@@ -12,3 +12,16 @@ class BaseModel(models.Model):
 
     class Meta:
         abstract = True
+
+
+class WorkspaceModel(BaseModel):
+    """Base for workspace content tables.
+
+    Every concrete subclass must end its first migration with
+    `apps.workspaces.rls.enable_rls(<table>)`; tests/test_rls_coverage.py checks this.
+    """
+
+    workspace = models.ForeignKey("workspaces.Workspace", on_delete=models.CASCADE, db_index=True)
+
+    class Meta:
+        abstract = True

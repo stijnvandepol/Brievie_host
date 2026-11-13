@@ -62,3 +62,26 @@ permission join tables) keep Django's integer keys; the UUID rule covers our tab
 The Django admin is mounted at `/admin/` with the user registered (password hash never
 shown). Only staff accounts (`createsuperuser`) can sign in; the app's own users are
 not staff. It is a fallback for the server owner, not part of the product UI.
+
+## 2026-11-13: Row-level security per workspace
+
+Workspace content tables subclass `WorkspaceModel` and their first migration ends with
+`enable_rls(<table>)`: RLS enabled **and forced**, policy `workspace_isolation` on
+`workspace_id = NULLIF(current_setting('brievie.workspace_id', true), '')::uuid` for
+both `USING` and `WITH CHECK`. Without a context the comparison is NULL, so code that
+forgets the context sees zero rows and cannot write. `tests/test_rls_coverage.py`
+fails for any `WorkspaceModel` table without this.
+
+`workspace_context(workspace_id)` sets the value with `set_config(..., true)` inside
+`transaction.atomic()` and restores the previous value on a normal exit, because a
+transaction-local setting survives a savepoint release. When the block fails, the
+savepoint rollback restores it.
+
+`Workspace` and `Membership` are **not** under RLS in phase 1a: they are read before a
+workspace is known (to decide which workspace a request may enter). They are guarded
+by the API dependency in Task 4 and its tests. Dropped: a second, user-keyed policy on
+these tables (needs a user setting as well; reconsider when the app role reads them).
+
+Foreign-key checks bypass RLS, so a row could point at a row of another workspace when
+it knows its id. `Folder.save()` rejects a parent from another workspace; later
+cross-row references need the same guard.

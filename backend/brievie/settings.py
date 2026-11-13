@@ -28,6 +28,8 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "ninja",
     "apps.accounts",
+    "apps.workspaces",
+    "apps.documents",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
