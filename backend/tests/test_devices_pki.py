@@ -7,6 +7,7 @@ from pytest_django import Settings
 
 from apps.devices.pki import certificate_sha256, load_ca_certificate_pem
 from tests.factories import UserFactory
+from tests.helpers import post_json
 
 FIXTURE = Path(__file__).parent / "fixtures" / "ca_root.crt"
 # openssl x509 -in tests/fixtures/ca_root.crt -outform der | sha256sum
@@ -16,7 +17,7 @@ FIXTURE_SHA256 = "54f4342d47de803e6812b6da3b0a57cf653dc36f03454c9232291f39834e06
 def pairing_payload() -> dict[str, object]:
     client = Client()
     client.force_login(UserFactory.create())
-    r = client.post("/api/v1/devices/pairing-codes")
+    r = post_json(client, "/devices/pairing-codes")
     assert r.status_code == 201
     payload: dict[str, object] = json.loads(r.json()["qr_payload"])
     return payload
@@ -80,3 +81,37 @@ class TestWithPrivateCa:
         payload = pairing_payload()
 
         assert payload["ca_sha256"] == certificate_sha256(served) == FIXTURE_SHA256
+
+
+BROKEN_PEM = "-----BEGIN CERTIFICATE-----\ngeheim-maar-kapot!!\n-----END CERTIFICATE-----\n"
+
+
+@pytest.mark.parametrize(
+    "kind", ["directory", "not_ascii", "not_pem", "malformed_pem", "unreadable"]
+)
+def test_bad_certificate_file_counts_as_no_private_ca(
+    kind: str, settings: Settings, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    path = tmp_path / "root.crt"
+    if kind == "directory":
+        path.mkdir()
+    elif kind == "not_ascii":
+        path.write_bytes(b"\xff\xfegeheim")
+    elif kind == "not_pem":
+        path.write_text("geheim")
+    elif kind == "malformed_pem":
+        path.write_text(BROKEN_PEM)
+    else:
+        path.write_text(FIXTURE.read_text())
+        path.chmod(0)
+    settings.BRIEVIE_CA_CERT_PATH = str(path)
+
+    with caplog.at_level("WARNING", logger="apps.devices.pki"):
+        assert load_ca_certificate_pem() is None
+        payload = pairing_payload()
+        r = Client().get("/api/v1/server/ca-certificate")
+
+    assert payload["ca_sha256"] is None
+    assert r.status_code == 404
+    assert caplog.records, "a warning is logged"
+    assert "geheim" not in caplog.text

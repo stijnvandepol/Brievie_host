@@ -24,11 +24,32 @@ Brievie anywhere but on your own machine.
 
 ```sh
 docker compose --project-directory deploy -f deploy/docker-compose.yml up -d --build
-curl http://127.0.0.1:8000/api/v1/health
+```
+
+Caddy is the only service with public ports (443, and 80 for the redirect). It serves
+`https://$BRIEVIE_HOSTNAME` (default `localhost`) with a certificate from its own
+private CA. To call the API with curl, copy the root certificate out first:
+
+```sh
+docker compose --project-directory deploy -f deploy/docker-compose.yml \
+  cp caddy:/data/caddy/pki/authorities/local/root.crt root.crt
+curl --cacert root.crt https://localhost/api/v1/health
 ```
 
 A one-shot `migrate` container applies migrations as the `brievie_owner` role and
 exits; the `api` container starts after it and serves requests as the `brievie_app`
-role, without the owner credentials. The cookies are `Secure` by default; for local
-development over plain http set `SESSION_COOKIE_SECURE=false` and
-`CSRF_COOKIE_SECURE=false` in `deploy/.env`.
+role, without the owner credentials.
+
+## First setup: the installation code
+
+`POST /api/v1/setup` creates the first administrator and needs an installation code,
+because whoever sets up the server first becomes its administrator. Either set
+`BRIEVIE_SETUP_TOKEN` in `deploy/.env`, or leave it empty: the `api` container then
+generates a code at its first start and prints it once in its log:
+
+```sh
+docker compose --project-directory deploy -f deploy/docker-compose.yml logs api | grep Installatiecode
+```
+
+Lost it? `docker compose ... exec api python manage.py prepare_setup_token --new`
+prints a new one (the old one stops working). After setup the code is deleted.

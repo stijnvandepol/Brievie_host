@@ -3,7 +3,7 @@ from uuid import UUID
 from django.http import HttpRequest
 from ninja import Router, Status
 
-from apps.common.schemas import ErrorOut
+from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.documents import services
 from apps.documents.models import Folder
 from apps.documents.schemas import FolderIn, FolderOut
@@ -15,7 +15,7 @@ router = Router(tags=["documents"])
 
 @router.get(
     "/workspaces/{workspace_id}/folders",
-    response={200: list[FolderOut], 401: ErrorOut, 404: ErrorOut},
+    response={200: list[FolderOut], 404: ErrorOut, **AUTH_ERRORS},
     operation_id="listFolders",
 )
 def list_folders(request: HttpRequest, workspace_id: UUID) -> list[Folder]:
@@ -25,14 +25,7 @@ def list_folders(request: HttpRequest, workspace_id: UUID) -> list[Folder]:
 
 @router.post(
     "/workspaces/{workspace_id}/folders",
-    response={
-        201: FolderOut,
-        401: ErrorOut,
-        403: ErrorOut,
-        404: ErrorOut,
-        409: ErrorOut,
-        422: ErrorOut,
-    },
+    response={201: FolderOut, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS, **BODY_ERRORS},
     operation_id="createFolder",
 )
 def create_folder(request: HttpRequest, workspace_id: UUID, payload: FolderIn) -> Status[Folder]:

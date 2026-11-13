@@ -5,7 +5,8 @@ from ninja.security import django_auth
 from apps.accounts import services
 from apps.accounts.models import User
 from apps.accounts.schemas import LoginIn, SetupIn, SetupOut, SetupStatusOut, UserOut
-from apps.common.schemas import ErrorOut
+from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
+from apps.common.throttling import ClientAddressThrottle
 from apps.workspaces.schemas import WorkspaceOut
 
 router = Router(tags=["accounts"])
@@ -13,8 +14,7 @@ router = Router(tags=["accounts"])
 
 @router.get(
     "/setup",
-    # Its only failure is the database being unreachable (500 internal_error).
-    response={200: SetupStatusOut, 500: ErrorOut},
+    response=SetupStatusOut,
     auth=None,
     operation_id="getSetupStatus",
 )
@@ -24,8 +24,9 @@ def get_setup_status(request: HttpRequest) -> SetupStatusOut:
 
 @router.post(
     "/setup",
-    response={201: SetupOut, 409: ErrorOut, 422: ErrorOut},
+    response={201: SetupOut, 403: ErrorOut, 409: ErrorOut, 429: ErrorOut, **BODY_ERRORS},
     auth=None,
+    throttle=ClientAddressThrottle("setup", "10/10m"),
     operation_id="setupServer",
 )
 def setup_server(request: HttpRequest, payload: SetupIn) -> Status[SetupOut]:
@@ -36,7 +37,7 @@ def setup_server(request: HttpRequest, payload: SetupIn) -> Status[SetupOut]:
 
 @router.post(
     "/auth/login",
-    response={200: UserOut, 401: ErrorOut, 422: ErrorOut, 429: ErrorOut},
+    response={200: UserOut, 401: ErrorOut, 429: ErrorOut, **BODY_ERRORS},
     auth=None,
     operation_id="login",
 )
@@ -46,7 +47,7 @@ def login(request: HttpRequest, payload: LoginIn) -> User:
 
 @router.post(
     "/auth/logout",
-    response={204: None, 401: ErrorOut, 403: ErrorOut},
+    response={204: None, **SESSION_WRITE_ERRORS},
     auth=django_auth,
     operation_id="logout",
 )
@@ -55,6 +56,6 @@ def logout(request: HttpRequest) -> Status[None]:
     return Status(204, None)
 
 
-@router.get("/me", response={200: UserOut, 401: ErrorOut}, operation_id="getMe")
+@router.get("/me", response={200: UserOut, **AUTH_ERRORS}, operation_id="getMe")
 def get_me(request: HttpRequest) -> User:
     return services.current_user(request)

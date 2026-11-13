@@ -2,7 +2,8 @@ import hashlib
 import hmac
 import json
 import secrets
-from datetime import timedelta
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from django.conf import settings
@@ -45,6 +46,21 @@ def create_pairing_code(user: User) -> tuple[PairingCode, str]:
             expires_at=timezone.now() + CODE_VALIDITY,
         )
     return pairing_code, format_code(code)
+
+
+@dataclass(frozen=True)
+class IssuedPairingCode:
+    code: str
+    expires_at: datetime
+    qr_payload: str
+
+
+def issue_pairing_code(user: User) -> IssuedPairingCode:
+    """A new pairing code for `user`, with the QR payload that carries it."""
+    pairing_code, code = create_pairing_code(user)
+    return IssuedPairingCode(
+        code=code, expires_at=pairing_code.expires_at, qr_payload=qr_payload(code)
+    )
 
 
 def qr_payload(code: str) -> str:

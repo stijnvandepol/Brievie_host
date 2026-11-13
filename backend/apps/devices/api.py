@@ -6,38 +6,30 @@ from ninja.security import django_auth
 
 from apps.accounts.schemas import UserOut
 from apps.accounts.services import current_user
-from apps.common.schemas import ErrorOut
+from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
+from apps.common.throttling import ClientAddressThrottle
 from apps.devices import services
 from apps.devices.models import Device
 from apps.devices.schemas import CaCertificateOut, DeviceOut, PairIn, PairingCodeOut, PairOut
-from apps.devices.throttling import PairingThrottle
 
 router = Router(tags=["devices"])
 
 
 @router.post(
     "/devices/pairing-codes",
-    response={201: PairingCodeOut, 401: ErrorOut, 403: ErrorOut},
+    response={201: PairingCodeOut, **SESSION_WRITE_ERRORS},
     auth=django_auth,
     operation_id="createPairingCode",
 )
-def create_pairing_code(request: HttpRequest) -> Status[PairingCodeOut]:
-    pairing_code, code = services.create_pairing_code(current_user(request))
-    return Status(
-        201,
-        PairingCodeOut(
-            code=code,
-            expires_at=pairing_code.expires_at,
-            qr_payload=services.qr_payload(code),
-        ),
-    )
+def create_pairing_code(request: HttpRequest) -> Status[services.IssuedPairingCode]:
+    return Status(201, services.issue_pairing_code(current_user(request)))
 
 
 @router.post(
     "/devices/pair",
-    response={201: PairOut, 400: ErrorOut, 422: ErrorOut, 429: ErrorOut},
+    response={201: PairOut, 429: ErrorOut, **BODY_ERRORS},
     auth=None,
-    throttle=PairingThrottle(),
+    throttle=ClientAddressThrottle("pairing", "10/10m"),
     operation_id="pairDevice",
 )
 def pair_device(request: HttpRequest, payload: PairIn) -> Status[PairOut]:
@@ -48,7 +40,7 @@ def pair_device(request: HttpRequest, payload: PairIn) -> Status[PairOut]:
 
 @router.get(
     "/devices",
-    response={200: list[DeviceOut], 401: ErrorOut},
+    response={200: list[DeviceOut], **AUTH_ERRORS},
     operation_id="listDevices",
 )
 def list_devices(request: HttpRequest) -> list[Device]:
@@ -57,7 +49,7 @@ def list_devices(request: HttpRequest) -> list[Device]:
 
 @router.delete(
     "/devices/{device_id}",
-    response={204: None, 401: ErrorOut, 403: ErrorOut, 404: ErrorOut},
+    response={204: None, 404: ErrorOut, **SESSION_WRITE_ERRORS},
     operation_id="revokeDevice",
 )
 def revoke_device(request: HttpRequest, device_id: UUID) -> Status[None]:

@@ -20,6 +20,9 @@ class SetupStatusOut(Schema):
 
 
 class SetupIn(Schema):
+    # The installation code from the server log or BRIEVIE_SETUP_TOKEN. Missing or
+    # empty counts as wrong (403 setup_token_invalid).
+    setup_token: str = Field(default="", max_length=200)
     email: str = Field(max_length=254)
     password: str = Field(max_length=128)
     name: str = Field(min_length=1, max_length=150)

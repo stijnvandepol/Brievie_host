@@ -67,7 +67,7 @@ def test_wrong_method_is_405_method_not_allowed(client: Client) -> None:
 
 @pytest.mark.urls("brievie.urls")
 def test_wrong_method_on_the_real_api_is_405_with_error_shape(client: Client) -> None:
-    r = client.post("/api/v1/health")
+    r = client.post("/api/v1/health", content_type="application/json")
     assert r.status_code == 405
     assert_error(r.json(), "method_not_allowed")
 
@@ -90,7 +90,7 @@ def assert_no_error_logs(caplog: pytest.LogCaptureFixture) -> None:
     assert [r for r in caplog.records if r.levelno >= logging.ERROR] == []
 
 
-@pytest.mark.parametrize("url", ["/api/suspicious", "/api/bad-request", "/api/too-big"])
+@pytest.mark.parametrize("url", ["/api/suspicious", "/api/bad-request"])
 def test_suspicious_operation_is_400_bad_request_without_error_log(
     client: Client, caplog: pytest.LogCaptureFixture, url: str
 ) -> None:
@@ -98,6 +98,16 @@ def test_suspicious_operation_is_400_bad_request_without_error_log(
         r = client.get(url)
     assert r.status_code == 400
     assert_error(r.json(), "bad_request")
+    assert_no_error_logs(caplog)
+
+
+def test_request_data_too_big_is_413_without_error_log(
+    client: Client, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.DEBUG):
+        r = client.get("/api/too-big")
+    assert r.status_code == 413
+    assert_error(r.json(), "payload_too_large")
     assert_no_error_logs(caplog)
 
 

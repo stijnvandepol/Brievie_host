@@ -1,5 +1,5 @@
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING
 
 import pytest
 from django.db import connection
@@ -10,14 +10,18 @@ from apps.documents.models import Folder
 from apps.workspaces.context import workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.factories import UserFactory
+from tests.helpers import post_json
+
+if TYPE_CHECKING:
+    from tests.helpers import Response
 
 
 def folders_url(workspace_id: uuid.UUID | str) -> str:
     return f"/api/v1/workspaces/{workspace_id}/folders"
 
 
-def create(client: Client, workspace_id: uuid.UUID | str, body: dict[str, Any]) -> Any:  # noqa: ANN401
-    return client.post(folders_url(workspace_id), body, content_type="application/json")
+def create(client: Client, workspace_id: uuid.UUID | str, body: dict[str, object]) -> "Response":
+    return post_json(client, f"/workspaces/{workspace_id}/folders", body)
 
 
 def admin_of(workspace: Workspace) -> User:

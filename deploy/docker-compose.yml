@@ -54,6 +54,8 @@ services:
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
       CSRF_COOKIE_SECURE: ${CSRF_COOKIE_SECURE:-true}
       BRIEVIE_PUBLIC_URLS: ${BRIEVIE_PUBLIC_URLS:-}
+      BRIEVIE_HSTS_SECONDS: ${BRIEVIE_HSTS_SECONDS:-0}
+      BRIEVIE_SETUP_TOKEN: ${BRIEVIE_SETUP_TOKEN:-}
       # Requests arrive through Caddy, which sets X-Forwarded-For.
       BRIEVIE_PROXY_COUNT: "1"
     volumes:
@@ -64,13 +66,14 @@ services:
     # No published port: only Caddy is reachable from outside.
 
   caddy:
-    image: caddy:2
+    image: caddy:2.11
     restart: unless-stopped
     depends_on:
       - api
     command: ["/bin/sh", "/etc/caddy/publish-root.sh"]
     environment:
       BRIEVIE_HOSTNAME: ${BRIEVIE_HOSTNAME:?set BRIEVIE_HOSTNAME in deploy/.env}
+      BRIEVIE_HSTS_SECONDS: ${BRIEVIE_HSTS_SECONDS:-0}
     ports:
       - "80:80"
       - "443:443"

@@ -9,6 +9,7 @@ from apps.devices.models import Device
 from apps.devices.services import create_pairing_code, pair_device
 from apps.workspaces.models import Membership, Workspace
 from tests.factories import UserFactory
+from tests.helpers import post_json
 
 
 def paired(user: User) -> tuple[Device, str]:
@@ -86,4 +87,4 @@ def test_bearer_token_works_on_workspace_endpoints_without_csrf(ws_a: Workspace)
 def test_logout_needs_a_session() -> None:
     _, token = paired(UserFactory.create())
 
-    assert Client().post("/api/v1/auth/logout", headers=bearer(token)).status_code == 401
+    assert post_json(Client(), "/auth/logout", headers=bearer(token)).status_code == 401

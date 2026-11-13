@@ -1,7 +1,7 @@
 import json
 import re
+import threading
 from datetime import datetime, timedelta
-from typing import Any
 
 import pytest
 from django.db import connection
@@ -13,14 +13,14 @@ from apps.accounts.models import User
 from apps.devices.models import Device, PairingCode
 from apps.devices.services import create_pairing_code, pair_device
 from tests.factories import UserFactory
+from tests.helpers import post_json
 
 CODE_FORMAT = re.compile(
     r"^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}$"
 )
 
 
-def post(client: Client, path: str, body: dict[str, Any] | None = None) -> Any:  # noqa: ANN401
-    return client.post(f"/api/v1{path}", body or {}, content_type="application/json")
+post = post_json
 
 
 @pytest.fixture
@@ -150,9 +150,7 @@ def test_create_pairing_code_needs_a_session_not_a_bearer_token(session_client: 
     token = post(Client(), "/devices/pair", {"code": new_code(session_client), "device_name": "A"})
     bearer = token.json()["token"]
 
-    r = Client().post(
-        "/api/v1/devices/pairing-codes", headers={"Authorization": f"Bearer {bearer}"}
-    )
+    r = post(Client(), "/devices/pairing-codes", headers={"Authorization": f"Bearer {bearer}"})
 
     assert r.status_code == 401
     assert r.json()["code"] == "not_authenticated"
@@ -214,3 +212,27 @@ def test_database_holds_neither_plain_code_nor_plain_token(user: User) -> None:
                 for value in row:
                     assert not any(s in str(value) for s in secrets), table
     assert PairingCode.objects.get().code_hash != code
+
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_pairing_with_one_code_gives_one_device() -> None:
+    _, code = create_pairing_code(UserFactory.create())
+    barrier = threading.Barrier(2)
+    statuses: list[int] = []
+
+    def run(name: str) -> None:
+        try:
+            barrier.wait(timeout=10)
+            r = post(Client(), "/devices/pair", {"code": code, "device_name": name})
+            statuses.append(r.status_code)
+        finally:
+            connection.close()
+
+    threads = [threading.Thread(target=run, args=(name,)) for name in ("A", "B")]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=30)
+
+    assert sorted(statuses) == [201, 400]
+    assert Device.objects.count() == 1

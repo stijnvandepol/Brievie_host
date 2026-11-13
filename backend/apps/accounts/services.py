@@ -1,3 +1,7 @@
+import hashlib
+import hmac
+import secrets
+
 from axes.handlers.proxy import AxesProxyHandler
 from django.conf import settings
 from django.contrib.auth import authenticate
@@ -10,14 +14,54 @@ from django.db import connection, transaction
 from django.http import HttpRequest
 from django.utils.translation import gettext as _
 
-from apps.accounts.models import User, normalise_email
+from apps.accounts.models import SetupToken, User, normalise_email
 from apps.common.errors import ApiError
 from apps.workspaces.models import Membership
 from apps.workspaces.services import create_workspace
 
-# pg_advisory_xact_lock key that serialises POST /setup ("brievie" in ASCII).
+# pg_advisory_xact_lock key that serialises POST /setup and the generation of the
+# setup token ("brievie" in ASCII).
 SETUP_LOCK_KEY = 0x62726965766965
 MODEL_BACKEND = "django.contrib.auth.backends.ModelBackend"
+
+
+def sha256_hex(value: str) -> str:
+    return hashlib.sha256(value.encode()).hexdigest()
+
+
+def _lock_setup() -> None:
+    with connection.cursor() as c:
+        c.execute("SELECT pg_advisory_xact_lock(%s)", [SETUP_LOCK_KEY])
+
+
+def prepare_setup_token(*, new: bool = False) -> str | None:
+    """Generate the first-run setup code if one is needed; return it (to print once).
+
+    Returns None when no code is generated: a user exists, `BRIEVIE_SETUP_TOKEN`
+    is set, or a code exists already (unless `new`). Only the hash is stored. The
+    advisory lock makes concurrent calls (several containers or workers) create
+    one code.
+    """
+    with transaction.atomic():
+        _lock_setup()
+        if User.objects.exists() or settings.BRIEVIE_SETUP_TOKEN:
+            SetupToken.objects.all().delete()
+            return None
+        if SetupToken.objects.exists() and not new:
+            return None
+        token = secrets.token_urlsafe(16)
+        SetupToken.objects.all().delete()
+        SetupToken.objects.create(token_hash=sha256_hex(token))
+    return token
+
+
+def _setup_token_is_valid(given: str) -> bool:
+    given_hash = sha256_hex(given)
+    configured: str = settings.BRIEVIE_SETUP_TOKEN
+    if configured:
+        return hmac.compare_digest(given_hash, sha256_hex(configured))
+    stored = SetupToken.objects.first()
+    return stored is not None and hmac.compare_digest(given_hash, stored.token_hash)
 
 
 def current_user(request: HttpRequest) -> User:
@@ -42,6 +86,7 @@ def _required(value: str, message: str) -> str:
 def setup_server(
     request: HttpRequest,
     *,
+    setup_token: str,
     email: str,
     password: str,
     name: str,
@@ -50,14 +95,21 @@ def setup_server(
 ) -> Membership:
     """Create the first user, their workspace and admin membership, and log them in.
 
-    Only allowed while no user exists. The advisory lock lasts until the request
-    transaction ends, so a concurrent call waits and then sees the new user.
+    Only allowed while no user exists, and only with the setup code (see
+    `prepare_setup_token`), which is deleted afterwards. The advisory lock lasts
+    until the request transaction ends, so a concurrent call waits and then sees
+    the new user.
     """
     with transaction.atomic():
-        with connection.cursor() as c:
-            c.execute("SELECT pg_advisory_xact_lock(%s)", [SETUP_LOCK_KEY])
+        _lock_setup()
         if User.objects.exists():
             raise ApiError(409, "already_set_up", _("Brievie is al ingesteld."))
+        if not setup_token or not _setup_token_is_valid(setup_token):
+            raise ApiError(
+                403,
+                "setup_token_invalid",
+                _("De installatiecode klopt niet. Je vindt hem in het log van de server."),
+            )
         email = normalise_email(email)
         validate_email(email)
         user = User(email=email, name=_required(name, _("Vul je naam in.")))
@@ -69,6 +121,7 @@ def setup_server(
             kind=workspace_kind,
             admin=user,
         )
+        SetupToken.objects.all().delete()
         django_login(request, user, backend=MODEL_BACKEND)
     return Membership.objects.select_related("workspace").get(user=user, workspace=workspace)
 

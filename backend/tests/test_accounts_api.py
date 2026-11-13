@@ -1,15 +1,17 @@
 import threading
-from typing import Any
 
 import pytest
 from django.db import connection
 from django.test import Client
+from pytest_django import Settings
 
 from apps.accounts.models import User
 from apps.workspaces.models import Membership, Workspace
 from tests.factories import TEST_PASSWORD, UserFactory
+from tests.helpers import SETUP_TOKEN, post_json
 
-SETUP_BODY = {
+SETUP_BODY: dict[str, object] = {
+    "setup_token": SETUP_TOKEN,
     "email": "Beheer@Example.nl",
     "password": "een-lang-wachtwoord-2026",
     "name": "Anna de Vries",
@@ -18,8 +20,12 @@ SETUP_BODY = {
 }
 
 
-def post(client: Client, path: str, body: dict[str, Any]) -> Any:  # noqa: ANN401
-    return client.post(f"/api/v1{path}", body, content_type="application/json")
+post = post_json
+
+
+@pytest.fixture(autouse=True)
+def _setup_token(settings: Settings) -> None:
+    settings.BRIEVIE_SETUP_TOKEN = SETUP_TOKEN
 
 
 def test_setup_status_before_and_after_setup(client: Client) -> None:
@@ -41,7 +47,7 @@ def test_setup_creates_admin_workspace_and_logs_in(client: Client) -> None:
     user = User.objects.get()
     workspace = Workspace.objects.get()
     assert Membership.objects.get(user=user, workspace=workspace).role == "admin"
-    assert user.check_password(SETUP_BODY["password"])
+    assert user.check_password(str(SETUP_BODY["password"]))
     # The setup response carries a session: the next call is authenticated.
     assert client.get("/api/v1/me").json()["email"] == "beheer@example.nl"
 
@@ -191,7 +197,7 @@ def test_lockout_is_per_email_and_ip(client: Client) -> None:
 def test_logout_ends_the_session(client: Client) -> None:
     client.force_login(UserFactory.create())
 
-    r = client.post("/api/v1/auth/logout")
+    r = post(client, "/auth/logout")
 
     assert r.status_code == 204
     assert client.get("/api/v1/me").status_code == 401
@@ -231,7 +237,7 @@ def test_session_calls_require_csrf() -> None:
     client = Client(enforce_csrf_checks=True)
     client.force_login(UserFactory.create())
 
-    r = client.post("/api/v1/auth/logout")
+    r = post(client, "/auth/logout")
 
     assert r.status_code == 403
     assert set(r.json()) == {"code", "message"}

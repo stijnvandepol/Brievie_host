@@ -12,8 +12,9 @@ from brievie.api import api
 
 ERROR_REF = "#/components/schemas/ErrorOut"
 CAMEL_CASE = re.compile(r"^[a-z][a-zA-Z0-9]*$")
-# getHealth has no failure mode (ruling); every other operation documents its errors.
-NO_ERROR_RESPONSES = {"getHealth"}
+# No failure mode besides a server error (ruling); every other operation documents its errors.
+NO_ERROR_RESPONSES = {"getHealth", "getSetupStatus"}
+BODY_ERRORS = {"400", "415", "422"}
 HTTP_METHODS = {"get", "put", "post", "delete", "patch", "options", "head", "trace"}
 
 
@@ -52,6 +53,22 @@ def test_every_operation_documents_an_error_response() -> None:
         ]
         assert error_refs, f"{op['operationId']} documents no error response"
         assert all(ref == ERROR_REF for ref in error_refs), op["operationId"]
+
+
+def test_every_operation_with_a_body_documents_body_errors() -> None:
+    with_body = [op for op in operations() if "requestBody" in op]
+    assert with_body
+    for op in with_body:
+        responses = op["responses"]
+        assert isinstance(responses, dict)
+        assert {str(status) for status in responses} >= BODY_ERRORS, op["operationId"]
+
+
+def test_no_operation_documents_a_500() -> None:
+    for op in operations():
+        responses = op["responses"]
+        assert isinstance(responses, dict)
+        assert "500" not in {str(status) for status in responses}, op["operationId"]
 
 
 def test_version_is_1_0_0() -> None:

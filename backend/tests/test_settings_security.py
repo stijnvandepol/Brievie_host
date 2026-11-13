@@ -10,7 +10,7 @@ import brievie.settings
 SECURITY_ENV = (
     "SESSION_COOKIE_SECURE",
     "CSRF_COOKIE_SECURE",
-    "SECURE_HSTS_SECONDS",
+    "BRIEVIE_HSTS_SECONDS",
     "CSRF_TRUSTED_ORIGINS",
     "BRIEVIE_DB_ROLE",
     "DATABASE_OWNER_URL",
@@ -63,3 +63,10 @@ def test_public_urls_keep_their_order(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(environ.Env, "read_env", lambda *args, **kwargs: None)
     values = runpy.run_path(str(Path(brievie.settings.__file__)))
     assert values["BRIEVIE_PUBLIC_URLS"] == ["https://brievie.local", "https://brievie.example.nl"]
+
+
+def test_hsts_follows_brievie_hsts_seconds(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("BRIEVIE_HSTS_SECONDS", "0")
+    monkeypatch.setattr(environ.Env, "read_env", lambda *args, **kwargs: None)
+    values = runpy.run_path(str(Path(brievie.settings.__file__)))
+    assert values["SECURE_HSTS_SECONDS"] == 0

@@ -52,6 +52,7 @@ AUTH_PASSWORD_VALIDATORS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "apps.common.errors.ApiMethodNotAllowedMiddleware",
+    "apps.common.errors.ApiJsonBodyMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
@@ -124,7 +125,10 @@ SESSION_COOKIE_SECURE: bool = env.bool("SESSION_COOKIE_SECURE", default=True)
 CSRF_COOKIE_SECURE: bool = env.bool("CSRF_COOKIE_SECURE", default=True)
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_TRUSTED_ORIGINS: list[str] = env.list("CSRF_TRUSTED_ORIGINS", default=[])
-SECURE_HSTS_SECONDS: int = env.int("SECURE_HSTS_SECONDS", default=31536000)
+# One variable for Django and Caddy. Compose sets 0 by default: with the private CA
+# a browser must still be able to click through its certificate warning, which
+# HSTS forbids. Set 31536000 with a public certificate.
+SECURE_HSTS_SECONDS: int = env.int("BRIEVIE_HSTS_SECONDS", default=31536000)
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 
@@ -159,3 +163,7 @@ if any(not url.startswith("https://") for url in BRIEVIE_PUBLIC_URLS):
 BRIEVIE_CA_CERT_PATH: str = env.str(
     "BRIEVIE_CA_CERT_PATH", default="/caddy-data/caddy/pki/authorities/local/root.crt"
 )
+
+# First-run setup needs this code. Unset: `manage.py prepare_setup_token` (run when
+# the api container starts) generates one, stores its hash and prints it once.
+BRIEVIE_SETUP_TOKEN: str = env.str("BRIEVIE_SETUP_TOKEN", default="")

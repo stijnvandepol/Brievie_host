@@ -1,7 +1,12 @@
 import logging
 from collections.abc import Callable
 
-from django.core.exceptions import BadRequest, PermissionDenied, SuspiciousOperation
+from django.core.exceptions import (
+    BadRequest,
+    PermissionDenied,
+    RequestDataTooBig,
+    SuspiciousOperation,
+)
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
@@ -46,6 +51,8 @@ def _http_error_body(status: int) -> tuple[str, str]:
         403: ("forbidden", _("Je mag dit niet doen.")),
         404: ("not_found", _("We kunnen dit niet vinden.")),
         405: ("method_not_allowed", _("Dit kan hier niet.")),
+        413: ("payload_too_large", _("Dit verzoek is te groot.")),
+        415: ("unsupported_media_type", _("Stuur de gegevens als JSON.")),
         429: ("too_many_attempts", _("Te veel pogingen. Probeer het later opnieuw.")),
     }
     return bodies.get(status, ("error", _("Er ging iets mis.")))
@@ -81,6 +88,10 @@ def install_error_handlers(api: NinjaAPI) -> None:
         logger.warning("Rejected %s %s: %s", request.method, request.path, type(exc).__name__)
         return http_error_response(400)
 
+    def handle_request_data_too_big(request: HttpRequest, exc: object) -> JsonResponse:
+        logger.warning("Rejected %s %s: request body too big", request.method, request.path)
+        return http_error_response(413)
+
     def handle_permission_denied(request: HttpRequest, exc: object) -> JsonResponse:
         return http_error_response(403)
 
@@ -115,6 +126,8 @@ def install_error_handlers(api: NinjaAPI) -> None:
     api.add_exception_handler(Http404, handle_not_found)
     api.add_exception_handler(SuspiciousOperation, handle_suspicious_operation)
     api.add_exception_handler(BadRequest, handle_suspicious_operation)
+    # A SuspiciousOperation subclass; Ninja picks the most specific handler.
+    api.add_exception_handler(RequestDataTooBig, handle_request_data_too_big)
     api.add_exception_handler(PermissionDenied, handle_permission_denied)
     api.add_exception_handler(DjangoValidationError, handle_model_validation_error)  # type: ignore[arg-type]
     api.add_exception_handler(Exception, handle_unexpected_error)
@@ -139,3 +152,36 @@ class ApiMethodNotAllowedMiddleware:
                 body["Allow"] = response["Allow"]
             return body
         return response
+
+
+class ApiJsonBodyMiddleware:
+    """Refuses an /api/ request body that is not `application/json` (415).
+
+    Ninja parses the body as JSON whatever the Content-Type says, and its views are
+    exempt from Django's CSRF middleware, so without this check a cross-site
+    `<form enctype="text/plain">` could post JSON to the unauthenticated endpoints.
+    A JSON Content-Type cannot be sent cross-site without a CORS preflight, and the
+    API allows no cross-origin requests. Runs before any view, so a refused request
+    changes nothing.
+    """
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
+        self.get_response = get_response
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        if (
+            request.path.startswith("/api/")
+            and _has_body(request)
+            and request.content_type != "application/json"
+        ):
+            return http_error_response(415)
+        return self.get_response(request)
+
+
+def _has_body(request: HttpRequest) -> bool:
+    if "HTTP_TRANSFER_ENCODING" in request.META:
+        return True
+    try:
+        return int(request.META.get("CONTENT_LENGTH") or 0) > 0
+    except ValueError:
+        return True

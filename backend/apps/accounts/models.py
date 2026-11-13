@@ -60,3 +60,22 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel):
     def clean(self) -> None:
         super().clean()
         self.email = normalise_email(self.email)
+
+
+class SetupToken(BaseModel):
+    """Hash of the generated first-run setup code. At most one row; gone after setup."""
+
+    token_hash = models.CharField(max_length=64)
+    # Always True; the unique constraint keeps the table at one row.
+    singleton = models.BooleanField(default=True, editable=False)
+
+    class Meta:
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(fields=["singleton"], name="accounts_setuptoken_singleton"),
+            models.CheckConstraint(
+                condition=models.Q(singleton=True), name="accounts_setuptoken_singleton_true"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return "Setup token"

@@ -6,25 +6,34 @@ tunnel) there is no such file and pinning is off.
 """
 
 import hashlib
+import logging
 import ssl
 from pathlib import Path
 
 from django.conf import settings
+
+logger = logging.getLogger(__name__)
 
 
 def load_ca_certificate_pem() -> str | None:
     """The root certificate as PEM, or `None` when there is no private CA (yet).
 
     Caddy writes the file the first time it serves the site, so it can be missing
-    right after installation.
+    right after installation. An unreadable or malformed file is logged (without
+    its content) and also counts as no private CA, so pairing keeps working.
     """
     path: str = settings.BRIEVIE_CA_CERT_PATH
     if not path:
         return None
     try:
-        return Path(path).read_text(encoding="ascii")
+        pem = Path(path).read_text(encoding="ascii")
+        certificate_sha256(pem)
     except FileNotFoundError:
         return None
+    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        logger.warning("Ignoring CA certificate at %s: %s", path, type(exc).__name__)
+        return None
+    return pem
 
 
 def certificate_sha256(pem: str) -> str:

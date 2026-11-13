@@ -55,7 +55,8 @@ English msgids plus a Dutch catalogue (extra build step for one language).
 Caddy is the only service that publishes ports to the network: 443, and 80 for the
 redirect to https (Task 6). The API port is not published. PostgreSQL still publishes
 5432 on 127.0.0.1 only, because `make test` and `make migrate` run on the host;
-move that to a development override file before a production install guide.
+a deliberate development convenience, loopback only. The production Compose
+template (phase 1d) must not publish it.
 
 ## 2026-11-13: User model
 
@@ -66,6 +67,9 @@ case-insensitive. Dropped: a functional `UNIQUE (lower(email))` index (Django re
 `USERNAME_FIELD` to be `unique=True`, so it would be a second index).
 Django's own tables (permissions, groups, sessions, the user's group and
 permission join tables) keep Django's integer keys; the UUID rule covers our tables.
+The same exception holds for third-party tables (django-axes' `axes_*`) and the
+database cache table `brievie_cache` (created by `createcachetable`): they do not
+follow the `id`/`created_at`/`updated_at` rule.
 
 ## 2026-11-13: No Django admin
 
@@ -104,7 +108,8 @@ cross-row references need the same guard.
 Secure by default, overridable through the environment for local http development:
 `SESSION_COOKIE_SECURE` and `CSRF_COOKIE_SECURE` (true), `SESSION_COOKIE_SAMESITE =
 "Lax"`, `SECURE_PROXY_SSL_HEADER` for Caddy's `X-Forwarded-Proto`,
-`SECURE_HSTS_SECONDS` (one year), `CSRF_TRUSTED_ORIGINS` from the environment.
+`SECURE_HSTS_SECONDS` from `BRIEVIE_HSTS_SECONDS` (one year when unset; see the HSTS
+entry below), `CSRF_TRUSTED_ORIGINS` from the environment.
 `LANGUAGES` offers Dutch only until a second language ships.
 
 ## 2026-11-13: Folder names
@@ -162,7 +167,7 @@ names). `Folder.save()` raises `ValidationError`; a check constraint
 ## 2026-11-13: HTTPS with Caddy and the certificate pin (Task 6)
 
 - **Caddy 2** (`caddy:2` image) terminates TLS for `{$BRIEVIE_HOSTNAME}` with
-  `tls internal` (its own CA), TLS 1.2 minimum, HSTS, `nosniff`,
+  `tls internal` (its own CA), TLS 1.2 minimum, HSTS (opt-in, see fix round 1), `nosniff`,
   `Referrer-Policy: same-origin`, `frame-ancestors 'none'`, and proxies to `api:8000`.
   `skip_install_trust`: the root reaches clients by pinning, not via a trust store.
 - **Only the public root reaches the api.** Caddy keeps its CA in its data volume with
@@ -185,6 +190,44 @@ committed file with the generated schema. Every operation has a camelCase
 `getHealth` (no failure mode). `getSetupStatus` documents 500 `internal_error`: its only
 failure is an unreachable database. `apps.common` is now an installed app (it holds the
 command). Dropped: Ninja's `export_openapi_schema` (no `--check`).
+
+## 2026-11-13: Fix round 1 for tasks 4-7
+
+- **JSON bodies only (415).** Ninja parses a body as JSON whatever its Content-Type
+  and its views are CSRF-exempt, so a cross-site `<form enctype="text/plain">` could
+  reach `/setup` and `/auth/login`. `ApiJsonBodyMiddleware` answers 415
+  `unsupported_media_type` to any `/api/` request with a body whose Content-Type is not
+  `application/json`, before any view runs. A JSON Content-Type needs a CORS preflight,
+  and the API allows no cross-origin requests. Session callers of state-changing
+  endpoints still need a CSRF token (tested).
+- **Installation code for the first setup.** The server is assumed reachable from the
+  internet, so `POST /setup` needs `setup_token`: `BRIEVIE_SETUP_TOKEN` from the
+  environment, or a code that `manage.py prepare_setup_token` generates when the api
+  container starts (no user, no env value, no code yet): `secrets.token_urlsafe(16)`,
+  stored only as SHA-256 in the one-row table `accounts_setuptoken`, printed once to
+  stdout as `Installatiecode: …`. **That line is the one allowed exception to "no
+  secrets in logs"**: the owner needs it once, it is useless after setup. Generation
+  takes the same advisory lock as setup, so concurrent starts create one code and
+  print it once; a later start prints nothing (`--new` replaces a lost code).
+  Comparison is constant-time; wrong or missing gives 403 `setup_token_invalid`;
+  attempts are limited to 10 per address per 10 minutes (429). Setup deletes the code.
+  `GET /setup` still returns only `needs_setup`.
+- **Throttles.** `apps.common.throttling.ClientAddressThrottle(scope, rate)` serves both
+  pairing and setup.
+- **413.** `RequestDataTooBig` gives 413 `payload_too_large`; other
+  `SuspiciousOperation`s stay 400.
+- **Contract.** `getSetupStatus` is exempt from the error-response rule like
+  `getHealth` (no fake 500). Every operation with a body documents 400, 413, 415 and
+  422 (`apps.common.schemas.BODY_ERRORS`).
+- **Broken CA file.** An unreadable, non-ASCII or malformed root certificate is logged
+  as a warning (path and error type, no content) and treated as no private CA.
+- **HSTS opt-in with the private CA.** HSTS would make a browser's certificate warning
+  impossible to click through. `BRIEVIE_HSTS_SECONDS` drives both Caddy's header and
+  Django's `SECURE_HSTS_SECONDS`; Compose defaults to 0, set 31536000 with a public
+  certificate. Django's own default without the variable stays one year.
+- **Caddy pinned** to `caddy:2.11` (2.11.9 at the time). Caddy replaces a
+  client-sent `X-Forwarded-For` (no trusted proxies configured), so the last entry
+  is the real client address (verified manually, see the task report).
 
 ## Open items
 
