@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
@@ -91,6 +92,10 @@ jobs:
 
   secrets:
     runs-on: ubuntu-latest
+    # gitleaks-action lists the pull request's commits.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v5
         with:
