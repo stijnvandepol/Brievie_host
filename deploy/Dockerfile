@@ -10,28 +10,38 @@ RUN pnpm install --frozen-lockfile
 COPY web/ ./
 RUN pnpm build
 
-FROM python:3.13-slim
+# Build stage: uv and the resolved virtualenv. Only /opt/venv is copied on, so the
+# running image has neither the uv binary nor its caches.
+FROM python:3.13-slim AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:0.13.8 /uv /usr/local/bin/uv
 
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/opt/venv
+
+WORKDIR /app
+COPY backend/pyproject.toml backend/uv.lock backend/.python-version ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+FROM python:3.13-slim
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy \
-    UV_PROJECT_ENVIRONMENT=/opt/venv \
     PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app
 
-COPY backend/pyproject.toml backend/uv.lock backend/.python-version ./
-RUN uv sync --frozen --no-dev --no-install-project
+COPY --from=builder /opt/venv /opt/venv
 
+# backend/tests is left out by .dockerignore.
 COPY backend/ ./
 # The built web app: WhiteNoise serves its files, apps.common.web its index.html.
 COPY --from=web /web/dist ./webdist
+# Build-time only: the real SECRET_KEY comes from the environment at run time.
 RUN DATABASE_URL=postgres://build@localhost/build \
     DATABASE_OWNER_URL=postgres://build@localhost/build \
-    SECRET_KEY=collectstatic-only \
+    SECRET_KEY=collectstatic-only-not-a-real-key-collectstatic-only-not-a-real-key \
     python manage.py collectstatic --noinput
 
 RUN useradd --system --create-home --uid 10001 brievie

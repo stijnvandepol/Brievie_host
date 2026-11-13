@@ -8,3 +8,4 @@ deploy/.env
 .superpowers
 **/node_modules
 web/dist
+backend/tests

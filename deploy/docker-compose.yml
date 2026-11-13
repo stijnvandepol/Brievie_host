@@ -49,16 +49,29 @@ services:
       DATABASE_URL: postgres://brievie_app:${BRIEVIE_APP_PASSWORD}@postgres:5432/brievie
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in deploy/.env}
       DEBUG: ${DEBUG:-false}
-      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost}
+      # Both follow BRIEVIE_HOSTNAME; set them only to deviate (they must agree: the api
+      # refuses to start when a public URL's host is not in ALLOWED_HOSTS).
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-${BRIEVIE_HOSTNAME:?set BRIEVIE_HOSTNAME in deploy/.env}}
       CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-}
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
       CSRF_COOKIE_SECURE: ${CSRF_COOKIE_SECURE:-true}
-      BRIEVIE_PUBLIC_URLS: ${BRIEVIE_PUBLIC_URLS:-}
+      BRIEVIE_PUBLIC_URLS: ${BRIEVIE_PUBLIC_URLS:-https://${BRIEVIE_HOSTNAME}:${BRIEVIE_HTTPS_PORT:-443}}
       BRIEVIE_HSTS_SECONDS: ${BRIEVIE_HSTS_SECONDS:-0}
       BRIEVIE_MAX_BODY_BYTES: ${BRIEVIE_MAX_BODY_BYTES:-2621440}
       BRIEVIE_SETUP_TOKEN: ${BRIEVIE_SETUP_TOKEN:-}
       # Requests arrive through Caddy, which sets X-Forwarded-For.
       BRIEVIE_PROXY_COUNT: "1"
+    healthcheck:
+      # The Host header must be an allowed host, so the first ALLOWED_HOSTS entry is used.
+      test:
+        - CMD
+        - python
+        - -c
+        - "import os, urllib.request as u; h = os.environ['ALLOWED_HOSTS'].split(',')[0].strip().lstrip('.'); u.urlopen(u.Request('http://127.0.0.1:8000/api/v1/health', headers={'Host': 'localhost' if h in ('', '*') else h}), timeout=3)"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
     volumes:
       # Only the public root of Caddy's internal CA (see caddy-publish-root.sh),
       # read-only, at the default BRIEVIE_CA_CERT_PATH. Never Caddy's data volume:
@@ -70,7 +83,8 @@ services:
     image: caddy:2.11
     restart: unless-stopped
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     command: ["/bin/sh", "/etc/caddy/publish-root.sh"]
     environment:
       BRIEVIE_HOSTNAME: ${BRIEVIE_HOSTNAME:?set BRIEVIE_HOSTNAME in deploy/.env}

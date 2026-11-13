@@ -30,7 +30,8 @@ jobs:
       BRIEVIE_APP_PASSWORD: ci-app
       DATABASE_URL: postgres://brievie_app:ci-app@localhost:5432/brievie
       DATABASE_OWNER_URL: postgres://brievie_owner:ci-owner@localhost:5432/brievie
-      SECRET_KEY: ci-only-not-secret
+      # At least 50 characters: the settings refuse shorter keys.
+      SECRET_KEY: ci-only-not-secret-ci-only-not-secret-ci-only-not-secret
     defaults:
       run:
         working-directory: backend
@@ -62,7 +63,11 @@ jobs:
         working-directory: web
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4 # the version comes from "packageManager" in web/package.json
+      # The action reads "packageManager" from the repo root by default; ours is in web/.
+      # (defaults.run.working-directory does not apply to `uses:` steps.)
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
       - uses: actions/setup-node@v5
         with:
           node-version: 26.13

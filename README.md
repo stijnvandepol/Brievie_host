@@ -17,14 +17,40 @@ make migrate      # apply migrations
 make test lint typecheck
 ```
 
-`deploy/.env` holds local passwords; change every `change-me` value before you run
-Brievie anywhere but on your own machine.
+`deploy/.env` holds local passwords. With `DEBUG=false` (the default) the server refuses to
+start while `SECRET_KEY` is the placeholder or shorter than 50 characters; the database
+passwords only produce a warning (`manage.py check`), because an existing database keeps
+the password it was created with. Replace every `change-me` value before you run Brievie
+anywhere but on your own machine (see below).
 
 ## Run the whole stack
 
-```sh
-docker compose --project-directory deploy -f deploy/docker-compose.yml up -d --build
-```
+1. Create your settings file:
+
+   ```sh
+   cp deploy/.env.example deploy/.env
+   ```
+
+2. Replace the `change-me` values in `deploy/.env` with real secrets. One command per
+   value; paste each output after the `=` of its line:
+
+   ```sh
+   openssl rand -base64 48   # SECRET_KEY (at least 50 characters)
+   openssl rand -hex 24      # POSTGRES_PASSWORD
+   openssl rand -hex 24      # BRIEVIE_OWNER_PASSWORD
+   openssl rand -hex 24      # BRIEVIE_APP_PASSWORD
+   ```
+
+   Also copy the two database passwords into `DATABASE_URL` and `DATABASE_OWNER_URL`
+   (only used when you run the backend outside Docker), and set `BRIEVIE_HOSTNAME`
+   (next section). The database passwords are set when the database is created: changing
+   them later in `deploy/.env` does not change a database that already exists.
+
+3. Start everything:
+
+   ```sh
+   docker compose --project-directory deploy -f deploy/docker-compose.yml up -d --build
+   ```
 
 Caddy is the only service with public ports (443, and 80 for the redirect). It serves
 `https://$BRIEVIE_HOSTNAME` (default `localhost`) with a certificate from its own
@@ -39,6 +65,32 @@ curl --cacert root.crt https://localhost/api/v1/health
 A one-shot `migrate` container applies migrations as the `brievie_owner` role and
 exits; the `api` container starts after it and serves requests as the `brievie_app`
 role, without the owner credentials.
+
+## iPhone koppelen
+
+The app reaches the server over your network, so `BRIEVIE_HOSTNAME` in `deploy/.env` must
+be a name or IP address **the phone** can reach, not `localhost` (on the phone that is the
+phone itself). Examples:
+
+- the fixed IP address of the computer that runs Brievie: `BRIEVIE_HOSTNAME=192.168.1.20`
+- a name on your network: `BRIEVIE_HOSTNAME=brievie.local` (or the name of your Mac or NAS)
+
+That one value is enough: `ALLOWED_HOSTS` and the addresses in the pairing QR code
+(`BRIEVIE_PUBLIC_URLS`) follow from it. Set them yourself only when you need more than
+one address; the server refuses to start if a public address is not in `ALLOWED_HOSTS`.
+Give the computer a fixed address in your router, so the address in the QR code stays
+valid. After changing `BRIEVIE_HOSTNAME`, run `docker compose ... up -d` again.
+
+The phone must be on the same network (Wi-Fi) as the server. Then open the web interface,
+choose "App koppelen", make a code and scan the QR code with the app. Does scanning fail?
+Use "Kopieer koppelgegevens" and paste the text in the app.
+
+**The private certificate.** Caddy makes its own certificate authority (CA) and signs the
+server certificate with it, because a home server has no public name that a public CA could
+vouch for. Your browser will warn about it: that is expected. The QR code carries the
+fingerprint of that CA, and the app only talks to a server whose certificate chain ends in
+exactly that CA. You do not install anything on the phone, and nobody else can pose as your
+server without the CA's private key (which stays in the Caddy volume).
 
 ## Web interface
 

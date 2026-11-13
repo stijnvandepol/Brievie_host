@@ -271,6 +271,16 @@ Choices:
 - **Compose ports.** Caddy's host ports come from `BRIEVIE_HTTP_PORT` and `BRIEVIE_HTTPS_PORT` (defaults 80 and 443), so a second stack can run next to the first.
 - **Countdown uses the browser clock** against the server's `expires_at`. A clock that is minutes off shows a wrong countdown; the server decides whether a code is valid.
 
+## 2026-11-13: Fixes after the whole-branch review
+
+- **Pairing needs a reachable address.** Compose derives `ALLOWED_HOSTS` and `BRIEVIE_PUBLIC_URLS` from `BRIEVIE_HOSTNAME` (`https://<host>:<BRIEVIE_HTTPS_PORT>`, the port always explicit because Compose cannot add it only when it is not 443); both stay overridable. System check `brievie.E001` (error) fails every management command, so the api container stops at start, when a public URL's host is not in `ALLOWED_HOSTS`. The pair-app page warns when every URL in the QR is `localhost`/127.0.0.1.
+- **The app pairs from the QR payload, not from the short code.** The code alone lacks the server URLs and the CA fingerprint, so the page offers "Kopieer koppelgegevens" (the whole `qr_payload`) as the fallback.
+- **Placeholder secrets.** With `DEBUG` off, `SECRET_KEY` containing `change-me` or shorter than 50 characters stops the server (`ImproperlyConfigured`). The two database passwords equal to the `.env.example` placeholders give warning `brievie.W001` instead of a refusal: a database volume keeps the password it was created with, and rotating it is a manual PostgreSQL step.
+- **401 before 403.** A bearer token that is unknown or revoked is 401 at once (`DeviceTokenAuth` raises), and a request with no session is 401 as well: `apps.accounts.auth.SessionAuth` checks CSRF only for a caller who has a session (403 stays for a session without a valid token). Session-only endpoints (`createPairingCode`, `logout`) answer 401 to any bearer token.
+- **Runtime image.** Multi-stage: the virtualenv is built where `uv` lives and copied over; `backend/tests` is excluded by `.dockerignore`.
+
 ## Open items
 
 - Pin GitHub Actions and container images by digest: later hardening task.
+- Two-factor authentication is not built in phase 1a; login is email + password only (with lockout).
+- Device tokens never expire; a device stops working only when somebody revokes it. A lifetime (and refresh) is still to be decided.

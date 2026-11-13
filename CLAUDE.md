@@ -13,10 +13,18 @@ sections 11, 12, 14, 18 and 19 before changing architecture). Decisions live in
 - `make migrate`: apply migrations as the owner role
 - `make openapi`: write `docs/api/openapi.json`
 
+Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
+
+- `pnpm test`: Vitest (queries by role); `pnpm build`: `tsc --noEmit` + Vite build
+- `pnpm lint`: Biome; `pnpm typecheck`: `tsc --noEmit`
+- `pnpm gen:api`: regenerate `src/api/schema.d.ts` from `docs/api/openapi.json` (after `make openapi`)
+- `pnpm extract`: update the Dutch text catalogue after changing visible strings
+
 ## Rules in short
 
 - Code, comments, commits, table and field names in English. User-facing text in
-  Dutch (B1), always through `gettext`.
+  Dutch (B1): in the backend always through `gettext`, in `web/` always through Lingui
+  (`t` macros; run `pnpm extract` afterwards).
 - Every table: UUID `id`, `created_at`, `updated_at`. Every workspace content table:
   `workspace_id` (subclass `WorkspaceModel`) and RLS enabled **and forced**.
 - `mypy --strict` and `ruff check` clean. No `Any`, no bare `except`.
