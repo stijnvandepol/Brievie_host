@@ -11,7 +11,13 @@ from apps.workspaces.schemas import WorkspaceOut
 router = Router(tags=["accounts"])
 
 
-@router.get("/setup", response=SetupStatusOut, auth=None, operation_id="getSetupStatus")
+@router.get(
+    "/setup",
+    # Its only failure is the database being unreachable (500 internal_error).
+    response={200: SetupStatusOut, 500: ErrorOut},
+    auth=None,
+    operation_id="getSetupStatus",
+)
 def get_setup_status(request: HttpRequest) -> SetupStatusOut:
     return SetupStatusOut(needs_setup=services.needs_setup())
 

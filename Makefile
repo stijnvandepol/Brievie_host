@@ -33,5 +33,4 @@ typecheck:
 
 ## Write the OpenAPI schema (the contract with Brievie_ios) to docs/api/openapi.json.
 openapi:
-	mkdir -p docs/api
-	$(BACKEND) uv run python manage.py export_openapi_schema --api brievie.api.api --indent 2 --sorted --output ../docs/api/openapi.json
+	$(BACKEND) uv run python manage.py export_openapi

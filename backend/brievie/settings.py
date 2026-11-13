@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "ninja",
     "axes",
+    "apps.common",
     "apps.accounts",
     "apps.workspaces",
     "apps.documents",

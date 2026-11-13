@@ -176,6 +176,16 @@ names). `Folder.save()` raises `ValidationError`; a check constraint
   dependency). No file (Caddy not started yet, or a public certificate): the payload
   carries `null` and `GET /server/ca-certificate` answers 404 `no_private_ca`.
 
+## 2026-11-13: OpenAPI contract (Task 7)
+
+`python manage.py export_openapi` writes `docs/api/openapi.json` (sorted keys, 2-space
+indent); `make openapi` runs it, CI runs it with `--check` and a test compares the
+committed file with the generated schema. Every operation has a camelCase
+`operationId` and documents at least one error response with `ErrorOut`, except
+`getHealth` (no failure mode). `getSetupStatus` documents 500 `internal_error`: its only
+failure is an unreachable database. `apps.common` is now an installed app (it holds the
+command). Dropped: Ninja's `export_openapi_schema` (no `--check`).
+
 ## Open items
 
 - Pin GitHub Actions and container images by digest: later hardening task.
