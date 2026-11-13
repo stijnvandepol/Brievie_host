@@ -11,6 +11,8 @@ SECURITY_ENV = (
     "SESSION_COOKIE_SECURE",
     "CSRF_COOKIE_SECURE",
     "BRIEVIE_HSTS_SECONDS",
+    "BRIEVIE_SETUP_TOKEN",
+    "BRIEVIE_MAX_BODY_BYTES",
     "CSRF_TRUSTED_ORIGINS",
     "BRIEVIE_DB_ROLE",
     "DATABASE_OWNER_URL",
@@ -70,3 +72,27 @@ def test_hsts_follows_brievie_hsts_seconds(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(environ.Env, "read_env", lambda *args, **kwargs: None)
     values = runpy.run_path(str(Path(brievie.settings.__file__)))
     assert values["SECURE_HSTS_SECONDS"] == 0
+
+
+def test_setup_token_from_env_must_be_long_enough(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("BRIEVIE_SETUP_TOKEN", "te-kort-123")
+    monkeypatch.setattr(environ.Env, "read_env", lambda *args, **kwargs: None)
+    with pytest.raises(ImproperlyConfigured, match="at least 16"):
+        runpy.run_path(str(Path(brievie.settings.__file__)))
+
+
+def test_setup_token_of_16_characters_is_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("BRIEVIE_SETUP_TOKEN", "x" * 16)
+    monkeypatch.setattr(environ.Env, "read_env", lambda *args, **kwargs: None)
+    assert runpy.run_path(str(Path(brievie.settings.__file__)))["BRIEVIE_SETUP_TOKEN"] == "x" * 16
+
+
+def test_body_limit_defaults_to_2_5_mib(fresh_settings: dict[str, object]) -> None:
+    assert fresh_settings["DATA_UPLOAD_MAX_MEMORY_SIZE"] == 2621440
+
+
+def test_body_limit_follows_brievie_max_body_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("BRIEVIE_MAX_BODY_BYTES", "1048576")
+    monkeypatch.setattr(environ.Env, "read_env", lambda *args, **kwargs: None)
+    values = runpy.run_path(str(Path(brievie.settings.__file__)))
+    assert values["DATA_UPLOAD_MAX_MEMORY_SIZE"] == 1048576

@@ -14,7 +14,7 @@ ERROR_REF = "#/components/schemas/ErrorOut"
 CAMEL_CASE = re.compile(r"^[a-z][a-zA-Z0-9]*$")
 # No failure mode besides a server error (ruling); every other operation documents its errors.
 NO_ERROR_RESPONSES = {"getHealth", "getSetupStatus"}
-BODY_ERRORS = {"400", "415", "422"}
+BODY_ERRORS = {"400", "413", "415", "422"}
 HTTP_METHODS = {"get", "put", "post", "delete", "patch", "options", "head", "trace"}
 
 

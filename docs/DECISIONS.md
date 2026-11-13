@@ -187,8 +187,7 @@ names). `Folder.save()` raises `ValidationError`; a check constraint
 indent); `make openapi` runs it, CI runs it with `--check` and a test compares the
 committed file with the generated schema. Every operation has a camelCase
 `operationId` and documents at least one error response with `ErrorOut`, except
-`getHealth` (no failure mode). `getSetupStatus` documents 500 `internal_error`: its only
-failure is an unreachable database. `apps.common` is now an installed app (it holds the
+`getHealth` and `getSetupStatus` (no failure mode besides a server error). `apps.common` is now an installed app (it holds the
 command). Dropped: Ninja's `export_openapi_schema` (no `--check`).
 
 ## 2026-11-13: Fix round 1 for tasks 4-7
@@ -228,6 +227,21 @@ command). Dropped: Ninja's `export_openapi_schema` (no `--check`).
 - **Caddy pinned** to `caddy:2.11` (2.11.9 at the time). Caddy replaces a
   client-sent `X-Forwarded-For` (no trusted proxies configured), so the last entry
   is the real client address (verified manually, see the task report).
+
+## 2026-11-13: Fix round 2 for tasks 4-7
+
+- **Body limit at the proxy.** Without it, a body over Django's limit made gunicorn
+  close the connection and Caddy answered 502. One variable, `BRIEVIE_MAX_BODY_BYTES`
+  (default 2621440, 2.5 MiB), drives Caddy's `request_body max_size` and Django's
+  `DATA_UPLOAD_MAX_MEMORY_SIZE`; Caddy answers 413 itself. The document-upload endpoint
+  in phase 1b needs its own, larger limit (a separate Caddy route and a streamed
+  upload in Django).
+- **Proxy errors in the API shape.** `handle_errors` in the Caddyfile answers 413 with
+  `payload_too_large` and 502/503/504 with `server_unavailable`, as
+  `{"code", "message"}` in Dutch.
+- **Setup token.** `setup_token` is a required field (`minLength` 1) in the contract; a
+  missing or empty value is 422, a wrong one 403. `BRIEVIE_SETUP_TOKEN` shorter than 16
+  characters stops the server at startup (`ImproperlyConfigured`).
 
 ## Open items
 

@@ -44,12 +44,10 @@ def test_correct_generated_token_sets_up_the_server() -> None:
     assert User.objects.count() == 1
 
 
-@pytest.mark.parametrize("token", [None, "", "fout-token"])
-def test_wrong_or_missing_token_is_403_and_creates_nothing(token: str | None) -> None:
+def test_wrong_token_is_403_and_creates_nothing() -> None:
     generated_token()
-    body = dict(BODY) if token is None else {**BODY, "setup_token": token}
 
-    r = post_json(Client(), "/setup", body)
+    r = post_json(Client(), "/setup", {**BODY, "setup_token": "fout-token"})
 
     assert r.status_code == 403
     assert r.json()["code"] == "setup_token_invalid"
@@ -57,9 +55,24 @@ def test_wrong_or_missing_token_is_403_and_creates_nothing(token: str | None) ->
     assert Workspace.objects.count() == 0
 
 
-def test_without_any_token_setup_is_impossible() -> None:
-    r = post_json(Client(), "/setup", {**BODY, "setup_token": ""})
-    assert r.status_code == 403
+@pytest.mark.parametrize("token", [None, ""])
+def test_missing_or_empty_token_is_422_and_creates_nothing(token: str | None) -> None:
+    generated_token()
+    body = dict(BODY) if token is None else {**BODY, "setup_token": token}
+
+    r = post_json(Client(), "/setup", body)
+
+    assert r.status_code == 422
+    assert r.json()["code"] == "validation_error"
+    assert User.objects.count() == 0
+
+
+def test_setup_token_is_required_in_the_contract() -> None:
+    from brievie.api import api
+
+    schema = api.get_openapi_schema()["components"]["schemas"]["SetupIn"]
+    assert "setup_token" in schema["required"]
+    assert schema["properties"]["setup_token"]["minLength"] == 1
 
 
 def test_token_is_deleted_and_unusable_after_setup() -> None:

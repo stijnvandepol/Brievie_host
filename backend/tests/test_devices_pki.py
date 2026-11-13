@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -87,7 +88,19 @@ BROKEN_PEM = "-----BEGIN CERTIFICATE-----\ngeheim-maar-kapot!!\n-----END CERTIFI
 
 
 @pytest.mark.parametrize(
-    "kind", ["directory", "not_ascii", "not_pem", "malformed_pem", "unreadable"]
+    "kind",
+    [
+        "directory",
+        "not_ascii",
+        "not_pem",
+        "malformed_pem",
+        pytest.param(
+            "unreadable",
+            marks=pytest.mark.skipif(
+                os.geteuid() == 0, reason="root reads files regardless of chmod 0"
+            ),
+        ),
+    ],
 )
 def test_bad_certificate_file_counts_as_no_private_ca(
     kind: str, settings: Settings, tmp_path: Path, caplog: pytest.LogCaptureFixture

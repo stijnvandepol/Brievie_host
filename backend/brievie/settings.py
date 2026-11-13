@@ -167,3 +167,10 @@ BRIEVIE_CA_CERT_PATH: str = env.str(
 # First-run setup needs this code. Unset: `manage.py prepare_setup_token` (run when
 # the api container starts) generates one, stores its hash and prints it once.
 BRIEVIE_SETUP_TOKEN: str = env.str("BRIEVIE_SETUP_TOKEN", default="")
+if BRIEVIE_SETUP_TOKEN and len(BRIEVIE_SETUP_TOKEN) < 16:
+    raise ImproperlyConfigured("BRIEVIE_SETUP_TOKEN must be at least 16 characters long.")
+
+# Largest request body. Caddy enforces the same value (request_body max_size), so a
+# too-large body gets 413 from the proxy instead of a connection reset. The document
+# upload endpoint (phase 1b) will need its own, larger limit.
+DATA_UPLOAD_MAX_MEMORY_SIZE: int = env.int("BRIEVIE_MAX_BODY_BYTES", default=2621440)

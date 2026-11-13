@@ -104,7 +104,7 @@ def setup_server(
         _lock_setup()
         if User.objects.exists():
             raise ApiError(409, "already_set_up", _("Brievie is al ingesteld."))
-        if not setup_token or not _setup_token_is_valid(setup_token):
+        if not _setup_token_is_valid(setup_token):
             raise ApiError(
                 403,
                 "setup_token_invalid",
