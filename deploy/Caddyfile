@@ -1,0 +1,22 @@
+# TLS in front of the API. Caddy's internal CA issues the certificate; the iOS app
+# pins that CA's root (QR payload "ca_sha256", GET /api/v1/server/ca-certificate).
+{
+	# The root is distributed by pinning, not by installing it into a trust store.
+	skip_install_trust
+}
+
+{$BRIEVIE_HOSTNAME} {
+	tls internal {
+		protocols tls1.2 tls1.3
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+		Content-Security-Policy "frame-ancestors 'none'"
+		-Server
+	}
+
+	reverse_proxy api:8000
+}

@@ -12,6 +12,7 @@ from django.utils.translation import gettext as _
 
 from apps.accounts.models import User
 from apps.common.errors import ApiError
+from apps.devices import pki
 from apps.devices.models import Device, PairingCode
 
 CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -46,13 +47,16 @@ def create_pairing_code(user: User) -> tuple[PairingCode, str]:
     return pairing_code, format_code(code)
 
 
-def qr_payload(code: str, *, ca_sha256: str | None) -> str:
-    """What the QR code holds: a JSON string the app parses (version 1)."""
+def qr_payload(code: str) -> str:
+    """What the QR code holds: a JSON string the app parses (version 1).
+
+    `ca_sha256` pins Caddy's private root; it is null when there is none (yet).
+    """
     payload = {
         "v": 1,
         "urls": list(settings.BRIEVIE_PUBLIC_URLS),
         "code": code,
-        "ca_sha256": ca_sha256,
+        "ca_sha256": pki.ca_certificate_sha256(),
     }
     return json.dumps(payload, separators=(",", ":"))
 
@@ -121,3 +125,10 @@ def revoke_device(user: User, device_id: UUID) -> None:
         )
         if revoked == 0:
             raise ApiError(404, "device_not_found", _("We kunnen dit apparaat niet vinden."))
+
+
+def ca_certificate_pem() -> str:
+    pem = pki.load_ca_certificate_pem()
+    if pem is None:
+        raise ApiError(404, "no_private_ca", _("Deze server gebruikt geen eigen certificaat."))
+    return pem

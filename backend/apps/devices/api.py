@@ -9,7 +9,7 @@ from apps.accounts.services import current_user
 from apps.common.schemas import ErrorOut
 from apps.devices import services
 from apps.devices.models import Device
-from apps.devices.schemas import DeviceOut, PairIn, PairingCodeOut, PairOut
+from apps.devices.schemas import CaCertificateOut, DeviceOut, PairIn, PairingCodeOut, PairOut
 from apps.devices.throttling import PairingThrottle
 
 router = Router(tags=["devices"])
@@ -28,7 +28,7 @@ def create_pairing_code(request: HttpRequest) -> Status[PairingCodeOut]:
         PairingCodeOut(
             code=code,
             expires_at=pairing_code.expires_at,
-            qr_payload=services.qr_payload(code, ca_sha256=None),
+            qr_payload=services.qr_payload(code),
         ),
     )
 
@@ -63,3 +63,14 @@ def list_devices(request: HttpRequest) -> list[Device]:
 def revoke_device(request: HttpRequest, device_id: UUID) -> Status[None]:
     services.revoke_device(current_user(request), device_id)
     return Status(204, None)
+
+
+@router.get(
+    "/server/ca-certificate",
+    response={200: CaCertificateOut, 404: ErrorOut},
+    auth=None,
+    tags=["server"],
+    operation_id="getCaCertificate",
+)
+def get_ca_certificate(request: HttpRequest) -> CaCertificateOut:
+    return CaCertificateOut(pem=services.ca_certificate_pem())

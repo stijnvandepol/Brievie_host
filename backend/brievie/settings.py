@@ -152,3 +152,9 @@ BRIEVIE_PUBLIC_URLS: list[str] = [
 ]
 if any(not url.startswith("https://") for url in BRIEVIE_PUBLIC_URLS):
     raise ImproperlyConfigured("Every BRIEVIE_PUBLIC_URLS entry must start with https://.")
+
+# Root certificate of Caddy's internal CA, from Caddy's data volume (read-only).
+# Empty: no private CA (public certificate); pairing then pins nothing.
+BRIEVIE_CA_CERT_PATH: str = env.str(
+    "BRIEVIE_CA_CERT_PATH", default="/caddy-data/caddy/pki/authorities/local/root.crt"
+)

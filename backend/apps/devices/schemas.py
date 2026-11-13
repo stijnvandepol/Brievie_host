@@ -30,3 +30,7 @@ class DeviceOut(Schema):
     name: str
     created_at: datetime
     last_seen_at: datetime | None
+
+
+class CaCertificateOut(Schema):
+    pem: str

@@ -52,8 +52,10 @@ English msgids plus a Dutch catalogue (extra build step for one language).
 
 ## 2026-11-13: Local ports
 
-PostgreSQL and the API publish their ports on 127.0.0.1 only, for local development.
-Task 6 (Caddy) makes Caddy the only service with public ports.
+Caddy is the only service that publishes ports to the network: 443, and 80 for the
+redirect to https (Task 6). The API port is not published. PostgreSQL still publishes
+5432 on 127.0.0.1 only, because `make test` and `make migrate` run on the host;
+move that to a development override file before a production install guide.
 
 ## 2026-11-13: User model
 
@@ -156,6 +158,23 @@ names). `Folder.save()` raises `ValidationError`; a check constraint
   table (more code for the same result).
 - **Public URLs.** `BRIEVIE_PUBLIC_URLS` (comma-separated, each `https://`, local address
   first) feeds the QR payload; settings refuse a non-https entry.
+
+## 2026-11-13: HTTPS with Caddy and the certificate pin (Task 6)
+
+- **Caddy 2** (`caddy:2` image) terminates TLS for `{$BRIEVIE_HOSTNAME}` with
+  `tls internal` (its own CA), TLS 1.2 minimum, HSTS, `nosniff`,
+  `Referrer-Policy: same-origin`, `frame-ancestors 'none'`, and proxies to `api:8000`.
+  `skip_install_trust`: the root reaches clients by pinning, not via a trust store.
+- **Only the public root reaches the api.** Caddy keeps its CA in its data volume with
+  mode 0700, next to `root.key`. Sharing that volume with `api` (as first planned)
+  fails on permissions, and loosening them would hand the CA's private key to the API
+  process, which would defeat the pin. `deploy/caddy-publish-root.sh` runs Caddy and
+  copies `root.crt` (0644) into a separate `caddy-ca` volume as soon as Caddy has
+  created its CA; `api` mounts only that volume, read-only, at the default
+  `BRIEVIE_CA_CERT_PATH` (`/caddy-data/caddy/pki/authorities/local/root.crt`).
+- **Pin.** `ca_sha256` = SHA-256 of the root's DER bytes (stdlib `ssl`, no new
+  dependency). No file (Caddy not started yet, or a public certificate): the payload
+  carries `null` and `GET /server/ca-certificate` answers 404 `no_private_ca`.
 
 ## Open items
 
