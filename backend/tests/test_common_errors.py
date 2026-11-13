@@ -84,3 +84,38 @@ def test_unhandled_exception_is_500_internal_error_and_rolls_back(
     assert Workspace.objects.count() == 0
     assert "boom" in caplog.text
     assert "geheim-123" not in caplog.text
+
+
+def assert_no_error_logs(caplog: pytest.LogCaptureFixture) -> None:
+    assert [r for r in caplog.records if r.levelno >= logging.ERROR] == []
+
+
+@pytest.mark.parametrize("url", ["/api/suspicious", "/api/bad-request", "/api/too-big"])
+def test_suspicious_operation_is_400_bad_request_without_error_log(
+    client: Client, caplog: pytest.LogCaptureFixture, url: str
+) -> None:
+    with caplog.at_level(logging.DEBUG):
+        r = client.get(url)
+    assert r.status_code == 400
+    assert_error(r.json(), "bad_request")
+    assert_no_error_logs(caplog)
+
+
+def test_permission_denied_is_403_forbidden_without_error_log(
+    client: Client, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.DEBUG):
+        r = client.get("/api/permission-denied")
+    assert r.status_code == 403
+    assert_error(r.json(), "forbidden")
+    assert_no_error_logs(caplog)
+
+
+def test_model_validation_error_is_422_with_its_first_message(
+    client: Client, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.DEBUG):
+        r = client.get("/api/model-validation")
+    assert r.status_code == 422
+    assert r.json() == {"code": "validation_error", "message": "Een map heeft een naam nodig."}
+    assert_no_error_logs(caplog)

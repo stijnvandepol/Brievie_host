@@ -44,7 +44,9 @@ class Migration(migrations.Migration):
                 (
                     "explanation_language",
                     models.CharField(
-                        choices=[("nl", "Nederlands"), ("en", "Engels")], default="nl", max_length=2
+                        choices=[("nl", "Nederlands"), ("en", "English")],
+                        default="nl",
+                        max_length=2,
                     ),
                 ),
                 ("is_active", models.BooleanField(default=True)),

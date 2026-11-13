@@ -109,10 +109,15 @@ def test_create_workspace_rejects_an_unknown_kind() -> None:
     assert Workspace.objects.count() == 0
 
 
-@pytest.mark.parametrize("name", ["", "   ", "Auto/APK", "/"])
-def test_folder_rejects_empty_or_slashed_names(ws_a: Workspace, name: str) -> None:
-    with workspace_context(ws_a.id), pytest.raises(ValidationError):
+@pytest.mark.parametrize(
+    ("name", "code"), [("", "blank"), ("   ", "blank"), ("Auto/APK", "slash"), ("/", "slash")]
+)
+def test_folder_rejects_empty_or_slashed_names(ws_a: Workspace, name: str, code: str) -> None:
+    with workspace_context(ws_a.id), pytest.raises(ValidationError) as excinfo:
         Folder.objects.create(workspace=ws_a, name=name)
+    [error] = excinfo.value.error_dict["name"]
+    assert error.code == code
+    assert excinfo.value.messages == [error.message]
 
 
 def test_folder_name_is_trimmed(ws_a: Workspace) -> None:

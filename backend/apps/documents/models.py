@@ -42,9 +42,13 @@ class Folder(WorkspaceModel):
     ) -> None:
         self.name = self.name.strip()
         if not self.name:
-            raise ValidationError({"name": _("Een map heeft een naam nodig.")}, code="blank")
+            raise ValidationError(
+                {"name": ValidationError(_("Een map heeft een naam nodig."), code="blank")}
+            )
         if "/" in self.name:
-            raise ValidationError({"name": _("Een mapnaam mag geen / bevatten.")}, code="slash")
+            raise ValidationError(
+                {"name": ValidationError(_("Een mapnaam mag geen / bevatten."), code="slash")}
+            )
         if self.parent is not None and self.parent.workspace_id != self.workspace_id:
             # The FK check bypasses RLS, so a parent from another workspace would be accepted.
             raise ValueError("A folder's parent must be in the same workspace.")

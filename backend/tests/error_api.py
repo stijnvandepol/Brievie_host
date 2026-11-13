@@ -1,5 +1,12 @@
 """A throwaway API, mounted only by tests/test_common_errors.py, that fails on purpose."""
 
+from django.core.exceptions import (
+    BadRequest,
+    PermissionDenied,
+    RequestDataTooBig,
+    SuspiciousOperation,
+    ValidationError,
+)
 from django.http import Http404, HttpRequest
 from django.urls import path
 from ninja import NinjaAPI, Schema
@@ -55,6 +62,31 @@ def teapot(request: HttpRequest) -> None:
 def crash(request: HttpRequest, payload: SecretIn) -> None:
     Workspace.objects.create(name="Half af", kind="home")
     raise RuntimeError("boom")
+
+
+@errors_api.get("/suspicious", auth=None)
+def suspicious(request: HttpRequest) -> None:
+    raise SuspiciousOperation("Invalid HTTP_HOST header")
+
+
+@errors_api.get("/bad-request", auth=None)
+def bad_request(request: HttpRequest) -> None:
+    raise BadRequest("Malformed")
+
+
+@errors_api.get("/too-big", auth=None)
+def too_big(request: HttpRequest) -> None:
+    raise RequestDataTooBig("Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.")
+
+
+@errors_api.get("/permission-denied", auth=None)
+def permission_denied(request: HttpRequest) -> None:
+    raise PermissionDenied
+
+
+@errors_api.get("/model-validation", auth=None)
+def model_validation(request: HttpRequest) -> None:
+    raise ValidationError({"name": ValidationError("Een map heeft een naam nodig.", code="blank")})
 
 
 urlpatterns = [path("api/", errors_api.urls)]

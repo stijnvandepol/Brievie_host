@@ -51,3 +51,7 @@ def test_natural_key_lookup_ignores_case() -> None:
 def test_authenticate_accepts_mixed_case_email() -> None:
     user = UserFactory.create(email="stijn@example.nl")
     assert authenticate(None, username="STIJN@example.nl", password=TEST_PASSWORD) == user
+
+
+def test_explanation_languages_are_named_in_their_own_language() -> None:
+    assert dict(User.ExplanationLanguage.choices) == {"nl": "Nederlands", "en": "English"}

@@ -26,6 +26,9 @@ sections 11, 12, 14, 18 and 19 before changing architecture). Decisions live in
 - Every non-2xx body: `{"code": "<snake_case>", "message": "<Dutch sentence>"}` via
   `apps.common.errors.ApiError`.
 - Thin endpoints: validate, call one function in the app's `services.py`, return.
+- Every mutating service function is wrapped in `transaction.atomic`, so raising inside
+  it rolls back its own writes. An error response (`ApiError`, Ninja `HttpError`,
+  `Http404`) does not roll back the request transaction; only a 500 does.
 - No document content, tokens, passwords or BSNs in logs.
 - No new dependency without a line in `docs/DECISIONS.md`.
 - No Redis, no Celery, no Node runtime container.

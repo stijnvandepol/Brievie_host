@@ -1,6 +1,8 @@
 import logging
 from collections.abc import Callable
 
+from django.core.exceptions import BadRequest, PermissionDenied, SuspiciousOperation
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.utils.translation import gettext as _
@@ -15,8 +17,11 @@ logger = logging.getLogger(__name__)
 class ApiError(Exception):
     """An expected failure, rendered as `{"code", "message"}` with the given status.
 
-    It does not roll back the request transaction: raise it before writing, or
-    keep writes that must survive the error (such as a failed-login record).
+    Like Ninja's `HttpError` family and `Http404`, it does not roll back the
+    request transaction: the view returns a response, so ATOMIC_REQUESTS commits
+    earlier writes (which keeps, for example, a failed-login record). Project rule:
+    every mutating service function is wrapped in `transaction.atomic`, so raising
+    inside it rolls back its own writes.
     """
 
     def __init__(self, status: int, code: str, message: str) -> None:
@@ -65,6 +70,25 @@ def install_error_handlers(api: NinjaAPI) -> None:
             response["Retry-After"] = str(exc.wait)
         return response
 
+    def handle_suspicious_operation(request: HttpRequest, exc: object) -> JsonResponse:
+        # A client error, not a server bug: no traceback, no rollback needed.
+        logger.warning("Rejected %s %s: %s", request.method, request.path, type(exc).__name__)
+        return http_error_response(400)
+
+    def handle_permission_denied(request: HttpRequest, exc: object) -> JsonResponse:
+        return http_error_response(403)
+
+    def handle_model_validation_error(
+        request: HttpRequest, exc: DjangoValidationError
+    ) -> JsonResponse:
+        messages = exc.messages
+        message = (
+            messages[0]
+            if messages
+            else _("De gegevens kloppen niet. Controleer wat je hebt ingevuld.")
+        )
+        return error_response(422, "validation_error", message)
+
     def handle_unexpected_error(request: HttpRequest, exc: object) -> JsonResponse:
         # The view returns normally, so ATOMIC_REQUESTS would commit half-done work.
         transaction.set_rollback(True)
@@ -83,6 +107,10 @@ def install_error_handlers(api: NinjaAPI) -> None:
     api.add_exception_handler(HttpError, handle_http_error)  # type: ignore[arg-type]
     api.add_exception_handler(ValidationError, handle_validation_error)
     api.add_exception_handler(Http404, handle_not_found)
+    api.add_exception_handler(SuspiciousOperation, handle_suspicious_operation)
+    api.add_exception_handler(BadRequest, handle_suspicious_operation)
+    api.add_exception_handler(PermissionDenied, handle_permission_denied)
+    api.add_exception_handler(DjangoValidationError, handle_model_validation_error)  # type: ignore[arg-type]
     api.add_exception_handler(Exception, handle_unexpected_error)
 
 

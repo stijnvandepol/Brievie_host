@@ -3,7 +3,6 @@ from typing import ClassVar
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 from django.db.models.functions import Lower
-from django.utils.translation import gettext_lazy as _
 
 from apps.common.models import BaseModel
 
@@ -28,8 +27,9 @@ class UserManager(BaseUserManager["User"]):
 
 class User(AbstractBaseUser, PermissionsMixin, BaseModel):
     class ExplanationLanguage(models.TextChoices):
-        DUTCH = "nl", _("Nederlands")
-        ENGLISH = "en", _("Engels")
+        # Each language in its own name, so a reader finds theirs; not translated.
+        DUTCH = "nl", "Nederlands"
+        ENGLISH = "en", "English"
 
     # Stored in lower case (create_user and clean() normalise; a check constraint
     # rejects anything else), so the unique index ignores case.
