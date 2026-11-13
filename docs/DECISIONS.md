@@ -11,6 +11,7 @@ Runtime:
 - **psycopg[binary]** (3.3.9): PostgreSQL driver (psycopg 3). Dropped: psycopg2 (maintenance only).
 - **django-environ** (0.14.0): reads settings and database URLs from the environment. Dropped: hand-written `os.environ` parsing. Note: its classifiers stop at Django 6.0; it has no upper bound and works on 6.1 (test suite).
 - **whitenoise** (6.12.0): serves static files (later the built web app) from the API container without an extra web server. Dropped: serving static files from Caddy (needs a shared volume). Classifiers stop at Django 6.0; no upper bound.
+- **django-stubs-ext** (6.1.2): makes generic Django classes such as `ModelAdmin[User]` subscriptable at runtime, so `mypy --strict` needs no `Any`. Dropped: `TYPE_CHECKING` aliases per class.
 - **gunicorn** (27.0.1): WSGI server in the container. Dropped: uvicorn/ASGI (no async needed yet).
 
 Development:
@@ -45,3 +46,19 @@ English msgids plus a Dutch catalogue (extra build step for one language).
 
 PostgreSQL and the API publish their ports on 127.0.0.1 only, for local development.
 Task 6 (Caddy) makes Caddy the only service with public ports.
+
+## 2026-11-13: User model
+
+`accounts.User` logs in with its email address. The address is stored in lower case:
+`create_user` and `clean()` normalise it, and a check constraint
+(`email = lower(email)`) rejects anything else, so the plain unique index is
+case-insensitive. Dropped: a functional `UNIQUE (lower(email))` index (Django requires
+`USERNAME_FIELD` to be `unique=True`, so it would be a second index).
+Django's own tables (permissions, groups, sessions, admin log, the user's group and
+permission join tables) keep Django's integer keys; the UUID rule covers our tables.
+
+## 2026-11-13: Django admin
+
+The Django admin is mounted at `/admin/` with the user registered (password hash never
+shown). Only staff accounts (`createsuperuser`) can sign in; the app's own users are
+not staff. It is a fallback for the server owner, not part of the product UI.
