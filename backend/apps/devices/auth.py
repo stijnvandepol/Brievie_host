@@ -1,22 +1,26 @@
 from django.http import HttpRequest
+from django.utils.translation import gettext as _
 from ninja.security import HttpBearer
 
 from apps.accounts.models import User
+from apps.common.errors import ApiError
 from apps.devices import services
 
 
 class DeviceTokenAuth(HttpBearer):
     """`Authorization: Bearer <token>` from a paired device.
 
-    Sets `request.user` and `request.device`. A revoked or unknown token does not
-    authenticate; with no session either, the request gets 401 `not_authenticated`.
-    Bearer requests need no CSRF token: a browser never adds this header by itself.
+    Sets `request.user` and `request.device`. A revoked or unknown token is refused
+    at once with 401 `not_authenticated`, whatever else the request carries (no
+    fallback to a session, no CSRF check first). A request without the header is
+    left to the next authenticator. Bearer requests need no CSRF token: a browser
+    never adds this header by itself.
     """
 
     def authenticate(self, request: HttpRequest, token: str) -> User | None:
         device = services.device_for_token(token)
         if device is None:
-            return None
+            raise ApiError(401, "not_authenticated", _("Je bent niet ingelogd."))
         request.user = device.user
         request.device = device  # type: ignore[attr-defined]
         return device.user

@@ -176,3 +176,19 @@ def test_setup_attempts_are_rate_limited() -> None:
 def test_get_setup_reveals_nothing_about_the_token() -> None:
     generated_token()
     assert Client().get("/api/v1/setup").json() == {"needs_setup": True}
+
+
+def test_surrounding_whitespace_is_ignored_for_a_generated_token() -> None:
+    token = generated_token()
+
+    r = post_json(Client(), "/setup", {**BODY, "setup_token": f"  {token}\n"})
+
+    assert r.status_code == 201
+
+
+def test_surrounding_whitespace_is_ignored_for_a_configured_token(settings: Settings) -> None:
+    settings.BRIEVIE_SETUP_TOKEN = "eigen-installatiecode-2026"
+
+    r = post_json(Client(), "/setup", {**BODY, "setup_token": " eigen-installatiecode-2026 "})
+
+    assert r.status_code == 201

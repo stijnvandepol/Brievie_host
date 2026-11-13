@@ -15,6 +15,11 @@ if _dotenv.is_file():
 
 SECRET_KEY: str = env.str("SECRET_KEY")
 DEBUG: bool = env.bool("DEBUG", default=False)
+if not DEBUG and ("change-me" in SECRET_KEY or len(SECRET_KEY) < 50):
+    raise ImproperlyConfigured(
+        "SECRET_KEY is still the placeholder or shorter than 50 characters. "
+        "Generate one: openssl rand -base64 48 (see 'Run the whole stack' in the README)."
+    )
 ALLOWED_HOSTS: list[str] = env.list("ALLOWED_HOSTS", default=["localhost"])
 
 INSTALLED_APPS = [

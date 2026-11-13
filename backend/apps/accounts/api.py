@@ -1,8 +1,8 @@
 from django.http import HttpRequest
 from ninja import Router, Status
-from ninja.security import django_auth
 
 from apps.accounts import services
+from apps.accounts.auth import session_auth
 from apps.accounts.models import User
 from apps.accounts.schemas import LoginIn, SetupIn, SetupOut, SetupStatusOut, UserOut
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
@@ -48,7 +48,8 @@ def login(request: HttpRequest, payload: LoginIn) -> User:
 @router.post(
     "/auth/logout",
     response={204: None, **SESSION_WRITE_ERRORS},
-    auth=django_auth,
+    auth=session_auth,
+    description="Web session only: a bearer token answers 401 not_authenticated.",
     operation_id="logout",
 )
 def logout(request: HttpRequest) -> Status[None]:

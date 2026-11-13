@@ -1,9 +1,9 @@
 from django.conf import settings
 from django.http import HttpRequest
 from ninja import NinjaAPI
-from ninja.security import django_auth
 
 from apps.accounts.api import router as accounts_router
+from apps.accounts.auth import session_auth
 from apps.common.errors import install_error_handlers
 from apps.common.schemas import HealthOut
 from apps.devices.api import router as devices_router
@@ -28,7 +28,7 @@ api = NinjaAPI(
     version="1.0.0",
     urls_namespace="api-v1",
     # A paired device's bearer token first, then the web session (with CSRF).
-    auth=[DeviceTokenAuth(), django_auth],
+    auth=[DeviceTokenAuth(), session_auth],
     docs_url=_urls["docs_url"],
     openapi_url=_urls["openapi_url"],
 )

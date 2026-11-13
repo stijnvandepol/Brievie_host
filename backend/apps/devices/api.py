@@ -2,8 +2,8 @@ from uuid import UUID
 
 from django.http import HttpRequest
 from ninja import Router, Status
-from ninja.security import django_auth
 
+from apps.accounts.auth import session_auth
 from apps.accounts.schemas import UserOut
 from apps.accounts.services import current_user
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
@@ -18,7 +18,11 @@ router = Router(tags=["devices"])
 @router.post(
     "/devices/pairing-codes",
     response={201: PairingCodeOut, **SESSION_WRITE_ERRORS},
-    auth=django_auth,
+    auth=session_auth,
+    description=(
+        "Web session only. A bearer token (even a valid one) is not accepted here and "
+        "answers 401 not_authenticated; a session without a valid CSRF token answers 403."
+    ),
     operation_id="createPairingCode",
 )
 def create_pairing_code(request: HttpRequest) -> Status[services.IssuedPairingCode]:

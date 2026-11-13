@@ -96,3 +96,35 @@ def test_body_limit_follows_brievie_max_body_bytes(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(environ.Env, "read_env", lambda *args, **kwargs: None)
     values = runpy.run_path(str(Path(brievie.settings.__file__)))
     assert values["DATA_UPLOAD_MAX_MEMORY_SIZE"] == 1048576
+
+
+GOOD_SECRET = "k" * 50
+
+
+def run_settings(monkeypatch: pytest.MonkeyPatch, **env: str) -> dict[str, object]:
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(environ.Env, "read_env", lambda *args, **kwargs: None)
+    return runpy.run_path(str(Path(brievie.settings.__file__)))
+
+
+@pytest.mark.parametrize(
+    "secret",
+    ["change-me-to-a-long-random-string" + "x" * 30, "k" * 49, ""],
+    ids=["placeholder", "too-short", "empty"],
+)
+def test_placeholder_or_short_secret_key_is_refused(
+    monkeypatch: pytest.MonkeyPatch, secret: str
+) -> None:
+    with pytest.raises(ImproperlyConfigured, match="SECRET_KEY"):
+        run_settings(monkeypatch, DEBUG="false", SECRET_KEY=secret)
+
+
+def test_long_random_secret_key_is_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
+    values = run_settings(monkeypatch, DEBUG="false", SECRET_KEY=GOOD_SECRET)
+    assert values["SECRET_KEY"] == GOOD_SECRET
+
+
+def test_debug_accepts_a_short_secret_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    values = run_settings(monkeypatch, DEBUG="true", SECRET_KEY="change-me")
+    assert values["SECRET_KEY"] == "change-me"

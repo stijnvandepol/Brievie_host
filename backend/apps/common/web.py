@@ -1,10 +1,11 @@
 from django.conf import settings
 from django.db import transaction
 from django.http import Http404, HttpRequest, HttpResponse
-from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.views.decorators.http import require_safe
 
 
+@csrf_exempt  # no write is accepted here: a POST is a plain 405, not the CSRF page
 @require_safe
 @ensure_csrf_cookie
 @transaction.non_atomic_requests

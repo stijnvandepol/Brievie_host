@@ -56,7 +56,7 @@ def prepare_setup_token(*, new: bool = False) -> str | None:
 
 
 def _setup_token_is_valid(given: str) -> bool:
-    given_hash = sha256_hex(given)
+    given_hash = sha256_hex(given.strip())  # a phone keyboard adds spaces
     configured: str = settings.BRIEVIE_SETUP_TOKEN
     if configured:
         return hmac.compare_digest(given_hash, sha256_hex(configured))

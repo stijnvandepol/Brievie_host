@@ -38,7 +38,7 @@ def test_unknown_api_path_still_returns_the_json_404(client: Client) -> None:
     assert r.json() == {"code": "not_found", "message": "We kunnen dit niet vinden."}
 
 
-@pytest.mark.parametrize("path", ["/api", "/api/", "/api/other"])
+@pytest.mark.parametrize("path", ["/api", "/api/", "/api/other", "/api/v1", "/api/v1/"])
 def test_api_prefix_is_never_the_index(client: Client, path: str) -> None:
     r = client.get(path)
     assert r.status_code == 404
@@ -52,11 +52,22 @@ def test_missing_file_is_a_404_and_not_the_index(client: Client, path: str) -> N
     assert INDEX not in r.content.decode()
 
 
-def test_only_safe_methods(client: Client) -> None:
-    assert client.post("/koppel-app").status_code == 405
+def test_only_safe_methods() -> None:
+    # With CSRF enforced, as in production: a POST is 405, never Django's CSRF page.
+    client = Client(enforce_csrf_checks=True)
+    for method in ("post", "put", "patch", "delete"):
+        r = getattr(client, method)("/login")
+        assert r.status_code == 405, method
+        assert "csrf" not in r.content.decode().lower()
     assert client.head("/koppel-app").status_code == 200
 
 
 def test_missing_build_is_a_404(client: Client, web_dist: Path) -> None:
     (web_dist / "index.html").unlink()
     assert client.get("/").status_code == 404
+
+
+def test_api_root_with_a_trailing_slash_is_the_json_404(client: Client) -> None:
+    r = client.get("/api/v1/")
+    assert r.status_code == 404
+    assert r.json() == {"code": "not_found", "message": "We kunnen dit niet vinden."}
