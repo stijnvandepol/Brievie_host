@@ -13,9 +13,9 @@ from django.core.checks import CheckMessage, Error, Warning, register
 from django.http.request import validate_host
 from django.utils.translation import gettext as _
 
-# The values in deploy/.env.example: a server that still uses them is open to anyone
-# who has read this repository.
-DATABASE_PASSWORD_PLACEHOLDERS = frozenset({"change-me-app", "change-me-owner"})
+# Every secret in deploy/.env.example contains this: a server that still uses one is
+# open to anyone who has read this repository.
+PLACEHOLDER_MARKER = "change-me"
 
 
 @register()
@@ -64,5 +64,5 @@ def check_database_passwords(
             id="brievie.W001",
         )
         for name, config in configs
-        if config.get("PASSWORD") in DATABASE_PASSWORD_PLACEHOLDERS
+        if PLACEHOLDER_MARKER in str(config.get("PASSWORD") or "")
     ]

@@ -12,39 +12,34 @@ repository is the server that runs at home or at the office; the iOS app lives i
 ## Run locally
 
 ```sh
-make dev          # PostgreSQL 18 on 127.0.0.1:5432, creates deploy/.env
+make dev          # creates deploy/.env with random secrets, starts PostgreSQL 18 on 127.0.0.1:5432
 make migrate      # apply migrations
 make test lint typecheck
 ```
 
-`deploy/.env` holds local passwords. With `DEBUG=false` (the default) the server refuses to
-start while `SECRET_KEY` is the placeholder or shorter than 50 characters; the database
-passwords only produce a warning (`manage.py check`), because an existing database keeps
-the password it was created with. Replace every `change-me` value before you run Brievie
-anywhere but on your own machine (see below).
+`make dev` runs `deploy/init-env.sh`, which creates `deploy/.env` from
+`deploy/.env.example` **only if it does not exist yet**, with freshly generated random
+values for `SECRET_KEY` and the database passwords (file mode 600, nothing is printed). It
+never changes an existing `deploy/.env`. The example file itself holds placeholders and is
+refused by the server: with `DEBUG=false` (the default) it will not start while
+`SECRET_KEY` is a placeholder or shorter than 50 characters, and `manage.py check` warns
+about placeholder database passwords.
+
+The database passwords are fixed when PostgreSQL first creates its volume. So
+`deploy/.env` must exist **before the first** `docker compose up` (or `make dev`). If the
+volume was created with other passwords (for example from an older `.env`), either put
+those passwords back in `deploy/.env`, change them in PostgreSQL (`ALTER ROLE ... PASSWORD`),
+or delete the volume (`docker compose ... down -v`, this deletes all data) and start again.
 
 ## Run the whole stack
 
-1. Create your settings file:
+1. Create your settings file (skips if `deploy/.env` exists; secrets are generated):
 
    ```sh
-   cp deploy/.env.example deploy/.env
+   sh deploy/init-env.sh
    ```
 
-2. Replace the `change-me` values in `deploy/.env` with real secrets. One command per
-   value; paste each output after the `=` of its line:
-
-   ```sh
-   openssl rand -base64 48   # SECRET_KEY (at least 50 characters)
-   openssl rand -hex 24      # POSTGRES_PASSWORD
-   openssl rand -hex 24      # BRIEVIE_OWNER_PASSWORD
-   openssl rand -hex 24      # BRIEVIE_APP_PASSWORD
-   ```
-
-   Also copy the two database passwords into `DATABASE_URL` and `DATABASE_OWNER_URL`
-   (only used when you run the backend outside Docker), and set `BRIEVIE_HOSTNAME`
-   (next section). The database passwords are set when the database is created: changing
-   them later in `deploy/.env` does not change a database that already exists.
+2. Set `BRIEVIE_HOSTNAME` in `deploy/.env` (see "iPhone koppelen" below).
 
 3. Start everything:
 

@@ -80,3 +80,13 @@ def test_placeholder_database_password_is_fine_in_debug(
     settings.DATABASE_OWNER = None
 
     assert check_database_passwords(None) == []
+
+
+def test_any_password_containing_change_me_is_a_warning(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings.DEBUG = False
+    monkeypatch.setitem(settings.DATABASES["default"], "PASSWORD", "x-change-me-too")
+    settings.DATABASE_OWNER = None
+
+    assert [m.id for m in check_database_passwords(None)] == ["brievie.W001"]

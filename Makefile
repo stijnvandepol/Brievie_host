@@ -4,7 +4,7 @@ BACKEND := cd backend &&
 .PHONY: dev down migrate test lint format typecheck openapi web-install web-test web-lint web-build web-api web-i18n
 
 deploy/.env:
-	cp deploy/.env.example deploy/.env
+	sh deploy/init-env.sh
 
 ## Start PostgreSQL for local development and tests.
 dev: deploy/.env
