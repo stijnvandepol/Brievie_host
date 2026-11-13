@@ -32,7 +32,8 @@ services:
       BRIEVIE_DB_ROLE: owner
       DATABASE_OWNER_URL: postgres://brievie_owner:${BRIEVIE_OWNER_PASSWORD}@postgres:5432/brievie
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in deploy/.env}
-    command: ["python", "manage.py", "migrate", "--noinput"]
+    # createcachetable: the database cache that holds throttle counts (idempotent).
+    command: ["sh", "-c", "python manage.py migrate --noinput && python manage.py createcachetable"]
     restart: "no"
 
   api:
@@ -52,6 +53,7 @@ services:
       CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-}
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
       CSRF_COOKIE_SECURE: ${CSRF_COOKIE_SECURE:-true}
+      BRIEVIE_PUBLIC_URLS: ${BRIEVIE_PUBLIC_URLS:-}
     ports:
       - "127.0.0.1:8000:8000"
 

@@ -135,6 +135,28 @@ names). `Folder.save()` raises `ValidationError`; a check constraint
 - **No public docs.** The Ninja docs page and the live `openapi.json` exist only with
   `DEBUG`; the contract is the committed `docs/api/openapi.json`.
 
+## 2026-11-13: Device pairing (Task 5)
+
+- **Secrets stored as hashes.** A pairing code (8 characters from
+  `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`, shown `XXXX-XXXX`, 10 minutes, single use) and a
+  device token (`secrets.token_urlsafe(32)`) are stored only as SHA-256 hex. Lookup is
+  by hash, so the database compares hashes, never the secret; the final comparison
+  uses `hmac.compare_digest`. A new code deletes the user's older unused codes.
+  Unsalted SHA-256 is enough for the token (256 bits); the code has 40 bits but lives
+  10 minutes, is single use and pairing is rate limited.
+- **Auth order.** `[DeviceTokenAuth(), django_auth]`: a bearer token (no CSRF needed,
+  browsers never add it on their own) or the session (CSRF enforced). Creating a pairing
+  code and logging out accept only the session. `last_seen_at` is written at most once
+  a minute.
+- **Pairing rate limit.** Ninja's `SimpleRateThrottle` at 10 per client address per
+  10 minutes (`PairingThrottle`), stored in Django's **database cache** so all gunicorn
+  workers share the count. `createcachetable` runs after `migrate` (Compose `migrate`
+  service, `make migrate`); the test run creates the table itself. Dropped: the
+  per-process local-memory cache (each worker would allow 10); a dedicated attempts
+  table (more code for the same result).
+- **Public URLs.** `BRIEVIE_PUBLIC_URLS` (comma-separated, each `https://`, local address
+  first) feeds the QR payload; settings refuse a non-https entry.
+
 ## Open items
 
 - Pin GitHub Actions and container images by digest: later hardening task.

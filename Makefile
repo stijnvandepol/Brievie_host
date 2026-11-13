@@ -17,6 +17,7 @@ down:
 ## Apply migrations as the schema owner role.
 migrate:
 	$(BACKEND) BRIEVIE_DB_ROLE=owner uv run python manage.py migrate
+	$(BACKEND) BRIEVIE_DB_ROLE=owner uv run python manage.py createcachetable
 
 test:
 	$(BACKEND) uv run pytest

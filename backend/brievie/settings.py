@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.workspaces",
     "apps.documents",
+    "apps.devices",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
@@ -91,6 +92,15 @@ DATABASES = {
 }
 DATABASES["default"]["ATOMIC_REQUESTS"] = True
 
+# The database cache is shared by all gunicorn workers (throttle counts).
+# `manage.py createcachetable` creates its table; the test run does so itself.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "brievie_cache",
+    }
+}
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 LANGUAGE_CODE = "nl"
@@ -134,3 +144,11 @@ AXES_RESET_ON_SUCCESS = True
 AXES_DISABLE_ACCESS_LOG = True
 AXES_VERBOSE = False
 SILENCED_SYSTEM_CHECKS = ["axes.W002"]  # AxesMiddleware: see above.
+
+# Addresses the app uses to reach this server, local address first; each must be
+# https://. They go into the pairing QR code.
+BRIEVIE_PUBLIC_URLS: list[str] = [
+    url.strip() for url in env.list("BRIEVIE_PUBLIC_URLS", default=[]) if url.strip()
+]
+if any(not url.startswith("https://") for url in BRIEVIE_PUBLIC_URLS):
+    raise ImproperlyConfigured("Every BRIEVIE_PUBLIC_URLS entry must start with https://.")

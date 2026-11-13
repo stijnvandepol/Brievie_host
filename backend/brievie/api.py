@@ -6,6 +6,8 @@ from ninja.security import django_auth
 from apps.accounts.api import router as accounts_router
 from apps.common.errors import install_error_handlers
 from apps.common.schemas import HealthOut
+from apps.devices.api import router as devices_router
+from apps.devices.auth import DeviceTokenAuth
 from apps.documents.api import router as documents_router
 from apps.workspaces.api import router as workspaces_router
 
@@ -25,7 +27,8 @@ api = NinjaAPI(
     title="Brievie",
     version="1.0.0",
     urls_namespace="api-v1",
-    auth=django_auth,
+    # A paired device's bearer token first, then the web session (with CSRF).
+    auth=[DeviceTokenAuth(), django_auth],
     docs_url=_urls["docs_url"],
     openapi_url=_urls["openapi_url"],
 )
@@ -40,3 +43,4 @@ def get_health(request: HttpRequest) -> HealthOut:
 api.add_router("", accounts_router)
 api.add_router("", workspaces_router)
 api.add_router("", documents_router)
+api.add_router("", devices_router)
