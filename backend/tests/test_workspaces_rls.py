@@ -1,5 +1,6 @@
 import pytest
-from django.db import DatabaseError, connection
+from django.core.exceptions import ValidationError
+from django.db import DatabaseError, IntegrityError, connection, transaction
 
 from apps.documents.models import Folder
 from apps.workspaces.context import workspace_context
@@ -106,3 +107,26 @@ def test_create_workspace_rejects_an_unknown_kind() -> None:
     with pytest.raises(ValueError, match="kind"):
         create_workspace(name="Iets", kind="hobby", admin=UserFactory.create())
     assert Workspace.objects.count() == 0
+
+
+@pytest.mark.parametrize("name", ["", "   ", "Auto/APK", "/"])
+def test_folder_rejects_empty_or_slashed_names(ws_a: Workspace, name: str) -> None:
+    with workspace_context(ws_a.id), pytest.raises(ValidationError):
+        Folder.objects.create(workspace=ws_a, name=name)
+
+
+def test_folder_name_is_trimmed(ws_a: Workspace) -> None:
+    with workspace_context(ws_a.id):
+        folder = Folder.objects.create(workspace=ws_a, name="  Auto  ")
+    assert folder.name == "Auto"
+    assert folder.path == "/Auto"
+
+
+@pytest.mark.parametrize("name", ["", "   ", "Auto/APK"])
+def test_database_rejects_bad_folder_names_written_around_the_model(
+    ws_a: Workspace, name: str
+) -> None:
+    with workspace_context(ws_a.id):
+        folder = Folder.objects.create(workspace=ws_a, name="Auto")
+        with pytest.raises(IntegrityError), transaction.atomic():
+            Folder.objects.filter(pk=folder.pk).update(name=name)

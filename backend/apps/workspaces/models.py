@@ -2,6 +2,7 @@ from typing import ClassVar
 
 from django.conf import settings
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 
 from apps.common.models import BaseModel
 
@@ -10,8 +11,8 @@ class Workspace(BaseModel):
     """Not under RLS: it is looked up before a workspace context exists."""
 
     class Kind(models.TextChoices):
-        HOME = "home", "Thuis"
-        BUSINESS = "business", "Zakelijk"
+        HOME = "home", _("Thuis")
+        BUSINESS = "business", _("Zakelijk")
 
     name = models.CharField(max_length=150)
     kind = models.CharField(max_length=10, choices=Kind.choices)
@@ -25,9 +26,9 @@ class Membership(BaseModel):
     """Not under RLS: it decides which workspace context a request may enter."""
 
     class Role(models.TextChoices):
-        ADMIN = "admin", "Beheerder"
-        MEMBER = "member", "Lid"
-        VIEWER = "viewer", "Meekijker"
+        ADMIN = "admin", _("Beheerder")
+        MEMBER = "member", _("Lid")
+        VIEWER = "viewer", _("Meekijker")
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="memberships"

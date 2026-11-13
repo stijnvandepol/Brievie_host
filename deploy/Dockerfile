@@ -25,5 +25,5 @@ RUN useradd --system --create-home --uid 10001 brievie
 USER brievie
 
 EXPOSE 8000
-# Migrations run as the schema owner; the server itself connects as the app role.
-CMD ["sh", "-c", "BRIEVIE_DB_ROLE=owner python manage.py migrate --noinput && exec gunicorn brievie.wsgi:application --bind 0.0.0.0:8000 --workers 2"]
+# Serves as the app role. Migrations run in the separate one-shot "migrate" service.
+CMD ["gunicorn", "brievie.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2"]

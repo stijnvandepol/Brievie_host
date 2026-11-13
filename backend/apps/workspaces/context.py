@@ -27,6 +27,11 @@ def workspace_context(workspace_id: UUID) -> Iterator[None]:
     so inside an outer transaction (ATOMIC_REQUESTS, a test) it would outlive this
     block. It is therefore restored explicitly on a normal exit. When the block
     fails, the savepoint is rolled back, which also rolls back the setting.
+
+    A query that fails inside the block and is caught there must run in its own
+    `transaction.atomic()`. ORM writes mark the block for rollback themselves, but
+    a raw `cursor.execute` does not: PostgreSQL then rejects every later query in
+    the transaction, including the restore of the setting.
     """
     with transaction.atomic():
         previous = _current_setting()

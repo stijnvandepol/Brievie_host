@@ -1,10 +1,11 @@
 import uuid
 
 import pytest
+from django.contrib.auth import authenticate
 from django.db import IntegrityError
 
 from apps.accounts.models import User
-from tests.factories import UserFactory
+from tests.factories import TEST_PASSWORD, UserFactory
 
 
 def test_create_user_normalises_email_to_lower_case() -> None:
@@ -40,3 +41,13 @@ def test_password_is_hashed_and_checkable() -> None:
     user = User.objects.create_user(email="a@example.nl", password="correct horse", name="A")
     assert user.password != "correct horse"
     assert user.check_password("correct horse")
+
+
+def test_natural_key_lookup_ignores_case() -> None:
+    user = UserFactory.create(email="stijn@example.nl")
+    assert User.objects.get_by_natural_key("  Stijn@Example.NL") == user
+
+
+def test_authenticate_accepts_mixed_case_email() -> None:
+    user = UserFactory.create(email="stijn@example.nl")
+    assert authenticate(None, username="STIJN@example.nl", password=TEST_PASSWORD) == user

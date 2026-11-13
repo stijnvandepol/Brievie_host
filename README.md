@@ -27,5 +27,8 @@ docker compose --project-directory deploy -f deploy/docker-compose.yml up -d --b
 curl http://127.0.0.1:8000/api/v1/health
 ```
 
-The API container applies migrations as the `brievie_owner` role and then serves
-requests as the `brievie_app` role.
+A one-shot `migrate` container applies migrations as the `brievie_owner` role and
+exits; the `api` container starts after it and serves requests as the `brievie_app`
+role, without the owner credentials. The cookies are `Secure` by default; for local
+development over plain http set `SESSION_COOKIE_SECURE=false` and
+`CSRF_COOKIE_SECURE=false` in `deploy/.env`.

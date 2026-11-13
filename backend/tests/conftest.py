@@ -18,6 +18,8 @@ def django_db_modify_db_settings(django_db_modify_db_settings_parallel_suffix: N
     subject to forced row-level security, so the tests see what the app sees.
     """
     owner = settings.DATABASE_OWNER
+    if owner is None:
+        pytest.fail("The test run needs DATABASE_OWNER_URL (see deploy/.env.example).")
     default = settings.DATABASES["default"]
     for key in _CONNECTION_KEYS:
         default[key] = owner[key]

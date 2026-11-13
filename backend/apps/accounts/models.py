@@ -3,6 +3,7 @@ from typing import ClassVar
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 from django.db.models.functions import Lower
+from django.utils.translation import gettext_lazy as _
 
 from apps.common.models import BaseModel
 
@@ -20,14 +21,15 @@ class UserManager(BaseUserManager["User"]):
         user.save(using=self._db)
         return user
 
-    def create_superuser(self, email: str, password: str, *, name: str) -> "User":
-        return self.create_user(email, password, name=name, is_staff=True, is_superuser=True)
+    def get_by_natural_key(self, username: str | None) -> "User":
+        # Login looks users up here; addresses are stored in lower case.
+        return super().get_by_natural_key(normalise_email(username or ""))
 
 
 class User(AbstractBaseUser, PermissionsMixin, BaseModel):
     class ExplanationLanguage(models.TextChoices):
-        DUTCH = "nl", "Nederlands"
-        ENGLISH = "en", "English"
+        DUTCH = "nl", _("Nederlands")
+        ENGLISH = "en", _("Engels")
 
     # Stored in lower case (create_user and clean() normalise; a check constraint
     # rejects anything else), so the unique index ignores case.
@@ -38,7 +40,6 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel):
         max_length=2, choices=ExplanationLanguage.choices, default=ExplanationLanguage.DUTCH
     )
     is_active = models.BooleanField(default=True)
-    is_staff = models.BooleanField(default=False)
 
     objects: ClassVar[UserManager] = UserManager()
 
