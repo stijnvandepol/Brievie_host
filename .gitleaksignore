@@ -1,0 +1,6 @@
+# Made-up passwords and setup tokens in test fixtures, not real secrets.
+616bb85b9c2c7b773b087ce6ce9f4941de8f6e14:backend/tests/test_api_content_type.py:generic-api-key:23
+8e2729b473aaa4dbc3cd0675ae066ab7c465cd7b:backend/tests/test_accounts_api.py:generic-api-key:14
+616bb85b9c2c7b773b087ce6ce9f4941de8f6e14:backend/tests/test_accounts_setup_token.py:generic-api-key:18
+616bb85b9c2c7b773b087ce6ce9f4941de8f6e14:backend/tests/test_accounts_setup_token.py:generic-api-key:76
+616bb85b9c2c7b773b087ce6ce9f4941de8f6e14:backend/tests/test_accounts_setup_token.py:generic-api-key:83
