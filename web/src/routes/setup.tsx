@@ -38,7 +38,7 @@ function SetupPage() {
       name: String(form.get("name")),
       email: String(form.get("email")),
       password: String(form.get("password")),
-      setup_token: String(form.get("setup_token")),
+      setup_token: String(form.get("setup_token")).trim(),
     });
   }
 
@@ -75,6 +75,8 @@ function SetupPage() {
           label={t`Installatiecode`}
           description={t`Je vindt de installatiecode in het logboek van de Brievie-container.`}
           name="setup_token"
+          autoComplete="off"
+          literal
         />
         <ErrorAlert error={setup.error} />
         <Button type="submit" className="button" isPending={setup.isPending}>

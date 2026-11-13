@@ -30,7 +30,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Logout */
+        /**
+         * Logout
+         * @description Web session only: a bearer token answers 401 not_authenticated.
+         */
         post: operations["logout"];
         delete?: never;
         options?: never;
@@ -81,7 +84,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create Pairing Code */
+        /**
+         * Create Pairing Code
+         * @description Web session only. A bearer token (even a valid one) is not accepted here and answers 401 not_authenticated; a session without a valid CSRF token answers 403.
+         */
         post: operations["createPairingCode"];
         delete?: never;
         options?: never;

@@ -99,6 +99,35 @@ describe("setup", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Deze installatiecode klopt niet.");
   });
 
+  it("keeps the installation code field free of mobile keyboard help", async () => {
+    needsSetup();
+    renderApp("/setup");
+    const field = await screen.findByRole("textbox", { name: /installatiecode/i });
+    expect(field).toHaveAttribute("autocapitalize", "none");
+    expect(field).toHaveAttribute("autocorrect", "off");
+    expect(field).toHaveAttribute("spellcheck", "false");
+    expect(field).toHaveAttribute("autocomplete", "off");
+  });
+
+  it("sends the installation code without surrounding spaces", async () => {
+    needsSetup();
+    let body: { setup_token?: string } = {};
+    server.use(
+      http.post(`*${API}/setup`, async ({ request }) => {
+        body = (await request.json()) as typeof body;
+        server.use(...loggedInHandlers());
+        return HttpResponse.json({ user, workspace }, { status: 201 });
+      }),
+    );
+    const u = userEvent.setup();
+    renderApp("/setup");
+    await u.click(await screen.findByRole("radio", { name: /thuis/i }));
+    await fillIn(u);
+    await u.type(screen.getByRole("textbox", { name: /installatiecode/i }), "  ");
+    await u.click(screen.getByRole("button", { name: /^start/i }));
+    await waitFor(() => expect(body.setup_token).toBe("abc-def"));
+  });
+
   it("explains where to find the installation code", async () => {
     needsSetup();
     renderApp("/setup");

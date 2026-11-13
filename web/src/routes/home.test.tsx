@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import {
@@ -9,6 +9,7 @@ import {
   loggedInHandlers,
   renderApp,
   server,
+  user,
 } from "../test-utils";
 
 describe("home", () => {
@@ -46,5 +47,22 @@ describe("home", () => {
     expect(await screen.findByRole("button", { name: /^inloggen$/i })).toBeInTheDocument();
     expect(csrf).toBe("tok123");
     expect(router.state.location.pathname).toBe("/login");
+  });
+
+  it("goes to the login screen when the session ended while the page was open", async () => {
+    const notLoggedIn = () =>
+      HttpResponse.json(errorBody("not_authenticated", "Je bent niet ingelogd."), { status: 401 });
+    let asked = 0;
+    server.use(
+      // The guard still sees a user; once the page asks for data the session is gone.
+      http.get(`*${API}/me`, () => {
+        asked += 1;
+        return asked === 1 ? HttpResponse.json(user) : notLoggedIn();
+      }),
+      http.get(`*${API}/workspaces`, notLoggedIn),
+      ...loggedInHandlers(),
+    );
+    const { router } = renderApp("/");
+    await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
   });
 });

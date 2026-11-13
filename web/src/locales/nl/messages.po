@@ -7,6 +7,18 @@ msgstr ""
 "X-Generator: @lingui/cli\n"
 "Language: nl\n"
 
+#: src/routes/pair-app.tsx
+msgid "{minutes, plural, one {# minuut} other {# minuten}}"
+msgstr "{minutes, plural, one {# minuut} other {# minuten}}"
+
+#: src/routes/pair-app.tsx
+msgid "{minutesText} en {secondsText}"
+msgstr "{minutesText} en {secondsText}"
+
+#: src/routes/pair-app.tsx
+msgid "{seconds, plural, one {# seconde} other {# seconden}}"
+msgstr "{seconds, plural, one {# seconde} other {# seconden}}"
+
 #: src/components/page.tsx
 #: src/routes/pair-app.tsx
 msgid "App koppelen"
@@ -20,15 +32,23 @@ msgstr "Brievie instellen"
 msgid "Deze code is verlopen."
 msgstr "Deze code is verlopen."
 
-#. placeholder {0}: formatClock(secondsLeft)
+#. placeholder {0}: formatTimeLeft(secondsLeft)
 #: src/routes/pair-app.tsx
-msgid "Deze code werkt nog {0} minuten."
-msgstr "Deze code werkt nog {0} minuten."
+msgid "Deze code werkt nog {0}."
+msgstr "Deze code werkt nog {0}."
+
+#: src/routes/root.tsx
+msgid "Deze pagina bestaat niet."
+msgstr "Deze pagina bestaat niet."
 
 #: src/routes/login.tsx
 #: src/routes/setup.tsx
 msgid "E-mailadres"
 msgstr "E-mailadres"
+
+#: src/routes/root.tsx
+msgid "Er ging iets mis"
+msgstr "Er ging iets mis"
 
 #: src/api/client.ts
 msgid "Er is iets misgegaan. Probeer het later opnieuw."
@@ -37,6 +57,10 @@ msgstr "Er is iets misgegaan. Probeer het later opnieuw."
 #: src/routes/home.tsx
 msgid "Even laden..."
 msgstr "Even laden..."
+
+#: src/routes/pair-app.tsx
+msgid "Gekopieerd"
+msgstr "Gekopieerd"
 
 #: src/components/page.tsx
 msgid "Hoofdmenu"
@@ -54,6 +78,10 @@ msgstr "Installatiecode"
 msgid "Je naam"
 msgstr "Je naam"
 
+#: src/routes/pair-app.tsx
+msgid "Je server staat ingesteld op 'localhost'. Je telefoon kan die niet bereiken. Stel in het bestand .env de naam of het IP-adres van je server in (BRIEVIE_HOSTNAME)."
+msgstr "Je server staat ingesteld op 'localhost'. Je telefoon kan die niet bereiken. Stel in het bestand .env de naam of het IP-adres van je server in (BRIEVIE_HOSTNAME)."
+
 #: src/routes/setup.tsx
 msgid "Je vindt de installatiecode in het logboek van de Brievie-container."
 msgstr "Je vindt de installatiecode in het logboek van de Brievie-container."
@@ -67,24 +95,48 @@ msgid "Kies minstens 12 tekens."
 msgstr "Kies minstens 12 tekens."
 
 #: src/routes/pair-app.tsx
-msgid "Koppel de Brievie-app op je telefoon aan deze server. Maak een code en scan de QR-code met de app. Lukt scannen niet? Typ dan de code in."
-msgstr "Koppel de Brievie-app op je telefoon aan deze server. Maak een code en scan de QR-code met de app. Lukt scannen niet? Typ dan de code in."
+msgid "Kopieer koppelgegevens"
+msgstr "Kopieer koppelgegevens"
+
+#: src/routes/pair-app.tsx
+msgid "Kopiëren lukt niet. Kopieer de tekst hieronder zelf."
+msgstr "Kopiëren lukt niet. Kopieer de tekst hieronder zelf."
+
+#: src/routes/pair-app.tsx
+msgid "Koppel de Brievie-app op je telefoon aan deze server. Maak een code en scan de QR-code met de app."
+msgstr "Koppel de Brievie-app op je telefoon aan deze server. Maak een code en scan de QR-code met de app."
 
 #: src/routes/pair-app.tsx
 msgid "Koppelcode maken"
 msgstr "Koppelcode maken"
 
+#: src/routes/pair-app.tsx
+msgid "Koppelgegevens"
+msgstr "Koppelgegevens"
+
+#: src/routes/pair-app.tsx
+msgid "Lukt scannen niet? Kopieer de koppelgegevens en plak ze in de app."
+msgstr "Lukt scannen niet? Kopieer de koppelgegevens en plak ze in de app."
+
 #: src/routes/setup.tsx
 msgid "Naam van de werkruimte"
 msgstr "Naam van de werkruimte"
+
+#: src/routes/root.tsx
+msgid "Naar de startpagina"
+msgstr "Naar de startpagina"
 
 #: src/routes/pair-app.tsx
 msgid "Nieuwe code"
 msgstr "Nieuwe code"
 
-#: src/routes/pair-app.tsx
-msgid "Of typ deze code in de app:"
-msgstr "Of typ deze code in de app:"
+#: src/routes/root.tsx
+msgid "Pagina niet gevonden"
+msgstr "Pagina niet gevonden"
+
+#: src/routes/root.tsx
+msgid "Probeer opnieuw"
+msgstr "Probeer opnieuw"
 
 #: src/routes/pair-app.tsx
 msgid "QR-code om de app te koppelen"

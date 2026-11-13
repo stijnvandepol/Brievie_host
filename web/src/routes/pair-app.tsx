@@ -1,9 +1,9 @@
-import { t } from "@lingui/core/macro";
+import { plural, t } from "@lingui/core/macro";
 import { useMutation } from "@tanstack/react-query";
 import { createRoute, useNavigate } from "@tanstack/react-router";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useRef, useState } from "react";
-import { Button } from "react-aria-components";
+import { Button, Label, TextArea, TextField } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import { ErrorAlert, Shell, usePageTitle } from "../components/page";
 import { requireUser } from "../guards";
@@ -21,22 +21,49 @@ function useSecondsLeft(expiresAt: string | undefined): number {
   return expiresAt ? Math.max(0, Math.ceil((new Date(expiresAt).getTime() - now) / 1000)) : 0;
 }
 
-function formatClock(totalSeconds: number): string {
+/** "9 minuten en 58 seconden", "1 minuut", "45 seconden". */
+function formatTimeLeft(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60);
-  const seconds = String(totalSeconds % 60).padStart(2, "0");
-  return `${minutes}:${seconds}`;
+  const seconds = totalSeconds % 60;
+  const minutesText = plural(minutes, { one: "# minuut", other: "# minuten" });
+  const secondsText = plural(seconds, { one: "# seconde", other: "# seconden" });
+  if (minutes === 0) return secondsText;
+  if (seconds === 0) return minutesText;
+  return t`${minutesText} en ${secondsText}`;
 }
+
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
+
+/** True when every address in the payload points at the server's own machine. */
+function onlyReachableOnTheServer(qrPayload: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(qrPayload);
+    if (typeof parsed !== "object" || parsed === null || !("urls" in parsed)) return false;
+    const urls = parsed.urls;
+    if (!Array.isArray(urls) || urls.length === 0) return false;
+    return urls.every(
+      (url) => typeof url === "string" && LOCAL_HOSTS.has(new URL(url).hostname.toLowerCase()),
+    );
+  } catch {
+    return false;
+  }
+}
+
+type CopyState = "idle" | "copied" | "failed";
 
 function PairAppPage() {
   usePageTitle(t`App koppelen`);
   const navigate = useNavigate();
   const result = useRef<HTMLDivElement>(null);
+  const newCode = useRef<HTMLButtonElement>(null);
+  const [copy, setCopy] = useState<CopyState>("idle");
   const create = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.POST("/api/v1/devices/pairing-codes");
       if (error !== undefined || !data) throw new ApiFailure(error);
       return data;
     },
+    onSuccess: () => setCopy("idle"),
     onError: async (error) => {
       // The session ended while this page was open.
       if (error instanceof ApiFailure && error.code === "not_authenticated") {
@@ -53,10 +80,30 @@ function PairAppPage() {
     if (pairing) result.current?.focus();
   }, [pairing]);
 
+  // The code ran out: the button for a new one is where focus belongs.
+  useEffect(() => {
+    if (expired) newCode.current?.focus();
+  }, [expired]);
+
+  async function copyPayload(payload: string) {
+    try {
+      await navigator.clipboard.writeText(payload);
+      setCopy("copied");
+    } catch {
+      // No Clipboard API, or the browser said no: the text is shown to copy by hand.
+      setCopy("failed");
+    }
+  }
+
+  let status = "";
+  if (expired) status = t`Deze code is verlopen.`;
+  else if (copy === "copied") status = t`Gekopieerd`;
+  else if (copy === "failed") status = t`Kopiëren lukt niet. Kopieer de tekst hieronder zelf.`;
+
   return (
     <Shell>
       <h1>{t`App koppelen`}</h1>
-      <p>{t`Koppel de Brievie-app op je telefoon aan deze server. Maak een code en scan de QR-code met de app. Lukt scannen niet? Typ dan de code in.`}</p>
+      <p>{t`Koppel de Brievie-app op je telefoon aan deze server. Maak een code en scan de QR-code met de app.`}</p>
 
       {pairing === undefined ? (
         <Button className="button" onPress={() => create.mutate()} isPending={create.isPending}>
@@ -65,6 +112,12 @@ function PairAppPage() {
       ) : null}
 
       <ErrorAlert error={create.error} />
+
+      {pairing !== undefined && onlyReachableOnTheServer(pairing.qr_payload) ? (
+        <div role="alert" className="alert">
+          {t`Je server staat ingesteld op 'localhost'. Je telefoon kan die niet bereiken. Stel in het bestand .env de naam of het IP-adres van je server in (BRIEVIE_HOSTNAME).`}
+        </div>
+      ) : null}
 
       {pairing !== undefined && !expired ? (
         <div className="pairing" ref={result} tabIndex={-1}>
@@ -75,20 +128,40 @@ function PairAppPage() {
             marginSize={4}
             level="M"
           />
-          <p>{t`Of typ deze code in de app:`}</p>
-          <p className="code">{pairing.code}</p>
-          <p role="timer">{t`Deze code werkt nog ${formatClock(secondsLeft)} minuten.`}</p>
+          <p role="timer">{t`Deze code werkt nog ${formatTimeLeft(secondsLeft)}.`}</p>
+          <p>{t`Lukt scannen niet? Kopieer de koppelgegevens en plak ze in de app.`}</p>
+          <Button className="button secondary" onPress={() => copyPayload(pairing.qr_payload)}>
+            {t`Kopieer koppelgegevens`}
+          </Button>
+          {copy === "failed" ? (
+            <TextField isReadOnly className="field payload">
+              <Label>{t`Koppelgegevens`}</Label>
+              <TextArea
+                value={pairing.qr_payload}
+                rows={5}
+                onFocus={(event) => event.currentTarget.select()}
+              />
+            </TextField>
+          ) : null}
         </div>
       ) : null}
 
       {expired ? (
         <div className="pairing" ref={result} tabIndex={-1}>
-          <p>{t`Deze code is verlopen.`}</p>
-          <Button className="button" onPress={() => create.mutate()} isPending={create.isPending}>
+          <Button
+            ref={newCode}
+            className="button"
+            onPress={() => create.mutate()}
+            isPending={create.isPending}
+          >
             {t`Nieuwe code`}
           </Button>
         </div>
       ) : null}
+
+      <p role="status" aria-live="polite" className="status">
+        {status}
+      </p>
     </Shell>
   );
 }

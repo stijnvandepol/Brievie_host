@@ -83,12 +83,17 @@ export function Field({
   autoComplete?: string;
   maxLength?: number;
   minLength?: number;
+  /** For codes typed on a phone: no capital letters, no autocorrect, no spell check. */
+  literal?: boolean;
 }) {
+  const { literal, ...fieldProps } = props;
   return (
-    <TextField {...props} isRequired className="field">
+    <TextField {...fieldProps} isRequired className="field">
       <Label>{label}</Label>
       {description ? <Text slot="description">{description}</Text> : null}
-      <Input />
+      <Input
+        {...(literal ? { autoCapitalize: "none", autoCorrect: "off", spellCheck: false } : {})}
+      />
       <FieldError />
     </TextField>
   );

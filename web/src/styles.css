@@ -94,7 +94,8 @@ a {
   font-size: 1rem;
 }
 
-input {
+input,
+textarea {
   font: inherit;
   min-height: 2.75rem;
   padding: 0.5rem 0.75rem;
@@ -230,14 +231,22 @@ input[data-invalid] {
   margin: 0;
 }
 
-.code {
+.pairing .field {
+  width: 100%;
+  text-align: left;
+}
+
+.pairing textarea {
+  width: 100%;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 1.75rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-size: 0.9rem;
   overflow-wrap: anywhere;
 }
 
+.status {
+  margin: 0.75rem 0 0;
+  min-height: 1.5rem;
+}
 :where([data-react-aria-pressable]) {
   /* What React Aria would inject itself; see the template in index.html. */
   touch-action: pan-x pan-y pinch-zoom;
@@ -249,6 +258,7 @@ input[data-invalid] {
   outline-offset: 2px;
 }
 
-input:focus-visible {
+input:focus-visible,
+textarea:focus-visible {
   outline-offset: 0;
 }

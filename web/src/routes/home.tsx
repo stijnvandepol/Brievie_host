@@ -1,6 +1,8 @@
 import { t } from "@lingui/core/macro";
 import { useQuery } from "@tanstack/react-query";
-import { createRoute } from "@tanstack/react-router";
+import { createRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { ApiFailure } from "../api/client";
 import { workspacesQuery } from "../api/queries";
 import { ErrorAlert, Shell, usePageTitle } from "../components/page";
 import { requireUser } from "../guards";
@@ -15,6 +17,14 @@ function kindLabel(kind: string): string {
 function HomePage() {
   usePageTitle(t`Werkruimtes`);
   const { data, error, isPending } = useQuery(workspacesQuery);
+  const navigate = useNavigate();
+
+  // The session ended while this page was open.
+  useEffect(() => {
+    if (error instanceof ApiFailure && error.code === "not_authenticated") {
+      void navigate({ to: "/login" });
+    }
+  }, [error, navigate]);
 
   return (
     <Shell>
