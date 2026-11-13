@@ -118,6 +118,20 @@ STORAGES = {
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
 }
 
+# The built web app (web/dist, copied here by deploy/Dockerfile). WhiteNoise serves its
+# files from the site root; apps.common.web serves its index for every other non-API path.
+BRIEVIE_WEB_DIST = Path(env.str("BRIEVIE_WEB_DIST", default=str(BASE_DIR / "webdist")))
+if BRIEVIE_WEB_DIST.is_dir():
+    WHITENOISE_ROOT = BRIEVIE_WEB_DIST
+
+
+# Vite puts a content hash in every file name under /assets/.
+def _is_hashed_asset(path: str, url: str) -> bool:
+    return url.startswith("/assets/")
+
+
+WHITENOISE_IMMUTABLE_FILE_TEST = _is_hashed_asset
+
 # The server is reachable from the internet behind Caddy, which terminates TLS.
 # Local http development can switch the secure cookies off in deploy/.env.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

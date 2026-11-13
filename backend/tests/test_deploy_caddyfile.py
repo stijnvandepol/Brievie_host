@@ -27,3 +27,17 @@ def test_proxy_errors_use_the_error_shape() -> None:
     assert bodies["payload_too_large"]["message"] == "Dit verzoek is te groot."
     assert re.search(r"handle_errors 413\b", CADDYFILE)
     assert re.search(r"handle_errors 502 503 504\b", CADDYFILE)
+
+
+def test_content_security_policy_allows_no_inline_script_or_eval() -> None:
+    match = re.search(r'Content-Security-Policy "([^"]+)"', CADDYFILE)
+    assert match
+    policy = dict(
+        (directive.split(" ", 1)[0], directive.split(" ", 1)[1:] or [""])
+        for directive in match.group(1).split("; ")
+    )
+    assert policy["default-src"] == ["'self'"]
+    assert policy["script-src"] == ["'self'"]
+    assert policy["frame-ancestors"] == ["'none'"]
+    assert "'unsafe-inline'" not in match.group(1)
+    assert "'unsafe-eval'" not in match.group(1)

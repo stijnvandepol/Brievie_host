@@ -21,7 +21,8 @@
 		Strict-Transport-Security "max-age={$BRIEVIE_HSTS_SECONDS}"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "same-origin"
-		Content-Security-Policy "frame-ancestors 'none'"
+		# The web app loads only its own scripts and styles: no inline script, no eval.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 		-Server
 	}
 

@@ -77,8 +77,8 @@ services:
       BRIEVIE_HSTS_SECONDS: ${BRIEVIE_HSTS_SECONDS:-0}
       BRIEVIE_MAX_BODY_BYTES: ${BRIEVIE_MAX_BODY_BYTES:-2621440}
     ports:
-      - "80:80"
-      - "443:443"
+      - "${BRIEVIE_HTTP_PORT:-80}:80"
+      - "${BRIEVIE_HTTPS_PORT:-443}:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./caddy-publish-root.sh:/etc/caddy/publish-root.sh:ro

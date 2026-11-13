@@ -1,4 +1,15 @@
 # syntax=docker/dockerfile:1
+
+# Build stage only: Node never ends up in the image that runs.
+FROM node:26.13-slim AS web
+# Node 25+ no longer ships corepack; the pnpm version is the one in web/package.json.
+RUN npm install --global pnpm@10.30.3
+WORKDIR /web
+COPY web/package.json web/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY web/ ./
+RUN pnpm build
+
 FROM python:3.13-slim
 
 COPY --from=ghcr.io/astral-sh/uv:0.13.8 /uv /usr/local/bin/uv
@@ -16,6 +27,8 @@ COPY backend/pyproject.toml backend/uv.lock backend/.python-version ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 COPY backend/ ./
+# The built web app: WhiteNoise serves its files, apps.common.web its index.html.
+COPY --from=web /web/dist ./webdist
 RUN DATABASE_URL=postgres://build@localhost/build \
     DATABASE_OWNER_URL=postgres://build@localhost/build \
     SECRET_KEY=collectstatic-only \

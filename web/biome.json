@@ -1,0 +1,12 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.6.7/schema.json",
+  "files": {
+    "includes": ["**", "!dist", "!node_modules", "!src/api/schema.d.ts", "!src/locales"]
+  },
+  "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },
+  "linter": {
+    "enabled": true,
+    "rules": { "preset": "recommended", "suspicious": { "noDocumentCookie": "off" } }
+  },
+  "assist": { "actions": { "source": { "organizeImports": "on" } } }
+}

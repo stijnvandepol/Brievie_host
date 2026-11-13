@@ -243,6 +243,34 @@ command). Dropped: Ninja's `export_openapi_schema` (no `--check`).
   missing or empty value is 422, a wrong one 403. `BRIEVIE_SETUP_TOKEN` shorter than 16
   characters stops the server at startup (`ImproperlyConfigured`).
 
+## 2026-11-13: Web interface (Task 8)
+
+A static React app in `web/`, built in a Node stage of `deploy/Dockerfile` (`node:26.13-slim`,
+the current LTS, pinned by minor) and copied to `/app/webdist`. Node is a build stage only:
+the running image has no Node. Runtime and build dependencies, each with the reason:
+
+- **React 19** (19.3.1) + **react-dom**: the UI library named in the plan.
+- **Vite** (8.3.8) + **@vitejs/plugin-react** (6.3.0): dev server and build; hashed asset names, no inline script.
+- **TypeScript** (5.9.3, strict): pinned to 5.x because `openapi-typescript` declares `typescript ^5`; 6 and 7 exist and can follow when it does.
+- **Biome** (2.6.7): lint, format and import order in one tool. Dropped: ESLint + Prettier.
+- **Vitest** (5.1.0) + **jsdom** (31.0.1) + **@testing-library/react** (16.3.3), **user-event** (14.6.10), **jest-dom** (7.0.1): tests run in the Vite config; queries by role prove accessible names.
+- **MSW** (3.0.5): mocks the API at the network edge, so the real `openapi-fetch` client runs in tests. Dropped: mocking `fetch` by hand.
+- **TanStack Query** (5.107.1): server state, mutations and their error state. **TanStack Router** (1.170.46): typed routes and guards (`beforeLoad` redirects). Dropped: React Router (untyped paths).
+- **React Aria Components** (1.22.1): accessible form controls, radio cards and buttons with keyboard and focus handling built in. Dropped: hand-built widgets.
+- **Lingui** (`@lingui/core`, `react`, `cli`, `vite-plugin`, `conf`, `format-po`, `babel-plugin-lingui-macro`, all 6.12.0): visible text through `t` macros, Dutch source strings in `src/locales/nl/messages.po`; English can be added as a second catalogue. `@rolldown/plugin-babel` (0.3.1) and `@babel/core` (8.1.2) run the macro plugin, because plugin-react 6 no longer includes Babel. CI re-extracts the catalogue and fails on a diff.
+- **openapi-typescript** (7.13.0) + **openapi-fetch** (0.17.0): `src/api/schema.d.ts` is generated from `docs/api/openapi.json` (`pnpm gen:api`); no API type is written by hand; CI fails when it is stale.
+- **qrcode.react** (4.2.0): renders `qr_payload` as an SVG QR code. Dropped: drawing to a canvas (not testable in jsdom).
+- **jsqr** (1.4.0) is not a project dependency; the manual browser check installs it outside the repo to decode the QR.
+
+Choices:
+
+- **One bundle, no code splitting.** About 130 kB gzip for four screens; one request.
+- **CSRF cookie from the app shell.** Django sets `csrftoken` only when a view uses it. `apps.common.web.web_app` (the SPA fallback) uses `ensure_csrf_cookie`, so the cookie exists before the first write, also after a browser cleared it while the session lived. The client sends it as `X-CSRFToken` on every non-safe call. No API endpoint changed.
+- **SPA fallback.** WhiteNoise serves the built files from the site root (`WHITENOISE_ROOT`, `/assets/` immutable for a year); every other non-`/api` path gets `index.html` (`no-cache`). A path with a file extension that reaches the view is a 404, never the index; `/api` and `/api/...` keep the JSON 404.
+- **Strict CSP from Caddy** (`default-src 'self'`, `script-src 'self'`, `style-src 'self'`, `img-src 'self' data:`, `frame-ancestors 'none'`, plus `object-src 'none'`, `base-uri`, `form-action`). React Aria wants to inject an inline `<style>` for `touch-action`; it skips that when an element with id `react-aria-pressable-style` exists, so `index.html` holds an empty `<template>` with that id and `styles.css` holds the rule. Verified in a browser: no violations.
+- **Compose ports.** Caddy's host ports come from `BRIEVIE_HTTP_PORT` and `BRIEVIE_HTTPS_PORT` (defaults 80 and 443), so a second stack can run next to the first.
+- **Countdown uses the browser clock** against the server's `expires_at`. A clock that is minutes off shows a wrong countdown; the server decides whether a code is valid.
+
 ## Open items
 
 - Pin GitHub Actions and container images by digest: later hardening task.

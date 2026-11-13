@@ -40,6 +40,15 @@ A one-shot `migrate` container applies migrations as the `brievie_owner` role an
 exits; the `api` container starts after it and serves requests as the `brievie_app`
 role, without the owner credentials.
 
+## Web interface
+
+`https://localhost` serves the web app (setup, login, workspaces, pairing the iOS app).
+It lives in `web/` and is built into the API image; there is no Node in the running
+stack. For development you need Node 24+ and pnpm: `make web-install`, then
+`cd web && pnpm dev` (proxies `/api` to the running stack; `BRIEVIE_DEV_API` changes the
+target). `make web-test`, `make web-lint` and `make web-build` are the checks. After
+`make openapi` run `make web-api`; after changing visible text run `make web-i18n`.
+
 ## First setup: the installation code
 
 `POST /api/v1/setup` creates the first administrator and needs an installation code,

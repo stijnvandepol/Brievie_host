@@ -1,0 +1,143 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-11-13 17:41+0100\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: nl\n"
+
+#: src/components/page.tsx
+#: src/routes/pair-app.tsx
+msgid "App koppelen"
+msgstr "App koppelen"
+
+#: src/routes/setup.tsx
+msgid "Brievie instellen"
+msgstr "Brievie instellen"
+
+#: src/routes/pair-app.tsx
+msgid "Deze code is verlopen."
+msgstr "Deze code is verlopen."
+
+#. placeholder {0}: formatClock(secondsLeft)
+#: src/routes/pair-app.tsx
+msgid "Deze code werkt nog {0} minuten."
+msgstr "Deze code werkt nog {0} minuten."
+
+#: src/routes/login.tsx
+#: src/routes/setup.tsx
+msgid "E-mailadres"
+msgstr "E-mailadres"
+
+#: src/api/client.ts
+msgid "Er is iets misgegaan. Probeer het later opnieuw."
+msgstr "Er is iets misgegaan. Probeer het later opnieuw."
+
+#: src/routes/home.tsx
+msgid "Even laden..."
+msgstr "Even laden..."
+
+#: src/components/page.tsx
+msgid "Hoofdmenu"
+msgstr "Hoofdmenu"
+
+#: src/routes/login.tsx
+msgid "Inloggen"
+msgstr "Inloggen"
+
+#: src/routes/setup.tsx
+msgid "Installatiecode"
+msgstr "Installatiecode"
+
+#: src/routes/setup.tsx
+msgid "Je naam"
+msgstr "Je naam"
+
+#: src/routes/setup.tsx
+msgid "Je vindt de installatiecode in het logboek van de Brievie-container."
+msgstr "Je vindt de installatiecode in het logboek van de Brievie-container."
+
+#: src/routes/setup.tsx
+msgid "Jouw account"
+msgstr "Jouw account"
+
+#: src/routes/setup.tsx
+msgid "Kies minstens 12 tekens."
+msgstr "Kies minstens 12 tekens."
+
+#: src/routes/pair-app.tsx
+msgid "Koppel de Brievie-app op je telefoon aan deze server. Maak een code en scan de QR-code met de app. Lukt scannen niet? Typ dan de code in."
+msgstr "Koppel de Brievie-app op je telefoon aan deze server. Maak een code en scan de QR-code met de app. Lukt scannen niet? Typ dan de code in."
+
+#: src/routes/pair-app.tsx
+msgid "Koppelcode maken"
+msgstr "Koppelcode maken"
+
+#: src/routes/setup.tsx
+msgid "Naam van de werkruimte"
+msgstr "Naam van de werkruimte"
+
+#: src/routes/pair-app.tsx
+msgid "Nieuwe code"
+msgstr "Nieuwe code"
+
+#: src/routes/pair-app.tsx
+msgid "Of typ deze code in de app:"
+msgstr "Of typ deze code in de app:"
+
+#: src/routes/pair-app.tsx
+msgid "QR-code om de app te koppelen"
+msgstr "QR-code om de app te koppelen"
+
+#: src/routes/setup.tsx
+msgid "Start Brievie"
+msgstr "Start Brievie"
+
+#: src/routes/setup.tsx
+msgid "Stel je eigen Brievie-server in. Dit doe je maar één keer."
+msgstr "Stel je eigen Brievie-server in. Dit doe je maar één keer."
+
+#: src/routes/home.tsx
+#: src/routes/setup.tsx
+msgid "Thuis"
+msgstr "Thuis"
+
+#: src/components/page.tsx
+msgid "Uitloggen"
+msgstr "Uitloggen"
+
+#: src/routes/setup.tsx
+msgid "Voor de post van je bedrijf."
+msgstr "Voor de post van je bedrijf."
+
+#: src/routes/setup.tsx
+msgid "Voor je eigen post en die van je gezin. Alles bij elkaar, rustig en overzichtelijk."
+msgstr "Voor je eigen post en die van je gezin. Alles bij elkaar, rustig en overzichtelijk."
+
+#: src/routes/setup.tsx
+msgid "Waar gebruik je Brievie voor?"
+msgstr "Waar gebruik je Brievie voor?"
+
+#: src/routes/login.tsx
+#: src/routes/setup.tsx
+msgid "Wachtwoord"
+msgstr "Wachtwoord"
+
+#: src/api/client.ts
+msgid "We kunnen de server niet bereiken. Controleer je verbinding en probeer het opnieuw."
+msgstr "We kunnen de server niet bereiken. Controleer je verbinding en probeer het opnieuw."
+
+#: src/routes/setup.tsx
+msgid "Welkom bij Brievie"
+msgstr "Welkom bij Brievie"
+
+#: src/components/page.tsx
+#: src/routes/home.tsx
+msgid "Werkruimtes"
+msgstr "Werkruimtes"
+
+#: src/routes/home.tsx
+#: src/routes/setup.tsx
+msgid "Zakelijk"
+msgstr "Zakelijk"
