@@ -1,3 +1,4 @@
+from datetime import timedelta
 from pathlib import Path
 
 import environ
@@ -22,12 +23,29 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.staticfiles",
     "ninja",
+    "axes",
     "apps.accounts",
     "apps.workspaces",
     "apps.documents",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
+
+# Axes first: it refuses a locked-out email + address before the password is checked.
+AUTHENTICATION_BACKENDS = [
+    "axes.backends.AxesStandaloneBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
+
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 12},
+    },
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -98,3 +116,21 @@ CSRF_TRUSTED_ORIGINS: list[str] = env.list("CSRF_TRUSTED_ORIGINS", default=[])
 SECURE_HSTS_SECONDS: int = env.int("SECURE_HSTS_SECONDS", default=31536000)
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
+
+# Number of reverse proxies in front of the app (Caddy in Compose: 1). Decides
+# which X-Forwarded-For entry is the client address (apps.common.net.client_ip).
+BRIEVIE_PROXY_COUNT: int = env.int("BRIEVIE_PROXY_COUNT", default=0)
+
+# Login lockout (django-axes): 5 failures for the same email + address lock that
+# pair for 15 minutes. apps.accounts.services.login checks the lock itself and
+# answers 429 in the API error shape, so axes' middleware is not installed.
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = timedelta(minutes=15)
+AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
+AXES_USERNAME_FORM_FIELD = "username"
+AXES_USERNAME_CALLABLE = "apps.accounts.services.axes_username"
+AXES_CLIENT_IP_CALLABLE = "apps.common.net.client_ip"
+AXES_RESET_ON_SUCCESS = True
+AXES_DISABLE_ACCESS_LOG = True
+AXES_VERBOSE = False
+SILENCED_SYSTEM_CHECKS = ["axes.W002"]  # AxesMiddleware: see above.

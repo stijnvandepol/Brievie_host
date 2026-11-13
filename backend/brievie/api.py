@@ -1,13 +1,42 @@
+from django.conf import settings
 from django.http import HttpRequest
 from ninja import NinjaAPI
+from ninja.security import django_auth
 
+from apps.accounts.api import router as accounts_router
 from apps.common.errors import install_error_handlers
 from apps.common.schemas import HealthOut
+from apps.documents.api import router as documents_router
+from apps.workspaces.api import router as workspaces_router
 
-api = NinjaAPI(title="Brievie", version="1.0.0", urls_namespace="api-v1")
+
+def docs_urls(*, debug: bool) -> dict[str, str | None]:
+    """The interactive docs and the live schema only in development.
+
+    The contract is the committed docs/api/openapi.json, not a public endpoint.
+    """
+    if debug:
+        return {"docs_url": "/docs", "openapi_url": "/openapi.json"}
+    return {"docs_url": None, "openapi_url": None}
+
+
+_urls = docs_urls(debug=settings.DEBUG)
+api = NinjaAPI(
+    title="Brievie",
+    version="1.0.0",
+    urls_namespace="api-v1",
+    auth=django_auth,
+    docs_url=_urls["docs_url"],
+    openapi_url=_urls["openapi_url"],
+)
 install_error_handlers(api)
 
 
 @api.get("/health", response=HealthOut, auth=None, operation_id="getHealth")
 def get_health(request: HttpRequest) -> HealthOut:
     return HealthOut(status="ok", api_version=api.version)
+
+
+api.add_router("", accounts_router)
+api.add_router("", workspaces_router)
+api.add_router("", documents_router)

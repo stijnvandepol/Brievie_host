@@ -12,6 +12,7 @@ Runtime:
 - **django-environ** (0.14.0): reads settings and database URLs from the environment. Dropped: hand-written `os.environ` parsing. Note: its classifiers stop at Django 6.0; it has no upper bound and works on 6.1 (test suite).
 - **whitenoise** (6.12.0): serves static files (later the built web app) from the API container without an extra web server. Dropped: serving static files from Caddy (needs a shared volume). Classifiers stop at Django 6.0; no upper bound.
 - **gunicorn** (27.0.1): WSGI server in the container. Dropped: uvicorn/ASGI (no async needed yet).
+- **django-axes** (9.0.0, Task 4): login lockout per email + client address, stored in the database (shared by all gunicorn workers). Classifiers include Django 6.1. Dropped: a hand-written attempt counter; Ninja's cache-based throttle (the default cache is per process).
 
 Development:
 
@@ -110,7 +111,30 @@ A folder name is trimmed and may not be blank or contain `/` (the path is built 
 names). `Folder.save()` raises `ValidationError`; a check constraint
 (`name ~ '\S' AND name NOT LIKE '%/%'`) guards writes that bypass the model.
 
+## 2026-11-13: Login, setup and the API surface (Task 4)
+
+- **Lockout.** django-axes with `AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]`,
+  limit 5, cool-off 15 minutes, reset on a successful login, no success log. The
+  username is the normalised email (`AXES_USERNAME_CALLABLE`), so case variants share
+  one counter. `accounts.services.login` asks axes whether the pair is locked before
+  checking the password and raises `ApiError(429, "too_many_attempts")` with
+  `Retry-After`; failures 1-5 answer 401 `invalid_credentials`, the sixth attempt 429.
+  `AxesMiddleware` is not installed (check `axes.W002` silenced): it would turn the
+  fifth failure itself into axes' own lockout response. The password check runs
+  outside `transaction.atomic`, so the attempt axes records survives the 401.
+- **Client address.** `apps.common.net.client_ip` reads `REMOTE_ADDR`, or behind
+  `BRIEVIE_PROXY_COUNT` proxies the matching `X-Forwarded-For` entry from the right.
+  Compose sets 1 (Caddy) from Task 6 on. Used by axes.
+- **Passwords.** Django's four standard validators, minimum length 12.
+- **Setup race.** `POST /setup` takes `pg_advisory_xact_lock` before checking that no
+  user exists; the lock lasts until the request transaction commits.
+- **Workspace in the URL.** `workspaces.deps.workspace_member` answers 404
+  `workspace_not_found` for both unknown and foreign ids, 403 `forbidden` for a role
+  below the minimum, and otherwise sets the RLS setting for the rest of the request
+  transaction (`enter_workspace_for_transaction`).
+- **No public docs.** The Ninja docs page and the live `openapi.json` exist only with
+  `DEBUG`; the contract is the committed `docs/api/openapi.json`.
+
 ## Open items
 
-- Password validators (minimum length 12): Task 4.
 - Pin GitHub Actions and container images by digest: later hardening task.

@@ -42,3 +42,16 @@ def workspace_context(workspace_id: UUID) -> Iterator[None]:
         # further query is allowed before it.
         if not transaction.get_rollback():
             _set_setting(previous)
+
+
+def enter_workspace_for_transaction(workspace_id: UUID) -> None:
+    """Scope row-level security to one workspace until the current transaction ends.
+
+    For request handling: with ATOMIC_REQUESTS the request is one transaction, and
+    a transaction-local setting ends with it, so it cannot leak into the next
+    request on the same connection. Outside a transaction the setting would last
+    for this one statement only, so that is refused.
+    """
+    if not connection.in_atomic_block:
+        raise RuntimeError("enter_workspace_for_transaction() needs an open transaction.")
+    _set_setting(str(workspace_id))

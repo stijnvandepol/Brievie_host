@@ -11,3 +11,11 @@ def create_workspace(*, name: str, kind: str, admin: User) -> Workspace:
         workspace = Workspace.objects.create(name=name, kind=kind)
         Membership.objects.create(user=admin, workspace=workspace, role=Membership.Role.ADMIN)
     return workspace
+
+
+def list_memberships(user: User) -> list[Membership]:
+    return list(
+        Membership.objects.filter(user=user)
+        .select_related("workspace")
+        .order_by("workspace__name", "workspace__id")
+    )

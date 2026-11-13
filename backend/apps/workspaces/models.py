@@ -36,12 +36,18 @@ class Membership(BaseModel):
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="memberships")
     role = models.CharField(max_length=10, choices=Role.choices)
 
+    # Each role may do everything the roles below it may do.
+    RANK: ClassVar[dict[str, int]] = {Role.VIEWER: 0, Role.MEMBER: 1, Role.ADMIN: 2}
+
     class Meta:
         constraints: ClassVar[list[models.BaseConstraint]] = [
             models.UniqueConstraint(
                 fields=["user", "workspace"], name="workspaces_membership_user_workspace_unique"
             ),
         ]
+
+    def has_role(self, min_role: str) -> bool:
+        return self.RANK[self.role] >= self.RANK[min_role]
 
     def __str__(self) -> str:
         return f"{self.user_id} in {self.workspace_id} as {self.role}"

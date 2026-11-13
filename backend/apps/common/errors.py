@@ -24,11 +24,14 @@ class ApiError(Exception):
     inside it rolls back its own writes.
     """
 
-    def __init__(self, status: int, code: str, message: str) -> None:
+    def __init__(
+        self, status: int, code: str, message: str, *, headers: dict[str, str] | None = None
+    ) -> None:
         super().__init__(message)
         self.status = status
         self.code = code
         self.message = message
+        self.headers = headers or {}
 
 
 def error_response(status: int, code: str, message: str) -> JsonResponse:
@@ -55,7 +58,10 @@ def http_error_response(status: int) -> JsonResponse:
 
 def install_error_handlers(api: NinjaAPI) -> None:
     def handle_api_error(request: HttpRequest, exc: ApiError) -> JsonResponse:
-        return error_response(exc.status, exc.code, exc.message)
+        response = error_response(exc.status, exc.code, exc.message)
+        for name, value in exc.headers.items():
+            response[name] = value
+        return response
 
     def handle_validation_error(request: HttpRequest, exc: object) -> JsonResponse:
         message = _("De gegevens kloppen niet. Controleer wat je hebt ingevuld.")
