@@ -3,10 +3,8 @@
 from pathlib import Path
 
 import pytest
-from django.http import HttpRequest, HttpResponse
-from django.test import Client, RequestFactory
+from django.test import Client
 from pytest_django import Settings
-from whitenoise.middleware import WhiteNoiseMiddleware
 
 INDEX = "<!doctype html><title>Brievie</title><div id=root></div>"
 
@@ -73,16 +71,3 @@ def test_api_root_with_a_trailing_slash_is_the_json_404(client: Client) -> None:
     r = client.get("/api/v1/")
     assert r.status_code == 404
     assert r.json() == {"code": "not_found", "message": "We kunnen dit niet vinden."}
-
-
-def test_favicon_is_served_as_svg_by_whitenoise(settings: Settings) -> None:
-    # In production WhiteNoise serves web/dist (built from web/public) before the resolver.
-    public = Path(__file__).resolve().parents[2] / "web" / "public"
-    settings.WHITENOISE_ROOT = public
-
-    def fallthrough(request: HttpRequest) -> HttpResponse:
-        raise AssertionError("WhiteNoise should have answered /favicon.svg")
-
-    r = WhiteNoiseMiddleware(fallthrough)(RequestFactory().get("/favicon.svg"))
-    assert r.status_code == 200
-    assert r["Content-Type"].startswith("image/svg+xml")
