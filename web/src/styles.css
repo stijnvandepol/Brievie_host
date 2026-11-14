@@ -104,6 +104,12 @@ a:hover {
   color: inherit;
 }
 
+.brand-mark {
+  height: 24px;
+  width: auto;
+  flex: none;
+}
+
 /* Shell: sidebar + main. The sidebar wraps above the page on narrow screens. */
 
 .shell {
