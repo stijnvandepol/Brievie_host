@@ -194,3 +194,19 @@ if BRIEVIE_SETUP_TOKEN and len(BRIEVIE_SETUP_TOKEN) < 16:
 # too-large body gets 413 from the proxy instead of a connection reset. The document
 # upload endpoint (phase 1b) will need its own, larger limit.
 DATA_UPLOAD_MAX_MEMORY_SIZE: int = env.int("BRIEVIE_MAX_BODY_BYTES", default=2621440)
+
+# Every handler masks BSNs: no log line may carry one, whatever code wrote it.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "filters": {"mask_bsn": {"()": "apps.common.privacy.BsnMaskingFilter"}},
+    "formatters": {"plain": {"format": "%(asctime)s %(levelname)s %(name)s %(message)s"}},
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "plain",
+            "filters": ["mask_bsn"],
+        },
+    },
+    "root": {"handlers": ["console"], "level": "INFO"},
+}
