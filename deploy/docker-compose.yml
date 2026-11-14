@@ -59,6 +59,7 @@ services:
       BRIEVIE_HSTS_SECONDS: ${BRIEVIE_HSTS_SECONDS:-0}
       BRIEVIE_MAX_BODY_BYTES: ${BRIEVIE_MAX_BODY_BYTES:-2621440}
       BRIEVIE_SETUP_TOKEN: ${BRIEVIE_SETUP_TOKEN:-}
+      BRIEVIE_MASTER_KEY: ${BRIEVIE_MASTER_KEY:?set BRIEVIE_MASTER_KEY in deploy/.env (sh deploy/init-env.sh adds it)}
       # Requests arrive through Caddy, which sets X-Forwarded-For.
       BRIEVIE_PROXY_COUNT: "1"
     healthcheck:
@@ -77,6 +78,8 @@ services:
       # read-only, at the default BRIEVIE_CA_CERT_PATH. Never Caddy's data volume:
       # it holds the CA's private keys.
       - caddy-ca:/caddy-data/caddy/pki/authorities/local:ro
+      # Encrypted document files (BRIEVIE_STORAGE_ROOT).
+      - documents:/data/documents
     # No published port: only Caddy is reachable from outside.
 
   caddy:
@@ -102,6 +105,7 @@ services:
 
 volumes:
   pgdata:
+  documents:
   caddy-data:
   caddy-config:
   caddy-ca:

@@ -305,6 +305,28 @@ Choices:
   with `Transfer-Encoding` and no `Content-Length`. The app's uploads always carry a
   length (upload from a file).
 
+## 2026-11-14: Encryption per workspace (phase 1b, Task 3)
+
+- **cryptography** (50.0.2): AES-256-GCM (`AESGCM`). Dropped: PyNaCl (another cipher
+  family, less common next to Django), the standard library (has no AEAD).
+- **Envelope encryption.** `BRIEVIE_MASTER_KEY` (32 bytes as hex, from the environment)
+  wraps one data key per workspace (`workspaces_workspacekey`, under forced RLS, bound to
+  the workspace id as associated data). The data key seals document files and stored
+  secrets (`apps.common.crypto.seal`: `BRV1` + nonce + ciphertext and tag; the
+  associated data names the place, so a file moved to another page or workspace does
+  not open). **Losing the master key loses every document**; back-ups (1d) must include
+  it, separately from the data.
+- **Read lazily, checked at start.** `crypto.master_key()` reads the setting on first
+  use, so `migrate`, `export_openapi` and CI run without it. The api and worker
+  containers run `manage.py check_master_key` first and stop when it is missing or
+  malformed. Dropped: a system check (it would also fail `migrate`, which does not get
+  the key).
+- **init-env.sh** generates the key for a new `.env` and appends it to an existing
+  `.env` that lacks it: the one change the script makes to an existing file.
+- **Storage behind an interface.** `apps.documents.storage.DocumentStorage`
+  (`FileSystemStorage` under `BRIEVIE_STORAGE_ROOT`, the `documents` volume); an
+  S3-compatible implementation can follow without touching callers.
+
 ## Open items
 
 - Pin GitHub Actions and container images by digest: later hardening task.

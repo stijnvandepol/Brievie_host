@@ -195,6 +195,12 @@ if BRIEVIE_SETUP_TOKEN and len(BRIEVIE_SETUP_TOKEN) < 16:
 # upload endpoint (phase 1b) will need its own, larger limit.
 DATA_UPLOAD_MAX_MEMORY_SIZE: int = env.int("BRIEVIE_MAX_BODY_BYTES", default=2621440)
 
+# Wraps every workspace's data key. Read lazily (apps.common.crypto.master_key), so
+# migrate and export_openapi run without it; the api and worker check it at start.
+BRIEVIE_MASTER_KEY: str = env.str("BRIEVIE_MASTER_KEY", default="")
+# Encrypted document files. A volume in Compose; never a path elsewhere in the code.
+BRIEVIE_STORAGE_ROOT: str = env.str("BRIEVIE_STORAGE_ROOT", default="/data/documents")
+
 # Every handler masks BSNs: no log line may carry one, whatever code wrote it.
 LOGGING = {
     "version": 1,

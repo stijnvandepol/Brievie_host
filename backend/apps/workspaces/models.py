@@ -4,7 +4,7 @@ from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.common.models import BaseModel
+from apps.common.models import BaseModel, WorkspaceModel
 
 
 class Workspace(BaseModel):
@@ -51,3 +51,17 @@ class Membership(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.user_id} in {self.workspace_id} as {self.role}"
+
+
+class WorkspaceKey(WorkspaceModel):
+    """The workspace's data key, wrapped with the master key (see `apps.workspaces.keys`)."""
+
+    wrapped_key = models.BinaryField()
+
+    class Meta:
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(fields=["workspace"], name="workspaces_workspacekey_unique"),
+        ]
+
+    def __str__(self) -> str:
+        return f"key of {self.workspace_id}"

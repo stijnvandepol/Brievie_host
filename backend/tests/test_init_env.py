@@ -85,12 +85,33 @@ def test_second_run_leaves_the_file_byte_identical(deploy: Path) -> None:
     assert (deploy / ".env").read_bytes() == before
 
 
-def test_existing_env_is_never_modified(deploy: Path) -> None:
-    (deploy / ".env").write_text("SECRET_KEY=mine\n")
+def test_fresh_env_has_a_32_byte_master_key(deploy: Path) -> None:
+    result = run_script(deploy)
+
+    key = read_env(deploy / ".env")["BRIEVIE_MASTER_KEY"]
+    assert len(bytes.fromhex(key)) == 32
+    assert key not in result.stdout + result.stderr
+
+
+def test_existing_env_without_a_master_key_gets_exactly_that_line(deploy: Path) -> None:
+    (deploy / ".env").write_text("SECRET_KEY=mine\nDEBUG=false")
+
+    result = run_script(deploy)
+
+    lines = (deploy / ".env").read_text().splitlines()
+    assert lines[:2] == ["SECRET_KEY=mine", "DEBUG=false"]
+    assert len(lines) == 3
+    key = lines[2].removeprefix("BRIEVIE_MASTER_KEY=")
+    assert len(bytes.fromhex(key)) == 32
+    assert key not in result.stdout + result.stderr
+
+
+def test_existing_env_with_a_master_key_is_never_modified(deploy: Path) -> None:
+    (deploy / ".env").write_text("SECRET_KEY=mine\nBRIEVIE_MASTER_KEY=abc\n")
 
     run_script(deploy)
 
-    assert (deploy / ".env").read_text() == "SECRET_KEY=mine\n"
+    assert (deploy / ".env").read_text() == "SECRET_KEY=mine\nBRIEVIE_MASTER_KEY=abc\n"
 
 
 def test_postgres_port_can_be_chosen(deploy: Path) -> None:

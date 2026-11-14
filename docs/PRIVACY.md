@@ -1,0 +1,33 @@
+# Privacy: where your data is and what leaves the server
+
+This describes the server as built (phase 1b). It is updated with every phase.
+
+## What is stored, and how
+
+| Data | Where | Protection |
+|---|---|---|
+| Page images of a document | Files in the `documents` volume | Encrypted (AES-256-GCM) with a key per workspace; that key is stored wrapped with `BRIEVIE_MASTER_KEY` |
+| API key of an external AI service | Database | Encrypted with the workspace key |
+| Recognised text (OCR), proposals, summaries, tasks | Database | **Not encrypted**: needed for review and (later) search. Protected by row-level security per workspace and by masking BSNs before anything is stored. Put the database volume on an encrypted disk |
+| Passwords, pairing codes, device tokens | Database | Only as hashes |
+
+A BSN (citizen service number) is replaced by `[BSN]` before text is stored, logged or
+sent to an AI service. The page image itself still shows it; that file is encrypted.
+
+Logs never contain document text, tokens or passwords.
+
+## What leaves the server
+
+| AI setting of the workspace | What is sent, and where |
+|---|---|
+| `off` (default) | Nothing |
+| `local` | The masked text, to an address inside your own network only (for example Ollama) |
+| `external` | The masked text of the letter, to the AI service you configured (default: Mistral, Paris). Never the page images |
+
+The iPhone app recognises the text on the phone itself and uploads the pages and that
+text to your server only.
+
+## The master key
+
+`BRIEVIE_MASTER_KEY` in `deploy/.env` unlocks every document. Without it the files
+cannot be read: keep a copy in a safe place, apart from the back-up of the data.
