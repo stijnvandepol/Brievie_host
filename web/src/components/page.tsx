@@ -58,7 +58,6 @@ export function Split({ children, wide = false }: { children: ReactNode; wide?: 
         </p>
         <div className="split-statement">
           <p className="split-title">{t`Je post en facturen, op je eigen server.`}</p>
-          <p className="split-sub">{t`Documenten verlaten je netwerk niet.`}</p>
         </div>
         <p className="split-host">{t`Server: ${window.location.host}`}</p>
       </aside>

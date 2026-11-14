@@ -92,10 +92,6 @@ msgstr "Deze code is verlopen."
 msgid "Deze pagina bestaat niet."
 msgstr "Deze pagina bestaat niet."
 
-#: src/components/page.tsx
-msgid "Documenten verlaten je netwerk niet."
-msgstr "Documenten verlaten je netwerk niet."
-
 #: src/routes/login.tsx
 #: src/routes/setup.tsx
 msgid "E-mailadres"
