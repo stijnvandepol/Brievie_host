@@ -346,6 +346,34 @@ Choices:
   Every step first checks that the document is still `processing`, so a duplicate or
   late job changes nothing.
 
+## 2026-11-14: Document upload (phase 1b, Task 6)
+
+- **One multipart request per document** (`createDocument`): the JSON field `metadata`
+  (`UploadMetadataIn`: `client_id`, and per page its SHA-256 and recognised text)
+  followed by one `page` file (JPEG) per page. Atomic: all pages or nothing.
+  `UploadMetadataIn` is in the contract's components although no operation names it,
+  so clients generate it (`brievie.api.CONTRACT_ONLY_SCHEMAS`).
+- **Idempotent on `client_id`.** The same upload again answers 200 with the existing
+  document; other pages under the same id answer 409 `document_conflict`. The document
+  row is inserted first, inside a savepoint, so a concurrent retry loses on the unique
+  constraint before any file is written.
+- **Limits.** `BRIEVIE_MAX_UPLOAD_BYTES` (32 MiB) for this route, in Caddy (its own
+  `handle` block: two `request_body` directives on one request both apply and the
+  smaller wins) and in `ApiContentLengthMiddleware` (413 before authentication reads
+  anything). `BRIEVIE_MAX_PAGES` (30), `BRIEVIE_MAX_PAGE_TEXT_CHARS` (20000).
+- **Uploads never touch the disk unencrypted.** `FILE_UPLOAD_HANDLERS` is the memory
+  handler only, with `FILE_UPLOAD_MAX_MEMORY_SIZE` equal to the upload limit; set
+  globally because the session's CSRF check parses the form before the view runs.
+  Pages are sealed with the workspace key before they are written; the associated data
+  is `<workspace>/<document>/<index>`.
+- **Known gap: orphan files.** When a request fails after its pages were written but
+  outside the intake function (rare), the rows roll back and the encrypted files stay.
+  A storage sweep comes with back-ups (1d).
+- **Multipart only here.** `ApiJsonBodyMiddleware` accepts `multipart/form-data` on this
+  one path; the endpoint needs a device token or a session with a CSRF token.
+- **`needs_attention`** (confidence below 0.85 on a deadline or amount) is computed on
+  `Extraction`, not stored.
+
 ## Open items
 
 - Pin GitHub Actions and container images by digest: later hardening task.

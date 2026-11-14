@@ -2,6 +2,8 @@
 
 from typing import cast
 
+from pydantic import BaseModel
+
 _PRIMITIVES = {"string", "integer", "number", "boolean"}
 _NULL = {"type": "null"}
 
@@ -43,3 +45,24 @@ def _merge_nullable(node: dict[str, object], pointer: str) -> dict[str, object]:
     primitive["type"] = [primitive["type"], "null"]
     rest = {key: value for key, value in node.items() if key != "anyOf"}
     return {**primitive, **rest}
+
+
+def add_component_schemas(
+    schema: dict[str, object], models: list[type[BaseModel]]
+) -> dict[str, object]:
+    """A copy of `schema` with `models` (and what they refer to) under components.schemas.
+
+    For types the contract needs but no operation names: the JSON inside a multipart
+    field. Clients generate them like any other schema.
+    """
+    result = dict(schema)
+    components = dict(cast(dict[str, object], result.get("components", {})))
+    schemas = dict(cast(dict[str, object], components.get("schemas", {})))
+    for model in models:
+        definition = model.model_json_schema(ref_template="#/components/schemas/{model}")
+        nested = cast(dict[str, object], definition.pop("$defs", {}))
+        schemas.update(nested)
+        schemas[model.__name__] = definition
+    components["schemas"] = schemas
+    result["components"] = components
+    return result

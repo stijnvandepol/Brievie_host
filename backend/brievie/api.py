@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.http import HttpRequest
 from ninja import NinjaAPI
+from pydantic import BaseModel
 
 from apps.accounts.api import router as accounts_router
 from apps.accounts.auth import session_auth
@@ -9,6 +10,7 @@ from apps.common.schemas import HealthOut
 from apps.devices.api import router as devices_router
 from apps.devices.auth import DeviceTokenAuth
 from apps.documents.api import router as documents_router
+from apps.documents.schemas import UploadMetadataIn
 from apps.workspaces.api import router as workspaces_router
 
 
@@ -21,6 +23,10 @@ def docs_urls(*, debug: bool) -> dict[str, str | None]:
         return {"docs_url": "/docs", "openapi_url": "/openapi.json"}
     return {"docs_url": None, "openapi_url": None}
 
+
+# In the exported contract although no operation names them: the JSON inside the
+# `metadata` field of the multipart upload.
+CONTRACT_ONLY_SCHEMAS: list[type[BaseModel]] = [UploadMetadataIn]
 
 _urls = docs_urls(debug=settings.DEBUG)
 api = NinjaAPI(

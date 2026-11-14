@@ -196,7 +196,19 @@ if BRIEVIE_SETUP_TOKEN and len(BRIEVIE_SETUP_TOKEN) < 16:
 # Largest request body. Caddy enforces the same value (request_body max_size), so a
 # too-large body gets 413 from the proxy instead of a connection reset. The document
 # upload endpoint (phase 1b) will need its own, larger limit.
-DATA_UPLOAD_MAX_MEMORY_SIZE: int = env.int("BRIEVIE_MAX_BODY_BYTES", default=2621440)
+BRIEVIE_MAX_BODY_BYTES: int = env.int("BRIEVIE_MAX_BODY_BYTES", default=2621440)
+DATA_UPLOAD_MAX_MEMORY_SIZE: int = BRIEVIE_MAX_BODY_BYTES
+
+# A document upload (page images plus their recognised text) has its own, larger
+# limit; Caddy enforces the same one on that route.
+BRIEVIE_MAX_UPLOAD_BYTES: int = env.int("BRIEVIE_MAX_UPLOAD_BYTES", default=33554432)
+BRIEVIE_MAX_PAGES: int = env.int("BRIEVIE_MAX_PAGES", default=30)
+BRIEVIE_MAX_PAGE_TEXT_CHARS: int = env.int("BRIEVIE_MAX_PAGE_TEXT_CHARS", default=20000)
+# Uploaded files stay in memory, whatever their size: a temporary file would be an
+# unencrypted copy of a page on disk. Set globally, because the session's CSRF check
+# parses the form before any view could choose its own handlers.
+FILE_UPLOAD_HANDLERS = ["django.core.files.uploadhandler.MemoryFileUploadHandler"]
+FILE_UPLOAD_MAX_MEMORY_SIZE: int = BRIEVIE_MAX_UPLOAD_BYTES
 
 # Background jobs live in each app's jobs.py ("tasks" is the name of a domain app).
 PROCRASTINATE_AUTODISCOVER_MODULE_NAME = "jobs"

@@ -1,4 +1,5 @@
 from collections.abc import Iterable
+from decimal import Decimal
 from typing import ClassVar
 
 from django.conf import settings
@@ -158,6 +159,10 @@ class DocumentPage(WorkspaceModel):
         return f"{self.document_id} page {self.index}"
 
 
+# Below this confidence a deadline or amount needs the user's attention (spec section 10).
+NEEDS_ATTENTION_BELOW = Decimal("0.85")
+
+
 class Extraction(WorkspaceModel):
     """One value the pipeline proposes for a document, with its source and confidence."""
 
@@ -198,3 +203,19 @@ class Extraction(WorkspaceModel):
 
     def __str__(self) -> str:
         return f"{self.document_id} {self.field}"
+
+    @property
+    def needs_attention(self) -> bool:
+        return needs_attention(self.field, self.confidence)
+
+
+_ATTENTION_FIELDS = {
+    Extraction.Field.ACTION_DEADLINE,
+    Extraction.Field.INVOICE_DUE_DATE,
+    Extraction.Field.INVOICE_AMOUNT_INCL,
+}
+
+
+def needs_attention(field: str, confidence: Decimal) -> bool:
+    """Only deadlines and amounts: a wrong one costs money or a missed term."""
+    return field in _ATTENTION_FIELDS and confidence < NEEDS_ATTENTION_BELOW
