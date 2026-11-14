@@ -279,6 +279,32 @@ Choices:
 - **401 before 403.** A bearer token that is unknown or revoked is 401 at once (`DeviceTokenAuth` raises), and a request with no session is 401 as well: `apps.accounts.auth.SessionAuth` checks CSRF only for a caller who has a session (403 stays for a session without a valid token). Session-only endpoints (`createPairingCode`, `logout`) answer 401 to any bearer token.
 - **Runtime image.** Multi-stage: the virtualenv is built where `uv` lives and copied over; `backend/tests` is excluded by `.dockerignore`.
 
+## 2026-11-14: Phase 1b scope (owner decisions)
+
+- **No heavy work on the server.** OCR happens on the iPhone (Apple Vision); in 1b the
+  app is the only intake, so the server runs no OCR. OCRmyPDF/Tesseract arrive with web
+  upload and the watch folder (1d). This deviates from the 1b row in spec section 16.
+- **AI through an API by default.** Modes `off`, `external`, `local`; `external` and
+  `local` are the same OpenAI-compatible provider with a different URL. Default for
+  `external`: Mistral. `local` (Ollama) stays possible but is not tested on real
+  hardware in 1b. New workspaces start with `off`.
+- **No web screens in 1b.** The result is reviewed in the app.
+
+## 2026-11-14: Contract fixes (phase 1b, Task 1)
+
+- **Nullable fields are type arrays.** Pydantic writes `X | None` as
+  `anyOf: [X, {"type": "null"}]`, which swift-openapi-generator (1.12.2) skips, so the
+  field never reached the app. `apps.common.openapi.normalize_nullable` rewrites it to
+  `type: [X, "null"]` in the exported file (verified: the generator emits
+  `parentId: String?`). Only primitives can be nullable; a nullable object or `$ref`
+  fails the export, and a test forbids `anyOf` in the contract. Nullable request
+  fields get a default, because the generated client omits a nil field.
+- **411 for a body without Content-Length.** gunicorn hands Django a chunked body
+  without a length and Django reads it as empty, so the caller got a misleading 415 or
+  422. `ApiContentLengthMiddleware` answers 411 `length_required` to any `/api/` request
+  with `Transfer-Encoding` and no `Content-Length`. The app's uploads always carry a
+  length (upload from a file).
+
 ## Open items
 
 - Pin GitHub Actions and container images by digest: later hardening task.

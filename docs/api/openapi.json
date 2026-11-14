@@ -27,16 +27,12 @@
             "type": "string"
           },
           "last_seen_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Seen At"
+            "format": "date-time",
+            "title": "Last Seen At",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "name": {
             "title": "Name",
@@ -79,16 +75,12 @@
             "type": "string"
           },
           "parent_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Parent Id"
+            "format": "uuid",
+            "title": "Parent Id",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -109,16 +101,12 @@
             "type": "string"
           },
           "parent_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Parent Id"
+            "format": "uuid",
+            "title": "Parent Id",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "path": {
             "title": "Path",

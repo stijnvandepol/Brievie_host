@@ -237,7 +237,10 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /** Last Seen At */
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
             last_seen_at: string | null;
             /** Name */
             name: string;
@@ -256,7 +259,10 @@ export interface components {
         FolderIn: {
             /** Name */
             name: string;
-            /** Parent Id */
+            /**
+             * Parent Id
+             * Format: uuid
+             */
             parent_id?: string | null;
         };
         /** FolderOut */
@@ -268,7 +274,10 @@ export interface components {
             id: string;
             /** Name */
             name: string;
-            /** Parent Id */
+            /**
+             * Parent Id
+             * Format: uuid
+             */
             parent_id: string | null;
             /** Path */
             path: string;

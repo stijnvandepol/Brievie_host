@@ -51,6 +51,7 @@ def _http_error_body(status: int) -> tuple[str, str]:
         403: ("forbidden", _("Je mag dit niet doen.")),
         404: ("not_found", _("We kunnen dit niet vinden.")),
         405: ("method_not_allowed", _("Dit kan hier niet.")),
+        411: ("length_required", _("Dit verzoek mist een lengte. Probeer het opnieuw.")),
         413: ("payload_too_large", _("Dit verzoek is te groot.")),
         415: ("unsupported_media_type", _("Stuur de gegevens als JSON.")),
         429: ("too_many_attempts", _("Te veel pogingen. Probeer het later opnieuw.")),
@@ -152,6 +153,26 @@ class ApiMethodNotAllowedMiddleware:
                 body["Allow"] = response["Allow"]
             return body
         return response
+
+
+class ApiContentLengthMiddleware:
+    """Refuses an /api/ request body that has no Content-Length (411).
+
+    gunicorn hands Django a chunked body without a length, and Django then reads it
+    as empty, so the caller would get a misleading 415 or 422. Runs before any view.
+    """
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
+        self.get_response = get_response
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        if (
+            request.path.startswith("/api/")
+            and "HTTP_TRANSFER_ENCODING" in request.META
+            and not request.META.get("CONTENT_LENGTH")
+        ):
+            return http_error_response(411)
+        return self.get_response(request)
 
 
 class ApiJsonBodyMiddleware:

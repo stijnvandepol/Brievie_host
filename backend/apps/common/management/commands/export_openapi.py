@@ -5,6 +5,7 @@ from pathlib import Path
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
+from apps.common.openapi import normalize_nullable
 from brievie.api import api
 
 # The contract with Brievie_ios; generated, never edited by hand.
@@ -12,7 +13,7 @@ OUTPUT: Path = settings.BASE_DIR.parent / "docs" / "api" / "openapi.json"
 
 
 def render_schema() -> str:
-    schema = api.get_openapi_schema()
+    schema = normalize_nullable(api.get_openapi_schema())
     return json.dumps(schema, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
 
