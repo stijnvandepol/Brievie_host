@@ -403,3 +403,11 @@ Choices:
 - Pin GitHub Actions and container images by digest: later hardening task.
 - Two-factor authentication is not built in phase 1a; login is email + password only (with lockout).
 - Device tokens never expire; a device stops working only when somebody revokes it. A lifetime (and refresh) is still to be decided.
+- Server-side OCR (OCRmyPDF + Tesseract) for uploads without text: with web upload and the watch folder (1d).
+- The extraction schema leaves out addressees, relations, labels, VAT lines and identifiers (licence plate, assessment number); they arrive with persons and labels (1c) and business mode (phase 2), with IBAN mod-97 and the VAT sum check.
+- `listDocuments` returns the newest 200; paging is an additive change for later.
+- Confirmed tasks have no reminders yet (1c), and calculated deadlines (NL rules) are not built: a client may only send `in_document` or `manual`.
+- A document cannot be deleted or edited after confirmation yet.
+- Encrypted page files of a rolled-back upload can stay behind; a storage sweep comes with back-ups (1d), which must also cover `BRIEVIE_MASTER_KEY`.
+- AI settings are set with `manage.py configure_ai`; the web settings screen comes with the wizard (1d). The `external` mode was not run against a real service by the builder (no key): the owner checks it with their own Mistral key.
+- The API key for an AI service lives in the database sealed with the workspace key; the worker therefore holds `BRIEVIE_MASTER_KEY` too.

@@ -61,6 +61,31 @@ A one-shot `migrate` container applies migrations as the `brievie_owner` role an
 exits; the `api` container starts after it and serves requests as the `brievie_app`
 role, without the owner credentials.
 
+## Documents and AI (phase 1b)
+
+The app uploads a scan (page images plus the text it recognised on the phone). The
+`worker` container processes it: it masks BSNs, optionally asks an AI service what the
+letter says, checks every answer against the letter text, and offers the result for
+review in the app. Nothing becomes a task until you confirm it there.
+
+A new workspace has AI **off**: you fill in the review by hand. To let an AI service
+read your letters (only the text, with BSNs masked; never the page images):
+
+```sh
+# The workspace id is in the address bar of the web interface, or in GET /api/v1/workspaces.
+docker compose --project-directory deploy -f deploy/docker-compose.yml exec api \
+  python manage.py configure_ai --workspace <workspace-id> --mode external
+```
+
+It asks for the API key (or reads `BRIEVIE_AI_API_KEY`) and defaults to Mistral
+(`https://api.mistral.ai/v1`, model `mistral-small-latest`); `--base-url` and `--model`
+choose another OpenAI-compatible service. `--mode local --base-url http://ollama:11434/v1
+--model <name>` uses a model on your own network, `--mode off` switches AI off.
+
+`BRIEVIE_MASTER_KEY` in `deploy/.env` encrypts the documents. `sh deploy/init-env.sh`
+creates it (also in an existing `.env`). **Keep a copy in a safe place**: without it the
+stored documents cannot be read. See [docs/PRIVACY.md](docs/PRIVACY.md).
+
 ## iPhone koppelen
 
 The app reaches the server over your network, so `BRIEVIE_HOSTNAME` in `deploy/.env` must
