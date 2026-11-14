@@ -374,6 +374,30 @@ Choices:
 - **`needs_attention`** (confidence below 0.85 on a deadline or amount) is computed on
   `Extraction`, not stored.
 
+## 2026-11-14: AI provider (phase 1b, Task 8)
+
+- **httpx** (0.28.1): the call to the AI service, with a timeout and a mock transport
+  for tests. Dropped: the `openai` SDK (a large dependency for one call), `urllib`
+  (no mock transport, clumsy timeouts).
+- **One provider for every mode.** `OpenAICompatibleProvider` posts to
+  `<base_url>/chat/completions` at temperature 0 with a strict JSON schema
+  (`response_format`). `external` defaults to Mistral (`https://api.mistral.ai/v1`,
+  `mistral-small-latest`): a European company, cheap small models, structured output.
+  `local` (Ollama and the like) is the same code with another URL; not tested on real
+  hardware in 1b.
+- **`local` cannot leave the network.** Its URL must name a Compose service (no dot),
+  `localhost`, a `.local` name, or a literal loopback or private address; checked when
+  configured and again before every use. A `.local` name is trusted to resolve inside
+  the network.
+- **The API key** is sealed with the workspace key, set with
+  `manage.py configure_ai` from `BRIEVIE_AI_API_KEY` or a prompt, never from the
+  command line, and never part of an exception or a log line (provider errors carry a
+  code only and are raised without their cause).
+- **Text cap.** At most 30000 characters go to the model, cut at a page boundary.
+- **Failures.** Timeout, connection error, 429 and 5xx retry (`ai_unavailable`);
+  401/403 `ai_key_rejected`, other 4xx `ai_request_rejected`, an answer without content
+  `ai_invalid_output`: no retry.
+
 ## Open items
 
 - Pin GitHub Actions and container images by digest: later hardening task.
