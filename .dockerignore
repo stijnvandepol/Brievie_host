@@ -1,0 +1,11 @@
+**/.venv
+**/__pycache__
+**/.mypy_cache
+**/.pytest_cache
+**/.ruff_cache
+deploy/.env
+.git
+.superpowers
+**/node_modules
+web/dist
+backend/tests

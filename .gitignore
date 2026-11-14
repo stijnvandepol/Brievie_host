@@ -1,0 +1,21 @@
+.superpowers/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+backend/staticfiles/
+
+# Local secrets
+deploy/.env
+.env
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+node_modules/
+web/dist/

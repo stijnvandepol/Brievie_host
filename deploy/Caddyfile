@@ -1,0 +1,48 @@
+# TLS in front of the API. Caddy's internal CA issues the certificate; the iOS app
+# pins that CA's root (QR payload "ca_sha256", GET /api/v1/server/ca-certificate).
+{
+	# The root is distributed by pinning, not by installing it into a trust store.
+	skip_install_trust
+}
+
+(security_headers) {
+	header {
+		# 0 with the private CA (browsers must be able to bypass its warning);
+		# 31536000 with a public certificate. Same variable as Django's HSTS.
+		Strict-Transport-Security "max-age={$BRIEVIE_HSTS_SECONDS}"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+		# The web app loads only its own scripts and styles: no inline script, no eval.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		-Server
+	}
+}
+
+{$BRIEVIE_HOSTNAME} {
+	tls internal {
+		protocols tls1.2 tls1.3
+	}
+
+	# Same limit as Django's DATA_UPLOAD_MAX_MEMORY_SIZE (BRIEVIE_MAX_BODY_BYTES).
+	request_body {
+		max_size {$BRIEVIE_MAX_BODY_BYTES}
+	}
+
+	import security_headers
+
+	encode zstd gzip
+
+	reverse_proxy api:8000
+
+	# Errors Caddy produces itself, in the API's error shape.
+	handle_errors 413 {
+		import security_headers
+		header Content-Type application/json
+		respond `{"code": "payload_too_large", "message": "Dit verzoek is te groot."}` 413
+	}
+	handle_errors 502 503 504 {
+		import security_headers
+		header Content-Type application/json
+		respond `{"code": "server_unavailable", "message": "De server is even niet bereikbaar. Probeer het later opnieuw."}` {err.status_code}
+	}
+}

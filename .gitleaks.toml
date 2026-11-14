@@ -1,0 +1,11 @@
+# Keeps the default rules and allows the made-up values the tests use. Matching on the value
+# (not on a commit) keeps this working after a squash or rebase.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Made-up passwords and setup tokens in test fixtures"
+regexes = [
+  '''^een-lang-wachtwoord-2026$''',
+  '''^uit-de-omgeving-123$''',
+]

@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      PGHOST: localhost
+      PGPASSWORD: postgres
+      POSTGRES_USER: postgres
+      BRIEVIE_OWNER_PASSWORD: ci-owner
+      BRIEVIE_APP_PASSWORD: ci-app
+      DATABASE_URL: postgres://brievie_app:ci-app@localhost:5432/brievie
+      DATABASE_OWNER_URL: postgres://brievie_owner:ci-owner@localhost:5432/brievie
+      # At least 50 characters: the settings refuse shorter keys.
+      SECRET_KEY: ci-only-not-secret-ci-only-not-secret-ci-only-not-secret
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.13.8"
+      - name: Create database roles
+        run: bash ../deploy/postgres-init/01-roles.sh
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy .
+      - name: Migrations match the models
+        run: uv run python manage.py makemigrations --check --dry-run
+      - name: OpenAPI contract is up to date
+        run: uv run python manage.py export_openapi --check
+      - run: uv run pytest
+      - name: Audit dependencies
+        run: |
+          uv export --frozen --no-hashes --no-emit-project > "$RUNNER_TEMP/requirements.txt"
+          uvx pip-audit --strict --requirement "$RUNNER_TEMP/requirements.txt"
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+      # The action reads "packageManager" from the repo root by default; ours is in web/.
+      # (defaults.run.working-directory does not apply to `uses:` steps.)
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 26.13
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - name: API types match the OpenAPI contract
+        run: |
+          pnpm gen:api
+          git diff --exit-code src/api/schema.d.ts
+      - name: Text catalogue is up to date
+        run: |
+          pnpm extract
+          git diff --exit-code -I POT-Creation-Date src/locales
+      - run: pnpm test
+      - run: pnpm build
+      - name: Audit dependencies
+        run: pnpm audit --prod --audit-level high
+
+  secrets:
+    runs-on: ubuntu-latest
+    # gitleaks-action lists the pull request's commits.
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
