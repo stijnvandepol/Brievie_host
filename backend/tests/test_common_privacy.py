@@ -1,6 +1,9 @@
 import logging
+import sys
+from typing import cast
 
 import pytest
+from django.conf import settings
 
 from apps.common.privacy import BsnMaskingFilter, find_bsns, mask_bsns
 
@@ -77,12 +80,10 @@ def test_log_records_are_masked(caplog: pytest.LogCaptureFixture) -> None:
 
 
 def test_every_configured_handler_masks_bsns() -> None:
-    from django.conf import settings
-
-    handlers = settings.LOGGING["handlers"]
+    handlers = cast(dict[str, dict[str, object]], settings.LOGGING["handlers"])
     assert handlers
     for handler in handlers.values():
-        assert "mask_bsn" in handler.get("filters", [])
+        assert handler.get("filters") == ["mask_bsn"]
 
 
 def test_tracebacks_are_masked() -> None:
@@ -90,8 +91,6 @@ def test_tracebacks_are_masked() -> None:
     try:
         raise ValueError("BSN 111222333 klopt niet")
     except ValueError:
-        import sys
-
         record.exc_info = sys.exc_info()
 
     BsnMaskingFilter().filter(record)
