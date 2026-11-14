@@ -2,6 +2,7 @@ import json
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
@@ -279,9 +280,9 @@ def test_json_schema_matches_snapshot_and_has_no_refs() -> None:
 
     assert "$ref" not in rendered
     assert "$defs" not in rendered
-    assert set(schema["properties"]) == {  # type: ignore[arg-type]
-        "afzender", "documenttype", "dagtekening", "samenvatting_b1", "acties", "factuur",
-    }  # fmt: skip
+    assert sorted(cast(dict[str, object], schema["properties"])) == [
+        "acties", "afzender", "dagtekening", "documenttype", "factuur", "samenvatting_b1",
+    ]  # fmt: skip
     assert rendered == SNAPSHOT.read_text(encoding="utf-8"), (
         "update tests/fixtures/extraction_schema.json"
     )
@@ -304,4 +305,6 @@ def test_json_schema_is_strict_everywhere() -> None:
     assert len(all_objects) >= 6
     for node in all_objects:
         assert node["additionalProperties"] is False
-        assert sorted(node["required"]) == sorted(node["properties"])  # type: ignore[call-overload]
+        assert sorted(cast(list[str], node["required"])) == sorted(
+            cast(dict[str, object], node["properties"])
+        )

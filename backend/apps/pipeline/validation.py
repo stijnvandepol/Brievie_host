@@ -6,6 +6,7 @@ dropped. The model's confidence is clamped and never raised.
 """
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
@@ -164,7 +165,7 @@ def _generated(field: str, value: str, group: int = 0) -> ValidatedValue:
     return ValidatedValue(field, group, value, "", GENERATED)
 
 
-def _code(codes: dict[str, str], dutch: str) -> str:
+def _code(codes: Mapping[str, str], dutch: str) -> str:
     return str(codes.get(dutch.strip().lower(), "other"))
 
 
