@@ -29,3 +29,12 @@ export const workspacesQuery = queryOptions({
     return data;
   },
 });
+
+export const devicesQuery = queryOptions({
+  queryKey: ["devices"],
+  queryFn: async () => {
+    const { data, error } = await api.GET("/api/v1/devices");
+    if (error !== undefined || !data) throw new ApiFailure(error);
+    return data;
+  },
+});
