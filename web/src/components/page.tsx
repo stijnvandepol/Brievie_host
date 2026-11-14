@@ -1,7 +1,7 @@
 import { t } from "@lingui/core/macro";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useId } from "react";
 import { Button, FieldError, Input, Label, Text, TextField } from "react-aria-components";
 import { ApiFailure, api, errorMessage } from "../api/client";
 import { meQuery } from "../api/queries";
@@ -15,21 +15,42 @@ export function usePageTitle(title: string) {
 
 /** The envelope mark; decorative, the word next to it names the product. */
 function BrandMark() {
+  // The tick is the flap of the envelope: it is punched out where it crosses the envelope
+  // (mask, so it works on any background) and solid where its tail runs past it.
+  const id = useId().replace(/:/g, "");
+  const maskId = `${id}-punch`;
+  const clipId = `${id}-envelope`;
+  const tick = "M232 472 L456 664 L836 260";
   return (
-    <svg
-      aria-hidden="true"
-      focusable="false"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="3" y="5" width="18" height="14" rx="2" />
-      <path d="M3 7l9 6 9-6" />
+    <svg aria-hidden="true" focusable="false" className="brand-mark" viewBox="144 216 736 592">
+      <defs>
+        <clipPath id={clipId}>
+          <rect x="156" y="396" width="600" height="400" rx="52" />
+        </clipPath>
+        <mask id={maskId} maskUnits="userSpaceOnUse" x="144" y="216" width="736" height="592">
+          <rect x="144" y="216" width="736" height="592" fill="#fff" />
+          <path
+            d={tick}
+            fill="none"
+            stroke="#000"
+            strokeWidth="64"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            clipPath={`url(#${clipId})`}
+          />
+        </mask>
+      </defs>
+      <g mask={`url(#${maskId})`} fill="currentColor">
+        <path
+          d={tick}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="64"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <rect x="156" y="396" width="600" height="400" rx="52" />
+      </g>
     </svg>
   );
 }
