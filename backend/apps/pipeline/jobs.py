@@ -2,18 +2,26 @@
 
 import logging
 from collections.abc import Callable
+from datetime import timedelta
 from uuid import UUID
 
+from django.utils import timezone
 from procrastinate import JobContext, RetryStrategy
 from procrastinate.contrib.django import app
+from procrastinate.contrib.django.models import ProcrastinateJob
 
+from apps.documents.models import Document
 from apps.pipeline.errors import PermanentError, RetryableError
 from apps.pipeline.steps import mark_failed, run_pipeline
+from apps.workspaces.context import workspace_context
+from apps.workspaces.models import Workspace
 
 logger = logging.getLogger(__name__)
 
 QUEUE = "pipeline"
 MAX_ATTEMPTS = 3
+# Longer than a job with all its retries can take (about 8 minutes).
+ABANDONED_AFTER = timedelta(minutes=15)
 
 Runner = Callable[[UUID, UUID], None]
 
@@ -65,3 +73,41 @@ async def retry_stalled_jobs(context: JobContext, timestamp: int) -> None:
     """Give jobs of a worker that died back to the queue, so no document hangs."""
     for job in await context.app.job_manager.get_stalled_jobs(queue=QUEUE):
         await context.app.job_manager.retry_job(job)
+
+
+def requeue_abandoned_documents() -> int:
+    """Queue documents again that are `processing` without a waiting or running job.
+
+    That happens when recording a failure itself failed (the database went away):
+    the job is over and nothing else would ever move the document. Returns how many
+    were queued.
+    """
+    stale_before = timezone.now() - ABANDONED_AFTER
+    queued = 0
+    for workspace_id in Workspace.objects.values_list("id", flat=True):
+        with workspace_context(workspace_id):
+            stale = Document.objects.filter(
+                status=Document.Status.PROCESSING, updated_at__lt=stale_before
+            ).values_list("id", flat=True)
+            for document_id in stale:
+                if _has_live_job(document_id):
+                    continue
+                defer_processing(workspace_id=workspace_id, document_id=document_id)
+                queued += 1
+    if queued:
+        logger.warning("Queued %d abandoned documents again", queued)
+    return queued
+
+
+def _has_live_job(document_id: UUID) -> bool:
+    return ProcrastinateJob.objects.filter(
+        task_name="process_document",
+        status__in=["todo", "doing"],
+        args__document_id=str(document_id),
+    ).exists()
+
+
+@app.periodic(cron="*/5 * * * *")
+@app.task(name="requeue_abandoned_documents", queue=QUEUE)
+def requeue_abandoned_documents_job(timestamp: int) -> None:
+    requeue_abandoned_documents()

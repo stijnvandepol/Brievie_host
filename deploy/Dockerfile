@@ -51,6 +51,8 @@ USER brievie
 
 EXPOSE 8000
 # Serves as the app role. Migrations run in the separate one-shot "migrate" service.
+# Threaded workers: a slow upload (Caddy streams the body) holds one thread, not a whole
+# worker, and is not killed by the worker timeout.
 # Before gunicorn starts, prepare_setup_token prints the first-run installation code
 # once (only while the server is not set up and BRIEVIE_SETUP_TOKEN is unset).
-CMD ["sh", "-c", "python manage.py check_master_key && python manage.py prepare_setup_token && exec gunicorn brievie.wsgi:application --bind 0.0.0.0:8000 --workers 2"]
+CMD ["sh", "-c", "python manage.py check_master_key && python manage.py prepare_setup_token && exec gunicorn brievie.wsgi:application --bind 0.0.0.0:8000 --workers 2 --worker-class gthread --threads 4 --timeout 120"]

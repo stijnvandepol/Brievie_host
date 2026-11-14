@@ -398,6 +398,23 @@ Choices:
   401/403 `ai_key_rejected`, other 4xx `ai_request_rejected`, an answer without content
   `ai_invalid_output`: no retry.
 
+## 2026-11-14: Fixes after the whole-branch review (phase 1b)
+
+- **BSN masking is wider.** Groups may be separated by dots, spaces, no-break spaces or
+  hyphens (also `1234.56.782`), and only a digit directly next to the number rules it
+  out: letters or other numbers around it do not (OCR glues columns together; an old
+  VAT id `NL…B01` holds the BSN). A number is masked too often rather than too rarely.
+- **Abandoned documents.** `requeue_abandoned_documents` (every 5 minutes) queues a
+  document again that has been `processing` for 15 minutes without a waiting or running
+  job: recording a failure can itself fail when the database goes away, and nothing
+  else would move that document.
+- **gunicorn runs threaded** (`gthread`, 4 threads, timeout 120 s): Caddy streams an
+  upload, so a slow connection held a sync worker past its 30 s timeout (502), and two
+  slow uploads blocked the API.
+- **Amounts must look like money.** A number counts as an amount only with `€`/`EUR`
+  before it or cents after it, so "Postbus 2500" cannot confirm an invented amount; a
+  due date found outside the invoice quote may not be the letter's own date.
+
 ## Open items
 
 - Pin GitHub Actions and container images by digest: later hardening task.
@@ -411,3 +428,4 @@ Choices:
 - Encrypted page files of a rolled-back upload can stay behind; a storage sweep comes with back-ups (1d), which must also cover `BRIEVIE_MASTER_KEY`.
 - AI settings are set with `manage.py configure_ai`; the web settings screen comes with the wizard (1d). The `external` mode was not run against a real service by the builder (no key): the owner checks it with their own Mistral key.
 - The API key for an AI service lives in the database sealed with the workspace key; the worker therefore holds `BRIEVIE_MASTER_KEY` too.
+- From the review, not fixed: `local` accepts a host made of digits only (`http://134744072`, read as an IP address by a resolver; only the owner can set it); a provider host name over 50 characters fails every document; a NUL character in page text gives 500 instead of 422; repeating a confirm after a lost answer gives 409 (the app reloads the document); an `in_document` deadline is checked for its quote, not for the date inside the quote.

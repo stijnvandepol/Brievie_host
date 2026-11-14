@@ -5,14 +5,19 @@ import re
 
 MASK = "[BSN]"
 
-# Nine digits, plain or grouped the way letters print them, not part of a longer
-# number or word.
+# Nine digits, plain or grouped the way letters print them (dots, spaces, no-break
+# spaces or hyphens between the groups). Only a digit directly next to it rules a
+# candidate out: OCR glues columns together, and an old VAT id (NL…B01) holds the BSN,
+# so letters and other numbers around it are no reason to let it through. Masking a
+# number too many is the safe side.
+_SEP = r"[.\u00a0 \t-]"
 _CANDIDATE = re.compile(
-    r"(?<!\w)(?<!\d[. ])"
-    r"(?:\d{9}|\d{3}\.\d{3}\.\d{3}|\d{3} \d{3} \d{3}|\d{4} \d{2} \d{3}|\d{2}\.\d{2}\.\d{2}\.\d{3})"
-    r"(?![. ]?\d)(?!\w)"
+    r"(?<!\d)"
+    rf"(?:\d{{9}}|\d{{3}}{_SEP}\d{{3}}{_SEP}\d{{3}}|\d{{4}}{_SEP}\d{{2}}{_SEP}\d{{3}}"
+    rf"|\d{{2}}{_SEP}\d{{2}}{_SEP}\d{{2}}{_SEP}\d{{3}})"
+    r"(?!\d)"
 )
-_LABEL = re.compile(r"\b(?:bsn|burgerservicenummer)\b", re.IGNORECASE)
+_LABEL = re.compile(r"bsn|burgerservicenummer", re.IGNORECASE)
 # How far after the word "BSN" a number still counts as labelled.
 _LABEL_REACH = 30
 

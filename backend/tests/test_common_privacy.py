@@ -38,13 +38,33 @@ def test_text_around_the_bsn_is_kept() -> None:
         "Factuur 123456789",
         "IBAN NL91ABNA0417164300",
         "1112223334",
-        "ref A111222333",
-        "bedrag 12 111 222 333",
         "000000000",
+        "2026-11-14 12:30",
     ],
 )
 def test_non_bsn_numbers_are_kept(text: str) -> None:
     assert mask_bsns(text) == text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "BSN: 1112.22.333",  # 4.2.3 with dots
+        "111-222-333",
+        "111\u00a0222\u00a0333",  # no-break spaces
+        "BSN111222333",
+        "111222333 01-02-1980",  # OCR flattened two columns
+        "Jansen 1980 111222333",
+        "btw-id NL111222333B01",  # an old VAT id of a sole trader holds the BSN
+        "ref A111222333",
+        "12 111 222 333",
+    ],
+)
+def test_bsn_next_to_other_text_or_numbers_is_masked(text: str) -> None:
+    # Final review: masking too much is the safe side; these forms leaked.
+    masked = mask_bsns(text)
+    assert "[BSN]" in masked
+    assert "222" not in masked
 
 
 def test_labelled_bsn_is_masked_even_when_misread() -> None:

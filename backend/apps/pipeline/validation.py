@@ -69,7 +69,7 @@ def validate(payload: ExtractionPayload, text: str, *, today: date) -> list[Vali
     for group, action in enumerate(payload.actions, start=1):
         values += _action(action, group, text, letter_date or today, today)
     if payload.invoice is not None:
-        values += _invoice(payload.invoice, text, letter_date or today, today)
+        values += _invoice(payload.invoice, text, letter_date, today)
     return values
 
 
@@ -117,7 +117,9 @@ def _action(
     return values
 
 
-def _invoice(invoice: InvoiceOut, text: str, reference: date, today: date) -> list[ValidatedValue]:
+def _invoice(
+    invoice: InvoiceOut, text: str, letter_date: date | None, today: date
+) -> list[ValidatedValue]:
     # One quote covers several invoice values, so a value may also be found
     # elsewhere in the letter.
     quote = (invoice.quote or "").strip()
@@ -134,8 +136,10 @@ def _invoice(invoice: InvoiceOut, text: str, reference: date, today: date) -> li
 
     due = _parse_date(invoice.due_date)
     if due is not None:
-        found = quoted and due in dates_in(quote) | dates_in(text)
-        plausible = _plausible_deadline(due, reference, today)
+        # Elsewhere in the letter the letter's own date does not count as a due date.
+        elsewhere = due != letter_date and due in dates_in(text)
+        found = quoted and (due in dates_in(quote) or elsewhere)
+        plausible = _plausible_deadline(due, letter_date or today, today)
         values.append(
             ValidatedValue(
                 "invoice_due_date",
@@ -235,13 +239,23 @@ def dates_in(text: str) -> set[date]:
     return found
 
 
-_AMOUNT = re.compile(r"(?<![\d.,])(\d{1,3}(?:[. ]\d{3})+|\d+)(?:,(\d{2}|-)|\.(\d{2}))?(?!\d)")
+_AMOUNT = re.compile(
+    r"(?:(€|EUR)\s*)?(?<![\d.,])(\d{1,3}(?:[. ]\d{3})+|\d+)"
+    r"(?:,(\d{2}|-)|\.(\d{2}))?(?![\d]|[.,]\d)",
+    re.IGNORECASE,
+)
 
 
 def amounts_in(text: str) -> set[Decimal]:
-    """Every amount written in `text`: `1.234,56`, `1234.56`, `12,-`, `1 000,00`."""
+    """Every amount of money written in `text`: `€ 1.234,56`, `1234.56`, `12,-`, `EUR 40`.
+
+    A number counts as money only with a currency sign before it or cents after it:
+    a postbox number, a year or a number of days is not an amount.
+    """
     found = set()
-    for whole, after_comma, after_point in _AMOUNT.findall(text):
+    for currency, whole, after_comma, after_point in _AMOUNT.findall(text):
+        if not (currency or after_comma or after_point):
+            continue
         cents = after_comma if after_comma.isdigit() else after_point
         digits = re.sub(r"[. ]", "", whole)
         found.add(Decimal(f"{digits}.{cents}") if cents else Decimal(digits))

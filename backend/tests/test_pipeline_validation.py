@@ -252,11 +252,37 @@ def test_dates_in_dutch_text() -> None:
 
 
 def test_amounts_in_dutch_text() -> None:
-    text = "€ 1.234,56 en 1234.56 en EUR 12,- en 99,95 en 1 000,00 en 2.500"
+    text = "€ 1.234,56 en 1234.56 en EUR 12,- en 99,95 en 1 000,00 en € 2.500 en EUR 40"
 
-    assert amounts_in(text) >= {
+    assert amounts_in(text) == {
         Decimal("1234.56"), Decimal("12"), Decimal("99.95"), Decimal("1000.00"), Decimal("2500"),
+        Decimal("40"),
     }  # fmt: skip
+
+
+def test_plain_numbers_are_not_amounts() -> None:
+    text = "Postbus 2500, binnen 30 dagen, jaar 2026, kenmerk 1234.56.789, NL91ABNA0417164300"
+
+    assert amounts_in(text) == set()
+
+
+def test_amount_that_is_only_a_plain_number_in_the_letter_gets_zero() -> None:
+    # Final review: "Postbus 2500" must not confirm an invented amount of 2500.00.
+    text = TEXT + " Postbus 2500"
+    data = invoice(bedrag_incl="2500.00")
+
+    values = validate(payload(factuur=data), text, today=TODAY)
+
+    assert value(values, "invoice_amount_incl").confidence == Decimal("0")
+
+
+def test_letter_date_is_not_accepted_as_due_date() -> None:
+    # Not in the invoice quote, and the only matching date in the text is the letter's own.
+    data = invoice(vervaldatum="2026-11-03")
+
+    values = validate(payload(factuur=data), TEXT, today=TODAY)
+
+    assert value(values, "invoice_due_date").confidence == Decimal("0")
 
 
 def test_needs_attention_only_for_deadlines_and_amounts() -> None:

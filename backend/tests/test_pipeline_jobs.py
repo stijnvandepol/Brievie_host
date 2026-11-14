@@ -1,7 +1,9 @@
 import uuid
+from datetime import timedelta
 from uuid import UUID
 
 import pytest
+from django.utils import timezone
 from procrastinate import RetryStrategy
 from procrastinate.contrib.django import app as procrastinate_app
 from procrastinate.contrib.django.models import ProcrastinateJob
@@ -149,3 +151,44 @@ def test_stalled_jobs_are_retried_periodically() -> None:
         for entry in procrastinate_app.periodic_registry.periodic_tasks.values()
     }
     assert periodic["retry_stalled_jobs"] == "*/5 * * * *"
+
+
+def age(workspace: Workspace, document: Document, minutes: int) -> None:
+    with workspace_context(workspace.id):
+        Document.objects.filter(id=document.id).update(
+            updated_at=timezone.now() - timedelta(minutes=minutes)
+        )
+
+
+def test_abandoned_processing_document_is_queued_again(ws_a: Workspace, ws_b: Workspace) -> None:
+    # Final review: marking a document failed can itself fail (database restart); then no
+    # job is left and nothing would ever move the document again.
+    abandoned = make_document(ws_a)
+    age(ws_a, abandoned, minutes=20)
+    fresh = make_document(ws_b)
+    finished = make_document(ws_b, status="done")
+    age(ws_b, finished, minutes=20)
+
+    assert jobs.requeue_abandoned_documents() == 1
+
+    job = ProcrastinateJob.objects.get()
+    assert job.args == {"workspace_id": str(ws_a.id), "document_id": str(abandoned.id)}
+    assert status_of(ws_b, fresh) == ("processing", "")
+    assert status_of(ws_b, finished) == ("done", "")
+
+
+def test_document_with_a_waiting_job_is_not_queued_twice(ws_a: Workspace) -> None:
+    document = make_document(ws_a)
+    jobs.defer_processing(workspace_id=ws_a.id, document_id=document.id)
+    age(ws_a, document, minutes=20)
+
+    assert jobs.requeue_abandoned_documents() == 0
+    assert ProcrastinateJob.objects.count() == 1
+
+
+def test_abandoned_documents_are_checked_periodically() -> None:
+    periodic = {
+        entry.task.name: entry.cron
+        for entry in procrastinate_app.periodic_registry.periodic_tasks.values()
+    }
+    assert periodic["requeue_abandoned_documents"] == "*/5 * * * *"
