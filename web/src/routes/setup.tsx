@@ -6,7 +6,7 @@ import { Button, Form, Label, Radio, RadioGroup } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import { meQuery } from "../api/queries";
 import type { components } from "../api/schema";
-import { ErrorAlert, Field, Plain, usePageTitle } from "../components/page";
+import { ErrorAlert, Field, Split, usePageTitle } from "../components/page";
 import { requireVisitor } from "../guards";
 import { rootRoute } from "./root";
 
@@ -43,9 +43,11 @@ function SetupPage() {
   }
 
   return (
-    <Plain>
-      <h1>{t`Welkom bij Brievie`}</h1>
-      <p>{t`Stel je eigen Brievie-server in. Dit doe je maar één keer.`}</p>
+    <Split wide>
+      <div className="heading">
+        <h1>{t`Welkom bij Brievie`}</h1>
+        <p className="lede">{t`Stel je eigen Brievie-server in. Dit doe je maar één keer.`}</p>
+      </div>
       <Form onSubmit={submit} className="form">
         <RadioGroup name="workspace_kind" isRequired className="choice">
           <Label className="choice-label">{t`Waar gebruik je Brievie voor?`}</Label>
@@ -61,7 +63,7 @@ function SetupPage() {
           </div>
         </RadioGroup>
         <Field label={t`Naam van de werkruimte`} name="workspace_name" maxLength={150} />
-        <h2>{t`Jouw account`}</h2>
+        <h2 className="form-section">{t`Jouw account`}</h2>
         <Field label={t`Je naam`} name="name" autoComplete="name" maxLength={150} />
         <Field label={t`E-mailadres`} name="email" type="email" autoComplete="username" />
         <Field
@@ -83,7 +85,7 @@ function SetupPage() {
           {t`Start Brievie`}
         </Button>
       </Form>
-    </Plain>
+    </Split>
   );
 }
 

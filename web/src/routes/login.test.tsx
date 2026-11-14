@@ -22,6 +22,15 @@ function loggedOut() {
 }
 
 describe("login", () => {
+  it("shows the server host, one h1 and the lockout hint", async () => {
+    loggedOut();
+    renderApp("/login");
+    expect(await screen.findByRole("heading", { level: 1, name: "Inloggen" })).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.getByText(`Server: ${window.location.host}`)).toBeInTheDocument();
+    expect(screen.getByText(/na vijf mislukte pogingen/i)).toBeInTheDocument();
+  });
+
   it("shows the server's message on 401", async () => {
     loggedOut();
     server.use(

@@ -14,6 +14,13 @@ function kindLabel(kind: string): string {
   return kind;
 }
 
+function roleLabel(role: string): string {
+  if (role === "admin") return t`Beheerder`;
+  if (role === "member") return t`Lid`;
+  if (role === "viewer") return t`Meekijker`;
+  return role;
+}
+
 function HomePage() {
   usePageTitle(t`Werkruimtes`);
   const { data, error, isPending } = useQuery(workspacesQuery);
@@ -28,18 +35,39 @@ function HomePage() {
 
   return (
     <Shell>
-      <h1>{t`Werkruimtes`}</h1>
+      <header className="page-header">
+        <h1>{t`Werkruimtes`}</h1>
+      </header>
       {isPending ? <p>{t`Even laden...`}</p> : null}
       <ErrorAlert error={error} />
       {data ? (
-        <ul className="list">
-          {data.map((workspace) => (
-            <li key={workspace.id}>
-              <strong>{workspace.name}</strong>
-              <span>{kindLabel(workspace.kind)}</span>
-            </li>
-          ))}
-        </ul>
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrolling box must be reachable by keyboard (WCAG 2.1.1).
+        <section className="panel table-scroll" aria-label={t`Werkruimtes`} tabIndex={0}>
+          <div>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th scope="col">{t`Naam`}</th>
+                  <th scope="col">{t`Soort`}</th>
+                  <th scope="col">{t`Rol`}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((workspace) => (
+                  <tr key={workspace.id}>
+                    <th scope="row" className="cell-strong">
+                      {workspace.name}
+                    </th>
+                    <td>{kindLabel(workspace.kind)}</td>
+                    <td>
+                      <span className="tag">{roleLabel(workspace.role)}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       ) : null}
     </Shell>
   );
