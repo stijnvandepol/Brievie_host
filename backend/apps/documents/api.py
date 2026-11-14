@@ -9,9 +9,10 @@ from pydantic import ValidationError
 from apps.accounts.services import current_user
 from apps.common.errors import ApiError
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
-from apps.documents import intake, services
+from apps.documents import intake, review, services
 from apps.documents.models import Document, Folder
 from apps.documents.schemas import (
+    ConfirmIn,
     DocumentOut,
     DocumentSummaryOut,
     FolderIn,
@@ -146,3 +147,27 @@ def retry_document_processing(
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
     document = services.retry_processing(workspace=membership.workspace, document_id=document_id)
     return Status(202, services.document_out(document))
+
+
+@router.post(
+    "/workspaces/{workspace_id}/documents/{document_id}/confirm",
+    response={
+        200: DocumentOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    operation_id="confirmDocument",
+)
+def confirm_document(
+    request: HttpRequest, workspace_id: UUID, document_id: UUID, payload: ConfirmIn
+) -> DocumentOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    document = review.confirm_document(
+        workspace=membership.workspace,
+        user=current_user(request),
+        document_id=document_id,
+        data=payload,
+    )
+    return services.document_out(document)

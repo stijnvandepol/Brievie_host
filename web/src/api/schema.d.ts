@@ -236,6 +236,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Document */
+        post: operations["confirmDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}/pages/{index}": {
         parameters: {
             query?: never;
@@ -296,6 +313,27 @@ export interface components {
         CaCertificateOut: {
             /** Pem */
             pem: string;
+        };
+        /**
+         * ConfirmIn
+         * @description What the user confirmed in the review. Nothing becomes a task without it.
+         */
+        ConfirmIn: {
+            /** Document Type */
+            document_type: string;
+            /**
+             * Letter Date
+             * Format: date
+             */
+            letter_date?: string | null;
+            /** Sender */
+            sender: string;
+            /** Summary */
+            summary: string;
+            /** Summary By Ai */
+            summary_by_ai: boolean;
+            /** Tasks */
+            tasks: components["schemas"]["TaskIn"][];
         };
         /** DeviceOut */
         DeviceOut: {
@@ -535,6 +573,25 @@ export interface components {
         SetupStatusOut: {
             /** Needs Setup */
             needs_setup: boolean;
+        };
+        /** TaskIn */
+        TaskIn: {
+            /**
+             * Deadline
+             * Format: date
+             */
+            deadline?: string | null;
+            /**
+             * Deadline Quote
+             * @default
+             */
+            deadline_quote: string;
+            /** Deadline Source */
+            deadline_source: string;
+            /** Description */
+            description: string;
+            /** Type */
+            type: string;
         };
         /** TaskOut */
         TaskOut: {
@@ -1315,6 +1372,105 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    confirmDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

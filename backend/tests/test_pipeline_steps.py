@@ -1,5 +1,6 @@
 import json
 import uuid
+from collections.abc import Callable
 from datetime import date
 from decimal import Decimal
 from uuid import UUID
@@ -49,7 +50,7 @@ class FakeProvider:
         self.answers = list(answers)
         self.texts: list[str] = []
         self.in_transaction: list[bool] = []
-        self.during_call = lambda: None
+        self.during_call: Callable[[], None] = lambda: None
 
     def extract(self, text: str) -> str:
         self.texts.append(text)

@@ -69,7 +69,7 @@ def run_pipeline(
 
 
 def load_text(document: Document) -> str:
-    """The document's text for the AI. Masked once more: no BSN may leave, whatever wrote the row."""
+    """The document's text for the AI, masked once more: no BSN may leave the server."""
     return mask_bsns(document.ocr_text)
 
 

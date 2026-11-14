@@ -1,0 +1,247 @@
+import uuid
+from typing import TYPE_CHECKING
+
+import pytest
+from django.test import Client
+
+from apps.documents.models import Document
+from apps.tasks.models import Task
+from apps.workspaces.context import workspace_context
+from apps.workspaces.models import Membership, Workspace
+from tests.documents_support import admin_of, documents_url, jpeg, upload
+from tests.factories import UserFactory
+from tests.helpers import post_json
+
+if TYPE_CHECKING:
+    from tests.helpers import Response
+
+TEXT = "Belastingdienst\nDatum 3 november 2026\nU moet € 1.234,56 betalen vóór 1 december 2026."
+
+
+@pytest.fixture
+def client_a(client: Client, ws_a: Workspace) -> Client:
+    client.force_login(admin_of(ws_a))
+    return client
+
+
+def reviewable(client: Client, workspace: Workspace, status: str = "needs_review") -> str:
+    document_id = str(upload(client, workspace.id, [jpeg()], texts=[TEXT]).json()["id"])
+    with workspace_context(workspace.id):
+        Document.objects.filter(id=document_id).update(status=status)
+    return document_id
+
+
+def task(**changes: object) -> dict[str, object]:
+    base: dict[str, object] = {
+        "type": "pay",
+        "description": "Betaal de aanslag",
+        "deadline": "2026-12-01",
+        "deadline_source": "in_document",
+        "deadline_quote": "vóór 1 december 2026",
+    }
+    base.update(changes)
+    return base
+
+
+def review(**changes: object) -> dict[str, object]:
+    base: dict[str, object] = {
+        "sender": "Belastingdienst",
+        "document_type": "assessment",
+        "letter_date": "2026-11-03",
+        "summary": "Je moet belasting betalen.",
+        "summary_by_ai": True,
+        "tasks": [task()],
+    }
+    base.update(changes)
+    return base
+
+
+def confirm(
+    client: Client, workspace_id: object, document_id: object, body: dict[str, object]
+) -> "Response":
+    return post_json(client, f"/workspaces/{workspace_id}/documents/{document_id}/confirm", body)
+
+
+def task_count(workspace: Workspace) -> int:
+    with workspace_context(workspace.id):
+        return Task.objects.count()
+
+
+def test_confirm_stores_the_review_and_creates_the_task(client_a: Client, ws_a: Workspace) -> None:
+    document_id = reviewable(client_a, ws_a)
+
+    r = confirm(client_a, ws_a.id, document_id, review())
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "done"
+    assert body["sender"] == "Belastingdienst"
+    assert body["document_type"] == "assessment"
+    assert body["letter_date"] == "2026-11-03"
+    assert body["summary"] == "Je moet belasting betalen."
+    assert body["summary_by_ai"] is True
+    (created,) = body["tasks"]
+    assert created["type"] == "pay"
+    assert created["deadline"] == "2026-12-01"
+    assert created["deadline_source"] == "in_document"
+    assert created["deadline_quote"] == "vóór 1 december 2026"
+    assert created["status"] == "open"
+    with workspace_context(ws_a.id):
+        document = Document.objects.get()
+        assert document.confirmed_by == admin_of(ws_a)
+        assert document.confirmed_at is not None
+        assert Task.objects.get().document_id == document.id
+    assert client_a.get(f"{documents_url(ws_a.id)}/{document_id}").json() == body
+
+
+def test_no_task_exists_before_confirmation(client_a: Client, ws_a: Workspace) -> None:
+    reviewable(client_a, ws_a)
+
+    assert task_count(ws_a) == 0
+
+
+def test_missing_optional_dates_are_accepted(client_a: Client, ws_a: Workspace) -> None:
+    # The iOS client leaves a nil field out instead of sending null.
+    document_id = reviewable(client_a, ws_a)
+    body = review(tasks=[{"type": "respond", "description": "Bel", "deadline_source": "manual"}])
+    del body["letter_date"]
+
+    r = confirm(client_a, ws_a.id, document_id, body)
+
+    assert r.status_code == 200
+    assert r.json()["letter_date"] is None
+    assert r.json()["tasks"][0]["deadline"] is None
+    assert r.json()["tasks"][0]["deadline_quote"] == ""
+
+
+def test_confirming_twice_is_a_conflict_and_makes_one_task(
+    client_a: Client, ws_a: Workspace
+) -> None:
+    document_id = reviewable(client_a, ws_a)
+    confirm(client_a, ws_a.id, document_id, review())
+
+    r = confirm(client_a, ws_a.id, document_id, review())
+
+    assert r.status_code == 409
+    assert r.json()["code"] == "document_not_reviewable"
+    assert task_count(ws_a) == 1
+
+
+def test_confirm_while_processing_is_a_conflict(client_a: Client, ws_a: Workspace) -> None:
+    document_id = reviewable(client_a, ws_a, status="processing")
+
+    r = confirm(client_a, ws_a.id, document_id, review())
+
+    assert r.status_code == 409
+    assert task_count(ws_a) == 0
+
+
+def test_failed_document_can_be_reviewed_by_hand(client_a: Client, ws_a: Workspace) -> None:
+    document_id = reviewable(client_a, ws_a, status="failed")
+    manual = task(deadline_source="manual", deadline_quote="")
+
+    r = confirm(client_a, ws_a.id, document_id, review(summary_by_ai=False, tasks=[manual]))
+
+    assert r.status_code == 200
+    assert r.json()["status"] == "done"
+    assert r.json()["failure_code"] == ""
+
+
+def test_manual_deadline_has_no_quote(client_a: Client, ws_a: Workspace) -> None:
+    document_id = reviewable(client_a, ws_a)
+    manual = task(deadline_source="manual", deadline_quote="vóór 1 december 2026")
+
+    r = confirm(client_a, ws_a.id, document_id, review(tasks=[manual]))
+
+    assert r.json()["tasks"][0]["deadline_quote"] == ""
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        task(deadline_quote=""),
+        task(deadline_quote="   "),
+        task(deadline=None),
+        task(deadline_quote="vóór 2 december 2026"),  # not in the document
+        task(deadline_source="calculated"),
+        task(type="dansen"),
+        task(description=""),
+        task(description="x" * 501),
+    ],
+)
+def test_invalid_task_is_refused(client_a: Client, ws_a: Workspace, bad: dict[str, object]) -> None:
+    document_id = reviewable(client_a, ws_a)
+
+    r = confirm(client_a, ws_a.id, document_id, review(tasks=[bad]))
+
+    assert r.status_code == 422
+    assert set(r.json()) == {"code", "message"}
+    assert task_count(ws_a) == 0
+    with workspace_context(ws_a.id):
+        assert Document.objects.get().status == "needs_review"
+
+
+def test_invalid_document_type_and_too_many_tasks_are_refused(
+    client_a: Client, ws_a: Workspace
+) -> None:
+    document_id = reviewable(client_a, ws_a)
+
+    assert (
+        confirm(client_a, ws_a.id, document_id, review(document_type="gedicht")).status_code == 422
+    )
+    many = [task() for _ in range(21)]
+    assert confirm(client_a, ws_a.id, document_id, review(tasks=many)).status_code == 422
+    assert task_count(ws_a) == 0
+
+
+def test_empty_document_type_and_no_tasks_are_fine(client_a: Client, ws_a: Workspace) -> None:
+    document_id = reviewable(client_a, ws_a)
+
+    r = confirm(client_a, ws_a.id, document_id, review(document_type="", tasks=[]))
+
+    assert r.status_code == 200
+    assert r.json()["tasks"] == []
+
+
+def test_bsn_in_confirmed_text_is_masked(client_a: Client, ws_a: Workspace) -> None:
+    document_id = reviewable(client_a, ws_a)
+    manual = task(description="Bel over 111222333", deadline_source="manual", deadline_quote="")
+    body = review(summary="BSN 111222333 staat erin", tasks=[manual])
+
+    r = confirm(client_a, ws_a.id, document_id, body)
+
+    assert "111222333" not in r.content.decode()
+
+
+def test_viewer_cannot_confirm(client: Client, client_a: Client, ws_a: Workspace) -> None:
+    document_id = reviewable(client_a, ws_a)
+    viewer = UserFactory.create()
+    Membership.objects.create(user=viewer, workspace=ws_a, role="viewer")
+    client.force_login(viewer)
+
+    r = confirm(client, ws_a.id, document_id, review())
+
+    assert r.status_code == 403
+    assert task_count(ws_a) == 0
+
+
+def test_document_of_another_workspace_cannot_be_confirmed(
+    client: Client, client_a: Client, ws_a: Workspace, ws_b: Workspace
+) -> None:
+    document_id = reviewable(client_a, ws_a)
+    client.force_login(admin_of(ws_b))
+
+    through_a = confirm(client, ws_a.id, document_id, review())
+    through_b = confirm(client, ws_b.id, document_id, review())
+
+    assert through_a.status_code == 404
+    assert through_a.json()["code"] == "workspace_not_found"
+    assert through_b.status_code == 404
+    assert through_b.json()["code"] == "document_not_found"
+    assert task_count(ws_a) == 0
+
+
+def test_unknown_document_is_404(client_a: Client, ws_a: Workspace) -> None:
+    r = confirm(client_a, ws_a.id, uuid.uuid4(), review())
+
+    assert r.status_code == 404

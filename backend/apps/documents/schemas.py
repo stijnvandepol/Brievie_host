@@ -81,3 +81,27 @@ class DocumentOut(DocumentSummaryOut):
     pages: list[PageOut]
     proposals: list[ProposalOut]
     tasks: list[TaskOut]
+
+
+class TaskIn(Schema):
+    # One of the task types: pay, respond, object, apply, inspection, cancel, renew,
+    # file_tax, other.
+    type: str
+    description: str = Field(min_length=1, max_length=500)
+    deadline: date | None = None
+    # "in_document" (then `deadline` and `deadline_quote` are required) or "manual".
+    deadline_source: str
+    deadline_quote: str = ""
+
+
+class ConfirmIn(Schema):
+    """What the user confirmed in the review. Nothing becomes a task without it."""
+
+    sender: str = Field(max_length=200)
+    # A document type code, or empty.
+    document_type: str
+    letter_date: date | None = None
+    summary: str = Field(max_length=5000)
+    # Whether `summary` is the AI's text (shown with a label) or the user's own.
+    summary_by_ai: bool
+    tasks: list[TaskIn] = Field(max_length=20)
