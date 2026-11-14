@@ -327,6 +327,25 @@ Choices:
   (`FileSystemStorage` under `BRIEVIE_STORAGE_ROOT`, the `documents` volume); an
   S3-compatible implementation can follow without touching callers.
 
+## 2026-11-14: Job queue (phase 1b, Task 5)
+
+- **Procrastinate** (3.11.0): the job queue lives in PostgreSQL (spec section 18).
+  Dropped: Celery + Redis (an extra container to run and back up), Django's own task
+  framework (no production worker yet). Jobs are in each app's `jobs.py`
+  (`PROCRASTINATE_AUTODISCOVER_MODULE_NAME`), because `tasks` is a domain app.
+- **Worker container.** Same image, `procrastinate worker --queues pipeline`, the
+  **app** database role (Procrastinate's tables get the default DML privileges), no
+  published port, no documents volume: the pipeline works on text in the database.
+- **Job arguments are ids only** (`workspace_id`, `document_id`), never text. Every job
+  enters `workspace_context` itself, in short transactions: none stays open during a
+  slow step such as an AI call.
+- **A document never stays in `processing`.** Only `RetryableError` is retried (3
+  attempts: after 10 s and 100 s); the last attempt, a `PermanentError` or any
+  unexpected exception sets `failed` with a code. `retry_stalled_jobs` (every 5
+  minutes) gives jobs of a worker that stopped sending heartbeats back to the queue.
+  Every step first checks that the document is still `processing`, so a duplicate or
+  late job changes nothing.
+
 ## Open items
 
 - Pin GitHub Actions and container images by digest: later hardening task.

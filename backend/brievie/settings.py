@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "ninja",
     "axes",
+    "procrastinate.contrib.django",
     "apps.common",
     "apps.accounts",
     "apps.workspaces",
@@ -196,6 +197,9 @@ if BRIEVIE_SETUP_TOKEN and len(BRIEVIE_SETUP_TOKEN) < 16:
 # too-large body gets 413 from the proxy instead of a connection reset. The document
 # upload endpoint (phase 1b) will need its own, larger limit.
 DATA_UPLOAD_MAX_MEMORY_SIZE: int = env.int("BRIEVIE_MAX_BODY_BYTES", default=2621440)
+
+# Background jobs live in each app's jobs.py ("tasks" is the name of a domain app).
+PROCRASTINATE_AUTODISCOVER_MODULE_NAME = "jobs"
 
 # Wraps every workspace's data key. Read lazily (apps.common.crypto.master_key), so
 # migrate and export_openapi run without it; the api and worker check it at start.

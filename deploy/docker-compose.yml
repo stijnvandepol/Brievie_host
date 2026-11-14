@@ -82,6 +82,25 @@ services:
       - documents:/data/documents
     # No published port: only Caddy is reachable from outside.
 
+  # Background jobs: same image as api, serves the queue in PostgreSQL. It reads
+  # and writes text in the database only; the document files stay with the api.
+  worker:
+    image: brievie/backend:local
+    pull_policy: never
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgres://brievie_app:${BRIEVIE_APP_PASSWORD}@postgres:5432/brievie
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in deploy/.env}
+      BRIEVIE_MASTER_KEY: ${BRIEVIE_MASTER_KEY:?set BRIEVIE_MASTER_KEY in deploy/.env (sh deploy/init-env.sh adds it)}
+    command:
+      - sh
+      - -c
+      - python manage.py check_master_key && exec python manage.py procrastinate worker --queues pipeline
+    # No published port.
+
   caddy:
     image: caddy:2.11
     restart: unless-stopped
