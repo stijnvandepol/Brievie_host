@@ -1,9 +1,10 @@
 import { t } from "@lingui/core/macro";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { type ReactNode, useEffect } from "react";
 import { Button, FieldError, Input, Label, Text, TextField } from "react-aria-components";
 import { ApiFailure, api, errorMessage } from "../api/client";
+import { meQuery } from "../api/queries";
 
 /** Every page gets its own title (WCAG 2.4.2). */
 export function usePageTitle(title: string) {
@@ -12,20 +13,69 @@ export function usePageTitle(title: string) {
   }, [title]);
 }
 
-/** Layout of the screens before login (setup, login). */
+/** The envelope mark; decorative, the word next to it names the product. */
+function BrandMark() {
+  return (
+    <svg
+      aria-hidden="true"
+      focusable="false"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M3 7l9 6 9-6" />
+    </svg>
+  );
+}
+
+/** A small centred screen without navigation (router errors, not found). */
 export function Plain({ children }: { children: ReactNode }) {
   return (
-    <main className="page">
-      <p className="brand">Brievie</p>
+    <main className="plain">
+      <p className="brand">
+        <BrandMark />
+        <span>Brievie</span>
+      </p>
       {children}
     </main>
   );
 }
 
-/** Layout of the screens after login: brand, navigation and logging out. */
+/** Layout of the screens before login (setup, login): brand panel left, form right. */
+export function Split({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
+  return (
+    <div className="split">
+      <aside className="split-aside">
+        <p className="brand">
+          <BrandMark />
+          <span>Brievie</span>
+        </p>
+        <div className="split-statement">
+          <p className="split-title">{t`Je post en facturen, op je eigen server.`}</p>
+          <p className="split-sub">{t`Documenten verlaten je netwerk niet.`}</p>
+        </div>
+        <p className="split-host">{t`Server: ${window.location.host}`}</p>
+      </aside>
+      <main className="split-main">
+        <div className={wide ? "split-content wide" : "split-content"}>{children}</div>
+      </main>
+    </div>
+  );
+}
+
+const NAV_LINK = "nav-link";
+
+/** Layout of the screens after login: sidebar with navigation and account, then the page. */
 export function Shell({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { data: me } = useQuery(meQuery);
 
   const logout = useMutation({
     mutationFn: async () => {
@@ -40,24 +90,39 @@ export function Shell({ children }: { children: ReactNode }) {
   });
 
   return (
-    <>
-      <header className="bar">
+    <div className="shell">
+      <div className="sidebar">
         <Link to="/" className="brand">
-          Brievie
+          <BrandMark />
+          <span>Brievie</span>
         </Link>
-        <nav aria-label={t`Hoofdmenu`} className="bar-nav">
-          <Link to="/">{t`Werkruimtes`}</Link>
-          <Link to="/koppel-app">{t`App koppelen`}</Link>
-          <Button className="button secondary" onPress={() => logout.mutate()}>
+        <nav aria-label={t`Hoofdmenu`} className="sidebar-nav">
+          <Link to="/" activeOptions={{ exact: true }} className={NAV_LINK}>
+            {t`Werkruimtes`}
+          </Link>
+          <Link to="/koppel-app" className={NAV_LINK}>
+            {t`Apparaten`}
+          </Link>
+        </nav>
+        <div className="sidebar-account">
+          {me ? (
+            <>
+              <span className="account-name">{me.name}</span>
+              <span className="account-email">{me.email}</span>
+            </>
+          ) : null}
+          <Button className="sidebar-button" onPress={() => logout.mutate()}>
             {t`Uitloggen`}
           </Button>
-        </nav>
-      </header>
-      <main className="page">
-        <ErrorAlert error={logout.error} />
-        {children}
+        </div>
+      </div>
+      <main className="main">
+        <div className="main-inner">
+          <ErrorAlert error={logout.error} />
+          {children}
+        </div>
       </main>
-    </>
+    </div>
   );
 }
 

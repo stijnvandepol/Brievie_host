@@ -7,6 +7,26 @@ msgstr ""
 "X-Generator: @lingui/cli\n"
 "Language: nl\n"
 
+#. placeholder {0}: formatTimeLeft(secondsLeft)
+#: src/routes/pair-app.tsx
+msgid "(nog {0})"
+msgstr "(nog {0})"
+
+#. placeholder {0}: data.length
+#: src/components/device-table.tsx
+msgid "{0, plural, one {# apparaat} other {# apparaten}}"
+msgstr "{0, plural, one {# apparaat} other {# apparaten}}"
+
+#. placeholder {0}: details.urls.length
+#: src/routes/pair-app.tsx
+msgid "{0, plural, one {Serveradres} other {Serveradressen}}"
+msgstr "{0, plural, one {Serveradres} other {Serveradressen}}"
+
+#. placeholder {0}: device.name
+#: src/components/device-table.tsx
+msgid "{0} kan daarna niet meer bij Brievie. Je kunt het apparaat opnieuw koppelen."
+msgstr "{0} kan daarna niet meer bij Brievie. Je kunt het apparaat opnieuw koppelen."
+
 #: src/routes/pair-app.tsx
 msgid "{minutes, plural, one {# minuut} other {# minuten}}"
 msgstr "{minutes, plural, one {# minuut} other {# minuten}}"
@@ -19,32 +39,71 @@ msgstr "{minutesText} en {secondsText}"
 msgid "{seconds, plural, one {# seconde} other {# seconden}}"
 msgstr "{seconds, plural, one {# seconde} other {# seconden}}"
 
-#: src/components/page.tsx
+#: src/components/device-table.tsx
+msgid "Actie"
+msgstr "Actie"
+
+#: src/components/device-table.tsx
+msgid "Actief"
+msgstr "Actief"
+
+#: src/components/device-table.tsx
+msgid "Annuleren"
+msgstr "Annuleren"
+
 #: src/routes/pair-app.tsx
 msgid "App koppelen"
 msgstr "App koppelen"
+
+#: src/components/device-table.tsx
+msgid "Apparaat"
+msgstr "Apparaat"
+
+#: src/components/device-table.tsx
+msgid "Apparaat intrekken?"
+msgstr "Apparaat intrekken?"
+
+#: src/components/page.tsx
+#: src/routes/pair-app.tsx
+msgid "Apparaten"
+msgstr "Apparaten"
+
+#: src/routes/home.tsx
+msgid "Beheerder"
+msgstr "Beheerder"
 
 #: src/routes/setup.tsx
 msgid "Brievie instellen"
 msgstr "Brievie instellen"
 
 #: src/routes/pair-app.tsx
+msgid "Certificaat"
+msgstr "Certificaat"
+
+#: src/routes/pair-app.tsx
+msgid "Code"
+msgstr "Code"
+
+#: src/routes/pair-app.tsx
 msgid "Deze code is verlopen."
 msgstr "Deze code is verlopen."
-
-#. placeholder {0}: formatTimeLeft(secondsLeft)
-#: src/routes/pair-app.tsx
-msgid "Deze code werkt nog {0}."
-msgstr "Deze code werkt nog {0}."
 
 #: src/routes/root.tsx
 msgid "Deze pagina bestaat niet."
 msgstr "Deze pagina bestaat niet."
 
+#: src/components/page.tsx
+msgid "Documenten verlaten je netwerk niet."
+msgstr "Documenten verlaten je netwerk niet."
+
 #: src/routes/login.tsx
 #: src/routes/setup.tsx
 msgid "E-mailadres"
 msgstr "E-mailadres"
+
+#: src/routes/pair-app.tsx
+msgid "Eigen CA, vingerafdruk zit in de code"
+msgstr "Eigen CA, vingerafdruk zit in de code"
 
 #: src/routes/root.tsx
 msgid "Er ging iets mis"
@@ -54,13 +113,38 @@ msgstr "Er ging iets mis"
 msgid "Er is iets misgegaan. Probeer het later opnieuw."
 msgstr "Er is iets misgegaan. Probeer het later opnieuw."
 
+#: src/components/device-table.tsx
+msgid "Er zijn nog geen apparaten gekoppeld."
+msgstr "Er zijn nog geen apparaten gekoppeld."
+
+#: src/components/device-table.tsx
 #: src/routes/home.tsx
 msgid "Even laden..."
 msgstr "Even laden..."
 
+#: src/routes/login.tsx
+msgid "Gebruik het account van deze server."
+msgstr "Gebruik het account van deze server."
+
+#: src/routes/pair-app.tsx
+msgid "Geen eigen CA"
+msgstr "Geen eigen CA"
+
 #: src/routes/pair-app.tsx
 msgid "Gekopieerd"
 msgstr "Gekopieerd"
+
+#: src/components/device-table.tsx
+msgid "Gekoppeld op"
+msgstr "Gekoppeld op"
+
+#: src/components/device-table.tsx
+msgid "Gekoppelde apparaten"
+msgstr "Gekoppelde apparaten"
+
+#: src/routes/pair-app.tsx
+msgid "Geldig tot"
+msgstr "Geldig tot"
 
 #: src/components/page.tsx
 msgid "Hoofdmenu"
@@ -74,9 +158,22 @@ msgstr "Inloggen"
 msgid "Installatiecode"
 msgstr "Installatiecode"
 
+#: src/components/device-table.tsx
+msgid "Intrekken"
+msgstr "Intrekken"
+
+#. placeholder {0}: device.name
+#: src/components/device-table.tsx
+msgid "Intrekken: {0}"
+msgstr "Intrekken: {0}"
+
 #: src/routes/setup.tsx
 msgid "Je naam"
 msgstr "Je naam"
+
+#: src/components/page.tsx
+msgid "Je post en facturen, op je eigen server."
+msgstr "Je post en facturen, op je eigen server."
 
 #: src/routes/pair-app.tsx
 msgid "Je server staat ingesteld op 'localhost'. Je telefoon kan die niet bereiken. Stel in het bestand .env de naam of het IP-adres van je server in (BRIEVIE_HOSTNAME)."
@@ -103,8 +200,8 @@ msgid "Kopiëren lukt niet. Kopieer de tekst hieronder zelf."
 msgstr "Kopiëren lukt niet. Kopieer de tekst hieronder zelf."
 
 #: src/routes/pair-app.tsx
-msgid "Koppel de Brievie-app op je telefoon aan deze server. Maak een code en scan de QR-code met de app."
-msgstr "Koppel de Brievie-app op je telefoon aan deze server. Maak een code en scan de QR-code met de app."
+msgid "Koppelcode"
+msgstr "Koppelcode"
 
 #: src/routes/pair-app.tsx
 msgid "Koppelcode maken"
@@ -114,9 +211,21 @@ msgstr "Koppelcode maken"
 msgid "Koppelgegevens"
 msgstr "Koppelgegevens"
 
-#: src/routes/pair-app.tsx
-msgid "Lukt scannen niet? Kopieer de koppelgegevens en plak ze in de app."
-msgstr "Lukt scannen niet? Kopieer de koppelgegevens en plak ze in de app."
+#: src/routes/home.tsx
+msgid "Lid"
+msgstr "Lid"
+
+#: src/routes/home.tsx
+msgid "Meekijker"
+msgstr "Meekijker"
+
+#: src/routes/login.tsx
+msgid "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
+msgstr "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
+
+#: src/routes/home.tsx
+msgid "Naam"
+msgstr "Naam"
 
 #: src/routes/setup.tsx
 msgid "Naam van de werkruimte"
@@ -130,6 +239,10 @@ msgstr "Naar de startpagina"
 msgid "Nieuwe code"
 msgstr "Nieuwe code"
 
+#: src/routes/pair-app.tsx
+msgid "Open de app op je telefoon en scan de code. De telefoon moet op hetzelfde netwerk zitten als deze server."
+msgstr "Open de app op je telefoon en scan de code. De telefoon moet op hetzelfde netwerk zitten als deze server."
+
 #: src/routes/root.tsx
 msgid "Pagina niet gevonden"
 msgstr "Pagina niet gevonden"
@@ -142,9 +255,30 @@ msgstr "Probeer opnieuw"
 msgid "QR-code om de app te koppelen"
 msgstr "QR-code om de app te koppelen"
 
+#: src/routes/home.tsx
+msgid "Rol"
+msgstr "Rol"
+
+#: src/routes/pair-app.tsx
+msgid "Scan met de Brievie-app"
+msgstr "Scan met de Brievie-app"
+
+#. placeholder {0}: window.location.host
+#: src/components/page.tsx
+msgid "Server: {0}"
+msgstr "Server: {0}"
+
+#: src/routes/home.tsx
+msgid "Soort"
+msgstr "Soort"
+
 #: src/routes/setup.tsx
 msgid "Start Brievie"
 msgstr "Start Brievie"
+
+#: src/components/device-table.tsx
+msgid "Status"
+msgstr "Status"
 
 #: src/routes/setup.tsx
 msgid "Stel je eigen Brievie-server in. Dit doe je maar één keer."
