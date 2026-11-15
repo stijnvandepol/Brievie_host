@@ -1,7 +1,9 @@
+from pathlib import Path
+
 import pytest
 from django.conf import settings
 from django.db import connection
-from pytest_django import DjangoDbBlocker
+from pytest_django import DjangoDbBlocker, Settings
 
 from apps.workspaces.models import Workspace
 from apps.workspaces.services import create_workspace
@@ -40,6 +42,13 @@ def _test_role_is_subject_to_rls(django_db_setup: None, django_db_blocker: Djang
         row = c.fetchone()
     if row is None or row[1] or row[2]:
         pytest.fail(f"Tests must run as a role without SUPERUSER and BYPASSRLS, got {row!r}")
+
+
+@pytest.fixture(autouse=True)
+def _storage_and_master_key(settings: Settings, tmp_path: Path) -> None:
+    """A fixed master key and a private storage root for every test."""
+    settings.BRIEVIE_MASTER_KEY = "5a" * 32
+    settings.BRIEVIE_STORAGE_ROOT = str(tmp_path / "documents")
 
 
 @pytest.fixture

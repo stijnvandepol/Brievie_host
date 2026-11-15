@@ -15,8 +15,38 @@ def error_bodies() -> dict[str, dict[str, str]]:
     return bodies
 
 
-def test_body_limit_comes_from_the_shared_variable() -> None:
-    assert re.search(r"request_body\s*\{\s*max_size \{\$BRIEVIE_MAX_BODY_BYTES\}", CADDYFILE)
+COMPOSE = (Path(__file__).resolve().parents[2] / "deploy" / "docker-compose.yml").read_text()
+
+
+def handle_block(opening: str) -> str:
+    """The body of the `handle` block that starts with `opening` (brace matched)."""
+    start = CADDYFILE.index(opening) + len(opening)
+    depth = 1
+    position = start
+    while depth:
+        depth += {"{": 1, "}": -1}.get(CADDYFILE[position], 0)
+        position += 1
+    return CADDYFILE[start : position - 1]
+
+
+def test_document_upload_has_its_own_body_limit() -> None:
+    # Two request_body directives on one request both apply and the smaller wins,
+    # so each limit lives in its own handle block.
+    matcher = handle_block("@documentUpload {").split()
+    assert matcher == ["method", "POST", "path_regexp", "^/api/v1/workspaces/[^/]+/documents$"]
+    upload = handle_block("handle @documentUpload {")
+    general = handle_block("handle {")
+    assert re.search(r"request_body\s*\{\s*max_size \{\$BRIEVIE_MAX_UPLOAD_BYTES\}", upload)
+    assert "BRIEVIE_MAX_BODY_BYTES" not in upload
+    assert re.search(r"request_body\s*\{\s*max_size \{\$BRIEVIE_MAX_BODY_BYTES\}", general)
+    assert "BRIEVIE_MAX_UPLOAD_BYTES" not in general
+    assert len(re.findall(r"request_body\s*\{", CADDYFILE)) == 2
+    assert "reverse_proxy api:8000" in upload
+    assert "reverse_proxy api:8000" in general
+
+
+def test_compose_passes_the_upload_limit_to_caddy_and_api() -> None:
+    assert COMPOSE.count("BRIEVIE_MAX_UPLOAD_BYTES: ${BRIEVIE_MAX_UPLOAD_BYTES:-33554432}") == 2
 
 
 def test_proxy_errors_use_the_error_shape() -> None:

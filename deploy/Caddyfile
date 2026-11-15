@@ -23,16 +23,31 @@
 		protocols tls1.2 tls1.3
 	}
 
-	# Same limit as Django's DATA_UPLOAD_MAX_MEMORY_SIZE (BRIEVIE_MAX_BODY_BYTES).
-	request_body {
-		max_size {$BRIEVIE_MAX_BODY_BYTES}
-	}
-
 	import security_headers
 
 	encode zstd gzip
 
-	reverse_proxy api:8000
+	# A document upload (page images) has its own, larger limit. Each limit lives in
+	# its own handle block: two request_body directives on one request would both
+	# apply, and the smaller one would win.
+	@documentUpload {
+		method POST
+		path_regexp ^/api/v1/workspaces/[^/]+/documents$
+	}
+	handle @documentUpload {
+		# Same limit as Django's BRIEVIE_MAX_UPLOAD_BYTES.
+		request_body {
+			max_size {$BRIEVIE_MAX_UPLOAD_BYTES}
+		}
+		reverse_proxy api:8000
+	}
+	handle {
+		# Same limit as Django's DATA_UPLOAD_MAX_MEMORY_SIZE (BRIEVIE_MAX_BODY_BYTES).
+		request_body {
+			max_size {$BRIEVIE_MAX_BODY_BYTES}
+		}
+		reverse_proxy api:8000
+	}
 
 	# Errors Caddy produces itself, in the API's error shape.
 	handle_errors 413 {

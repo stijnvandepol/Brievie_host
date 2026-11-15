@@ -58,7 +58,9 @@ services:
       BRIEVIE_PUBLIC_URLS: ${BRIEVIE_PUBLIC_URLS:-https://${BRIEVIE_HOSTNAME}:${BRIEVIE_HTTPS_PORT:-443}}
       BRIEVIE_HSTS_SECONDS: ${BRIEVIE_HSTS_SECONDS:-0}
       BRIEVIE_MAX_BODY_BYTES: ${BRIEVIE_MAX_BODY_BYTES:-2621440}
+      BRIEVIE_MAX_UPLOAD_BYTES: ${BRIEVIE_MAX_UPLOAD_BYTES:-33554432}
       BRIEVIE_SETUP_TOKEN: ${BRIEVIE_SETUP_TOKEN:-}
+      BRIEVIE_MASTER_KEY: ${BRIEVIE_MASTER_KEY:?set BRIEVIE_MASTER_KEY in deploy/.env (sh deploy/init-env.sh adds it)}
       # Requests arrive through Caddy, which sets X-Forwarded-For.
       BRIEVIE_PROXY_COUNT: "1"
     healthcheck:
@@ -77,7 +79,28 @@ services:
       # read-only, at the default BRIEVIE_CA_CERT_PATH. Never Caddy's data volume:
       # it holds the CA's private keys.
       - caddy-ca:/caddy-data/caddy/pki/authorities/local:ro
+      # Encrypted document files (BRIEVIE_STORAGE_ROOT).
+      - documents:/data/documents
     # No published port: only Caddy is reachable from outside.
+
+  # Background jobs: same image as api, serves the queue in PostgreSQL. It reads
+  # and writes text in the database only; the document files stay with the api.
+  worker:
+    image: brievie/backend:local
+    pull_policy: never
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgres://brievie_app:${BRIEVIE_APP_PASSWORD}@postgres:5432/brievie
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in deploy/.env}
+      BRIEVIE_MASTER_KEY: ${BRIEVIE_MASTER_KEY:?set BRIEVIE_MASTER_KEY in deploy/.env (sh deploy/init-env.sh adds it)}
+    command:
+      - sh
+      - -c
+      - python manage.py check_master_key && exec python manage.py procrastinate worker --queues pipeline
+    # No published port.
 
   caddy:
     image: caddy:2.11
@@ -90,6 +113,7 @@ services:
       BRIEVIE_HOSTNAME: ${BRIEVIE_HOSTNAME:?set BRIEVIE_HOSTNAME in deploy/.env}
       BRIEVIE_HSTS_SECONDS: ${BRIEVIE_HSTS_SECONDS:-0}
       BRIEVIE_MAX_BODY_BYTES: ${BRIEVIE_MAX_BODY_BYTES:-2621440}
+      BRIEVIE_MAX_UPLOAD_BYTES: ${BRIEVIE_MAX_UPLOAD_BYTES:-33554432}
     ports:
       - "${BRIEVIE_HTTP_PORT:-80}:80"
       - "${BRIEVIE_HTTPS_PORT:-443}:443"
@@ -102,6 +126,7 @@ services:
 
 volumes:
   pgdata:
+  documents:
   caddy-data:
   caddy-config:
   caddy-ca:

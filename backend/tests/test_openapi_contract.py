@@ -8,6 +8,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 
 from apps.common.management.commands import export_openapi
+from apps.common.openapi import normalize_nullable
 from brievie.api import api
 
 ERROR_REF = "#/components/schemas/ErrorOut"
@@ -102,3 +103,45 @@ def test_check_fails_when_the_file_is_missing(
 
     with pytest.raises(CommandError):
         call_command("export_openapi", "--check")
+
+
+def test_contract_has_no_anyof() -> None:
+    # swift-openapi-generator skips `anyOf: [X, null]` properties.
+    assert '"anyOf"' not in export_openapi.render_schema()
+
+
+def test_nullable_primitive_becomes_type_array() -> None:
+    out = normalize_nullable(
+        {
+            "properties": {
+                "p": {
+                    "anyOf": [{"type": "string", "format": "uuid"}, {"type": "null"}],
+                    "title": "P",
+                }
+            }
+        }
+    )
+    assert out == {
+        "properties": {"p": {"type": ["string", "null"], "format": "uuid", "title": "P"}}
+    }
+
+
+def test_normalize_nullable_does_not_change_its_input() -> None:
+    schema: dict[str, object] = {"p": {"anyOf": [{"type": "integer"}, {"type": "null"}]}}
+    normalize_nullable(schema)
+    assert schema == {"p": {"anyOf": [{"type": "integer"}, {"type": "null"}]}}
+
+
+def test_nullable_ref_is_refused() -> None:
+    schema: dict[str, object] = {
+        "properties": {"p": {"anyOf": [{"$ref": "#/components/schemas/X"}, {"type": "null"}]}}
+    }
+    with pytest.raises(ValueError, match="/properties/p"):
+        normalize_nullable(schema)
+
+
+def test_folder_parent_id_is_nullable_uuid() -> None:
+    schemas = json.loads(export_openapi.render_schema())["components"]["schemas"]
+    parent_id = schemas["FolderOut"]["properties"]["parent_id"]
+    assert parent_id["type"] == ["string", "null"]
+    assert parent_id["format"] == "uuid"

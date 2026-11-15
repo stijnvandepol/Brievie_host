@@ -1,0 +1,205 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "acties": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "deadline": {
+            "additionalProperties": false,
+            "properties": {
+              "bron": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "waarde": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "zekerheid": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "waarde",
+              "bron",
+              "zekerheid"
+            ],
+            "type": "object"
+          },
+          "omschrijving": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "omschrijving",
+          "deadline"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "afzender": {
+      "additionalProperties": false,
+      "properties": {
+        "bron": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "naam": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "zekerheid": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "naam",
+        "bron",
+        "zekerheid"
+      ],
+      "type": "object"
+    },
+    "dagtekening": {
+      "additionalProperties": false,
+      "properties": {
+        "bron": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "waarde": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "zekerheid": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "waarde",
+        "bron",
+        "zekerheid"
+      ],
+      "type": "object"
+    },
+    "documenttype": {
+      "type": "string"
+    },
+    "factuur": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "bedrag_incl": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "bron": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "nummer": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "vervaldatum": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "zekerheid": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "nummer",
+            "vervaldatum",
+            "bedrag_incl",
+            "bron",
+            "zekerheid"
+          ],
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "samenvatting_b1": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "afzender",
+    "documenttype",
+    "dagtekening",
+    "samenvatting_b1",
+    "acties",
+    "factuur"
+  ],
+  "type": "object"
+}

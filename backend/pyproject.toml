@@ -4,11 +4,14 @@ version = "0.1.0"
 description = "Brievie host: keeps, explains and tracks the mail of a household or small business."
 requires-python = ">=3.13"
 dependencies = [
+    "cryptography>=50.0.2",
     "django~=6.1.0",
     "django-axes>=9.0.0",
     "django-environ>=0.14.0",
     "django-ninja>=1.8.0",
     "gunicorn>=27.0.1",
+    "httpx>=0.28.1",
+    "procrastinate>=3.11.0",
     "psycopg[binary]>=3.3.9",
     "whitenoise>=6.12.0",
 ]

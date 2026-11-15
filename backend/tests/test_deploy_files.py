@@ -60,3 +60,13 @@ def test_error_responses_carry_the_security_headers() -> None:
 def test_caddy_waits_for_a_healthy_api() -> None:
     assert re.search(r"api:\n\s+condition: service_healthy", service("caddy"))
     assert "healthcheck:" in service("api")
+
+
+def test_api_server_survives_a_slow_upload() -> None:
+    # Final review: sync workers with the default 30 s timeout are killed during a slow
+    # upload (Caddy streams the body), and two slow uploads would block the whole API.
+    dockerfile = (Path(__file__).resolve().parents[2] / "deploy" / "Dockerfile").read_text()
+    command = next(line for line in dockerfile.splitlines() if line.startswith("CMD"))
+    assert "--worker-class gthread" in command
+    assert "--threads 4" in command
+    assert "--timeout 120" in command

@@ -12,6 +12,7 @@ sections 11, 12, 14, 18 and 19 before changing architecture). Decisions live in
 - `make typecheck`: `mypy --strict`
 - `make migrate`: apply migrations as the owner role
 - `make openapi`: write `docs/api/openapi.json`
+- `uv run python manage.py configure_ai --workspace <id> --mode off|external|local`: AI per workspace
 
 Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
 
@@ -39,5 +40,11 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
   `Http404`) does not roll back the request transaction; only a 500 does.
 - No document content, tokens, passwords or BSNs in logs.
 - No new dependency without a line in `docs/DECISIONS.md`.
-- No Redis, no Celery, no Node runtime container.
+- No Redis, no Celery, no Node runtime container. Background jobs: Procrastinate, in an
+  app's `jobs.py`; a job takes ids only and enters `workspace_context` itself, in short
+  transactions (none open during an external call).
+- Text is BSN-masked (`apps.common.privacy.mask_bsns`) before it is stored, logged or sent
+  to an AI service. Document files are sealed (`apps.common.crypto`) before they touch disk.
+- Nullable fields in API schemas are primitives only, and nullable inputs have a default
+  (the iOS generator needs both); the contract test forbids `anyOf`.
 - Tests first for logic. Conventional commits.

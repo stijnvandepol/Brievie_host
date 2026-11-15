@@ -279,8 +279,153 @@ Choices:
 - **401 before 403.** A bearer token that is unknown or revoked is 401 at once (`DeviceTokenAuth` raises), and a request with no session is 401 as well: `apps.accounts.auth.SessionAuth` checks CSRF only for a caller who has a session (403 stays for a session without a valid token). Session-only endpoints (`createPairingCode`, `logout`) answer 401 to any bearer token.
 - **Runtime image.** Multi-stage: the virtualenv is built where `uv` lives and copied over; `backend/tests` is excluded by `.dockerignore`.
 
+## 2026-11-14: Phase 1b scope (owner decisions)
+
+- **No heavy work on the server.** OCR happens on the iPhone (Apple Vision); in 1b the
+  app is the only intake, so the server runs no OCR. OCRmyPDF/Tesseract arrive with web
+  upload and the watch folder (1d). This deviates from the 1b row in spec section 16.
+- **AI through an API by default.** Modes `off`, `external`, `local`; `external` and
+  `local` are the same OpenAI-compatible provider with a different URL. Default for
+  `external`: Mistral. `local` (Ollama) stays possible but is not tested on real
+  hardware in 1b. New workspaces start with `off`.
+- **No web screens in 1b.** The result is reviewed in the app.
+
+## 2026-11-14: Contract fixes (phase 1b, Task 1)
+
+- **Nullable fields are type arrays.** Pydantic writes `X | None` as
+  `anyOf: [X, {"type": "null"}]`, which swift-openapi-generator (1.12.2) skips, so the
+  field never reached the app. `apps.common.openapi.normalize_nullable` rewrites it to
+  `type: [X, "null"]` in the exported file (verified: the generator emits
+  `parentId: String?`). Only primitives can be nullable; a nullable object or `$ref`
+  fails the export, and a test forbids `anyOf` in the contract. Nullable request
+  fields get a default, because the generated client omits a nil field.
+- **411 for a body without Content-Length.** gunicorn hands Django a chunked body
+  without a length and Django reads it as empty, so the caller got a misleading 415 or
+  422. `ApiContentLengthMiddleware` answers 411 `length_required` to any `/api/` request
+  with `Transfer-Encoding` and no `Content-Length`. The app's uploads always carry a
+  length (upload from a file).
+
+## 2026-11-14: Encryption per workspace (phase 1b, Task 3)
+
+- **cryptography** (50.0.2): AES-256-GCM (`AESGCM`). Dropped: PyNaCl (another cipher
+  family, less common next to Django), the standard library (has no AEAD).
+- **Envelope encryption.** `BRIEVIE_MASTER_KEY` (32 bytes as hex, from the environment)
+  wraps one data key per workspace (`workspaces_workspacekey`, under forced RLS, bound to
+  the workspace id as associated data). The data key seals document files and stored
+  secrets (`apps.common.crypto.seal`: `BRV1` + nonce + ciphertext and tag; the
+  associated data names the place, so a file moved to another page or workspace does
+  not open). **Losing the master key loses every document**; back-ups (1d) must include
+  it, separately from the data.
+- **Read lazily, checked at start.** `crypto.master_key()` reads the setting on first
+  use, so `migrate`, `export_openapi` and CI run without it. The api and worker
+  containers run `manage.py check_master_key` first and stop when it is missing or
+  malformed. Dropped: a system check (it would also fail `migrate`, which does not get
+  the key).
+- **init-env.sh** generates the key for a new `.env` and appends it to an existing
+  `.env` that lacks it: the one change the script makes to an existing file.
+- **Storage behind an interface.** `apps.documents.storage.DocumentStorage`
+  (`FileSystemStorage` under `BRIEVIE_STORAGE_ROOT`, the `documents` volume); an
+  S3-compatible implementation can follow without touching callers.
+
+## 2026-11-14: Job queue (phase 1b, Task 5)
+
+- **Procrastinate** (3.11.0): the job queue lives in PostgreSQL (spec section 18).
+  Dropped: Celery + Redis (an extra container to run and back up), Django's own task
+  framework (no production worker yet). Jobs are in each app's `jobs.py`
+  (`PROCRASTINATE_AUTODISCOVER_MODULE_NAME`), because `tasks` is a domain app.
+- **Worker container.** Same image, `procrastinate worker --queues pipeline`, the
+  **app** database role (Procrastinate's tables get the default DML privileges), no
+  published port, no documents volume: the pipeline works on text in the database.
+- **Job arguments are ids only** (`workspace_id`, `document_id`), never text. Every job
+  enters `workspace_context` itself, in short transactions: none stays open during a
+  slow step such as an AI call.
+- **A document never stays in `processing`.** Only `RetryableError` is retried (3
+  attempts: after 10 s and 100 s); the last attempt, a `PermanentError` or any
+  unexpected exception sets `failed` with a code. `retry_stalled_jobs` (every 5
+  minutes) gives jobs of a worker that stopped sending heartbeats back to the queue.
+  Every step first checks that the document is still `processing`, so a duplicate or
+  late job changes nothing.
+
+## 2026-11-14: Document upload (phase 1b, Task 6)
+
+- **One multipart request per document** (`createDocument`): the JSON field `metadata`
+  (`UploadMetadataIn`: `client_id`, and per page its SHA-256 and recognised text)
+  followed by one `page` file (JPEG) per page. Atomic: all pages or nothing.
+  `UploadMetadataIn` is in the contract's components although no operation names it,
+  so clients generate it (`brievie.api.CONTRACT_ONLY_SCHEMAS`).
+- **Idempotent on `client_id`.** The same upload again answers 200 with the existing
+  document; other pages under the same id answer 409 `document_conflict`. The document
+  row is inserted first, inside a savepoint, so a concurrent retry loses on the unique
+  constraint before any file is written.
+- **Limits.** `BRIEVIE_MAX_UPLOAD_BYTES` (32 MiB) for this route, in Caddy (its own
+  `handle` block: two `request_body` directives on one request both apply and the
+  smaller wins) and in `ApiContentLengthMiddleware` (413 before authentication reads
+  anything). `BRIEVIE_MAX_PAGES` (30), `BRIEVIE_MAX_PAGE_TEXT_CHARS` (20000).
+- **Uploads never touch the disk unencrypted.** `FILE_UPLOAD_HANDLERS` is the memory
+  handler only, with `FILE_UPLOAD_MAX_MEMORY_SIZE` equal to the upload limit; set
+  globally because the session's CSRF check parses the form before the view runs.
+  Pages are sealed with the workspace key before they are written; the associated data
+  is `<workspace>/<document>/<index>`.
+- **Known gap: orphan files.** When a request fails after its pages were written but
+  outside the intake function (rare), the rows roll back and the encrypted files stay.
+  A storage sweep comes with back-ups (1d).
+- **Multipart only here.** `ApiJsonBodyMiddleware` accepts `multipart/form-data` on this
+  one path; the endpoint needs a device token or a session with a CSRF token.
+- **`needs_attention`** (confidence below 0.85 on a deadline or amount) is computed on
+  `Extraction`, not stored.
+
+## 2026-11-14: AI provider (phase 1b, Task 8)
+
+- **httpx** (0.28.1): the call to the AI service, with a timeout and a mock transport
+  for tests. Dropped: the `openai` SDK (a large dependency for one call), `urllib`
+  (no mock transport, clumsy timeouts).
+- **One provider for every mode.** `OpenAICompatibleProvider` posts to
+  `<base_url>/chat/completions` at temperature 0 with a strict JSON schema
+  (`response_format`). `external` defaults to Mistral (`https://api.mistral.ai/v1`,
+  `mistral-small-latest`): a European company, cheap small models, structured output.
+  `local` (Ollama and the like) is the same code with another URL; not tested on real
+  hardware in 1b.
+- **`local` cannot leave the network.** Its URL must name a Compose service (no dot),
+  `localhost`, a `.local` name, or a literal loopback or private address; checked when
+  configured and again before every use. A `.local` name is trusted to resolve inside
+  the network.
+- **The API key** is sealed with the workspace key, set with
+  `manage.py configure_ai` from `BRIEVIE_AI_API_KEY` or a prompt, never from the
+  command line, and never part of an exception or a log line (provider errors carry a
+  code only and are raised without their cause).
+- **Text cap.** At most 30000 characters go to the model, cut at a page boundary.
+- **Failures.** Timeout, connection error, 429 and 5xx retry (`ai_unavailable`);
+  401/403 `ai_key_rejected`, other 4xx `ai_request_rejected`, an answer without content
+  `ai_invalid_output`: no retry.
+
+## 2026-11-14: Fixes after the whole-branch review (phase 1b)
+
+- **BSN masking is wider.** Groups may be separated by dots, spaces, no-break spaces or
+  hyphens (also `1234.56.782`), and only a digit directly next to the number rules it
+  out: letters or other numbers around it do not (OCR glues columns together; an old
+  VAT id `NL…B01` holds the BSN). A number is masked too often rather than too rarely.
+- **Abandoned documents.** `requeue_abandoned_documents` (every 5 minutes) queues a
+  document again that has been `processing` for 15 minutes without a waiting or running
+  job: recording a failure can itself fail when the database goes away, and nothing
+  else would move that document.
+- **gunicorn runs threaded** (`gthread`, 4 threads, timeout 120 s): Caddy streams an
+  upload, so a slow connection held a sync worker past its 30 s timeout (502), and two
+  slow uploads blocked the API.
+- **Amounts must look like money.** A number counts as an amount only with `€`/`EUR`
+  before it or cents after it, so "Postbus 2500" cannot confirm an invented amount; a
+  due date found outside the invoice quote may not be the letter's own date.
+
 ## Open items
 
 - Pin GitHub Actions and container images by digest: later hardening task.
 - Two-factor authentication is not built in phase 1a; login is email + password only (with lockout).
 - Device tokens never expire; a device stops working only when somebody revokes it. A lifetime (and refresh) is still to be decided.
+- Server-side OCR (OCRmyPDF + Tesseract) for uploads without text: with web upload and the watch folder (1d).
+- The extraction schema leaves out addressees, relations, labels, VAT lines and identifiers (licence plate, assessment number); they arrive with persons and labels (1c) and business mode (phase 2), with IBAN mod-97 and the VAT sum check.
+- `listDocuments` returns the newest 200; paging is an additive change for later.
+- Confirmed tasks have no reminders yet (1c), and calculated deadlines (NL rules) are not built: a client may only send `in_document` or `manual`.
+- A document cannot be deleted or edited after confirmation yet.
+- Encrypted page files of a rolled-back upload can stay behind; a storage sweep comes with back-ups (1d), which must also cover `BRIEVIE_MASTER_KEY`.
+- AI settings are set with `manage.py configure_ai`; the web settings screen comes with the wizard (1d). The `external` mode was not run against a real service by the builder (no key): the owner checks it with their own Mistral key.
+- The API key for an AI service lives in the database sealed with the workspace key; the worker therefore holds `BRIEVIE_MASTER_KEY` too.
+- From the review, not fixed: `local` accepts a host made of digits only (`http://134744072`, read as an IP address by a resolver; only the owner can set it); a provider host name over 50 characters fails every document; a NUL character in page text gives 500 instead of 422; repeating a confirm after a lost answer gives 409 (the app reloads the document); an `in_document` deadline is checked for its quote, not for the date inside the quote.

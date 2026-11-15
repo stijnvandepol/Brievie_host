@@ -18,3 +18,20 @@ the translation. Add a line before introducing a new domain term.
 | op naam van | addressee |
 | thuis | home |
 | zakelijk | business |
+| document | document |
+| pagina | page |
+| dagtekening | letter_date |
+| afzender | sender |
+| samenvatting | summary |
+| zekerheid | confidence |
+| bron (van een waarde) | quote |
+| controleren | review |
+| voorstel | proposal |
+| betalen | pay |
+| reageren | respond |
+| bezwaar | object |
+| aanvragen | apply |
+| keuring | inspection |
+| opzeggen | cancel |
+| verlengen | renew |
+| aangifte | file_tax |

@@ -29,10 +29,13 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "ninja",
     "axes",
+    "procrastinate.contrib.django",
     "apps.common",
     "apps.accounts",
     "apps.workspaces",
     "apps.documents",
+    "apps.tasks",
+    "apps.pipeline",
     "apps.devices",
 ]
 
@@ -57,6 +60,7 @@ AUTH_PASSWORD_VALIDATORS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "apps.common.errors.ApiMethodNotAllowedMiddleware",
+    "apps.common.errors.ApiContentLengthMiddleware",
     "apps.common.errors.ApiJsonBodyMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -192,4 +196,41 @@ if BRIEVIE_SETUP_TOKEN and len(BRIEVIE_SETUP_TOKEN) < 16:
 # Largest request body. Caddy enforces the same value (request_body max_size), so a
 # too-large body gets 413 from the proxy instead of a connection reset. The document
 # upload endpoint (phase 1b) will need its own, larger limit.
-DATA_UPLOAD_MAX_MEMORY_SIZE: int = env.int("BRIEVIE_MAX_BODY_BYTES", default=2621440)
+BRIEVIE_MAX_BODY_BYTES: int = env.int("BRIEVIE_MAX_BODY_BYTES", default=2621440)
+DATA_UPLOAD_MAX_MEMORY_SIZE: int = BRIEVIE_MAX_BODY_BYTES
+
+# A document upload (page images plus their recognised text) has its own, larger
+# limit; Caddy enforces the same one on that route.
+BRIEVIE_MAX_UPLOAD_BYTES: int = env.int("BRIEVIE_MAX_UPLOAD_BYTES", default=33554432)
+BRIEVIE_MAX_PAGES: int = env.int("BRIEVIE_MAX_PAGES", default=30)
+BRIEVIE_MAX_PAGE_TEXT_CHARS: int = env.int("BRIEVIE_MAX_PAGE_TEXT_CHARS", default=20000)
+# Uploaded files stay in memory, whatever their size: a temporary file would be an
+# unencrypted copy of a page on disk. Set globally, because the session's CSRF check
+# parses the form before any view could choose its own handlers.
+FILE_UPLOAD_HANDLERS = ["django.core.files.uploadhandler.MemoryFileUploadHandler"]
+FILE_UPLOAD_MAX_MEMORY_SIZE: int = BRIEVIE_MAX_UPLOAD_BYTES
+
+# Background jobs live in each app's jobs.py ("tasks" is the name of a domain app).
+PROCRASTINATE_AUTODISCOVER_MODULE_NAME = "jobs"
+
+# Wraps every workspace's data key. Read lazily (apps.common.crypto.master_key), so
+# migrate and export_openapi run without it; the api and worker check it at start.
+BRIEVIE_MASTER_KEY: str = env.str("BRIEVIE_MASTER_KEY", default="")
+# Encrypted document files. A volume in Compose; never a path elsewhere in the code.
+BRIEVIE_STORAGE_ROOT: str = env.str("BRIEVIE_STORAGE_ROOT", default="/data/documents")
+
+# Every handler masks BSNs: no log line may carry one, whatever code wrote it.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "filters": {"mask_bsn": {"()": "apps.common.privacy.BsnMaskingFilter"}},
+    "formatters": {"plain": {"format": "%(asctime)s %(levelname)s %(name)s %(message)s"}},
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "plain",
+            "filters": ["mask_bsn"],
+        },
+    },
+    "root": {"handlers": ["console"], "level": "INFO"},
+}

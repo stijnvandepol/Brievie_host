@@ -1,10 +1,13 @@
 from collections.abc import Iterable
+from decimal import Decimal
 from typing import ClassVar
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models.base import ModelBase
 from django.utils.translation import gettext as _
+from django.utils.translation import gettext_lazy
 
 from apps.common.models import WorkspaceModel
 
@@ -60,3 +63,159 @@ class Folder(WorkspaceModel):
             using=using,
             update_fields=update_fields,
         )
+
+
+class Document(WorkspaceModel):
+    """A letter or invoice: one or more pages, the recognised text and what was confirmed."""
+
+    class Status(models.TextChoices):
+        PROCESSING = "processing", gettext_lazy("Wordt verwerkt")
+        NEEDS_REVIEW = "needs_review", gettext_lazy("Te controleren")
+        DONE = "done", gettext_lazy("Klaar")
+        FAILED = "failed", gettext_lazy("Verwerken mislukt")
+
+    class Source(models.TextChoices):
+        SCAN = "scan", gettext_lazy("Scan")
+        UPLOAD = "upload", gettext_lazy("Upload")
+        MAIL = "mail", gettext_lazy("Mail")
+        WATCH_FOLDER = "watch_folder", gettext_lazy("Watch-map")
+
+    class Type(models.TextChoices):
+        INVOICE = "invoice", gettext_lazy("Factuur")
+        ASSESSMENT = "assessment", gettext_lazy("Aanslag")
+        DECISION = "decision", gettext_lazy("Beschikking")
+        BILL = "bill", gettext_lazy("Rekening")
+        REMINDER = "reminder", gettext_lazy("Herinnering")
+        DEMAND = "demand", gettext_lazy("Aanmaning")
+        POLICY = "policy", gettext_lazy("Polis")
+        ANNUAL_STATEMENT = "annual_statement", gettext_lazy("Jaaropgave")
+        PAYSLIP = "payslip", gettext_lazy("Loonstrook")
+        INSPECTION = "inspection", gettext_lazy("Keuring")
+        CONTRACT = "contract", gettext_lazy("Contract")
+        RECEIPT = "receipt", gettext_lazy("Bonnetje")
+        INFORMATION = "information", gettext_lazy("Informatie")
+        OTHER = "other", gettext_lazy("Overig")
+
+    # Chosen by the uploading client: a repeated upload finds the same document.
+    client_id = models.UUIDField()
+    scanned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+    source = models.CharField(max_length=20, choices=Source.choices, default=Source.SCAN)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PROCESSING)
+    # Why processing failed (snake_case code); empty otherwise.
+    failure_code = models.CharField(max_length=50, blank=True, default="")
+    page_count = models.PositiveIntegerField()
+    # BSN-masked text of all pages, joined by a form feed.
+    ocr_text = models.TextField(blank=True, default="")
+
+    # Filled in when the user confirms the review.
+    sender = models.CharField(max_length=200, blank=True, default="")
+    document_type = models.CharField(max_length=30, choices=Type.choices, blank=True, default="")
+    letter_date = models.DateField(null=True, blank=True)
+    summary = models.TextField(blank=True, default="")
+    summary_by_ai = models.BooleanField(default=False)
+    confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["workspace", "client_id"], name="documents_document_client_id_unique"
+            ),
+        ]
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(fields=["workspace", "-created_at"], name="documents_document_recent"),
+        ]
+
+    def __str__(self) -> str:
+        return str(self.id)
+
+
+class DocumentPage(WorkspaceModel):
+    same_workspace_fields = ("document",)
+
+    document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="pages")
+    index = models.PositiveIntegerField()  # 1-based
+    content_type = models.CharField(max_length=50, default="image/jpeg")
+    size = models.PositiveIntegerField()
+    # Hex SHA-256 of the unencrypted file, as sent by the client.
+    sha256 = models.CharField(max_length=64)
+    ocr_text = models.TextField(blank=True, default="")  # BSN-masked
+    # Relative path in the document storage; the file is encrypted.
+    storage_path = models.CharField(max_length=300)
+
+    class Meta:
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["document", "index"], name="documents_documentpage_index_unique"
+            ),
+        ]
+        ordering: ClassVar[list[str]] = ["index"]
+
+    def __str__(self) -> str:
+        return f"{self.document_id} page {self.index}"
+
+
+# Below this confidence a deadline or amount needs the user's attention (spec section 10).
+NEEDS_ATTENTION_BELOW = Decimal("0.85")
+
+
+class Extraction(WorkspaceModel):
+    """One value the pipeline proposes for a document, with its source and confidence."""
+
+    same_workspace_fields = ("document",)
+
+    class Field(models.TextChoices):
+        SENDER = "sender"
+        DOCUMENT_TYPE = "document_type"
+        LETTER_DATE = "letter_date"
+        SUMMARY = "summary"
+        ACTION_TYPE = "action_type"
+        ACTION_DESCRIPTION = "action_description"
+        ACTION_DEADLINE = "action_deadline"
+        INVOICE_NUMBER = "invoice_number"
+        INVOICE_DUE_DATE = "invoice_due_date"
+        INVOICE_AMOUNT_INCL = "invoice_amount_incl"
+
+    document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="extractions")
+    field = models.CharField(max_length=30, choices=Field.choices)
+    # 0 for values about the document; 1..n ties the values of one proposed action together.
+    group = models.PositiveIntegerField(default=0)
+    # Dates as ISO dates, amounts as decimal strings.
+    value = models.TextField()
+    # The words in the letter the value was read from; empty for generated text.
+    quote = models.TextField(blank=True, default="")
+    confidence = models.DecimalField(max_digits=4, decimal_places=3)
+    provider = models.CharField(max_length=50, blank=True, default="")
+    model = models.CharField(max_length=100, blank=True, default="")
+
+    class Meta:
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.CheckConstraint(
+                condition=models.Q(confidence__gte=0) & models.Q(confidence__lte=1),
+                name="documents_extraction_confidence_range",
+            ),
+        ]
+        ordering: ClassVar[list[str]] = ["group", "created_at", "id"]
+
+    def __str__(self) -> str:
+        return f"{self.document_id} {self.field}"
+
+    @property
+    def needs_attention(self) -> bool:
+        return needs_attention(self.field, self.confidence)
+
+
+_ATTENTION_FIELDS = {
+    Extraction.Field.ACTION_DEADLINE,
+    Extraction.Field.INVOICE_DUE_DATE,
+    Extraction.Field.INVOICE_AMOUNT_INCL,
+}
+
+
+def needs_attention(field: str, confidence: Decimal) -> bool:
+    """Only deadlines and amounts: a wrong one costs money or a missed term."""
+    return field in _ATTENTION_FIELDS and confidence < NEEDS_ATTENTION_BELOW

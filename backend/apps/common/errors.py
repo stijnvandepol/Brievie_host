@@ -1,6 +1,8 @@
 import logging
+import re
 from collections.abc import Callable
 
+from django.conf import settings
 from django.core.exceptions import (
     BadRequest,
     PermissionDenied,
@@ -51,6 +53,7 @@ def _http_error_body(status: int) -> tuple[str, str]:
         403: ("forbidden", _("Je mag dit niet doen.")),
         404: ("not_found", _("We kunnen dit niet vinden.")),
         405: ("method_not_allowed", _("Dit kan hier niet.")),
+        411: ("length_required", _("Dit verzoek mist een lengte. Probeer het opnieuw.")),
         413: ("payload_too_large", _("Dit verzoek is te groot.")),
         415: ("unsupported_media_type", _("Stuur de gegevens als JSON.")),
         429: ("too_many_attempts", _("Te veel pogingen. Probeer het later opnieuw.")),
@@ -154,6 +157,45 @@ class ApiMethodNotAllowedMiddleware:
         return response
 
 
+# The one endpoint that takes a multipart body (page images) and has a larger limit.
+_DOCUMENT_UPLOAD_PATH = re.compile(r"^/api/v1/workspaces/[^/]+/documents$")
+
+
+def is_document_upload(request: HttpRequest) -> bool:
+    return request.method == "POST" and bool(_DOCUMENT_UPLOAD_PATH.match(request.path))
+
+
+class ApiContentLengthMiddleware:
+    """Refuses an /api/ request body without a Content-Length (411) or above the limit (413).
+
+    gunicorn hands Django a chunked body without a length, and Django then reads it
+    as empty, so the caller would get a misleading 415 or 422. The size check runs
+    here, before authentication, so an oversized body is never read.
+    """
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
+        self.get_response = get_response
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        if not request.path.startswith("/api/"):
+            return self.get_response(request)
+        length = request.META.get("CONTENT_LENGTH")
+        if "HTTP_TRANSFER_ENCODING" in request.META and not length:
+            return http_error_response(411)
+        limit = (
+            settings.BRIEVIE_MAX_UPLOAD_BYTES
+            if is_document_upload(request)
+            else settings.BRIEVIE_MAX_BODY_BYTES
+        )
+        try:
+            too_big = int(length or 0) > limit
+        except ValueError:
+            return http_error_response(400)
+        if too_big:
+            return http_error_response(413)
+        return self.get_response(request)
+
+
 class ApiJsonBodyMiddleware:
     """Refuses an /api/ request body that is not `application/json` (415).
 
@@ -172,10 +214,16 @@ class ApiJsonBodyMiddleware:
         if (
             request.path.startswith("/api/")
             and _has_body(request)
-            and request.content_type != "application/json"
+            and request.content_type != _expected_content_type(request)
         ):
             return http_error_response(415)
         return self.get_response(request)
+
+
+def _expected_content_type(request: HttpRequest) -> str:
+    # A multipart body cannot be sent cross-site to this endpoint either: it needs a
+    # device token, or a session with a CSRF token.
+    return "multipart/form-data" if is_document_upload(request) else "application/json"
 
 
 def _has_body(request: HttpRequest) -> bool:
