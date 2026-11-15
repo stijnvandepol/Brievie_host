@@ -5,6 +5,7 @@ from ninja import Schema
 from pydantic import Field
 
 from apps.accounts.schemas import UserOut
+from apps.common.schemas import InputSchema
 
 
 class PairingCodeOut(Schema):
@@ -14,7 +15,7 @@ class PairingCodeOut(Schema):
     qr_payload: str
 
 
-class PairIn(Schema):
+class PairIn(InputSchema):
     code: str = Field(max_length=20)
     device_name: str = Field(min_length=1, max_length=100)
 

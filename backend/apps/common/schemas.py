@@ -1,4 +1,20 @@
 from ninja import Schema
+from pydantic import field_validator
+
+
+class InputSchema(Schema):
+    """Base for request bodies: no text field may hold a NUL character.
+
+    PostgreSQL text cannot store `\\x00`; without this check the insert fails with a
+    500 instead of a 422 in the normal error shape.
+    """
+
+    @field_validator("*", mode="after")
+    @classmethod
+    def _no_nul(cls, value: object) -> object:
+        if isinstance(value, str) and "\x00" in value:
+            raise ValueError("Text may not contain a NUL character.")
+        return value
 
 
 class ErrorOut(Schema):

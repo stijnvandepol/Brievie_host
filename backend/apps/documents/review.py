@@ -1,5 +1,8 @@
 """Confirming a document: the user's review becomes its fields and its tasks."""
 
+from collections import Counter
+from dataclasses import dataclass
+from datetime import date
 from uuid import UUID
 
 from django.db import transaction
@@ -11,12 +14,23 @@ from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
 from apps.documents.models import Document
 from apps.documents.schemas import ConfirmIn, TaskIn
-from apps.pipeline.validation import quote_in_text
+from apps.pipeline.validation import dates_in, quote_in_text
 from apps.tasks.models import Task
 from apps.workspaces.models import Workspace
 
 _REVIEWABLE = {Document.Status.NEEDS_REVIEW, Document.Status.FAILED}
 _CLIENT_SOURCES = {Task.DeadlineSource.IN_DOCUMENT, Task.DeadlineSource.MANUAL}
+
+
+@dataclass(frozen=True)
+class _StoredTask:
+    """A task as confirm stores it; also what a repeated confirm is compared on."""
+
+    type: str
+    description: str
+    deadline: date | None
+    deadline_source: str
+    deadline_quote: str
 
 
 def confirm_document(
@@ -25,7 +39,9 @@ def confirm_document(
     """Store the confirmed review and create its tasks; the document becomes `done`.
 
     Allowed while the document waits for review, or after processing failed (the
-    user then fills everything in by hand). Needs the workspace's RLS context.
+    user then fills everything in by hand). Repeating the same review on a `done`
+    document (a retry after a lost answer) changes nothing and answers the same;
+    another review is a conflict. Needs the workspace's RLS context.
     """
     with transaction.atomic():
         document = (
@@ -33,6 +49,8 @@ def confirm_document(
         )
         if document is None:
             raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
+        if document.status == Document.Status.DONE and _is_repeat(data, document):
+            return document
         if document.status not in _REVIEWABLE:
             raise ApiError(
                 409,
@@ -51,19 +69,66 @@ def confirm_document(
         document.confirmed_by = user
         document.confirmed_at = timezone.now()
         document.save()
-        for task in data.tasks:
-            in_document = task.deadline_source == Task.DeadlineSource.IN_DOCUMENT
+        for task in _stored_tasks(data, document):
             Task.objects.create(
                 workspace=workspace,
                 document=document,
                 type=task.type,
-                description=mask_bsns(task.description.strip()),
+                description=task.description,
                 deadline=task.deadline,
                 deadline_source=task.deadline_source,
-                # A deadline the user typed has no source in the document.
-                deadline_quote=task.deadline_quote.strip() if in_document else "",
+                deadline_quote=task.deadline_quote,
             )
     return document
+
+
+def _stored_tasks(data: ConfirmIn, document: Document) -> list[_StoredTask]:
+    return [_stored_task(task, document) for task in data.tasks]
+
+
+def _stored_task(task: TaskIn, document: Document) -> _StoredTask:
+    source = task.deadline_source
+    quote = task.deadline_quote.strip()
+    # The quote shown with a deadline must say that date. When it does not (the user
+    # changed the date, or the AI misread it), the date is the user's own: it is kept
+    # as a manual deadline, like an unverified proposal, without the misleading quote.
+    if source == Task.DeadlineSource.IN_DOCUMENT and task.deadline not in dates_in(quote):
+        source = Task.DeadlineSource.MANUAL
+    return _StoredTask(
+        type=task.type,
+        description=mask_bsns(task.description.strip()),
+        deadline=task.deadline,
+        deadline_source=source,
+        # A deadline the user typed has no source in the document.
+        deadline_quote=quote if source == Task.DeadlineSource.IN_DOCUMENT else "",
+    )
+
+
+def _is_repeat(data: ConfirmIn, document: Document) -> bool:
+    """Whether `data` is the review this document was confirmed with.
+
+    Compared on what was stored (trimmed, BSNs masked, tasks in any order), so the
+    exact same request always matches. Task fields the user may change later (status)
+    are not part of it.
+    """
+    stored = Counter(
+        _StoredTask(
+            type=task.type,
+            description=task.description,
+            deadline=task.deadline,
+            deadline_source=task.deadline_source,
+            deadline_quote=task.deadline_quote,
+        )
+        for task in document.tasks.all()
+    )
+    return (
+        document.sender == mask_bsns(data.sender.strip())
+        and document.document_type == data.document_type
+        and document.letter_date == data.letter_date
+        and document.summary == mask_bsns(data.summary.strip())
+        and document.summary_by_ai == data.summary_by_ai
+        and stored == Counter(_stored_tasks(data, document))
+    )
 
 
 def _validate(data: ConfirmIn, document: Document) -> None:

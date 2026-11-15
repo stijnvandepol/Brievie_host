@@ -337,3 +337,32 @@ def test_page_file_cannot_be_opened_as_another_page(client_a: Client, ws_a: Work
     r = client_a.get(f"{documents_url(ws_a.id)}/{document.id}/pages/2")
 
     assert r.status_code == 500
+
+
+def test_nul_character_in_page_text_is_refused(client_a: Client, ws_a: Workspace) -> None:
+    r = upload(client_a, ws_a.id, [jpeg()], texts=["Belasting\x00dienst"])
+
+    assert r.status_code == 422
+    assert r.json()["code"] == "validation_error"
+    assert stored_files() == []
+    assert counts(ws_a) == (0, 0)
+
+
+def test_failure_after_the_pages_are_written_leaves_no_files(
+    client_a: Client, ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    written: list[Path] = []
+
+    def queue_down(**_: object) -> None:
+        written.extend(stored_files())
+        raise ConnectionError("queue is down")
+
+    monkeypatch.setattr(intake, "defer_processing", queue_down)
+    client_a.raise_request_exception = False
+
+    r = upload(client_a, ws_a.id, [jpeg("een"), jpeg("twee")])
+
+    assert r.status_code == 500
+    assert len(written) == 2
+    assert stored_files() == []
+    assert counts(ws_a) == (0, 0)
