@@ -5,7 +5,7 @@ import type { FormEvent } from "react";
 import { Button, Form } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import { meQuery } from "../api/queries";
-import { ErrorAlert, Field, Plain, usePageTitle } from "../components/page";
+import { ErrorAlert, Field, Split, usePageTitle } from "../components/page";
 import { requireVisitor } from "../guards";
 import { rootRoute } from "./root";
 
@@ -32,8 +32,11 @@ function LoginPage() {
   }
 
   return (
-    <Plain>
-      <h1>{t`Inloggen`}</h1>
+    <Split>
+      <div className="heading">
+        <h1>{t`Inloggen`}</h1>
+        <p className="lede">{t`Gebruik het account van deze server.`}</p>
+      </div>
       <Form onSubmit={submit} className="form">
         <Field label={t`E-mailadres`} name="email" type="email" autoComplete="username" />
         <Field
@@ -47,7 +50,8 @@ function LoginPage() {
           {t`Inloggen`}
         </Button>
       </Form>
-    </Plain>
+      <p className="hint">{t`Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd.`}</p>
+    </Split>
   );
 }
 

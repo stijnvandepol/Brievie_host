@@ -5,6 +5,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useRef, useState } from "react";
 import { Button, Label, TextArea, TextField } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
+import { DeviceTable } from "../components/device-table";
 import { ErrorAlert, Shell, usePageTitle } from "../components/page";
 import { requireUser } from "../guards";
 import { rootRoute } from "./root";
@@ -32,6 +33,23 @@ function formatTimeLeft(totalSeconds: number): string {
   return t`${minutesText} en ${secondsText}`;
 }
 
+/** The server addresses and certificate pin the app is given; null when the payload is not usable. */
+function readPayload(qrPayload: string): { urls: string[]; hasPin: boolean } | null {
+  try {
+    const parsed: unknown = JSON.parse(qrPayload);
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const urls = "urls" in parsed && Array.isArray(parsed.urls) ? parsed.urls : [];
+    return {
+      urls: urls.filter((url): url is string => typeof url === "string"),
+      hasPin: "ca_sha256" in parsed && typeof parsed.ca_sha256 === "string",
+    };
+  } catch {
+    return null;
+  }
+}
+
+const clock = new Intl.DateTimeFormat("nl-NL", { hour: "2-digit", minute: "2-digit" });
+
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
 
 /** True when every address in the payload points at the server's own machine. */
@@ -54,7 +72,7 @@ type CopyState = "idle" | "copied" | "failed";
 function PairAppPage() {
   usePageTitle(t`App koppelen`);
   const navigate = useNavigate();
-  const result = useRef<HTMLDivElement>(null);
+  const result = useRef<HTMLElement>(null);
   const newCode = useRef<HTMLButtonElement>(null);
   const [copy, setCopy] = useState<CopyState>("idle");
   const create = useMutation({
@@ -74,6 +92,7 @@ function PairAppPage() {
   const pairing = create.data;
   const secondsLeft = useSecondsLeft(pairing?.expires_at);
   const expired = pairing !== undefined && secondsLeft === 0;
+  const details = pairing ? readPayload(pairing.qr_payload) : null;
 
   // A new code appears below the button: bring keyboard and screen reader users to it.
   useEffect(() => {
@@ -102,14 +121,27 @@ function PairAppPage() {
 
   return (
     <Shell>
-      <h1>{t`App koppelen`}</h1>
-      <p>{t`Koppel de Brievie-app op je telefoon aan deze server. Maak een code en scan de QR-code met de app.`}</p>
-
-      {pairing === undefined ? (
-        <Button className="button" onPress={() => create.mutate()} isPending={create.isPending}>
-          {t`Koppelcode maken`}
-        </Button>
-      ) : null}
+      <header className="page-header">
+        <div className="page-title">
+          <span className="eyebrow">{t`Apparaten`}</span>
+          <h1>{t`App koppelen`}</h1>
+        </div>
+        {pairing === undefined ? (
+          <Button className="button" onPress={() => create.mutate()} isPending={create.isPending}>
+            {t`Koppelcode maken`}
+          </Button>
+        ) : null}
+        {expired ? (
+          <Button
+            ref={newCode}
+            className="button"
+            onPress={() => create.mutate()}
+            isPending={create.isPending}
+          >
+            {t`Nieuwe code`}
+          </Button>
+        ) : null}
+      </header>
 
       <ErrorAlert error={create.error} />
 
@@ -119,49 +151,83 @@ function PairAppPage() {
         </div>
       ) : null}
 
-      {pairing !== undefined && !expired ? (
-        <div className="pairing" ref={result} tabIndex={-1}>
-          <QRCodeSVG
-            value={pairing.qr_payload}
-            title={t`QR-code om de app te koppelen`}
-            size={256}
-            marginSize={4}
-            level="M"
-          />
-          <p role="timer">{t`Deze code werkt nog ${formatTimeLeft(secondsLeft)}.`}</p>
-          <p>{t`Lukt scannen niet? Kopieer de koppelgegevens en plak ze in de app.`}</p>
-          <Button className="button secondary" onPress={() => copyPayload(pairing.qr_payload)}>
-            {t`Kopieer koppelgegevens`}
-          </Button>
-          {copy === "failed" ? (
-            <TextField isReadOnly className="field payload">
-              <Label>{t`Koppelgegevens`}</Label>
-              <TextArea
-                value={pairing.qr_payload}
-                rows={5}
-                onFocus={(event) => event.currentTarget.select()}
-              />
-            </TextField>
-          ) : null}
-        </div>
-      ) : null}
-
-      {expired ? (
-        <div className="pairing" ref={result} tabIndex={-1}>
-          <Button
-            ref={newCode}
-            className="button"
-            onPress={() => create.mutate()}
-            isPending={create.isPending}
-          >
-            {t`Nieuwe code`}
-          </Button>
-        </div>
-      ) : null}
-
       <p role="status" aria-live="polite" className="status">
         {status}
       </p>
+
+      {pairing !== undefined && !expired ? (
+        <section
+          className="panel pairing"
+          ref={result}
+          tabIndex={-1}
+          aria-labelledby="pairing-title"
+        >
+          <div className="pairing-details">
+            <h2 id="pairing-title">{t`Koppelcode`}</h2>
+            <dl className="facts">
+              <dt>{t`Code`}</dt>
+              <dd className="num code">{pairing.code}</dd>
+              <dt>{t`Geldig tot`}</dt>
+              <dd className="num">
+                <time dateTime={pairing.expires_at}>
+                  {clock.format(new Date(pairing.expires_at))}
+                </time>{" "}
+                <span role="timer">{t`(nog ${formatTimeLeft(secondsLeft)})`}</span>
+              </dd>
+              {details && details.urls.length > 0 ? (
+                <>
+                  <dt>
+                    {plural(details.urls.length, { one: "Serveradres", other: "Serveradressen" })}
+                  </dt>
+                  <dd className="wrap">
+                    {details.urls.map((url) => (
+                      <span key={url} className="block">
+                        {url}
+                      </span>
+                    ))}
+                  </dd>
+                </>
+              ) : null}
+              {details ? (
+                <>
+                  <dt>{t`Certificaat`}</dt>
+                  <dd>
+                    {details.hasPin ? t`Eigen CA, vingerafdruk zit in de code` : t`Geen eigen CA`}
+                  </dd>
+                </>
+              ) : null}
+            </dl>
+            <p className="muted">{t`Open de app op je telefoon en scan de code. De telefoon moet op hetzelfde netwerk zitten als deze server.`}</p>
+            <div>
+              <Button className="button secondary" onPress={() => copyPayload(pairing.qr_payload)}>
+                {t`Kopieer koppelgegevens`}
+              </Button>
+            </div>
+            {copy === "failed" ? (
+              <TextField isReadOnly className="field payload">
+                <Label>{t`Koppelgegevens`}</Label>
+                <TextArea
+                  value={pairing.qr_payload}
+                  rows={5}
+                  onFocus={(event) => event.currentTarget.select()}
+                />
+              </TextField>
+            ) : null}
+          </div>
+          <div className="pairing-qr">
+            <QRCodeSVG
+              value={pairing.qr_payload}
+              title={t`QR-code om de app te koppelen`}
+              size={200}
+              marginSize={4}
+              level="M"
+            />
+            <span className="muted small">{t`Scan met de Brievie-app`}</span>
+          </div>
+        </section>
+      ) : null}
+
+      <DeviceTable />
     </Shell>
   );
 }

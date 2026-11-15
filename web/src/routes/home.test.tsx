@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import {
@@ -13,15 +13,33 @@ import {
 } from "../test-utils";
 
 describe("home", () => {
-  it("lists the workspaces with their kind and links to pairing the app from the menu", async () => {
+  it("lists the workspaces in a table with kind and role, and links to the devices page", async () => {
     server.use(...loggedInHandlers());
     renderApp("/");
-    expect(await screen.findByRole("heading", { name: /werkruimtes/i })).toBeInTheDocument();
-    expect(await screen.findByText("Thuis", { selector: "strong" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /app koppelen/i })).toHaveAttribute(
-      "href",
-      "/koppel-app",
+    expect(
+      await screen.findByRole("heading", { level: 1, name: /werkruimtes/i }),
+    ).toBeInTheDocument();
+    const row = (await screen.findByRole("rowheader", { name: "Thuis" })).closest("tr");
+    expect(row).not.toBeNull();
+    const cells = within(row as HTMLElement).getAllByRole("cell");
+    expect(cells.map((cell) => cell.textContent)).toEqual(["Thuis", "Beheerder"]);
+    expect(screen.getByRole("columnheader", { name: "Rol" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Apparaten" })).toHaveAttribute("href", "/koppel-app");
+  });
+
+  it("marks the current page in the menu and shows who is logged in", async () => {
+    server.use(...loggedInHandlers());
+    renderApp("/");
+    const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
+    expect(within(nav).getByRole("link", { name: "Werkruimtes" })).toHaveAttribute(
+      "aria-current",
+      "page",
     );
+    expect(within(nav).getByRole("link", { name: "Apparaten" })).not.toHaveAttribute(
+      "aria-current",
+    );
+    expect(await screen.findByText("anna@example.nl")).toBeInTheDocument();
+    expect(screen.getByText("Anna")).toBeInTheDocument();
   });
 
   it("logs out with the CSRF token and returns to the login screen", async () => {

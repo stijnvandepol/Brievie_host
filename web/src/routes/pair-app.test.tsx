@@ -31,7 +31,7 @@ function pairingCode(secondsValid: number, code = "ABCD-EFGH", payload = QR_PAYL
 }
 
 describe("pair the app", () => {
-  it("renders a QR whose value is the qr_payload and a countdown, without the short code", async () => {
+  it("renders a QR whose value is the qr_payload, the code, addresses and a countdown", async () => {
     server.use(...loggedInHandlers(), pairingCode(600));
     document.cookie = "csrftoken=tok123; path=/";
     const u = userEvent.setup();
@@ -40,12 +40,14 @@ describe("pair the app", () => {
 
     expect(await screen.findByRole("img", { name: /qr-code/i })).toBeInTheDocument();
     expect(qrValues.at(-1)).toBe(QR_PAYLOAD);
-    expect(screen.queryByText("ABCD-EFGH")).not.toBeInTheDocument();
-    expect(screen.queryByText(/typ.*code/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "App koppelen" })).toBeInTheDocument();
+    expect(screen.getByText("Apparaten", { selector: ".eyebrow" })).toBeInTheDocument();
+    expect(screen.getByText("ABCD-EFGH")).toBeInTheDocument();
+    expect(screen.getByText("https://192.168.1.20:443")).toBeInTheDocument();
+    expect(screen.getByText("Eigen CA, vingerafdruk zit in de code")).toBeInTheDocument();
     expect(screen.getByRole("timer")).toHaveTextContent(
-      /^Deze code werkt nog (9 minuten en \d+ seconden|10 minuten)\.$/,
+      /^\(nog (9 minuten en \d+ seconden|10 minuten)\)$/,
     );
-    expect(screen.getByText(/lukt scannen niet\? kopieer de koppelgegevens/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /nieuwe code/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });

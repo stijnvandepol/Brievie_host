@@ -30,6 +30,7 @@ export function loggedInHandlers() {
     http.get(`*${API}/setup`, () => HttpResponse.json({ needs_setup: false })),
     http.get(`*${API}/me`, () => HttpResponse.json(user)),
     http.get(`*${API}/workspaces`, () => HttpResponse.json([workspace])),
+    http.get(`*${API}/devices`, () => HttpResponse.json([])),
   ];
 }
 

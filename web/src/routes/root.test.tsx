@@ -46,7 +46,7 @@ describe("router screens", () => {
     renderApp("/");
     await screen.findByRole("heading", { name: /werkruimtes/i });
 
-    await u.click(screen.getByRole("link", { name: /app koppelen/i }));
+    await u.click(screen.getByRole("link", { name: "Apparaten" }));
 
     const heading = await screen.findByRole("heading", { level: 1, name: /app koppelen/i });
     await waitFor(() => expect(heading).toHaveFocus());
