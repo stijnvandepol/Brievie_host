@@ -8,4 +8,5 @@ description = "Made-up passwords and setup tokens in test fixtures"
 regexes = [
   '''^een-lang-wachtwoord-2026$''',
   '''^uit-de-omgeving-123$''',
+  '''^sk-geheime-sleutel-123$''',
 ]
