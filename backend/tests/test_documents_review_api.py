@@ -114,17 +114,98 @@ def test_missing_optional_dates_are_accepted(client_a: Client, ws_a: Workspace) 
     assert r.json()["tasks"][0]["deadline_quote"] == ""
 
 
-def test_confirming_twice_is_a_conflict_and_makes_one_task(
+def test_repeating_the_same_confirm_answers_like_the_first_and_makes_one_task(
+    client_a: Client, ws_a: Workspace
+) -> None:
+    # The app retries after a lost answer.
+    document_id = reviewable(client_a, ws_a)
+    first = confirm(client_a, ws_a.id, document_id, review())
+
+    again = confirm(client_a, ws_a.id, document_id, review())
+
+    assert first.status_code == 200
+    assert again.status_code == 200
+    assert again.json() == first.json()
+    assert task_count(ws_a) == 1
+
+
+def test_repeat_with_tasks_in_another_order_and_untrimmed_text_is_the_same(
     client_a: Client, ws_a: Workspace
 ) -> None:
     document_id = reviewable(client_a, ws_a)
-    confirm(client_a, ws_a.id, document_id, review())
+    other = task(type="respond", description="Bel", deadline_source="manual", deadline_quote="")
+    confirm(client_a, ws_a.id, document_id, review(tasks=[task(), other]))
 
-    r = confirm(client_a, ws_a.id, document_id, review())
+    again = review(
+        sender=" Belastingdienst ", tasks=[other, task(description="Betaal de aanslag ")]
+    )
+    r = confirm(client_a, ws_a.id, document_id, again)
+
+    assert r.status_code == 200
+    assert task_count(ws_a) == 2
+
+
+@pytest.mark.parametrize(
+    "changed",
+    [
+        review(sender="CAK"),
+        review(summary_by_ai=False),
+        review(letter_date=None),
+        review(tasks=[]),
+        review(tasks=[task(), task()]),
+        review(tasks=[task(description="Betaal op tijd")]),
+    ],
+)
+def test_repeat_with_another_review_is_a_conflict_and_changes_nothing(
+    client_a: Client, ws_a: Workspace, changed: dict[str, object]
+) -> None:
+    document_id = reviewable(client_a, ws_a)
+    first = confirm(client_a, ws_a.id, document_id, review())
+
+    r = confirm(client_a, ws_a.id, document_id, changed)
 
     assert r.status_code == 409
     assert r.json()["code"] == "document_not_reviewable"
     assert task_count(ws_a) == 1
+    assert client_a.get(f"{documents_url(ws_a.id)}/{document_id}").json() == first.json()
+
+
+def test_deadline_not_in_its_quote_becomes_a_manual_deadline(
+    client_a: Client, ws_a: Workspace
+) -> None:
+    # The quote is in the letter, but it does not say 2 December.
+    document_id = reviewable(client_a, ws_a)
+
+    r = confirm(client_a, ws_a.id, document_id, review(tasks=[task(deadline="2026-12-02")]))
+
+    assert r.status_code == 200
+    (created,) = r.json()["tasks"]
+    assert created["deadline"] == "2026-12-02"
+    assert created["deadline_source"] == "manual"
+    assert created["deadline_quote"] == ""
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        review(sender="Belasting\x00dienst"),
+        review(summary="Je moet\x00 betalen."),
+        review(tasks=[task(description="Betaal\x00")]),
+        review(tasks=[task(deadline_quote="vóór 1 december 2026\x00")]),
+        review(document_type="\x00"),
+    ],
+)
+def test_nul_character_is_refused_not_a_server_error(
+    client_a: Client, ws_a: Workspace, body: dict[str, object]
+) -> None:
+    document_id = reviewable(client_a, ws_a)
+
+    r = confirm(client_a, ws_a.id, document_id, body)
+
+    assert r.status_code == 422
+    assert r.json()["code"] == "validation_error"
+    assert set(r.json()) == {"code", "message"}
+    assert task_count(ws_a) == 0
 
 
 def test_confirm_while_processing_is_a_conflict(client_a: Client, ws_a: Workspace) -> None:

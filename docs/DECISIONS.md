@@ -368,7 +368,7 @@ Choices:
   is `<workspace>/<document>/<index>`.
 - **Known gap: orphan files.** When a request fails after its pages were written but
   outside the intake function (rare), the rows roll back and the encrypted files stay.
-  A storage sweep comes with back-ups (1d).
+  A storage sweep comes with back-ups (1d). (Narrowed on 2026-11-15, see below.)
 - **Multipart only here.** `ApiJsonBodyMiddleware` accepts `multipart/form-data` on this
   one path; the endpoint needs a device token or a session with a CSRF token.
 - **`needs_attention`** (confidence below 0.85 on a deadline or amount) is computed on
@@ -415,6 +415,34 @@ Choices:
   before it or cents after it, so "Postbus 2500" cannot confirm an invented amount; a
   due date found outside the invoice quote may not be the letter's own date.
 
+## 2026-11-15: Deferred review findings (phase 1b)
+
+- **Amounts.** `45,5` is read as 45.50 (one decimal digit counts tens of cents). The
+  English form `1,234.56` is read as 1234.56 only with comma groups of three and two
+  cents, a form a Dutch amount never takes; `1,234` alone is not read at all (it could
+  be Dutch decimals). An ambiguous number gives no amount, never a smaller wrong one.
+- **AI provider address.** `configure_ai` refuses a URL longer than its column and a
+  host that is not a valid DNS name; `Extraction.provider` is 255 characters (DNS
+  allows 253). `local` refuses a host made of digits or a `0x` number
+  (`http://134744072` is 8.8.8.8 to the resolver), so it cannot pass as a Compose
+  service name.
+- **Confirm is idempotent by comparing the body.** A confirm on a `done` document
+  answers 200 with the same document when the review equals what was stored (trimmed,
+  BSNs masked, tasks in any order); any other review stays 409
+  `document_not_reviewable`. Chosen over a client idempotency key: the stored
+  document and tasks hold everything to compare, so the contract does not change.
+- **An `in_document` deadline must be in its quote.** The quote must be in the letter
+  (else 422) and must say the date (`dates_in`: ISO, `d-m-yyyy`, `d maand yyyy`). When
+  the date is not in the quote, confirm keeps the task with the user's date as
+  `manual`, without the quote: the same "not verified" outcome a proposal gets with
+  confidence 0, not an error.
+- **No NUL characters in request text.** Every request schema derives from
+  `apps.common.schemas.InputSchema`, whose validator refuses `\x00` in any string
+  field (422 `validation_error`); PostgreSQL text cannot store it.
+- **Upload files are removed on any failure inside the intake service**, also after
+  all pages were written (queueing the job). Left: a failure after the service
+  returned, such as a lost connection at the request's commit.
+
 ## Open items
 
 - Pin GitHub Actions and container images by digest: later hardening task.
@@ -425,7 +453,6 @@ Choices:
 - `listDocuments` returns the newest 200; paging is an additive change for later.
 - Confirmed tasks have no reminders yet (1c), and calculated deadlines (NL rules) are not built: a client may only send `in_document` or `manual`.
 - A document cannot be deleted or edited after confirmation yet.
-- Encrypted page files of a rolled-back upload can stay behind; a storage sweep comes with back-ups (1d), which must also cover `BRIEVIE_MASTER_KEY`.
+- Encrypted page files can still stay behind when the request transaction fails after the intake service returned (a lost connection at commit); a storage sweep comes with back-ups (1d), which must also cover `BRIEVIE_MASTER_KEY`.
 - AI settings are set with `manage.py configure_ai`; the web settings screen comes with the wizard (1d). The `external` mode was not run against a real service by the builder (no key): the owner checks it with their own Mistral key.
 - The API key for an AI service lives in the database sealed with the workspace key; the worker therefore holds `BRIEVIE_MASTER_KEY` too.
-- From the review, not fixed: `local` accepts a host made of digits only (`http://134744072`, read as an IP address by a resolver; only the owner can set it); a provider host name over 50 characters fails every document; a NUL character in page text gives 500 instead of 422; repeating a confirm after a lost answer gives 409 (the app reloads the document); an `in_document` deadline is checked for its quote, not for the date inside the quote.

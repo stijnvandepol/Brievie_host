@@ -4,6 +4,8 @@ from uuid import UUID
 from ninja import Schema
 from pydantic import Field
 
+from apps.common.schemas import InputSchema
+
 
 class FolderOut(Schema):
     id: UUID
@@ -12,12 +14,12 @@ class FolderOut(Schema):
     parent_id: UUID | None
 
 
-class FolderIn(Schema):
+class FolderIn(InputSchema):
     name: str = Field(max_length=200)
     parent_id: UUID | None = None
 
 
-class PageMetaIn(Schema):
+class PageMetaIn(InputSchema):
     """One page of an upload, in page order."""
 
     # Lower-case hex SHA-256 of the page's JPEG bytes.
@@ -26,7 +28,7 @@ class PageMetaIn(Schema):
     text: str
 
 
-class UploadMetadataIn(Schema):
+class UploadMetadataIn(InputSchema):
     """The `metadata` field of `createDocument`, as a JSON string."""
 
     # Chosen by the client; repeating an upload with the same id is safe.
@@ -83,7 +85,7 @@ class DocumentOut(DocumentSummaryOut):
     tasks: list[TaskOut]
 
 
-class TaskIn(Schema):
+class TaskIn(InputSchema):
     # One of the task types: pay, respond, object, apply, inspection, cancel, renew,
     # file_tax, other.
     type: str
@@ -94,7 +96,7 @@ class TaskIn(Schema):
     deadline_quote: str = ""
 
 
-class ConfirmIn(Schema):
+class ConfirmIn(InputSchema):
     """What the user confirmed in the review. Nothing becomes a task without it."""
 
     sender: str = Field(max_length=200)

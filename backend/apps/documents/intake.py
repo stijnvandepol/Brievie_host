@@ -13,7 +13,7 @@ from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
 from apps.documents.models import Document, DocumentPage
 from apps.documents.schemas import UploadMetadataIn
-from apps.documents.storage import default_storage
+from apps.documents.storage import DocumentStorage, default_storage
 from apps.pipeline.jobs import defer_processing
 from apps.workspaces.keys import workspace_key
 from apps.workspaces.models import Workspace
@@ -47,26 +47,39 @@ def create_document_from_upload(
     if existing is not None:
         return _same_upload(existing, hashes), False
 
-    with transaction.atomic():
-        try:
-            with transaction.atomic():
-                document = Document.objects.create(
-                    workspace=workspace,
-                    client_id=metadata.client_id,
-                    scanned_by=user,
-                    page_count=len(pages),
-                    ocr_text=PAGE_SEPARATOR.join(mask_bsns(page.text) for page in metadata.pages),
-                )
-        except IntegrityError:
-            # Another request with this client_id got in first; nothing is written yet.
-            winner = Document.objects.filter(
-                workspace=workspace, client_id=metadata.client_id
-            ).first()
-            if winner is None:
-                raise
-            return _same_upload(winner, hashes), False
-        _store_pages(document, metadata, pages)
-        defer_processing(workspace_id=workspace.id, document_id=document.id)
+    storage = default_storage()
+    written: list[str] = []
+    try:
+        with transaction.atomic():
+            try:
+                with transaction.atomic():
+                    document = Document.objects.create(
+                        workspace=workspace,
+                        client_id=metadata.client_id,
+                        scanned_by=user,
+                        page_count=len(pages),
+                        ocr_text=PAGE_SEPARATOR.join(
+                            mask_bsns(page.text) for page in metadata.pages
+                        ),
+                    )
+            except IntegrityError:
+                # Another request with this client_id got in first; nothing is written yet.
+                winner = Document.objects.filter(
+                    workspace=workspace, client_id=metadata.client_id
+                ).first()
+                if winner is None:
+                    raise
+                return _same_upload(winner, hashes), False
+            _store_pages(document, metadata, pages, storage, written)
+            defer_processing(workspace_id=workspace.id, document_id=document.id)
+    except BaseException:
+        # Anything that fails after a page was written (another page, queueing the
+        # job) rolls the rows back; the files have to go by hand, or encrypted
+        # orphans stay behind. Queueing is part of the transaction (Procrastinate
+        # writes its job row in it), so nothing here has to wait for the commit.
+        for path in written:
+            storage.delete(path)
+        raise
     return document, True
 
 
@@ -85,30 +98,30 @@ def _same_upload(existing: Document, hashes: list[str]) -> Document:
     return existing
 
 
-def _store_pages(document: Document, metadata: UploadMetadataIn, pages: list[bytes]) -> None:
-    storage = default_storage()
+def _store_pages(
+    document: Document,
+    metadata: UploadMetadataIn,
+    pages: list[bytes],
+    storage: DocumentStorage,
+    written: list[str],
+) -> None:
+    """Write the encrypted pages and their rows; every written path goes into `written`."""
     key = workspace_key(document.workspace_id)
-    written: list[str] = []
-    try:
-        for index, (data, meta) in enumerate(zip(pages, metadata.pages, strict=True), start=1):
-            path = page_path(document.workspace_id, document.id, index)
-            aad = page_aad(document.workspace_id, document.id, index)
-            storage.write(path, crypto.seal(key, data, aad=aad))
-            written.append(path)
-            DocumentPage.objects.create(
-                workspace_id=document.workspace_id,
-                document=document,
-                index=index,
-                size=len(data),
-                sha256=meta.sha256,
-                ocr_text=mask_bsns(meta.text),
-                storage_path=path,
-            )
-    except BaseException:
-        # The rows roll back with the transaction; the files have to go by hand.
-        for path in written:
-            storage.delete(path)
-        raise
+    for index, (data, meta) in enumerate(zip(pages, metadata.pages, strict=True), start=1):
+        path = page_path(document.workspace_id, document.id, index)
+        aad = page_aad(document.workspace_id, document.id, index)
+        # Recorded first: a write that fails halfway must be cleaned up too.
+        written.append(path)
+        storage.write(path, crypto.seal(key, data, aad=aad))
+        DocumentPage.objects.create(
+            workspace_id=document.workspace_id,
+            document=document,
+            index=index,
+            size=len(data),
+            sha256=meta.sha256,
+            ocr_text=mask_bsns(meta.text),
+            storage_path=path,
+        )
 
 
 def _validate(metadata: UploadMetadataIn, pages: list[bytes]) -> None:

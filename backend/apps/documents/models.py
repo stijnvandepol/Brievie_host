@@ -189,7 +189,8 @@ class Extraction(WorkspaceModel):
     # The words in the letter the value was read from; empty for generated text.
     quote = models.TextField(blank=True, default="")
     confidence = models.DecimalField(max_digits=4, decimal_places=3)
-    provider = models.CharField(max_length=50, blank=True, default="")
+    # The AI service's host name (at most 253 characters in DNS).
+    provider = models.CharField(max_length=255, blank=True, default="")
     model = models.CharField(max_length=100, blank=True, default="")
 
     class Meta:

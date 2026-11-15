@@ -4,6 +4,7 @@ from uuid import UUID
 from ninja import Schema
 from pydantic import Field
 
+from apps.common.schemas import InputSchema
 from apps.workspaces.schemas import WorkspaceOut
 
 
@@ -19,7 +20,7 @@ class SetupStatusOut(Schema):
     needs_setup: bool
 
 
-class SetupIn(Schema):
+class SetupIn(InputSchema):
     # The installation code from the server log or BRIEVIE_SETUP_TOKEN.
     setup_token: str = Field(min_length=1, max_length=200)
     email: str = Field(max_length=254)
@@ -34,6 +35,6 @@ class SetupOut(Schema):
     workspace: WorkspaceOut
 
 
-class LoginIn(Schema):
+class LoginIn(InputSchema):
     email: str = Field(max_length=254)
     password: str = Field(max_length=128)
