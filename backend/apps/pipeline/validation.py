@@ -240,23 +240,36 @@ def dates_in(text: str) -> set[date]:
 
 
 _AMOUNT = re.compile(
-    r"(?:(€|EUR)\s*)?(?<![\d.,])(\d{1,3}(?:[. ]\d{3})+|\d+)"
-    r"(?:,(\d{2}|-)|\.(\d{2}))?(?![\d]|[.,]\d)",
+    r"(?:(?P<currency>€|EUR)\s*)?(?<![\d.,])"
+    # English thousands (`1,234.56`): only with comma groups and two cents, the one
+    # form a Dutch amount never takes. `1,234` alone stays unread (it could be 1,234).
+    r"(?:(?P<en_whole>\d{1,3}(?:,\d{3})+)\.(?P<en_cents>\d{2})"
+    r"|(?P<whole>\d{1,3}(?:[. ]\d{3})+|\d+)"
+    r"(?:,(?P<after_comma>\d{1,2}|-)|\.(?P<after_point>\d{2}))?)"
+    r"(?![\d]|[.,]\d)",
     re.IGNORECASE,
 )
 
 
 def amounts_in(text: str) -> set[Decimal]:
-    """Every amount of money written in `text`: `€ 1.234,56`, `1234.56`, `12,-`, `EUR 40`.
+    """Every amount of money written in `text`: `€ 1.234,56`, `1234.56`, `12,-`, `EUR 40`,
+    `45,5` (45.50) and `1,234.56`.
 
     A number counts as money only with a currency sign before it or cents after it:
-    a postbox number, a year or a number of days is not an amount.
+    a postbox number, a year or a number of days is not an amount. A form that could
+    be read two ways gives nothing rather than a wrong (smaller) number.
     """
     found = set()
-    for currency, whole, after_comma, after_point in _AMOUNT.findall(text):
-        if not (currency or after_comma or after_point):
+    for match in _AMOUNT.finditer(text):
+        if match["en_whole"]:
+            found.add(Decimal(f"{match['en_whole'].replace(',', '')}.{match['en_cents']}"))
+            continue
+        after_comma = match["after_comma"] or ""
+        after_point = match["after_point"] or ""
+        if not (match["currency"] or after_comma or after_point):
             continue
         cents = after_comma if after_comma.isdigit() else after_point
-        digits = re.sub(r"[. ]", "", whole)
-        found.add(Decimal(f"{digits}.{cents}") if cents else Decimal(digits))
+        digits = re.sub(r"[. ]", "", match["whole"])
+        # `45,5` is 45.50: one decimal digit counts tens of cents.
+        found.add(Decimal(f"{digits}.{cents.ljust(2, '0')}") if cents else Decimal(digits))
     return found

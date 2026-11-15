@@ -261,3 +261,56 @@ def test_unknown_mode_is_refused(ws_a: Workspace) -> None:
         settings_service.configure(
             workspace_id=ws_a.id, mode="cloud", base_url="", model="", api_key=None
         )
+
+
+LONG_HOST = "ollama-inference-gateway.huis-van-de-familie.example-lan.local"
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["http://134744072/v1", "http://134744072:11434/v1", "http://0x7f000001/v1",
+     "http://0X0A000001/v1", "http://017700000001/v1", "http://127.1/v1", "http://0177.0.0.1/v1",
+     "http://10.0.1/v1"],
+)  # fmt: skip
+def test_local_refuses_numeric_host_forms(ws_a: Workspace, url: str) -> None:
+    # A resolver reads these as IPv4 addresses (8.8.8.8, 127.0.0.1, ...), not as names.
+    assert not settings_service.is_on_own_network(url)
+    with workspace_context(ws_a.id), pytest.raises(ValueError, match="network"):
+        settings_service.configure(
+            workspace_id=ws_a.id, mode="local", base_url=url, model="qwen", api_key=None
+        )
+
+
+@pytest.mark.parametrize(
+    "url", ["http://ollama2:11434/v1", "http://llm-01/v1", "http://ai_box/v1", "http://cafe/v1"]
+)
+def test_local_still_accepts_service_names_with_digits(url: str) -> None:
+    assert settings_service.is_on_own_network(url)
+
+
+def test_long_realistic_host_name_is_accepted_and_named(ws_a: Workspace) -> None:
+    assert len(LONG_HOST) > 50
+    with workspace_context(ws_a.id):
+        settings_service.configure(
+            workspace_id=ws_a.id, mode="local", base_url=f"http://{LONG_HOST}:11434/v1",
+            model="qwen", api_key=None,
+        )  # fmt: skip
+        built = settings_service.provider_for(ws_a.id)
+
+    assert built is not None
+    assert built.name == LONG_HOST
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["https://" + "a" * 64 + ".example.com/v1",
+     "https://" + ".".join(["abcdefghij"] * 24) + ".com/v1",
+     "https://api.mistral.ai/" + "v" * 300],
+)  # fmt: skip
+def test_host_or_address_that_cannot_be_stored_is_refused(ws_a: Workspace, url: str) -> None:
+    with workspace_context(ws_a.id):
+        with pytest.raises(ValueError, match="AI service"):
+            settings_service.configure(
+                workspace_id=ws_a.id, mode="external", base_url=url, model="m", api_key=API_KEY
+            )
+        assert not AISettings.objects.exists()

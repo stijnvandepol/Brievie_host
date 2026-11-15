@@ -257,3 +257,15 @@ def test_document_of_another_workspace_is_not_processed(ws_a: Workspace, ws_b: W
 
     assert provider.texts == []
     assert state(ws_a, document) == ("processing", "", [])
+
+
+def test_provider_with_a_long_host_name_stores_its_proposals(ws_a: Workspace) -> None:
+    document = make_document(ws_a)
+    provider = FakeProvider(answer())
+    provider.name = "ollama-inference-gateway.huis-van-de-familie.example-lan.local"
+
+    run(ws_a, document, provider)
+
+    status, code, proposals = state(ws_a, document)
+    assert (status, code) == ("needs_review", "")
+    assert {p.provider for p in proposals} == {provider.name}

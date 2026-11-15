@@ -415,6 +415,18 @@ Choices:
   before it or cents after it, so "Postbus 2500" cannot confirm an invented amount; a
   due date found outside the invoice quote may not be the letter's own date.
 
+## 2026-11-15: Deferred review findings (phase 1b)
+
+- **Amounts.** `45,5` is read as 45.50 (one decimal digit counts tens of cents). The
+  English form `1,234.56` is read as 1234.56 only with comma groups of three and two
+  cents, a form a Dutch amount never takes; `1,234` alone is not read at all (it could
+  be Dutch decimals). An ambiguous number gives no amount, never a smaller wrong one.
+- **AI provider address.** `configure_ai` refuses a URL longer than its column and a
+  host that is not a valid DNS name; `Extraction.provider` is 255 characters (DNS
+  allows 253). `local` refuses a host made of digits or a `0x` number
+  (`http://134744072` is 8.8.8.8 to the resolver), so it cannot pass as a Compose
+  service name.
+
 ## Open items
 
 - Pin GitHub Actions and container images by digest: later hardening task.
@@ -428,4 +440,4 @@ Choices:
 - Encrypted page files of a rolled-back upload can stay behind; a storage sweep comes with back-ups (1d), which must also cover `BRIEVIE_MASTER_KEY`.
 - AI settings are set with `manage.py configure_ai`; the web settings screen comes with the wizard (1d). The `external` mode was not run against a real service by the builder (no key): the owner checks it with their own Mistral key.
 - The API key for an AI service lives in the database sealed with the workspace key; the worker therefore holds `BRIEVIE_MASTER_KEY` too.
-- From the review, not fixed: `local` accepts a host made of digits only (`http://134744072`, read as an IP address by a resolver; only the owner can set it); a provider host name over 50 characters fails every document; a NUL character in page text gives 500 instead of 422; repeating a confirm after a lost answer gives 409 (the app reloads the document); an `in_document` deadline is checked for its quote, not for the date inside the quote.
+- From the review, not fixed: a NUL character in page text gives 500 instead of 422; repeating a confirm after a lost answer gives 409 (the app reloads the document); an `in_document` deadline is checked for its quote, not for the date inside the quote.

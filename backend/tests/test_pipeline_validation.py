@@ -334,3 +334,25 @@ def test_json_schema_is_strict_everywhere() -> None:
         assert sorted(cast(list[str], node["required"])) == sorted(
             cast(dict[str, object], node["properties"])
         )
+
+
+def test_one_decimal_dutch_amount_is_parsed_with_cents() -> None:
+    assert amounts_in("EUR 45,5") == {Decimal("45.50")}
+    assert amounts_in("€ 1.234,5 te betalen") == {Decimal("1234.50")}
+
+
+def test_english_thousands_form_is_parsed_only_when_unambiguous() -> None:
+    assert amounts_in("Total 1,234.56") == {Decimal("1234.56")}
+    assert amounts_in("€ 12,345,678.90") == {Decimal("12345678.90")}
+    # Without cents a comma group could be Dutch decimals: never a smaller wrong number.
+    assert amounts_in("€ 1,234") == set()
+    assert amounts_in("1,234.5") == set()
+
+
+def test_one_decimal_amount_in_the_letter_confirms_the_invoice() -> None:
+    text = TEXT + " Te betalen: EUR 45,5"
+    data = invoice(bedrag_incl="45.50", bron="Te betalen: EUR 45,5")
+
+    values = validate(payload(factuur=data), text, today=TODAY)
+
+    assert value(values, "invoice_amount_incl").confidence == Decimal("0.900")
