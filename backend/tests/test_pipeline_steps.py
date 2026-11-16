@@ -9,6 +9,7 @@ import pytest
 from django.db import connection
 
 from apps.documents.models import Document, Extraction
+from apps.pipeline.choices import ExtractionRequest
 from apps.pipeline.errors import PermanentError
 from apps.pipeline.providers import LLMProvider, ProviderUnavailable
 from apps.pipeline.steps import run_pipeline
@@ -52,7 +53,8 @@ class FakeProvider:
         self.in_transaction: list[bool] = []
         self.during_call: Callable[[], None] = lambda: None
 
-    def extract(self, text: str) -> str:
+    def extract(self, request: ExtractionRequest) -> str:
+        text = request.text
         self.texts.append(text)
         self.in_transaction.append(connection.in_atomic_block)
         self.during_call()

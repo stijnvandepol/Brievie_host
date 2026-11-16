@@ -1,4 +1,5 @@
 import json
+import uuid
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -8,13 +9,18 @@ import pytest
 from pydantic import ValidationError
 
 from apps.documents.models import needs_attention
+from apps.pipeline.choices import Choice, ExtractionRequest
 from apps.pipeline.schema import ExtractionPayload, json_schema
 from apps.pipeline.validation import (
+    LABEL_CONFIDENCE_CAP,
+    MAX_AI_LABELS,
+    ValidatedChoice,
     ValidatedValue,
     amounts_in,
     dates_in,
     quote_in_text,
     validate,
+    validate_choices,
 )
 
 TEXT = (
@@ -356,3 +362,168 @@ def test_one_decimal_amount_in_the_letter_confirms_the_invoice() -> None:
     values = validate(payload(factuur=data), text, today=TODAY)
 
     assert value(values, "invoice_amount_incl").confidence == Decimal("0.900")
+
+
+JAN = uuid.uuid4()
+EMMA = uuid.uuid4()
+LABEL_IDS = [uuid.uuid4() for _ in range(5)]
+CHOICE_TEXT = TEXT + "\nT.a.v. de heer J. de Vries\nAan de ouders van Emma"
+REQUEST = ExtractionRequest(
+    text=CHOICE_TEXT,
+    persons=(Choice("P1", JAN, "Jan de Vries", ("J. de Vries",)), Choice("P2", EMMA, "Emma")),
+    labels=tuple(Choice(f"L{n}", id_, f"Label {n}") for n, id_ in enumerate(LABEL_IDS, 1)),
+)
+
+
+def picks(
+    addressees: list[dict[str, object]] | None = None,
+    labels: list[dict[str, object]] | None = None,
+) -> tuple[list[ValidatedChoice], int]:
+    data = payload(op_naam_van=addressees or [], labels=labels or [])
+    return validate_choices(data, CHOICE_TEXT, REQUEST)
+
+
+def test_payload_without_the_new_fields_still_parses() -> None:
+    data = payload()
+
+    assert data.addressees == []
+    assert data.labels == []
+
+
+def test_payload_reads_the_new_fields_by_their_dutch_names() -> None:
+    data = payload(
+        op_naam_van=[{"id": "P1", "bron": "J. de Vries", "zekerheid": 0.9}],
+        labels=[{"id": "L2", "zekerheid": 0.8}],
+    )
+
+    assert data.addressees[0].id == "P1"
+    assert data.addressees[0].quote == "J. de Vries"
+    assert data.labels[0].confidence == 0.8
+
+
+def test_valid_picks_map_aliases_to_the_real_ids() -> None:
+    chosen, dropped = picks(
+        [{"id": "P1", "bron": "T.a.v. de heer J. de Vries", "zekerheid": 0.9}],
+        [{"id": "L2", "zekerheid": 0.7}],
+    )
+
+    assert chosen == [
+        ValidatedChoice("addressee", JAN, "T.a.v. de heer J. de Vries", Decimal("0.900")),
+        ValidatedChoice("label", LABEL_IDS[1], "", Decimal("0.700")),
+    ]
+    assert dropped == 0
+
+
+def test_unknown_alias_is_dropped() -> None:
+    chosen, dropped = picks(
+        [{"id": str(JAN), "bron": "J. de Vries", "zekerheid": 0.9}],
+        [{"id": "L9", "zekerheid": 0.9}, {"id": "Belastingdienst", "zekerheid": 0.9}],
+    )
+
+    assert chosen == []
+    assert dropped == 3
+
+
+def test_a_person_alias_is_not_a_label() -> None:
+    chosen, dropped = picks(labels=[{"id": "P1", "zekerheid": 0.9}])
+
+    assert chosen == []
+    assert dropped == 1
+
+
+def test_duplicate_alias_counts_once() -> None:
+    chosen, dropped = picks(
+        [
+            {"id": "P2", "bron": "Aan de ouders van Emma", "zekerheid": 0.8},
+            {"id": "P2", "bron": "Emma", "zekerheid": 0.9},
+        ],
+        [{"id": "L1", "zekerheid": 0.5}, {"id": "L1", "zekerheid": 0.6}],
+    )
+
+    assert [(c.kind, c.target_id) for c in chosen] == [("addressee", EMMA), ("label", LABEL_IDS[0])]
+    assert dropped == 0
+
+
+def test_addressee_quote_must_be_in_the_letter() -> None:
+    chosen, dropped = picks(
+        [
+            {"id": "P1", "bron": "Geachte heer De Vries", "zekerheid": 0.9},
+            {"id": "P2", "bron": None, "zekerheid": 0.9},
+        ]
+    )
+
+    assert chosen == []
+    assert dropped == 2
+
+
+def test_addressee_quote_need_not_contain_the_name() -> None:
+    chosen, _ = picks([{"id": "P1", "bron": "aan de ouders van emma", "zekerheid": 0.6}])
+
+    assert chosen == [ValidatedChoice("addressee", JAN, "aan de ouders van emma", Decimal("0.600"))]
+
+
+def test_label_confidence_is_capped_at_080() -> None:
+    chosen, _ = picks(labels=[{"id": "L1", "zekerheid": 0.97}, {"id": "L2", "zekerheid": -1}])
+
+    assert Decimal("0.800") == LABEL_CONFIDENCE_CAP
+    assert [c.confidence for c in chosen] == [Decimal("0.800"), Decimal("0.000")]
+
+
+def test_at_most_three_labels_highest_first() -> None:
+    chosen, dropped = picks(
+        labels=[
+            {"id": "L1", "zekerheid": 0.2},
+            {"id": "L2", "zekerheid": 0.6},
+            {"id": "L3", "zekerheid": 0.4},
+            {"id": "L4", "zekerheid": 0.7},
+        ]
+    )
+
+    assert MAX_AI_LABELS == 3
+    assert [c.target_id for c in chosen] == [LABEL_IDS[3], LABEL_IDS[1], LABEL_IDS[2]]
+    assert dropped == 0
+
+
+def _choice_items(schema: dict[str, object], name: str) -> dict[str, object]:
+    properties = cast(dict[str, dict[str, object]], schema["properties"])
+    return cast(dict[str, object], properties[name]["items"])
+
+
+def test_schema_has_enum_of_this_requests_aliases() -> None:
+    request = ExtractionRequest(
+        text="brief",
+        persons=(Choice("P1", JAN, "Jan"),),
+        labels=(Choice("L1", uuid.uuid4(), "Auto"), Choice("L2", uuid.uuid4(), "Zorg")),
+    )
+
+    schema = json_schema(request)
+
+    assert cast(list[str], schema["required"])[-2:] == ["op_naam_van", "labels"]
+    labels = _choice_items(schema, "labels")
+    label_properties = cast(dict[str, dict[str, object]], labels["properties"])
+    assert label_properties["id"]["enum"] == ["L1", "L2"]
+    assert labels["required"] == ["id", "zekerheid"]
+    assert labels["additionalProperties"] is False
+    persons = _choice_items(schema, "op_naam_van")
+    person_properties = cast(dict[str, dict[str, object]], persons["properties"])
+    assert person_properties["id"]["enum"] == ["P1"]
+    assert sorted(cast(list[str], persons["required"])) == ["bron", "id", "zekerheid"]
+    assert "default" not in json.dumps(schema)
+
+
+def test_schema_leaves_out_an_empty_list() -> None:
+    request = ExtractionRequest(text="brief", labels=(Choice("L1", uuid.uuid4(), "Auto"),))
+
+    schema = json_schema(request)
+
+    assert "op_naam_van" not in cast(dict[str, object], schema["properties"])
+    assert "op_naam_van" not in cast(list[str], schema["required"])
+    assert "labels" in cast(list[str], schema["required"])
+
+
+def test_schema_without_lists_has_no_choice_properties() -> None:
+    rendered = json.dumps(
+        json_schema(ExtractionRequest(text="brief")), indent=2, sort_keys=True, ensure_ascii=False
+    )
+
+    assert rendered + "\n" == SNAPSHOT.read_text(encoding="utf-8")

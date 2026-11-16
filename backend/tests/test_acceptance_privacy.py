@@ -8,6 +8,7 @@ from django.test import Client
 
 from apps.documents.models import Document, DocumentPage, Extraction
 from apps.pipeline import jobs
+from apps.pipeline.choices import ExtractionRequest
 from apps.pipeline.providers import OpenAICompatibleProvider
 from apps.pipeline.steps import run_pipeline
 from apps.workspaces.context import workspace_context
@@ -27,7 +28,8 @@ class QuotingProvider:
     def __init__(self) -> None:
         self.texts: list[str] = []
 
-    def extract(self, text: str) -> str:
+    def extract(self, request: ExtractionRequest) -> str:
+        text = request.text
         self.texts.append(text)
         line = next(line for line in text.splitlines() if "BSN" in line)
         return json.dumps(

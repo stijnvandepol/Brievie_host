@@ -15,6 +15,7 @@ from pydantic import ValidationError
 
 from apps.common.privacy import mask_bsns
 from apps.documents.models import Document, Extraction
+from apps.pipeline.choices import ExtractionRequest
 from apps.pipeline.errors import PermanentError
 from apps.pipeline.providers import LLMProvider
 from apps.pipeline.schema import ExtractionPayload
@@ -50,7 +51,7 @@ def run_pipeline(
 
     values: list[ValidatedValue] = []
     if provider is not None:
-        payload = extract(provider, text)
+        payload = extract(provider, ExtractionRequest(text))
         values = validate(payload, text, today=today())
 
     with workspace_context(workspace_id):
@@ -73,10 +74,10 @@ def load_text(document: Document) -> str:
     return mask_bsns(document.ocr_text)
 
 
-def extract(provider: LLMProvider, text: str) -> ExtractionPayload:
+def extract(provider: LLMProvider, request: ExtractionRequest) -> ExtractionPayload:
     """Ask the provider and parse its answer; one more try when the answer is unusable."""
     for _attempt in range(2):
-        raw = provider.extract(text)
+        raw = provider.extract(request)
         try:
             return ExtractionPayload.model_validate_json(_strip_code_fence(raw))
         except ValidationError:

@@ -6,18 +6,23 @@ dropped. The model's confidence is clamped and never raised.
 """
 
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
+from uuid import UUID
 
 from apps.documents.models import Document
+from apps.pipeline.choices import Choice, ExtractionRequest
 from apps.pipeline.schema import ActionOut, ExtractionPayload, InvoiceOut, SourcedDate
 from apps.tasks.models import Task
 
 ZERO = Decimal("0")
 # Generated text (summary, classification) has no source in the letter.
 GENERATED = Decimal("0.500")
+# A label is a classification: nothing in the letter proves it.
+LABEL_CONFIDENCE_CAP = Decimal("0.800")
+MAX_AI_LABELS = 3
 
 
 @dataclass(frozen=True)
@@ -26,6 +31,14 @@ class ValidatedValue:
     group: int  # 0 for the document; 1..n per proposed action
     value: str
     quote: str
+    confidence: Decimal
+
+
+@dataclass(frozen=True)
+class ValidatedChoice:
+    kind: str  # "addressee" or "label"
+    target_id: UUID
+    quote: str  # empty for a label
     confidence: Decimal
 
 
@@ -71,6 +84,56 @@ def validate(payload: ExtractionPayload, text: str, *, today: date) -> list[Vali
     if payload.invoice is not None:
         values += _invoice(payload.invoice, text, letter_date, today)
     return values
+
+
+def validate_choices(
+    payload: ExtractionPayload, text: str, request: ExtractionRequest
+) -> tuple[list[ValidatedChoice], int]:
+    """The valid picks from the request's lists, and how many picks were dropped.
+
+    A pick of an alias that is not in this request's list is dropped, as is an
+    addressee whose quote is not in the letter. A repeated alias counts once (the
+    first one). At most MAX_AI_LABELS labels, highest confidence first.
+    """
+    dropped = 0
+    persons = _by_alias(request.persons)
+    addressees: list[ValidatedChoice] = []
+    for index in _first_per_alias(pick.id for pick in payload.addressees):
+        pick = payload.addressees[index]
+        quote = (pick.quote or "").strip()
+        if pick.id not in persons or not quote_in_text(quote, text):
+            dropped += 1
+            continue
+        addressees.append(
+            ValidatedChoice("addressee", persons[pick.id], quote, _clamp(pick.confidence))
+        )
+
+    known_labels = _by_alias(request.labels)
+    labels: list[ValidatedChoice] = []
+    for index in _first_per_alias(pick.id for pick in payload.labels):
+        label = payload.labels[index]
+        if label.id not in known_labels:
+            dropped += 1
+            continue
+        confidence = min(_clamp(label.confidence), LABEL_CONFIDENCE_CAP)
+        labels.append(ValidatedChoice("label", known_labels[label.id], "", confidence))
+    labels.sort(key=lambda choice: choice.confidence, reverse=True)
+    return addressees + labels[:MAX_AI_LABELS], dropped
+
+
+def _by_alias(choices: tuple[Choice, ...]) -> dict[str, UUID]:
+    return {choice.alias: choice.target_id for choice in choices}
+
+
+def _first_per_alias(aliases: Iterable[str]) -> list[int]:
+    """The positions of the first pick of each alias."""
+    seen: set[str] = set()
+    positions = []
+    for position, alias in enumerate(aliases):
+        if alias not in seen:
+            seen.add(alias)
+            positions.append(position)
+    return positions
 
 
 def _sender(payload: ExtractionPayload, text: str) -> list[ValidatedValue]:

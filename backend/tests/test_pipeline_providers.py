@@ -1,10 +1,12 @@
 import json
+import uuid
 
 import httpx
 import pytest
 
 from apps.common import crypto
 from apps.pipeline import settings_service
+from apps.pipeline.choices import Choice, ExtractionRequest
 from apps.pipeline.errors import PermanentError, RetryableError
 from apps.pipeline.models import AISettings
 from apps.pipeline.providers import (
@@ -47,7 +49,7 @@ def answering(
 def test_request_asks_for_the_schema_at_temperature_zero() -> None:
     transport, seen = answering('{"a": 1}')
 
-    result = provider(transport).extract("De brief")
+    result = provider(transport).extract(ExtractionRequest("De brief"))
 
     assert result == '{"a": 1}'
     (request,) = seen
@@ -69,7 +71,9 @@ def test_request_asks_for_the_schema_at_temperature_zero() -> None:
 def test_no_authorization_header_without_a_key() -> None:
     transport, seen = answering("{}")
 
-    provider(transport, api_key=None, base_url="http://ollama:11434/v1").extract("x")
+    provider(transport, api_key=None, base_url="http://ollama:11434/v1").extract(
+        ExtractionRequest("x")
+    )
 
     assert "Authorization" not in seen[0].headers
     assert str(seen[0].url) == "http://ollama:11434/v1/chat/completions"
@@ -86,7 +90,7 @@ def test_passing_failures_are_retryable(status: int) -> None:
     transport, _ = answering("", status=status)
 
     with pytest.raises(ProviderUnavailable) as excinfo:
-        provider(transport).extract("x")
+        provider(transport).extract(ExtractionRequest("x"))
 
     assert isinstance(excinfo.value, RetryableError)
     assert excinfo.value.code == "ai_unavailable"
@@ -101,7 +105,7 @@ def test_timeout_and_connection_errors_are_retryable() -> None:
 
     for handler in (timeout, refused):
         with pytest.raises(ProviderUnavailable):
-            provider(httpx.MockTransport(handler)).extract("x")
+            provider(httpx.MockTransport(handler)).extract(ExtractionRequest("x"))
 
 
 @pytest.mark.parametrize(
@@ -113,7 +117,7 @@ def test_refusals_are_permanent(status: int, code: str) -> None:
     transport, _ = answering("", status=status)
 
     with pytest.raises(ProviderRejected) as excinfo:
-        provider(transport).extract("x")
+        provider(transport).extract(ExtractionRequest("x"))
 
     assert isinstance(excinfo.value, PermanentError)
     assert excinfo.value.code == code
@@ -124,7 +128,7 @@ def test_answer_without_content_is_invalid_output(body: object) -> None:
     transport = httpx.MockTransport(lambda request: httpx.Response(200, json=body))
 
     with pytest.raises(PermanentError) as excinfo:
-        provider(transport).extract("x")
+        provider(transport).extract(ExtractionRequest("x"))
 
     assert excinfo.value.code == "ai_invalid_output"
 
@@ -136,7 +140,7 @@ def test_key_and_letter_never_reach_an_exception_or_the_log(
         return httpx.Response(401, text=f"bad key {API_KEY} for: geheime brieftekst")
 
     with caplog.at_level("DEBUG"), pytest.raises(ProviderRejected) as excinfo:
-        provider(httpx.MockTransport(echo)).extract("geheime brieftekst")
+        provider(httpx.MockTransport(echo)).extract(ExtractionRequest("geheime brieftekst"))
 
     for text in (str(excinfo.value), repr(excinfo.value), caplog.text):
         assert API_KEY not in text
@@ -149,7 +153,7 @@ def test_long_text_is_cut_at_a_page_boundary() -> None:
     transport, seen = answering("{}")
     pages = ["a" * 12000, "b" * 12000, "c" * 12000, "d" * 12000]
 
-    provider(transport).extract("\n\f\n".join(pages))
+    provider(transport).extract(ExtractionRequest("\n\f\n".join(pages)))
 
     sent = json.loads(seen[0].content)["messages"][1]["content"]
     assert sent == "\n\f\n".join(pages[:2])
@@ -159,7 +163,7 @@ def test_long_text_is_cut_at_a_page_boundary() -> None:
 def test_one_very_long_page_is_cut_hard() -> None:
     transport, seen = answering("{}")
 
-    provider(transport).extract("a" * 40000)
+    provider(transport).extract(ExtractionRequest("a" * 40000))
 
     assert len(json.loads(seen[0].content)["messages"][1]["content"]) == 30000
 
@@ -314,3 +318,32 @@ def test_host_or_address_that_cannot_be_stored_is_refused(ws_a: Workspace, url: 
                 workspace_id=ws_a.id, mode="external", base_url=url, model="m", api_key=API_KEY
             )
         assert not AISettings.objects.exists()
+
+
+CHOICES = ExtractionRequest(
+    text="De brief",
+    persons=(Choice("P1", uuid.uuid4(), "Jan de Vries", ("J. de Vries",)),),
+    labels=(Choice("L1", uuid.uuid4(), "Auto"), Choice("L2", uuid.uuid4(), "Zorg")),
+)
+BLOCK = "Personen (op naam van): P1 = Jan de Vries (ook: J. de Vries)\nLabels: L1 = Auto; L2 = Zorg"
+
+
+def test_provider_sends_block_after_the_letter_and_enum_schema() -> None:
+    transport, seen = answering("{}")
+
+    provider(transport).extract(CHOICES)
+
+    body = json.loads(seen[0].content)
+    assert body["messages"][1]["content"] == "De brief\n\n" + BLOCK
+    schema = body["response_format"]["json_schema"]["schema"]
+    assert schema == json_schema(CHOICES)
+    assert schema["properties"]["labels"]["items"]["properties"]["id"]["enum"] == ["L1", "L2"]
+    assert schema["properties"]["op_naam_van"]["items"]["properties"]["id"]["enum"] == ["P1"]
+
+
+def test_long_letter_is_cut_but_the_block_is_whole() -> None:
+    transport, seen = answering("{}")
+
+    provider(transport).extract(ExtractionRequest("a" * 40000, CHOICES.persons, CHOICES.labels))
+
+    assert json.loads(seen[0].content)["messages"][1]["content"] == "a" * 30000 + "\n\n" + BLOCK
