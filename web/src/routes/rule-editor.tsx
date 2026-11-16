@@ -1,7 +1,7 @@
-import { t } from "@lingui/core/macro";
+import { plural, t } from "@lingui/core/macro";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, Form, Input, Label, Switch, TextField } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import { labelsQuery, personsQuery, rulesQuery } from "../api/queries";
@@ -370,6 +370,8 @@ function RuleForm({
     },
   });
 
+  // Whether the last test left letters out; it outlives `test.reset()` on save.
+  const [limited, setLimited] = useState(false);
   const test = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.POST("/api/v1/workspaces/{workspace_id}/rules/test", {
@@ -379,6 +381,7 @@ function RuleForm({
       if (error !== undefined || !data) throw new ApiFailure(error);
       return data;
     },
+    onSuccess: (data) => setLimited(data.total_count > data.checked_count),
   });
 
   const run = useMutation({
@@ -399,7 +402,16 @@ function RuleForm({
   useEffect(() => {
     resetTest();
     setBlocked(null);
+    setLimited(false);
   }, [formKey, resetTest]);
+
+  const resultRef = useRef<HTMLElement>(null);
+  const hasResult = test.data !== undefined;
+  useEffect(() => {
+    if (hasResult && typeof resultRef.current?.scrollIntoView === "function") {
+      resultRef.current.scrollIntoView({ block: "nearest" });
+    }
+  }, [hasResult]);
 
   const params = { workspaceId };
   const matched = test.data?.matched_count ?? 0;
@@ -540,8 +552,18 @@ function RuleForm({
       </div>
 
       {test.data ? (
-        <section className="panel" aria-label={t`Uitkomst van de test`}>
-          <p role="status">{t`${matched} van de nieuwste ${checked} brieven passen`}</p>
+        <section
+          ref={resultRef}
+          className="panel"
+          role="status"
+          aria-label={t`Uitkomst van de test`}
+        >
+          <p>
+            {plural(matched, {
+              one: `# van de nieuwste ${checked} brieven past`,
+              other: `# van de nieuwste ${checked} brieven passen`,
+            })}
+          </p>
           {total > checked ? <p>{t`Je hebt ${total} brieven`}</p> : null}
           <DocumentTable
             workspaceId={workspaceId}
@@ -556,7 +578,11 @@ function RuleForm({
       {savedActive === true ? (
         <section className="panel" aria-label={t`Toepassen op bestaande post`}>
           <h2>{t`Toepassen op bestaande post?`}</h2>
-          <p>{t`De regel wordt op al je post toegepast, niet alleen op de nieuwste 500.`}</p>
+          <p>
+            {limited
+              ? t`De regel wordt op al je post toegepast, niet alleen op de nieuwste 500.`
+              : t`De regel wordt op al je post toegepast.`}
+          </p>
           {running ? (
             <p role="status">{t`Bezig. Je ziet het resultaat bij de brieven zelf.`}</p>
           ) : (

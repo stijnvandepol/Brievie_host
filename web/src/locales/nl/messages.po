@@ -58,8 +58,8 @@ msgid "{applied} keer toegepast, {proposed} keer voorgesteld"
 msgstr "{applied} keer toegepast, {proposed} keer voorgesteld"
 
 #: src/routes/rule-editor.tsx
-msgid "{matched} van de nieuwste {checked} brieven passen"
-msgstr "{matched} van de nieuwste {checked} brieven passen"
+msgid "{matched, plural, one {# van de nieuwste {checked} brieven past} other {# van de nieuwste {checked} brieven passen}}"
+msgstr "{matched, plural, one {# van de nieuwste {checked} brieven past} other {# van de nieuwste {checked} brieven passen}}"
 
 #: src/routes/pair-app.tsx
 msgid "{minutes, plural, one {# minuut} other {# minuten}}"
@@ -86,20 +86,22 @@ msgid "{seconds, plural, one {# seconde} other {# seconden}}"
 msgstr "{seconds, plural, one {# seconde} other {# seconden}}"
 
 #: src/components/rule-sentence.ts
-msgid "{subject} \"{value}\" bevat"
-msgstr "{subject} \"{value}\" bevat"
+msgid "{subject} {quoted} bevat"
+msgstr "{subject} {quoted} bevat"
 
 #: src/components/rule-sentence.ts
-msgid "{subject} \"{value}\" is"
-msgstr "{subject} \"{value}\" is"
+msgid "{subject} {quoted} is"
+msgstr "{subject} {quoted} is"
 
+#. placeholder {0}: joinValues(values, word)
 #: src/components/rule-sentence.ts
-msgid "{subject} het woord {value} bevat"
-msgstr "{subject} het woord {value} bevat"
+msgid "{subject} het woord {0} bevat"
+msgstr "{subject} het woord {0} bevat"
 
+#. placeholder {0}: joinValues(values, word)
 #: src/components/rule-sentence.ts
-msgid "{subject} het woord {value} niet bevat"
-msgstr "{subject} het woord {value} niet bevat"
+msgid "{subject} het woord {0} niet bevat"
+msgstr "{subject} het woord {0} niet bevat"
 
 #: src/components/document-history.tsx
 msgid "{who} bevestigde deze brief"
@@ -377,6 +379,10 @@ msgstr "De regel is opgeslagen."
 #: src/routes/rule-editor.tsx
 msgid "De regel wordt op al je post toegepast, niet alleen op de nieuwste 500."
 msgstr "De regel wordt op al je post toegepast, niet alleen op de nieuwste 500."
+
+#: src/routes/rule-editor.tsx
+msgid "De regel wordt op al je post toegepast."
+msgstr "De regel wordt op al je post toegepast."
 
 #: src/components/rule-sentence.ts
 msgid "de tekst"

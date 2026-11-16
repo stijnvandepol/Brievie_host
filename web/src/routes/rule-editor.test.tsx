@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   API,
   annaPerson,
@@ -133,13 +133,79 @@ describe("rule editor", () => {
     await user.type(await screen.findByRole("textbox", { name: "Naam" }), "APK");
     await user.type(within(condition(1)).getByRole("textbox", { name: "Waarde" }), "APK");
     await user.click(screen.getByRole("button", { name: "Test op bestaande post" }));
-    expect(await screen.findByText("1 van de nieuwste 500 brieven passen")).toBeVisible();
+    expect(await screen.findByText("1 van de nieuwste 500 brieven past")).toBeVisible();
     expect(screen.getByText("Je hebt 600 brieven")).toBeVisible();
     expect(screen.getByRole("link", { name: "Belastingdienst" })).toHaveAttribute(
       "href",
       expect.stringContaining(`/post/${documentSummary.id}`),
     );
     expect(tested).toEqual([expect.objectContaining({ name: "APK" })]);
+  });
+
+  it("reads singular for one matching letter and scrolls the result into view", async () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    server.use(
+      http.post(`${base}/rules/test`, () =>
+        HttpResponse.json({
+          total_count: 5,
+          checked_count: 5,
+          matched_count: 1,
+          documents: [documentSummary],
+        }),
+      ),
+      ...loggedInHandlers(),
+      ...ruleHandlers([]),
+    );
+    const user = userEvent.setup();
+    renderApp(newPath);
+    await user.type(await screen.findByRole("textbox", { name: "Naam" }), "APK");
+    await user.click(screen.getByRole("button", { name: "Test op bestaande post" }));
+    const result = await screen.findByRole("status", { name: "Uitkomst van de test" });
+    expect(within(result).getByText("1 van de nieuwste 5 brieven past")).toBeVisible();
+    await waitFor(() => expect(scroll).toHaveBeenCalledWith({ block: "nearest" }));
+  });
+
+  it("reads plural for several matching letters", async () => {
+    server.use(
+      http.post(`${base}/rules/test`, () =>
+        HttpResponse.json({ total_count: 5, checked_count: 5, matched_count: 3, documents: [] }),
+      ),
+      ...loggedInHandlers(),
+      ...ruleHandlers([]),
+    );
+    const user = userEvent.setup();
+    renderApp(newPath);
+    await user.type(await screen.findByRole("textbox", { name: "Naam" }), "APK");
+    await user.click(screen.getByRole("button", { name: "Test op bestaande post" }));
+    expect(await screen.findByText("3 van de nieuwste 5 brieven passen")).toBeVisible();
+  });
+
+  it("mentions the limit of the test only when it did not look at every letter", async () => {
+    server.use(
+      http.post(`${base}/rules/test`, () =>
+        HttpResponse.json({
+          total_count: 600,
+          checked_count: 500,
+          matched_count: 1,
+          documents: [],
+        }),
+      ),
+      http.put(`${base}/rules/${apkRule.id}`, () => HttpResponse.json(apkRule)),
+      ...loggedInHandlers(),
+      ...ruleHandlers(),
+    );
+    const user = userEvent.setup();
+    renderApp(`/w/${workspace.id}/automatisering/${apkRule.id}`);
+    await screen.findByRole("textbox", { name: "Naam" });
+    await user.click(screen.getByRole("button", { name: "Test op bestaande post" }));
+    await screen.findByText("1 van de nieuwste 500 brieven past");
+    await user.click(screen.getByRole("button", { name: "Opslaan" }));
+    expect(
+      await screen.findByText(
+        "De regel wordt op al je post toegepast, niet alleen op de nieuwste 500.",
+      ),
+    ).toBeVisible();
   });
 
   it("announces the server's validation sentence", async () => {
@@ -184,9 +250,8 @@ describe("rule editor", () => {
     await user.click(screen.getByRole("button", { name: "Opslaan" }));
     await waitFor(() => expect(puts).toHaveLength(1));
     expect(await screen.findByText("Toepassen op bestaande post?")).toBeVisible();
-    expect(
-      screen.getByText("De regel wordt op al je post toegepast, niet alleen op de nieuwste 500."),
-    ).toBeVisible();
+    expect(screen.getByText("De regel wordt op al je post toegepast.")).toBeVisible();
+    expect(screen.queryByText(/niet alleen op de nieuwste/)).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Toepassen" }));
     expect(
       await screen.findByText("Bezig. Je ziet het resultaat bij de brieven zelf."),

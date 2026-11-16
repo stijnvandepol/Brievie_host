@@ -503,6 +503,12 @@ textarea {
   color: var(--link);
 }
 
+.button-text[data-disabled] {
+  color: var(--muted);
+  opacity: 0.55;
+  cursor: default;
+}
+
 .button-text.danger {
   color: var(--danger);
 }
@@ -869,7 +875,8 @@ textarea:focus-visible {
   /* An A4 box until the image has loaded, then the image's own ratio. */
   aspect-ratio: auto 210 / 297;
   border: 1px solid var(--border);
-  background: var(--surface);
+  /* Shows as an empty sheet until the image has loaded and covers it. */
+  background: var(--hairline);
 }
 
 .document-side {

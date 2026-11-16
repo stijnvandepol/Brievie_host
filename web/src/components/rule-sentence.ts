@@ -101,36 +101,79 @@ export function operatorLabel(op: string): string {
   }
 }
 
+/** "A", "A of B", "A, B of C": the values of one grouped phrase. */
+function joinValues(values: string[], word: string): string {
+  const last = values[values.length - 1] ?? "";
+  if (values.length < 2) return last;
+  return `${values.slice(0, -1).join(", ")} ${word} ${last}`;
+}
+
 function conditionSentence(
-  { field, op, value }: Condition,
+  { field, op }: Condition,
+  values: string[],
+  word: string,
   labels: LabelOut[],
   persons: PersonOut[],
 ): string {
   const gone = t`(verwijderd)`;
   if (field === "text" || field === "sender") {
     const subject = field === "text" ? t`de tekst` : t`de afzender`;
-    if (op === "contains_word") return t`${subject} het woord ${value} bevat`;
-    if (op === "not_contains_word") return t`${subject} het woord ${value} niet bevat`;
-    if (op === "contains") return t`${subject} "${value}" bevat`;
-    return t`${subject} "${value}" is`;
+    if (op === "contains_word") return t`${subject} het woord ${joinValues(values, word)} bevat`;
+    if (op === "not_contains_word") {
+      return t`${subject} het woord ${joinValues(values, word)} niet bevat`;
+    }
+    const quoted = joinValues(
+      values.map((value) => `"${value}"`),
+      word,
+    );
+    if (op === "contains") return t`${subject} ${quoted} bevat`;
+    return t`${subject} ${quoted} is`;
   }
   if (field === "document_type") {
-    const type = typeLabel(value) || value;
+    const type = joinValues(
+      values.map((value) => typeLabel(value) || value),
+      word,
+    );
     return op === "is_not" ? t`het soort post niet ${type} is` : t`het soort post ${type} is`;
   }
   if (field === "label") {
-    const name = labels.find((label) => label.id === value)?.name ?? gone;
+    const name = joinValues(
+      values.map((value) => labels.find((label) => label.id === value)?.name ?? gone),
+      word,
+    );
     return op === "has_not"
       ? t`de brief het label ${name} niet heeft`
       : t`de brief het label ${name} heeft`;
   }
   if (field === "addressee") {
     if (op === "is_empty") return t`de brief op niemands naam staat`;
-    const name = persons.find((person) => person.id === value)?.display_name ?? gone;
+    const name = joinValues(
+      values.map((value) => persons.find((person) => person.id === value)?.display_name ?? gone),
+      word,
+    );
     return t`de brief op naam van ${name} staat`;
   }
-  const source = sourceLabel(value);
+  const source = joinValues(values.map(sourceLabel), word);
   return t`de bron ${source} is`;
+}
+
+/** Consecutive conditions with the same field and operator read as one phrase. */
+function groupConditions(conditions: Condition[]): { first: Condition; values: string[] }[] {
+  const groups: { first: Condition; values: string[] }[] = [];
+  for (const condition of conditions) {
+    const last = groups[groups.length - 1];
+    if (
+      last &&
+      condition.op !== "is_empty" &&
+      last.first.field === condition.field &&
+      last.first.op === condition.op
+    ) {
+      last.values.push(condition.value);
+    } else {
+      groups.push({ first: condition, values: [condition.value] });
+    }
+  }
+  return groups;
 }
 
 function actionSentence(action: Action, labels: LabelOut[], persons: PersonOut[]): string {
@@ -146,8 +189,9 @@ function actionSentence(action: Action, labels: LabelOut[], persons: PersonOut[]
 /** Reads a rule back: "Als de tekst het woord APK bevat → label Auto". */
 export function ruleSentence(rule: RuleShape, labels: LabelOut[], persons: PersonOut[]): string {
   const joiner = rule.match === "any" ? ` ${t`of`} ` : ` ${t`en`} `;
-  const conditions = rule.conditions
-    .map((condition) => conditionSentence(condition, labels, persons))
+  const word = rule.match === "any" ? t`of` : t`en`;
+  const conditions = groupConditions(rule.conditions)
+    .map(({ first, values }) => conditionSentence(first, values, word, labels, persons))
     .join(joiner);
   const actions = rule.actions.map((action) => actionSentence(action, labels, persons)).join(", ");
   return `${t`Als`} ${conditions} → ${actions}`;
