@@ -1,6 +1,7 @@
 from apps.documents.models import Document
 from apps.labels.models import COLORS, Label
-from apps.labels.presets import CONDITION_OPERATORS, PRESETS, apply_preset
+from apps.labels.presets import PRESETS, apply_preset
+from apps.rules.engine import OPERATORS
 from apps.workspaces.context import workspace_context
 from apps.workspaces.models import Workspace
 
@@ -55,7 +56,7 @@ def test_every_preset_color_and_condition_is_valid() -> None:
             assert 1 <= len(label.name) <= 50, label
             assert label.recognise, label
             for condition in label.recognise:
-                assert condition.op in CONDITION_OPERATORS[condition.field], condition
+                assert condition.op in OPERATORS[condition.field], condition
                 if condition.field == "document_type":
                     assert condition.value in Document.Type.values, condition
                 else:

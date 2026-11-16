@@ -14,17 +14,6 @@ from apps.labels.models import Label
 from apps.labels.services import list_labels
 from apps.workspaces.models import Workspace
 
-# The operators each condition field allows (design 9.2). The rules engine will own
-# this table; it lives here until that engine exists.
-CONDITION_OPERATORS: Mapping[str, frozenset[str]] = {
-    "text": frozenset({"contains_word", "contains", "not_contains_word"}),
-    "sender": frozenset({"contains_word", "contains", "equals"}),
-    "document_type": frozenset({"is", "is_not"}),
-    "label": frozenset({"has", "has_not"}),
-    "addressee": frozenset({"is", "is_empty"}),
-    "source": frozenset({"is"}),
-}
-
 
 @dataclass(frozen=True)
 class Recognise:
