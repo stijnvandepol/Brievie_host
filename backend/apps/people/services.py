@@ -9,6 +9,7 @@ from psycopg import errors as pg_errors
 from apps.accounts.models import User
 from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
+from apps.documents.models import DocumentSuggestion
 from apps.people.models import Person
 from apps.rules.definition import named_ids
 from apps.rules.models import Rule
@@ -151,6 +152,11 @@ def update_person(
             person.archived_at = None
         elif person.archived_at is None:
             person.archived_at = timezone.now()
+            # An archived person cannot be added to a document, so their open proposals
+            # could be neither accepted nor confirmed. Accepted and dismissed rows stay.
+            DocumentSuggestion.objects.filter(
+                person=person, state=DocumentSuggestion.State.OPEN
+            ).delete()
         _save(person)
         return _annotated(workspace, person.id)
 

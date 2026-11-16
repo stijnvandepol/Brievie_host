@@ -102,9 +102,25 @@ def _label_ids(document: Document) -> list[UUID]:
     return [link.label_id for link in document.label_links.all()]
 
 
+# The prefetch of a document's suggestions wherever several documents are shown: with
+# their persons, so `_open_suggestions` can leave out archived ones without a query each.
+SUGGESTIONS = models.Prefetch(
+    "suggestions", queryset=DocumentSuggestion.objects.select_related("person")
+)
+
+
 def _open_suggestions(document: Document) -> list[DocumentSuggestion]:
-    """Preselected first, then by confidence. `.all()` so a prefetch is used."""
-    rows = [s for s in document.suggestions.all() if s.state == DocumentSuggestion.State.OPEN]
+    """Preselected first, then by confidence. `.all()` so a prefetch is used.
+
+    A proposal of a person archived since is left out: it can no longer be accepted
+    (archiving removes it as well; this covers a row left from before).
+    """
+    rows = [
+        s
+        for s in document.suggestions.all()
+        if s.state == DocumentSuggestion.State.OPEN
+        and (s.person is None or s.person.archived_at is None)
+    ]
     return sorted(rows, key=lambda s: (not s.preselected, -s.confidence, s.created_at, s.id))
 
 
@@ -140,7 +156,7 @@ def list_documents(
     if label_id is not None:
         documents = documents.filter(label_links__label_id=label_id)
     return list(
-        documents.prefetch_related("addressee_links", "label_links", "suggestions").order_by(
+        documents.prefetch_related("addressee_links", "label_links", SUGGESTIONS).order_by(
             "-created_at", "-id"
         )[:200]
     )
@@ -166,6 +182,12 @@ def get_document(*, workspace: Workspace, document_id: UUID) -> Document:
 
 def document_summary_out(document: Document) -> DocumentSummaryOut:
     """A row of a document list."""
+    return _summary_out(document, _open_suggestions(document))
+
+
+def _summary_out(
+    document: Document, open_suggestions: list[DocumentSuggestion]
+) -> DocumentSummaryOut:
     return DocumentSummaryOut(
         id=document.id,
         client_id=document.client_id,
@@ -178,14 +200,16 @@ def document_summary_out(document: Document) -> DocumentSummaryOut:
         addressee_ids=_addressee_ids(document),
         label_ids=_label_ids(document),
         inbox_state=inbox_state(document),
-        open_suggestion_count=len(_open_suggestions(document)),
+        open_suggestion_count=len(open_suggestions),
     )
 
 
 def document_out(document: Document) -> DocumentOut:
     """The document with its pages, proposals and tasks, as the API shows it."""
+    models.prefetch_related_objects([document], SUGGESTIONS)
+    open_suggestions = _open_suggestions(document)
     return DocumentOut(
-        **document_summary_out(document).model_dump(),
+        **_summary_out(document, open_suggestions).model_dump(),
         failure_code=document.failure_code,
         summary=document.summary,
         summary_by_ai=document.summary_by_ai,
@@ -231,7 +255,7 @@ def document_out(document: Document) -> DocumentOut:
                 confidence=f"{s.confidence:.3f}",
                 preselected=s.preselected,
             )
-            for s in _open_suggestions(document)
+            for s in open_suggestions
         ],
     )
 

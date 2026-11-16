@@ -3,8 +3,10 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 import pytest
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.test import Client
+from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 
 from apps.documents import organise, suggestions
 from apps.documents.models import (
@@ -435,3 +437,62 @@ def test_a_suggestion_names_exactly_one_target(ws_a: Workspace) -> None:
             origin="ai",
             confidence=Decimal("0.5"),
         )
+
+
+def test_archiving_a_person_removes_only_their_open_suggestions(
+    client_a: Client, ws_a: Workspace
+) -> None:
+    # A1: an open proposal of an archived person could neither be accepted nor confirmed.
+    document = make_document(ws_a, "needs_review")
+    other = make_document(ws_a, "needs_review")
+    anna, bram = make_person(ws_a, "Anna"), make_person(ws_a, "Bram")
+    propose_person(document, anna)
+    open_bram = propose_person(document, bram)
+    dismissed_anna = propose_person(other, anna)
+    assert open_bram is not None
+    assert dismissed_anna is not None
+    with workspace_context(ws_a.id):
+        suggestions.mark_dismissed(other, ADD_ADDRESSEE, anna.id)
+
+    r = client_a.put(
+        f"/api/v1/workspaces/{ws_a.id}/persons/{anna.id}",
+        {"display_name": "Anna", "archived": True},
+        content_type="application/json",
+    )
+
+    assert r.status_code == 200
+    assert [s.id for s in rows(document)] == [open_bram.id]
+    assert state_of(dismissed_anna) == "dismissed"
+
+
+def test_an_open_suggestion_of_an_archived_person_is_not_shown(
+    client_a: Client, ws_a: Workspace
+) -> None:
+    document = make_document(ws_a, "needs_review")
+    anna, bram = make_person(ws_a, "Anna"), make_person(ws_a, "Bram")
+    propose_person(document, anna)
+    propose_person(document, bram)
+    with workspace_context(ws_a.id):
+        # Behind the service's back: archiving through the service removes the row.
+        Person.objects.filter(id=anna.id).update(archived_at=timezone.now())
+
+    body = client_a.get(f"{documents_url(ws_a.id)}/{document.id}").json()
+
+    assert [s["person_id"] for s in body["suggestions"]] == [str(bram.id)]
+    assert body["open_suggestion_count"] == 1
+    listed = client_a.get(documents_url(ws_a.id)).json()
+    assert [d["open_suggestion_count"] for d in listed] == [1]
+
+
+def test_a_document_reads_its_suggestions_once(client_a: Client, ws_a: Workspace) -> None:
+    # A2
+    document = make_document(ws_a, "needs_review")
+    propose_person(document, make_person(ws_a, "Anna"))
+    propose_label(document, label(ws_a, "zorg"))
+
+    with CaptureQueriesContext(connection) as queries:
+        body = client_a.get(f"{documents_url(ws_a.id)}/{document.id}").json()
+
+    assert body["open_suggestion_count"] == 2
+    reads = [q for q in queries if 'FROM "documents_documentsuggestion"' in q["sql"]]
+    assert len(reads) == 1

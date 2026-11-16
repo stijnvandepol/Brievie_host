@@ -13,7 +13,7 @@ from procrastinate.exceptions import AlreadyEnqueued
 from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
 from apps.documents.models import Document
-from apps.documents.services import document_summary_out
+from apps.documents.services import SUGGESTIONS, document_summary_out
 from apps.labels.models import Label
 from apps.people.models import Person
 from apps.rules import definition, jobs
@@ -143,7 +143,7 @@ def test_rule(*, workspace: Workspace, data: RuleIn) -> RuleTestOut:
     checked = list(documents.order_by("-created_at", "-id")[:TEST_LIMIT])
     matched = [d for d in checked if spec.id in evaluate(facts_for(d), [spec]).matched_rule_ids]
     shown = matched[:TEST_SHOWN]
-    prefetch_related_objects(shown, "addressee_links", "label_links", "suggestions")
+    prefetch_related_objects(shown, "addressee_links", "label_links", SUGGESTIONS)
     return RuleTestOut(
         total_count=total,
         checked_count=len(checked),
