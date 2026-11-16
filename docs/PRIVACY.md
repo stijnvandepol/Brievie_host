@@ -31,7 +31,8 @@ until then a workspace has one account.
 
 The names go along so the AI can choose labels and addressees from the workspace's own
 lists; it answers with short numbers that the server translates back, and only the
-workspace's own labels and persons can be chosen. Rules are never sent. With `off`,
+workspace's own labels and persons can be chosen. At most 50 persons and 100 labels
+(by name) are offered per letter. Rules are never sent. With `off`,
 names are still recognised in the letter and rules still run, on the server itself.
 
 The iPhone app recognises the text on the phone itself and uploads the pages and that

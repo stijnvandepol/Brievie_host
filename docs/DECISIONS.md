@@ -561,7 +561,8 @@ Choices:
   every id is checked against the workspace's own lists. Free text from the model is
   never stored as a label or addressee. What leaves the network: see
   `docs/PRIVACY.md` (names of labels, display names and name variants of persons; never
-  ids, rules or page images).
+  ids, rules or page images). At most 50 persons and 100 labels (by name) are offered
+  to the AI per letter.
 - **A fixed colour palette for labels** (eight names). The CSP forbids inline styles, so
   the web has one CSS class per colour and the app maps each to its own; a free hex value
   would need inline styles.
@@ -581,3 +582,18 @@ Choices:
 - **A manual run locks each document** (blocking `select_for_update`, not skip-locked,
   which could silently miss a document) and **one run per rule can be queued at a time**
   (queueing lock), so a double click does not run it twice.
+- **The engine never sees a dismissed or missing target.** The document's dismissed
+  labels and addressees are part of its facts and are never planned, so no later rule
+  builds on them ("label X → label Y" does not fire after the user removed X). Actions on
+  a deleted label or an archived person are dropped before evaluation for the same reason.
+- **A failure while organising a processed letter keeps the AI's result.** Name
+  matching, AI picks and rules run in a savepoint: when they fail, only their writes are
+  rolled back, the proposals are stored and the letter goes to `needs_review`.
+- **Rules respect the limits of 30 labels and 10 addressees per document.** The executor
+  skips an applied or proposed change that would take the document over the limit;
+  otherwise every later hand edit would be refused.
+- **A manual run gives way to processing.** `apply_rule_to_existing` runs at priority -1
+  (below `process_document`) and does one batch of 50 per job run, queueing the next
+  batch with the last document id as cursor under the same queueing lock. When a fresh
+  run of the rule is already waiting, the continuation is dropped: that run starts from
+  the beginning.
