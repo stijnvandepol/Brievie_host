@@ -205,7 +205,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Documents */
+        /**
+         * List Documents
+         * @description The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id` and `label_id` narrow the list; together they all apply.
+         */
         get: operations["listDocuments"];
         put?: never;
         /**
@@ -236,6 +239,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/addressees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Document Addressees */
+        put: operations["setDocumentAddressees"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}/confirm": {
         parameters: {
             query?: never;
@@ -247,6 +267,23 @@ export interface paths {
         put?: never;
         /** Confirm Document */
         post: operations["confirmDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Document Events */
+        get: operations["listDocumentEvents"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -299,6 +336,23 @@ export interface paths {
         put?: never;
         /** Create Folder */
         post: operations["createFolder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/inbox/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Inbox Counts */
+        get: operations["getInboxCounts"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -379,6 +433,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AddresseesIn */
+        AddresseesIn: {
+            /** Person Ids */
+            person_ids: string[];
+        };
         /** CaCertificateOut */
         CaCertificateOut: {
             /** Pem */
@@ -425,8 +484,39 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** DocumentEventOut */
+        DocumentEventOut: {
+            /** Actor Name */
+            actor_name: string;
+            /** Can Undo */
+            can_undo: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Label Name */
+            label_name: string;
+            /** Origin */
+            origin: string;
+            /** Person Name */
+            person_name: string;
+            /** Rule Name */
+            rule_name: string;
+            /** Undone */
+            undone: boolean;
+        };
         /** DocumentOut */
         DocumentOut: {
+            /** Addressee Ids */
+            addressee_ids: string[];
             /**
              * Client Id
              * Format: uuid
@@ -446,11 +536,17 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Inbox State */
+            inbox_state: string;
+            /** Label Ids */
+            label_ids: string[];
             /**
              * Letter Date
              * Format: date
              */
             letter_date: string | null;
+            /** Open Suggestion Count */
+            open_suggestion_count: number;
             /** Page Count */
             page_count: number;
             /** Pages */
@@ -470,6 +566,8 @@ export interface components {
         };
         /** DocumentSummaryOut */
         DocumentSummaryOut: {
+            /** Addressee Ids */
+            addressee_ids: string[];
             /**
              * Client Id
              * Format: uuid
@@ -487,11 +585,17 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Inbox State */
+            inbox_state: string;
+            /** Label Ids */
+            label_ids: string[];
             /**
              * Letter Date
              * Format: date
              */
             letter_date: string | null;
+            /** Open Suggestion Count */
+            open_suggestion_count: number;
             /** Page Count */
             page_count: number;
             /** Sender */
@@ -542,6 +646,15 @@ export interface components {
             api_version: string;
             /** Status */
             status: string;
+        };
+        /** InboxCountsOut */
+        InboxCountsOut: {
+            /** New */
+            new: number;
+            /** Review */
+            review: number;
+            /** Unassigned */
+            unassigned: number;
         };
         /** LoginIn */
         LoginIn: {
@@ -1309,7 +1422,11 @@ export interface operations {
     };
     listDocuments: {
         parameters: {
-            query?: never;
+            query?: {
+                inbox_state?: string;
+                person_id?: string | null;
+                label_id?: string | null;
+            };
             header?: never;
             path: {
                 workspace_id: string;
@@ -1338,6 +1455,15 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1509,6 +1635,105 @@ export interface operations {
             };
         };
     };
+    setDocumentAddressees: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddresseesIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     confirmDocument: {
         parameters: {
             query?: never;
@@ -1599,6 +1824,47 @@ export interface operations {
             };
             /** @description Unprocessable Content */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    listDocumentEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentEventOut"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1838,6 +2104,46 @@ export interface operations {
             };
             /** @description Unprocessable Content */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    getInboxCounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxCountsOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

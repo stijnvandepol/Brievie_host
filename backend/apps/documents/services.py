@@ -1,15 +1,29 @@
 from uuid import UUID
 
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, models, transaction
 from django.utils.translation import gettext as _
 from psycopg import errors as pg_errors
 
+from apps.accounts.models import User
 from apps.common import crypto
 from apps.common.errors import ApiError
+from apps.documents import organise
 from apps.documents.intake import page_aad
-from apps.documents.models import Document, DocumentPage, Folder
-from apps.documents.schemas import DocumentOut, PageOut, ProposalOut, TaskOut
+from apps.documents.models import (
+    Document,
+    DocumentAddressee,
+    DocumentEvent,
+    DocumentPage,
+    Folder,
+)
+from apps.documents.schemas import (
+    DocumentOut,
+    DocumentSummaryOut,
+    PageOut,
+    ProposalOut,
+    TaskOut,
+)
 from apps.documents.storage import default_storage
 from apps.pipeline.jobs import defer_processing
 from apps.workspaces.keys import workspace_key
@@ -53,9 +67,77 @@ def create_folder(*, workspace: Workspace, name: str, parent_id: UUID | None) ->
     return folder
 
 
-def list_documents(workspace: Workspace) -> list[Document]:
-    """The newest documents of the workspace (at most 200; paging comes later)."""
-    return list(Document.objects.filter(workspace=workspace).order_by("-created_at", "-id")[:200])
+class InboxState:
+    NEW = "new"
+    REVIEW = "review"
+    UNASSIGNED = "unassigned"
+    SORTED = ""
+
+
+INBOX_STATES = (InboxState.NEW, InboxState.REVIEW, InboxState.UNASSIGNED)
+_REVIEW_STATUSES = (Document.Status.NEEDS_REVIEW, Document.Status.FAILED)
+
+
+def inbox_state(document: Document) -> str:
+    """Where the document stands in the inbox; derived, not stored (design 11)."""
+    if document.status == Document.Status.PROCESSING:
+        return InboxState.NEW
+    if document.status in _REVIEW_STATUSES:
+        return InboxState.REVIEW
+    if not _addressee_ids(document):
+        return InboxState.UNASSIGNED
+    return InboxState.SORTED
+
+
+def _addressee_ids(document: Document) -> list[UUID]:
+    # `.all()` so a prefetch (list_documents) is used.
+    return [link.person_id for link in document.addressee_links.all()]
+
+
+def _has_addressee() -> models.Exists:
+    return models.Exists(DocumentAddressee.objects.filter(document=models.OuterRef("pk")))
+
+
+def _in_state(state: str) -> models.Q:
+    if state == InboxState.NEW:
+        return models.Q(status=Document.Status.PROCESSING)
+    if state == InboxState.REVIEW:
+        return models.Q(status__in=_REVIEW_STATUSES)
+    return models.Q(status=Document.Status.DONE, has_addressee=False)
+
+
+def list_documents(
+    workspace: Workspace,
+    *,
+    inbox_state: str = "",
+    person_id: UUID | None = None,
+    label_id: UUID | None = None,
+) -> list[Document]:
+    """The newest documents of the workspace (at most 200; paging comes later), filtered."""
+    if inbox_state and inbox_state not in INBOX_STATES:
+        raise ApiError(422, "validation_error", _("Deze stand van de inbox kennen we niet."))
+    if label_id is not None:
+        # Labels arrive in a later step; until then no document has one.
+        return []
+    documents = Document.objects.filter(workspace=workspace).annotate(
+        has_addressee=_has_addressee()
+    )
+    if inbox_state:
+        documents = documents.filter(_in_state(inbox_state))
+    if person_id is not None:
+        documents = documents.filter(addressee_links__person_id=person_id)
+    return list(documents.prefetch_related("addressee_links").order_by("-created_at", "-id")[:200])
+
+
+def inbox_counts(workspace: Workspace) -> dict[str, int]:
+    """How many documents are in each inbox state, for the badges."""
+    documents = Document.objects.filter(workspace=workspace).annotate(
+        has_addressee=_has_addressee()
+    )
+    counts = documents.aggregate(
+        **{state: models.Count("id", filter=_in_state(state)) for state in INBOX_STATES}
+    )
+    return {state: int(counts[state]) for state in INBOX_STATES}
 
 
 def get_document(*, workspace: Workspace, document_id: UUID) -> Document:
@@ -65,9 +147,9 @@ def get_document(*, workspace: Workspace, document_id: UUID) -> Document:
     return document
 
 
-def document_out(document: Document) -> DocumentOut:
-    """The document with its pages, proposals and tasks, as the API shows it."""
-    return DocumentOut(
+def document_summary_out(document: Document) -> DocumentSummaryOut:
+    """A row of a document list."""
+    return DocumentSummaryOut(
         id=document.id,
         client_id=document.client_id,
         status=document.status,
@@ -76,6 +158,18 @@ def document_out(document: Document) -> DocumentOut:
         sender=document.sender,
         document_type=document.document_type,
         letter_date=document.letter_date,
+        addressee_ids=_addressee_ids(document),
+        # Labels and suggestions arrive in later steps.
+        label_ids=[],
+        inbox_state=inbox_state(document),
+        open_suggestion_count=0,
+    )
+
+
+def document_out(document: Document) -> DocumentOut:
+    """The document with its pages, proposals and tasks, as the API shows it."""
+    return DocumentOut(
+        **document_summary_out(document).model_dump(),
         failure_code=document.failure_code,
         summary=document.summary,
         summary_by_ai=document.summary_by_ai,
@@ -143,3 +237,34 @@ def retry_processing(*, workspace: Workspace, document_id: UUID) -> Document:
         document.save(update_fields=["status", "failure_code", "updated_at"])
         defer_processing(workspace_id=workspace.id, document_id=document.id)
     return document
+
+
+def set_document_addressees(
+    *, workspace: Workspace, user: User, document_id: UUID, person_ids: list[UUID]
+) -> Document:
+    """The document's addressees become exactly `person_ids`."""
+    with transaction.atomic():
+        document = (
+            Document.objects.select_for_update().filter(workspace=workspace, id=document_id).first()
+        )
+        if document is None:
+            raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
+        if document.status == Document.Status.PROCESSING:
+            raise ApiError(
+                409,
+                "document_processing",
+                _("Dit document wordt nog verwerkt. Probeer het zo opnieuw."),
+            )
+        organise.set_addressees(document=document, person_ids=person_ids, actor=user)
+    return document
+
+
+def list_document_events(*, workspace: Workspace, document_id: UUID) -> list[DocumentEvent]:
+    """The document's history, newest first."""
+    document = get_document(workspace=workspace, document_id=document_id)
+    return list(
+        DocumentEvent.objects.filter(document=document)
+        .select_related("actor")
+        .annotate(undone=models.Exists(DocumentEvent.objects.filter(undoes=models.OuterRef("pk"))))
+        .order_by("-created_at", "-id")
+    )

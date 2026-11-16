@@ -220,3 +220,71 @@ _ATTENTION_FIELDS = {
 def needs_attention(field: str, confidence: Decimal) -> bool:
     """Only deadlines and amounts: a wrong one costs money or a missed term."""
     return field in _ATTENTION_FIELDS and confidence < NEEDS_ATTENTION_BELOW
+
+
+class DocumentAddressee(WorkspaceModel):
+    """A person a document is "op naam van"; a document has zero or more."""
+
+    same_workspace_fields = ("document", "person")
+
+    document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="addressee_links")
+    # Deleting a person who is still on a document is refused (archive instead).
+    person = models.ForeignKey(
+        "people.Person", on_delete=models.PROTECT, related_name="document_links"
+    )
+
+    class Meta:
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["document", "person"], name="documents_documentaddressee_unique"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.document_id} {self.person_id}"
+
+
+class DocumentEvent(WorkspaceModel):
+    """One change in a document's history. Names are copied so they outlive a delete."""
+
+    same_workspace_fields = ("document", "person", "undoes")
+
+    class Kind(models.TextChoices):
+        LABEL_ADDED = "label_added"
+        LABEL_REMOVED = "label_removed"
+        ADDRESSEE_ADDED = "addressee_added"
+        ADDRESSEE_REMOVED = "addressee_removed"
+        CONFIRMED = "confirmed"
+        TASK_COMPLETED = "task_completed"
+        TASK_REOPENED = "task_reopened"
+
+    class Origin(models.TextChoices):
+        USER = "user"
+        RULE = "rule"
+        # The user accepted a proposal.
+        SUGGESTION = "suggestion"
+        UNDO = "undo"
+
+    document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="events")
+    kind = models.CharField(max_length=30, choices=Kind.choices)
+    origin = models.CharField(max_length=20, choices=Origin.choices, default=Origin.USER)
+    # Null for a rule that ran in a job.
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    person = models.ForeignKey(
+        "people.Person", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    person_name = models.TextField(blank=True, default="")
+    label_name = models.TextField(blank=True, default="")
+    rule_name = models.TextField(blank=True, default="")
+    # The event this one reverses.
+    undoes = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="undone_by"
+    )
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"{self.document_id} {self.kind}"

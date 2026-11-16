@@ -1,6 +1,24 @@
 {
   "components": {
     "schemas": {
+      "AddresseesIn": {
+        "properties": {
+          "person_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Person Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "person_ids"
+        ],
+        "title": "AddresseesIn",
+        "type": "object"
+      },
       "CaCertificateOut": {
         "properties": {
           "pem": {
@@ -96,8 +114,76 @@
         "title": "DeviceOut",
         "type": "object"
       },
+      "DocumentEventOut": {
+        "properties": {
+          "actor_name": {
+            "title": "Actor Name",
+            "type": "string"
+          },
+          "can_undo": {
+            "title": "Can Undo",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label_name": {
+            "title": "Label Name",
+            "type": "string"
+          },
+          "origin": {
+            "title": "Origin",
+            "type": "string"
+          },
+          "person_name": {
+            "title": "Person Name",
+            "type": "string"
+          },
+          "rule_name": {
+            "title": "Rule Name",
+            "type": "string"
+          },
+          "undone": {
+            "title": "Undone",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "kind",
+          "origin",
+          "actor_name",
+          "rule_name",
+          "label_name",
+          "person_name",
+          "can_undo",
+          "undone"
+        ],
+        "title": "DocumentEventOut",
+        "type": "object"
+      },
       "DocumentOut": {
         "properties": {
+          "addressee_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Addressee Ids",
+            "type": "array"
+          },
           "client_id": {
             "format": "uuid",
             "title": "Client Id",
@@ -121,6 +207,18 @@
             "title": "Id",
             "type": "string"
           },
+          "inbox_state": {
+            "title": "Inbox State",
+            "type": "string"
+          },
+          "label_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Label Ids",
+            "type": "array"
+          },
           "letter_date": {
             "format": "date",
             "title": "Letter Date",
@@ -128,6 +226,10 @@
               "string",
               "null"
             ]
+          },
+          "open_suggestion_count": {
+            "title": "Open Suggestion Count",
+            "type": "integer"
           },
           "page_count": {
             "title": "Page Count",
@@ -180,6 +282,10 @@
           "sender",
           "document_type",
           "letter_date",
+          "addressee_ids",
+          "label_ids",
+          "inbox_state",
+          "open_suggestion_count",
           "failure_code",
           "summary",
           "summary_by_ai",
@@ -192,6 +298,14 @@
       },
       "DocumentSummaryOut": {
         "properties": {
+          "addressee_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Addressee Ids",
+            "type": "array"
+          },
           "client_id": {
             "format": "uuid",
             "title": "Client Id",
@@ -211,6 +325,18 @@
             "title": "Id",
             "type": "string"
           },
+          "inbox_state": {
+            "title": "Inbox State",
+            "type": "string"
+          },
+          "label_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Label Ids",
+            "type": "array"
+          },
           "letter_date": {
             "format": "date",
             "title": "Letter Date",
@@ -218,6 +344,10 @@
               "string",
               "null"
             ]
+          },
+          "open_suggestion_count": {
+            "title": "Open Suggestion Count",
+            "type": "integer"
           },
           "page_count": {
             "title": "Page Count",
@@ -240,7 +370,11 @@
           "created_at",
           "sender",
           "document_type",
-          "letter_date"
+          "letter_date",
+          "addressee_ids",
+          "label_ids",
+          "inbox_state",
+          "open_suggestion_count"
         ],
         "title": "DocumentSummaryOut",
         "type": "object"
@@ -335,6 +469,29 @@
           "api_version"
         ],
         "title": "HealthOut",
+        "type": "object"
+      },
+      "InboxCountsOut": {
+        "properties": {
+          "new": {
+            "title": "New",
+            "type": "integer"
+          },
+          "review": {
+            "title": "Review",
+            "type": "integer"
+          },
+          "unassigned": {
+            "title": "Unassigned",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "new",
+          "review",
+          "unassigned"
+        ],
+        "title": "InboxCountsOut",
         "type": "object"
       },
       "LoginIn": {
@@ -1532,6 +1689,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/documents": {
       "get": {
+        "description": "The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id` and `label_id` narrow the list; together they all apply.",
         "operationId": "listDocuments",
         "parameters": [
           {
@@ -1542,6 +1700,42 @@
               "format": "uuid",
               "title": "Workspace Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "inbox_state",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Inbox State",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "person_id",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "title": "Person Id",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "label_id",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "title": "Label Id",
+              "type": [
+                "string",
+                "null"
+              ]
             }
           }
         ],
@@ -1579,6 +1773,16 @@
               }
             },
             "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
           }
         },
         "security": [
@@ -1835,6 +2039,147 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/addressees": {
+      "put": {
+        "operationId": "setDocumentAddressees",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddresseesIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Set Document Addressees",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}/confirm": {
       "post": {
         "operationId": "confirmDocument",
@@ -1971,6 +2316,81 @@
           }
         ],
         "summary": "Confirm Document",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/events": {
+      "get": {
+        "operationId": "listDocumentEvents",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentEventOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "List Document Events",
         "tags": [
           "documents"
         ]
@@ -2337,6 +2757,67 @@
           }
         ],
         "summary": "Create Folder",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/inbox/counts": {
+      "get": {
+        "operationId": "getInboxCounts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxCountsOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Get Inbox Counts",
         "tags": [
           "documents"
         ]

@@ -10,13 +10,16 @@ from apps.accounts.services import current_user
 from apps.common.errors import ApiError
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.documents import intake, review, services
-from apps.documents.models import Document, Folder
+from apps.documents.models import DocumentEvent, Folder
 from apps.documents.schemas import (
+    AddresseesIn,
     ConfirmIn,
+    DocumentEventOut,
     DocumentOut,
     DocumentSummaryOut,
     FolderIn,
     FolderOut,
+    InboxCountsOut,
     UploadMetadataIn,
 )
 from apps.workspaces.deps import workspace_member
@@ -92,12 +95,35 @@ def create_document(
 
 @router.get(
     "/workspaces/{workspace_id}/documents",
-    response={200: list[DocumentSummaryOut], 404: ErrorOut, **AUTH_ERRORS},
+    response={200: list[DocumentSummaryOut], 404: ErrorOut, 422: ErrorOut, **AUTH_ERRORS},
     operation_id="listDocuments",
+    description=(
+        "The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), "
+        "`person_id` and `label_id` narrow the list; together they all apply."
+    ),
 )
-def list_documents(request: HttpRequest, workspace_id: UUID) -> list[Document]:
+def list_documents(
+    request: HttpRequest,
+    workspace_id: UUID,
+    inbox_state: str = "",
+    person_id: UUID | None = None,
+    label_id: UUID | None = None,
+) -> list[DocumentSummaryOut]:
     membership = workspace_member(request, workspace_id)
-    return services.list_documents(membership.workspace)
+    documents = services.list_documents(
+        membership.workspace, inbox_state=inbox_state, person_id=person_id, label_id=label_id
+    )
+    return [services.document_summary_out(document) for document in documents]
+
+
+@router.get(
+    "/workspaces/{workspace_id}/inbox/counts",
+    response={200: InboxCountsOut, 404: ErrorOut, **AUTH_ERRORS},
+    operation_id="getInboxCounts",
+)
+def get_inbox_counts(request: HttpRequest, workspace_id: UUID) -> InboxCountsOut:
+    membership = workspace_member(request, workspace_id)
+    return InboxCountsOut(**services.inbox_counts(membership.workspace))
 
 
 @router.get(
@@ -171,3 +197,39 @@ def confirm_document(
         data=payload,
     )
     return services.document_out(document)
+
+
+@router.put(
+    "/workspaces/{workspace_id}/documents/{document_id}/addressees",
+    response={
+        200: DocumentOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    operation_id="setDocumentAddressees",
+)
+def set_document_addressees(
+    request: HttpRequest, workspace_id: UUID, document_id: UUID, payload: AddresseesIn
+) -> DocumentOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    document = services.set_document_addressees(
+        workspace=membership.workspace,
+        user=current_user(request),
+        document_id=document_id,
+        person_ids=payload.person_ids,
+    )
+    return services.document_out(document)
+
+
+@router.get(
+    "/workspaces/{workspace_id}/documents/{document_id}/events",
+    response={200: list[DocumentEventOut], 404: ErrorOut, **AUTH_ERRORS},
+    operation_id="listDocumentEvents",
+)
+def list_document_events(
+    request: HttpRequest, workspace_id: UUID, document_id: UUID
+) -> list[DocumentEvent]:
+    membership = workspace_member(request, workspace_id)
+    return services.list_document_events(workspace=membership.workspace, document_id=document_id)

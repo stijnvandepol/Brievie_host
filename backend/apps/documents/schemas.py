@@ -5,6 +5,7 @@ from ninja import Schema
 from pydantic import Field
 
 from apps.common.schemas import InputSchema
+from apps.documents.models import DocumentEvent
 
 
 class FolderOut(Schema):
@@ -45,6 +46,14 @@ class DocumentSummaryOut(Schema):
     sender: str
     document_type: str
     letter_date: date | None
+    # The persons the document is "op naam van"; join with `listPersons`.
+    addressee_ids: list[UUID]
+    # Join with `listLabels`.
+    label_ids: list[UUID]
+    # "new", "review", "unassigned", or empty when the document is sorted.
+    inbox_state: str
+    # Proposals (labels, addressees) waiting for the user.
+    open_suggestion_count: int
 
 
 class PageOut(Schema):
@@ -107,3 +116,37 @@ class ConfirmIn(InputSchema):
     # Whether `summary` is the AI's text (shown with a label) or the user's own.
     summary_by_ai: bool
     tasks: list[TaskIn] = Field(max_length=20)
+
+
+class AddresseesIn(InputSchema):
+    # The document's addressees become exactly these persons.
+    person_ids: list[UUID] = Field(max_length=10)
+
+
+class InboxCountsOut(Schema):
+    new: int
+    review: int
+    unassigned: int
+
+
+class DocumentEventOut(Schema):
+    id: UUID
+    created_at: datetime
+    kind: str
+    origin: str
+    # Names are copies, so they stay readable after a delete; empty when not applicable.
+    actor_name: str
+    rule_name: str
+    label_name: str
+    person_name: str
+    can_undo: bool
+    undone: bool
+
+    @staticmethod
+    def resolve_actor_name(obj: DocumentEvent) -> str:
+        return obj.actor.name if obj.actor is not None else ""
+
+    @staticmethod
+    def resolve_can_undo(obj: DocumentEvent) -> bool:
+        # Undo is for changes a rule made; rules arrive in a later step.
+        return False

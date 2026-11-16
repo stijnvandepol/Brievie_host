@@ -46,7 +46,15 @@ export const documentsQuery = (workspaceId: string, filters: DocumentFilters = {
     queryKey: ["workspaces", workspaceId, "documents", filters],
     queryFn: async () => {
       const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/documents", {
-        params: { path: { workspace_id: workspaceId } },
+        params: {
+          path: { workspace_id: workspaceId },
+          // Only the filters that are set; an empty value means "no filter".
+          query: {
+            inbox_state: filters.inbox_state || undefined,
+            person_id: filters.person_id || undefined,
+            label_id: filters.label_id || undefined,
+          },
+        },
       });
       if (error !== undefined || !data) throw new ApiFailure(error);
       return data;

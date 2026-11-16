@@ -12,6 +12,7 @@ from django.utils.translation import gettext as _
 from apps.accounts.models import User
 from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
+from apps.documents import organise
 from apps.documents.models import Document
 from apps.documents.schemas import ConfirmIn, TaskIn
 from apps.pipeline.validation import dates_in, quote_in_text
@@ -69,6 +70,7 @@ def confirm_document(
         document.confirmed_by = user
         document.confirmed_at = timezone.now()
         document.save()
+        organise.record_confirmed(document, actor=user)
         for task in _stored_tasks(data, document):
             Task.objects.create(
                 workspace=workspace,

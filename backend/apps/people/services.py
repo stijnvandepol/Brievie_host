@@ -22,18 +22,15 @@ VARIANT_MAX = 100
 
 
 def _persons(workspace: Workspace) -> "models.QuerySet[Person]":
-    """The workspace's persons, each annotated with `document_count`.
-
-    Documents get addressees in a later step; until then every count is 0.
-    """
+    """The workspace's persons, each annotated with `document_count`."""
     return Person.objects.filter(workspace=workspace).annotate(
-        document_count=models.Value(0, output_field=models.IntegerField())
+        document_count=models.Count("document_links")
     )
 
 
 def _in_use(person: Person) -> bool:
     """Whether deleting would lose information; archiving is the alternative."""
-    return person.user_id is not None
+    return person.user_id is not None or person.document_links.exists()
 
 
 def list_persons(workspace: Workspace) -> list[Person]:

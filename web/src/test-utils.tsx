@@ -70,6 +70,10 @@ export const documentSummary = {
   page_count: 3,
   sender: "Belastingdienst",
   status: "done",
+  addressee_ids: [],
+  label_ids: [],
+  inbox_state: "unassigned",
+  open_suggestion_count: 0,
 };
 
 export const documentDetail: components["schemas"]["DocumentOut"] = {
