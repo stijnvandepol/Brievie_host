@@ -182,6 +182,9 @@ SAMPLES: list[tuple[str, str, str, set[str], set[str] | None]] = [
     ("municipal_tax_bill", "Gemeente Utrecht", "assessment", {"gemeente"}, {"kvk"}),
     ("payslip", "Bakkerij De Korenaar", "payslip", {"inkomen"}, {"personeel"}),
     ("energy_bill", "Vonk Energie", "invoice", {"energie"}, {"inkoop", "huisvesting"}),
+    # Terms in the footer of an invoice make it no contract.
+    ("supplier_invoice", "Groothandel Kantoorplus", "invoice", set(), {"inkoop"}),
+    ("supplier_invoice", "Groothandel Kantoorplus", "contract", set(), {"contracten"}),
 ]
 
 
@@ -227,7 +230,7 @@ def test_presets_on_sample_letters(
 
 def test_every_sample_letter_has_a_letterhead() -> None:
     letters = sorted(LETTERS.glob("*.txt"))
-    assert len(letters) >= 8
+    assert len(letters) >= 9
     for letter in letters:
         text = letter.read_text(encoding="utf-8")
         for part in ("Telefoon", "www.", "KvK", "BTW", "IBAN"):

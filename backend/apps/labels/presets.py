@@ -142,7 +142,7 @@ _BUSINESS = (
         "contracten",
         "Contracten",
         "teal",
-        (_type_is("contract"), *_words("overeenkomst", "algemene voorwaarden")),
+        (_type_is("contract"),),
     ),
     PresetLabel(
         "kvk",

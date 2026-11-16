@@ -297,14 +297,16 @@ Data in `apps/labels/presets.py`: per workspace kind a list of
 | Bank | grey | sender contains "bank"; words: rekeningafschrift, creditcard |
 | Personeel | purple | words: loonstrook, loonheffing, pensioenfonds, UWV, arbo |
 | Verzekering | purple | words: polis, polisblad, verzekering, verzekeringen |
-| Contracten | teal | document type is contract; words: overeenkomst, algemene voorwaarden |
+| Contracten | teal | document type is contract |
 | KVK en overheid | grey | sender has the word KVK, RVO or "Kamer van Koophandel"; sender contains "gemeente" |
 | Huisvesting | yellow | words: huur, huurovereenkomst, energie, VvE |
 
 The label names are the owner's choice. The recognition words differ from the first
 sketch on purpose (builder's call): `btw`, `bank`, `telefoon`, `internet` and `KVK` as
 words in the letter text stand on nearly every invoice or letterhead and would put the
-label on everything, so they are dropped or moved to the sender. A test runs every
+label on everything, so they are dropped or moved to the sender. For the same reason
+Contracten is recognised by the document type only: "overeenkomst" and "algemene
+voorwaarden" stand in the footer of almost every supplier invoice. A test runs every
 preset over a small set of sample letters: an ordinary invoice from a webshop may get
 no label in Thuis and only Inkoop in Zakelijk.
 
