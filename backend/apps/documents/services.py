@@ -357,8 +357,9 @@ def _lock_for_organising(workspace: Workspace, document_id: UUID) -> Document:
 def list_document_events(*, workspace: Workspace, document_id: UUID) -> list[DocumentEvent]:
     """The document's history, newest first.
 
-    Annotated with `undone` (an undo event points at it) and `still_linked` (its label
-    or person is on the document now), which `DocumentEventOut.can_undo` reads.
+    Annotated with `undone` (an undo event points at it), `still_linked` (its label or
+    person is on the document now) and `superseded` (a later event concerns the same
+    label or person), which `DocumentEventOut.can_undo` reads.
     """
     document = get_document(workspace=workspace, document_id=document_id)
     label_linked = DocumentLabel.objects.filter(
@@ -367,12 +368,17 @@ def list_document_events(*, workspace: Workspace, document_id: UUID) -> list[Doc
     person_linked = DocumentAddressee.objects.filter(
         document_id=models.OuterRef("document_id"), person_id=models.OuterRef("person_id")
     )
+    later = DocumentEvent.objects.filter(
+        document_id=models.OuterRef("document_id"), created_at__gt=models.OuterRef("created_at")
+    )
     return list(
         DocumentEvent.objects.filter(document=document)
         .select_related("actor")
         .annotate(
             undone=models.Exists(DocumentEvent.objects.filter(undoes=models.OuterRef("pk"))),
             still_linked=models.Exists(label_linked) | models.Exists(person_linked),
+            superseded=models.Exists(later.filter(label_id=models.OuterRef("label_id")))
+            | models.Exists(later.filter(person_id=models.OuterRef("person_id"))),
         )
         .order_by("-created_at", "-id")
     )

@@ -18,9 +18,6 @@ from apps.workspaces.context import workspace_context
 from apps.workspaces.models import Workspace
 from tests.documents_support import admin_of, jpeg, upload
 
-# The preset rules would add their own proposals to these letters.
-pytestmark = pytest.mark.usefixtures("without_preset_rules")
-
 BSN = "111222333"
 LETTER = f"CAK\nUw BSN {BSN}\nU moet betalen vóór 1 december 2026."
 
@@ -104,7 +101,13 @@ def test_bsn_nowhere_in_storage(
         stored += [page.ocr_text for page in DocumentPage.objects.all()]
         proposals = list(Extraction.objects.all())
         stored += [p.value for p in proposals] + [p.quote for p in proposals]
+        rows = list(DocumentSuggestion.objects.all())
+        stored += [row.quote for row in rows] + [row.rule_name for row in rows]
     assert proposals
+    # The preset rule "Label Zorg" recognised "CAK" and stored its quote.
+    assert [(row.origin, row.rule_name, row.quote) for row in rows] == [
+        ("rule", "Label Zorg", "CAK")
+    ]
     assert all(BSN not in text for text in stored)
     assert BSN not in body.decode()
     assert BSN not in caplog.text
@@ -147,6 +150,12 @@ class PickingProvider(QuotingProvider):
         )
 
 
+def suggested_name(row: DocumentSuggestion) -> str:
+    if row.person is not None:
+        return row.person.display_name
+    return row.label.name if row.label is not None else ""
+
+
 def test_request_carries_names_but_no_ids(client: Client, ws_a: Workspace) -> None:
     # Design 10.3: names of labels and persons go along; never their ids.
     add_person(ws_a)
@@ -162,14 +171,24 @@ def test_request_carries_names_but_no_ids(client: Client, ws_a: Workspace) -> No
         ids = [str(i) for i in Label.objects.values_list("id", flat=True)]
         ids += [str(i) for i in Person.objects.values_list("id", flat=True)]
         label_names = list(Label.objects.values_list("name", flat=True))
-        stored = DocumentSuggestion.objects.filter(state="open").count()
+        stored = sorted(
+            (row.origin, suggested_name(row))
+            for row in DocumentSuggestion.objects.filter(state="open").select_related(
+                "person", "label"
+            )
+        )
     assert ids
     assert all(i not in sent for i in [*ids, str(document_id)])
     assert "Jan de Vries" in sent
     assert "J. de Vries" in sent
     assert all(name in sent for name in label_names)
-    # The aliases came back and were turned into the workspace's own ids.
-    assert stored == 2
+    # The aliases came back and were turned into the workspace's own ids (the AI's pick
+    # of Jan joins the stronger name match); the preset rule proposes "Belastingdienst".
+    assert stored == [
+        ("ai", request.labels[0].name),
+        ("name_match", "Jan de Vries"),
+        ("rule", "Belastingdienst"),
+    ]
 
 
 def test_ai_off_sends_nothing(
@@ -187,9 +206,12 @@ def test_ai_off_sends_nothing(
     jobs.run_job(ws_a.id, document_id, attempts=0)
 
     with workspace_context(ws_a.id):
-        [row] = DocumentSuggestion.objects.all()
-    # The deterministic layer still works without AI.
-    assert (row.person_id, row.origin) == (person.id, "name_match")
+        rows = {
+            (row.person_id or row.label_id, row.origin) for row in DocumentSuggestion.objects.all()
+        }
+        belasting = Label.objects.get(system_key="belastingdienst")
+    # The deterministic layer (name matching and the preset rules) still works without AI.
+    assert rows == {(person.id, "name_match"), (belasting.id, "rule")}
 
 
 def test_no_person_or_label_name_in_logs(

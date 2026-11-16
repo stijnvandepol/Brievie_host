@@ -200,3 +200,20 @@ def test_inactive_rule_does_nothing(ws_a: Workspace) -> None:
     assert open_rows(ws_a, document) == []
     with workspace_context(ws_a.id):
         assert not Rule.objects.get().runs.exists()
+
+
+def test_label_of_another_workspace_in_a_stored_rule_is_skipped(
+    ws_a: Workspace, ws_b: Workspace
+) -> None:
+    remove_rules(ws_a)
+    foreign = label(ws_b, "bank")
+    make_rule(ws_a, text_word("APK"), actions=[add_label(foreign)], mode="auto")
+    make_rule(ws_a, text_word("APK"), actions=[add_label(foreign)])
+    document = make_document(ws_a, LETTER)
+
+    run_rules(ws_a, document)
+
+    with workspace_context(ws_a.id):
+        assert not DocumentLabel.objects.filter(document=document).exists()
+        assert not DocumentSuggestion.objects.filter(document=document).exists()
+    assert runs(ws_a) == []

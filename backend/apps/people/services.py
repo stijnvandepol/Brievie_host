@@ -164,7 +164,7 @@ def delete_person(*, workspace: Workspace, person_id: UUID) -> None:
                 "person_in_use",
                 _("Deze persoon is nog in gebruik. Je kunt de persoon wel archiveren."),
             )
-        for rule in Rule.objects.filter(workspace=workspace):
+        for rule in Rule.objects.select_for_update().filter(workspace=workspace):
             if person.id in named_ids(rule)[1]:
                 raise ApiError(
                     409,

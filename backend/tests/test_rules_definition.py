@@ -50,7 +50,9 @@ def test_definition_rejects_unknown_operator_with_dutch_sentence() -> None:
     assert message == "Een voorwaarde heeft een vergelijking die bij dit veld niet past."
 
 
-def test_definition_rejects_label_of_another_workspace(ws_a: Workspace, ws_b: Workspace) -> None:
+def test_definition_rejects_a_label_id_outside_the_given_set(
+    ws_a: Workspace, ws_b: Workspace
+) -> None:
     with workspace_context(ws_b.id):
         foreign = Label.objects.filter(workspace=ws_b).first()
     with workspace_context(ws_a.id):

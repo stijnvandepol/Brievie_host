@@ -10,6 +10,7 @@ from collections.abc import Collection, Sequence
 from uuid import UUID
 
 from django.db import transaction
+from django.db.models import QuerySet
 from django.utils.translation import gettext as _
 
 from apps.accounts.models import User
@@ -207,6 +208,8 @@ def undo_event(*, document: Document, event_id: UUID, actor: User) -> None:
             event.origin != DocumentEvent.Origin.RULE
             or event.kind not in _UNDOABLE
             or DocumentEvent.objects.filter(undoes=event).exists()
+            or _target_of(event) is None
+            or _later_events_for_target(event).exists()
         ):
             raise _not_undoable()
         if event.kind == DocumentEvent.Kind.LABEL_ADDED:
@@ -251,6 +254,23 @@ def undo_event(*, document: Document, event_id: UUID, actor: User) -> None:
             undoes=event,
         )
         suggestions.mark_dismissed(document, _ADD_ADDRESSEE, person_id)
+
+
+def _target_of(event: DocumentEvent) -> UUID | None:
+    return event.label_id if event.kind == DocumentEvent.Kind.LABEL_ADDED else event.person_id
+
+
+def _later_events_for_target(event: DocumentEvent) -> QuerySet[DocumentEvent]:
+    """Events after `event` on its document about the same label or person.
+
+    A rule's change can be undone only while nothing happened to its target since.
+    """
+    later = DocumentEvent.objects.filter(
+        document_id=event.document_id, created_at__gt=event.created_at
+    )
+    if event.kind == DocumentEvent.Kind.LABEL_ADDED:
+        return later.filter(label=event.label)
+    return later.filter(person=event.person)
 
 
 def _not_undoable() -> ApiError:

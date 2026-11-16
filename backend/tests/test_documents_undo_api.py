@@ -191,3 +191,27 @@ def test_member_of_another_workspace_gets_404(
 
     assert r.status_code == 404
     assert r.json()["code"] == "workspace_not_found"
+
+
+def test_undo_after_the_label_was_put_back_by_hand_is_409(
+    client_a: Client, ws_a: Workspace
+) -> None:
+    document, label = processed_with_auto_rule(ws_a)
+    event_id = rule_event_id(document)
+    labels_url = f"/api/v1/workspaces/{ws_a.id}/documents/{document.id}/labels"
+    for ids in ([], [str(label.id)]):
+        r = client_a.put(labels_url, {"label_ids": ids}, content_type="application/json")
+        assert r.status_code == 200
+    rows = events(client_a, document)
+    assert [(row["kind"], row["origin"], row["can_undo"]) for row in rows] == [
+        ("label_added", "user", False),
+        ("label_removed", "user", False),
+        ("label_added", "rule", False),
+    ]
+
+    r = undo(client_a, document, event_id)
+
+    assert r.status_code == 409
+    assert r.json()["code"] == "event_not_undoable"
+    with workspace_context(ws_a.id):
+        assert DocumentLabel.objects.filter(document=document, label=label).exists()

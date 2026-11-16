@@ -98,10 +98,10 @@ def organise_processed(
 
     Runs in the transaction that holds the document's row lock. A run replaces the
     open proposals of an earlier run; accepted and dismissed rows stay. Name matching,
-    then the AI's picks, then the rules (trigger `processed`); the rules engine counts
-    the open proposals as hoped for, so the order does not change the outcome. Every
-    id is looked up again: a person or label deleted or archived since the lists were
-    read is skipped.
+    then the AI's picks, then the rules (trigger `processed`). Rules come last so they
+    see the other proposals: a rule's proposal of the same change strengthens that row
+    to origin `rule`. Every id is looked up again: a person or label deleted or
+    archived since the lists were read is skipped.
     """
     suggestions.clear_open(
         document,

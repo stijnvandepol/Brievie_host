@@ -20,6 +20,7 @@ from apps.pipeline.providers import LLMProvider, ProviderUnavailable
 from apps.pipeline.steps import run_pipeline
 from apps.workspaces.context import workspace_context
 from apps.workspaces.models import Workspace
+from tests.rules_support import add_label, make_rule, text_word
 
 # The preset rules would add their own proposals to these letters.
 pytestmark = pytest.mark.usefixtures("without_preset_rules")
@@ -481,3 +482,16 @@ def test_failure_while_proposing_after_the_ai_ends_failed(
 
     assert state(ws_a, document)[:2] == ("failed", "internal_error")
     assert open_suggestions(ws_a, document) == []
+
+
+def test_rule_takes_over_the_ais_proposal_of_the_same_label(ws_a: Workspace) -> None:
+    belasting = preset_label(ws_a, "belastingdienst")
+    make_rule(ws_a, text_word("Belastingdienst"), actions=[add_label(belasting)], name="Fiscus")
+    document = make_document(ws_a, text=LETTER)
+
+    run(ws_a, document, FakeProvider(picking(labels=["Belastingdienst"])))
+
+    [row] = open_suggestions(ws_a, document)
+    assert (row.label_id, row.origin, row.rule_name) == (belasting.id, "rule", "Fiscus")
+    assert row.quote == "Belastingdienst"
+    assert row.confidence == Decimal("1.000")

@@ -206,10 +206,13 @@ def test_noop_action_is_not_planned_but_rule_counts_as_matched() -> None:
     assert result.matched_rule_ids == (r.id,)
     assert result.planned == ()
 
+
+def test_rule_plans_a_target_that_is_only_an_open_suggestion() -> None:
+    # The open suggestion (from name matching or the AI) gets the rule as its origin.
     proposer = rule(text_word("brief"), mode="propose")
     hoped = evaluate(facts("Een brief", hoped_label_ids=frozenset({ZORG})), [proposer])
     assert hoped.matched_rule_ids == (proposer.id,)
-    assert hoped.planned == ()
+    assert [(p.target_id, p.mode) for p in hoped.planned] == [(ZORG, "propose")]
 
 
 def test_same_action_twice_is_planned_once() -> None:

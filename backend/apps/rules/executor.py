@@ -34,9 +34,17 @@ def execute(document: Document, evaluation: Evaluation, *, trigger: str) -> None
     if not planned:
         return
     with transaction.atomic():
-        rules = Rule.objects.in_bulk({p.rule_id for p in planned})
-        labels = Label.objects.in_bulk([p.target_id for p in planned if p.action == _ADD_LABEL])
-        persons = Person.objects.in_bulk([p.target_id for p in planned if p.action != _ADD_LABEL])
+        rules = Rule.objects.filter(workspace_id=document.workspace_id).in_bulk(
+            {p.rule_id for p in planned}
+        )
+        # Filtered by workspace as well as by RLS: a stored id may name another workspace's row.
+        workspace_id = document.workspace_id
+        labels = Label.objects.filter(workspace_id=workspace_id).in_bulk(
+            [p.target_id for p in planned if p.action == _ADD_LABEL]
+        )
+        persons = Person.objects.filter(workspace_id=workspace_id).in_bulk(
+            [p.target_id for p in planned if p.action != _ADD_LABEL]
+        )
         applied = {(p.action, p.target_id) for p in planned if p.mode == Rule.Mode.AUTO}
         outcomes: dict[UUID, str] = {}
         for action in planned:

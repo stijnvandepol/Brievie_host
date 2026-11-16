@@ -165,6 +165,10 @@ def evaluate(facts: DocumentFacts, rules: Sequence[RuleSpec]) -> Evaluation:
         settled.label_ids | facts.hoped_label_ids,
         settled.addressee_ids | facts.hoped_addressee_ids,
     )
+    # Targets this run already planned; open suggestions are not in it, so a rule still
+    # plans a target that is only proposed by name matching or the AI (the suggestion
+    # then gets the rule as its origin).
+    proposed = _State()
     matched: list[UUID] = []
     planned: list[PlannedAction] = []
     for rule in rules:
@@ -179,8 +183,9 @@ def evaluate(facts: DocumentFacts, rules: Sequence[RuleSpec]) -> Evaluation:
             target = action.target_id
             if target in settled.targets(action.type):
                 continue
-            # Already hoped for: only an automatic action adds something (it settles it).
-            if target in hoped.targets(action.type) and not auto:
+            # Already planned in this run: only an automatic action adds something (it
+            # settles it).
+            if target in proposed.targets(action.type) and not auto:
                 continue
             planned.append(
                 PlannedAction(
@@ -193,6 +198,7 @@ def evaluate(facts: DocumentFacts, rules: Sequence[RuleSpec]) -> Evaluation:
                 )
             )
             hoped.targets(action.type).add(target)
+            proposed.targets(action.type).add(target)
             if auto:
                 settled.targets(action.type).add(target)
         if rule.stop:
