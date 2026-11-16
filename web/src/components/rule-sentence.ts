@@ -51,7 +51,7 @@ export function sourceLabel(source: string): string {
     case "mail":
       return t`Mail`;
     case "watch_folder":
-      return t`Watch-map`;
+      return t`Bewaakte map`;
     default:
       return source;
   }

@@ -6,6 +6,15 @@ import { DocumentTable } from "../components/document-table";
 import { ErrorAlert, Shell, usePageTitle } from "../components/page";
 import { workspaceRoute } from "./workspace";
 
+type FilterOption = { value: string; text: string };
+
+/** The current value as an extra option when the list does not hold it (yet or any more). */
+function withCurrent(options: FilterOption[], value: string | undefined): FilterOption[] {
+  return !value || options.some((option) => option.value === value)
+    ? options
+    : [...options, { value, text: t`(verwijderd)` }];
+}
+
 function PostPage() {
   usePageTitle(t`Post`);
   const { workspace } = postRoute.useRouteContext();
@@ -13,8 +22,19 @@ function PostPage() {
   const navigate = useNavigate();
   const persons = useQuery(personsQuery(workspace.id));
   const labels = useQuery(labelsQuery(workspace.id));
+  const filtered = Boolean(persoon || label);
   const { data, error, isPending } = useQuery(
     documentsQuery(workspace.id, { person_id: persoon, label_id: label }),
+  );
+
+  // A value in the URL that the list no longer holds stays visible, so the filter is not a lie.
+  const personOptions = withCurrent(
+    (persons.data ?? []).map((person) => ({ value: person.id, text: person.display_name })),
+    persons.data ? persoon : undefined,
+  );
+  const labelOptions = withCurrent(
+    (labels.data ?? []).map((option) => ({ value: option.id, text: option.name })),
+    labels.data ? label : undefined,
   );
 
   return (
@@ -39,9 +59,9 @@ function PostPage() {
           }
         >
           <option value="">{t`Iedereen`}</option>
-          {(persons.data ?? []).map((person) => (
-            <option key={person.id} value={person.id}>
-              {person.display_name}
+          {personOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.text}
             </option>
           ))}
         </select>
@@ -61,9 +81,9 @@ function PostPage() {
           }
         >
           <option value="">{t`Alle labels`}</option>
-          {(labels.data ?? []).map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.name}
+          {labelOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.text}
             </option>
           ))}
         </select>
@@ -76,6 +96,7 @@ function PostPage() {
           documents={data}
           persons={persons.data ?? []}
           labels={labels.data ?? []}
+          empty={filtered ? t`Geen brieven met deze filters.` : t`Er is nog geen post.`}
         />
       ) : null}
     </Shell>

@@ -54,7 +54,7 @@ describe("ruleSentence", () => {
     ],
     [{ field: "addressee", op: "is", value: papa.id }, "de brief op naam van Papa staat"],
     [{ field: "addressee", op: "is_empty", value: "" }, "de brief op niemands naam staat"],
-    [{ field: "source", op: "is", value: "watch_folder" }, "de bron Watch-map is"],
+    [{ field: "source", op: "is", value: "watch_folder" }, "de bron Bewaakte map is"],
   ])("reads %j", (condition, text) => {
     expect(ruleSentence(rule({ conditions: [condition] }), labels, persons)).toBe(
       `Als ${text} → label Sales`,

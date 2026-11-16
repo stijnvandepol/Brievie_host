@@ -74,6 +74,7 @@ function RuleItem({
   canEdit,
   isFirst,
   isLast,
+  reordering,
   onMove,
   onError,
 }: {
@@ -83,6 +84,8 @@ function RuleItem({
   canEdit: boolean;
   isFirst: boolean;
   isLast: boolean;
+  /** A reorder is on its way: the order on screen is not the final one yet. */
+  reordering: boolean;
   onMove: (direction: -1 | 1) => void;
   onError: (error: unknown) => void;
 }) {
@@ -160,7 +163,7 @@ function RuleItem({
             <Button
               className="button-text"
               aria-label={t`Omhoog: ${name}`}
-              isDisabled={isFirst}
+              isDisabled={isFirst || reordering}
               onPress={() => onMove(-1)}
             >
               {t`Omhoog`}
@@ -168,7 +171,7 @@ function RuleItem({
             <Button
               className="button-text"
               aria-label={t`Omlaag: ${name}`}
-              isDisabled={isLast}
+              isDisabled={isLast || reordering}
               onPress={() => onMove(1)}
             >
               {t`Omlaag`}
@@ -203,6 +206,20 @@ function AutomationsPage() {
     onSettled: () => queryClient.invalidateQueries({ queryKey: rulesQuery(workspace.id).queryKey }),
   });
 
+  const applyPreset = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.POST("/api/v1/workspaces/{workspace_id}/labels/preset", {
+        params: { path: { workspace_id: workspace.id } },
+      });
+      if (error !== undefined) throw new ApiFailure(error);
+    },
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: rulesQuery(workspace.id).queryKey }),
+        queryClient.invalidateQueries({ queryKey: labelsQuery(workspace.id).queryKey }),
+      ]),
+  });
+
   const list = rules.data ?? [];
   function move(index: number, direction: -1 | 1) {
     const ids = list.map((rule) => rule.id);
@@ -228,18 +245,25 @@ function AutomationsPage() {
       <p className="panel-note">
         {canEdit
           ? t`Een regel zet labels of een naam op nieuwe post. De regels draaien van boven naar beneden.`
-          : t`Alleen een beheerder kan regels wijzigen`}
+          : t`Alleen een beheerder kan regels wijzigen.`}
       </p>
       {rules.isPending ? <p>{t`Even laden...`}</p> : null}
-      <ErrorAlert error={rules.error ?? reorder.error ?? rowError} />
+      <ErrorAlert error={rules.error ?? reorder.error ?? applyPreset.error ?? rowError} />
       {rules.data && list.length === 0 ? (
         <section className="panel" aria-label={t`Regels`}>
           <p className="panel-note">{t`Je hebt nog geen regels.`}</p>
           <div className="header-actions">
             {canEdit ? (
-              <Link to="/w/$workspaceId/labels" params={params} className="button secondary">
+              <Button
+                className="button secondary"
+                isPending={applyPreset.isPending}
+                onPress={() => {
+                  setRowError(null);
+                  applyPreset.mutate();
+                }}
+              >
                 {t`Startset toevoegen`}
-              </Link>
+              </Button>
             ) : null}
             {canEdit ? (
               <Link to="/w/$workspaceId/automatisering/nieuw" params={params} className="button">
@@ -260,6 +284,7 @@ function AutomationsPage() {
               canEdit={canEdit}
               isFirst={index === 0}
               isLast={index === list.length - 1}
+              reordering={reorder.isPending}
               onMove={(direction) => move(index, direction)}
               onError={setRowError}
             />

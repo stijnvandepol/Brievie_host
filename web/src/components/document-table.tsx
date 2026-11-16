@@ -72,16 +72,19 @@ export function DocumentTable({
   documents,
   persons,
   labels,
+  empty,
 }: {
   workspaceId: string;
   documents: DocumentSummary[];
   persons: Person[];
   labels: LabelOut[];
+  /** What to say when there are no letters. */
+  empty: string;
 }) {
   if (documents.length === 0) {
     return (
       <section className="panel" aria-label={t`Post`}>
-        <p className="panel-note">{t`Er is nog geen post.`}</p>
+        <p className="panel-note">{empty}</p>
       </section>
     );
   }

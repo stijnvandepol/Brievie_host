@@ -18,6 +18,7 @@ msgid "(nog {0})"
 msgstr "(nog {0})"
 
 #: src/components/rule-sentence.ts
+#: src/routes/post.tsx
 #: src/routes/rule-editor.tsx
 msgid "(verwijderd)"
 msgstr "(verwijderd)"
@@ -203,8 +204,8 @@ msgstr "Alle labels"
 
 #: src/routes/automations.tsx
 #: src/routes/rule-editor.tsx
-msgid "Alleen een beheerder kan regels wijzigen"
-msgstr "Alleen een beheerder kan regels wijzigen"
+msgid "Alleen een beheerder kan regels wijzigen."
+msgstr "Alleen een beheerder kan regels wijzigen."
 
 #: src/components/rule-sentence.ts
 #: src/routes/rule-editor.tsx
@@ -282,6 +283,10 @@ msgstr "bevat het woord"
 msgid "bevat niet het woord"
 msgstr "bevat niet het woord"
 
+#: src/components/rule-sentence.ts
+msgid "Bewaakte map"
+msgstr "Bewaakte map"
+
 #: src/routes/rule-editor.tsx
 msgid "Bezig. Je ziet het resultaat bij de brieven zelf."
 msgstr "Bezig. Je ziet het resultaat bij de brieven zelf."
@@ -318,11 +323,8 @@ msgstr "Code"
 msgid "Contract"
 msgstr "Contract"
 
-#: src/routes/inbox.tsx
-msgid "Controleer deze brief in de app"
-msgstr "Controleer deze brief in de app"
-
 #: src/routes/document.tsx
+#: src/routes/inbox.tsx
 msgid "Controleer deze brief in de app."
 msgstr "Controleer deze brief in de app."
 
@@ -442,7 +444,7 @@ msgstr "Er ging iets mis"
 msgid "Er is iets misgegaan. Probeer het later opnieuw."
 msgstr "Er is iets misgegaan. Probeer het later opnieuw."
 
-#: src/components/document-table.tsx
+#: src/routes/post.tsx
 msgid "Er is nog geen post."
 msgstr "Er is nog geen post."
 
@@ -489,6 +491,14 @@ msgstr "Geel"
 #: src/components/label-picker.tsx
 msgid "Geen"
 msgstr "Geen"
+
+#: src/routes/post.tsx
+msgid "Geen brieven met deze filters."
+msgstr "Geen brieven met deze filters."
+
+#: src/routes/rule-editor.tsx
+msgid "Geen brieven passen."
+msgstr "Geen brieven passen."
 
 #: src/routes/pair-app.tsx
 msgid "Geen eigen CA"
@@ -766,12 +776,12 @@ msgid "Loonstrook"
 msgstr "Loonstrook"
 
 #: src/routes/rule-editor.tsx
-msgid "Maak eerst een label"
-msgstr "Maak eerst een label"
-
-#: src/routes/rule-editor.tsx
 msgid "Maak eerst een label of voeg een persoon toe."
 msgstr "Maak eerst een label of voeg een persoon toe."
+
+#: src/routes/rule-editor.tsx
+msgid "Maak eerst een label."
+msgstr "Maak eerst een label."
 
 #: src/components/rule-sentence.ts
 msgid "Mail"
@@ -886,6 +896,10 @@ msgstr "Op naam van {name}?"
 #: src/routes/rule-editor.tsx
 msgid "Op naam zetten van"
 msgstr "Op naam zetten van"
+
+#: src/routes/inbox.tsx
+msgid "Op niemands naam"
+msgstr "Op niemands naam"
 
 #: src/routes/pair-app.tsx
 msgid "Open de app op je telefoon en scan de code. De telefoon moet op hetzelfde netwerk zitten als deze server."
@@ -1176,8 +1190,8 @@ msgid "Verwijderen: {name}"
 msgstr "Verwijderen: {name}"
 
 #: src/routes/rule-editor.tsx
-msgid "Voeg eerst een persoon toe"
-msgstr "Voeg eerst een persoon toe"
+msgid "Voeg eerst een persoon toe."
+msgstr "Voeg eerst een persoon toe."
 
 #: src/routes/setup.tsx
 msgid "Voor de post van je bedrijf."
@@ -1194,10 +1208,6 @@ msgstr "voorstel"
 #: src/components/suggestion-list.tsx
 msgid "Voorstel van AI"
 msgstr "Voorstel van AI"
-
-#: src/routes/document.tsx
-msgid "Voorstel van de AI"
-msgstr "Voorstel van de AI"
 
 #: src/components/suggestion-list.tsx
 msgid "Voorstellen"
@@ -1232,13 +1242,13 @@ msgstr "Waarde"
 msgid "Wachtwoord"
 msgstr "Wachtwoord"
 
+#: src/routes/document.tsx
+msgid "Wat de AI las"
+msgstr "Wat de AI las"
+
 #: src/routes/inbox.tsx
 msgid "Wat te doen"
 msgstr "Wat te doen"
-
-#: src/components/rule-sentence.ts
-msgid "Watch-map"
-msgstr "Watch-map"
 
 #: src/api/client.ts
 msgid "We kunnen de server niet bereiken. Controleer je verbinding en probeer het opnieuw."
@@ -1279,7 +1289,3 @@ msgstr "Zakelijk"
 #: src/routes/persons.tsx
 msgid "Zo staat de naam op brieven, bijvoorbeeld J. de Vries. Zet elke variant op een eigen regel."
 msgstr "Zo staat de naam op brieven, bijvoorbeeld J. de Vries. Zet elke variant op een eigen regel."
-
-#: src/routes/inbox.tsx
-msgid "Zonder eigenaar"
-msgstr "Zonder eigenaar"

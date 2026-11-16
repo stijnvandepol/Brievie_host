@@ -163,4 +163,38 @@ describe("post", () => {
       `/w/${workspace.id}/personen`,
     );
   });
+
+  it("shows a filter value that is not in the list as '(verwijderd)'", async () => {
+    server.use(...loggedInHandlers(), ...documentHandlers());
+    const gone = "c9999999-9999-4999-8999-999999999999";
+    renderApp(`/w/${workspace.id}/post?label=${gone}&persoon=${gone}`);
+    const label = await screen.findByRole("combobox", { name: "Label" });
+    await screen.findByRole("option", { name: "Belastingdienst" });
+    await waitFor(() => expect(label).toHaveValue(gone));
+    expect(within(label).getByRole("option", { name: "(verwijderd)" })).toBeInTheDocument();
+    const person = screen.getByRole("combobox", { name: "Persoon" });
+    await waitFor(() => expect(person).toHaveValue(gone));
+    expect(within(person).getByRole("option", { name: "(verwijderd)" })).toBeInTheDocument();
+  });
+
+  it("says there are no letters for these filters, and no post at all without filters", async () => {
+    server.use(
+      ...loggedInHandlers(),
+      http.get(`*${API}/workspaces/${workspace.id}/documents`, () => HttpResponse.json([])),
+      ...documentHandlers(),
+    );
+    renderApp(`/w/${workspace.id}/post?label=${belasting.id}`);
+    expect(await screen.findByText("Geen brieven met deze filters.")).toBeVisible();
+    expect(screen.queryByText("Er is nog geen post.")).not.toBeInTheDocument();
+  });
+
+  it("says there is no post yet when nothing is filtered", async () => {
+    server.use(
+      ...loggedInHandlers(),
+      http.get(`*${API}/workspaces/${workspace.id}/documents`, () => HttpResponse.json([])),
+      ...documentHandlers(),
+    );
+    renderApp(`/w/${workspace.id}/post`);
+    expect(await screen.findByText("Er is nog geen post.")).toBeVisible();
+  });
 });

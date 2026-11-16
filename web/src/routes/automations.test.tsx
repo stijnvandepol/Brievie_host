@@ -116,21 +116,57 @@ describe("automations", () => {
     await waitFor(() => expect(deleted).toEqual([bankRule.id]));
   });
 
-  it("offers the start set and a new rule when there are no rules", async () => {
-    server.use(...loggedInHandlers(), ...ruleHandlers([]));
-    renderApp(path);
-    expect(await screen.findByRole("link", { name: "Startset toevoegen" })).toHaveAttribute(
-      "href",
-      expect.stringContaining("/labels"),
+  it("applies the start set from the empty state and fetches rules and labels again", async () => {
+    let presets = 0;
+    let ruleFetches = 0;
+    let labelFetches = 0;
+    server.use(
+      http.post(`${base}/labels/preset`, () => {
+        presets += 1;
+        return HttpResponse.json([]);
+      }),
+      http.get(`${base}/rules`, () => {
+        ruleFetches += 1;
+        return HttpResponse.json([]);
+      }),
+      http.get(`${base}/labels`, () => {
+        labelFetches += 1;
+        return HttpResponse.json([]);
+      }),
+      ...loggedInHandlers(),
+      ...ruleHandlers([]),
     );
+    const user = userEvent.setup();
+    renderApp(path);
+    await user.click(await screen.findByRole("button", { name: "Startset toevoegen" }));
+    await waitFor(() => expect(presets).toBe(1));
+    await waitFor(() => expect(ruleFetches).toBeGreaterThanOrEqual(2));
+    await waitFor(() => expect(labelFetches).toBeGreaterThanOrEqual(2));
     expect(screen.getAllByRole("link", { name: "Nieuwe regel" }).length).toBeGreaterThan(0);
+  });
+
+  it("disables moving while a reorder is pending", async () => {
+    server.use(
+      http.put(`${base}/rules/order`, async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        return HttpResponse.json([bankRule, apkRule]);
+      }),
+      ...loggedInHandlers(),
+      ...ruleHandlers(),
+    );
+    const user = userEvent.setup();
+    renderApp(path);
+    await user.click(await screen.findByRole("button", { name: "Omlaag: APK naar Auto" }));
+    expect(screen.getByRole("button", { name: "Omhoog: Bank" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Omlaag: APK naar Auto" })).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Omhoog: Bank" })).toBeEnabled());
   });
 
   it("shows a member the rules without editing controls", async () => {
     server.use(asMember(), ...loggedInHandlers(), ...ruleHandlers());
     renderApp(path);
     expect(await screen.findByText("APK naar Auto")).toBeVisible();
-    expect(screen.getByText("Alleen een beheerder kan regels wijzigen")).toBeVisible();
+    expect(screen.getByText("Alleen een beheerder kan regels wijzigen.")).toBeVisible();
     expect(screen.queryByRole("link", { name: "Nieuwe regel" })).not.toBeInTheDocument();
     expect(screen.queryByRole("switch")).not.toBeInTheDocument();
     expect(
@@ -163,6 +199,7 @@ describe("automations", () => {
     server.use(asMember(), ...loggedInHandlers(), ...ruleHandlers([]));
     renderApp(path);
     expect(await screen.findByText("Je hebt nog geen regels.")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Startset toevoegen" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Startset toevoegen" })).not.toBeInTheDocument();
   });
 });

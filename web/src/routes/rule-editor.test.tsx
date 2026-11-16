@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import {
   API,
+  annaPerson,
   apkRule,
   documentSummary,
   errorBody,
@@ -216,7 +217,7 @@ describe("rule editor", () => {
       ...ruleHandlers(),
     );
     renderApp(newPath);
-    expect(await screen.findByText("Alleen een beheerder kan regels wijzigen")).toBeVisible();
+    expect(await screen.findByText("Alleen een beheerder kan regels wijzigen.")).toBeVisible();
     expect(screen.queryByRole("textbox", { name: "Naam" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Opslaan" })).not.toBeInTheDocument();
   });
@@ -323,8 +324,8 @@ describe("rule editor", () => {
     );
     renderApp(newPath);
     await screen.findByRole("textbox", { name: "Naam" });
-    expect(screen.getByText("Maak eerst een label")).toBeVisible();
-    expect(screen.getByText("Voeg eerst een persoon toe")).toBeVisible();
+    expect(screen.getByText("Maak eerst een label.")).toBeVisible();
+    expect(screen.getByText("Voeg eerst een persoon toe.")).toBeVisible();
     expect(within(condition(1)).getByRole("option", { name: "Een label" })).toBeDisabled();
     expect(within(condition(1)).getByRole("option", { name: "Op naam van" })).toBeDisabled();
     expect(within(action(1)).getByRole("option", { name: "Label toevoegen" })).toBeDisabled();
@@ -429,5 +430,82 @@ describe("rule editor", () => {
       "Kies bij elke voorwaarde en actie een label of persoon.",
     );
     expect(requests).toEqual([]);
+  });
+
+  it("goes to the saved rule's own page after the first save, so a second save is a PUT", async () => {
+    const newId = "f3333333-3333-4333-8333-333333333333";
+    const posts: unknown[] = [];
+    const puts: unknown[] = [];
+    let created = false;
+    server.use(
+      http.post(`${base}/rules`, async ({ request }) => {
+        posts.push(await request.json());
+        created = true;
+        return HttpResponse.json({ ...apkRule, id: newId }, { status: 201 });
+      }),
+      http.put(`${base}/rules/${newId}`, async ({ request }) => {
+        puts.push(await request.json());
+        return HttpResponse.json({ ...apkRule, id: newId });
+      }),
+      http.get(`${base}/rules`, () =>
+        HttpResponse.json(created ? [{ ...apkRule, id: newId }] : []),
+      ),
+      ...loggedInHandlers(),
+      ...ruleHandlers([]),
+    );
+    const user = userEvent.setup();
+    const { router } = renderApp(newPath);
+    await user.type(await screen.findByRole("textbox", { name: "Naam" }), "APK naar Auto");
+    await user.type(within(condition(1)).getByRole("textbox", { name: "Waarde" }), "APK");
+    await user.selectOptions(within(action(1)).getByRole("combobox", { name: "Label" }), "Sales");
+    await user.click(screen.getByRole("button", { name: "Opslaan" }));
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(`/w/${workspace.id}/automatisering/${newId}`),
+    );
+    expect(await screen.findByRole("heading", { name: "Regel wijzigen" })).toBeVisible();
+    expect(await screen.findByText("Toepassen op bestaande post?")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Opslaan" }));
+    await waitFor(() => expect(puts).toHaveLength(1));
+    expect(posts).toHaveLength(1);
+  });
+
+  it("names archived persons and says so when no letter matches", async () => {
+    const archived = { ...papa, archived: true };
+    server.use(
+      http.post(`${base}/rules/test`, () =>
+        HttpResponse.json({
+          total_count: 1,
+          checked_count: 1,
+          matched_count: 1,
+          documents: [{ ...documentSummary, addressee_ids: [papa.id] }],
+        }),
+      ),
+      ...loggedInHandlers(),
+      ...ruleHandlers([]),
+      http.get(`${base}/persons`, () => HttpResponse.json([archived, annaPerson])),
+    );
+    const user = userEvent.setup();
+    renderApp(newPath);
+    await user.type(await screen.findByRole("textbox", { name: "Naam" }), "APK");
+    await user.type(within(condition(1)).getByRole("textbox", { name: "Waarde" }), "APK");
+    await user.click(screen.getByRole("button", { name: "Test op bestaande post" }));
+    const link = await screen.findByRole("link", { name: "Belastingdienst" });
+    expect(within(link.closest("tr") as HTMLElement).getByText("Papa")).toBeVisible();
+  });
+
+  it("says no letters match when the test finds none", async () => {
+    server.use(
+      http.post(`${base}/rules/test`, () =>
+        HttpResponse.json({ total_count: 3, checked_count: 3, matched_count: 0, documents: [] }),
+      ),
+      ...loggedInHandlers(),
+      ...ruleHandlers([]),
+    );
+    const user = userEvent.setup();
+    renderApp(newPath);
+    await user.type(await screen.findByRole("textbox", { name: "Naam" }), "APK");
+    await user.type(within(condition(1)).getByRole("textbox", { name: "Waarde" }), "APK");
+    await user.click(screen.getByRole("button", { name: "Test op bestaande post" }));
+    expect(await screen.findByText("Geen brieven passen.")).toBeVisible();
   });
 });

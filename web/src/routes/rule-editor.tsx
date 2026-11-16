@@ -1,6 +1,6 @@
 import { t } from "@lingui/core/macro";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createRoute, Link } from "@tanstack/react-router";
+import { createRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Button, Form, Input, Label, Switch, TextField } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
@@ -252,12 +252,16 @@ function RuleForm({
   workspaceId,
   rule,
   choices,
+  justCreated,
 }: {
   workspaceId: string;
   rule: RuleOut | null;
   choices: Choices;
+  /** The page was opened by the first save of this rule: its "apply to existing post" offer stays. */
+  justCreated: boolean;
 }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [name, setName] = useState(rule?.name ?? "");
   const [match, setMatch] = useState(rule?.match ?? "all");
   const [mode, setMode] = useState(rule?.mode ?? "propose");
@@ -279,7 +283,9 @@ function RuleForm({
   );
   // A rule that was just created is changed, not created again, by the next save.
   const [savedId, setSavedId] = useState<string | null>(rule?.id ?? null);
-  const [savedActive, setSavedActive] = useState<boolean | null>(null);
+  const [savedActive, setSavedActive] = useState<boolean | null>(
+    justCreated && rule ? rule.active : null,
+  );
   const [running, setRunning] = useState(false);
 
   function body(): RuleBody {
@@ -341,6 +347,15 @@ function RuleForm({
       setSavedActive(saved.active);
       setRunning(false);
       await queryClient.invalidateQueries({ queryKey: rulesQuery(workspaceId).queryKey });
+      // A reload must not show an empty form, and a second save must change this rule.
+      if (!rule) {
+        await navigate({
+          to: "/w/$workspaceId/automatisering/$ruleId",
+          params: { workspaceId, ruleId: saved.id },
+          replace: true,
+          search: { opgeslagen: true },
+        });
+      }
     },
   });
 
@@ -481,9 +496,11 @@ function RuleForm({
         </Switch>
       </section>
 
-      {choices.labels.length === 0 ? <p className="panel-note">{t`Maak eerst een label`}</p> : null}
+      {choices.labels.length === 0 ? (
+        <p className="panel-note">{t`Maak eerst een label.`}</p>
+      ) : null}
       {choices.persons.length === 0 ? (
-        <p className="panel-note">{t`Voeg eerst een persoon toe`}</p>
+        <p className="panel-note">{t`Voeg eerst een persoon toe.`}</p>
       ) : null}
       {blocked ? (
         <div role="alert" className="alert">
@@ -518,8 +535,9 @@ function RuleForm({
           <DocumentTable
             workspaceId={workspaceId}
             documents={test.data.documents}
-            persons={choices.persons}
+            persons={choices.everyone}
             labels={choices.labels}
+            empty={t`Geen brieven passen.`}
           />
         </section>
       ) : null}
@@ -549,7 +567,7 @@ function RuleForm({
   );
 }
 
-function RuleEditorPage({ ruleId }: { ruleId: string | null }) {
+function RuleEditorPage({ ruleId, justCreated }: { ruleId: string | null; justCreated: boolean }) {
   const { workspace } = (ruleId ? ruleRoute : newRuleRoute).useRouteContext();
   usePageTitle(ruleId ? t`Regel wijzigen` : t`Nieuwe regel`);
   const rules = useQuery(rulesQuery(workspace.id));
@@ -564,7 +582,9 @@ function RuleEditorPage({ ruleId }: { ruleId: string | null }) {
       <header className="page-header">
         <h1>{ruleId ? t`Regel wijzigen` : t`Nieuwe regel`}</h1>
       </header>
-      {canEdit ? null : <p className="panel-note">{t`Alleen een beheerder kan regels wijzigen`}</p>}
+      {canEdit ? null : (
+        <p className="panel-note">{t`Alleen een beheerder kan regels wijzigen.`}</p>
+      )}
       {canEdit && !ready ? <p>{t`Even laden...`}</p> : null}
       <ErrorAlert error={rules.error ?? labels.error ?? persons.error} />
       {canEdit && ready && ruleId && !rule ? (
@@ -577,6 +597,7 @@ function RuleEditorPage({ ruleId }: { ruleId: string | null }) {
           key={ruleId ?? "new"}
           workspaceId={workspace.id}
           rule={rule ?? null}
+          justCreated={justCreated}
           choices={{
             labels: labels.data ?? [],
             persons: (persons.data ?? []).filter((person) => !person.archived),
@@ -591,14 +612,18 @@ function RuleEditorPage({ ruleId }: { ruleId: string | null }) {
 export const newRuleRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: "automatisering/nieuw",
-  component: () => <RuleEditorPage ruleId={null} />,
+  component: () => <RuleEditorPage ruleId={null} justCreated={false} />,
 });
 
 export const ruleRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: "automatisering/$ruleId",
+  // `opgeslagen`: the page was reached by the first save of a new rule.
+  validateSearch: (search: Record<string, unknown>): { opgeslagen?: true } =>
+    search.opgeslagen === true || search.opgeslagen === "true" ? { opgeslagen: true } : {},
   component: function RuleRoutePage() {
     const { ruleId } = ruleRoute.useParams();
-    return <RuleEditorPage ruleId={ruleId} />;
+    const { opgeslagen } = ruleRoute.useSearch();
+    return <RuleEditorPage ruleId={ruleId} justCreated={opgeslagen === true} />;
   },
 });
