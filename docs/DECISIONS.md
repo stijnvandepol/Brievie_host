@@ -449,13 +449,23 @@ Choices:
 - Two-factor authentication is not built in phase 1a; login is email + password only (with lockout).
 - Device tokens never expire; a device stops working only when somebody revokes it. A lifetime (and refresh) is still to be decided.
 - Server-side OCR (OCRmyPDF + Tesseract) for uploads without text: with web upload and the watch folder (1d).
-- The extraction schema leaves out addressees, relations, labels, VAT lines and identifiers (licence plate, assessment number); they arrive with persons and labels (1c) and business mode (phase 2), with IBAN mod-97 and the VAT sum check.
-- `listDocuments` returns the newest 200; paging is an additive change for later.
-- Confirmed tasks have no reminders yet (1c), and calculated deadlines (NL rules) are not built: a client may only send `in_document` or `manual`.
+- The extraction schema leaves out relations, VAT lines and identifiers (licence plate, assessment number); they arrive with business mode (phase 2), with IBAN mod-97 and the VAT sum check. Addressees and labels arrived in 1c.
+- `listDocuments` returns the newest 200; the inbox counts are exact, the lists show the newest 200. Paging is an additive change for later (1d or after).
+- Confirmed tasks have no reminders yet (local notifications, follow-up step), and calculated deadlines (NL rules) are not built: a client may only send `in_document` or `manual`.
 - A document cannot be deleted or edited after confirmation yet.
 - Encrypted page files can still stay behind when the request transaction fails after the intake service returned (a lost connection at commit); a storage sweep comes with back-ups (1d), which must also cover `BRIEVIE_MASTER_KEY`.
 - AI settings are set with `manage.py configure_ai`; the web settings screen comes with the wizard (1d). The `external` mode was not run against a real service by the builder (no key): the owner checks it with their own Mistral key.
 - The API key for an AI service lives in the database sealed with the workspace key; the worker therefore holds `BRIEVIE_MASTER_KEY` too.
+- From phase 1c, for 1d and later:
+  - Removing a member must unlink their person, and deleting a user must clear `Person.user` inside each workspace's context (row-level security).
+  - `listDocuments` now documents 422, so the iOS app's generated switch gains a case at the next contract sync.
+  - The history says "Jij" by comparing names, because events carry no actor id.
+  - Events written in the same call can tie on `created_at` (the ordering falls back to the id).
+  - `testRule` costs about six queries per document.
+  - `updateLabel` without a colour resets it to grey.
+  - There is no undo of a whole manual run.
+  - Visibility per document and "Zorg private" wait for members (inviting members, 1d).
+  - Folders, NL rules (calculated deadlines), full-text search, learned rule suggestions and paging of `listDocuments` are not built.
 
 ## 2026-11-16: more than one AI supplier
 
@@ -495,3 +505,79 @@ Choices:
 - No licence header per source file: the `LICENSE` file and the README section cover the
   repository. The CLA from spec section 14 is still open and is needed before the first
   outside contribution.
+
+## 2026-11-16: Phase 1c scope (owner decisions)
+
+- **A person can be linked to a member.** Post is always on the name of a `Person`.
+  Every member gets a person automatically; a person without an account can be linked
+  later and keeps all their post.
+- **Everyone in the workspace sees every document.** There is one account per workspace
+  until members can be invited, so restricting does nothing yet. "Privé" and "Zorg is
+  private by default" (spec 14) arrive with inviting members. `docs/PRIVACY.md` says it.
+- **Proposal first, automatic per rule.** A label or addressee from the AI is always a
+  proposal the user confirms. A rule starts in mode `propose`; the user can switch it to
+  `auto`. Every change is in the document's history and can be undone.
+- **Calendar through EventKit in the iPhone app.** Google and Outlook cannot fetch an ICS
+  feed from a home server on a private address. Dropped: an ICS feed per member (it can
+  follow once outside access exists).
+- **Label presets**: ten labels for Thuis, nine for Zakelijk, created with the workspace
+  and offered again for an existing one. Departments are not in a preset: the user adds
+  several labels at once.
+- **Scope**: persons, inbox, post in the web, labels, automatic labelling, rules,
+  calendar, ticking off a task. Folders, NL rules, search, the Today screen and local
+  notifications move to a follow-up step.
+
+## 2026-11-16: Ordering post (phase 1c)
+
+- **One mechanism for automatic labelling.** A preset label comes with a preset rule
+  (for example the word "Belastingdienst" gives the label Belasting); applying a preset
+  creates the rules. There is no second, hard-coded matching path. Dropped: keyword
+  lists in code next to the rules (two places to explain and to switch off).
+- **Only `apps.documents.organise` adds or removes a document's labels and addressees.**
+  It writes the history event (`DocumentEvent`) in the same transaction, whoever made the
+  change (user, rule, accepted suggestion, undo). Deleting a whole label or person
+  cascades without events.
+- **Suggestions have their own table.** A label or addressee proposal is a
+  `DocumentSuggestion` (open, accepted, dismissed), not a field of the extraction.
+  Dismissed is remembered: nothing automatic (AI, name matching, rules) proposes or
+  applies a change the user dismissed on that document. An `Origin` of empty string is a
+  dismissed marker for a change nothing proposed (the user removed it by hand).
+  Dropped: storing proposals in the extraction JSON (no per-item state, no memory).
+- **A rule takes over an open suggestion.** Strongest origin wins: rule, then name
+  match, then AI. A proposal counts in a rule's counters (`proposed`) only when it is
+  new or taken over, so a second run does not inflate them.
+- **Rules run at three moments:** when processing ends, when a document is confirmed, and
+  on "Toepassen op bestaande post". Never on a hand edit of labels or addressees: no
+  loops and no surprises when someone removes a label.
+- **Name matching is deterministic and runs on the server**, also with AI off. A match
+  directly after an address word ("t.a.v.", "aan", "mevrouw", "familie", ...) scores
+  0.95, one in the first 600 characters of the first page 0.85 (preselected from 0.85),
+  any other 0.60. An address word counts only directly before the name on the same line,
+  with nothing but whitespace or `.,:;` between. Why: a name far behind a word like "aan" or "beste", or on another line, says nothing about who the letter is addressed to, and a loose window made too many names look addressed.
+- **"aanslag" is not a recognition word for Belastingdienst.** A municipal tax bill says
+  it too (gemeentelijke belastingen), so it would label town hall post as Belastingdienst.
+- **Closed lists as per-request aliases.** The AI is shown the workspace's labels and
+  persons under short aliases for this request only; its answer is translated back and
+  every id is checked against the workspace's own lists. Free text from the model is
+  never stored as a label or addressee. What leaves the network: see
+  `docs/PRIVACY.md` (names of labels, display names and name variants of persons; never
+  ids, rules or page images).
+- **A fixed colour palette for labels** (eight names). The CSP forbids inline styles, so
+  the web has one CSS class per colour and the app maps each to its own; a free hex value
+  would need inline styles.
+- **Rule conditions are flat objects** (one condition type per object, no `anyOf`),
+  because the contract test forbids `anyOf` (the iOS generator cannot read it). Limits
+  on counts and lengths are checked in `rules.definition`.
+- **The rules engine stays pure** (`apps.rules.engine`, no Django import): facts in,
+  planned changes out. The executor does the database work.
+- **No `remove_label` action.** Rules add labels and addressees only. Removal by a rule
+  has no undo story that is simple to explain. Dropped until somebody needs it.
+- **Undo is offered only while the rule's event is the latest event** for that label or
+  person on the document. After a later change by hand the undo would reverse the wrong
+  state; the user reverses it by hand (the same click). Undo also dismisses the matching
+  suggestion, so the rule does not do it again.
+- **No undo of a whole manual run.** The builder shows the match count before the run;
+  undo is per document.
+- **A manual run locks each document** (blocking `select_for_update`, not skip-locked,
+  which could silently miss a document) and **one run per rule can be queued at a time**
+  (queueing lock), so a double click does not run it twice.

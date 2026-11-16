@@ -95,6 +95,16 @@ service works with `--base-url ... --model ...`. `--mode local --base-url http:/
 creates it (also in an existing `.env`). **Keep a copy in a safe place**: without it the
 stored documents cannot be read. See [docs/PRIVACY.md](docs/PRIVACY.md).
 
+## Ordering post (phase 1c)
+
+Post is on the name of a person, carries labels, and can be ordered by rules. A new
+workspace gets a start set of labels and rules (Thuis or Zakelijk). A label or person a
+rule or the AI proposes is a suggestion you confirm; switch a rule to automatic and its
+changes are made for you, shown in the document's history and undoable. The web interface
+has the inbox, persons, labels, the tab Automatisering (rule builder with a test) and a
+task list. With AI `external` or `local` the names of your labels and persons go along
+with the letter text, see [docs/PRIVACY.md](docs/PRIVACY.md).
+
 ## iPhone koppelen
 
 The app reaches the server over your network, so `BRIEVIE_HOSTNAME` in `deploy/.env` must

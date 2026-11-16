@@ -40,6 +40,13 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
   `Http404`) does not roll back the request transaction; only a 500 does.
 - No document content, tokens, passwords or BSNs in logs.
 - No new dependency without a line in `docs/DECISIONS.md`.
+- Apps of phase 1c: `people` (persons, name matching), `labels`, `rules` (engine, executor,
+  presets) and `tasks`; `documents.organise` and `documents.suggestions` order post.
+- Only `apps.documents.organise` adds or removes a document's labels and addressees (it
+  writes the history).
+- A label or addressee proposal is a `DocumentSuggestion`; nothing automatic repeats a
+  dismissed one.
+- The rules engine (`apps.rules.engine`) stays pure: no Django import.
 - No Redis, no Celery, no Node runtime container. Background jobs: Procrastinate, in an
   app's `jobs.py`; a job takes ids only and enters `workspace_context` itself, in short
   transactions (none open during an external call).

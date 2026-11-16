@@ -33,6 +33,12 @@ the translation. Add a line before introducing a new domain term.
 | bron (van een waarde) | quote |
 | controleren | review |
 | voorstel | proposal |
+| label | label |
+| geschiedenis | history (`DocumentEvent`) |
+| inbox (te controleren post) | inbox |
+| naamherkenning | name matching |
+| startset-regel | preset rule |
+| handmatig (regel uitvoeren) | manual run |
 | betalen | pay |
 | reageren | respond |
 | bezwaar | object |
