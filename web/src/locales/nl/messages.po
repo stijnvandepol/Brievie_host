@@ -16,6 +16,10 @@ msgstr "(gearchiveerd)"
 msgid "(nog {0})"
 msgstr "(nog {0})"
 
+#: src/components/rule-sentence.ts
+msgid "(verwijderd)"
+msgstr "(verwijderd)"
+
 #. placeholder {0}: data.length
 #: src/components/device-table.tsx
 msgid "{0, plural, one {# apparaat} other {# apparaten}}"
@@ -46,6 +50,14 @@ msgstr "{0} kan daarna niet meer bij Brievie. Je kunt het apparaat opnieuw koppe
 msgid "{0} wordt verwijderd. Dit kun je niet ongedaan maken."
 msgstr "{0} wordt verwijderd. Dit kun je niet ongedaan maken."
 
+#: src/routes/automations.tsx
+msgid "{applied} keer toegepast, {proposed} keer voorgesteld"
+msgstr "{applied} keer toegepast, {proposed} keer voorgesteld"
+
+#: src/routes/rule-editor.tsx
+msgid "{matched} van de nieuwste {checked} brieven passen"
+msgstr "{matched} van de nieuwste {checked} brieven passen"
+
 #: src/routes/pair-app.tsx
 msgid "{minutes, plural, one {# minuut} other {# minuten}}"
 msgstr "{minutes, plural, one {# minuut} other {# minuten}}"
@@ -62,9 +74,29 @@ msgstr "{name} wordt verwijderd en van {count} brieven gehaald. Dit kun je niet 
 msgid "{name} wordt verwijderd en van 1 brief gehaald. Dit kun je niet ongedaan maken."
 msgstr "{name} wordt verwijderd en van 1 brief gehaald. Dit kun je niet ongedaan maken."
 
+#: src/routes/automations.tsx
+msgid "{name} wordt verwijderd. Wat de regel al heeft gedaan, blijft staan."
+msgstr "{name} wordt verwijderd. Wat de regel al heeft gedaan, blijft staan."
+
 #: src/routes/pair-app.tsx
 msgid "{seconds, plural, one {# seconde} other {# seconden}}"
 msgstr "{seconds, plural, one {# seconde} other {# seconden}}"
+
+#: src/components/rule-sentence.ts
+msgid "{subject} \"{value}\" bevat"
+msgstr "{subject} \"{value}\" bevat"
+
+#: src/components/rule-sentence.ts
+msgid "{subject} \"{value}\" is"
+msgstr "{subject} \"{value}\" is"
+
+#: src/components/rule-sentence.ts
+msgid "{subject} het woord {value} bevat"
+msgstr "{subject} het woord {value} bevat"
+
+#: src/components/rule-sentence.ts
+msgid "{subject} het woord {value} niet bevat"
+msgstr "{subject} het woord {value} niet bevat"
 
 #: src/components/document-history.tsx
 msgid "{who} bevestigde deze brief"
@@ -104,15 +136,35 @@ msgid "Account"
 msgstr "Account"
 
 #: src/components/device-table.tsx
+#: src/routes/rule-editor.tsx
 msgid "Actie"
 msgstr "Actie"
 
+#: src/routes/rule-editor.tsx
+msgid "Actie {number}"
+msgstr "Actie {number}"
+
+#: src/routes/rule-editor.tsx
+msgid "Actie {number} verwijderen"
+msgstr "Actie {number} verwijderen"
+
+#: src/routes/rule-editor.tsx
+msgid "Actie toevoegen"
+msgstr "Actie toevoegen"
+
 #: src/components/device-table.tsx
+#: src/routes/automations.tsx
+#: src/routes/rule-editor.tsx
 msgid "Actief"
 msgstr "Actief"
 
+#: src/routes/automations.tsx
+msgid "Actief: {name}"
+msgstr "Actief: {name}"
+
 #: src/routes/labels.tsx
 #: src/routes/persons.tsx
+#: src/routes/rule-editor.tsx
 msgid "Acties"
 msgstr "Acties"
 
@@ -126,11 +178,26 @@ msgstr "Afdelingen"
 msgid "Afzender"
 msgstr "Afzender"
 
+#: src/routes/rule-editor.tsx
+msgid "alle"
+msgstr "alle"
+
 #: src/routes/post.tsx
 msgid "Alle labels"
 msgstr "Alle labels"
 
+#: src/routes/automations.tsx
+#: src/routes/rule-editor.tsx
+msgid "Alleen een beheerder kan regels wijzigen"
+msgstr "Alleen een beheerder kan regels wijzigen"
+
+#: src/components/rule-sentence.ts
+#: src/routes/rule-editor.tsx
+msgid "Als"
+msgstr "Als"
+
 #: src/components/device-table.tsx
+#: src/routes/automations.tsx
 #: src/routes/labels.tsx
 #: src/routes/persons.tsx
 msgid "Annuleren"
@@ -162,6 +229,20 @@ msgstr "Archiveren"
 msgid "Archiveren: {0}"
 msgstr "Archiveren: {0}"
 
+#: src/routes/automations.tsx
+#: src/routes/rule-editor.tsx
+msgid "Automatisch toepassen"
+msgstr "Automatisch toepassen"
+
+#: src/routes/automations.tsx
+msgid "Automatisch toepassen: {name}"
+msgstr "Automatisch toepassen: {name}"
+
+#: src/components/page.tsx
+#: src/routes/automations.tsx
+msgid "Automatisering"
+msgstr "Automatisering"
+
 #: src/routes/document.tsx
 msgid "Bedrag incl. btw"
 msgstr "Bedrag incl. btw"
@@ -173,6 +254,22 @@ msgstr "Beheerder"
 #: src/components/document-table.tsx
 msgid "Beschikking"
 msgstr "Beschikking"
+
+#: src/components/rule-sentence.ts
+msgid "bevat de tekst"
+msgstr "bevat de tekst"
+
+#: src/components/rule-sentence.ts
+msgid "bevat het woord"
+msgstr "bevat het woord"
+
+#: src/components/rule-sentence.ts
+msgid "bevat niet het woord"
+msgstr "bevat niet het woord"
+
+#: src/routes/rule-editor.tsx
+msgid "Bezig. Je ziet het resultaat bij de brieven zelf."
+msgstr "Bezig. Je ziet het resultaat bij de brieven zelf."
 
 #: src/routes/setup.tsx
 msgid "Bijvoorbeeld: Sales, Finance, HR. Je krijgt per afdeling een label."
@@ -214,11 +311,63 @@ msgstr "Controleer deze brief in de app"
 msgid "Controleer deze brief in de app."
 msgstr "Controleer deze brief in de app."
 
+#: src/routes/rule-editor.tsx
+msgid "Dan"
+msgstr "Dan"
+
 #: src/components/document-table.tsx
 #: src/routes/document.tsx
 #: src/routes/inbox.tsx
 msgid "Datum brief"
 msgstr "Datum brief"
+
+#: src/components/rule-sentence.ts
+msgid "de afzender"
+msgstr "de afzender"
+
+#: src/components/rule-sentence.ts
+msgid "De afzender"
+msgstr "De afzender"
+
+#: src/components/rule-sentence.ts
+msgid "de brief het label {name} heeft"
+msgstr "de brief het label {name} heeft"
+
+#: src/components/rule-sentence.ts
+msgid "de brief het label {name} niet heeft"
+msgstr "de brief het label {name} niet heeft"
+
+#: src/components/rule-sentence.ts
+msgid "de brief op naam van {name} staat"
+msgstr "de brief op naam van {name} staat"
+
+#: src/components/rule-sentence.ts
+msgid "de brief op niemands naam staat"
+msgstr "de brief op niemands naam staat"
+
+#: src/components/rule-sentence.ts
+msgid "De bron"
+msgstr "De bron"
+
+#: src/components/rule-sentence.ts
+msgid "de bron {source} is"
+msgstr "de bron {source} is"
+
+#: src/routes/rule-editor.tsx
+msgid "De regel is opgeslagen."
+msgstr "De regel is opgeslagen."
+
+#: src/routes/rule-editor.tsx
+msgid "De regel wordt op al je post toegepast, niet alleen op de nieuwste 500."
+msgstr "De regel wordt op al je post toegepast, niet alleen op de nieuwste 500."
+
+#: src/components/rule-sentence.ts
+msgid "de tekst"
+msgstr "de tekst"
+
+#: src/components/rule-sentence.ts
+msgid "De tekst"
+msgstr "De tekst"
 
 #: src/routes/document.tsx
 msgid "Deadline"
@@ -237,14 +386,38 @@ msgstr "Deze code is verlopen."
 msgid "Deze pagina bestaat niet."
 msgstr "Deze pagina bestaat niet."
 
+#: src/routes/rule-editor.tsx
+msgid "Deze regel bestaat niet (meer)."
+msgstr "Deze regel bestaat niet (meer)."
+
+#: src/routes/rule-editor.tsx
+msgid "deze voorwaarden kloppen"
+msgstr "deze voorwaarden kloppen"
+
 #: src/routes/login.tsx
 #: src/routes/setup.tsx
 msgid "E-mailadres"
 msgstr "E-mailadres"
 
+#: src/components/rule-sentence.ts
+msgid "Een label"
+msgstr "Een label"
+
+#: src/routes/automations.tsx
+msgid "Een regel zet labels of een naam op nieuwe post. De regels draaien van boven naar beneden."
+msgstr "Een regel zet labels of een naam op nieuwe post. De regels draaien van boven naar beneden."
+
+#: src/routes/rule-editor.tsx
+msgid "een van"
+msgstr "een van"
+
 #: src/routes/pair-app.tsx
 msgid "Eigen CA, vingerafdruk zit in de code"
 msgstr "Eigen CA, vingerafdruk zit in de code"
+
+#: src/components/rule-sentence.ts
+msgid "en"
+msgstr "en"
 
 #: src/routes/root.tsx
 msgid "Er ging iets mis"
@@ -267,12 +440,14 @@ msgid "Er zijn nog geen apparaten gekoppeld."
 msgstr "Er zijn nog geen apparaten gekoppeld."
 
 #: src/components/device-table.tsx
+#: src/routes/automations.tsx
 #: src/routes/document.tsx
 #: src/routes/home.tsx
 #: src/routes/inbox.tsx
 #: src/routes/labels.tsx
 #: src/routes/persons.tsx
 #: src/routes/post.tsx
+#: src/routes/rule-editor.tsx
 msgid "Even laden..."
 msgstr "Even laden..."
 
@@ -344,6 +519,14 @@ msgstr "Groen"
 msgid "Groenblauw"
 msgstr "Groenblauw"
 
+#: src/components/rule-sentence.ts
+msgid "heeft"
+msgstr "heeft"
+
+#: src/components/rule-sentence.ts
+msgid "heeft niet"
+msgstr "heeft niet"
+
 #: src/components/document-table.tsx
 msgid "Herinnering"
 msgstr "Herinnering"
@@ -352,9 +535,25 @@ msgstr "Herinnering"
 msgid "Herkend in de brief"
 msgstr "Herkend in de brief"
 
+#: src/components/rule-sentence.ts
+msgid "Het soort post"
+msgstr "Het soort post"
+
+#: src/components/rule-sentence.ts
+msgid "het soort post {type} is"
+msgstr "het soort post {type} is"
+
+#: src/components/rule-sentence.ts
+msgid "het soort post niet {type} is"
+msgstr "het soort post niet {type} is"
+
 #: src/routes/inbox.tsx
 msgid "Hier is niets te doen."
 msgstr "Hier is niets te doen."
+
+#: src/routes/rule-editor.tsx
+msgid "Hoeveel voorwaarden moeten kloppen"
+msgstr "Hoeveel voorwaarden moeten kloppen"
 
 #: src/components/page.tsx
 msgid "Hoofdmenu"
@@ -389,6 +588,10 @@ msgstr "Inloggen"
 msgid "Installatiecode"
 msgstr "Installatiecode"
 
+#: src/routes/rule-editor.tsx
+msgid "Instellingen"
+msgstr "Instellingen"
+
 #: src/components/device-table.tsx
 msgid "Intrekken"
 msgstr "Intrekken"
@@ -398,6 +601,22 @@ msgstr "Intrekken"
 msgid "Intrekken: {0}"
 msgstr "Intrekken: {0}"
 
+#: src/components/rule-sentence.ts
+msgid "is"
+msgstr "is"
+
+#: src/components/rule-sentence.ts
+msgid "is leeg"
+msgstr "is leeg"
+
+#: src/components/rule-sentence.ts
+msgid "is niet"
+msgstr "is niet"
+
+#: src/components/rule-sentence.ts
+msgid "is precies"
+msgstr "is precies"
+
 #: src/components/document-table.tsx
 msgid "Jaaropgave"
 msgstr "Jaaropgave"
@@ -405,6 +624,14 @@ msgstr "Jaaropgave"
 #: src/components/external-ai-notice.tsx
 msgid "Je gebruikt een externe AI-dienst. De namen op deze pagina gaan mee met elke brief die de AI leest."
 msgstr "Je gebruikt een externe AI-dienst. De namen op deze pagina gaan mee met elke brief die de AI leest."
+
+#: src/routes/rule-editor.tsx
+msgid "Je hebt {total} brieven"
+msgstr "Je hebt {total} brieven"
+
+#: src/routes/automations.tsx
+msgid "Je hebt nog geen regels."
+msgstr "Je hebt nog geen regels."
 
 #: src/routes/setup.tsx
 msgid "Je naam"
@@ -477,14 +704,20 @@ msgstr "Koppelgegevens"
 
 #: src/routes/labels.tsx
 #: src/routes/post.tsx
+#: src/routes/rule-editor.tsx
 msgid "Label"
 msgstr "Label"
+
+#: src/components/rule-sentence.ts
+msgid "label {name}"
+msgstr "label {name}"
 
 #: src/components/suggestion-list.tsx
 msgid "Label {name}?"
 msgstr "Label {name}?"
 
 #: src/routes/labels.tsx
+#: src/routes/rule-editor.tsx
 msgid "Label toevoegen"
 msgstr "Label toevoegen"
 
@@ -513,6 +746,10 @@ msgstr "Lid"
 msgid "Loonstrook"
 msgstr "Loonstrook"
 
+#: src/components/rule-sentence.ts
+msgid "Mail"
+msgstr "Mail"
+
 #: src/routes/home.tsx
 msgid "Meekijker"
 msgstr "Meekijker"
@@ -528,6 +765,7 @@ msgstr "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
 #: src/routes/home.tsx
 #: src/routes/labels.tsx
 #: src/routes/persons.tsx
+#: src/routes/rule-editor.tsx
 msgid "Naam"
 msgstr "Naam"
 
@@ -567,6 +805,31 @@ msgstr "Nieuw"
 msgid "Nieuwe code"
 msgstr "Nieuwe code"
 
+#: src/routes/automations.tsx
+#: src/routes/rule-editor.tsx
+msgid "Nieuwe regel"
+msgstr "Nieuwe regel"
+
+#: src/components/rule-sentence.ts
+msgid "of"
+msgstr "of"
+
+#: src/routes/automations.tsx
+msgid "Omhoog"
+msgstr "Omhoog"
+
+#: src/routes/automations.tsx
+msgid "Omhoog: {name}"
+msgstr "Omhoog: {name}"
+
+#: src/routes/automations.tsx
+msgid "Omlaag"
+msgstr "Omlaag"
+
+#: src/routes/automations.tsx
+msgid "Omlaag: {name}"
+msgstr "Omlaag: {name}"
+
 #: src/components/document-table.tsx
 #: src/routes/document.tsx
 #: src/routes/inbox.tsx
@@ -579,14 +842,23 @@ msgstr "Ontvangen"
 
 #: src/components/document-table.tsx
 #: src/components/person-picker.tsx
+#: src/components/rule-sentence.ts
 #: src/routes/document.tsx
 #: src/routes/inbox.tsx
 msgid "Op naam van"
 msgstr "Op naam van"
 
+#: src/components/rule-sentence.ts
+msgid "op naam van {name}"
+msgstr "op naam van {name}"
+
 #: src/components/suggestion-list.tsx
 msgid "Op naam van {name}?"
 msgstr "Op naam van {name}?"
+
+#: src/routes/rule-editor.tsx
+msgid "Op naam zetten van"
+msgstr "Op naam zetten van"
 
 #: src/routes/pair-app.tsx
 msgid "Open de app op je telefoon en scan de code. De telefoon moet op hetzelfde netwerk zitten als deze server."
@@ -594,6 +866,7 @@ msgstr "Open de app op je telefoon en scan de code. De telefoon moet op hetzelfd
 
 #: src/routes/labels.tsx
 #: src/routes/persons.tsx
+#: src/routes/rule-editor.tsx
 msgid "Opslaan"
 msgstr "Opslaan"
 
@@ -624,6 +897,7 @@ msgid "Personen"
 msgstr "Personen"
 
 #: src/routes/post.tsx
+#: src/routes/rule-editor.tsx
 msgid "Persoon"
 msgstr "Persoon"
 
@@ -661,9 +935,21 @@ msgstr "QR-code om de app te koppelen"
 msgid "Regel {ruleName}"
 msgstr "Regel {ruleName}"
 
+#: src/routes/automations.tsx
+msgid "Regel verwijderen?"
+msgstr "Regel verwijderen?"
+
+#: src/routes/rule-editor.tsx
+msgid "Regel wijzigen"
+msgstr "Regel wijzigen"
+
 #: src/components/suggestion-list.tsx
 msgid "Regel: {ruleName}"
 msgstr "Regel: {ruleName}"
+
+#: src/routes/automations.tsx
+msgid "Regels"
+msgstr "Regels"
 
 #: src/components/document-table.tsx
 msgid "Rekening"
@@ -680,6 +966,10 @@ msgstr "Rood"
 #: src/routes/document.tsx
 msgid "Samenvatting"
 msgstr "Samenvatting"
+
+#: src/components/rule-sentence.ts
+msgid "Scan"
+msgstr "Scan"
 
 #: src/routes/pair-app.tsx
 msgid "Scan met de Brievie-app"
@@ -709,6 +999,7 @@ msgstr "Soort taak"
 msgid "Start Brievie"
 msgstr "Start Brievie"
 
+#: src/routes/automations.tsx
 #: src/routes/labels.tsx
 msgid "Startset toevoegen"
 msgstr "Startset toevoegen"
@@ -722,6 +1013,10 @@ msgstr "Status"
 #: src/routes/setup.tsx
 msgid "Stel je eigen Brievie-server in. Dit doe je maar één keer."
 msgstr "Stel je eigen Brievie-server in. Dit doe je maar één keer."
+
+#: src/routes/rule-editor.tsx
+msgid "Stop daarna met de volgende regels"
+msgstr "Stop daarna met de volgende regels"
 
 #: src/routes/document.tsx
 msgid "Taak"
@@ -739,6 +1034,10 @@ msgstr "Te controleren"
 #: src/routes/document.tsx
 msgid "Tekst van de brief"
 msgstr "Tekst van de brief"
+
+#: src/routes/rule-editor.tsx
+msgid "Terug naar de regels"
+msgstr "Terug naar de regels"
 
 #: src/routes/document.tsx
 msgid "Terug naar Post"
@@ -765,10 +1064,26 @@ msgstr "Terugzetten"
 msgid "Terugzetten: {0}"
 msgstr "Terugzetten: {0}"
 
+#: src/routes/rule-editor.tsx
+msgid "Test op bestaande post"
+msgstr "Test op bestaande post"
+
 #: src/routes/home.tsx
 #: src/routes/setup.tsx
 msgid "Thuis"
 msgstr "Thuis"
+
+#: src/routes/rule-editor.tsx
+msgid "Toepassen"
+msgstr "Toepassen"
+
+#: src/routes/rule-editor.tsx
+msgid "Toepassen op bestaande post"
+msgstr "Toepassen op bestaande post"
+
+#: src/routes/rule-editor.tsx
+msgid "Toepassen op bestaande post?"
+msgstr "Toepassen op bestaande post?"
 
 #: src/components/suggestion-list.tsx
 #: src/routes/labels.tsx
@@ -779,14 +1094,34 @@ msgstr "Toevoegen"
 msgid "Toevoegen: {text}"
 msgstr "Toevoegen: {text}"
 
+#: src/routes/rule-editor.tsx
+msgid "Uit: de regel doet een voorstel dat jij bevestigt."
+msgstr "Uit: de regel doet een voorstel dat jij bevestigt."
+
 #. placeholder {0}: formatLetterDate(task.deadline)
 #: src/routes/document.tsx
 msgid "Uiterlijk {0}"
 msgstr "Uiterlijk {0}"
 
+#: src/routes/rule-editor.tsx
+msgid "Uitkomst van de test"
+msgstr "Uitkomst van de test"
+
 #: src/components/page.tsx
 msgid "Uitloggen"
 msgstr "Uitloggen"
+
+#: src/components/rule-sentence.ts
+msgid "Upload"
+msgstr "Upload"
+
+#: src/routes/rule-editor.tsx
+msgid "Veld"
+msgstr "Veld"
+
+#: src/routes/rule-editor.tsx
+msgid "Vergelijking"
+msgstr "Vergelijking"
 
 #: src/routes/document.tsx
 msgid "Vervaldatum"
@@ -796,8 +1131,10 @@ msgstr "Vervaldatum"
 msgid "Verwerken mislukt"
 msgstr "Verwerken mislukt"
 
+#: src/routes/automations.tsx
 #: src/routes/labels.tsx
 #: src/routes/persons.tsx
+#: src/routes/rule-editor.tsx
 msgid "Verwijderen"
 msgstr "Verwijderen"
 
@@ -806,6 +1143,7 @@ msgstr "Verwijderen"
 msgid "Verwijderen: {0}"
 msgstr "Verwijderen: {0}"
 
+#: src/routes/automations.tsx
 #: src/routes/labels.tsx
 msgid "Verwijderen: {name}"
 msgstr "Verwijderen: {name}"
@@ -834,9 +1172,29 @@ msgstr "Voorstel van de AI"
 msgid "Voorstellen"
 msgstr "Voorstellen"
 
+#: src/routes/rule-editor.tsx
+msgid "Voorwaarde {number}"
+msgstr "Voorwaarde {number}"
+
+#: src/routes/rule-editor.tsx
+msgid "Voorwaarde {number} verwijderen"
+msgstr "Voorwaarde {number} verwijderen"
+
+#: src/routes/rule-editor.tsx
+msgid "Voorwaarde toevoegen"
+msgstr "Voorwaarde toevoegen"
+
+#: src/routes/rule-editor.tsx
+msgid "Voorwaarden"
+msgstr "Voorwaarden"
+
 #: src/routes/setup.tsx
 msgid "Waar gebruik je Brievie voor?"
 msgstr "Waar gebruik je Brievie voor?"
+
+#: src/routes/rule-editor.tsx
+msgid "Waarde"
+msgstr "Waarde"
 
 #: src/routes/login.tsx
 #: src/routes/setup.tsx
@@ -846,6 +1204,10 @@ msgstr "Wachtwoord"
 #: src/routes/inbox.tsx
 msgid "Wat te doen"
 msgstr "Wat te doen"
+
+#: src/components/rule-sentence.ts
+msgid "Watch-map"
+msgstr "Watch-map"
 
 #: src/api/client.ts
 msgid "We kunnen de server niet bereiken. Controleer je verbinding en probeer het opnieuw."

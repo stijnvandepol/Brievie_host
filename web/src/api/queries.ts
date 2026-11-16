@@ -148,3 +148,16 @@ export const aiStatusQuery = (workspaceId: string) =>
       return data;
     },
   });
+
+/** The workspace's rules in the order they run. */
+export const rulesQuery = (workspaceId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "rules"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/rules", {
+        params: { path: { workspace_id: workspaceId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });

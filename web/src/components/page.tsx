@@ -121,6 +121,9 @@ function WorkspaceNav({ workspace }: { workspace: { id: string; name: string } }
       <Link to="/w/$workspaceId/labels" params={params} className={NAV_LINK}>
         {t`Labels`}
       </Link>
+      <Link to="/w/$workspaceId/automatisering" params={params} className={NAV_LINK}>
+        {t`Automatisering`}
+      </Link>
       <hr className="sidebar-rule" />
     </>
   );

@@ -188,3 +188,41 @@ export function documentHandlers(detail: components["schemas"]["DocumentOut"] = 
     ...personHandlers(),
   ];
 }
+
+type Rule = components["schemas"]["RuleOut"];
+
+export const apkRule: Rule = {
+  id: "f1111111-1111-4111-8111-111111111111",
+  position: 0,
+  name: "APK naar Auto",
+  active: true,
+  mode: "propose",
+  stop: false,
+  match: "all",
+  conditions: [{ field: "text", op: "contains_word", value: "APK" }],
+  actions: [{ type: "add_label", label_id: sales.id }],
+  system_key: "",
+  applied_count: 12,
+  proposed_count: 3,
+};
+
+export const bankRule: Rule = {
+  ...apkRule,
+  id: "f2222222-2222-4222-8222-222222222222",
+  position: 1,
+  name: "Bank",
+  active: false,
+  mode: "auto",
+  conditions: [{ field: "sender", op: "contains", value: "ING" }],
+  actions: [{ type: "add_addressee", person_id: papa.id }],
+  applied_count: 0,
+  proposed_count: 0,
+};
+
+/** The rules of the first workspace, plus the labels and persons their sentences need. */
+export function ruleHandlers(rules: Rule[] = [apkRule, bankRule]) {
+  return [
+    ...personHandlers(),
+    http.get(`*${API}/workspaces/${workspace.id}/rules`, () => HttpResponse.json(rules)),
+  ];
+}
