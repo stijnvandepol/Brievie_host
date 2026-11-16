@@ -194,6 +194,23 @@ def test_archived_person_target_is_skipped(ws_a: Workspace) -> None:
         ) == [emma.id]
 
 
+def test_archived_person_target_is_not_built_on(ws_a: Workspace) -> None:
+    remove_rules(ws_a)
+    oud = make_person(ws_a, "Oud")
+    auto = label(ws_a, "auto")
+    make_rule(ws_a, text_word("APK"), actions=[add_addressee(oud.id)], mode="auto")
+    make_rule(ws_a, Condition("addressee", "is", str(oud.id)), actions=[add_label(auto)])
+    with workspace_context(ws_a.id):
+        oud.archived_at = oud.created_at
+        oud.save()
+    document = make_document(ws_a, LETTER)
+
+    run_rules(ws_a, document)
+
+    assert open_rows(ws_a, document) == []
+    assert runs(ws_a) == []
+
+
 def test_deleted_target_is_skipped(ws_a: Workspace) -> None:
     remove_rules(ws_a)
     auto = label(ws_a, "auto")

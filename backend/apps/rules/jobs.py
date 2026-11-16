@@ -9,7 +9,7 @@ from apps.pipeline.jobs import QUEUE
 from apps.rules.definition import to_spec
 from apps.rules.engine import RuleSpec, evaluate
 from apps.rules.executor import execute
-from apps.rules.facts import facts_for
+from apps.rules.facts import facts_for, plannable
 from apps.rules.models import Rule, RuleRun
 from apps.workspaces.context import workspace_context
 
@@ -58,4 +58,5 @@ def apply_rule(workspace_id: UUID, rule_id: UUID) -> None:
 
 def _active_spec(workspace_id: UUID, rule_id: UUID) -> RuleSpec | None:
     rule = Rule.objects.filter(workspace_id=workspace_id, id=rule_id, active=True).first()
-    return to_spec(rule) if rule is not None else None
+    spec = to_spec(rule) if rule is not None else None
+    return plannable(workspace_id, [spec])[0] if spec is not None else None

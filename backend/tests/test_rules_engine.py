@@ -29,6 +29,8 @@ def facts(
     addressee_ids: frozenset[UUID] = frozenset(),
     hoped_label_ids: frozenset[UUID] = frozenset(),
     hoped_addressee_ids: frozenset[UUID] = frozenset(),
+    dismissed_label_ids: frozenset[UUID] = frozenset(),
+    dismissed_addressee_ids: frozenset[UUID] = frozenset(),
 ) -> DocumentFacts:
     return DocumentFacts(
         text=text,
@@ -39,6 +41,8 @@ def facts(
         addressee_ids=addressee_ids,
         hoped_label_ids=hoped_label_ids,
         hoped_addressee_ids=hoped_addressee_ids,
+        dismissed_label_ids=dismissed_label_ids,
+        dismissed_addressee_ids=dismissed_addressee_ids,
     )
 
 
@@ -296,3 +300,24 @@ def test_many_rules_on_a_long_text_stay_fast() -> None:
     assert time.monotonic() - started < 2
     assert len(result.planned) == 200
     assert {p.mode for p in result.planned} == {"auto"}
+
+
+def test_a_dismissed_target_is_never_planned_nor_built_on() -> None:
+    # B2: A puts Zorg on, B builds on Zorg; the user dismissed Zorg on this document.
+    a = rule(text_word("Belastingdienst"), actions=(Action("add_label", ZORG),))
+    b = rule(Condition("label", "has", str(ZORG)), actions=(Action("add_label", BANK),))
+    proposing_b = rule(
+        Condition("label", "has", str(ZORG)), actions=(Action("add_label", BANK),), mode="propose"
+    )
+    document = facts("Belastingdienst", dismissed_label_ids=frozenset({ZORG}))
+
+    assert evaluate(document, [a, b]).planned == ()
+    assert evaluate(document, [a, proposing_b]).planned == ()
+
+
+def test_a_dismissed_addressee_is_never_planned_nor_built_on() -> None:
+    a = rule(text_word("Zorg"), actions=(Action("add_addressee", MAMA),))
+    b = rule(Condition("addressee", "is", str(MAMA)), actions=(Action("add_label", ZORG),))
+    document = facts("Zorg", dismissed_addressee_ids=frozenset({MAMA}))
+
+    assert evaluate(document, [a, b]).planned == ()

@@ -4,7 +4,8 @@ A pure function without Django or a database, so "test this rule" and the real r
 the same code. The engine keeps two states while it walks the rules: settled (the facts
 plus every planned `auto` action) and hoped (settled plus the open suggestions plus
 every planned `propose` action). A rule matches on the hoped state; its actions are
-`auto` only when the rule is automatic and also matches the settled state.
+`auto` only when the rule is automatic and also matches the settled state. A change
+the user dismissed on the document is never planned, so no later rule builds on it.
 """
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -64,6 +65,10 @@ class DocumentFacts:
     # Open suggestions on the document: not there yet, but hoped for.
     hoped_label_ids: frozenset[UUID] = frozenset()
     hoped_addressee_ids: frozenset[UUID] = frozenset()
+
+    # Changes the user dismissed on the document: never planned, so never built on.
+    dismissed_label_ids: frozenset[UUID] = frozenset()
+    dismissed_addressee_ids: frozenset[UUID] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -192,6 +197,7 @@ def evaluate(facts: DocumentFacts, rules: Sequence[RuleSpec]) -> Evaluation:
     # plans a target that is only proposed by name matching or the AI (the suggestion
     # then gets the rule as its origin).
     proposed = _State()
+    dismissed = _State(set(facts.dismissed_label_ids), set(facts.dismissed_addressee_ids))
     matched: list[UUID] = []
     planned: list[PlannedAction] = []
     for rule in rules:
@@ -204,7 +210,7 @@ def evaluate(facts: DocumentFacts, rules: Sequence[RuleSpec]) -> Evaluation:
             if action.type not in ACTIONS:
                 continue
             target = action.target_id
-            if target in settled.targets(action.type):
+            if target in settled.targets(action.type) or target in dismissed.targets(action.type):
                 continue
             # Already planned in this run: only an automatic action adds something (it
             # settles it).

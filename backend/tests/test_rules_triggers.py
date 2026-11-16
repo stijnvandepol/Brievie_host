@@ -9,6 +9,7 @@ from apps.labels.models import Label
 from apps.pipeline import jobs
 from apps.pipeline.errors import PermanentError
 from apps.pipeline.steps import run_pipeline
+from apps.rules.engine import Condition
 from apps.rules.models import RuleRun
 from apps.workspaces.context import workspace_context
 from apps.workspaces.models import Workspace
@@ -169,6 +170,24 @@ def test_dismissed_change_is_never_reapplied(client_a: Client, ws_a: Workspace) 
             "label_removed",
             "label_added",
         ]
+
+
+def test_a_target_removed_at_confirm_is_not_built_on(client_a: Client, ws_a: Workspace) -> None:
+    # B2: rule A puts X on, rule B adds Y "because the document has X".
+    remove_rules(ws_a)
+    x, y = label(ws_a, "belastingdienst"), label(ws_a, "bank")
+    make_rule(ws_a, text_word("Belastingdienst"), actions=[add_label(x)], mode="auto")
+    document = make_document(ws_a, "Belastingdienst\nAanslag 2025", status="processing")
+    process(ws_a, document)
+    assert label_ids(ws_a, document) == {x.id}
+    make_rule(ws_a, Condition("label", "has", str(x.id)), actions=[add_label(y)], mode="auto")
+
+    r = confirm(client_a, document, sets_organisation=True, label_ids=[])
+
+    assert r.status_code == 200
+    assert r.json()["label_ids"] == []
+    assert r.json()["suggestions"] == []
+    assert label_ids(ws_a, document) == set()
 
 
 def test_repeated_confirm_after_auto_rule_is_200(client_a: Client, ws_a: Workspace) -> None:

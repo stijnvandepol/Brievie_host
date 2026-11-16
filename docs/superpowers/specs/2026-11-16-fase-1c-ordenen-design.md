@@ -428,6 +428,10 @@ class DocumentFacts:
     hoped_label_ids: frozenset[UUID] = frozenset()
     hoped_addressee_ids: frozenset[UUID] = frozenset()
 
+    # Changes the user dismissed on the document: never planned, so never built on.
+    dismissed_label_ids: frozenset[UUID] = frozenset()
+    dismissed_addressee_ids: frozenset[UUID] = frozenset()
+
 def evaluate(facts: DocumentFacts, rules: Sequence[RuleSpec]) -> Evaluation: ...
 ```
 
@@ -448,6 +452,11 @@ whose conditions held, whether or not anything would change) and `planned`, a li
   matches the settled state. A rule that matches only thanks to a proposal nobody
   accepted yet is itself a proposal. So "label Zorg → op naam van mama" (auto) never
   fires on a Zorg label that is still a suggestion.
+- A change the user dismissed on the document is never planned and never enters the
+  settled or hoped state, so no later rule builds on it: when the user removed Zorg,
+  "label Zorg → op naam van mama" does not fire. Actions whose label no longer exists
+  or whose person no longer exists or is archived are dropped from the rules before
+  `evaluate`, for the same reason.
 - `quote`: for a `text` or `sender` condition that matched, the matched words with up
   to 40 characters before them; the first one when several matched; empty otherwise.
 
@@ -458,7 +467,8 @@ there. The real run hands the result to the executor. Same code, minus the last 
 
 `facts_for(document)` builds the facts from the database: the text is the masked OCR
 text; `sender` and `document_type` are the confirmed values, or before confirmation the
-AI's proposals (a sender only when its confidence is above 0).
+AI's proposals (a sender only when its confidence is above 0); the dismissed
+suggestions become `dismissed_label_ids` and `dismissed_addressee_ids`.
 
 `execute(document, planned, trigger)` runs inside the workspace context and a
 transaction, with the document row locked:
