@@ -11,7 +11,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from uuid import UUID
 
-from apps.common.text import excerpt, find_phrase, normalise
+from apps.common.text import Prepared, excerpt, find_phrase, normalise, prepare
 
 # The operators each condition field allows (design 9.2).
 OPERATORS: Mapping[str, frozenset[str]] = {
@@ -98,12 +98,32 @@ def _uuid(value: str) -> UUID | None:
         return None
 
 
-def _phrase(haystack: str, op: str, value: str) -> tuple[bool, str]:
+@dataclass
+class _Phrases:
+    """The text and sender, normalised once per evaluation, and the outcome of every
+    text or sender condition asked so far: they do not depend on the settled or hoped
+    state, so each is worked out once (a letter can be 600,000 characters)."""
+
+    text: Prepared
+    sender: Prepared
+    results: dict[Condition, tuple[bool, str]] = field(default_factory=dict)
+
+    def holds(self, condition: Condition) -> tuple[bool, str]:
+        result = self.results.get(condition)
+        if result is None:
+            haystack = self.text if condition.field == "text" else self.sender
+            result = _phrase(haystack, condition.op, condition.value)
+            self.results[condition] = result
+        return result
+
+
+def _phrase(haystack: Prepared, op: str, value: str) -> tuple[bool, str]:
     """Whether a text or sender operator holds, and the quote when it found words."""
+    original = haystack.original
     if op == "equals":
-        if normalise(haystack) != normalise(value):
+        if haystack.normalised != normalise(value):
             return False, ""
-        return True, excerpt(haystack, (0, len(haystack)))
+        return True, excerpt(original, (0, len(original)))
     if op not in ("contains_word", "contains", "not_contains_word"):
         return False, ""
     span = find_phrase(haystack, value, whole_words=op != "contains")
@@ -111,7 +131,7 @@ def _phrase(haystack: str, op: str, value: str) -> tuple[bool, str]:
         return span is None, ""
     if span is None:
         return False, ""
-    return True, excerpt(haystack, span)
+    return True, excerpt(original, span)
 
 
 def _id_condition(ids: set[UUID], op: str, value: str) -> bool:
@@ -127,15 +147,15 @@ def _id_condition(ids: set[UUID], op: str, value: str) -> bool:
     return False
 
 
-def _condition(condition: Condition, facts: DocumentFacts, state: _State) -> tuple[bool, str]:
+def _condition(
+    condition: Condition, facts: DocumentFacts, phrases: _Phrases, state: _State
+) -> tuple[bool, str]:
     """Whether `condition` holds on `state`, and its quote (empty when it has none)."""
     field_, op, value = condition.field, condition.op, condition.value
     if op not in OPERATORS.get(field_, frozenset()):
         return False, ""
-    if field_ == "text":
-        return _phrase(facts.text, op, value)
-    if field_ == "sender":
-        return _phrase(facts.sender, op, value)
+    if field_ in ("text", "sender"):
+        return phrases.holds(condition)
     if field_ == "label":
         return _id_condition(state.label_ids, op, value), ""
     if field_ == "addressee":
@@ -147,12 +167,14 @@ def _condition(condition: Condition, facts: DocumentFacts, state: _State) -> tup
 _COMBINE: Mapping[str, Callable[[Iterable[bool]], bool]] = {"all": all, "any": any}
 
 
-def _matches(rule: RuleSpec, facts: DocumentFacts, state: _State) -> tuple[bool, str]:
+def _matches(
+    rule: RuleSpec, facts: DocumentFacts, phrases: _Phrases, state: _State
+) -> tuple[bool, str]:
     """Whether `rule` matches `state`, and the quote of its first matching phrase."""
     combine = _COMBINE.get(rule.match)
     if combine is None:
         return False, ""
-    results = [_condition(c, facts, state) for c in rule.conditions]
+    results = [_condition(c, facts, phrases, state) for c in rule.conditions]
     holds = combine(held for held, _ in results)
     quote = next((q for held, q in results if held and q), "") if holds else ""
     return holds, quote
@@ -160,6 +182,7 @@ def _matches(rule: RuleSpec, facts: DocumentFacts, state: _State) -> tuple[bool,
 
 def evaluate(facts: DocumentFacts, rules: Sequence[RuleSpec]) -> Evaluation:
     """Plan the actions of `rules` on a document (design 9.3)."""
+    phrases = _Phrases(prepare(facts.text), prepare(facts.sender))
     settled = _State(set(facts.label_ids), set(facts.addressee_ids))
     hoped = _State(
         settled.label_ids | facts.hoped_label_ids,
@@ -172,11 +195,11 @@ def evaluate(facts: DocumentFacts, rules: Sequence[RuleSpec]) -> Evaluation:
     matched: list[UUID] = []
     planned: list[PlannedAction] = []
     for rule in rules:
-        holds, quote = _matches(rule, facts, hoped)
+        holds, quote = _matches(rule, facts, phrases, hoped)
         if not holds:
             continue
         matched.append(rule.id)
-        auto = rule.mode == "auto" and _matches(rule, facts, settled)[0]
+        auto = rule.mode == "auto" and _matches(rule, facts, phrases, settled)[0]
         for action in rule.actions:
             if action.type not in ACTIONS:
                 continue

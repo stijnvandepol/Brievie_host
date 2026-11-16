@@ -1,3 +1,4 @@
+import time
 from decimal import Decimal
 from uuid import uuid4
 
@@ -119,3 +120,18 @@ def test_address_word_with_punctuation_and_title_counts() -> None:
     [a] = match_addressees("Aan: mevrouw J. de Vries", [p])
     [b] = match_addressees("x " * 400 + "T.a.v. de heer J. de Vries", [p])
     assert a.confidence == b.confidence == Decimal("0.950")
+
+
+def test_many_persons_on_a_long_text_stay_fast() -> None:
+    # The text is normalised once, not once per name variant (B1).
+    sentence = "Geachte heer, hierbij ontvangt u de jaaropgave van dit jaar. "
+    text = "T.a.v. Persoon Zeven\n" + (sentence * (30_000 // len(sentence) + 1))[:30_000]
+    persons = [person(*(f"Persoon {n} variant {v}" for v in range(5))) for n in range(50)] + [
+        person("Persoon Zeven")
+    ]
+
+    started = time.monotonic()
+    matches = match_addressees(text, persons)
+
+    assert time.monotonic() - started < 2
+    assert [m.confidence for m in matches] == [Decimal("0.950")]

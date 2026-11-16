@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from uuid import UUID
 
-from apps.common.text import excerpt, find_all_phrases, normalise
+from apps.common.text import excerpt, find_all_phrases, normalise, prepare
 
 PRESELECT_FROM = Decimal("0.85")
 
@@ -98,6 +98,7 @@ def match_addressees(text: str, persons: Sequence[PersonNames]) -> list[NameMatc
     first_page_length = text.find(PAGE_SEPARATOR)
     if first_page_length == -1:
         first_page_length = len(text)
+    prepared = prepare(text)
     matches: list[NameMatch] = []
     for person in persons:
         best: tuple[Decimal, int, NameMatch] | None = None
@@ -105,7 +106,7 @@ def match_addressees(text: str, persons: Sequence[PersonNames]) -> list[NameMatc
             length = len(normalise(name))
             if length < MIN_NAME_LENGTH:
                 continue
-            for span in find_all_phrases(text, name, whole_words=True):
+            for span in find_all_phrases(prepared, name, whole_words=True):
                 confidence = _confidence(text, first_page_length, span[0])
                 if best is None or (confidence, length) > best[:2]:
                     best = (

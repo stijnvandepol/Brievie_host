@@ -7,6 +7,7 @@ collapsed) while spans always refer to the original text.
 
 import unicodedata
 from collections.abc import Iterator
+from dataclasses import dataclass
 
 
 def _normalise_with_map(value: str) -> tuple[str, list[int]]:
@@ -41,7 +42,25 @@ def normalise(value: str) -> str:
     return _normalise_with_map(value)[0]
 
 
-def find_all_phrases(haystack: str, phrase: str, *, whole_words: bool) -> Iterator[tuple[int, int]]:
+@dataclass(frozen=True)
+class Prepared:
+    """A text normalised once, to search many phrases in (normalising a long letter is
+    the expensive part of a search)."""
+
+    original: str
+    normalised: str
+    # Per normalised character, its index in `original`.
+    origin: tuple[int, ...]
+
+
+def prepare(text: str) -> Prepared:
+    normalised, origin = _normalise_with_map(text)
+    return Prepared(text, normalised, tuple(origin))
+
+
+def find_all_phrases(
+    haystack: str | Prepared, phrase: str, *, whole_words: bool
+) -> Iterator[tuple[int, int]]:
     """Every span in the original `haystack` where `phrase` occurs after normalising both.
 
     With `whole_words` the characters around a match may not be letters or digits.
@@ -49,7 +68,8 @@ def find_all_phrases(haystack: str, phrase: str, *, whole_words: bool) -> Iterat
     needle = normalise(phrase)
     if not needle:
         return
-    text, origin = _normalise_with_map(haystack)
+    prepared = haystack if isinstance(haystack, Prepared) else prepare(haystack)
+    original, text, origin = prepared.original, prepared.normalised, prepared.origin
     position = text.find(needle)
     while position != -1:
         end = position + len(needle)
@@ -58,13 +78,15 @@ def find_all_phrases(haystack: str, phrase: str, *, whole_words: bool) -> Iterat
         if not whole_words or (before_ok and after_ok):
             span_end = origin[end - 1] + 1
             # Combining marks of the last character belong to the match.
-            while span_end < len(haystack) and unicodedata.combining(haystack[span_end]):
+            while span_end < len(original) and unicodedata.combining(original[span_end]):
                 span_end += 1
             yield origin[position], span_end
         position = text.find(needle, position + 1)
 
 
-def find_phrase(haystack: str, phrase: str, *, whole_words: bool) -> tuple[int, int] | None:
+def find_phrase(
+    haystack: str | Prepared, phrase: str, *, whole_words: bool
+) -> tuple[int, int] | None:
     """The span in the original `haystack` of the first occurrence of `phrase`, or None."""
     return next(find_all_phrases(haystack, phrase, whole_words=whole_words), None)
 

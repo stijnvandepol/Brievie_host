@@ -1,4 +1,4 @@
-from apps.common.text import excerpt, find_phrase, normalise
+from apps.common.text import excerpt, find_all_phrases, find_phrase, normalise, prepare
 
 
 def test_normalise_folds_case_accents_and_whitespace() -> None:
@@ -68,3 +68,13 @@ def test_zero_width_space_is_dropped_so_jande_vries_does_not_match_jan_de_vries(
 def test_span_covers_combining_marks_of_the_last_character() -> None:
     text = "Rene\u0301 Jansen"
     assert find_phrase(text, "rene", whole_words=True) == (0, 5)
+
+
+def test_a_prepared_text_gives_the_same_spans() -> None:
+    text = "Aan  René   Jansen,\nRené Jansen"
+    prepared = prepare(text)
+    assert prepared.original == text
+    assert list(find_all_phrases(prepared, "rene jansen", whole_words=True)) == list(
+        find_all_phrases(text, "rene jansen", whole_words=True)
+    )
+    assert find_phrase(prepared, "Jansen", whole_words=True) == (12, 18)

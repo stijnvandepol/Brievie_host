@@ -1,5 +1,6 @@
 import ast
 import inspect
+import time
 from uuid import UUID, uuid4
 
 from apps.rules import engine
@@ -277,3 +278,21 @@ def test_engine_imports_no_django() -> None:
             modules.append(node.module)
     assert modules
     assert not [m for m in modules if m.split(".")[0] == "django"]
+
+
+def test_many_rules_on_a_long_text_stay_fast() -> None:
+    # The text is normalised once per evaluation, not once per condition (B1).
+    words = [f"woord{i}" for i in range(20)]
+    sentence = "Geachte heer, hierbij ontvangt u de jaaropgave " + " ".join(words) + ". "
+    text = (sentence * (30_000 // len(sentence) + 1))[:30_000]
+    rules = [
+        rule(*(text_word(w) for w in words), mode="auto", actions=(Action("add_label", uuid4()),))
+        for _ in range(200)
+    ]
+
+    started = time.monotonic()
+    result = evaluate(facts(text, "Belastingdienst"), rules)
+
+    assert time.monotonic() - started < 2
+    assert len(result.planned) == 200
+    assert {p.mode for p in result.planned} == {"auto"}
