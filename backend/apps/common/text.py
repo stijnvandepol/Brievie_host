@@ -19,7 +19,9 @@ def _normalise_with_map(value: str) -> tuple[str, list[int]]:
             pending_space = True
             continue
         folded = "".join(
-            c for c in unicodedata.normalize("NFKD", original) if not unicodedata.combining(c)
+            c
+            for c in unicodedata.normalize("NFKD", original)
+            if not unicodedata.combining(c) and unicodedata.category(c) != "Cf"
         ).casefold()
         if not folded:
             continue
@@ -34,7 +36,8 @@ def _normalise_with_map(value: str) -> tuple[str, list[int]]:
 
 
 def normalise(value: str) -> str:
-    """NFKD, combining marks removed, case folded, whitespace runs to one space, stripped."""
+    """NFKD, combining marks and format characters (Cf) removed, case folded, whitespace
+    runs to one space, stripped."""
     return _normalise_with_map(value)[0]
 
 
@@ -53,7 +56,11 @@ def find_all_phrases(haystack: str, phrase: str, *, whole_words: bool) -> Iterat
         before_ok = position == 0 or not text[position - 1].isalnum()
         after_ok = end == len(text) or not text[end].isalnum()
         if not whole_words or (before_ok and after_ok):
-            yield origin[position], origin[end - 1] + 1
+            span_end = origin[end - 1] + 1
+            # Combining marks of the last character belong to the match.
+            while span_end < len(haystack) and unicodedata.combining(haystack[span_end]):
+                span_end += 1
+            yield origin[position], span_end
         position = text.find(needle, position + 1)
 
 
@@ -63,9 +70,22 @@ def find_phrase(haystack: str, phrase: str, *, whole_words: bool) -> tuple[int, 
 
 
 def excerpt(haystack: str, span: tuple[int, int], *, before: int = 40) -> str:
-    """The matched text with up to `before` characters before it, cut at a line break."""
+    """The matched text with up to `before` characters before it, on one line.
+
+    The lead is cut at a line break and starts at a word boundary; whitespace runs
+    become single spaces.
+    """
     start, end = span
-    lead = haystack[max(0, start - before) : start]
+    window_start = max(0, start - before)
+    lead = haystack[window_start:start]
     for line_break in ("\n", "\r", "\f"):
         lead = lead.rsplit(line_break, 1)[-1]
-    return (lead + haystack[start:end]).strip()
+    cut_mid_word = (
+        len(lead) == start - window_start
+        and window_start > 0
+        and lead[:1].strip() != ""
+        and not haystack[window_start - 1].isspace()
+    )
+    if cut_mid_word:
+        _, _, lead = lead.partition(" ") if " " in lead else ("", "", "")
+    return " ".join((lead + haystack[start:end]).split())

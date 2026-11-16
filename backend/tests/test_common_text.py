@@ -41,4 +41,30 @@ def test_excerpt_cuts_at_a_line_break() -> None:
 def test_excerpt_limits_the_text_before() -> None:
     text = "a" * 100 + " naam"
     start = text.index("naam")
-    assert excerpt(text, (start, start + 4), before=10) == "a" * 9 + " naam"
+    assert excerpt(text, (start, start + 4), before=10) == "naam"
+
+
+def test_excerpt_lead_starts_at_a_word_boundary() -> None:
+    text = "aaa bbb ccc naam"
+    start = text.index("naam")
+    assert excerpt(text, (start, start + 4), before=8) == "bbb ccc naam"
+    assert excerpt(text, (start, start + 4), before=6) == "ccc naam"
+
+
+def test_excerpt_collapses_line_breaks_and_whitespace() -> None:
+    text = "Brief\nRENÉ\n  JANSEN,\nrest"
+    assert excerpt(text, (6, text.index(",")), before=40) == "RENÉ JANSEN"
+
+
+def test_soft_hyphen_is_ignored() -> None:
+    assert find_phrase("Jan\u00adsen", "Jansen", whole_words=True) == (0, 7)
+
+
+def test_zero_width_space_is_dropped_so_jande_vries_does_not_match_jan_de_vries() -> None:
+    assert normalise("Jan\u200bde Vries") == "jande vries"
+    assert find_phrase("Jan\u200bde Vries", "Jan de Vries", whole_words=True) is None
+
+
+def test_span_covers_combining_marks_of_the_last_character() -> None:
+    text = "Rene\u0301 Jansen"
+    assert find_phrase(text, "rene", whole_words=True) == (0, 5)

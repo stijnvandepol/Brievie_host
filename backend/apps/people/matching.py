@@ -52,21 +52,37 @@ class NameMatch:
     confidence: Decimal
 
 
+_NORMALISED_ADDRESS_WORDS = tuple(normalise(word) for word in ADDRESS_WORDS)
+_LINE_BREAKS = "\n\r\f"
+
+
 def _follows_address_word(text: str, start: int) -> bool:
+    """True when an address word stands directly before `start` on the same line.
+
+    Only whitespace and `.,:;` may sit between the word and the name (other address
+    words end in an address word themselves), within `ADDRESS_WORD_REACH` characters.
+    """
     window_start = max(0, start - ADDRESS_WORD_REACH)
-    # Do not let a word cut in half by the window count as a whole word.
-    while (
-        window_start < start
-        and window_start > 0
-        and text[window_start - 1].isalnum()
-        and text[window_start].isalnum()
+    lead = text[window_start:start]
+    for line_break in _LINE_BREAKS:
+        lead = lead.rsplit(line_break, 1)[-1]
+    cut = len(lead) == start - window_start and window_start > 0
+    cut_inside_word = cut and text[window_start - 1].isalnum()
+    normalised = normalise(lead)
+    for candidate in (
+        normalised.rstrip(" ,:;"),
+        normalised.rstrip(" ,:;").rstrip(".").rstrip(" ,:;"),
     ):
-        window_start += 1
-    window = text[window_start:start]
-    return any(
-        next(find_all_phrases(window, word, whole_words=True), None) is not None
-        for word in ADDRESS_WORDS
-    )
+        for word in _NORMALISED_ADDRESS_WORDS:
+            if not candidate.endswith(word):
+                continue
+            before = len(candidate) - len(word)
+            if before > 0:
+                if not candidate[before - 1].isalnum():
+                    return True
+            elif not cut_inside_word:
+                return True
+    return False
 
 
 def _confidence(text: str, first_page_length: int, start: int) -> Decimal:

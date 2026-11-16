@@ -54,7 +54,7 @@ def test_names_shorter_than_three_are_ignored() -> None:
 
 def test_case_accents_and_line_breaks_are_ignored() -> None:
     p = person("rene jansen")
-    [match] = match_addressees("Beste\nRENÉ\nJANSEN,\nuw polis", [p])
+    [match] = match_addressees("Beste RENÉ\nJANSEN,\nuw polis", [p])
     assert match.person_id == p.person_id
     assert match.confidence == Decimal("0.950")
 
@@ -88,3 +88,34 @@ def test_no_persons_or_empty_text() -> None:
 
 def test_preselect_threshold() -> None:
     assert Decimal("0.85") == PRESELECT_FROM
+
+
+def test_first_page_rule_stands_alone() -> None:
+    [match] = match_addressees("Brief\fJan de Vries", [person("Jan de Vries")])
+    assert match.confidence == Decimal("0.600")
+
+
+def test_address_word_must_stand_directly_before_the_name() -> None:
+    p = person("Jan de Vries")
+    text = "Wij zijn de beste in hypotheken voor Jan de Vries"
+    [first_page] = match_addressees(text, [p])
+    assert first_page.confidence == Decimal("0.850")
+    [page_two] = match_addressees("x " * 400 + "\f" + text, [p])
+    assert page_two.confidence == Decimal("0.600")
+
+
+def test_address_word_before_a_form_feed_does_not_count() -> None:
+    [match] = match_addressees("x" * 700 + " Aan\fJan de Vries", [person("Jan de Vries")])
+    assert match.confidence == Decimal("0.600")
+
+
+def test_address_word_on_the_previous_line_does_not_count() -> None:
+    [match] = match_addressees("x " * 400 + "Aan\nJan de Vries", [person("Jan de Vries")])
+    assert match.confidence == Decimal("0.600")
+
+
+def test_address_word_with_punctuation_and_title_counts() -> None:
+    p = person("J. de Vries")
+    [a] = match_addressees("Aan: mevrouw J. de Vries", [p])
+    [b] = match_addressees("x " * 400 + "T.a.v. de heer J. de Vries", [p])
+    assert a.confidence == b.confidence == Decimal("0.950")
