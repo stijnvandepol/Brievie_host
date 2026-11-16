@@ -52,6 +52,8 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
   transactions (none open during an external call).
 - Text is BSN-masked (`apps.common.privacy.mask_bsns`) before it is stored, logged or sent
   to an AI service. Document files are sealed (`apps.common.crypto`) before they touch disk.
+- A field added to an existing API schema has a default (never newly required; the
+  contract test compares with `backend/tests/fixtures/openapi_1b.json`).
 - Nullable fields in API schemas are primitives only, and nullable inputs have a default
   (the iOS generator needs both); the contract test forbids `anyOf`.
 - Tests first for logic. Conventional commits.

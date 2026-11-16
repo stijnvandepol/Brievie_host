@@ -597,3 +597,17 @@ Choices:
   batch with the last document id as cursor under the same queueing lock. When a fresh
   run of the rule is already waiting, the continuation is dropped: that run starts from
   the beginning.
+
+## 2026-11-16: a new app must read an old server
+
+People update the iPhone app before the server, and the iOS client is generated from
+`docs/api/openapi.json`: a property under `required` makes the generated decoder refuse a
+body without it. So a field added to an existing API schema always has a default in its
+Pydantic schema and is never required (the server still always sends it). Request schemas
+follow the same rule. `test_released_schemas_gain_no_required_properties` compares the
+contract with `backend/tests/fixtures/openapi_1b.json`, the released 1b contract, and fails
+when a schema that exists in both gains a required property. Schemas new in a phase are not
+restricted. When a release ships, the fixture is replaced by that release's contract.
+openapi-typescript makes list fields with a default factory optional but keeps scalar
+fields with a literal default required; the web client is served by the same server, so it
+only reads the optional lists with `?? []`.

@@ -857,7 +857,7 @@ export interface components {
         /** DocumentOut */
         DocumentOut: {
             /** Addressee Ids */
-            addressee_ids: string[];
+            addressee_ids?: string[];
             /**
              * Client Id
              * Format: uuid
@@ -877,16 +877,22 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /** Inbox State */
+            /**
+             * Inbox State
+             * @default
+             */
             inbox_state: string;
             /** Label Ids */
-            label_ids: string[];
+            label_ids?: string[];
             /**
              * Letter Date
              * Format: date
              */
             letter_date: string | null;
-            /** Open Suggestion Count */
+            /**
+             * Open Suggestion Count
+             * @default 0
+             */
             open_suggestion_count: number;
             /** Page Count */
             page_count: number;
@@ -899,7 +905,7 @@ export interface components {
             /** Status */
             status: string;
             /** Suggestions */
-            suggestions: components["schemas"]["SuggestionOut"][];
+            suggestions?: components["schemas"]["SuggestionOut"][];
             /** Summary */
             summary: string;
             /** Summary By Ai */
@@ -910,7 +916,7 @@ export interface components {
         /** DocumentSummaryOut */
         DocumentSummaryOut: {
             /** Addressee Ids */
-            addressee_ids: string[];
+            addressee_ids?: string[];
             /**
              * Client Id
              * Format: uuid
@@ -928,16 +934,22 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /** Inbox State */
+            /**
+             * Inbox State
+             * @default
+             */
             inbox_state: string;
             /** Label Ids */
-            label_ids: string[];
+            label_ids?: string[];
             /**
              * Letter Date
              * Format: date
              */
             letter_date: string | null;
-            /** Open Suggestion Count */
+            /**
+             * Open Suggestion Count
+             * @default 0
+             */
             open_suggestion_count: number;
             /** Page Count */
             page_count: number;
@@ -1394,7 +1406,7 @@ export interface components {
              * Completed At
              * Format: date-time
              */
-            completed_at: string | null;
+            completed_at?: string | null;
             /**
              * Deadline
              * Format: date

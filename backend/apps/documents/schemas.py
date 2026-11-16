@@ -47,13 +47,13 @@ class DocumentSummaryOut(Schema):
     document_type: str
     letter_date: date | None
     # The persons the document is "op naam van"; join with `listPersons`.
-    addressee_ids: list[UUID]
+    addressee_ids: list[UUID] = Field(default_factory=list)
     # Join with `listLabels`.
-    label_ids: list[UUID]
+    label_ids: list[UUID] = Field(default_factory=list)
     # "new", "review", "unassigned", or empty when the document is sorted.
-    inbox_state: str
+    inbox_state: str = ""
     # Proposals (labels, addressees) waiting for the user.
-    open_suggestion_count: int
+    open_suggestion_count: int = 0
 
 
 class PageOut(Schema):
@@ -82,7 +82,7 @@ class TaskOut(Schema):
     deadline_source: str
     deadline_quote: str
     status: str
-    completed_at: datetime | None
+    completed_at: datetime | None = None
 
 
 class SuggestionOut(Schema):
@@ -112,7 +112,7 @@ class DocumentOut(DocumentSummaryOut):
     proposals: list[ProposalOut]
     tasks: list[TaskOut]
     # Open proposals only, preselected first, then by confidence.
-    suggestions: list[SuggestionOut]
+    suggestions: list[SuggestionOut] = Field(default_factory=list)
 
 
 class TaskIn(InputSchema):

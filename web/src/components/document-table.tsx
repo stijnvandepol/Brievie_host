@@ -118,9 +118,9 @@ export function DocumentTable({
               <td className="num">
                 {document.letter_date ? formatLetterDate(document.letter_date) : ""}
               </td>
-              <td>{personNames(persons, document.addressee_ids).join(", ")}</td>
+              <td>{personNames(persons, document.addressee_ids ?? []).join(", ")}</td>
               <td>
-                <LabelChips labels={labels} ids={document.label_ids} />
+                <LabelChips labels={labels} ids={document.label_ids ?? []} />
               </td>
               <td>
                 <span className="tag">{statusLabel(document.status)}</span>{" "}

@@ -87,7 +87,7 @@ export function SuggestionList({
   canEdit: boolean;
 }) {
   const answer = useAnswerSuggestion(workspaceId, document.id);
-  const items = document.suggestions.flatMap((suggestion) => {
+  const items = (document.suggestions ?? []).flatMap((suggestion) => {
     const text = question(suggestion, persons, labels);
     return text === null ? [] : [{ suggestion, text }];
   });

@@ -145,3 +145,16 @@ def test_folder_parent_id_is_nullable_uuid() -> None:
     parent_id = schemas["FolderOut"]["properties"]["parent_id"]
     assert parent_id["type"] == ["string", "null"]
     assert parent_id["format"] == "uuid"
+
+
+def test_released_schemas_gain_no_required_properties() -> None:
+    """A new app must read an old server: nothing that was optional becomes required."""
+    fixture = Path(__file__).parent / "fixtures" / "openapi_1b.json"
+    released = json.loads(fixture.read_text(encoding="utf-8"))["components"]["schemas"]
+    current = json.loads(export_openapi.render_schema())["components"]["schemas"]
+    gained = {
+        name: sorted(set(current[name].get("required", [])) - set(old.get("required", [])))
+        for name, old in released.items()
+        if name in current
+    }
+    assert {name: props for name, props in gained.items() if props} == {}

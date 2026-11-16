@@ -55,7 +55,7 @@ function InboxRow({
       <td>{typeLabel(document.document_type)}</td>
       <td className="num">{document.letter_date ? formatLetterDate(document.letter_date) : ""}</td>
       <td>
-        <LabelChips labels={labels} ids={document.label_ids} />{" "}
+        <LabelChips labels={labels} ids={document.label_ids ?? []} />{" "}
         <SuggestionMark count={document.open_suggestion_count} />
       </td>
       <td>
@@ -63,7 +63,7 @@ function InboxRow({
           <>
             <PersonPicker
               persons={persons}
-              selectedIds={document.addressee_ids}
+              selectedIds={document.addressee_ids ?? []}
               onChange={(ids) => {
                 onAssign();
                 setAddressees.mutate(ids);

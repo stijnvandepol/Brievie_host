@@ -128,7 +128,7 @@ function DocumentView({
               <dd>
                 <PersonPicker
                   persons={persons.data ?? []}
-                  selectedIds={document.addressee_ids}
+                  selectedIds={document.addressee_ids ?? []}
                   onChange={(ids) => setAddressees.mutate(ids)}
                   disabled={!canEdit || document.status === "processing" || setAddressees.isPending}
                 />
@@ -139,7 +139,7 @@ function DocumentView({
               <dd>
                 <LabelPicker
                   labels={labels.data ?? []}
-                  selectedIds={document.label_ids}
+                  selectedIds={document.label_ids ?? []}
                   onChange={(ids) => setLabels.mutate(ids)}
                   disabled={!canEdit || document.status === "processing" || setLabels.isPending}
                 />
