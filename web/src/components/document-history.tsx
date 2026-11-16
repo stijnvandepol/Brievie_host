@@ -32,6 +32,10 @@ function sentence(event: DocumentEvent, myName: string | undefined): string | nu
       return t`${who} haalde ${person} weg`;
     case "confirmed":
       return t`${who} bevestigde deze brief`;
+    case "task_completed":
+      return t`${who} rondde een taak af`;
+    case "task_reopened":
+      return t`${who} zette een taak weer open`;
     default:
       return null;
   }

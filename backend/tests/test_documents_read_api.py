@@ -82,6 +82,7 @@ def test_detail_shows_proposals_and_tasks(client_a: Client, ws_a: Workspace) -> 
     assert task["deadline_source"] == "in_document"
     assert task["deadline_quote"] == "vóór 1 december 2026"
     assert task["status"] == "open"
+    assert task["completed_at"] is None
     assert body["failure_code"] == ""
     assert body["summary_by_ai"] is False
 

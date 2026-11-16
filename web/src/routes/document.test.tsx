@@ -18,6 +18,16 @@ import {
   workspace,
 } from "../test-utils";
 
+const task = {
+  id: "0f0e0d0c-0b0a-4908-8706-050403020101",
+  type: "pay",
+  description: "Betaal de aanslag",
+  deadline: "2026-12-01",
+  deadline_quote: "uiterlijk 1 december",
+  deadline_source: "letter",
+  status: "open",
+  completed_at: null,
+};
 const path = `/w/${workspace.id}/post/${documentSummary.id}`;
 
 describe("document", () => {
@@ -41,6 +51,58 @@ describe("document", () => {
     expect(screen.getByText("Je krijgt een aanslag van 120 euro.")).toBeInTheDocument();
     expect(screen.getByText("Betaal de aanslag")).toBeInTheDocument();
     expect(screen.getByText("Tekst van de brief")).toBeInTheDocument();
+  });
+
+  it("ticks a task off and opens it again", async () => {
+    const posts: string[] = [];
+    server.use(
+      http.post(`*${API}/workspaces/${workspace.id}/tasks/${task.id}/:action`, ({ params }) => {
+        posts.push(String(params.action));
+        return HttpResponse.json({});
+      }),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
+    const user = userEvent.setup();
+    renderApp(path);
+    const box = await screen.findByRole("checkbox", { name: "Betaal de aanslag" });
+    expect(box).not.toBeChecked();
+    await user.click(box);
+    await waitFor(() => expect(posts).toEqual(["complete"]));
+  });
+
+  it("shows a done task struck through with its completion date", async () => {
+    server.use(
+      ...loggedInHandlers(),
+      ...documentHandlers({
+        ...documentDetail,
+        tasks: [{ ...task, status: "done", completed_at: "2026-11-12T10:00:00Z" }],
+      }),
+    );
+    const user = userEvent.setup();
+    const posts: string[] = [];
+    server.use(
+      http.post(`*${API}/workspaces/${workspace.id}/tasks/${task.id}/:action`, ({ params }) => {
+        posts.push(String(params.action));
+        return HttpResponse.json({});
+      }),
+    );
+    renderApp(path);
+    const box = await screen.findByRole("checkbox", { name: "Betaal de aanslag" });
+    expect(box).toBeChecked();
+    expect(screen.getByText(/Afgerond op 12 nov/)).toBeInTheDocument();
+    await user.click(box);
+    await waitFor(() => expect(posts).toEqual(["reopen"]));
+  });
+
+  it("disables the task checkbox for a viewer", async () => {
+    server.use(
+      http.get(`*${API}/workspaces`, () => HttpResponse.json([{ ...workspace, role: "viewer" }])),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
+    renderApp(path);
+    expect(await screen.findByRole("checkbox", { name: "Betaal de aanslag" })).toBeDisabled();
   });
 
   it("marks an AI summary", async () => {
@@ -204,6 +266,20 @@ describe("document", () => {
           },
           {
             ...event,
+            id: "e5",
+            kind: "task_completed",
+            person_name: "",
+            created_at: "2026-11-10T12:10:00Z",
+          },
+          {
+            ...event,
+            id: "e6",
+            kind: "task_reopened",
+            person_name: "",
+            created_at: "2026-11-10T12:20:00Z",
+          },
+          {
+            ...event,
             id: "e4",
             kind: "from_the_future",
             person_name: "",
@@ -218,7 +294,9 @@ describe("document", () => {
     expect(await screen.findByText("Jij zette deze brief op naam van Papa")).toBeInTheDocument();
     expect(screen.getByText("Bram haalde Papa weg")).toBeInTheDocument();
     expect(screen.getByText("Jij bevestigde deze brief")).toBeInTheDocument();
-    expect(screen.getAllByRole("listitem").filter((li) => li.closest("ol"))).toHaveLength(3);
+    expect(screen.getByText("Jij rondde een taak af")).toBeInTheDocument();
+    expect(screen.getByText("Jij zette een taak weer open")).toBeInTheDocument();
+    expect(screen.getAllByRole("listitem").filter((li) => li.closest("ol"))).toHaveLength(5);
   });
 
   const eventsUrl = `*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/events`;

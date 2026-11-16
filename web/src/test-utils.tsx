@@ -99,6 +99,7 @@ export const documentDetail: components["schemas"]["DocumentOut"] = {
       deadline_quote: "uiterlijk 1 december",
       deadline_source: "letter",
       status: "open",
+      completed_at: null,
     },
   ],
   suggestions: [],

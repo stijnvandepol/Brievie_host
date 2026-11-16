@@ -189,6 +189,11 @@ def add_label(
         return True
 
 
+def record_task_event(document: Document, kind: str, actor: User) -> None:
+    """History entry for ticking a task off or reopening it (`task_completed`, `task_reopened`)."""
+    _write_event(document, kind, actor, DocumentEvent.Origin.USER)
+
+
 _UNDOABLE = (DocumentEvent.Kind.LABEL_ADDED, DocumentEvent.Kind.ADDRESSEE_ADDED)
 
 

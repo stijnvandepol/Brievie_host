@@ -82,6 +82,7 @@ class TaskOut(Schema):
     deadline_source: str
     deadline_quote: str
     status: str
+    completed_at: datetime | None
 
 
 class SuggestionOut(Schema):

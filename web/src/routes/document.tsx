@@ -9,6 +9,7 @@ import { LabelPicker, useSetLabels } from "../components/label-picker";
 import { ErrorAlert, Shell, usePageTitle } from "../components/page";
 import { PersonPicker, useSetAddressees } from "../components/person-picker";
 import { SuggestionList } from "../components/suggestion-list";
+import { TaskList } from "../components/task-list";
 import { workspaceRoute } from "./workspace";
 
 type Document = components["schemas"]["DocumentOut"];
@@ -179,18 +180,7 @@ function DocumentView({
               <div className="panel-head">
                 <h2 id="tasks-heading">{t`Taken`}</h2>
               </div>
-              <ul className="task-list">
-                {document.tasks.map((task) => (
-                  <li key={task.id}>
-                    <span>{task.description}</span>
-                    {task.deadline ? (
-                      <span className="muted small">
-                        {t`Uiterlijk ${formatLetterDate(task.deadline)}`}
-                      </span>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
+              <TaskList workspaceId={workspaceId} tasks={document.tasks} canEdit={canEdit} />
             </section>
           ) : null}
           <DocumentHistory workspaceId={workspaceId} documentId={document.id} canEdit={canEdit} />

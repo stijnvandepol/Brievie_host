@@ -920,6 +920,16 @@ textarea:focus-visible {
   flex-direction: column;
 }
 
+.task-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-done span {
+  text-decoration: line-through;
+}
+
 .suggestion-list {
   display: flex;
   flex-direction: column;

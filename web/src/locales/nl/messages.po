@@ -111,8 +111,16 @@ msgid "{who} haalde het label {label} eraf"
 msgstr "{who} haalde het label {label} eraf"
 
 #: src/components/document-history.tsx
+msgid "{who} rondde een taak af"
+msgstr "{who} rondde een taak af"
+
+#: src/components/document-history.tsx
 msgid "{who} zette deze brief op naam van {person}"
 msgstr "{who} zette deze brief op naam van {person}"
+
+#: src/components/document-history.tsx
+msgid "{who} zette een taak weer open"
+msgstr "{who} zette een taak weer open"
 
 #: src/components/document-history.tsx
 msgid "{who} zette het label {label} erop"
@@ -171,6 +179,11 @@ msgstr "Acties"
 #: src/routes/setup.tsx
 msgid "Afdelingen"
 msgstr "Afdelingen"
+
+#. placeholder {0}: day.format(new Date(task.completed_at))
+#: src/components/task-list.tsx
+msgid "Afgerond op {0}"
+msgstr "Afgerond op {0}"
 
 #: src/components/document-table.tsx
 #: src/routes/document.tsx
@@ -1099,7 +1112,7 @@ msgid "Uit: de regel doet een voorstel dat jij bevestigt."
 msgstr "Uit: de regel doet een voorstel dat jij bevestigt."
 
 #. placeholder {0}: formatLetterDate(task.deadline)
-#: src/routes/document.tsx
+#: src/components/task-list.tsx
 msgid "Uiterlijk {0}"
 msgstr "Uiterlijk {0}"
 

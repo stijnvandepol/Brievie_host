@@ -215,6 +215,7 @@ def document_out(document: Document) -> DocumentOut:
                 deadline_source=task.deadline_source,
                 deadline_quote=task.deadline_quote,
                 status=task.status,
+                completed_at=task.completed_at,
             )
             for task in document.tasks.order_by("deadline", "created_at", "id")
         ],
