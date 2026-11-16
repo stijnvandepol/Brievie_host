@@ -93,6 +93,11 @@ def propose(
         return row
 
 
+def open_row(document: Document, action: str, target_id: UUID) -> DocumentSuggestion | None:
+    """The open proposal of this change on the document, if there is one."""
+    return _rows(document, action, target_id).filter(state=State.OPEN).first()
+
+
 def is_dismissed(document: Document, action: str, target_id: UUID) -> bool:
     return _rows(document, action, target_id).filter(state=State.DISMISSED).exists()
 

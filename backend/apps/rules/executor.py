@@ -94,6 +94,11 @@ def _apply(document: Document, action: PlannedAction, target: Label | Person, ru
 
 
 def _propose(document: Document, action: PlannedAction, target: Label | Person, rule: Rule) -> bool:
+    """Whether the proposal is new: a new open row, or an open row this rule took over.
+
+    Re-proposing what the rule already proposed is no new proposal, so it adds no run.
+    """
+    before = suggestions.open_row(document, action.action, action.target_id)
     row = suggestions.propose(
         document,
         action=action.action,
@@ -105,4 +110,6 @@ def _propose(document: Document, action: PlannedAction, target: Label | Person, 
         rule_name=action.rule_name,
         rule=rule,
     )
-    return row is not None
+    if row is None:
+        return False
+    return before is None or (before.origin, before.rule_id) != (row.origin, row.rule_id)

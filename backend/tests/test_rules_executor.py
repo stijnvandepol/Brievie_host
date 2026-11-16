@@ -109,6 +109,36 @@ def test_propose_rule_creates_suggestion_with_rule_name(ws_a: Workspace) -> None
         assert not DocumentEvent.objects.filter(document=document).exists()
 
 
+def test_same_propose_rule_twice_leaves_one_run(ws_a: Workspace) -> None:
+    remove_rules(ws_a)
+    auto = label(ws_a, "auto")
+    make_rule(ws_a, text_word("APK"), actions=[add_label(auto)], name="Label Auto")
+    document = make_document(ws_a, LETTER)
+
+    run_rules(ws_a, document)
+    run_rules(ws_a, document, trigger="confirmed")
+
+    assert len(open_rows(ws_a, document)) == 1
+    assert runs(ws_a) == [("Label Auto", "processed", "proposed")]
+
+
+def test_rule_that_takes_over_an_ai_suggestion_gets_a_run(ws_a: Workspace) -> None:
+    remove_rules(ws_a)
+    auto = label(ws_a, "auto")
+    rule = make_rule(ws_a, text_word("APK"), actions=[add_label(auto)], name="Label Auto")
+    document = make_document(ws_a, LETTER)
+    with workspace_context(ws_a.id):
+        suggestions.propose(
+            document, action="add_label", label=auto, origin="ai", confidence=Decimal("0.8")
+        )
+
+    run_rules(ws_a, document)
+
+    [row] = open_rows(ws_a, document)
+    assert (row.origin, row.rule_id) == ("rule", rule.id)
+    assert runs(ws_a) == [("Label Auto", "processed", "proposed")]
+
+
 def test_proposed_and_applied_in_one_run_is_only_applied(ws_a: Workspace) -> None:
     remove_rules(ws_a)
     auto = label(ws_a, "auto")
