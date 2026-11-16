@@ -15,6 +15,9 @@ the translation. Add a line before introducing a new domain term.
 | relatie | relation |
 | map | folder |
 | regel | rule |
+| automatisering | automation |
+| voorstellen (modus van een regel) | propose |
+| terugdraaien | undo |
 | taak | task |
 | post | entry |
 | op naam van | addressee |

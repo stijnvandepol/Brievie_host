@@ -26,6 +26,7 @@ from apps.pipeline.providers import LLMProvider
 from apps.pipeline.schema import ExtractionPayload
 from apps.pipeline.settings_service import provider_for
 from apps.pipeline.validation import ValidatedChoice, ValidatedValue, validate, validate_choices
+from apps.rules import triggers
 from apps.workspaces.context import workspace_context
 
 logger = logging.getLogger(__name__)
@@ -96,10 +97,11 @@ def organise_processed(
     """Propose labels and addressees for a processed document (design 17).
 
     Runs in the transaction that holds the document's row lock. A run replaces the
-    open proposals of an earlier run; accepted and dismissed rows stay. First the
-    deterministic layer (name matching; the rules engine joins here), then the AI's
-    picks. Every id is looked up again: a person or label deleted or archived since
-    the lists were read is skipped.
+    open proposals of an earlier run; accepted and dismissed rows stay. Name matching,
+    then the AI's picks, then the rules (trigger `processed`); the rules engine counts
+    the open proposals as hoped for, so the order does not change the outcome. Every
+    id is looked up again: a person or label deleted or archived since the lists were
+    read is skipped.
     """
     suggestions.clear_open(
         document,
@@ -131,7 +133,6 @@ def organise_processed(
             confidence=match.confidence,
             preselected=match.confidence >= PRESELECT_FROM,
         )
-    # The rules engine (design 9.4, trigger `processed`) runs here, before the AI's picks.
     for choice in ai_choices:
         if choice.kind == "addressee":
             person = found_persons.get(choice.target_id)
@@ -156,6 +157,7 @@ def organise_processed(
                 origin=DocumentSuggestion.Origin.AI,
                 confidence=choice.confidence,
             )
+    triggers.on_processed(document)
 
 
 def active_persons() -> list[PersonNames]:

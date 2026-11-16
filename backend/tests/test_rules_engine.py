@@ -172,6 +172,15 @@ def test_open_suggestion_counts_as_hoped_not_settled() -> None:
     assert [(p.target_id, p.mode) for p in settled.planned] == [(BANK, "auto")]
 
 
+def test_has_not_on_a_hoped_label_does_not_match_at_all() -> None:
+    # A rule matches on the hoped state, so a label that is only proposed already counts
+    # as there: "label has_not X" does not hold, not even as a proposal.
+    r = rule(Condition("label", "has_not", str(ZORG)), actions=(Action("add_label", BANK),))
+    result = evaluate(facts(hoped_label_ids=frozenset({ZORG})), [r])
+    assert result.matched_rule_ids == ()
+    assert result.planned == ()
+
+
 def test_stop_ends_the_run_after_own_actions() -> None:
     r1 = rule(
         text_word("brief"),

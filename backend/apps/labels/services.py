@@ -9,6 +9,8 @@ from psycopg import errors as pg_errors
 from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
 from apps.labels.models import COLORS, Label
+from apps.rules.definition import named_ids, only_adds_label
+from apps.rules.models import Rule
 from apps.workspaces.models import Workspace
 
 _NAME_UNIQUE = "labels_label_name_unique"
@@ -95,9 +97,33 @@ def update_label(*, workspace: Workspace, label_id: UUID, name: str, color: str)
 
 
 def delete_label(*, workspace: Workspace, label_id: UUID) -> None:
-    """Removes the label from its documents too; their events keep its name."""
+    """Removes the label from its documents too; their events keep its name.
+
+    The label's preset rule goes with it when adding this label is all it does. Another
+    rule that names the label is a conflict: the rule would point at nothing.
+    """
     with transaction.atomic():
-        _get_for_update(workspace, label_id).delete()
+        label = _get_for_update(workspace, label_id)
+        own_rules: list[Rule] = []
+        for rule in Rule.objects.select_for_update().filter(workspace=workspace):
+            if label.id not in named_ids(rule)[0]:
+                continue
+            if (
+                label.system_key
+                and rule.system_key == label.system_key
+                and only_adds_label(rule, label.id)
+            ):
+                own_rules.append(rule)
+                continue
+            raise ApiError(
+                409,
+                "label_in_use",
+                _("De regel '%(rule)s' gebruikt dit label. Pas die regel eerst aan.")
+                % {"rule": rule.name},
+            )
+        for rule in own_rules:
+            rule.delete()
+        label.delete()
 
 
 def create_extra_labels(*, workspace: Workspace, names: Sequence[str]) -> None:

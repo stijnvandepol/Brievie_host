@@ -25,6 +25,7 @@ from apps.documents.models import (
 from apps.labels.models import Label
 from apps.labels.services import label_not_found
 from apps.people.models import Person
+from apps.rules.models import Rule
 
 ADDRESSEES_MAX = 10
 LABELS_MAX = 30
@@ -95,15 +96,27 @@ def set_addressees(
             suggestions.mark_accepted(document, _ADD_ADDRESSEE, person_id)
 
 
-def add_addressee(document: Document, person: Person, *, actor: User | None, origin: str) -> bool:
-    """Put `person` on the document; False when they were already there."""
+def add_addressee(
+    document: Document,
+    person: Person,
+    *,
+    actor: User | None,
+    origin: str,
+    rule: Rule | None = None,
+) -> bool:
+    """Put `person` on the document; False when they were already there.
+
+    `rule` is the rule that made the change (origin `rule`).
+    """
     with transaction.atomic():
         if DocumentAddressee.objects.filter(document=document, person=person).exists():
             return False
         DocumentAddressee.objects.create(
             workspace_id=document.workspace_id, document=document, person=person
         )
-        _write_event(document, DocumentEvent.Kind.ADDRESSEE_ADDED, actor, origin, person=person)
+        _write_event(
+            document, DocumentEvent.Kind.ADDRESSEE_ADDED, actor, origin, person=person, rule=rule
+        )
         return True
 
 
@@ -151,16 +164,97 @@ def set_labels(
             suggestions.mark_accepted(document, _ADD_LABEL, label_id)
 
 
-def add_label(document: Document, label: Label, *, actor: User | None, origin: str) -> bool:
-    """Put `label` on the document; False when it was already there."""
+def add_label(
+    document: Document,
+    label: Label,
+    *,
+    actor: User | None,
+    origin: str,
+    rule: Rule | None = None,
+) -> bool:
+    """Put `label` on the document; False when it was already there.
+
+    `rule` is the rule that made the change (origin `rule`).
+    """
     with transaction.atomic():
         if DocumentLabel.objects.filter(document=document, label=label).exists():
             return False
         DocumentLabel.objects.create(
             workspace_id=document.workspace_id, document=document, label=label
         )
-        _write_event(document, DocumentEvent.Kind.LABEL_ADDED, actor, origin, label=label)
+        _write_event(
+            document, DocumentEvent.Kind.LABEL_ADDED, actor, origin, label=label, rule=rule
+        )
         return True
+
+
+_UNDOABLE = (DocumentEvent.Kind.LABEL_ADDED, DocumentEvent.Kind.ADDRESSEE_ADDED)
+
+
+def undo_event(*, document: Document, event_id: UUID, actor: User) -> None:
+    """Reverse a change a rule made (design 13), and remember the user's "no".
+
+    Only a `label_added` or `addressee_added` event with origin `rule` that was not
+    undone yet, while its label or person is still on the document.
+    """
+    with transaction.atomic():
+        event = (
+            DocumentEvent.objects.select_for_update().filter(document=document, id=event_id).first()
+        )
+        if event is None:
+            raise ApiError(404, "event_not_found", _("We kunnen deze gebeurtenis niet vinden."))
+        if (
+            event.origin != DocumentEvent.Origin.RULE
+            or event.kind not in _UNDOABLE
+            or DocumentEvent.objects.filter(undoes=event).exists()
+        ):
+            raise _not_undoable()
+        if event.kind == DocumentEvent.Kind.LABEL_ADDED:
+            label_id = event.label_id
+            label_link = (
+                None
+                if label_id is None
+                else DocumentLabel.objects.filter(document=document, label_id=label_id)
+                .select_related("label")
+                .first()
+            )
+            if label_id is None or label_link is None:
+                raise _not_undoable()
+            label_link.delete()
+            _write_event(
+                document,
+                DocumentEvent.Kind.LABEL_REMOVED,
+                actor,
+                DocumentEvent.Origin.UNDO,
+                label=label_link.label,
+                undoes=event,
+            )
+            suggestions.mark_dismissed(document, _ADD_LABEL, label_id)
+            return
+        person_id = event.person_id
+        person_link = (
+            None
+            if person_id is None
+            else DocumentAddressee.objects.filter(document=document, person_id=person_id)
+            .select_related("person")
+            .first()
+        )
+        if person_id is None or person_link is None:
+            raise _not_undoable()
+        person_link.delete()
+        _write_event(
+            document,
+            DocumentEvent.Kind.ADDRESSEE_REMOVED,
+            actor,
+            DocumentEvent.Origin.UNDO,
+            person=person_link.person,
+            undoes=event,
+        )
+        suggestions.mark_dismissed(document, _ADD_ADDRESSEE, person_id)
+
+
+def _not_undoable() -> ApiError:
+    return ApiError(409, "event_not_undoable", _("Deze wijziging kun je niet meer terugdraaien."))
 
 
 def record_confirmed(document: Document, *, actor: User) -> None:
@@ -186,6 +280,8 @@ def _write_event(
     *,
     person: Person | None = None,
     label: Label | None = None,
+    rule: Rule | None = None,
+    undoes: DocumentEvent | None = None,
 ) -> None:
     DocumentEvent.objects.create(
         workspace_id=document.workspace_id,
@@ -197,4 +293,7 @@ def _write_event(
         person_name=person.display_name if person is not None else "",
         label=label,
         label_name=label.name if label is not None else "",
+        rule=rule,
+        rule_name=rule.name if rule is not None else "",
+        undoes=undoes,
     )

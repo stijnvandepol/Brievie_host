@@ -10,6 +10,8 @@ from apps.accounts.models import User
 from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
 from apps.people.models import Person
+from apps.rules.definition import named_ids
+from apps.rules.models import Rule
 from apps.workspaces.models import Membership, Workspace
 
 _NAME_UNIQUE = "people_person_name_unique"
@@ -162,6 +164,14 @@ def delete_person(*, workspace: Workspace, person_id: UUID) -> None:
                 "person_in_use",
                 _("Deze persoon is nog in gebruik. Je kunt de persoon wel archiveren."),
             )
+        for rule in Rule.objects.filter(workspace=workspace):
+            if person.id in named_ids(rule)[1]:
+                raise ApiError(
+                    409,
+                    "person_in_use",
+                    _("De regel '%(rule)s' gebruikt deze persoon. Pas die regel eerst aan.")
+                    % {"rule": rule.name},
+                )
         person.delete()
 
 

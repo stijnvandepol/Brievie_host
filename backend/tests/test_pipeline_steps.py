@@ -21,6 +21,9 @@ from apps.pipeline.steps import run_pipeline
 from apps.workspaces.context import workspace_context
 from apps.workspaces.models import Workspace
 
+# The preset rules would add their own proposals to these letters.
+pytestmark = pytest.mark.usefixtures("without_preset_rules")
+
 TEXT = "Belastingdienst\nDatum 3 november 2026\nU moet € 1.234,56 betalen vóór 1 december 2026."
 TODAY = date(2026, 11, 14)
 

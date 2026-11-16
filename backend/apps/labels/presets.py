@@ -1,7 +1,7 @@
 """The start sets of labels per workspace kind (design 7.3).
 
-`recognise` becomes one rule per label (mode `propose`, match `any`) once the rules
-engine exists; until then it is data only.
+`recognise` becomes one rule per label (mode `propose`, match `any`), created with the
+label by `apply_preset` (see `apps.rules.presets`).
 """
 
 from collections.abc import Mapping
@@ -47,7 +47,8 @@ _HOME = (
         "belastingdienst",
         "Belastingdienst",
         "blue",
-        _words("belastingdienst", "toeslagen", "aanslag"),
+        # Not "aanslag": the municipality and the water board send an aanslag too.
+        _words("belastingdienst", "toeslagen"),
     ),
     PresetLabel(
         "zorg",
@@ -115,7 +116,7 @@ _BUSINESS = (
         "belastingdienst",
         "Belastingdienst",
         "blue",
-        _words("belastingdienst", "aanslag", "naheffing", "aangifte"),
+        _words("belastingdienst", "naheffing", "aangifte"),
     ),
     PresetLabel("inkoop", "Inkoop", "orange", (_type_is("invoice"),)),
     PresetLabel("verkoop", "Verkoop", "green", _words("offerte", "opdrachtbevestiging")),
@@ -166,13 +167,19 @@ PRESETS: Mapping[str, tuple[PresetLabel, ...]] = {
 
 
 def apply_preset(workspace: Workspace) -> list[Label]:
-    """Create the preset labels that are missing; return all labels (as `list_labels`).
+    """Create the preset labels that are missing, and the preset rules of the preset
+    labels that have none; return all labels (as `list_labels`).
 
     A preset label counts as present when a label has its `system_key`, or else its
     name (ignoring case); an existing label is never changed. Idempotent. Needs the
     workspace's RLS context.
     """
+    # rules.presets reads PRESETS from this module, so it is imported here.
+    from apps.rules.presets import ensure_preset_rules
+
     with transaction.atomic():
+        # Two calls at once would both create the same labels; the second waits here.
+        Workspace.objects.select_for_update().filter(id=workspace.id).first()
         existing = Label.objects.filter(workspace=workspace)
         keys = set(existing.exclude(system_key="").values_list("system_key", flat=True))
         names = set(existing.annotate(lower=Lower("name")).values_list("lower", flat=True))
@@ -182,4 +189,5 @@ def apply_preset(workspace: Workspace) -> list[Label]:
             Label.objects.create(
                 workspace=workspace, name=preset.name, color=preset.color, system_key=preset.key
             )
+        ensure_preset_rules(workspace)
         return list_labels(workspace)

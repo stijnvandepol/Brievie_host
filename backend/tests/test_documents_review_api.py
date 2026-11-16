@@ -18,6 +18,9 @@ from tests.helpers import post_json
 if TYPE_CHECKING:
     from tests.helpers import Response
 
+# The preset rules would add their own proposals to these letters.
+pytestmark = pytest.mark.usefixtures("without_preset_rules")
+
 TEXT = "Belastingdienst\nDatum 3 november 2026\nU moet € 1.234,56 betalen vóór 1 december 2026."
 
 

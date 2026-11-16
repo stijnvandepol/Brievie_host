@@ -69,9 +69,12 @@ def update_label(
 
 @router.delete(
     _LABEL,
-    response={204: None, 404: ErrorOut, **SESSION_WRITE_ERRORS},
+    response={204: None, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS},
     operation_id="deleteLabel",
-    description="Also removes the label from its documents; their history keeps its name.",
+    description=(
+        "Also removes the label from its documents (their history keeps its name) and its "
+        "preset rule. 409 `label_in_use` when another rule names the label."
+    ),
 )
 def delete_label(request: HttpRequest, workspace_id: UUID, label_id: UUID) -> Status[None]:
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)

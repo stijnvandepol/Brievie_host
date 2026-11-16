@@ -272,7 +272,7 @@ class DocumentLabel(WorkspaceModel):
 class DocumentEvent(WorkspaceModel):
     """One change in a document's history. Names are copied so they outlive a delete."""
 
-    same_workspace_fields = ("document", "person", "label", "undoes")
+    same_workspace_fields = ("document", "person", "label", "rule", "undoes")
 
     class Kind(models.TextChoices):
         LABEL_ADDED = "label_added"
@@ -305,6 +305,9 @@ class DocumentEvent(WorkspaceModel):
         "labels.Label", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
     label_name = models.TextField(blank=True, default="")
+    rule = models.ForeignKey(
+        "rules.Rule", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
     rule_name = models.TextField(blank=True, default="")
     # The event this one reverses.
     undoes = models.ForeignKey(
@@ -325,7 +328,7 @@ class DocumentSuggestion(WorkspaceModel):
     applies that change on this document again.
     """
 
-    same_workspace_fields = ("document", "label", "person")
+    same_workspace_fields = ("document", "label", "person", "rule")
 
     class Action(models.TextChoices):
         ADD_LABEL = "add_label"
@@ -354,6 +357,9 @@ class DocumentSuggestion(WorkspaceModel):
         "people.Person", null=True, blank=True, on_delete=models.CASCADE, related_name="+"
     )
     origin = models.CharField(max_length=20, choices=Origin.choices, blank=True, default="")
+    rule = models.ForeignKey(
+        "rules.Rule", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
     rule_name = models.TextField(blank=True, default="")
     # The words in the letter that led to it; may be empty. BSN-masked.
     quote = models.TextField(blank=True, default="")

@@ -14,6 +14,7 @@ from apps.documents.models import (
     Document,
     DocumentAddressee,
     DocumentEvent,
+    DocumentLabel,
     DocumentPage,
     DocumentSuggestion,
     Folder,
@@ -354,11 +355,34 @@ def _lock_for_organising(workspace: Workspace, document_id: UUID) -> Document:
 
 
 def list_document_events(*, workspace: Workspace, document_id: UUID) -> list[DocumentEvent]:
-    """The document's history, newest first."""
+    """The document's history, newest first.
+
+    Annotated with `undone` (an undo event points at it) and `still_linked` (its label
+    or person is on the document now), which `DocumentEventOut.can_undo` reads.
+    """
     document = get_document(workspace=workspace, document_id=document_id)
+    label_linked = DocumentLabel.objects.filter(
+        document_id=models.OuterRef("document_id"), label_id=models.OuterRef("label_id")
+    )
+    person_linked = DocumentAddressee.objects.filter(
+        document_id=models.OuterRef("document_id"), person_id=models.OuterRef("person_id")
+    )
     return list(
         DocumentEvent.objects.filter(document=document)
         .select_related("actor")
-        .annotate(undone=models.Exists(DocumentEvent.objects.filter(undoes=models.OuterRef("pk"))))
+        .annotate(
+            undone=models.Exists(DocumentEvent.objects.filter(undoes=models.OuterRef("pk"))),
+            still_linked=models.Exists(label_linked) | models.Exists(person_linked),
+        )
         .order_by("-created_at", "-id")
     )
+
+
+def undo_document_event(
+    *, workspace: Workspace, user: User, document_id: UUID, event_id: UUID
+) -> Document:
+    """Reverse a change a rule made; the rule will not make it again on this document."""
+    with transaction.atomic():
+        document = _lock_for_organising(workspace, document_id)
+        organise.undo_event(document=document, event_id=event_id, actor=user)
+    return document

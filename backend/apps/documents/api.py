@@ -302,3 +302,26 @@ def list_document_events(
 ) -> list[DocumentEvent]:
     membership = workspace_member(request, workspace_id)
     return services.list_document_events(workspace=membership.workspace, document_id=document_id)
+
+
+@router.post(
+    "/workspaces/{workspace_id}/documents/{document_id}/events/{event_id}/undo",
+    response={200: DocumentOut, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS},
+    operation_id="undoDocumentEvent",
+    description=(
+        "Reverse a change a rule made (`can_undo`); the rule does not make it again on "
+        "this document. 409 `event_not_undoable` when the change is not a rule's, was "
+        "undone already or is gone anyway."
+    ),
+)
+def undo_document_event(
+    request: HttpRequest, workspace_id: UUID, document_id: UUID, event_id: UUID
+) -> DocumentOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    document = services.undo_document_event(
+        workspace=membership.workspace,
+        user=current_user(request),
+        document_id=document_id,
+        event_id=event_id,
+    )
+    return services.document_out(document)

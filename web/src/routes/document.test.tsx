@@ -220,4 +220,68 @@ describe("document", () => {
     expect(screen.getByText("Jij bevestigde deze brief")).toBeInTheDocument();
     expect(screen.getAllByRole("listitem").filter((li) => li.closest("ol"))).toHaveLength(3);
   });
+
+  const eventsUrl = `*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/events`;
+  const ruleEvent = {
+    id: "e9",
+    kind: "label_added",
+    origin: "rule",
+    actor_name: "",
+    rule_name: "APK",
+    label_name: "Auto",
+    person_name: "",
+    can_undo: true,
+    undone: false,
+    created_at: "2026-11-10T10:00:00Z",
+  };
+
+  it("undoes a change a rule made from the history", async () => {
+    const undone: string[] = [];
+    let events = [ruleEvent];
+    server.use(
+      http.get(eventsUrl, () => HttpResponse.json(events)),
+      http.post(`${eventsUrl}/:eventId/undo`, ({ params }) => {
+        undone.push(String(params.eventId));
+        events = [
+          {
+            ...ruleEvent,
+            id: "e10",
+            kind: "label_removed",
+            origin: "undo",
+            actor_name: "Anna",
+            rule_name: "",
+            can_undo: false,
+            created_at: "2026-11-10T11:00:00Z",
+          },
+          { ...ruleEvent, can_undo: false, undone: true },
+        ];
+        return HttpResponse.json(documentDetail);
+      }),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
+    renderApp(path);
+    expect(await screen.findByText("Regel APK zette het label Auto erop")).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Terugdraaien: Regel APK zette het label Auto erop" }),
+    );
+
+    await waitFor(() => expect(undone).toEqual(["e9"]));
+    expect(await screen.findByText("Teruggedraaid")).toBeInTheDocument();
+    expect(screen.getByText("Jij haalde het label Auto eraf")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Terugdraaien/ })).not.toBeInTheDocument();
+  });
+
+  it("shows a viewer no undo button", async () => {
+    server.use(
+      http.get(`*${API}/workspaces`, () => HttpResponse.json([{ ...workspace, role: "viewer" }])),
+      http.get(eventsUrl, () => HttpResponse.json([ruleEvent])),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
+    renderApp(path);
+    expect(await screen.findByText("Regel APK zette het label Auto erop")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Terugdraaien/ })).not.toBeInTheDocument();
+  });
 });

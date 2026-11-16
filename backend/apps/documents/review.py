@@ -16,6 +16,7 @@ from apps.documents import organise
 from apps.documents.models import Document, DocumentSuggestion
 from apps.documents.schemas import ConfirmIn, TaskIn
 from apps.pipeline.validation import dates_in, quote_in_text
+from apps.rules import triggers
 from apps.tasks.models import Task
 from apps.workspaces.models import Workspace
 
@@ -43,8 +44,9 @@ def confirm_document(
     user then fills everything in by hand). Repeating the same review on a `done`
     document (a retry after a lost answer) changes nothing and answers the same;
     another review is a conflict. With `sets_organisation` the review also makes the
-    document's labels and addressees exactly the given lists (design 8). Needs the
-    workspace's RLS context.
+    document's labels and addressees exactly the given lists (design 8). Then the rules
+    run (trigger `confirmed`); a repeat does not run them. Needs the workspace's RLS
+    context.
     """
     with transaction.atomic():
         document = (
@@ -86,6 +88,8 @@ def confirm_document(
                 deadline_source=task.deadline_source,
                 deadline_quote=task.deadline_quote,
             )
+        # After the user's own choices, now with the confirmed sender and type.
+        triggers.on_confirmed(document)
     return document
 
 

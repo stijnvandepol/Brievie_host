@@ -193,7 +193,7 @@ function DocumentView({
               </ul>
             </section>
           ) : null}
-          <DocumentHistory workspaceId={workspaceId} documentId={document.id} />
+          <DocumentHistory workspaceId={workspaceId} documentId={document.id} canEdit={canEdit} />
           <details className="panel letter-text">
             <summary>{t`Tekst van de brief`}</summary>
             {document.pages.map((page) => (

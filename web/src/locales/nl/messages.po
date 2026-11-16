@@ -75,8 +75,16 @@ msgid "{who} haalde {person} weg"
 msgstr "{who} haalde {person} weg"
 
 #: src/components/document-history.tsx
+msgid "{who} haalde het label {label} eraf"
+msgstr "{who} haalde het label {label} eraf"
+
+#: src/components/document-history.tsx
 msgid "{who} zette deze brief op naam van {person}"
 msgstr "{who} zette deze brief op naam van {person}"
+
+#: src/components/document-history.tsx
+msgid "{who} zette het label {label} erop"
+msgstr "{who} zette het label {label} erop"
 
 #: src/components/document-table.tsx
 msgid "Aanmaning"
@@ -735,6 +743,18 @@ msgstr "Tekst van de brief"
 #: src/routes/document.tsx
 msgid "Terug naar Post"
 msgstr "Terug naar Post"
+
+#: src/components/document-history.tsx
+msgid "Terugdraaien"
+msgstr "Terugdraaien"
+
+#: src/components/document-history.tsx
+msgid "Terugdraaien: {text}"
+msgstr "Terugdraaien: {text}"
+
+#: src/components/document-history.tsx
+msgid "Teruggedraaid"
+msgstr "Teruggedraaid"
 
 #: src/routes/persons.tsx
 msgid "Terugzetten"

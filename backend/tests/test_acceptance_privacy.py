@@ -18,6 +18,9 @@ from apps.workspaces.context import workspace_context
 from apps.workspaces.models import Workspace
 from tests.documents_support import admin_of, jpeg, upload
 
+# The preset rules would add their own proposals to these letters.
+pytestmark = pytest.mark.usefixtures("without_preset_rules")
+
 BSN = "111222333"
 LETTER = f"CAK\nUw BSN {BSN}\nU moet betalen vóór 1 december 2026."
 

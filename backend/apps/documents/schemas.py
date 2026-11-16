@@ -179,5 +179,11 @@ class DocumentEventOut(Schema):
 
     @staticmethod
     def resolve_can_undo(obj: DocumentEvent) -> bool:
-        # Undo is for changes a rule made; rules arrive in a later step.
-        return False
+        # A change a rule made, not undone yet, whose label or person is still there
+        # (`undone` and `still_linked` are annotations of `list_document_events`).
+        return (
+            obj.origin == DocumentEvent.Origin.RULE
+            and obj.kind in (DocumentEvent.Kind.LABEL_ADDED, DocumentEvent.Kind.ADDRESSEE_ADDED)
+            and not getattr(obj, "undone", False)
+            and bool(getattr(obj, "still_linked", False))
+        )

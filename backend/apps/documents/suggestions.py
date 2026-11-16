@@ -17,6 +17,7 @@ from apps.common.privacy import mask_bsns
 from apps.documents.models import Document, DocumentAddressee, DocumentLabel, DocumentSuggestion
 from apps.labels.models import Label
 from apps.people.models import Person
+from apps.rules.models import Rule
 
 Action = DocumentSuggestion.Action
 Origin = DocumentSuggestion.Origin
@@ -36,6 +37,7 @@ def propose(
     quote: str = "",
     confidence: Decimal,
     rule_name: str = "",
+    rule: Rule | None = None,
     preselected: bool = False,
 ) -> DocumentSuggestion | None:
     """Record a proposal; None when the change is already on the document or was dismissed.
@@ -60,6 +62,7 @@ def propose(
                 label=label,
                 person=person,
                 origin=origin,
+                rule=rule,
                 rule_name=rule_name,
                 quote=mask_bsns(quote.strip()),
                 confidence=confidence,
@@ -72,6 +75,7 @@ def propose(
             # nothing of the old one carries over.
             row.state = State.OPEN
             row.origin = origin
+            row.rule = rule
             row.rule_name = rule_name
             row.quote = mask_bsns(quote.strip())
             row.confidence = confidence
@@ -80,6 +84,7 @@ def propose(
             return row
         if _STRENGTH[Origin(origin)] > _STRENGTH[Origin(row.origin)]:
             row.origin = origin
+            row.rule = rule
             row.rule_name = rule_name
             row.quote = mask_bsns(quote.strip())
         row.confidence = max(row.confidence, confidence)
