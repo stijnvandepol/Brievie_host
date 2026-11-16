@@ -10,13 +10,21 @@ from uuid import UUID
 from django.db import transaction
 
 from apps.documents import organise, suggestions
-from apps.documents.models import Document, DocumentEvent, DocumentSuggestion
+from apps.documents.models import (
+    Document,
+    DocumentAddressee,
+    DocumentEvent,
+    DocumentLabel,
+    DocumentSuggestion,
+)
+from apps.documents.organise import ADDRESSEES_MAX, LABELS_MAX
 from apps.labels.models import Label
 from apps.people.models import Person
 from apps.rules.engine import Evaluation, PlannedAction
 from apps.rules.models import Rule, RuleRun
 
 _ADD_LABEL = DocumentSuggestion.Action.ADD_LABEL
+_ADD_ADDRESSEE = DocumentSuggestion.Action.ADD_ADDRESSEE
 
 # A rule's proposal is certain: its conditions held.
 RULE_CONFIDENCE = Decimal("1")
@@ -28,7 +36,8 @@ def execute(document: Document, evaluation: Evaluation, *, trigger: str) -> None
 
     A target that no longer exists or is archived is skipped, and so is a change the
     user dismissed on this document. When one target is both proposed and applied in
-    the same evaluation, it is only applied.
+    the same evaluation, it is only applied. A change that would take the document
+    over its limit of labels or addressees (applied, or once accepted) is skipped too.
     """
     planned = evaluation.planned
     if not planned:
@@ -46,16 +55,22 @@ def execute(document: Document, evaluation: Evaluation, *, trigger: str) -> None
             [p.target_id for p in planned if p.action != _ADD_LABEL]
         )
         applied = {(p.action, p.target_id) for p in planned if p.mode == Rule.Mode.AUTO}
+        room: dict[str, int] = {
+            _ADD_LABEL: LABELS_MAX - DocumentLabel.objects.filter(document=document).count(),
+            _ADD_ADDRESSEE: ADDRESSEES_MAX
+            - DocumentAddressee.objects.filter(document=document).count(),
+        }
         outcomes: dict[UUID, str] = {}
         for action in planned:
             rule = rules.get(action.rule_id)
             target = _target(action, labels, persons)
-            if rule is None or target is None:
+            if rule is None or target is None or room[action.action] <= 0:
                 continue
             if suggestions.is_dismissed(document, action.action, action.target_id):
                 continue
             if action.mode == Rule.Mode.AUTO:
                 if _apply(document, action, target, rule):
+                    room[action.action] -= 1
                     outcomes[rule.id] = RuleRun.Outcome.APPLIED
             elif (action.action, action.target_id) not in applied and _propose(
                 document, action, target, rule

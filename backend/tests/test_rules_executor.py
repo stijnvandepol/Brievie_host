@@ -8,6 +8,7 @@ from apps.documents.models import (
     DocumentLabel,
     DocumentSuggestion,
 )
+from apps.documents.organise import ADDRESSEES_MAX, LABELS_MAX
 from apps.labels.models import Label
 from apps.rules.engine import Condition, evaluate
 from apps.rules.executor import execute
@@ -263,4 +264,49 @@ def test_label_of_another_workspace_in_a_stored_rule_is_skipped(
     with workspace_context(ws_a.id):
         assert not DocumentLabel.objects.filter(document=document).exists()
         assert not DocumentSuggestion.objects.filter(document=document).exists()
+    assert runs(ws_a) == []
+
+
+def fill_labels(workspace: Workspace, document: Document, count: int) -> None:
+    with workspace_context(workspace.id):
+        for n in range(count):
+            own = Label.objects.create(workspace=workspace, name=f"Eigen {n}")
+            DocumentLabel.objects.create(workspace=workspace, document=document, label=own)
+
+
+def test_rules_never_take_a_document_over_the_label_limit(ws_a: Workspace) -> None:
+    # B5: one label below the limit; the first automatic label fits, nothing after it.
+    remove_rules(ws_a)
+    auto, bank, zorg = label(ws_a, "auto"), label(ws_a, "bank"), label(ws_a, "zorg")
+    make_rule(ws_a, text_word("APK"), actions=[add_label(auto)], name="Eerste", mode="auto")
+    make_rule(ws_a, text_word("APK"), actions=[add_label(bank)], name="Tweede", mode="auto")
+    make_rule(ws_a, text_word("APK"), actions=[add_label(zorg)], name="Voorstel")
+    document = make_document(ws_a, LETTER)
+    fill_labels(ws_a, document, LABELS_MAX - 1)
+
+    run_rules(ws_a, document)
+
+    with workspace_context(ws_a.id):
+        assert DocumentLabel.objects.filter(document=document).count() == LABELS_MAX
+        assert DocumentLabel.objects.filter(document=document, label=auto).exists()
+    assert open_rows(ws_a, document) == []
+    assert runs(ws_a) == [("Eerste", "processed", "applied")]
+
+
+def test_rules_never_take_a_document_over_the_addressee_limit(ws_a: Workspace) -> None:
+    remove_rules(ws_a)
+    persons = [make_person(ws_a, f"Persoon {n}") for n in range(ADDRESSEES_MAX + 2)]
+    on_document, auto, proposed = persons[:ADDRESSEES_MAX], persons[-2], persons[-1]
+    make_rule(ws_a, text_word("APK"), actions=[add_addressee(auto.id)], mode="auto")
+    make_rule(ws_a, text_word("APK"), actions=[add_addressee(proposed.id)])
+    document = make_document(ws_a, LETTER)
+    with workspace_context(ws_a.id):
+        for person in on_document:
+            DocumentAddressee.objects.create(workspace=ws_a, document=document, person=person)
+
+    run_rules(ws_a, document)
+
+    with workspace_context(ws_a.id):
+        assert DocumentAddressee.objects.filter(document=document).count() == ADDRESSEES_MAX
+    assert open_rows(ws_a, document) == []
     assert runs(ws_a) == []
