@@ -43,9 +43,16 @@ def execute(document: Document, evaluation: Evaluation, *, trigger: str) -> None
     if not planned:
         return
     with transaction.atomic():
-        rules = Rule.objects.filter(workspace_id=document.workspace_id).in_bulk(
-            {p.rule_id for p in planned}
-        )
+        # Locked: a rule deleted meanwhile is skipped here, and cannot be deleted before
+        # its run and events are written (that would break the commit). `no_key` blocks a
+        # delete but not another run's foreign-key checks; id order avoids a deadlock
+        # between two runs.
+        rules = {
+            rule.id: rule
+            for rule in Rule.objects.select_for_update(no_key=True)
+            .filter(workspace_id=document.workspace_id, id__in={p.rule_id for p in planned})
+            .order_by("id")
+        }
         # Filtered by workspace as well as by RLS: a stored id may name another workspace's row.
         workspace_id = document.workspace_id
         labels = Label.objects.filter(workspace_id=workspace_id).in_bulk(

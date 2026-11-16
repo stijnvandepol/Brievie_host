@@ -1,5 +1,8 @@
 from decimal import Decimal
 
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
+
 from apps.documents import suggestions
 from apps.documents.models import (
     Document,
@@ -310,3 +313,32 @@ def test_rules_never_take_a_document_over_the_addressee_limit(ws_a: Workspace) -
         assert DocumentAddressee.objects.filter(document=document).count() == ADDRESSEES_MAX
     assert open_rows(ws_a, document) == []
     assert runs(ws_a) == []
+
+
+def test_a_rule_deleted_before_execution_is_skipped(ws_a: Workspace) -> None:
+    remove_rules(ws_a)
+    auto = label(ws_a, "auto")
+    rule = make_rule(ws_a, text_word("APK"), actions=[add_label(auto)], mode="auto")
+    document = make_document(ws_a, LETTER)
+    with workspace_context(ws_a.id):
+        locked = Document.objects.select_for_update().get(id=document.id)
+        evaluation = evaluate(facts_for(locked), active_specs(ws_a.id))
+        Rule.objects.filter(id=rule.id).delete()
+
+        execute(locked, evaluation, trigger="processed")
+
+        assert not DocumentLabel.objects.filter(document=document).exists()
+        assert not DocumentEvent.objects.exists()
+    assert runs(ws_a) == []
+
+
+def test_execution_locks_the_rules_it_uses(ws_a: Workspace) -> None:
+    # B6: a rule deleted while it runs cannot break the commit with a foreign-key error.
+    remove_rules(ws_a)
+    make_rule(ws_a, text_word("APK"), actions=[add_label(label(ws_a, "auto"))], mode="auto")
+    document = make_document(ws_a, LETTER)
+
+    with CaptureQueriesContext(connection) as queries:
+        run_rules(ws_a, document)
+
+    assert any('FROM "rules_rule"' in q["sql"] and "FOR NO KEY UPDATE" in q["sql"] for q in queries)
