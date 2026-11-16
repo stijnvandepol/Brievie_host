@@ -38,7 +38,7 @@ function HomePage() {
   useEffect(() => {
     if (only) {
       void navigate({
-        to: "/w/$workspaceId/post",
+        to: "/w/$workspaceId/inbox",
         params: { workspaceId: only.id },
         replace: true,
       });

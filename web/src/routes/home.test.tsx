@@ -61,7 +61,7 @@ describe("home", () => {
   it("redirects to the only workspace", async () => {
     server.use(...loggedInHandlers());
     const { router } = renderApp("/");
-    await waitFor(() => expect(router.state.location.pathname).toBe(`/w/${workspace.id}/post`));
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/w/${workspace.id}/inbox`));
   });
 
   it("logs out with the CSRF token and returns to the login screen", async () => {

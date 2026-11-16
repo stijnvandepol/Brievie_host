@@ -1,4 +1,5 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import {
   API,
@@ -7,6 +8,7 @@ import {
   HttpResponse,
   http,
   loggedInHandlers,
+  papa,
   renderApp,
   server,
   workspace,
@@ -44,5 +46,65 @@ describe("post", () => {
       `/w/${workspace.id}/post`,
     );
     expect(within(nav).getByRole("link", { name: "Werkruimtes" })).toBeInTheDocument();
+  });
+
+  it("shows the addressees in a column", async () => {
+    server.use(
+      ...loggedInHandlers(),
+      http.get(`*${API}/workspaces/${workspace.id}/documents`, () =>
+        HttpResponse.json([{ ...documentSummary, addressee_ids: [papa.id] }]),
+      ),
+      ...documentHandlers(),
+    );
+    renderApp(`/w/${workspace.id}/post`);
+    const link = await screen.findByRole("link", { name: "Belastingdienst" });
+    expect(screen.getByRole("columnheader", { name: "Op naam van" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(within(link.closest("tr") as HTMLElement).getByText("Papa")).toBeInTheDocument(),
+    );
+  });
+
+  it("filters on a person through the URL", async () => {
+    const seen: (string | null)[] = [];
+    server.use(
+      ...loggedInHandlers(),
+      http.get(`*${API}/workspaces/${workspace.id}/documents`, ({ request }) => {
+        seen.push(new URL(request.url).searchParams.get("person_id"));
+        return HttpResponse.json([documentSummary]);
+      }),
+      ...documentHandlers(),
+    );
+    const user = userEvent.setup();
+    const { router } = renderApp(`/w/${workspace.id}/post`);
+    const filter = await screen.findByRole("combobox", { name: "Persoon" });
+    await screen.findByRole("option", { name: "Papa" });
+    await user.selectOptions(filter, "Papa");
+    await waitFor(() => expect(router.state.location.search).toEqual({ persoon: papa.id }));
+    await waitFor(() => expect(seen).toContain(papa.id));
+  });
+
+  it("reads the person filter from the URL", async () => {
+    server.use(...loggedInHandlers(), ...documentHandlers());
+    renderApp(`/w/${workspace.id}/post?persoon=${papa.id}`);
+    const filter = await screen.findByRole("combobox", { name: "Persoon" });
+    await waitFor(() => expect(filter).toHaveValue(papa.id));
+  });
+
+  it("sums review and unassigned in the sidebar count", async () => {
+    server.use(
+      http.get(`*${API}/workspaces/${workspace.id}/inbox/counts`, () =>
+        HttpResponse.json({ new: 5, review: 1, unassigned: 2 }),
+      ),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
+    renderApp(`/w/${workspace.id}/post`);
+    const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
+    const inbox = await within(nav).findByRole("link", { name: "Inbox, 3 te doen" });
+    expect(inbox).toHaveAttribute("href", `/w/${workspace.id}/inbox`);
+    expect(within(nav).getByRole("link", { name: "Personen" })).toHaveAttribute(
+      "href",
+      `/w/${workspace.id}/personen`,
+    );
   });
 });

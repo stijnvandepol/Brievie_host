@@ -1,10 +1,16 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import {
+  API,
+  annaPerson,
   documentDetail,
   documentHandlers,
   documentSummary,
+  HttpResponse,
+  http,
   loggedInHandlers,
+  papa,
   renderApp,
   server,
   workspace,
@@ -85,5 +91,99 @@ describe("document", () => {
     );
     renderApp(path);
     expect(await screen.findByText("Deze brief wordt nog gelezen.")).toBeInTheDocument();
+  });
+
+  it("sends the new set of addressees from the picker", async () => {
+    const puts: unknown[] = [];
+    server.use(
+      http.put(
+        `*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/addressees`,
+        async ({ request }) => {
+          puts.push(await request.json());
+          return HttpResponse.json({ ...documentDetail, addressee_ids: [papa.id, annaPerson.id] });
+        },
+      ),
+      ...loggedInHandlers(),
+      ...documentHandlers({ ...documentDetail, addressee_ids: [papa.id] }),
+    );
+    const user = userEvent.setup();
+    renderApp(path);
+    const picker = await screen.findByRole("button", { name: /Op naam van/ });
+    await waitFor(() => expect(picker).toHaveTextContent("Papa"));
+    await user.click(picker);
+    await user.click(await screen.findByRole("option", { name: "Anna" }));
+    await waitFor(() => expect(puts).toEqual([{ person_ids: [papa.id, annaPerson.id] }]));
+  });
+
+  it("shows the picker disabled to a viewer", async () => {
+    server.use(
+      http.get(`*${API}/workspaces`, () => HttpResponse.json([{ ...workspace, role: "viewer" }])),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
+    renderApp(path);
+    expect(await screen.findByRole("button", { name: /Op naam van/ })).toBeDisabled();
+  });
+
+  it("shows the picker disabled while the letter is being read", async () => {
+    server.use(
+      ...loggedInHandlers(),
+      ...documentHandlers({ ...documentDetail, status: "processing" }),
+    );
+    renderApp(path);
+    expect(await screen.findByRole("button", { name: /Op naam van/ })).toBeDisabled();
+  });
+
+  it("lists the history as sentences and skips a kind it does not know", async () => {
+    const event = {
+      can_undo: false,
+      undone: false,
+      label_name: "",
+      rule_name: "",
+      actor_name: "Anna",
+      origin: "user",
+    };
+    server.use(
+      http.get(`*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/events`, () =>
+        HttpResponse.json([
+          {
+            ...event,
+            id: "e1",
+            kind: "addressee_added",
+            person_name: "Papa",
+            created_at: "2026-11-10T10:00:00Z",
+          },
+          {
+            ...event,
+            id: "e2",
+            kind: "addressee_removed",
+            actor_name: "Bram",
+            person_name: "Papa",
+            created_at: "2026-11-10T11:00:00Z",
+          },
+          {
+            ...event,
+            id: "e3",
+            kind: "confirmed",
+            person_name: "",
+            created_at: "2026-11-10T09:45:00Z",
+          },
+          {
+            ...event,
+            id: "e4",
+            kind: "from_the_future",
+            person_name: "",
+            created_at: "2026-11-10T12:00:00Z",
+          },
+        ]),
+      ),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
+    renderApp(path);
+    expect(await screen.findByText("Jij zette deze brief op naam van Papa")).toBeInTheDocument();
+    expect(screen.getByText("Bram haalde Papa weg")).toBeInTheDocument();
+    expect(screen.getByText("Jij bevestigde deze brief")).toBeInTheDocument();
+    expect(screen.getAllByRole("listitem").filter((li) => li.closest("ol"))).toHaveLength(3);
   });
 });

@@ -32,6 +32,9 @@ export function loggedInHandlers() {
     http.get(`*${API}/me`, () => HttpResponse.json(user)),
     http.get(`*${API}/workspaces`, () => HttpResponse.json([workspace])),
     http.get(`*${API}/devices`, () => HttpResponse.json([])),
+    http.get(`*${API}/workspaces/${workspace.id}/inbox/counts`, () =>
+      HttpResponse.json({ new: 0, review: 0, unassigned: 0 }),
+    ),
   ];
 }
 
@@ -100,6 +103,43 @@ export const documentDetail: components["schemas"]["DocumentOut"] = {
   ],
 };
 
+type Person = components["schemas"]["PersonOut"];
+
+export const papa: Person = {
+  id: "a1111111-1111-4111-8111-111111111111",
+  display_name: "Papa",
+  name_variants: ["P. de Vries"],
+  archived: false,
+  document_count: 2,
+  user_id: null,
+};
+
+export const annaPerson: Person = {
+  id: "a2222222-2222-4222-8222-222222222222",
+  display_name: "Anna",
+  name_variants: [],
+  archived: false,
+  document_count: 0,
+  user_id: user.id,
+};
+
+export const members: components["schemas"]["MemberOut"][] = [
+  { user_id: user.id, name: "Anna", role: "admin", person_id: annaPerson.id },
+  {
+    user_id: "b3333333-3333-4333-8333-333333333333",
+    name: "Bram",
+    role: "member",
+    person_id: null,
+  },
+];
+
+export function personHandlers(persons: Person[] = [papa, annaPerson]) {
+  return [
+    http.get(`*${API}/workspaces/${workspace.id}/persons`, () => HttpResponse.json(persons)),
+    http.get(`*${API}/workspaces/${workspace.id}/members`, () => HttpResponse.json(members)),
+  ];
+}
+
 /** The post endpoints of the first workspace: the list and one document with its pages. */
 export function documentHandlers(detail: components["schemas"]["DocumentOut"] = documentDetail) {
   return [
@@ -109,5 +149,9 @@ export function documentHandlers(detail: components["schemas"]["DocumentOut"] = 
     http.get(`*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}`, () =>
       HttpResponse.json(detail),
     ),
+    http.get(`*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/events`, () =>
+      HttpResponse.json([]),
+    ),
+    ...personHandlers(),
   ];
 }

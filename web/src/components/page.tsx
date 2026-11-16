@@ -4,7 +4,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { type ReactNode, useEffect, useId } from "react";
 import { Button, FieldError, Input, Label, Text, TextField } from "react-aria-components";
 import { ApiFailure, api, errorMessage } from "../api/client";
-import { meQuery } from "../api/queries";
+import { inboxCountsQuery, meQuery } from "../api/queries";
 
 /** Every page gets its own title (WCAG 2.4.2). */
 export function usePageTitle(title: string) {
@@ -91,6 +91,38 @@ export function Split({ children, wide = false }: { children: ReactNode; wide?: 
 
 const NAV_LINK = "nav-link";
 
+/** The entries of one workspace; the inbox shows what waits for you (review plus unassigned). */
+function WorkspaceNav({ workspace }: { workspace: { id: string; name: string } }) {
+  const { data: counts } = useQuery(inboxCountsQuery(workspace.id));
+  const todo = counts ? counts.review + counts.unassigned : 0;
+  const params = { workspaceId: workspace.id };
+  return (
+    <>
+      <p className="sidebar-workspace">{workspace.name}</p>
+      <Link
+        to="/w/$workspaceId/inbox"
+        params={params}
+        className={NAV_LINK}
+        aria-label={todo > 0 ? t`Inbox, ${todo} te doen` : undefined}
+      >
+        {t`Inbox`}
+        {todo > 0 ? (
+          <span className="nav-count" aria-hidden="true">
+            {todo}
+          </span>
+        ) : null}
+      </Link>
+      <Link to="/w/$workspaceId/post" params={params} className={NAV_LINK}>
+        {t`Post`}
+      </Link>
+      <Link to="/w/$workspaceId/personen" params={params} className={NAV_LINK}>
+        {t`Personen`}
+      </Link>
+      <hr className="sidebar-rule" />
+    </>
+  );
+}
+
 /** Layout of the screens after login: sidebar with navigation and account, then the page. */
 export function Shell({
   children,
@@ -123,19 +155,7 @@ export function Shell({
           <span>Brievie</span>
         </Link>
         <nav aria-label={t`Hoofdmenu`} className="sidebar-nav">
-          {workspace ? (
-            <>
-              <p className="sidebar-workspace">{workspace.name}</p>
-              <Link
-                to="/w/$workspaceId/post"
-                params={{ workspaceId: workspace.id }}
-                className={NAV_LINK}
-              >
-                {t`Post`}
-              </Link>
-              <hr className="sidebar-rule" />
-            </>
-          ) : null}
+          {workspace ? <WorkspaceNav workspace={workspace} /> : null}
           <Link to="/" activeOptions={{ exact: true }} className={NAV_LINK}>
             {t`Werkruimtes`}
           </Link>

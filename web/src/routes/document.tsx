@@ -1,10 +1,12 @@
 import { t } from "@lingui/core/macro";
 import { useQuery } from "@tanstack/react-query";
 import { createRoute, Link } from "@tanstack/react-router";
-import { documentQuery } from "../api/queries";
+import { documentQuery, personsQuery } from "../api/queries";
 import type { components } from "../api/schema";
+import { DocumentHistory } from "../components/document-history";
 import { formatLetterDate, statusLabel, typeLabel } from "../components/document-table";
 import { ErrorAlert, Shell, usePageTitle } from "../components/page";
+import { PersonPicker, useSetAddressees } from "../components/person-picker";
 import { workspaceRoute } from "./workspace";
 
 type Document = components["schemas"]["DocumentOut"];
@@ -69,7 +71,17 @@ function StatusNotice({ document }: { document: Document }) {
   return null;
 }
 
-function DocumentView({ workspaceId, document }: { workspaceId: string; document: Document }) {
+function DocumentView({
+  workspaceId,
+  document,
+  canEdit,
+}: {
+  workspaceId: string;
+  document: Document;
+  canEdit: boolean;
+}) {
+  const persons = useQuery(personsQuery(workspaceId));
+  const setAddressees = useSetAddressees(workspaceId, document.id);
   const sender = document.sender || t`Onbekende afzender`;
   const pages = Array.from({ length: document.page_count }, (_, index) => index + 1);
   const reviewing = document.status === "needs_review" || document.status === "failed";
@@ -110,7 +122,21 @@ function DocumentView({ workspaceId, document }: { workspaceId: string; document
                 <dt>{t`Status`}</dt>
                 <dd>{statusLabel(document.status)}</dd>
               </div>
+              <div>
+                <dt>{t`Op naam van`}</dt>
+                <dd>
+                  <PersonPicker
+                    persons={persons.data ?? []}
+                    selectedIds={document.addressee_ids}
+                    onChange={(ids) => setAddressees.mutate(ids)}
+                    disabled={
+                      !canEdit || document.status === "processing" || setAddressees.isPending
+                    }
+                  />
+                </dd>
+              </div>
             </dl>
+            <ErrorAlert error={setAddressees.error ?? persons.error} />
           </section>
           {document.summary ? (
             <section className="panel" aria-labelledby="summary-heading">
@@ -143,6 +169,7 @@ function DocumentView({ workspaceId, document }: { workspaceId: string; document
               </ul>
             </section>
           ) : null}
+          <DocumentHistory workspaceId={workspaceId} documentId={document.id} />
           <details className="panel letter-text">
             <summary>{t`Tekst van de brief`}</summary>
             {document.pages.map((page) => (
@@ -173,7 +200,13 @@ function DocumentPage() {
       </p>
       {isPending ? <p>{t`Even laden...`}</p> : null}
       <ErrorAlert error={error} />
-      {data ? <DocumentView workspaceId={workspace.id} document={data} /> : null}
+      {data ? (
+        <DocumentView
+          workspaceId={workspace.id}
+          document={data}
+          canEdit={workspace.role !== "viewer"}
+        />
+      ) : null}
     </Shell>
   );
 }

@@ -7,6 +7,10 @@ msgstr ""
 "X-Generator: @lingui/cli\n"
 "Language: nl\n"
 
+#: src/components/person-picker.tsx
+msgid "(gearchiveerd)"
+msgstr "(gearchiveerd)"
+
 #. placeholder {0}: formatTimeLeft(secondsLeft)
 #: src/routes/pair-app.tsx
 msgid "(nog {0})"
@@ -27,6 +31,11 @@ msgstr "{0, plural, one {Serveradres} other {Serveradressen}}"
 msgid "{0} kan daarna niet meer bij Brievie. Je kunt het apparaat opnieuw koppelen."
 msgstr "{0} kan daarna niet meer bij Brievie. Je kunt het apparaat opnieuw koppelen."
 
+#. placeholder {0}: person.display_name
+#: src/routes/persons.tsx
+msgid "{0} wordt verwijderd. Dit kun je niet ongedaan maken."
+msgstr "{0} wordt verwijderd. Dit kun je niet ongedaan maken."
+
 #: src/routes/pair-app.tsx
 msgid "{minutes, plural, one {# minuut} other {# minuten}}"
 msgstr "{minutes, plural, one {# minuut} other {# minuten}}"
@@ -39,6 +48,18 @@ msgstr "{minutesText} en {secondsText}"
 msgid "{seconds, plural, one {# seconde} other {# seconden}}"
 msgstr "{seconds, plural, one {# seconde} other {# seconden}}"
 
+#: src/components/document-history.tsx
+msgid "{who} bevestigde deze brief"
+msgstr "{who} bevestigde deze brief"
+
+#: src/components/document-history.tsx
+msgid "{who} haalde {person} weg"
+msgstr "{who} haalde {person} weg"
+
+#: src/components/document-history.tsx
+msgid "{who} zette deze brief op naam van {person}"
+msgstr "{who} zette deze brief op naam van {person}"
+
 #: src/components/document-table.tsx
 msgid "Aanmaning"
 msgstr "Aanmaning"
@@ -46,6 +67,14 @@ msgstr "Aanmaning"
 #: src/components/document-table.tsx
 msgid "Aanslag"
 msgstr "Aanslag"
+
+#: src/routes/persons.tsx
+msgid "Aantal brieven"
+msgstr "Aantal brieven"
+
+#: src/routes/persons.tsx
+msgid "Account"
+msgstr "Account"
 
 #: src/components/device-table.tsx
 msgid "Actie"
@@ -55,12 +84,18 @@ msgstr "Actie"
 msgid "Actief"
 msgstr "Actief"
 
+#: src/routes/persons.tsx
+msgid "Acties"
+msgstr "Acties"
+
 #: src/components/document-table.tsx
 #: src/routes/document.tsx
+#: src/routes/inbox.tsx
 msgid "Afzender"
 msgstr "Afzender"
 
 #: src/components/device-table.tsx
+#: src/routes/persons.tsx
 msgid "Annuleren"
 msgstr "Annuleren"
 
@@ -80,6 +115,15 @@ msgstr "Apparaat intrekken?"
 #: src/routes/pair-app.tsx
 msgid "Apparaten"
 msgstr "Apparaten"
+
+#: src/routes/persons.tsx
+msgid "Archiveren"
+msgstr "Archiveren"
+
+#. placeholder {0}: person.display_name
+#: src/routes/persons.tsx
+msgid "Archiveren: {0}"
+msgstr "Archiveren: {0}"
 
 #: src/routes/document.tsx
 msgid "Bedrag incl. btw"
@@ -117,12 +161,17 @@ msgstr "Code"
 msgid "Contract"
 msgstr "Contract"
 
+#: src/routes/inbox.tsx
+msgid "Controleer deze brief in de app"
+msgstr "Controleer deze brief in de app"
+
 #: src/routes/document.tsx
 msgid "Controleer deze brief in de app."
 msgstr "Controleer deze brief in de app."
 
 #: src/components/document-table.tsx
 #: src/routes/document.tsx
+#: src/routes/inbox.tsx
 msgid "Datum brief"
 msgstr "Datum brief"
 
@@ -131,6 +180,7 @@ msgid "Deadline"
 msgstr "Deadline"
 
 #: src/routes/document.tsx
+#: src/routes/inbox.tsx
 msgid "Deze brief wordt nog gelezen."
 msgstr "Deze brief wordt nog gelezen."
 
@@ -163,6 +213,10 @@ msgstr "Er is iets misgegaan. Probeer het later opnieuw."
 msgid "Er is nog geen post."
 msgstr "Er is nog geen post."
 
+#: src/components/document-history.tsx
+msgid "Er is nog niets gebeurd."
+msgstr "Er is nog niets gebeurd."
+
 #: src/components/device-table.tsx
 msgid "Er zijn nog geen apparaten gekoppeld."
 msgstr "Er zijn nog geen apparaten gekoppeld."
@@ -170,6 +224,8 @@ msgstr "Er zijn nog geen apparaten gekoppeld."
 #: src/components/device-table.tsx
 #: src/routes/document.tsx
 #: src/routes/home.tsx
+#: src/routes/inbox.tsx
+#: src/routes/persons.tsx
 #: src/routes/post.tsx
 msgid "Even laden..."
 msgstr "Even laden..."
@@ -181,6 +237,10 @@ msgstr "Factuur"
 #: src/routes/document.tsx
 msgid "Factuurnummer"
 msgstr "Factuurnummer"
+
+#: src/routes/persons.tsx
+msgid "Gearchiveerd"
+msgstr "Gearchiveerd"
 
 #: src/routes/login.tsx
 msgid "Gebruik het account van deze server."
@@ -214,13 +274,38 @@ msgstr "Geldig tot"
 msgid "Gemaakt door AI. Controleer of het klopt."
 msgstr "Gemaakt door AI. Controleer of het klopt."
 
+#: src/components/document-history.tsx
+msgid "Geschiedenis"
+msgstr "Geschiedenis"
+
 #: src/components/document-table.tsx
 msgid "Herinnering"
 msgstr "Herinnering"
 
+#: src/routes/inbox.tsx
+msgid "Hier is niets te doen."
+msgstr "Hier is niets te doen."
+
 #: src/components/page.tsx
 msgid "Hoofdmenu"
 msgstr "Hoofdmenu"
+
+#: src/routes/post.tsx
+msgid "Iedereen"
+msgstr "Iedereen"
+
+#: src/components/document-history.tsx
+msgid "Iemand"
+msgstr "Iemand"
+
+#: src/components/page.tsx
+#: src/routes/inbox.tsx
+msgid "Inbox"
+msgstr "Inbox"
+
+#: src/components/page.tsx
+msgid "Inbox, {todo} te doen"
+msgstr "Inbox, {todo} te doen"
 
 #: src/components/document-table.tsx
 msgid "Informatie"
@@ -263,6 +348,10 @@ msgstr "Je server staat ingesteld op 'localhost'. Je telefoon kan die niet berei
 msgid "Je vindt de installatiecode in het logboek van de Brievie-container."
 msgstr "Je vindt de installatiecode in het logboek van de Brievie-container."
 
+#: src/components/document-history.tsx
+msgid "Jij"
+msgstr "Jij"
+
 #: src/routes/setup.tsx
 msgid "Jouw account"
 msgstr "Jouw account"
@@ -270,6 +359,10 @@ msgstr "Jouw account"
 #: src/components/document-table.tsx
 msgid "Keuring"
 msgstr "Keuring"
+
+#: src/routes/persons.tsx
+msgid "Kies een account"
+msgstr "Kies een account"
 
 #: src/routes/setup.tsx
 msgid "Kies minstens 12 tekens."
@@ -286,6 +379,11 @@ msgstr "Kopieer koppelgegevens"
 #: src/routes/pair-app.tsx
 msgid "Kopiëren lukt niet. Kopieer de tekst hieronder zelf."
 msgstr "Kopiëren lukt niet. Kopieer de tekst hieronder zelf."
+
+#. placeholder {0}: person.display_name
+#: src/routes/persons.tsx
+msgid "Koppel aan account: {0}"
+msgstr "Koppel aan account: {0}"
 
 #: src/routes/pair-app.tsx
 msgid "Koppelcode"
@@ -316,6 +414,7 @@ msgid "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
 msgstr "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
 
 #: src/routes/home.tsx
+#: src/routes/persons.tsx
 msgid "Naam"
 msgstr "Naam"
 
@@ -323,9 +422,21 @@ msgstr "Naam"
 msgid "Naam van de werkruimte"
 msgstr "Naam van de werkruimte"
 
+#: src/routes/persons.tsx
+msgid "Naamvarianten"
+msgstr "Naamvarianten"
+
 #: src/routes/root.tsx
 msgid "Naar de startpagina"
 msgstr "Naar de startpagina"
+
+#: src/components/person-picker.tsx
+msgid "Niemand"
+msgstr "Niemand"
+
+#: src/routes/inbox.tsx
+msgid "Nieuw"
+msgstr "Nieuw"
 
 #: src/routes/pair-app.tsx
 msgid "Nieuwe code"
@@ -333,6 +444,7 @@ msgstr "Nieuwe code"
 
 #: src/components/document-table.tsx
 #: src/routes/document.tsx
+#: src/routes/inbox.tsx
 msgid "Onbekende afzender"
 msgstr "Onbekende afzender"
 
@@ -340,9 +452,20 @@ msgstr "Onbekende afzender"
 msgid "Ontvangen"
 msgstr "Ontvangen"
 
+#: src/components/document-table.tsx
+#: src/components/person-picker.tsx
+#: src/routes/document.tsx
+#: src/routes/inbox.tsx
+msgid "Op naam van"
+msgstr "Op naam van"
+
 #: src/routes/pair-app.tsx
 msgid "Open de app op je telefoon en scan de code. De telefoon moet op hetzelfde netwerk zitten als deze server."
 msgstr "Open de app op je telefoon en scan de code. De telefoon moet op hetzelfde netwerk zitten als deze server."
+
+#: src/routes/persons.tsx
+msgid "Opslaan"
+msgstr "Opslaan"
 
 #: src/components/document-table.tsx
 msgid "Overig"
@@ -356,6 +479,27 @@ msgstr "Pagina {n} van {0}"
 #: src/routes/root.tsx
 msgid "Pagina niet gevonden"
 msgstr "Pagina niet gevonden"
+
+#: src/components/page.tsx
+#: src/routes/persons.tsx
+msgid "Personen"
+msgstr "Personen"
+
+#: src/routes/post.tsx
+msgid "Persoon"
+msgstr "Persoon"
+
+#: src/routes/persons.tsx
+msgid "Persoon toevoegen"
+msgstr "Persoon toevoegen"
+
+#: src/routes/persons.tsx
+msgid "Persoon verwijderen?"
+msgstr "Persoon verwijderen?"
+
+#: src/routes/persons.tsx
+msgid "Persoon wijzigen"
+msgstr "Persoon wijzigen"
 
 #: src/components/document-table.tsx
 msgid "Polis"
@@ -374,6 +518,10 @@ msgstr "Probeer opnieuw"
 #: src/routes/pair-app.tsx
 msgid "QR-code om de app te koppelen"
 msgstr "QR-code om de app te koppelen"
+
+#: src/components/document-history.tsx
+msgid "Regel {ruleName}"
+msgstr "Regel {ruleName}"
 
 #: src/components/document-table.tsx
 msgid "Rekening"
@@ -399,6 +547,7 @@ msgstr "Server: {0}"
 #: src/components/document-table.tsx
 #: src/routes/document.tsx
 #: src/routes/home.tsx
+#: src/routes/inbox.tsx
 msgid "Soort"
 msgstr "Soort"
 
@@ -429,6 +578,7 @@ msgid "Taken"
 msgstr "Taken"
 
 #: src/components/document-table.tsx
+#: src/routes/inbox.tsx
 msgid "Te controleren"
 msgstr "Te controleren"
 
@@ -439,6 +589,15 @@ msgstr "Tekst van de brief"
 #: src/routes/document.tsx
 msgid "Terug naar Post"
 msgstr "Terug naar Post"
+
+#: src/routes/persons.tsx
+msgid "Terugzetten"
+msgstr "Terugzetten"
+
+#. placeholder {0}: person.display_name
+#: src/routes/persons.tsx
+msgid "Terugzetten: {0}"
+msgstr "Terugzetten: {0}"
 
 #: src/routes/home.tsx
 #: src/routes/setup.tsx
@@ -462,6 +621,15 @@ msgstr "Vervaldatum"
 msgid "Verwerken mislukt"
 msgstr "Verwerken mislukt"
 
+#: src/routes/persons.tsx
+msgid "Verwijderen"
+msgstr "Verwijderen"
+
+#. placeholder {0}: person.display_name
+#: src/routes/persons.tsx
+msgid "Verwijderen: {0}"
+msgstr "Verwijderen: {0}"
+
 #: src/routes/setup.tsx
 msgid "Voor de post van je bedrijf."
 msgstr "Voor de post van je bedrijf."
@@ -483,6 +651,10 @@ msgstr "Waar gebruik je Brievie voor?"
 msgid "Wachtwoord"
 msgstr "Wachtwoord"
 
+#: src/routes/inbox.tsx
+msgid "Wat te doen"
+msgstr "Wat te doen"
+
 #: src/api/client.ts
 msgid "We kunnen de server niet bereiken. Controleer je verbinding en probeer het opnieuw."
 msgstr "We kunnen de server niet bereiken. Controleer je verbinding en probeer het opnieuw."
@@ -496,6 +668,15 @@ msgstr "Welkom bij Brievie"
 msgid "Werkruimtes"
 msgstr "Werkruimtes"
 
+#: src/routes/persons.tsx
+msgid "Wijzigen"
+msgstr "Wijzigen"
+
+#. placeholder {0}: person.display_name
+#: src/routes/persons.tsx
+msgid "Wijzigen: {0}"
+msgstr "Wijzigen: {0}"
+
 #: src/components/document-table.tsx
 msgid "Wordt verwerkt"
 msgstr "Wordt verwerkt"
@@ -504,3 +685,11 @@ msgstr "Wordt verwerkt"
 #: src/routes/setup.tsx
 msgid "Zakelijk"
 msgstr "Zakelijk"
+
+#: src/routes/persons.tsx
+msgid "Zo staat de naam op brieven, bijvoorbeeld J. de Vries. Zet elke variant op een eigen regel."
+msgstr "Zo staat de naam op brieven, bijvoorbeeld J. de Vries. Zet elke variant op een eigen regel."
+
+#: src/routes/inbox.tsx
+msgid "Zonder eigenaar"
+msgstr "Zonder eigenaar"
