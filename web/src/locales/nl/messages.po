@@ -340,6 +340,10 @@ msgstr "Groenblauw"
 msgid "Herinnering"
 msgstr "Herinnering"
 
+#: src/components/suggestion-list.tsx
+msgid "Herkend in de brief"
+msgstr "Herkend in de brief"
+
 #: src/routes/inbox.tsx
 msgid "Hier is niets te doen."
 msgstr "Hier is niets te doen."
@@ -389,6 +393,10 @@ msgstr "Intrekken: {0}"
 #: src/components/document-table.tsx
 msgid "Jaaropgave"
 msgstr "Jaaropgave"
+
+#: src/components/external-ai-notice.tsx
+msgid "Je gebruikt een externe AI-dienst. De namen op deze pagina gaan mee met elke brief die de AI leest."
+msgstr "Je gebruikt een externe AI-dienst. De namen op deze pagina gaan mee met elke brief die de AI leest."
 
 #: src/routes/setup.tsx
 msgid "Je naam"
@@ -464,6 +472,10 @@ msgstr "Koppelgegevens"
 msgid "Label"
 msgstr "Label"
 
+#: src/components/suggestion-list.tsx
+msgid "Label {name}?"
+msgstr "Label {name}?"
+
 #: src/routes/labels.tsx
 msgid "Label toevoegen"
 msgstr "Label toevoegen"
@@ -527,6 +539,14 @@ msgstr "Naar de startpagina"
 msgid "Namen"
 msgstr "Namen"
 
+#: src/components/suggestion-list.tsx
+msgid "Negeren"
+msgstr "Negeren"
+
+#: src/components/suggestion-list.tsx
+msgid "Negeren: {text}"
+msgstr "Negeren: {text}"
+
 #: src/components/person-picker.tsx
 msgid "Niemand"
 msgstr "Niemand"
@@ -555,6 +575,10 @@ msgstr "Ontvangen"
 #: src/routes/inbox.tsx
 msgid "Op naam van"
 msgstr "Op naam van"
+
+#: src/components/suggestion-list.tsx
+msgid "Op naam van {name}?"
+msgstr "Op naam van {name}?"
 
 #: src/routes/pair-app.tsx
 msgid "Open de app op je telefoon en scan de code. De telefoon moet op hetzelfde netwerk zitten als deze server."
@@ -628,6 +652,10 @@ msgstr "QR-code om de app te koppelen"
 #: src/components/document-history.tsx
 msgid "Regel {ruleName}"
 msgstr "Regel {ruleName}"
+
+#: src/components/suggestion-list.tsx
+msgid "Regel: {ruleName}"
+msgstr "Regel: {ruleName}"
 
 #: src/components/document-table.tsx
 msgid "Rekening"
@@ -722,9 +750,14 @@ msgstr "Terugzetten: {0}"
 msgid "Thuis"
 msgstr "Thuis"
 
+#: src/components/suggestion-list.tsx
 #: src/routes/labels.tsx
 msgid "Toevoegen"
 msgstr "Toevoegen"
+
+#: src/components/suggestion-list.tsx
+msgid "Toevoegen: {text}"
+msgstr "Toevoegen: {text}"
 
 #. placeholder {0}: formatLetterDate(task.deadline)
 #: src/routes/document.tsx
@@ -765,9 +798,21 @@ msgstr "Voor de post van je bedrijf."
 msgid "Voor je eigen post en die van je gezin. Alles bij elkaar, rustig en overzichtelijk."
 msgstr "Voor je eigen post en die van je gezin. Alles bij elkaar, rustig en overzichtelijk."
 
+#: src/components/suggestion-list.tsx
+msgid "voorstel"
+msgstr "voorstel"
+
+#: src/components/suggestion-list.tsx
+msgid "Voorstel van AI"
+msgstr "Voorstel van AI"
+
 #: src/routes/document.tsx
 msgid "Voorstel van de AI"
 msgstr "Voorstel van de AI"
+
+#: src/components/suggestion-list.tsx
+msgid "Voorstellen"
+msgstr "Voorstellen"
 
 #: src/routes/setup.tsx
 msgid "Waar gebruik je Brievie voor?"

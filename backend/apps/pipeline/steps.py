@@ -6,7 +6,7 @@ retried after a failure, and a document that is no longer `processing` is left a
 
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import date
 from uuid import UUID
 
@@ -14,13 +14,17 @@ from django.utils import timezone
 from pydantic import ValidationError
 
 from apps.common.privacy import mask_bsns
-from apps.documents.models import Document, Extraction
-from apps.pipeline.choices import ExtractionRequest
+from apps.documents import suggestions
+from apps.documents.models import Document, DocumentSuggestion, Extraction
+from apps.labels.models import Label
+from apps.people.matching import PRESELECT_FROM, PersonNames, match_addressees
+from apps.people.models import Person
+from apps.pipeline.choices import ExtractionRequest, aliased
 from apps.pipeline.errors import PermanentError
 from apps.pipeline.providers import LLMProvider
 from apps.pipeline.schema import ExtractionPayload
 from apps.pipeline.settings_service import provider_for
-from apps.pipeline.validation import ValidatedValue, validate
+from apps.pipeline.validation import ValidatedChoice, ValidatedValue, validate, validate_choices
 from apps.workspaces.context import workspace_context
 
 logger = logging.getLogger(__name__)
@@ -48,11 +52,18 @@ def run_pipeline(
             return
         text = load_text(document)
         provider = provider_factory(workspace_id)
+        persons = active_persons()
+        request = None
+        if provider is not None:
+            request = ExtractionRequest(text, *aliased(_as_choices(persons), _labels()))
 
     values: list[ValidatedValue] = []
-    if provider is not None:
-        payload = extract(provider, ExtractionRequest(text))
+    choices: list[ValidatedChoice] = []
+    dropped = 0
+    if provider is not None and request is not None:
+        payload = extract(provider, request)
         values = validate(payload, text, today=today())
+        choices, dropped = validate_choices(payload, text, request)
 
     with workspace_context(workspace_id):
         document = _lock_processing(document_id)
@@ -61,12 +72,113 @@ def run_pipeline(
             logger.info("Document %s changed during processing; result dropped", document_id)
             return
         store_proposals(document, values, provider)
+        organise_processed(document, text, persons, choices)
+        document.status = Document.Status.NEEDS_REVIEW
+        document.save(update_fields=["status", "updated_at"])
+        suggestion_count = _open_suggestion_count(document)
     logger.info(
-        "Processed document %s: %d proposals in %.1f s",
+        "Processed document %s: %d proposals, %d suggestions, %d AI picks dropped in %.1f s",
         document_id,
         len(values),
+        suggestion_count,
+        dropped,
         time.monotonic() - started,
     )
+
+
+def organise_processed(
+    document: Document,
+    text: str,
+    persons: Sequence[PersonNames],
+    ai_choices: Sequence[ValidatedChoice],
+) -> None:
+    """Propose labels and addressees for a processed document (design 17).
+
+    Runs in the transaction that holds the document's row lock. A run replaces the
+    open proposals of an earlier run; accepted and dismissed rows stay. First the
+    deterministic layer (name matching; the rules engine joins here), then the AI's
+    picks. Every id is looked up again: a person or label deleted or archived since
+    the lists were read is skipped.
+    """
+    suggestions.clear_open(
+        document,
+        {
+            DocumentSuggestion.Origin.NAME_MATCH,
+            DocumentSuggestion.Origin.AI,
+            DocumentSuggestion.Origin.RULE,
+        },
+    )
+    matches = match_addressees(text, persons)
+    ai_persons = [c.target_id for c in ai_choices if c.kind == "addressee"]
+    found_persons = {
+        person.id: person
+        for person in Person.objects.filter(
+            id__in=[m.person_id for m in matches] + ai_persons, archived_at__isnull=True
+        )
+    }
+    found_labels = Label.objects.in_bulk([c.target_id for c in ai_choices if c.kind == "label"])
+    for match in matches:
+        person = found_persons.get(match.person_id)
+        if person is None:
+            continue
+        suggestions.propose(
+            document,
+            action=DocumentSuggestion.Action.ADD_ADDRESSEE,
+            person=person,
+            origin=DocumentSuggestion.Origin.NAME_MATCH,
+            quote=match.quote,
+            confidence=match.confidence,
+            preselected=match.confidence >= PRESELECT_FROM,
+        )
+    # The rules engine (design 9.4, trigger `processed`) runs here, before the AI's picks.
+    for choice in ai_choices:
+        if choice.kind == "addressee":
+            person = found_persons.get(choice.target_id)
+            if person is None:
+                continue
+            suggestions.propose(
+                document,
+                action=DocumentSuggestion.Action.ADD_ADDRESSEE,
+                person=person,
+                origin=DocumentSuggestion.Origin.AI,
+                quote=choice.quote,
+                confidence=choice.confidence,
+            )
+        else:
+            label = found_labels.get(choice.target_id)
+            if label is None:
+                continue
+            suggestions.propose(
+                document,
+                action=DocumentSuggestion.Action.ADD_LABEL,
+                label=label,
+                origin=DocumentSuggestion.Origin.AI,
+                confidence=choice.confidence,
+            )
+
+
+def active_persons() -> list[PersonNames]:
+    """The workspace's non-archived persons with every way their name is written."""
+    return [
+        PersonNames(person_id, (name, *variants))
+        for person_id, name, variants in Person.objects.filter(
+            archived_at__isnull=True
+        ).values_list("id", "display_name", "name_variants")
+    ]
+
+
+def _as_choices(persons: Sequence[PersonNames]) -> list[tuple[UUID, str, Sequence[str]]]:
+    return [(person.person_id, person.names[0], person.names[1:]) for person in persons]
+
+
+def _labels() -> list[tuple[UUID, str]]:
+    return list(Label.objects.values_list("id", "name"))
+
+
+def _open_suggestion_count(document: Document) -> int:
+    return DocumentSuggestion.objects.filter(
+        document=document, state=DocumentSuggestion.State.OPEN
+    ).count()
 
 
 def load_text(document: Document) -> str:
@@ -89,7 +201,7 @@ def extract(provider: LLMProvider, request: ExtractionRequest) -> ExtractionPayl
 def store_proposals(
     document: Document, values: list[ValidatedValue], provider: LLMProvider | None
 ) -> None:
-    """Replace the document's proposals and offer it for review."""
+    """Replace the document's proposals."""
     document.extractions.all().delete()
     for value in values:
         Extraction.objects.create(
@@ -103,16 +215,19 @@ def store_proposals(
             provider=provider.name if provider is not None else "",
             model=provider.model if provider is not None else "",
         )
-    document.status = Document.Status.NEEDS_REVIEW
-    document.save(update_fields=["status", "updated_at"])
 
 
 def mark_failed(workspace_id: UUID, document_id: UUID, code: str) -> None:
-    """Record that processing failed. Only a `processing` document is touched."""
+    """Record that processing failed. Only a `processing` document is touched.
+
+    The deterministic proposals are still made (design 17): the user organises the
+    document by hand and finds them there.
+    """
     with workspace_context(workspace_id):
         document = _lock_processing(document_id)
         if document is None:
             return
+        organise_processed(document, load_text(document), active_persons(), [])
         document.status = Document.Status.FAILED
         document.failure_code = code
         document.save(update_fields=["status", "failure_code", "updated_at"])

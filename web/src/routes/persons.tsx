@@ -18,6 +18,7 @@ import {
 import { ApiFailure, api } from "../api/client";
 import { membersQuery, personsQuery } from "../api/queries";
 import type { components } from "../api/schema";
+import { ExternalAiNotice } from "../components/external-ai-notice";
 import { ErrorAlert, Shell, usePageTitle } from "../components/page";
 import { workspaceRoute } from "./workspace";
 
@@ -301,6 +302,7 @@ function PersonsPage() {
           </Button>
         ) : null}
       </header>
+      <ExternalAiNotice workspaceId={workspace.id} />
       {persons.isPending ? <p>{t`Even laden...`}</p> : null}
       <ErrorAlert error={persons.error ?? members.error ?? rowError} />
       {persons.data ? (

@@ -153,7 +153,15 @@ export const sales: Label = {
 };
 
 export function labelHandlers(labels: Label[] = [belasting, sales]) {
-  return [http.get(`*${API}/workspaces/${workspace.id}/labels`, () => HttpResponse.json(labels))];
+  return [
+    http.get(`*${API}/workspaces/${workspace.id}/labels`, () => HttpResponse.json(labels)),
+    ...aiHandlers(),
+  ];
+}
+
+/** The AI mode of the first workspace (default: off). */
+export function aiHandlers(mode = "off") {
+  return [http.get(`*${API}/workspaces/${workspace.id}/ai`, () => HttpResponse.json({ mode }))];
 }
 
 /** The persons, members and labels of the first workspace. */

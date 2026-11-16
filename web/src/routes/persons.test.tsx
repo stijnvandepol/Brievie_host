@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import {
   API,
+  aiHandlers,
   annaPerson,
   errorBody,
   HttpResponse,
@@ -233,5 +234,23 @@ describe("persons: roles and errors", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "De accounts konden niet worden geladen.",
     );
+  });
+
+  it("says the names go along when the AI service is external", async () => {
+    server.use(...aiHandlers("external"), ...loggedInHandlers(), ...personHandlers());
+    renderApp(path);
+    expect(
+      await screen.findByText(
+        "Je gebruikt een externe AI-dienst. De namen op deze pagina gaan mee met elke brief die de AI leest.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it.each(["off", "local"])("says nothing about names when the AI is %s", async (mode) => {
+    server.use(...aiHandlers(mode), ...loggedInHandlers(), ...personHandlers());
+    renderApp(path);
+    await screen.findByRole("heading", { level: 1, name: "Personen" });
+    await screen.findByRole("region", { name: "Personen" });
+    expect(screen.queryByText(/externe AI-dienst/)).not.toBeInTheDocument();
   });
 });

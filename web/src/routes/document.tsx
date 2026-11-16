@@ -8,6 +8,7 @@ import { formatLetterDate, statusLabel, typeLabel } from "../components/document
 import { LabelPicker, useSetLabels } from "../components/label-picker";
 import { ErrorAlert, Shell, usePageTitle } from "../components/page";
 import { PersonPicker, useSetAddressees } from "../components/person-picker";
+import { SuggestionList } from "../components/suggestion-list";
 import { workspaceRoute } from "./workspace";
 
 type Document = components["schemas"]["DocumentOut"];
@@ -154,6 +155,13 @@ function DocumentView({
               error={setAddressees.error ?? setLabels.error ?? persons.error ?? labels.error}
             />
           </section>
+          <SuggestionList
+            workspaceId={workspaceId}
+            document={document}
+            persons={persons.data ?? []}
+            labels={labels.data ?? []}
+            canEdit={canEdit}
+          />
           {document.summary ? (
             <section className="panel" aria-labelledby="summary-heading">
               <div className="panel-head">

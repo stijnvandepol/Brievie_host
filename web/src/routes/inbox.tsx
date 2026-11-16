@@ -8,6 +8,7 @@ import { formatLetterDate, typeLabel } from "../components/document-table";
 import { LabelChips } from "../components/label-chip";
 import { ErrorAlert, Shell, usePageTitle } from "../components/page";
 import { PersonPicker, useSetAddressees } from "../components/person-picker";
+import { SuggestionMark } from "../components/suggestion-list";
 import { workspaceRoute } from "./workspace";
 
 type DocumentSummary = components["schemas"]["DocumentSummaryOut"];
@@ -50,7 +51,8 @@ function InboxRow({
       <td>{typeLabel(document.document_type)}</td>
       <td className="num">{document.letter_date ? formatLetterDate(document.letter_date) : ""}</td>
       <td>
-        <LabelChips labels={labels} ids={document.label_ids} />
+        <LabelChips labels={labels} ids={document.label_ids} />{" "}
+        <SuggestionMark count={document.open_suggestion_count} />
       </td>
       <td>
         {tab === "unassigned" ? (

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import {
   API,
+  aiHandlers,
   belasting,
   errorBody,
   HttpResponse,
@@ -209,5 +210,23 @@ describe("labels", () => {
     ]) {
       expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
     }
+  });
+
+  it("says the names go along when the AI service is external", async () => {
+    server.use(...aiHandlers("external"), ...loggedInHandlers(), ...labelHandlers());
+    renderApp(path);
+    expect(
+      await screen.findByText(
+        "Je gebruikt een externe AI-dienst. De namen op deze pagina gaan mee met elke brief die de AI leest.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it.each(["off", "local"])("says nothing about names when the AI is %s", async (mode) => {
+    server.use(...aiHandlers(mode), ...loggedInHandlers(), ...labelHandlers());
+    renderApp(path);
+    await screen.findByRole("heading", { level: 1, name: "Labels" });
+    await screen.findByRole("region", { name: "Labels" });
+    expect(screen.queryByText(/externe AI-dienst/)).not.toBeInTheDocument();
   });
 });

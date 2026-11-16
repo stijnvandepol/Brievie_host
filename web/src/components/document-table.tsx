@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import type { components } from "../api/schema";
 import { LabelChips } from "./label-chip";
 import { personNames } from "./person-picker";
+import { SuggestionMark } from "./suggestion-list";
 
 type DocumentSummary = components["schemas"]["DocumentSummaryOut"];
 type Person = components["schemas"]["PersonOut"];
@@ -119,7 +120,8 @@ export function DocumentTable({
                 <LabelChips labels={labels} ids={document.label_ids} />
               </td>
               <td>
-                <span className="tag">{statusLabel(document.status)}</span>
+                <span className="tag">{statusLabel(document.status)}</span>{" "}
+                <SuggestionMark count={document.open_suggestion_count} />
               </td>
               <td className="num">
                 <time dateTime={document.created_at}>

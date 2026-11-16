@@ -100,6 +100,12 @@ def configure(
     return settings
 
 
+def ai_mode(workspace_id: UUID) -> str:
+    """The workspace's AI mode; `off` when it has no settings. Needs its RLS context."""
+    mode = AISettings.objects.filter(workspace_id=workspace_id).values_list("mode", flat=True)
+    return str(mode.first() or AISettings.Mode.OFF)
+
+
 def provider_for(workspace_id: UUID) -> LLMProvider | None:
     """The provider for the workspace, or `None` when its AI is off."""
     settings = AISettings.objects.filter(workspace_id=workspace_id).first()

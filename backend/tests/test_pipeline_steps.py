@@ -7,8 +7,13 @@ from uuid import UUID
 
 import pytest
 from django.db import connection
+from django.utils import timezone
 
-from apps.documents.models import Document, Extraction
+from apps.documents import suggestions
+from apps.documents.models import Document, DocumentSuggestion, Extraction
+from apps.labels.models import Label
+from apps.people.models import Person
+from apps.pipeline import jobs
 from apps.pipeline.choices import ExtractionRequest
 from apps.pipeline.errors import PermanentError
 from apps.pipeline.providers import LLMProvider, ProviderUnavailable
@@ -43,24 +48,31 @@ def answer(**changes: object) -> str:
     return json.dumps(data)
 
 
+Answer = str | Exception | Callable[[ExtractionRequest], str]
+
+
 class FakeProvider:
     name = "fake"
     model = "fake-1"
 
-    def __init__(self, *answers: str | Exception) -> None:
+    def __init__(self, *answers: Answer) -> None:
         self.answers = list(answers)
         self.texts: list[str] = []
+        self.requests: list[ExtractionRequest] = []
         self.in_transaction: list[bool] = []
         self.during_call: Callable[[], None] = lambda: None
 
     def extract(self, request: ExtractionRequest) -> str:
         text = request.text
         self.texts.append(text)
+        self.requests.append(request)
         self.in_transaction.append(connection.in_atomic_block)
         self.during_call()
         result = self.answers.pop(0) if len(self.answers) > 1 else self.answers[0]
         if isinstance(result, Exception):
             raise result
+        if callable(result):
+            return result(request)
         return result
 
 
@@ -271,3 +283,145 @@ def test_provider_with_a_long_host_name_stores_its_proposals(ws_a: Workspace) ->
     status, code, proposals = state(ws_a, document)
     assert (status, code) == ("needs_review", "")
     assert {p.provider for p in proposals} == {provider.name}
+
+
+# Suggestions at the end of processing (design 10 and 17).
+
+LETTER = "T.a.v. J. de Vries\nBelastingdienst\nU moet betalen vóór 1 december 2026."
+
+
+def make_person(workspace: Workspace, name: str, *variants: str, archived: bool = False) -> Person:
+    with workspace_context(workspace.id):
+        return Person.objects.create(
+            workspace=workspace,
+            display_name=name,
+            name_variants=list(variants),
+            archived_at=timezone.now() if archived else None,
+        )
+
+
+def preset_label(workspace: Workspace, key: str) -> Label:
+    with workspace_context(workspace.id):
+        return Label.objects.get(system_key=key)
+
+
+def open_suggestions(workspace: Workspace, document: Document) -> list[DocumentSuggestion]:
+    with workspace_context(workspace.id):
+        return list(
+            DocumentSuggestion.objects.filter(document=document, state="open").order_by("origin")
+        )
+
+
+def picking(
+    *, persons: dict[str, str] | None = None, labels: list[str] | None = None
+) -> Callable[[ExtractionRequest], str]:
+    """An answer that picks persons (name -> quote) and labels by name from the request."""
+
+    def build(request: ExtractionRequest) -> str:
+        person_alias = {choice.name: choice.alias for choice in request.persons}
+        label_alias = {choice.name: choice.alias for choice in request.labels}
+        return answer(
+            op_naam_van=[
+                {"id": person_alias[name], "bron": quote, "zekerheid": 0.99}
+                for name, quote in (persons or {}).items()
+            ],
+            labels=[{"id": label_alias[name], "zekerheid": 0.95} for name in labels or []],
+        )
+
+    return build
+
+
+def test_name_in_letter_becomes_a_preselected_suggestion(ws_a: Workspace) -> None:
+    jan = make_person(ws_a, "Jan de Vries", "J. de Vries")
+    make_person(ws_a, "Oud", "J. de Vries 2", archived=True)
+    document = make_document(ws_a, text=LETTER)
+
+    run(ws_a, document, None)
+
+    [row] = open_suggestions(ws_a, document)
+    assert (row.action, row.person_id, row.origin) == ("add_addressee", jan.id, "name_match")
+    assert row.preselected
+    assert row.confidence == Decimal("0.950")
+    assert "J. de Vries" in row.quote
+    assert state(ws_a, document)[0] == "needs_review"
+
+
+def test_ai_picks_become_suggestions_never_preselected(ws_a: Workspace) -> None:
+    emma = make_person(ws_a, "Emma")
+    belasting = preset_label(ws_a, "belastingdienst")
+    document = make_document(ws_a, text=LETTER)
+    provider = FakeProvider(
+        picking(persons={"Emma": "T.a.v. J. de Vries"}, labels=["Belastingdienst"])
+    )
+
+    run(ws_a, document, provider)
+
+    rows = open_suggestions(ws_a, document)
+    assert {(r.action, r.person_id or r.label_id, r.origin) for r in rows} == {
+        ("add_addressee", emma.id, "ai"),
+        ("add_label", belasting.id, "ai"),
+    }
+    assert not any(r.preselected for r in rows)
+    by_label = next(r for r in rows if r.label_id is not None)
+    assert by_label.confidence == Decimal("0.800")
+
+
+def test_ai_pick_of_deleted_label_is_skipped(ws_a: Workspace) -> None:
+    # Review Focus 1
+    belasting = preset_label(ws_a, "belastingdienst")
+    zorg = preset_label(ws_a, "zorg")
+    emma = make_person(ws_a, "Emma")
+    document = make_document(ws_a, text=LETTER)
+    provider = FakeProvider(
+        picking(persons={"Emma": "Belastingdienst"}, labels=["Belastingdienst", "Zorg"])
+    )
+
+    def delete_meanwhile() -> None:
+        with workspace_context(ws_a.id):
+            Label.objects.filter(id=belasting.id).delete()
+            Person.objects.filter(id=emma.id).update(archived_at=timezone.now())
+
+    provider.during_call = delete_meanwhile
+
+    run(ws_a, document, provider)
+
+    assert [(r.label_id, r.person_id) for r in open_suggestions(ws_a, document)] == [
+        (zorg.id, None)
+    ]
+
+
+def test_rerun_replaces_open_and_keeps_dismissed(ws_a: Workspace) -> None:
+    jan = make_person(ws_a, "Jan de Vries", "J. de Vries")
+    belasting, zorg, auto = (preset_label(ws_a, key) for key in ("belastingdienst", "zorg", "auto"))
+    document = make_document(ws_a, text=LETTER)
+    run(ws_a, document, FakeProvider(picking(labels=["Belastingdienst", "Zorg"])))
+    with workspace_context(ws_a.id):
+        suggestions.mark_dismissed(document, "add_label", belasting.id)
+        Document.objects.filter(id=document.id).update(status="processing")
+
+    run(ws_a, document, FakeProvider(picking(labels=["Belastingdienst", "Auto"])))
+
+    assert {(r.label_id, r.person_id) for r in open_suggestions(ws_a, document)} == {
+        (None, jan.id),
+        (auto.id, None),
+    }
+    with workspace_context(ws_a.id):
+        assert suggestions.is_dismissed(document, "add_label", belasting.id)
+        assert not DocumentSuggestion.objects.filter(label_id=zorg.id).exists()
+
+
+def test_failed_processing_still_proposes_the_name(ws_a: Workspace) -> None:
+    jan = make_person(ws_a, "Jan de Vries", "J. de Vries")
+    document = make_document(ws_a, text=LETTER)
+    provider = FakeProvider(PermanentError("ai_rejected"))
+
+    jobs.run_job(
+        ws_a.id,
+        document.id,
+        attempts=0,
+        run=lambda w, d: run_pipeline(w, d, provider_factory=lambda _: provider),
+    )
+
+    assert state(ws_a, document)[:2] == ("failed", "ai_rejected")
+    [row] = open_suggestions(ws_a, document)
+    assert (row.person_id, row.origin, row.preselected) == (jan.id, "name_match", True)

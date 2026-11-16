@@ -19,6 +19,7 @@ import {
 import { ApiFailure, api } from "../api/client";
 import { labelsQuery } from "../api/queries";
 import type { components } from "../api/schema";
+import { ExternalAiNotice } from "../components/external-ai-notice";
 import { colorName, LABEL_COLORS, LabelChip } from "../components/label-chip";
 import { ErrorAlert, Shell, usePageTitle } from "../components/page";
 import { workspaceRoute } from "./workspace";
@@ -374,6 +375,7 @@ function LabelsPage() {
           </div>
         ) : null}
       </header>
+      <ExternalAiNotice workspaceId={workspace.id} />
       {labels.isPending ? <p>{t`Even laden...`}</p> : null}
       <ErrorAlert error={labels.error ?? applyPreset.error ?? rowError} />
       {labels.data ? (

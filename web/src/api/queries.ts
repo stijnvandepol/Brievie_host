@@ -135,3 +135,16 @@ export const labelsQuery = (workspaceId: string) =>
       return data;
     },
   });
+
+/** How the workspace's letters are read: `off`, `external` or `local`. */
+export const aiStatusQuery = (workspaceId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "ai"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/ai", {
+        params: { path: { workspace_id: workspaceId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });

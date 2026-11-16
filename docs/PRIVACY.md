@@ -1,6 +1,6 @@
 # Privacy: where your data is and what leaves the server
 
-This describes the server as built (phase 1b). It is updated with every phase.
+This describes the server as built (phase 1c). It is updated with every phase.
 
 ## What is stored, and how
 
@@ -14,15 +14,20 @@ This describes the server as built (phase 1b). It is updated with every phase.
 A BSN (citizen service number) is replaced by `[BSN]` before text is stored, logged or
 sent to an AI service. The page image itself still shows it; that file is encrypted.
 
-Logs never contain document text, tokens or passwords.
+Logs never contain document text, names of persons or labels, tokens or passwords.
+
+Every member of a workspace sees all its post, whoever the letters are addressed to.
 
 ## What leaves the server
 
 | AI setting of the workspace | What is sent, and where |
 |---|---|
 | `off` (default) | Nothing |
-| `local` | The masked text, to an address inside your own network only (for example Ollama) |
-| `external` | The masked text of the letter, to the AI service you configured (default: Mistral, Paris). Never the page images |
+| `local` | The masked text, with the names of the workspace's labels and the names and name variants of its persons, to an address inside your own network only (for example Ollama) |
+| `external` | The masked text of the letter, with the names of the workspace's labels and the names and name variants of its persons, to the AI service you configured (default: Mistral, Paris). Never ids, rules or the page images |
+
+The names go along so the AI can choose labels and addressees from the workspace's own
+lists. With `off` names are still recognised in the letter, on the server itself.
 
 The iPhone app recognises the text on the phone itself and uploads the pages and that
 text to your server only.
