@@ -20,8 +20,9 @@ from apps.tasks.models import Task
 ZERO = Decimal("0")
 # Generated text (summary, classification) has no source in the letter.
 GENERATED = Decimal("0.500")
-# A label is a classification: nothing in the letter proves it.
-LABEL_CONFIDENCE_CAP = Decimal("0.800")
+# An AI pick from the closed lists: a label is a classification and an addressee's
+# quote need not contain the name, so nothing in the letter proves either.
+CHOICE_CONFIDENCE_CAP = Decimal("0.800")
 MAX_AI_LABELS = 3
 
 
@@ -93,7 +94,8 @@ def validate_choices(
 
     A pick of an alias that is not in this request's list is dropped, as is an
     addressee whose quote is not in the letter. A repeated alias counts once (the
-    first one). At most MAX_AI_LABELS labels, highest confidence first.
+    first one). Confidence is capped at CHOICE_CONFIDENCE_CAP. At most MAX_AI_LABELS
+    labels, highest confidence first.
     """
     dropped = 0
     persons = _by_alias(request.persons)
@@ -105,7 +107,12 @@ def validate_choices(
             dropped += 1
             continue
         addressees.append(
-            ValidatedChoice("addressee", persons[pick.id], quote, _clamp(pick.confidence))
+            ValidatedChoice(
+                "addressee",
+                persons[pick.id],
+                quote,
+                min(_clamp(pick.confidence), CHOICE_CONFIDENCE_CAP),
+            )
         )
 
     known_labels = _by_alias(request.labels)
@@ -115,7 +122,7 @@ def validate_choices(
         if label.id not in known_labels:
             dropped += 1
             continue
-        confidence = min(_clamp(label.confidence), LABEL_CONFIDENCE_CAP)
+        confidence = min(_clamp(label.confidence), CHOICE_CONFIDENCE_CAP)
         labels.append(ValidatedChoice("label", known_labels[label.id], "", confidence))
     labels.sort(key=lambda choice: choice.confidence, reverse=True)
     return addressees + labels[:MAX_AI_LABELS], dropped

@@ -581,7 +581,8 @@ quote, confidence)]`:
 - a duplicate id counts once;
 - addressee: `bron` must be literally in the letter (the 1b quote rule); when it is
   not, the pick is dropped. The quote need not contain the person's name ("aan de
-  ouders van Emma");
+  ouders van Emma"), so the model's confidence is clamped to 0–1 and capped at 0.80,
+  as for labels;
 - label: no quote (a classification, like the document type); the model's confidence
   is clamped to 0–1 and capped at 0.80, because nothing in the letter proves it;
 - at most three labels, highest confidence first.

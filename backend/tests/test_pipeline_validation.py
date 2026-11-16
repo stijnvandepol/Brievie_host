@@ -12,7 +12,7 @@ from apps.documents.models import needs_attention
 from apps.pipeline.choices import Choice, ExtractionRequest
 from apps.pipeline.schema import ExtractionPayload, json_schema
 from apps.pipeline.validation import (
-    LABEL_CONFIDENCE_CAP,
+    CHOICE_CONFIDENCE_CAP,
     MAX_AI_LABELS,
     ValidatedChoice,
     ValidatedValue,
@@ -408,7 +408,7 @@ def test_valid_picks_map_aliases_to_the_real_ids() -> None:
     )
 
     assert chosen == [
-        ValidatedChoice("addressee", JAN, "T.a.v. de heer J. de Vries", Decimal("0.900")),
+        ValidatedChoice("addressee", JAN, "T.a.v. de heer J. de Vries", Decimal("0.800")),
         ValidatedChoice("label", LABEL_IDS[1], "", Decimal("0.700")),
     ]
     assert dropped == 0
@@ -465,8 +465,20 @@ def test_addressee_quote_need_not_contain_the_name() -> None:
 def test_label_confidence_is_capped_at_080() -> None:
     chosen, _ = picks(labels=[{"id": "L1", "zekerheid": 0.97}, {"id": "L2", "zekerheid": -1}])
 
-    assert Decimal("0.800") == LABEL_CONFIDENCE_CAP
+    assert Decimal("0.800") == CHOICE_CONFIDENCE_CAP
     assert [c.confidence for c in chosen] == [Decimal("0.800"), Decimal("0.000")]
+
+
+def test_addressee_confidence_is_capped_at_080() -> None:
+    # B4: the quote need not contain the name, so nothing proves the pick either.
+    chosen, _ = picks(
+        [
+            {"id": "P1", "bron": "J. de Vries", "zekerheid": 0.99},
+            {"id": "P2", "bron": "Emma", "zekerheid": 1.5},
+        ]
+    )
+
+    assert [c.confidence for c in chosen] == [Decimal("0.800"), Decimal("0.800")]
 
 
 def test_at_most_three_labels_highest_first() -> None:
