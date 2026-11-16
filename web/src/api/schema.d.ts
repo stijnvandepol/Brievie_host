@@ -341,6 +341,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/suggestions/{suggestion_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Suggestion
+         * @description Make the proposed change. Accepting an accepted proposal changes nothing.
+         */
+        post: operations["acceptSuggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/suggestions/{suggestion_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Suggestion
+         * @description Say no to a proposal; the document does not change and nothing automatic proposes or makes this change on it again.
+         */
+        post: operations["dismissSuggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/folders": {
         parameters: {
             query?: never;
@@ -524,8 +564,18 @@ export interface components {
          * @description What the user confirmed in the review. Nothing becomes a task without it.
          */
         ConfirmIn: {
+            /**
+             * Addressee Ids
+             * @default []
+             */
+            addressee_ids: string[];
             /** Document Type */
             document_type: string;
+            /**
+             * Label Ids
+             * @default []
+             */
+            label_ids: string[];
             /**
              * Letter Date
              * Format: date
@@ -533,6 +583,11 @@ export interface components {
             letter_date?: string | null;
             /** Sender */
             sender: string;
+            /**
+             * Sets Organisation
+             * @default false
+             */
+            sets_organisation: boolean;
             /** Summary */
             summary: string;
             /** Summary By Ai */
@@ -633,6 +688,8 @@ export interface components {
             sender: string;
             /** Status */
             status: string;
+            /** Suggestions */
+            suggestions: components["schemas"]["SuggestionOut"][];
             /** Summary */
             summary: string;
             /** Summary By Ai */
@@ -926,6 +983,36 @@ export interface components {
         SetupStatusOut: {
             /** Needs Setup */
             needs_setup: boolean;
+        };
+        /** SuggestionOut */
+        SuggestionOut: {
+            /** Action */
+            action: string;
+            /** Confidence */
+            confidence: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Label Id
+             * Format: uuid
+             */
+            label_id: string | null;
+            /** Origin */
+            origin: string;
+            /**
+             * Person Id
+             * Format: uuid
+             */
+            person_id: string | null;
+            /** Preselected */
+            preselected: boolean;
+            /** Quote */
+            quote: string;
+            /** Rule Name */
+            rule_name: string;
         };
         /** TaskIn */
         TaskIn: {
@@ -2141,6 +2228,135 @@ export interface operations {
         responses: {
             /** @description Accepted */
             202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    acceptSuggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    dismissSuggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -84,6 +84,24 @@ class TaskOut(Schema):
     status: str
 
 
+class SuggestionOut(Schema):
+    id: UUID
+    # "add_label" (then `label_id` is set) or "add_addressee" (then `person_id`).
+    action: str
+    label_id: UUID | None
+    person_id: UUID | None
+    # "rule", "name_match" or "ai".
+    origin: str
+    # The rule that proposed it; empty otherwise.
+    rule_name: str
+    # The words in the document that led to it; may be empty.
+    quote: str
+    # Between 0 and 1, as a decimal string.
+    confidence: str
+    # Shown ticked in the review (a strong name match).
+    preselected: bool
+
+
 class DocumentOut(DocumentSummaryOut):
     # Why processing failed; empty otherwise.
     failure_code: str
@@ -92,6 +110,8 @@ class DocumentOut(DocumentSummaryOut):
     pages: list[PageOut]
     proposals: list[ProposalOut]
     tasks: list[TaskOut]
+    # Open proposals only, preselected first, then by confidence.
+    suggestions: list[SuggestionOut]
 
 
 class TaskIn(InputSchema):
@@ -116,6 +136,12 @@ class ConfirmIn(InputSchema):
     # Whether `summary` is the AI's text (shown with a label) or the user's own.
     summary_by_ai: bool
     tasks: list[TaskIn] = Field(max_length=20)
+    # When true, the document's labels and addressees become exactly `label_ids` and
+    # `addressee_ids`, and the open suggestions not taken are dismissed. When false
+    # (clients that do not know these fields), they are left alone.
+    sets_organisation: bool = False
+    label_ids: list[UUID] = Field(default=[], max_length=30)
+    addressee_ids: list[UUID] = Field(default=[], max_length=10)
 
 
 class AddresseesIn(InputSchema):

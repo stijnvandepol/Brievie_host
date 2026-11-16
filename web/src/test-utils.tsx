@@ -101,6 +101,7 @@ export const documentDetail: components["schemas"]["DocumentOut"] = {
       status: "open",
     },
   ],
+  suggestions: [],
 };
 
 type Person = components["schemas"]["PersonOut"];

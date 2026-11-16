@@ -1,11 +1,12 @@
 """The only code that adds or removes a document's addressees and labels.
 
-Every change writes an event.
+Every change writes an event. A hand edit (`set_addressees`, `set_labels`) also updates
+the document's suggestions: what the user removed is dismissed, what they chose accepted.
 
 Callers hold the document locked (`select_for_update`) and the workspace's RLS context.
 """
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from uuid import UUID
 
 from django.db import transaction
@@ -13,13 +14,23 @@ from django.utils.translation import gettext as _
 
 from apps.accounts.models import User
 from apps.common.errors import ApiError
-from apps.documents.models import Document, DocumentAddressee, DocumentEvent, DocumentLabel
+from apps.documents import suggestions
+from apps.documents.models import (
+    Document,
+    DocumentAddressee,
+    DocumentEvent,
+    DocumentLabel,
+    DocumentSuggestion,
+)
 from apps.labels.models import Label
 from apps.labels.services import label_not_found
 from apps.people.models import Person
 
 ADDRESSEES_MAX = 10
 LABELS_MAX = 30
+
+_ADD_LABEL = DocumentSuggestion.Action.ADD_LABEL
+_ADD_ADDRESSEE = DocumentSuggestion.Action.ADD_ADDRESSEE
 
 
 def set_addressees(
@@ -28,11 +39,13 @@ def set_addressees(
     person_ids: Sequence[UUID],
     actor: User | None,
     origin: str = DocumentEvent.Origin.USER,
+    suggested_ids: Collection[UUID] = (),
 ) -> None:
     """Make the document's addressees exactly `person_ids` (repeats count once).
 
     A person who is already on the document stays, even when archived since; an
-    archived person cannot be newly added.
+    archived person cannot be newly added. Persons in `suggested_ids` are added with
+    origin `suggestion` (the user took a proposal).
     """
     wanted = list(dict.fromkeys(person_ids))
     if len(wanted) > ADDRESSEES_MAX:
@@ -71,8 +84,15 @@ def set_addressees(
                     origin,
                     person=link.person,
                 )
+                suggestions.mark_dismissed(document, _ADD_ADDRESSEE, link.person_id)
         for person_id in wanted:
-            add_addressee(document, persons[person_id], actor=actor, origin=origin)
+            add_addressee(
+                document,
+                persons[person_id],
+                actor=actor,
+                origin=_origin_for(person_id, origin, suggested_ids),
+            )
+            suggestions.mark_accepted(document, _ADD_ADDRESSEE, person_id)
 
 
 def add_addressee(document: Document, person: Person, *, actor: User | None, origin: str) -> bool:
@@ -93,8 +113,12 @@ def set_labels(
     label_ids: Sequence[UUID],
     actor: User | None,
     origin: str = DocumentEvent.Origin.USER,
+    suggested_ids: Collection[UUID] = (),
 ) -> None:
-    """Make the document's labels exactly `label_ids` (repeats count once)."""
+    """Make the document's labels exactly `label_ids` (repeats count once).
+
+    Labels in `suggested_ids` are added with origin `suggestion`.
+    """
     wanted = list(dict.fromkeys(label_ids))
     if len(wanted) > LABELS_MAX:
         raise ApiError(
@@ -116,8 +140,15 @@ def set_labels(
                 _write_event(
                     document, DocumentEvent.Kind.LABEL_REMOVED, actor, origin, label=link.label
                 )
+                suggestions.mark_dismissed(document, _ADD_LABEL, link.label_id)
         for label_id in wanted:
-            add_label(document, labels[label_id], actor=actor, origin=origin)
+            add_label(
+                document,
+                labels[label_id],
+                actor=actor,
+                origin=_origin_for(label_id, origin, suggested_ids),
+            )
+            suggestions.mark_accepted(document, _ADD_LABEL, label_id)
 
 
 def add_label(document: Document, label: Label, *, actor: User | None, origin: str) -> bool:
@@ -141,6 +172,10 @@ def record_confirmed(document: Document, *, actor: User) -> None:
         origin=DocumentEvent.Origin.USER,
         actor=actor,
     )
+
+
+def _origin_for(target_id: UUID, origin: str, suggested_ids: Collection[UUID]) -> str:
+    return DocumentEvent.Origin.SUGGESTION if target_id in suggested_ids else origin
 
 
 def _write_event(

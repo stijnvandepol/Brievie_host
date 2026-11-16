@@ -248,6 +248,50 @@ def set_document_labels(
     return services.document_out(document)
 
 
+@router.post(
+    "/workspaces/{workspace_id}/documents/{document_id}/suggestions/{suggestion_id}/accept",
+    response={
+        200: DocumentOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        422: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+    },
+    operation_id="acceptSuggestion",
+    description="Make the proposed change. Accepting an accepted proposal changes nothing.",
+)
+def accept_suggestion(
+    request: HttpRequest, workspace_id: UUID, document_id: UUID, suggestion_id: UUID
+) -> DocumentOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    document = services.accept_suggestion(
+        workspace=membership.workspace,
+        user=current_user(request),
+        document_id=document_id,
+        suggestion_id=suggestion_id,
+    )
+    return services.document_out(document)
+
+
+@router.post(
+    "/workspaces/{workspace_id}/documents/{document_id}/suggestions/{suggestion_id}/dismiss",
+    response={200: DocumentOut, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS},
+    operation_id="dismissSuggestion",
+    description=(
+        "Say no to a proposal; the document does not change and nothing automatic "
+        "proposes or makes this change on it again."
+    ),
+)
+def dismiss_suggestion(
+    request: HttpRequest, workspace_id: UUID, document_id: UUID, suggestion_id: UUID
+) -> DocumentOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    document = services.dismiss_suggestion(
+        workspace=membership.workspace, document_id=document_id, suggestion_id=suggestion_id
+    )
+    return services.document_out(document)
+
+
 @router.get(
     "/workspaces/{workspace_id}/documents/{document_id}/events",
     response={200: list[DocumentEventOut], 404: ErrorOut, **AUTH_ERRORS},

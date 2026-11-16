@@ -1,14 +1,17 @@
 import uuid
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 import pytest
 from django.test import Client
 
-from apps.documents.models import Document
+from apps.documents import organise, suggestions
+from apps.documents.models import Document, DocumentEvent, DocumentSuggestion
+from apps.labels.models import Label
 from apps.tasks.models import Task
 from apps.workspaces.context import workspace_context
 from apps.workspaces.models import Membership, Workspace
-from tests.documents_support import admin_of, documents_url, jpeg, upload
+from tests.documents_support import admin_of, documents_url, jpeg, make_person, upload
 from tests.factories import UserFactory
 from tests.helpers import post_json
 
@@ -326,3 +329,142 @@ def test_unknown_document_is_404(client_a: Client, ws_a: Workspace) -> None:
     r = confirm(client_a, ws_a.id, uuid.uuid4(), review())
 
     assert r.status_code == 404
+
+
+def organised_document(client: Client, workspace: Workspace) -> tuple[str, Label, Label, Label]:
+    """A reviewable document with the label "Zorg" on it and open suggestions for
+    "Bank" and "Auto"."""
+    document_id = reviewable(client, workspace)
+    with workspace_context(workspace.id):
+        zorg, bank, auto = (
+            Label.objects.get(workspace=workspace, system_key=key)
+            for key in ("zorg", "bank", "auto")
+        )
+        document = Document.objects.get(id=document_id)
+        organise.add_label(document, zorg, actor=None, origin="user")
+        for target in (bank, auto):
+            suggestions.propose(
+                document,
+                action=DocumentSuggestion.Action.ADD_LABEL,
+                label=target,
+                origin="ai",
+                confidence=Decimal("0.700"),
+            )
+    return document_id, zorg, bank, auto
+
+
+def suggestion_states(workspace: Workspace, document_id: str) -> dict[uuid.UUID | None, str]:
+    with workspace_context(workspace.id):
+        return {
+            s.label_id or s.person_id: s.state
+            for s in DocumentSuggestion.objects.filter(document_id=document_id)
+        }
+
+
+def label_events(workspace: Workspace, document_id: str) -> list[tuple[str, str, str]]:
+    with workspace_context(workspace.id):
+        return [
+            (e.kind, e.origin, e.label_name)
+            for e in DocumentEvent.objects.filter(
+                document_id=document_id, kind__startswith="label"
+            ).order_by("created_at", "id")
+        ]
+
+
+def test_confirm_with_flag_sets_exact_lists_and_closes_suggestions(
+    client_a: Client, ws_a: Workspace
+) -> None:
+    document_id, zorg, bank, auto = organised_document(client_a, ws_a)
+    anna = make_person(ws_a, "Anna")
+    body = review(sets_organisation=True, label_ids=[str(bank.id)], addressee_ids=[str(anna.id)])
+
+    r = confirm(client_a, ws_a.id, document_id, body)
+
+    assert r.status_code == 200
+    assert r.json()["label_ids"] == [str(bank.id)]
+    assert r.json()["addressee_ids"] == [str(anna.id)]
+    assert r.json()["suggestions"] == []
+    # Chosen -> accepted, left out -> dismissed, removed by hand -> dismissed.
+    assert suggestion_states(ws_a, document_id) == {
+        bank.id: "accepted",
+        auto.id: "dismissed",
+        zorg.id: "dismissed",
+    }
+    assert label_events(ws_a, document_id) == [
+        ("label_added", "user", "Zorg"),
+        ("label_removed", "user", "Zorg"),
+        ("label_added", "suggestion", "Bank"),
+    ]
+    with workspace_context(ws_a.id):
+        stored = Document.objects.get(id=document_id).confirmed_organisation
+    assert stored == {"label_ids": [str(bank.id)], "addressee_ids": [str(anna.id)]}
+
+
+def test_confirm_with_flag_and_unknown_label_changes_nothing(
+    client_a: Client, ws_a: Workspace
+) -> None:
+    document_id, _, bank, _ = organised_document(client_a, ws_a)
+    body = review(sets_organisation=True, label_ids=[str(bank.id), str(uuid.uuid4())])
+
+    r = confirm(client_a, ws_a.id, document_id, body)
+
+    assert r.status_code == 404
+    assert r.json()["code"] == "label_not_found"
+    assert task_count(ws_a) == 0
+    with workspace_context(ws_a.id):
+        assert Document.objects.get(id=document_id).status == "needs_review"
+    assert suggestion_states(ws_a, document_id)[bank.id] == "open"
+
+
+def test_confirm_without_flag_leaves_labels_and_suggestions(
+    client_a: Client, ws_a: Workspace
+) -> None:
+    # The 1b app does not know the new fields.
+    document_id, zorg, bank, auto = organised_document(client_a, ws_a)
+
+    r = confirm(client_a, ws_a.id, document_id, review())
+
+    assert r.status_code == 200
+    assert r.json()["label_ids"] == [str(zorg.id)]
+    assert r.json()["open_suggestion_count"] == 2
+    assert suggestion_states(ws_a, document_id) == {bank.id: "open", auto.id: "open"}
+    with workspace_context(ws_a.id):
+        assert Document.objects.get(id=document_id).confirmed_organisation is None
+    # Repeating it is still the same confirm.
+    assert confirm(client_a, ws_a.id, document_id, review()).status_code == 200
+
+
+def test_repeated_confirm_with_same_lists_is_200(client_a: Client, ws_a: Workspace) -> None:
+    document_id, zorg, bank, auto = organised_document(client_a, ws_a)
+    first = review(sets_organisation=True, label_ids=[str(bank.id), str(zorg.id)])
+    confirm(client_a, ws_a.id, document_id, first)
+    # A rule run after the confirm may add a label; the repeat is compared with the
+    # snapshot, not with the current labels.
+    with workspace_context(ws_a.id):
+        organise.add_label(Document.objects.get(id=document_id), auto, actor=None, origin="rule")
+
+    again = review(sets_organisation=True, label_ids=[str(zorg.id), str(bank.id), str(bank.id)])
+    r = confirm(client_a, ws_a.id, document_id, again)
+
+    assert r.status_code == 200
+    assert set(r.json()["label_ids"]) == {str(zorg.id), str(bank.id), str(auto.id)}
+    assert task_count(ws_a) == 1
+
+
+@pytest.mark.parametrize("variant", ["other_labels", "without_flag", "flag_after_plain"])
+def test_repeated_confirm_with_other_lists_is_409(
+    client_a: Client, ws_a: Workspace, variant: str
+) -> None:
+    document_id, zorg, bank, _ = organised_document(client_a, ws_a)
+    with_flag = review(sets_organisation=True, label_ids=[str(zorg.id)])
+    first, second = {
+        "other_labels": (with_flag, review(sets_organisation=True, label_ids=[str(bank.id)])),
+        "without_flag": (with_flag, review()),
+        "flag_after_plain": (review(), review(sets_organisation=True, label_ids=[str(zorg.id)])),
+    }[variant]
+    assert confirm(client_a, ws_a.id, document_id, first).status_code == 200
+
+    r = confirm(client_a, ws_a.id, document_id, second)
+
+    assert r.status_code == 409
+    assert r.json()["code"] == "document_not_reviewable"
