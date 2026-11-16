@@ -484,3 +484,14 @@ Choices:
   Timeout is 120 s because the model may reason before it answers.
 - Not run against the real Claude API by the builder (tests use a mock transport): the
   owner checks it with their own key.
+
+## 2026-11-16: licence
+
+- The host is licensed `AGPL-3.0-or-later` (`LICENSE`, `license` in `backend/pyproject.toml`
+  and `web/package.json`). The spec (sections 11 and 14) says AGPL so nobody can build a
+  closed cloud version; it does not say which variant. Chosen: "or later", the FSF default,
+  so a future AGPL version can be adopted without asking every contributor. Dropped:
+  `AGPL-3.0-only` (no gain while the owner holds all copyright).
+- No licence header per source file: the `LICENSE` file and the README section cover the
+  repository. The CLA from spec section 14 is still open and is needed before the first
+  outside contribution.
