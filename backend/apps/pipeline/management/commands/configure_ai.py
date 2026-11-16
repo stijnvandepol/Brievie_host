@@ -15,14 +15,22 @@ KEY_VARIABLE = "BRIEVIE_AI_API_KEY"
 
 class Command(BaseCommand):
     help = (
-        "Set how a workspace has its documents read: off, external (an AI service, "
-        "default Mistral) or local (a service on the own network). The API key is read "
+        "Set how a workspace has its documents read: off, external (an AI service: "
+        "--supplier mistral (default), openai or claude; --base-url and --model "
+        "override it, e.g. for another OpenAI-compatible service) or local (a service on "
+        "the own network). The API key is read "
         f"from {KEY_VARIABLE} or asked for; it is never a command-line argument."
     )
 
     def add_arguments(self, parser: ArgumentParser) -> None:
         parser.add_argument("--workspace", required=True, type=UUID)
         parser.add_argument("--mode", required=True, choices=AISettings.Mode.values)
+        parser.add_argument(
+            "--supplier",
+            choices=list(settings_service.SUPPLIERS),
+            default=settings_service.DEFAULT_SUPPLIER,
+            help="The AI service for mode external.",
+        )
         parser.add_argument("--base-url", default="")
         parser.add_argument("--model", default="")
 
@@ -31,6 +39,7 @@ class Command(BaseCommand):
         *args: object,
         workspace: UUID,
         mode: str,
+        supplier: str,
         base_url: str,
         model: str,
         **options: object,
@@ -47,6 +56,7 @@ class Command(BaseCommand):
                 settings = settings_service.configure(
                     workspace_id=workspace,
                     mode=mode,
+                    supplier=supplier,
                     base_url=base_url,
                     model=model,
                     api_key=api_key,

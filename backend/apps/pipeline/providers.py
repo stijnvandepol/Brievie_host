@@ -1,18 +1,24 @@
 """The AI services that read a letter. One interface, with a fake in the tests."""
 
+import logging
 from functools import cache
 from pathlib import Path
 from typing import Protocol
 from urllib.parse import urlsplit
 
+import anthropic
 import httpx
 
-from apps.pipeline.errors import PermanentError, RetryableError
+from apps.pipeline.errors import PermanentError, PipelineError, RetryableError
 from apps.pipeline.schema import json_schema
 
 # More text than this is cut off (at a page boundary when possible).
 MAX_TEXT_CHARS = 30000
+# Claude may reason before it answers; the answer itself is a small JSON object.
+_MAX_OUTPUT_TOKENS = 16000
 _PAGE_BREAK = "\f"
+# The SDK logs whole request bodies (the letter) at DEBUG; keep that out of every log.
+logging.getLogger("anthropic").setLevel(logging.WARNING)
 _PROMPT = Path(__file__).parent / "prompts" / "extract_nl.txt"
 
 
@@ -93,6 +99,62 @@ class OpenAICompatibleProvider:
         if not isinstance(content, str):
             raise PermanentError("ai_invalid_output")
         return content
+
+
+class AnthropicProvider:
+    """Claude, through the official SDK: the Messages API is not OpenAI-compatible."""
+
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        api_key: str | None,
+        model: str,
+        timeout: float = 120.0,
+        http_client: anthropic.DefaultHttpxClient | None = None,
+    ) -> None:
+        # The job queue retries, not the SDK.
+        self._client = anthropic.Anthropic(
+            api_key=api_key,
+            base_url=base_url,
+            timeout=timeout,
+            max_retries=0,
+            http_client=http_client,
+        )
+        self.name = urlsplit(base_url).hostname or "unknown"
+        self.model = model
+
+    def extract(self, text: str) -> str:
+        # The error is built inside the handler but raised outside it, `from None`: the
+        # SDK's exceptions and the response body can carry the key or the letter and
+        # must not travel with ours, not even as implicit context.
+        error: PipelineError
+        try:
+            response = self._client.messages.create(
+                model=self.model,
+                max_tokens=_MAX_OUTPUT_TOKENS,
+                system=_system_prompt(),
+                messages=[{"role": "user", "content": _cut(text)}],
+                output_config={"format": {"type": "json_schema", "schema": json_schema()}},
+            )
+        except (anthropic.AuthenticationError, anthropic.PermissionDeniedError):
+            error = ProviderRejected("ai_key_rejected")
+        except anthropic.RateLimitError:
+            error = ProviderUnavailable()
+        except anthropic.APIStatusError as exc:
+            if exc.status_code >= 500 or exc.status_code in (408, 409):
+                error = ProviderUnavailable()
+            else:
+                error = ProviderRejected("ai_request_rejected")
+        except anthropic.APIConnectionError:
+            error = ProviderUnavailable()
+        else:
+            if response.stop_reason == "end_turn":
+                for block in response.content:
+                    if block.type == "text":
+                        return block.text
+            error = PermanentError("ai_invalid_output")
+        raise error from None
 
 
 @cache

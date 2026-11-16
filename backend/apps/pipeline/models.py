@@ -14,8 +14,14 @@ class AISettings(WorkspaceModel):
         EXTERNAL = "external", _("Externe dienst")
         LOCAL = "local", _("Op het eigen netwerk")
 
+    class Api(models.TextChoices):
+        OPENAI = "openai", _("OpenAI-compatibel")
+        ANTHROPIC = "anthropic", _("Claude (Anthropic)")
+
     mode = models.CharField(max_length=10, choices=Mode.choices, default=Mode.OFF)
-    # Base URL of an OpenAI-compatible API, e.g. https://api.mistral.ai/v1
+    # The kind of API at `base_url`: OpenAI-compatible chat completions or Claude's Messages API.
+    api = models.CharField(max_length=20, choices=Api.choices, default=Api.OPENAI)
+    # Base URL of the service, e.g. https://api.mistral.ai/v1 or https://api.anthropic.com
     base_url = models.CharField(max_length=300, blank=True, default="")
     model = models.CharField(max_length=100, blank=True, default="")
     # The API key, sealed with the workspace key.

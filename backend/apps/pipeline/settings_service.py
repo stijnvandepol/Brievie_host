@@ -2,6 +2,7 @@
 
 import ipaddress
 import re
+from dataclasses import dataclass
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -10,11 +11,28 @@ from django.db import transaction
 from apps.common import crypto
 from apps.pipeline.errors import PermanentError
 from apps.pipeline.models import AISettings
-from apps.pipeline.providers import LLMProvider, OpenAICompatibleProvider
+from apps.pipeline.providers import AnthropicProvider, LLMProvider, OpenAICompatibleProvider
 from apps.workspaces.keys import workspace_key
 
+DEFAULT_SUPPLIER = "mistral"
 DEFAULT_EXTERNAL_URL = "https://api.mistral.ai/v1"
 DEFAULT_EXTERNAL_MODEL = "mistral-small-latest"
+
+
+@dataclass(frozen=True)
+class SupplierPreset:
+    api: str
+    base_url: str
+    model: str  # "" = no default: the caller must name a model
+
+
+SUPPLIERS: dict[str, SupplierPreset] = {
+    "mistral": SupplierPreset(AISettings.Api.OPENAI, DEFAULT_EXTERNAL_URL, DEFAULT_EXTERNAL_MODEL),
+    "openai": SupplierPreset(AISettings.Api.OPENAI, "https://api.openai.com/v1", ""),
+    "claude": SupplierPreset(
+        AISettings.Api.ANTHROPIC, "https://api.anthropic.com", "claude-opus-5-5"
+    ),
+}
 _KEY_AAD = b"ai-api-key"
 # A DNS name is at most 253 characters, each label at most 63.
 _MAX_HOST = 253
@@ -25,23 +43,38 @@ _NUMERIC_HOST = re.compile(r"(0x[0-9a-f]*|[0-9]+)", re.IGNORECASE)
 
 
 def configure(
-    *, workspace_id: UUID, mode: str, base_url: str, model: str, api_key: str | None
+    *,
+    workspace_id: UUID,
+    mode: str,
+    base_url: str,
+    model: str,
+    api_key: str | None,
+    supplier: str = DEFAULT_SUPPLIER,
 ) -> AISettings:
     """Set the workspace's AI mode. Needs the workspace's RLS context.
 
-    `external`: an https service and its key (default: Mistral). `local`: a service
+    `external`: an https service and its key; `supplier` picks the preset (Mistral by
+    default, OpenAI, Claude), `base_url` and `model` override it. `local`: a service
     on the own network only, so no document text leaves it. `off`: nothing.
     """
     if mode not in AISettings.Mode.values:
         raise ValueError(f"Unknown mode: {mode!r}")
+    preset = SUPPLIERS.get(supplier)
+    if preset is None:
+        raise ValueError(f"Unknown supplier: {supplier!r}")
+    api: str = AISettings.Api.OPENAI
+    if mode == AISettings.Mode.EXTERNAL:
+        api = preset.api
+        base_url = base_url or preset.base_url
+        model = model or preset.model
+        if not model:
+            raise ValueError(f"Supplier {supplier} needs a model name.")
     if mode != AISettings.Mode.OFF:
         _check_address(base_url or DEFAULT_EXTERNAL_URL)
     sealed: bytes | None = None
     if mode == AISettings.Mode.OFF:
         base_url, model = "", ""
     elif mode == AISettings.Mode.EXTERNAL:
-        base_url = base_url or DEFAULT_EXTERNAL_URL
-        model = model or DEFAULT_EXTERNAL_MODEL
         if urlsplit(base_url).scheme != "https":
             raise ValueError("An external AI service needs an https address.")
         if not api_key:
@@ -56,7 +89,13 @@ def configure(
             sealed = crypto.seal(workspace_key(workspace_id), api_key.encode(), aad=_KEY_AAD)
         settings, _ = AISettings.objects.update_or_create(
             workspace_id=workspace_id,
-            defaults={"mode": mode, "base_url": base_url, "model": model, "api_key_sealed": sealed},
+            defaults={
+                "mode": mode,
+                "api": api,
+                "base_url": base_url,
+                "model": model,
+                "api_key_sealed": sealed,
+            },
         )
     return settings
 
@@ -74,6 +113,8 @@ def provider_for(workspace_id: UUID) -> LLMProvider | None:
         api_key = crypto.open_sealed(
             workspace_key(workspace_id), bytes(settings.api_key_sealed), aad=_KEY_AAD
         ).decode()
+    if settings.api == AISettings.Api.ANTHROPIC:
+        return AnthropicProvider(base_url=settings.base_url, api_key=api_key, model=settings.model)
     return OpenAICompatibleProvider(
         base_url=settings.base_url, api_key=api_key, model=settings.model
     )
