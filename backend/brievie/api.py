@@ -14,6 +14,7 @@ from apps.documents.schemas import UploadMetadataIn
 from apps.labels.api import router as labels_router
 from apps.people.api import router as people_router
 from apps.pipeline.api import router as pipeline_router
+from apps.rules.api import router as rules_router
 from apps.workspaces.api import router as workspaces_router
 
 
@@ -54,5 +55,6 @@ api.add_router("", workspaces_router)
 api.add_router("", documents_router)
 api.add_router("", people_router)
 api.add_router("", labels_router)
+api.add_router("", rules_router)
 api.add_router("", pipeline_router)
 api.add_router("", devices_router)
