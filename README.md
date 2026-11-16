@@ -143,3 +143,13 @@ docker compose --project-directory deploy -f deploy/docker-compose.yml logs api 
 
 Lost it? `docker compose ... exec api python manage.py prepare_setup_token --new`
 prints a new one (the old one stops working). After setup the code is deleted.
+
+## Licence
+
+Brievie host is free software: you can redistribute it and/or modify it under the terms of
+the GNU Affero General Public License as published by the Free Software Foundation, either
+version 3 of the License, or (at your option) any later version. It comes without any
+warranty. The full text is in `LICENSE`.
+
+If you run a modified version as a service for others, the AGPL requires you to offer
+those users the source of your version.

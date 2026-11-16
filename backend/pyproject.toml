@@ -3,6 +3,7 @@ name = "brievie"
 version = "0.1.0"
 description = "Brievie host: keeps, explains and tracks the mail of a household or small business."
 requires-python = ">=3.13"
+license = "AGPL-3.0-or-later"
 dependencies = [
     "anthropic>=2.8.0",
     "cryptography>=50.0.2",
