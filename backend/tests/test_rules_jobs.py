@@ -1,10 +1,12 @@
 import pytest
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
+from procrastinate.contrib.django.models import ProcrastinateJob
 
 from apps.documents import suggestions
 from apps.documents.models import DocumentEvent, DocumentLabel
 from apps.labels.models import Label
+from apps.pipeline import jobs as pipeline_jobs
 from apps.rules import jobs
 from apps.rules.models import Rule, RuleRun
 from apps.workspaces.context import workspace_context
@@ -26,6 +28,27 @@ def labelled(workspace: Workspace, label_: Label) -> set[object]:
 
 def run(workspace: Workspace, rule: Rule) -> None:
     jobs.apply_rule_to_existing(workspace_id=str(workspace.id), rule_id=str(rule.id))
+
+
+def waiting_rule_jobs() -> list[ProcrastinateJob]:
+    return list(
+        ProcrastinateJob.objects.filter(status="todo", task_name="apply_rule_to_existing").order_by(
+            "id"
+        )
+    )
+
+
+def work_rule_jobs() -> int:
+    """Run the waiting rule jobs as the worker would: each is taken (`doing`, which frees
+    its queueing lock) before it runs. Returns how many ran."""
+    ran = 0
+    while waiting := waiting_rule_jobs():
+        job = waiting[0]
+        with connection.cursor() as cursor:
+            cursor.execute("UPDATE procrastinate_jobs SET status = 'doing' WHERE id = %s", [job.id])
+        jobs.apply_rule_to_existing(**job.args)
+        ran += 1
+    return ran
 
 
 def test_job_applies_auto_rule_to_existing_documents(ws_a: Workspace) -> None:
@@ -56,8 +79,75 @@ def test_job_walks_every_batch(ws_a: Workspace, monkeypatch: pytest.MonkeyPatch)
     hits = [make_document(ws_a, LETTER) for _ in range(5)]
 
     run(ws_a, rule)
+    ran = work_rule_jobs()
 
     assert labelled(ws_a, auto) == {d.id for d in hits}
+    # 2 + 2 + 1 documents: the first run and two continuations.
+    assert ran == 2
+
+
+def test_one_batch_per_job_then_a_continuation(
+    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # B8: a letter waiting to be processed gets its turn between batches.
+    monkeypatch.setattr(jobs, "BATCH_SIZE", 2)
+    remove_rules(ws_a)
+    auto = label(ws_a, "auto")
+    rule = make_rule(ws_a, text_word("APK"), actions=[add_label(auto)], mode="auto")
+    documents = sorted((make_document(ws_a, LETTER) for _ in range(3)), key=lambda d: d.id)
+
+    run(ws_a, rule)
+
+    assert labelled(ws_a, auto) == {documents[0].id, documents[1].id}
+    [continuation] = waiting_rule_jobs()
+    assert continuation.args == {
+        "workspace_id": str(ws_a.id),
+        "rule_id": str(rule.id),
+        "after": str(documents[1].id),
+    }
+    assert continuation.queueing_lock == f"rule-{rule.id}"
+    assert continuation.queue_name == "pipeline"
+
+
+def test_rule_jobs_wait_behind_processing_letters(ws_a: Workspace) -> None:
+    # Procrastinate fetches the waiting job with the highest priority first.
+    rule = make_rule(ws_a, text_word("APK"), actions=[add_label(label(ws_a, "auto"))])
+    with workspace_context(ws_a.id):
+        jobs.defer_rule_run(ws_a.id, rule.id)
+        pipeline_jobs.defer_processing(workspace_id=ws_a.id, document_id=make_document(ws_a).id)
+
+    priorities = dict(ProcrastinateJob.objects.values_list("task_name", "priority"))
+    assert priorities["apply_rule_to_existing"] < priorities["process_document"]
+
+
+def test_last_batch_queues_nothing(ws_a: Workspace, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(jobs, "BATCH_SIZE", 2)
+    remove_rules(ws_a)
+    rule = make_rule(ws_a, text_word("APK"), actions=[add_label(label(ws_a, "auto"))])
+    make_document(ws_a, LETTER)
+
+    run(ws_a, rule)
+
+    assert waiting_rule_jobs() == []
+
+
+def test_continuation_gives_way_to_a_waiting_fresh_run(
+    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Clicked again during the walk: the waiting run starts from the beginning, so the
+    # continuation is not needed and not queued.
+    monkeypatch.setattr(jobs, "BATCH_SIZE", 2)
+    remove_rules(ws_a)
+    rule = make_rule(ws_a, text_word("APK"), actions=[add_label(label(ws_a, "auto"))])
+    for _ in range(3):
+        make_document(ws_a, LETTER)
+    with workspace_context(ws_a.id):
+        assert jobs.defer_rule_run(ws_a.id, rule.id)
+
+    run(ws_a, rule)
+
+    [waiting] = waiting_rule_jobs()
+    assert waiting.args == {"workspace_id": str(ws_a.id), "rule_id": str(rule.id)}
 
 
 def test_job_respects_dismissed(ws_a: Workspace) -> None:

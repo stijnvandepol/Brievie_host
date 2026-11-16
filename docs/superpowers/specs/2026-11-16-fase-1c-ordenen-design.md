@@ -493,7 +493,9 @@ surprises):
 3. **Manual**: "Toepassen op bestaande post" on a rule. `runRule` queues the job
    `apply_rule_to_existing(workspace_id, rule_id)`, which walks the workspace's
    documents that are not `processing` in batches of 50, each batch in its own short
-   transaction, evaluating only that rule.
+   transaction, evaluating only that rule. One batch per job run: a full batch queues
+   the next one (with the last document id as cursor), at a lower priority than
+   `process_document`, so a new letter is processed between two batches.
 
 ### 9.5 API (rules: read `member`, change `admin`)
 
