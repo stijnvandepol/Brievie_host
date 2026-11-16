@@ -92,7 +92,13 @@ export function Split({ children, wide = false }: { children: ReactNode; wide?: 
 const NAV_LINK = "nav-link";
 
 /** Layout of the screens after login: sidebar with navigation and account, then the page. */
-export function Shell({ children }: { children: ReactNode }) {
+export function Shell({
+  children,
+  workspace,
+}: {
+  children: ReactNode;
+  workspace?: { id: string; name: string };
+}) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { data: me } = useQuery(meQuery);
@@ -117,6 +123,19 @@ export function Shell({ children }: { children: ReactNode }) {
           <span>Brievie</span>
         </Link>
         <nav aria-label={t`Hoofdmenu`} className="sidebar-nav">
+          {workspace ? (
+            <>
+              <p className="sidebar-workspace">{workspace.name}</p>
+              <Link
+                to="/w/$workspaceId/post"
+                params={{ workspaceId: workspace.id }}
+                className={NAV_LINK}
+              >
+                {t`Post`}
+              </Link>
+              <hr className="sidebar-rule" />
+            </>
+          ) : null}
           <Link to="/" activeOptions={{ exact: true }} className={NAV_LINK}>
             {t`Werkruimtes`}
           </Link>

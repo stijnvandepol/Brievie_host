@@ -39,6 +39,14 @@ msgstr "{minutesText} en {secondsText}"
 msgid "{seconds, plural, one {# seconde} other {# seconden}}"
 msgstr "{seconds, plural, one {# seconde} other {# seconden}}"
 
+#: src/components/document-table.tsx
+msgid "Aanmaning"
+msgstr "Aanmaning"
+
+#: src/components/document-table.tsx
+msgid "Aanslag"
+msgstr "Aanslag"
+
 #: src/components/device-table.tsx
 msgid "Actie"
 msgstr "Actie"
@@ -46,6 +54,11 @@ msgstr "Actie"
 #: src/components/device-table.tsx
 msgid "Actief"
 msgstr "Actief"
+
+#: src/components/document-table.tsx
+#: src/routes/document.tsx
+msgid "Afzender"
+msgstr "Afzender"
 
 #: src/components/device-table.tsx
 msgid "Annuleren"
@@ -68,9 +81,25 @@ msgstr "Apparaat intrekken?"
 msgid "Apparaten"
 msgstr "Apparaten"
 
+#: src/routes/document.tsx
+msgid "Bedrag incl. btw"
+msgstr "Bedrag incl. btw"
+
 #: src/routes/home.tsx
 msgid "Beheerder"
 msgstr "Beheerder"
+
+#: src/components/document-table.tsx
+msgid "Beschikking"
+msgstr "Beschikking"
+
+#: src/components/document-table.tsx
+msgid "Bonnetje"
+msgstr "Bonnetje"
+
+#: src/routes/document.tsx
+msgid "Brief"
+msgstr "Brief"
 
 #: src/routes/setup.tsx
 msgid "Brievie instellen"
@@ -83,6 +112,27 @@ msgstr "Certificaat"
 #: src/routes/pair-app.tsx
 msgid "Code"
 msgstr "Code"
+
+#: src/components/document-table.tsx
+msgid "Contract"
+msgstr "Contract"
+
+#: src/routes/document.tsx
+msgid "Controleer deze brief in de app."
+msgstr "Controleer deze brief in de app."
+
+#: src/components/document-table.tsx
+#: src/routes/document.tsx
+msgid "Datum brief"
+msgstr "Datum brief"
+
+#: src/routes/document.tsx
+msgid "Deadline"
+msgstr "Deadline"
+
+#: src/routes/document.tsx
+msgid "Deze brief wordt nog gelezen."
+msgstr "Deze brief wordt nog gelezen."
 
 #: src/routes/pair-app.tsx
 msgid "Deze code is verlopen."
@@ -109,14 +159,28 @@ msgstr "Er ging iets mis"
 msgid "Er is iets misgegaan. Probeer het later opnieuw."
 msgstr "Er is iets misgegaan. Probeer het later opnieuw."
 
+#: src/components/document-table.tsx
+msgid "Er is nog geen post."
+msgstr "Er is nog geen post."
+
 #: src/components/device-table.tsx
 msgid "Er zijn nog geen apparaten gekoppeld."
 msgstr "Er zijn nog geen apparaten gekoppeld."
 
 #: src/components/device-table.tsx
+#: src/routes/document.tsx
 #: src/routes/home.tsx
+#: src/routes/post.tsx
 msgid "Even laden..."
 msgstr "Even laden..."
+
+#: src/components/document-table.tsx
+msgid "Factuur"
+msgstr "Factuur"
+
+#: src/routes/document.tsx
+msgid "Factuurnummer"
+msgstr "Factuurnummer"
 
 #: src/routes/login.tsx
 msgid "Gebruik het account van deze server."
@@ -125,6 +189,10 @@ msgstr "Gebruik het account van deze server."
 #: src/routes/pair-app.tsx
 msgid "Geen eigen CA"
 msgstr "Geen eigen CA"
+
+#: src/routes/document.tsx
+msgid "Gegevens"
+msgstr "Gegevens"
 
 #: src/routes/pair-app.tsx
 msgid "Gekopieerd"
@@ -142,9 +210,21 @@ msgstr "Gekoppelde apparaten"
 msgid "Geldig tot"
 msgstr "Geldig tot"
 
+#: src/routes/document.tsx
+msgid "Gemaakt door AI. Controleer of het klopt."
+msgstr "Gemaakt door AI. Controleer of het klopt."
+
+#: src/components/document-table.tsx
+msgid "Herinnering"
+msgstr "Herinnering"
+
 #: src/components/page.tsx
 msgid "Hoofdmenu"
 msgstr "Hoofdmenu"
+
+#: src/components/document-table.tsx
+msgid "Informatie"
+msgstr "Informatie"
 
 #: src/routes/login.tsx
 msgid "Inloggen"
@@ -162,6 +242,10 @@ msgstr "Intrekken"
 #: src/components/device-table.tsx
 msgid "Intrekken: {0}"
 msgstr "Intrekken: {0}"
+
+#: src/components/document-table.tsx
+msgid "Jaaropgave"
+msgstr "Jaaropgave"
 
 #: src/routes/setup.tsx
 msgid "Je naam"
@@ -183,9 +267,17 @@ msgstr "Je vindt de installatiecode in het logboek van de Brievie-container."
 msgid "Jouw account"
 msgstr "Jouw account"
 
+#: src/components/document-table.tsx
+msgid "Keuring"
+msgstr "Keuring"
+
 #: src/routes/setup.tsx
 msgid "Kies minstens 12 tekens."
 msgstr "Kies minstens 12 tekens."
+
+#: src/components/document-table.tsx
+msgid "Klaar"
+msgstr "Klaar"
 
 #: src/routes/pair-app.tsx
 msgid "Kopieer koppelgegevens"
@@ -211,6 +303,10 @@ msgstr "Koppelgegevens"
 msgid "Lid"
 msgstr "Lid"
 
+#: src/components/document-table.tsx
+msgid "Loonstrook"
+msgstr "Loonstrook"
+
 #: src/routes/home.tsx
 msgid "Meekijker"
 msgstr "Meekijker"
@@ -235,13 +331,41 @@ msgstr "Naar de startpagina"
 msgid "Nieuwe code"
 msgstr "Nieuwe code"
 
+#: src/components/document-table.tsx
+#: src/routes/document.tsx
+msgid "Onbekende afzender"
+msgstr "Onbekende afzender"
+
+#: src/components/document-table.tsx
+msgid "Ontvangen"
+msgstr "Ontvangen"
+
 #: src/routes/pair-app.tsx
 msgid "Open de app op je telefoon en scan de code. De telefoon moet op hetzelfde netwerk zitten als deze server."
 msgstr "Open de app op je telefoon en scan de code. De telefoon moet op hetzelfde netwerk zitten als deze server."
 
+#: src/components/document-table.tsx
+msgid "Overig"
+msgstr "Overig"
+
+#. placeholder {0}: document.page_count
+#: src/routes/document.tsx
+msgid "Pagina {n} van {0}"
+msgstr "Pagina {n} van {0}"
+
 #: src/routes/root.tsx
 msgid "Pagina niet gevonden"
 msgstr "Pagina niet gevonden"
+
+#: src/components/document-table.tsx
+msgid "Polis"
+msgstr "Polis"
+
+#: src/components/document-table.tsx
+#: src/components/page.tsx
+#: src/routes/post.tsx
+msgid "Post"
+msgstr "Post"
 
 #: src/routes/root.tsx
 msgid "Probeer opnieuw"
@@ -251,9 +375,17 @@ msgstr "Probeer opnieuw"
 msgid "QR-code om de app te koppelen"
 msgstr "QR-code om de app te koppelen"
 
+#: src/components/document-table.tsx
+msgid "Rekening"
+msgstr "Rekening"
+
 #: src/routes/home.tsx
 msgid "Rol"
 msgstr "Rol"
+
+#: src/routes/document.tsx
+msgid "Samenvatting"
+msgstr "Samenvatting"
 
 #: src/routes/pair-app.tsx
 msgid "Scan met de Brievie-app"
@@ -264,15 +396,23 @@ msgstr "Scan met de Brievie-app"
 msgid "Server: {0}"
 msgstr "Server: {0}"
 
+#: src/components/document-table.tsx
+#: src/routes/document.tsx
 #: src/routes/home.tsx
 msgid "Soort"
 msgstr "Soort"
+
+#: src/routes/document.tsx
+msgid "Soort taak"
+msgstr "Soort taak"
 
 #: src/routes/setup.tsx
 msgid "Start Brievie"
 msgstr "Start Brievie"
 
 #: src/components/device-table.tsx
+#: src/components/document-table.tsx
+#: src/routes/document.tsx
 msgid "Status"
 msgstr "Status"
 
@@ -280,14 +420,47 @@ msgstr "Status"
 msgid "Stel je eigen Brievie-server in. Dit doe je maar één keer."
 msgstr "Stel je eigen Brievie-server in. Dit doe je maar één keer."
 
+#: src/routes/document.tsx
+msgid "Taak"
+msgstr "Taak"
+
+#: src/routes/document.tsx
+msgid "Taken"
+msgstr "Taken"
+
+#: src/components/document-table.tsx
+msgid "Te controleren"
+msgstr "Te controleren"
+
+#: src/routes/document.tsx
+msgid "Tekst van de brief"
+msgstr "Tekst van de brief"
+
+#: src/routes/document.tsx
+msgid "Terug naar Post"
+msgstr "Terug naar Post"
+
 #: src/routes/home.tsx
 #: src/routes/setup.tsx
 msgid "Thuis"
 msgstr "Thuis"
 
+#. placeholder {0}: formatLetterDate(task.deadline)
+#: src/routes/document.tsx
+msgid "Uiterlijk {0}"
+msgstr "Uiterlijk {0}"
+
 #: src/components/page.tsx
 msgid "Uitloggen"
 msgstr "Uitloggen"
+
+#: src/routes/document.tsx
+msgid "Vervaldatum"
+msgstr "Vervaldatum"
+
+#: src/components/document-table.tsx
+msgid "Verwerken mislukt"
+msgstr "Verwerken mislukt"
 
 #: src/routes/setup.tsx
 msgid "Voor de post van je bedrijf."
@@ -296,6 +469,10 @@ msgstr "Voor de post van je bedrijf."
 #: src/routes/setup.tsx
 msgid "Voor je eigen post en die van je gezin. Alles bij elkaar, rustig en overzichtelijk."
 msgstr "Voor je eigen post en die van je gezin. Alles bij elkaar, rustig en overzichtelijk."
+
+#: src/routes/document.tsx
+msgid "Voorstel van de AI"
+msgstr "Voorstel van de AI"
 
 #: src/routes/setup.tsx
 msgid "Waar gebruik je Brievie voor?"
@@ -318,6 +495,10 @@ msgstr "Welkom bij Brievie"
 #: src/routes/home.tsx
 msgid "Werkruimtes"
 msgstr "Werkruimtes"
+
+#: src/components/document-table.tsx
+msgid "Wordt verwerkt"
+msgstr "Wordt verwerkt"
 
 #: src/routes/home.tsx
 #: src/routes/setup.tsx

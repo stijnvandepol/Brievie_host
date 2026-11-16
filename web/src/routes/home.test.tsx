@@ -8,13 +8,20 @@ import {
   http,
   loggedInHandlers,
   renderApp,
+  secondWorkspace,
   server,
   user,
+  workspace,
 } from "../test-utils";
+
+/** Two workspaces: `/` shows the list instead of going straight to the post. */
+function twoWorkspaces() {
+  return http.get(`*${API}/workspaces`, () => HttpResponse.json([workspace, secondWorkspace]));
+}
 
 describe("home", () => {
   it("lists the workspaces in a table with kind and role, and links to the devices page", async () => {
-    server.use(...loggedInHandlers());
+    server.use(twoWorkspaces(), ...loggedInHandlers());
     renderApp("/");
     expect(
       await screen.findByRole("heading", { level: 1, name: /werkruimtes/i }),
@@ -28,7 +35,7 @@ describe("home", () => {
   });
 
   it("marks the current page in the menu and shows who is logged in", async () => {
-    server.use(...loggedInHandlers());
+    server.use(twoWorkspaces(), ...loggedInHandlers());
     renderApp("/");
     const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
     expect(within(nav).getByRole("link", { name: "Werkruimtes" })).toHaveAttribute(
@@ -40,6 +47,21 @@ describe("home", () => {
     );
     expect(await screen.findByText("anna@example.nl")).toBeInTheDocument();
     expect(screen.getByText("Anna")).toBeInTheDocument();
+  });
+
+  it("links each workspace when there are several", async () => {
+    server.use(twoWorkspaces(), ...loggedInHandlers());
+    renderApp("/");
+    expect(await screen.findByRole("link", { name: "Bedrijf" })).toHaveAttribute(
+      "href",
+      `/w/${secondWorkspace.id}/post`,
+    );
+  });
+
+  it("redirects to the only workspace", async () => {
+    server.use(...loggedInHandlers());
+    const { router } = renderApp("/");
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/w/${workspace.id}/post`));
   });
 
   it("logs out with the CSRF token and returns to the login screen", async () => {

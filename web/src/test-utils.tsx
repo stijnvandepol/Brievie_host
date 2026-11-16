@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
 import { render } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
+import type { components } from "./api/schema";
 import { i18n } from "./i18n";
 import { createAppRouter } from "./router";
 import { server } from "./test-server";
@@ -52,3 +53,57 @@ export function renderApp(path: string) {
 }
 
 export { HttpResponse, http, server };
+
+export const secondWorkspace = {
+  id: "5d1e7c3a-2b4f-4a6e-9c8d-1f2a3b4c5555",
+  name: "Bedrijf",
+  kind: "business",
+  role: "member",
+};
+
+export const documentSummary = {
+  id: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4444",
+  client_id: "3c2b1a09-8f7e-4d6c-9b5a-4e3d2c1b0999",
+  created_at: "2026-11-10T09:30:00Z",
+  document_type: "assessment",
+  letter_date: "2026-11-05",
+  page_count: 3,
+  sender: "Belastingdienst",
+  status: "done",
+};
+
+export const documentDetail: components["schemas"]["DocumentOut"] = {
+  ...documentSummary,
+  failure_code: "",
+  pages: [
+    { index: 1, ocr_text: "Eerste pagina" },
+    { index: 2, ocr_text: "Tweede pagina" },
+    { index: 3, ocr_text: "Derde pagina" },
+  ],
+  proposals: [],
+  summary: "Je krijgt een aanslag van 120 euro.",
+  summary_by_ai: true,
+  tasks: [
+    {
+      id: "0f0e0d0c-0b0a-4908-8706-050403020101",
+      type: "pay",
+      description: "Betaal de aanslag",
+      deadline: "2026-12-01",
+      deadline_quote: "uiterlijk 1 december",
+      deadline_source: "letter",
+      status: "open",
+    },
+  ],
+};
+
+/** The post endpoints of the first workspace: the list and one document with its pages. */
+export function documentHandlers(detail: components["schemas"]["DocumentOut"] = documentDetail) {
+  return [
+    http.get(`*${API}/workspaces/${workspace.id}/documents`, () =>
+      HttpResponse.json([documentSummary]),
+    ),
+    http.get(`*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}`, () =>
+      HttpResponse.json(detail),
+    ),
+  ];
+}

@@ -820,3 +820,115 @@ textarea:focus-visible {
     scroll-behavior: auto;
   }
 }
+
+/* Workspace entries in the sidebar */
+
+.sidebar-workspace {
+  padding: 8px 12px 4px;
+  color: var(--brand-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sidebar-rule {
+  width: 100%;
+  margin: 6px 0;
+  border: 0;
+  border-top: 1px solid var(--brand-divider);
+}
+
+/* The document page: the pages left, the details right */
+
+.back-link {
+  margin-bottom: 12px;
+}
+
+.document {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.document-pages {
+  display: flex;
+  flex: 1 1 420px;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.document-page {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.document-side {
+  display: flex;
+  flex: 1 1 320px;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.notice {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  font-weight: 500;
+}
+
+.detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 16px;
+}
+
+.detail-list dt {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.detail-list dd {
+  margin: 0;
+}
+
+.block {
+  display: block;
+}
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 16px;
+  list-style: none;
+}
+
+.task-list li {
+  display: flex;
+  flex-direction: column;
+}
+
+.letter-text {
+  padding: 12px 16px;
+}
+
+.letter-text summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.letter-page {
+  margin-top: 12px;
+  white-space: pre-wrap;
+}

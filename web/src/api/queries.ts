@@ -38,3 +38,30 @@ export const devicesQuery = queryOptions({
     return data;
   },
 });
+
+export type DocumentFilters = { inbox_state?: string; person_id?: string; label_id?: string };
+
+export const documentsQuery = (workspaceId: string, filters: DocumentFilters = {}) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "documents", filters],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/documents", {
+        params: { path: { workspace_id: workspaceId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
+export const documentQuery = (workspaceId: string, documentId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "documents", documentId],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/documents/{document_id}",
+        { params: { path: { workspace_id: workspaceId, document_id: documentId } } },
+      );
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
