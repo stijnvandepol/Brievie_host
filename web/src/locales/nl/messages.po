@@ -21,6 +21,16 @@ msgstr "(nog {0})"
 msgid "{0, plural, one {# apparaat} other {# apparaten}}"
 msgstr "{0, plural, one {# apparaat} other {# apparaten}}"
 
+#. placeholder {0}: result.existing
+#: src/routes/labels.tsx
+msgid "{0, plural, one {# bestond al} other {# bestonden al}}"
+msgstr "{0, plural, one {# bestond al} other {# bestonden al}}"
+
+#. placeholder {0}: result.added
+#: src/routes/labels.tsx
+msgid "{0, plural, one {# label toegevoegd} other {# labels toegevoegd}}"
+msgstr "{0, plural, one {# label toegevoegd} other {# labels toegevoegd}}"
+
 #. placeholder {0}: details.urls.length
 #: src/routes/pair-app.tsx
 msgid "{0, plural, one {Serveradres} other {Serveradressen}}"
@@ -43,6 +53,14 @@ msgstr "{minutes, plural, one {# minuut} other {# minuten}}"
 #: src/routes/pair-app.tsx
 msgid "{minutesText} en {secondsText}"
 msgstr "{minutesText} en {secondsText}"
+
+#: src/routes/labels.tsx
+msgid "{name} wordt verwijderd en van {count} brieven gehaald. Dit kun je niet ongedaan maken."
+msgstr "{name} wordt verwijderd en van {count} brieven gehaald. Dit kun je niet ongedaan maken."
+
+#: src/routes/labels.tsx
+msgid "{name} wordt verwijderd en van 1 brief gehaald. Dit kun je niet ongedaan maken."
+msgstr "{name} wordt verwijderd en van 1 brief gehaald. Dit kun je niet ongedaan maken."
 
 #: src/routes/pair-app.tsx
 msgid "{seconds, plural, one {# seconde} other {# seconden}}"
@@ -68,6 +86,7 @@ msgstr "Aanmaning"
 msgid "Aanslag"
 msgstr "Aanslag"
 
+#: src/routes/labels.tsx
 #: src/routes/persons.tsx
 msgid "Aantal brieven"
 msgstr "Aantal brieven"
@@ -84,9 +103,14 @@ msgstr "Actie"
 msgid "Actief"
 msgstr "Actief"
 
+#: src/routes/labels.tsx
 #: src/routes/persons.tsx
 msgid "Acties"
 msgstr "Acties"
+
+#: src/routes/setup.tsx
+msgid "Afdelingen"
+msgstr "Afdelingen"
 
 #: src/components/document-table.tsx
 #: src/routes/document.tsx
@@ -94,7 +118,12 @@ msgstr "Acties"
 msgid "Afzender"
 msgstr "Afzender"
 
+#: src/routes/post.tsx
+msgid "Alle labels"
+msgstr "Alle labels"
+
 #: src/components/device-table.tsx
+#: src/routes/labels.tsx
 #: src/routes/persons.tsx
 msgid "Annuleren"
 msgstr "Annuleren"
@@ -136,6 +165,14 @@ msgstr "Beheerder"
 #: src/components/document-table.tsx
 msgid "Beschikking"
 msgstr "Beschikking"
+
+#: src/routes/setup.tsx
+msgid "Bijvoorbeeld: Sales, Finance, HR. Je krijgt per afdeling een label."
+msgstr "Bijvoorbeeld: Sales, Finance, HR. Je krijgt per afdeling een label."
+
+#: src/components/label-chip.tsx
+msgid "Blauw"
+msgstr "Blauw"
 
 #: src/components/document-table.tsx
 msgid "Bonnetje"
@@ -225,6 +262,7 @@ msgstr "Er zijn nog geen apparaten gekoppeld."
 #: src/routes/document.tsx
 #: src/routes/home.tsx
 #: src/routes/inbox.tsx
+#: src/routes/labels.tsx
 #: src/routes/persons.tsx
 #: src/routes/post.tsx
 msgid "Even laden..."
@@ -245,6 +283,14 @@ msgstr "Gearchiveerd"
 #: src/routes/login.tsx
 msgid "Gebruik het account van deze server."
 msgstr "Gebruik het account van deze server."
+
+#: src/components/label-chip.tsx
+msgid "Geel"
+msgstr "Geel"
+
+#: src/components/label-picker.tsx
+msgid "Geen"
+msgstr "Geen"
 
 #: src/routes/pair-app.tsx
 msgid "Geen eigen CA"
@@ -277,6 +323,18 @@ msgstr "Gemaakt door AI. Controleer of het klopt."
 #: src/components/document-history.tsx
 msgid "Geschiedenis"
 msgstr "Geschiedenis"
+
+#: src/components/label-chip.tsx
+msgid "Grijs"
+msgstr "Grijs"
+
+#: src/components/label-chip.tsx
+msgid "Groen"
+msgstr "Groen"
+
+#: src/components/label-chip.tsx
+msgid "Groenblauw"
+msgstr "Groenblauw"
 
 #: src/components/document-table.tsx
 msgid "Herinnering"
@@ -372,6 +430,10 @@ msgstr "Kies minstens 12 tekens."
 msgid "Klaar"
 msgstr "Klaar"
 
+#: src/routes/labels.tsx
+msgid "Kleur"
+msgstr "Kleur"
+
 #: src/routes/pair-app.tsx
 msgid "Kopieer koppelgegevens"
 msgstr "Kopieer koppelgegevens"
@@ -397,6 +459,32 @@ msgstr "Koppelcode maken"
 msgid "Koppelgegevens"
 msgstr "Koppelgegevens"
 
+#: src/routes/labels.tsx
+#: src/routes/post.tsx
+msgid "Label"
+msgstr "Label"
+
+#: src/routes/labels.tsx
+msgid "Label toevoegen"
+msgstr "Label toevoegen"
+
+#: src/routes/labels.tsx
+msgid "Label verwijderen?"
+msgstr "Label verwijderen?"
+
+#: src/routes/labels.tsx
+msgid "Label wijzigen"
+msgstr "Label wijzigen"
+
+#: src/components/document-table.tsx
+#: src/components/label-picker.tsx
+#: src/components/page.tsx
+#: src/routes/document.tsx
+#: src/routes/inbox.tsx
+#: src/routes/labels.tsx
+msgid "Labels"
+msgstr "Labels"
+
 #: src/routes/home.tsx
 msgid "Lid"
 msgstr "Lid"
@@ -409,11 +497,16 @@ msgstr "Loonstrook"
 msgid "Meekijker"
 msgstr "Meekijker"
 
+#: src/routes/labels.tsx
+msgid "Meerdere tegelijk toevoegen"
+msgstr "Meerdere tegelijk toevoegen"
+
 #: src/routes/login.tsx
 msgid "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
 msgstr "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
 
 #: src/routes/home.tsx
+#: src/routes/labels.tsx
 #: src/routes/persons.tsx
 msgid "Naam"
 msgstr "Naam"
@@ -429,6 +522,10 @@ msgstr "Naamvarianten"
 #: src/routes/root.tsx
 msgid "Naar de startpagina"
 msgstr "Naar de startpagina"
+
+#: src/routes/labels.tsx
+msgid "Namen"
+msgstr "Namen"
 
 #: src/components/person-picker.tsx
 msgid "Niemand"
@@ -463,13 +560,22 @@ msgstr "Op naam van"
 msgid "Open de app op je telefoon en scan de code. De telefoon moet op hetzelfde netwerk zitten als deze server."
 msgstr "Open de app op je telefoon en scan de code. De telefoon moet op hetzelfde netwerk zitten als deze server."
 
+#: src/routes/labels.tsx
 #: src/routes/persons.tsx
 msgid "Opslaan"
 msgstr "Opslaan"
 
+#: src/components/label-chip.tsx
+msgid "Oranje"
+msgstr "Oranje"
+
 #: src/components/document-table.tsx
 msgid "Overig"
 msgstr "Overig"
+
+#: src/components/label-chip.tsx
+msgid "Paars"
+msgstr "Paars"
 
 #. placeholder {0}: document.page_count
 #: src/routes/document.tsx
@@ -531,6 +637,10 @@ msgstr "Rekening"
 msgid "Rol"
 msgstr "Rol"
 
+#: src/components/label-chip.tsx
+msgid "Rood"
+msgstr "Rood"
+
 #: src/routes/document.tsx
 msgid "Samenvatting"
 msgstr "Samenvatting"
@@ -543,6 +653,10 @@ msgstr "Scan met de Brievie-app"
 #: src/components/page.tsx
 msgid "Server: {0}"
 msgstr "Server: {0}"
+
+#: src/routes/labels.tsx
+msgid "Sluiten"
+msgstr "Sluiten"
 
 #: src/components/document-table.tsx
 #: src/routes/document.tsx
@@ -558,6 +672,10 @@ msgstr "Soort taak"
 #: src/routes/setup.tsx
 msgid "Start Brievie"
 msgstr "Start Brievie"
+
+#: src/routes/labels.tsx
+msgid "Startset toevoegen"
+msgstr "Startset toevoegen"
 
 #: src/components/device-table.tsx
 #: src/components/document-table.tsx
@@ -604,6 +722,10 @@ msgstr "Terugzetten: {0}"
 msgid "Thuis"
 msgstr "Thuis"
 
+#: src/routes/labels.tsx
+msgid "Toevoegen"
+msgstr "Toevoegen"
+
 #. placeholder {0}: formatLetterDate(task.deadline)
 #: src/routes/document.tsx
 msgid "Uiterlijk {0}"
@@ -621,6 +743,7 @@ msgstr "Vervaldatum"
 msgid "Verwerken mislukt"
 msgstr "Verwerken mislukt"
 
+#: src/routes/labels.tsx
 #: src/routes/persons.tsx
 msgid "Verwijderen"
 msgstr "Verwijderen"
@@ -629,6 +752,10 @@ msgstr "Verwijderen"
 #: src/routes/persons.tsx
 msgid "Verwijderen: {0}"
 msgstr "Verwijderen: {0}"
+
+#: src/routes/labels.tsx
+msgid "Verwijderen: {name}"
+msgstr "Verwijderen: {name}"
 
 #: src/routes/setup.tsx
 msgid "Voor de post van je bedrijf."
@@ -668,6 +795,7 @@ msgstr "Welkom bij Brievie"
 msgid "Werkruimtes"
 msgstr "Werkruimtes"
 
+#: src/routes/labels.tsx
 #: src/routes/persons.tsx
 msgid "Wijzigen"
 msgstr "Wijzigen"
@@ -676,6 +804,10 @@ msgstr "Wijzigen"
 #: src/routes/persons.tsx
 msgid "Wijzigen: {0}"
 msgstr "Wijzigen: {0}"
+
+#: src/routes/labels.tsx
+msgid "Wijzigen: {name}"
+msgstr "Wijzigen: {name}"
 
 #: src/components/document-table.tsx
 msgid "Wordt verwerkt"

@@ -133,8 +133,32 @@ export const members: components["schemas"]["MemberOut"][] = [
   },
 ];
 
+type Label = components["schemas"]["LabelOut"];
+
+export const belasting: Label = {
+  id: "d1111111-1111-4111-8111-111111111111",
+  name: "Belastingdienst",
+  color: "blue",
+  system_key: "belastingdienst",
+  document_count: 2,
+};
+
+export const sales: Label = {
+  id: "d2222222-2222-4222-8222-222222222222",
+  name: "Sales",
+  color: "teal",
+  system_key: "",
+  document_count: 0,
+};
+
+export function labelHandlers(labels: Label[] = [belasting, sales]) {
+  return [http.get(`*${API}/workspaces/${workspace.id}/labels`, () => HttpResponse.json(labels))];
+}
+
+/** The persons, members and labels of the first workspace. */
 export function personHandlers(persons: Person[] = [papa, annaPerson]) {
   return [
+    ...labelHandlers(),
     http.get(`*${API}/workspaces/${workspace.id}/persons`, () => HttpResponse.json(persons)),
     http.get(`*${API}/workspaces/${workspace.id}/members`, () => HttpResponse.json(members)),
   ];

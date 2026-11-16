@@ -112,23 +112,30 @@ function PersonRow({
   person,
   members,
   isAdmin,
+  canEdit,
   onEdit,
   onError,
+  onDone,
 }: {
   workspaceId: string;
   person: Person;
   members: Member[];
   isAdmin: boolean;
+  canEdit: boolean;
   onEdit: () => void;
   onError: (error: unknown) => void;
+  onDone: () => void;
 }) {
   const queryClient = useQueryClient();
   const path = { workspace_id: workspaceId, person_id: person.id };
-  const refresh = () =>
-    Promise.all([
+  // A success wipes the error an earlier action left on the page.
+  const refresh = () => {
+    onDone();
+    return Promise.all([
       queryClient.invalidateQueries({ queryKey: personsQuery(workspaceId).queryKey }),
       queryClient.invalidateQueries({ queryKey: membersQuery(workspaceId).queryKey }),
     ]);
+  };
 
   const archive = useMutation({
     mutationFn: async (archived: boolean) => {
@@ -179,31 +186,35 @@ function PersonRow({
       <td>{account?.name ?? ""}</td>
       <td className="num">{person.document_count}</td>
       <td className="cell-action">
-        <Button
-          className="button-text"
-          aria-label={t`Wijzigen: ${person.display_name}`}
-          onPress={onEdit}
-        >
-          {t`Wijzigen`}
-        </Button>
-        {person.archived ? (
-          <Button
-            className="button-text"
-            aria-label={t`Terugzetten: ${person.display_name}`}
-            onPress={() => archive.mutate(false)}
-          >
-            {t`Terugzetten`}
-          </Button>
-        ) : (
-          <Button
-            className="button-text"
-            aria-label={t`Archiveren: ${person.display_name}`}
-            onPress={() => archive.mutate(true)}
-          >
-            {t`Archiveren`}
-          </Button>
-        )}
-        <DeleteButton person={person} onConfirm={() => remove.mutate()} />
+        {canEdit ? (
+          <>
+            <Button
+              className="button-text"
+              aria-label={t`Wijzigen: ${person.display_name}`}
+              onPress={onEdit}
+            >
+              {t`Wijzigen`}
+            </Button>
+            {person.archived ? (
+              <Button
+                className="button-text"
+                aria-label={t`Terugzetten: ${person.display_name}`}
+                onPress={() => archive.mutate(false)}
+              >
+                {t`Terugzetten`}
+              </Button>
+            ) : (
+              <Button
+                className="button-text"
+                aria-label={t`Archiveren: ${person.display_name}`}
+                onPress={() => archive.mutate(true)}
+              >
+                {t`Archiveren`}
+              </Button>
+            )}
+            <DeleteButton person={person} onConfirm={() => remove.mutate()} />
+          </>
+        ) : null}
         {canLink ? (
           <select
             className="inline-select"
@@ -272,23 +283,26 @@ function PersonsPage() {
   const members = useQuery(membersQuery(workspace.id));
   const [editing, setEditing] = useState<Editing>(null);
   const [rowError, setRowError] = useState<unknown>(null);
+  const canEdit = workspace.role !== "viewer";
 
   return (
     <Shell workspace={workspace}>
       <header className="page-header">
         <h1>{t`Personen`}</h1>
-        <Button
-          className="button"
-          onPress={() => {
-            setRowError(null);
-            setEditing("new");
-          }}
-        >
-          {t`Persoon toevoegen`}
-        </Button>
+        {canEdit ? (
+          <Button
+            className="button"
+            onPress={() => {
+              setRowError(null);
+              setEditing("new");
+            }}
+          >
+            {t`Persoon toevoegen`}
+          </Button>
+        ) : null}
       </header>
       {persons.isPending ? <p>{t`Even laden...`}</p> : null}
-      <ErrorAlert error={persons.error ?? rowError} />
+      <ErrorAlert error={persons.error ?? members.error ?? rowError} />
       {persons.data ? (
         // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrolling box must be reachable by keyboard (WCAG 2.1.1).
         <section className="panel table-scroll" aria-label={t`Personen`} tabIndex={0}>
@@ -312,11 +326,13 @@ function PersonsPage() {
                   person={person}
                   members={members.data ?? []}
                   isAdmin={workspace.role === "admin"}
+                  canEdit={canEdit}
                   onEdit={() => {
                     setRowError(null);
                     setEditing(person);
                   }}
                   onError={setRowError}
+                  onDone={() => setRowError(null)}
                 />
               ))}
             </tbody>

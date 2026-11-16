@@ -83,6 +83,51 @@ describe("setup", () => {
     await waitFor(() => expect(body.workspace_kind).toBe("business"));
   });
 
+  it("asks for departments with Zakelijk and sends them as extra labels", async () => {
+    needsSetup();
+    let body: { extra_labels?: string[] } = {};
+    server.use(
+      http.post(`*${API}/setup`, async ({ request }) => {
+        body = (await request.json()) as typeof body;
+        server.use(...loggedInHandlers());
+        return HttpResponse.json({ user, workspace }, { status: 201 });
+      }),
+    );
+    const u = userEvent.setup();
+    renderApp("/setup");
+    await screen.findByRole("radio", { name: /zakelijk/i });
+    expect(screen.queryByRole("textbox", { name: "Afdelingen" })).not.toBeInTheDocument();
+    await u.click(screen.getByRole("radio", { name: /zakelijk/i }));
+    expect(
+      screen.getByText("Bijvoorbeeld: Sales, Finance, HR. Je krijgt per afdeling een label."),
+    ).toBeInTheDocument();
+    await u.type(screen.getByRole("textbox", { name: "Afdelingen" }), "Sales, Finance, HR, ");
+    await fillIn(u);
+    await u.click(screen.getByRole("button", { name: /^start/i }));
+    await waitFor(() => expect(body.extra_labels).toEqual(["Sales", "Finance", "HR"]));
+  });
+
+  it("sends no extra labels when Thuis is chosen after typing departments", async () => {
+    needsSetup();
+    let body: { extra_labels?: string[] } = {};
+    server.use(
+      http.post(`*${API}/setup`, async ({ request }) => {
+        body = (await request.json()) as typeof body;
+        server.use(...loggedInHandlers());
+        return HttpResponse.json({ user, workspace }, { status: 201 });
+      }),
+    );
+    const u = userEvent.setup();
+    renderApp("/setup");
+    await u.click(await screen.findByRole("radio", { name: /zakelijk/i }));
+    await u.type(screen.getByRole("textbox", { name: "Afdelingen" }), "Sales");
+    await u.click(screen.getByRole("radio", { name: /thuis/i }));
+    expect(screen.queryByRole("textbox", { name: "Afdelingen" })).not.toBeInTheDocument();
+    await fillIn(u);
+    await u.click(screen.getByRole("button", { name: /^start/i }));
+    await waitFor(() => expect(body.extra_labels).toEqual([]));
+  });
+
   it("shows the server message for a wrong installation code and stays on the form", async () => {
     needsSetup();
     server.use(

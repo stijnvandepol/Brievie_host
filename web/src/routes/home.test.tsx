@@ -14,7 +14,7 @@ import {
   workspace,
 } from "../test-utils";
 
-/** Two workspaces: `/` shows the list instead of going straight to the post. */
+/** Two workspaces: `/` shows the list instead of going straight to the inbox. */
 function twoWorkspaces() {
   return http.get(`*${API}/workspaces`, () => HttpResponse.json([workspace, secondWorkspace]));
 }
@@ -54,7 +54,7 @@ describe("home", () => {
     renderApp("/");
     expect(await screen.findByRole("link", { name: "Bedrijf" })).toHaveAttribute(
       "href",
-      `/w/${secondWorkspace.id}/post`,
+      `/w/${secondWorkspace.id}/inbox`,
     );
   });
 

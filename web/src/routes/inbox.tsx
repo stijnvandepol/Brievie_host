@@ -2,15 +2,17 @@ import { t } from "@lingui/core/macro";
 import { useQuery } from "@tanstack/react-query";
 import { createRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Tab, TabList, TabPanel, Tabs } from "react-aria-components";
-import { documentsQuery, inboxCountsQuery, personsQuery } from "../api/queries";
+import { documentsQuery, inboxCountsQuery, labelsQuery, personsQuery } from "../api/queries";
 import type { components } from "../api/schema";
 import { formatLetterDate, typeLabel } from "../components/document-table";
+import { LabelChips } from "../components/label-chip";
 import { ErrorAlert, Shell, usePageTitle } from "../components/page";
 import { PersonPicker, useSetAddressees } from "../components/person-picker";
 import { workspaceRoute } from "./workspace";
 
 type DocumentSummary = components["schemas"]["DocumentSummaryOut"];
 type Person = components["schemas"]["PersonOut"];
+type LabelOut = components["schemas"]["LabelOut"];
 
 const TABS = ["review", "unassigned", "new"] as const;
 type InboxTab = (typeof TABS)[number];
@@ -24,11 +26,15 @@ function InboxRow({
   document,
   tab,
   persons,
+  labels,
+  canEdit,
 }: {
   workspaceId: string;
   document: DocumentSummary;
   tab: InboxTab;
   persons: Person[];
+  labels: LabelOut[];
+  canEdit: boolean;
 }) {
   const setAddressees = useSetAddressees(workspaceId, document.id);
   return (
@@ -44,13 +50,16 @@ function InboxRow({
       <td>{typeLabel(document.document_type)}</td>
       <td className="num">{document.letter_date ? formatLetterDate(document.letter_date) : ""}</td>
       <td>
+        <LabelChips labels={labels} ids={document.label_ids} />
+      </td>
+      <td>
         {tab === "unassigned" ? (
           <>
             <PersonPicker
               persons={persons}
               selectedIds={document.addressee_ids}
               onChange={(ids) => setAddressees.mutate(ids)}
-              disabled={setAddressees.isPending}
+              disabled={!canEdit || setAddressees.isPending}
             />
             <ErrorAlert error={setAddressees.error} />
           </>
@@ -62,9 +71,18 @@ function InboxRow({
   );
 }
 
-function InboxList({ workspaceId, tab }: { workspaceId: string; tab: InboxTab }) {
+function InboxList({
+  workspaceId,
+  tab,
+  canEdit,
+}: {
+  workspaceId: string;
+  tab: InboxTab;
+  canEdit: boolean;
+}) {
   const documents = useQuery(documentsQuery(workspaceId, { inbox_state: tab }));
   const persons = useQuery(personsQuery(workspaceId));
+  const labels = useQuery(labelsQuery(workspaceId));
   if (documents.isPending) return <p>{t`Even laden...`}</p>;
   if (documents.error) return <ErrorAlert error={documents.error} />;
   if (documents.data.length === 0) {
@@ -77,13 +95,14 @@ function InboxList({ workspaceId, tab }: { workspaceId: string; tab: InboxTab })
   return (
     // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrolling box must be reachable by keyboard (WCAG 2.1.1).
     <section className="panel table-scroll" aria-label={t`Inbox`} tabIndex={0}>
-      <ErrorAlert error={persons.error} />
+      <ErrorAlert error={persons.error ?? labels.error} />
       <table className="table table-wide">
         <thead>
           <tr>
             <th scope="col">{t`Afzender`}</th>
             <th scope="col">{t`Soort`}</th>
             <th scope="col">{t`Datum brief`}</th>
+            <th scope="col">{t`Labels`}</th>
             <th scope="col">{tab === "unassigned" ? t`Op naam van` : t`Wat te doen`}</th>
           </tr>
         </thead>
@@ -95,6 +114,8 @@ function InboxList({ workspaceId, tab }: { workspaceId: string; tab: InboxTab })
               document={document}
               tab={tab}
               persons={persons.data ?? []}
+              labels={labels.data ?? []}
+              canEdit={canEdit}
             />
           ))}
         </tbody>
@@ -146,7 +167,7 @@ function InboxPage() {
             ))}
           </TabList>
           <TabPanel id={tab} className="tab-panel">
-            <InboxList workspaceId={workspace.id} tab={tab} />
+            <InboxList workspaceId={workspace.id} tab={tab} canEdit={workspace.role !== "viewer"} />
           </TabPanel>
         </Tabs>
       ) : (

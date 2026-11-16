@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   API,
   annaPerson,
+  belasting,
   documentDetail,
   documentHandlers,
   documentSummary,
@@ -12,6 +13,7 @@ import {
   loggedInHandlers,
   papa,
   renderApp,
+  sales,
   server,
   workspace,
 } from "../test-utils";
@@ -113,6 +115,38 @@ describe("document", () => {
     await user.click(picker);
     await user.click(await screen.findByRole("option", { name: "Anna" }));
     await waitFor(() => expect(puts).toEqual([{ person_ids: [papa.id, annaPerson.id] }]));
+  });
+
+  it("sets the labels of the letter through the picker", async () => {
+    const puts: unknown[] = [];
+    server.use(
+      http.put(
+        `*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/labels`,
+        async ({ request }) => {
+          puts.push(await request.json());
+          return HttpResponse.json({ ...documentDetail, label_ids: [belasting.id, sales.id] });
+        },
+      ),
+      ...loggedInHandlers(),
+      ...documentHandlers({ ...documentDetail, label_ids: [belasting.id] }),
+    );
+    const user = userEvent.setup();
+    renderApp(path);
+    const picker = await screen.findByRole("button", { name: /Labels/ });
+    await waitFor(() => expect(picker).toHaveTextContent("Belastingdienst"));
+    await user.click(picker);
+    await user.click(await screen.findByRole("option", { name: "Sales" }));
+    await waitFor(() => expect(puts).toEqual([{ label_ids: [belasting.id, sales.id] }]));
+  });
+
+  it("shows the label picker disabled to a viewer", async () => {
+    server.use(
+      http.get(`*${API}/workspaces`, () => HttpResponse.json([{ ...workspace, role: "viewer" }])),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
+    renderApp(path);
+    expect(await screen.findByRole("button", { name: /Labels/ })).toBeDisabled();
   });
 
   it("shows the picker disabled to a viewer", async () => {

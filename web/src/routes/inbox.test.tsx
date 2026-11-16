@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import {
   API,
+  belasting,
   documentSummary,
   HttpResponse,
   http,
@@ -102,5 +103,35 @@ describe("inbox", () => {
     await waitFor(() =>
       expect(screen.queryByRole("link", { name: "Belastingdienst" })).not.toBeInTheDocument(),
     );
+  });
+});
+
+describe("inbox labels and roles", () => {
+  it("shows the labels of a letter as chips", async () => {
+    server.use(
+      counts({ new: 0, review: 0, unassigned: 1 }),
+      ...loggedInHandlers(),
+      ...personHandlers(),
+      http.get(`${base}/documents`, () =>
+        HttpResponse.json([{ ...documentSummary, label_ids: [belasting.id] }]),
+      ),
+    );
+    renderApp(path);
+    const row = (await screen.findByRole("link", { name: "Belastingdienst" })).closest("tr");
+    expect(
+      await within(row as HTMLElement).findByText("Belastingdienst", { selector: ".label-chip" }),
+    ).toHaveClass("label-blue");
+  });
+
+  it("disables the person picker for a viewer", async () => {
+    server.use(
+      http.get(`*${API}/workspaces`, () => HttpResponse.json([{ ...workspace, role: "viewer" }])),
+      counts({ new: 0, review: 0, unassigned: 1 }),
+      ...loggedInHandlers(),
+      ...personHandlers(),
+      http.get(`${base}/documents`, () => HttpResponse.json([documentSummary])),
+    );
+    renderApp(path);
+    expect(await screen.findByRole("button", { name: /Op naam van/ })).toBeDisabled();
   });
 });

@@ -3,6 +3,7 @@ import { createRouter, type RouterHistory } from "@tanstack/react-router";
 import { documentRoute } from "./routes/document";
 import { homeRoute } from "./routes/home";
 import { inboxRoute } from "./routes/inbox";
+import { labelsRoute } from "./routes/labels";
 import { loginRoute } from "./routes/login";
 import { pairAppRoute } from "./routes/pair-app";
 import { personsRoute } from "./routes/persons";
@@ -16,7 +17,7 @@ const routeTree = rootRoute.addChildren([
   setupRoute,
   loginRoute,
   pairAppRoute,
-  workspaceRoute.addChildren([inboxRoute, postRoute, documentRoute, personsRoute]),
+  workspaceRoute.addChildren([inboxRoute, postRoute, documentRoute, personsRoute, labelsRoute]),
 ]);
 
 export function createAppRouter(queryClient: QueryClient, history?: RouterHistory) {

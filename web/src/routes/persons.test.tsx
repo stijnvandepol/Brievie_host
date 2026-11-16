@@ -181,3 +181,57 @@ describe("persons", () => {
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 });
+
+describe("persons: roles and errors", () => {
+  it("gives a viewer no controls to change persons", async () => {
+    server.use(
+      http.get(`*${API}/workspaces`, () => HttpResponse.json([{ ...workspace, role: "viewer" }])),
+      ...loggedInHandlers(),
+      ...personHandlers(),
+    );
+    renderApp(path);
+    await screen.findByRole("rowheader", { name: /Papa/ });
+    expect(screen.queryByRole("button", { name: "Persoon toevoegen" })).not.toBeInTheDocument();
+    for (const name of [/Wijzigen/, /Archiveren/, /Terugzetten/, /Verwijderen/]) {
+      expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
+    }
+  });
+
+  it("clears a row error after a later action succeeds", async () => {
+    let attempts = 0;
+    server.use(
+      http.put(`${base}/persons/${papa.id}`, async ({ request }) => {
+        attempts += 1;
+        if (attempts === 1) {
+          return HttpResponse.json(errorBody("person_exists", "Dat ging mis."), { status: 409 });
+        }
+        return HttpResponse.json({ ...papa, ...((await request.json()) as object) });
+      }),
+      ...loggedInHandlers(),
+      ...personHandlers(),
+    );
+    const user = userEvent.setup();
+    renderApp(path);
+    await user.click(await screen.findByRole("button", { name: /Archiveren: Papa/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Dat ging mis.");
+    await user.click(screen.getByRole("button", { name: /Archiveren: Papa/ }));
+    await waitFor(() => expect(attempts).toBe(2));
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+  });
+
+  it("shows a failed load of the members", async () => {
+    server.use(
+      http.get(`${base}/members`, () =>
+        HttpResponse.json(errorBody("server_error", "De accounts konden niet worden geladen."), {
+          status: 500,
+        }),
+      ),
+      ...loggedInHandlers(),
+      http.get(`${base}/persons`, () => HttpResponse.json([papa])),
+    );
+    renderApp(path);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "De accounts konden niet worden geladen.",
+    );
+  });
+});

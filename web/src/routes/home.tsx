@@ -68,7 +68,7 @@ function HomePage() {
                 {data.map((workspace) => (
                   <tr key={workspace.id}>
                     <th scope="row" className="cell-strong">
-                      <Link to="/w/$workspaceId/post" params={{ workspaceId: workspace.id }}>
+                      <Link to="/w/$workspaceId/inbox" params={{ workspaceId: workspace.id }}>
                         {workspace.name}
                       </Link>
                     </th>

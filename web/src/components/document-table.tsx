@@ -1,10 +1,12 @@
 import { t } from "@lingui/core/macro";
 import { Link } from "@tanstack/react-router";
 import type { components } from "../api/schema";
+import { LabelChips } from "./label-chip";
 import { personNames } from "./person-picker";
 
 type DocumentSummary = components["schemas"]["DocumentSummaryOut"];
 type Person = components["schemas"]["PersonOut"];
+type LabelOut = components["schemas"]["LabelOut"];
 
 const date = new Intl.DateTimeFormat("nl-NL", { dateStyle: "medium" });
 
@@ -68,10 +70,12 @@ export function DocumentTable({
   workspaceId,
   documents,
   persons,
+  labels,
 }: {
   workspaceId: string;
   documents: DocumentSummary[];
   persons: Person[];
+  labels: LabelOut[];
 }) {
   if (documents.length === 0) {
     return (
@@ -90,6 +94,7 @@ export function DocumentTable({
             <th scope="col">{t`Soort`}</th>
             <th scope="col">{t`Datum brief`}</th>
             <th scope="col">{t`Op naam van`}</th>
+            <th scope="col">{t`Labels`}</th>
             <th scope="col">{t`Status`}</th>
             <th scope="col">{t`Ontvangen`}</th>
           </tr>
@@ -110,6 +115,9 @@ export function DocumentTable({
                 {document.letter_date ? formatLetterDate(document.letter_date) : ""}
               </td>
               <td>{personNames(persons, document.addressee_ids).join(", ")}</td>
+              <td>
+                <LabelChips labels={labels} ids={document.label_ids} />
+              </td>
               <td>
                 <span className="tag">{statusLabel(document.status)}</span>
               </td>

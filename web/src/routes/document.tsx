@@ -1,10 +1,11 @@
 import { t } from "@lingui/core/macro";
 import { useQuery } from "@tanstack/react-query";
 import { createRoute, Link } from "@tanstack/react-router";
-import { documentQuery, personsQuery } from "../api/queries";
+import { documentQuery, labelsQuery, personsQuery } from "../api/queries";
 import type { components } from "../api/schema";
 import { DocumentHistory } from "../components/document-history";
 import { formatLetterDate, statusLabel, typeLabel } from "../components/document-table";
+import { LabelPicker, useSetLabels } from "../components/label-picker";
 import { ErrorAlert, Shell, usePageTitle } from "../components/page";
 import { PersonPicker, useSetAddressees } from "../components/person-picker";
 import { workspaceRoute } from "./workspace";
@@ -81,7 +82,9 @@ function DocumentView({
   canEdit: boolean;
 }) {
   const persons = useQuery(personsQuery(workspaceId));
+  const labels = useQuery(labelsQuery(workspaceId));
   const setAddressees = useSetAddressees(workspaceId, document.id);
+  const setLabels = useSetLabels(workspaceId, document.id);
   const sender = document.sender || t`Onbekende afzender`;
   const pages = Array.from({ length: document.page_count }, (_, index) => index + 1);
   const reviewing = document.status === "needs_review" || document.status === "failed";
@@ -135,8 +138,21 @@ function DocumentView({
                   />
                 </dd>
               </div>
+              <div>
+                <dt>{t`Labels`}</dt>
+                <dd>
+                  <LabelPicker
+                    labels={labels.data ?? []}
+                    selectedIds={document.label_ids}
+                    onChange={(ids) => setLabels.mutate(ids)}
+                    disabled={!canEdit || document.status === "processing" || setLabels.isPending}
+                  />
+                </dd>
+              </div>
             </dl>
-            <ErrorAlert error={setAddressees.error ?? persons.error} />
+            <ErrorAlert
+              error={setAddressees.error ?? setLabels.error ?? persons.error ?? labels.error}
+            />
           </section>
           {document.summary ? (
             <section className="panel" aria-labelledby="summary-heading">

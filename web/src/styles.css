@@ -970,15 +970,6 @@ textarea:focus-visible {
   font-weight: 500;
 }
 
-select {
-  min-height: 44px;
-  padding: 0 12px;
-  border: 1px solid var(--input-border);
-  border-radius: var(--radius-control);
-  background: var(--surface);
-  color: var(--text);
-}
-
 .inline-select {
   max-width: 200px;
   margin-left: 8px;
@@ -1076,4 +1067,97 @@ select {
 
 .history-list time {
   display: block;
+}
+
+/* Labels: each colour is a class; the name is always shown, colour is a second signal. */
+
+.label-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.label-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.label-grey {
+  background: #e3e8ed;
+  color: #17212b;
+}
+
+.label-blue {
+  background: #dbe8f8;
+  color: #153e75;
+}
+
+.label-teal {
+  background: #d4efec;
+  color: #0f5048;
+}
+
+.label-green {
+  background: #dcefe3;
+  color: #14573a;
+}
+
+.label-yellow {
+  background: #fbefc4;
+  color: #5c4300;
+}
+
+.label-orange {
+  background: #fbe3cf;
+  color: #7a3a06;
+}
+
+.label-red {
+  background: #fbdcdc;
+  color: #8a1c1c;
+}
+
+.label-purple {
+  background: #e8def6;
+  color: #4d2a82;
+}
+
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.color-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.color-option {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.color-option[data-selected] {
+  border-color: var(--text);
+  font-weight: 600;
+}
+
+.color-option[data-selected]::before {
+  content: "\2713";
+  margin-right: 6px;
+}
+
+.color-option[data-focus-visible] {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }

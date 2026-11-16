@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import {
   API,
+  belasting,
   documentHandlers,
   documentSummary,
   HttpResponse,
@@ -88,6 +89,61 @@ describe("post", () => {
     renderApp(`/w/${workspace.id}/post?persoon=${papa.id}`);
     const filter = await screen.findByRole("combobox", { name: "Persoon" });
     await waitFor(() => expect(filter).toHaveValue(papa.id));
+  });
+
+  it("shows the labels of a letter as chips in a column", async () => {
+    server.use(
+      ...loggedInHandlers(),
+      http.get(`*${API}/workspaces/${workspace.id}/documents`, () =>
+        HttpResponse.json([{ ...documentSummary, label_ids: [belasting.id] }]),
+      ),
+      ...documentHandlers(),
+    );
+    renderApp(`/w/${workspace.id}/post`);
+    const link = await screen.findByRole("link", { name: "Belastingdienst" });
+    expect(screen.getByRole("columnheader", { name: "Labels" })).toBeInTheDocument();
+    const chip = await within(link.closest("tr") as HTMLElement).findByText("Belastingdienst", {
+      selector: ".label-chip",
+    });
+    expect(chip).toHaveClass("label-blue");
+  });
+
+  it("filters on a label through the URL", async () => {
+    const seen: (string | null)[] = [];
+    server.use(
+      ...loggedInHandlers(),
+      http.get(`*${API}/workspaces/${workspace.id}/documents`, ({ request }) => {
+        seen.push(new URL(request.url).searchParams.get("label_id"));
+        return HttpResponse.json([documentSummary]);
+      }),
+      ...documentHandlers(),
+    );
+    const user = userEvent.setup();
+    const { router } = renderApp(`/w/${workspace.id}/post`);
+    const filter = await screen.findByRole("combobox", { name: "Label" });
+    await screen.findByRole("option", { name: "Belastingdienst" });
+    await user.selectOptions(filter, "Belastingdienst");
+    await waitFor(() => expect(router.state.location.search).toEqual({ label: belasting.id }));
+    await waitFor(() => expect(seen).toContain(belasting.id));
+  });
+
+  it("reads the label filter from the URL", async () => {
+    server.use(...loggedInHandlers(), ...documentHandlers());
+    renderApp(`/w/${workspace.id}/post?label=${belasting.id}`);
+    const filter = await screen.findByRole("combobox", { name: "Label" });
+    await waitFor(() => expect(filter).toHaveValue(belasting.id));
+  });
+
+  it("keeps the person filter when a label is chosen", async () => {
+    server.use(...loggedInHandlers(), ...documentHandlers());
+    const user = userEvent.setup();
+    const { router } = renderApp(`/w/${workspace.id}/post?persoon=${papa.id}`);
+    const filter = await screen.findByRole("combobox", { name: "Label" });
+    await screen.findByRole("option", { name: "Belastingdienst" });
+    await user.selectOptions(filter, "Belastingdienst");
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({ persoon: papa.id, label: belasting.id }),
+    );
   });
 
   it("sums review and unassigned in the sidebar count", async () => {
