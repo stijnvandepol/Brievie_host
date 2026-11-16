@@ -464,6 +464,9 @@ describe("rule editor", () => {
     );
     expect(await screen.findByRole("heading", { name: "Regel wijzigen" })).toBeVisible();
     expect(await screen.findByText("Toepassen op bestaande post?")).toBeVisible();
+    // The flag is consumed: a reload would not show the offer again.
+    await waitFor(() => expect(router.state.location.search).toEqual({}));
+    expect(screen.getByText("Toepassen op bestaande post?")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Opslaan" }));
     await waitFor(() => expect(puts).toHaveLength(1));
     expect(posts).toHaveLength(1);

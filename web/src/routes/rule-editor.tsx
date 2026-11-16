@@ -287,6 +287,17 @@ function RuleForm({
     justCreated && rule ? rule.active : null,
   );
   const [running, setRunning] = useState(false);
+  // The flag has done its job (the offer is in state): a reload must not show the offer again.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once, on mount.
+  useEffect(() => {
+    if (!justCreated || !rule) return;
+    void navigate({
+      to: "/w/$workspaceId/automatisering/$ruleId",
+      params: { workspaceId, ruleId: rule.id },
+      search: {},
+      replace: true,
+    });
+  }, []);
 
   function body(): RuleBody {
     return {

@@ -145,21 +145,54 @@ describe("automations", () => {
     expect(screen.getAllByRole("link", { name: "Nieuwe regel" }).length).toBeGreaterThan(0);
   });
 
-  it("disables moving while a reorder is pending", async () => {
+  it("keeps focus on the pressed move button and ignores a second press while pending", async () => {
+    let orders = 0;
+    let order = [apkRule, bankRule];
     server.use(
       http.put(`${base}/rules/order`, async () => {
+        orders += 1;
         await new Promise((resolve) => setTimeout(resolve, 100));
-        return HttpResponse.json([bankRule, apkRule]);
+        order = [bankRule, apkRule];
+        return HttpResponse.json(order);
       }),
+      http.get(`${base}/rules`, () => HttpResponse.json(order)),
+      ...loggedInHandlers(),
+      ...ruleHandlers(),
+    );
+    const user = userEvent.setup();
+    renderApp(path);
+    const down = await screen.findByRole("button", { name: "Omlaag: APK naar Auto" });
+    await user.click(down);
+    expect(down).toHaveFocus();
+    expect(down).toBeEnabled();
+    await user.keyboard("{Enter}");
+    // The APK rule is last now: its "Omlaag" is disabled, so focus is on its "Omhoog".
+    const up = await screen.findByRole("button", { name: "Omhoog: APK naar Auto" });
+    await waitFor(() => expect(up).toHaveFocus());
+    expect(orders).toBe(1);
+  });
+
+  it("keeps focus on the same move button while the rule stays in the middle", async () => {
+    const third = { ...bankRule, id: "f3333333-3333-4333-8333-333333333333", name: "Derde" };
+    let order = [apkRule, bankRule, third];
+    server.use(
+      http.put(`${base}/rules/order`, async () => {
+        order = [bankRule, apkRule, third];
+        return HttpResponse.json(order);
+      }),
+      http.get(`${base}/rules`, () => HttpResponse.json(order)),
       ...loggedInHandlers(),
       ...ruleHandlers(),
     );
     const user = userEvent.setup();
     renderApp(path);
     await user.click(await screen.findByRole("button", { name: "Omlaag: APK naar Auto" }));
-    expect(screen.getByRole("button", { name: "Omhoog: Bank" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Omlaag: APK naar Auto" })).toBeDisabled();
-    await waitFor(() => expect(screen.getByRole("button", { name: "Omhoog: Bank" })).toBeEnabled());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Omlaag: APK naar Auto" })).toHaveFocus(),
+    );
+    expect(screen.getAllByRole("button", { name: /^Omlaag: / })[1]).toHaveAccessibleName(
+      "Omlaag: APK naar Auto",
+    );
   });
 
   it("shows a member the rules without editing controls", async () => {

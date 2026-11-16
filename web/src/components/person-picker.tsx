@@ -58,7 +58,7 @@ export function PersonPicker({
 }
 
 /** Sets the addressees of one letter; afterwards every list that shows it is fetched again. */
-export function useSetAddressees(workspaceId: string, documentId: string) {
+export function useSetAddressees(workspaceId: string, documentId: string, onSuccess?: () => void) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (personIds: string[]) => {
@@ -72,6 +72,7 @@ export function useSetAddressees(workspaceId: string, documentId: string) {
       if (error !== undefined || !data) throw new ApiFailure(error);
       return data;
     },
+    onSuccess,
     // Also after a failure: the lists show the truth.
     onSettled: async () => {
       await Promise.all([

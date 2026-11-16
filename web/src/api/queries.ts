@@ -48,7 +48,10 @@ export const documentsQuery = (
 ) =>
   queryOptions({
     queryKey: ["workspaces", workspaceId, "documents", filters],
-    refetchInterval: options.poll ? READING_REFETCH_MS : false,
+    // While the list itself holds letters (they are being read), fetch it again.
+    refetchInterval: options.poll
+      ? (query) => ((query.state.data?.length ?? 0) > 0 ? READING_REFETCH_MS : false)
+      : false,
     queryFn: async () => {
       const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/documents", {
         params: {

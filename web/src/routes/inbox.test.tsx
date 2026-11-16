@@ -242,4 +242,27 @@ describe("inbox focus and URL", () => {
     await waitFor(() => expect(router.state.location.search).toEqual({ tab: "review" }));
     expect(router.history.length).toBe(1);
   });
+
+  it("keeps focus on the picker and shows the error when the PUT fails", async () => {
+    server.use(
+      counts({ new: 0, review: 0, unassigned: 2 }),
+      http.put(`${base}/documents/${documentSummary.id}/addressees`, () =>
+        HttpResponse.json({ code: "forbidden", message: "Dat mag je niet." }, { status: 403 }),
+      ),
+      rows([documentSummary, second], () => []),
+      ...loggedInHandlers(),
+      ...personHandlers(),
+    );
+    const user = userEvent.setup();
+    renderApp(path);
+    await assign(user, "Belastingdienst");
+    // A multi-select stays open after a choice: closing it hands focus back to the picker.
+    await screen.findByText("Dat mag je niet.");
+    await user.keyboard("{Escape}");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Dat mag je niet.");
+    const row = screen.getByRole("link", { name: "Belastingdienst" }).closest("tr");
+    await waitFor(() =>
+      expect(within(row as HTMLElement).getByRole("button", { name: /Op naam van/ })).toHaveFocus(),
+    );
+  });
 });

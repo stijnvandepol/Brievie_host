@@ -1,4 +1,4 @@
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, type QueryKey, type UseQueryOptions } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import { API, HttpResponse, http, server, workspace } from "../test-utils";
 import { documentQuery, documentsQuery, inboxCountsQuery, READING_REFETCH_MS } from "./queries";
@@ -23,16 +23,15 @@ describe("documentsQuery", () => {
   });
 });
 
-/** What a query's `refetchInterval` says for the data it holds now. */
-async function intervalAfterFetch(
-  options: ReturnType<typeof documentQuery> | ReturnType<typeof inboxCountsQuery>,
+/** What a query's `refetchInterval` says for the data it holds after one fetch. */
+async function intervalAfterFetch<TData, TKey extends QueryKey>(
+  options: UseQueryOptions<TData, Error, TData, TKey> & { queryKey: TKey },
 ) {
   const client = new QueryClient();
-  await client.fetchQuery(options as never);
-  const query = client.getQueryCache().find({ queryKey: options.queryKey });
+  await client.fetchQuery(options);
+  const query = client.getQueryCache().build(client, options);
   const interval = options.refetchInterval;
-  if (typeof interval !== "function" || !query) throw new Error("no interval function");
-  return (interval as (query: unknown) => unknown)(query);
+  return typeof interval === "function" ? interval(query) : interval;
 }
 
 describe("polling while letters are being read", () => {
@@ -54,10 +53,14 @@ describe("polling while letters are being read", () => {
     expect(await intervalAfterFetch(inboxCountsQuery(workspace.id))).toBe(false);
   });
 
-  it("polls the document list only when asked to", () => {
-    expect(documentsQuery(workspace.id, {}, { poll: true }).refetchInterval).toBe(
+  it("polls the document list only when asked to, and only while it holds letters", async () => {
+    const list = `*${API}/workspaces/${workspace.id}/documents`;
+    server.use(http.get(list, () => HttpResponse.json([{ id: "d-1" }])));
+    expect(await intervalAfterFetch(documentsQuery(workspace.id, {}, { poll: true }))).toBe(
       READING_REFETCH_MS,
     );
-    expect(documentsQuery(workspace.id).refetchInterval).toBe(false);
+    expect(await intervalAfterFetch(documentsQuery(workspace.id))).toBe(false);
+    server.use(http.get(list, () => HttpResponse.json([])));
+    expect(await intervalAfterFetch(documentsQuery(workspace.id, {}, { poll: true }))).toBe(false);
   });
 });

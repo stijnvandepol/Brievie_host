@@ -1,7 +1,7 @@
 import { t } from "@lingui/core/macro";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, Dialog, Heading, Modal, ModalOverlay, Switch } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import { labelsQuery, personsQuery, rulesQuery } from "../api/queries";
@@ -74,7 +74,6 @@ function RuleItem({
   canEdit,
   isFirst,
   isLast,
-  reordering,
   onMove,
   onError,
 }: {
@@ -84,8 +83,6 @@ function RuleItem({
   canEdit: boolean;
   isFirst: boolean;
   isLast: boolean;
-  /** A reorder is on its way: the order on screen is not the final one yet. */
-  reordering: boolean;
   onMove: (direction: -1 | 1) => void;
   onError: (error: unknown) => void;
 }) {
@@ -120,7 +117,7 @@ function RuleItem({
   const applied = rule.applied_count;
   const proposed = rule.proposed_count;
   return (
-    <li className="rule-item">
+    <li className="rule-item" data-rule-id={rule.id}>
       <div className="rule-main">
         <h2 className="rule-name">
           {canEdit ? (
@@ -163,7 +160,8 @@ function RuleItem({
             <Button
               className="button-text"
               aria-label={t`Omhoog: ${name}`}
-              isDisabled={isFirst || reordering}
+              isDisabled={isFirst}
+              data-move="up"
               onPress={() => onMove(-1)}
             >
               {t`Omhoog`}
@@ -171,7 +169,8 @@ function RuleItem({
             <Button
               className="button-text"
               aria-label={t`Omlaag: ${name}`}
-              isDisabled={isLast || reordering}
+              isDisabled={isLast}
+              data-move="down"
               onPress={() => onMove(1)}
             >
               {t`Omlaag`}
@@ -221,12 +220,34 @@ function AutomationsPage() {
   });
 
   const list = rules.data ?? [];
+  const listElement = useRef<HTMLOListElement>(null);
+  // The button that was pressed: focus returns to it (or its sibling) once the order is final.
+  const moved = useRef<{ id: string; direction: -1 | 1 } | null>(null);
+  const { isPending: reordering } = reorder;
+  const { isFetching } = rules;
+  useEffect(() => {
+    const last = moved.current;
+    if (!last || reordering || isFetching) return;
+    moved.current = null;
+    const item = listElement.current?.querySelector(`[data-rule-id="${last.id}"]`);
+    const wanted = item?.querySelector<HTMLButtonElement>(
+      `[data-move="${last.direction === -1 ? "up" : "down"}"]`,
+    );
+    const other = item?.querySelector<HTMLButtonElement>(
+      `[data-move="${last.direction === -1 ? "down" : "up"}"]`,
+    );
+    (wanted && !wanted.disabled ? wanted : other)?.focus();
+  }, [reordering, isFetching]);
+
   function move(index: number, direction: -1 | 1) {
+    // The order on screen is not final while a move is on its way.
+    if (reorder.isPending) return;
     const ids = list.map((rule) => rule.id);
     const other = index + direction;
     if (other < 0 || other >= ids.length) return;
     [ids[index], ids[other]] = [ids[other] as string, ids[index] as string];
     setRowError(null);
+    moved.current = { id: ids[other] as string, direction };
     reorder.mutate(ids);
   }
 
@@ -274,7 +295,7 @@ function AutomationsPage() {
         </section>
       ) : null}
       {list.length > 0 ? (
-        <ol className="panel rule-list" aria-label={t`Regels`}>
+        <ol ref={listElement} className="panel rule-list" aria-label={t`Regels`}>
           {list.map((rule, index) => (
             <RuleItem
               key={rule.id}
@@ -284,7 +305,6 @@ function AutomationsPage() {
               canEdit={canEdit}
               isFirst={index === 0}
               isLast={index === list.length - 1}
-              reordering={reorder.isPending}
               onMove={(direction) => move(index, direction)}
               onError={setRowError}
             />

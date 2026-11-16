@@ -30,7 +30,7 @@ function InboxRow({
   persons,
   labels,
   canEdit,
-  onAssign,
+  onAssigned,
 }: {
   workspaceId: string;
   document: DocumentSummary;
@@ -38,10 +38,10 @@ function InboxRow({
   persons: Person[];
   labels: LabelOut[];
   canEdit: boolean;
-  /** Called right before the letter is put on a name, while the row is still there. */
-  onAssign: () => void;
+  /** Called once the letter is on a name, while the row is still in the list. */
+  onAssigned: () => void;
 }) {
-  const setAddressees = useSetAddressees(workspaceId, document.id);
+  const setAddressees = useSetAddressees(workspaceId, document.id, onAssigned);
   return (
     <tr>
       <th scope="row" className="cell-strong">
@@ -64,10 +64,7 @@ function InboxRow({
             <PersonPicker
               persons={persons}
               selectedIds={document.addressee_ids ?? []}
-              onChange={(ids) => {
-                onAssign();
-                setAddressees.mutate(ids);
-              }}
+              onChange={(ids) => setAddressees.mutate(ids)}
               disabled={!canEdit || setAddressees.isPending}
             />
             <ErrorAlert error={setAddressees.error} />
@@ -145,7 +142,7 @@ function InboxList({
               persons={persons.data ?? []}
               labels={labels.data ?? []}
               canEdit={canEdit}
-              onAssign={() => {
+              onAssigned={() => {
                 assigned.current = { id: document.id, index };
               }}
             />
@@ -214,7 +211,7 @@ function InboxPage() {
               workspaceId={workspace.id}
               tab={tab}
               canEdit={workspace.role !== "viewer"}
-              poll={tab === "new" && counts.new > 0}
+              poll={tab === "new"}
             />
           </TabPanel>
         </Tabs>
