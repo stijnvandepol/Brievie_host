@@ -863,8 +863,11 @@ textarea:focus-visible {
 
 .document-page {
   display: block;
+  width: 100%;
   max-width: 100%;
   height: auto;
+  /* An A4 box until the image has loaded, then the image's own ratio. */
+  aspect-ratio: auto 210 / 297;
   border: 1px solid var(--border);
   background: var(--surface);
 }

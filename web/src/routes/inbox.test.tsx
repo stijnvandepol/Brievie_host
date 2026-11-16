@@ -31,7 +31,7 @@ describe("inbox", () => {
       http.get(`${base}/documents`, () => HttpResponse.json([documentSummary])),
     );
     renderApp(path);
-    const selected = await screen.findByRole("tab", { name: /Zonder eigenaar/, selected: true });
+    const selected = await screen.findByRole("tab", { name: /Op niemands naam/, selected: true });
     expect(selected).toHaveTextContent("2");
     expect(screen.getByRole("tab", { name: /Te controleren/ })).toHaveTextContent("0");
     expect(screen.getByRole("tab", { name: /Nieuw/ })).toHaveTextContent("1");
@@ -63,7 +63,7 @@ describe("inbox", () => {
     );
     const user = userEvent.setup();
     const { router } = renderApp(path);
-    await user.click(await screen.findByRole("tab", { name: /Zonder eigenaar/ }));
+    await user.click(await screen.findByRole("tab", { name: /Op niemands naam/ }));
     await waitFor(() => expect(router.state.location.search).toEqual({ tab: "unassigned" }));
   });
 
@@ -77,7 +77,7 @@ describe("inbox", () => {
       ),
     );
     renderApp(path);
-    expect(await screen.findByText("Controleer deze brief in de app")).toBeInTheDocument();
+    expect(await screen.findByText("Controleer deze brief in de app.")).toBeInTheDocument();
   });
 
   it("puts a letter on a name and removes the row", async () => {
@@ -133,5 +133,113 @@ describe("inbox labels and roles", () => {
     );
     renderApp(path);
     expect(await screen.findByRole("button", { name: /Op naam van/ })).toBeDisabled();
+  });
+});
+
+describe("inbox focus and URL", () => {
+  const second = {
+    ...documentSummary,
+    id: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b5555",
+    sender: "Gemeente",
+  };
+  const third = {
+    ...documentSummary,
+    id: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b6666",
+    sender: "Zorgverzekeraar",
+  };
+
+  async function assign(user: ReturnType<typeof userEvent.setup>, sender: string) {
+    const row = (await screen.findByRole("link", { name: sender })).closest("tr");
+    await user.click(within(row as HTMLElement).getByRole("button", { name: /Op naam van/ }));
+    await user.click(await screen.findByRole("option", { name: "Papa" }));
+  }
+
+  function rows(list: (typeof documentSummary)[], taken: () => string[]) {
+    return http.get(`${base}/documents`, () =>
+      HttpResponse.json(list.filter((document) => !taken().includes(document.id))),
+    );
+  }
+
+  it("moves focus to the picker of the row that takes its place", async () => {
+    const taken: string[] = [];
+    server.use(
+      counts({ new: 0, review: 0, unassigned: 3 }),
+      http.put(`${base}/documents/${documentSummary.id}/addressees`, () => {
+        taken.push(documentSummary.id);
+        return HttpResponse.json({ ...documentSummary, addressee_ids: [papa.id] });
+      }),
+      rows([documentSummary, second, third], () => taken),
+      ...loggedInHandlers(),
+      ...personHandlers(),
+    );
+    const user = userEvent.setup();
+    renderApp(path);
+    await assign(user, "Belastingdienst");
+    await waitFor(() =>
+      expect(screen.queryByRole("link", { name: "Belastingdienst" })).not.toBeInTheDocument(),
+    );
+    const next = (await screen.findByRole("link", { name: "Gemeente" })).closest("tr");
+    await waitFor(() =>
+      expect(
+        within(next as HTMLElement).getByRole("button", { name: /Op naam van/ }),
+      ).toHaveFocus(),
+    );
+  });
+
+  it("moves focus to the previous row when the last row left", async () => {
+    const taken: string[] = [];
+    server.use(
+      counts({ new: 0, review: 0, unassigned: 2 }),
+      http.put(`${base}/documents/${second.id}/addressees`, () => {
+        taken.push(second.id);
+        return HttpResponse.json({ ...second, addressee_ids: [papa.id] });
+      }),
+      rows([documentSummary, second], () => taken),
+      ...loggedInHandlers(),
+      ...personHandlers(),
+    );
+    const user = userEvent.setup();
+    renderApp(path);
+    await assign(user, "Gemeente");
+    await waitFor(() =>
+      expect(screen.queryByRole("link", { name: "Gemeente" })).not.toBeInTheDocument(),
+    );
+    const previous = screen.getByRole("link", { name: "Belastingdienst" }).closest("tr");
+    await waitFor(() =>
+      expect(
+        within(previous as HTMLElement).getByRole("button", { name: /Op naam van/ }),
+      ).toHaveFocus(),
+    );
+  });
+
+  it("moves focus to the empty panel when the list is empty", async () => {
+    const taken: string[] = [];
+    server.use(
+      counts({ new: 0, review: 0, unassigned: 1 }),
+      http.put(`${base}/documents/${documentSummary.id}/addressees`, () => {
+        taken.push(documentSummary.id);
+        return HttpResponse.json({ ...documentSummary, addressee_ids: [papa.id] });
+      }),
+      rows([documentSummary], () => taken),
+      ...loggedInHandlers(),
+      ...personHandlers(),
+    );
+    const user = userEvent.setup();
+    renderApp(path);
+    await assign(user, "Belastingdienst");
+    const note = await screen.findByText("Hier is niets te doen.");
+    await waitFor(() => expect(note.closest("section")).toHaveFocus());
+  });
+
+  it("writes the chosen tab into the URL, replacing the entry", async () => {
+    server.use(
+      counts({ new: 0, review: 1, unassigned: 1 }),
+      ...loggedInHandlers(),
+      ...personHandlers(),
+      http.get(`${base}/documents`, () => HttpResponse.json([])),
+    );
+    const { router } = renderApp(path);
+    await waitFor(() => expect(router.state.location.search).toEqual({ tab: "review" }));
+    expect(router.history.length).toBe(1);
   });
 });

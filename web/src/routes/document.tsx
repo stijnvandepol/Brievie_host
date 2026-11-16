@@ -47,7 +47,7 @@ function Proposals({ proposals }: { proposals: Proposal[] }) {
   return (
     <section className="panel" aria-labelledby="proposals-heading">
       <div className="panel-head">
-        <h2 id="proposals-heading">{t`Voorstel van de AI`}</h2>
+        <h2 id="proposals-heading">{t`Wat de AI las`}</h2>
       </div>
       <dl className="detail-list">
         {proposals.map((proposal) => (
@@ -91,110 +91,103 @@ function DocumentView({
   const pages = Array.from({ length: document.page_count }, (_, index) => index + 1);
   const reviewing = document.status === "needs_review" || document.status === "failed";
   return (
-    <>
-      <header className="page-header">
-        <h1>{sender}</h1>
-      </header>
-      <div className="document">
-        <div className="document-pages">
-          {pages.map((n) => (
-            <img
-              key={n}
-              className="document-page"
-              src={`/api/v1/workspaces/${workspaceId}/documents/${document.id}/pages/${n}`}
-              alt={t`Pagina ${n} van ${document.page_count}`}
-              loading="lazy"
-            />
-          ))}
-        </div>
-        <div className="document-side">
-          <StatusNotice document={document} />
-          <section className="panel" aria-label={t`Gegevens`}>
-            <dl className="detail-list">
-              <div>
-                <dt>{t`Afzender`}</dt>
-                <dd>{sender}</dd>
-              </div>
-              <div>
-                <dt>{t`Soort`}</dt>
-                <dd>{typeLabel(document.document_type)}</dd>
-              </div>
-              <div>
-                <dt>{t`Datum brief`}</dt>
-                <dd>{document.letter_date ? formatLetterDate(document.letter_date) : ""}</dd>
-              </div>
-              <div>
-                <dt>{t`Status`}</dt>
-                <dd>{statusLabel(document.status)}</dd>
-              </div>
-              <div>
-                <dt>{t`Op naam van`}</dt>
-                <dd>
-                  <PersonPicker
-                    persons={persons.data ?? []}
-                    selectedIds={document.addressee_ids}
-                    onChange={(ids) => setAddressees.mutate(ids)}
-                    disabled={
-                      !canEdit || document.status === "processing" || setAddressees.isPending
-                    }
-                  />
-                </dd>
-              </div>
-              <div>
-                <dt>{t`Labels`}</dt>
-                <dd>
-                  <LabelPicker
-                    labels={labels.data ?? []}
-                    selectedIds={document.label_ids}
-                    onChange={(ids) => setLabels.mutate(ids)}
-                    disabled={!canEdit || document.status === "processing" || setLabels.isPending}
-                  />
-                </dd>
-              </div>
-            </dl>
-            <ErrorAlert
-              error={setAddressees.error ?? setLabels.error ?? persons.error ?? labels.error}
-            />
-          </section>
-          <SuggestionList
-            workspaceId={workspaceId}
-            document={document}
-            persons={persons.data ?? []}
-            labels={labels.data ?? []}
-            canEdit={canEdit}
+    <div className="document">
+      <div className="document-pages">
+        {pages.map((n) => (
+          <img
+            key={n}
+            className="document-page"
+            src={`/api/v1/workspaces/${workspaceId}/documents/${document.id}/pages/${n}`}
+            alt={t`Pagina ${n} van ${document.page_count}`}
+            loading="lazy"
           />
-          {document.summary ? (
-            <section className="panel" aria-labelledby="summary-heading">
-              <div className="panel-head">
-                <h2 id="summary-heading">{t`Samenvatting`}</h2>
-              </div>
-              <p className="panel-note">{document.summary}</p>
-              {document.summary_by_ai ? (
-                <p className="panel-note muted small">{t`Gemaakt door AI. Controleer of het klopt.`}</p>
-              ) : null}
-            </section>
-          ) : null}
-          {reviewing ? <Proposals proposals={document.proposals} /> : null}
-          {document.tasks.length > 0 ? (
-            <section className="panel" aria-labelledby="tasks-heading">
-              <div className="panel-head">
-                <h2 id="tasks-heading">{t`Taken`}</h2>
-              </div>
-              <TaskList workspaceId={workspaceId} tasks={document.tasks} canEdit={canEdit} />
-            </section>
-          ) : null}
-          <DocumentHistory workspaceId={workspaceId} documentId={document.id} canEdit={canEdit} />
-          <details className="panel letter-text">
-            <summary>{t`Tekst van de brief`}</summary>
-            {document.pages.map((page) => (
-              <p key={page.index} className="letter-page">
-                {page.ocr_text}
-              </p>
-            ))}
-          </details>
-        </div>
+        ))}
       </div>
-    </>
+      <div className="document-side">
+        <StatusNotice document={document} />
+        <section className="panel" aria-label={t`Gegevens`}>
+          <dl className="detail-list">
+            <div>
+              <dt>{t`Afzender`}</dt>
+              <dd>{sender}</dd>
+            </div>
+            <div>
+              <dt>{t`Soort`}</dt>
+              <dd>{typeLabel(document.document_type)}</dd>
+            </div>
+            <div>
+              <dt>{t`Datum brief`}</dt>
+              <dd>{document.letter_date ? formatLetterDate(document.letter_date) : ""}</dd>
+            </div>
+            <div>
+              <dt>{t`Status`}</dt>
+              <dd>{statusLabel(document.status)}</dd>
+            </div>
+            <div>
+              <dt>{t`Op naam van`}</dt>
+              <dd>
+                <PersonPicker
+                  persons={persons.data ?? []}
+                  selectedIds={document.addressee_ids}
+                  onChange={(ids) => setAddressees.mutate(ids)}
+                  disabled={!canEdit || document.status === "processing" || setAddressees.isPending}
+                />
+              </dd>
+            </div>
+            <div>
+              <dt>{t`Labels`}</dt>
+              <dd>
+                <LabelPicker
+                  labels={labels.data ?? []}
+                  selectedIds={document.label_ids}
+                  onChange={(ids) => setLabels.mutate(ids)}
+                  disabled={!canEdit || document.status === "processing" || setLabels.isPending}
+                />
+              </dd>
+            </div>
+          </dl>
+          <ErrorAlert
+            error={setAddressees.error ?? setLabels.error ?? persons.error ?? labels.error}
+          />
+        </section>
+        <SuggestionList
+          workspaceId={workspaceId}
+          document={document}
+          persons={persons.data ?? []}
+          labels={labels.data ?? []}
+          canEdit={canEdit}
+        />
+        {document.summary ? (
+          <section className="panel" aria-labelledby="summary-heading">
+            <div className="panel-head">
+              <h2 id="summary-heading">{t`Samenvatting`}</h2>
+            </div>
+            <p className="panel-note">{document.summary}</p>
+            {document.summary_by_ai ? (
+              <p className="panel-note muted small">{t`Gemaakt door AI. Controleer of het klopt.`}</p>
+            ) : null}
+          </section>
+        ) : null}
+        {reviewing ? <Proposals proposals={document.proposals} /> : null}
+        {document.tasks.length > 0 ? (
+          <section className="panel" aria-labelledby="tasks-heading">
+            <div className="panel-head">
+              <h2 id="tasks-heading">{t`Taken`}</h2>
+            </div>
+            <TaskList workspaceId={workspaceId} tasks={document.tasks} canEdit={canEdit} />
+          </section>
+        ) : null}
+        <DocumentHistory workspaceId={workspaceId} documentId={document.id} canEdit={canEdit} />
+        <details className="panel letter-text">
+          <summary>{t`Tekst van de brief`}</summary>
+          {document.pages.map((page) => (
+            <p key={page.index} className="letter-page">
+              {page.ocr_text}
+            </p>
+          ))}
+        </details>
+      </div>
+    </div>
   );
 }
 
@@ -203,7 +196,8 @@ function DocumentPage() {
   const { documentId } = documentRoute.useParams();
   const { data, error, isPending } = useQuery(documentQuery(workspace.id, documentId));
   const unknown = t`Onbekende afzender`;
-  usePageTitle(data ? data.sender || unknown : t`Brief`);
+  const title = data ? data.sender || unknown : t`Brief`;
+  usePageTitle(title);
 
   return (
     <Shell workspace={workspace}>
@@ -212,6 +206,10 @@ function DocumentPage() {
           {t`Terug naar Post`}
         </Link>
       </p>
+      {/* Always there, so the focus after a route change has a heading to land on. */}
+      <header className="page-header">
+        <h1>{title}</h1>
+      </header>
       {isPending ? <p>{t`Even laden...`}</p> : null}
       <ErrorAlert error={error} />
       {data ? (

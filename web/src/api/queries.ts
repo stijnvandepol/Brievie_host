@@ -41,9 +41,14 @@ export const devicesQuery = queryOptions({
 
 export type DocumentFilters = { inbox_state?: string; person_id?: string; label_id?: string };
 
-export const documentsQuery = (workspaceId: string, filters: DocumentFilters = {}) =>
+export const documentsQuery = (
+  workspaceId: string,
+  filters: DocumentFilters = {},
+  options: { poll?: boolean } = {},
+) =>
   queryOptions({
     queryKey: ["workspaces", workspaceId, "documents", filters],
+    refetchInterval: options.poll ? READING_REFETCH_MS : false,
     queryFn: async () => {
       const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/documents", {
         params: {
@@ -61,9 +66,14 @@ export const documentsQuery = (workspaceId: string, filters: DocumentFilters = {
     },
   });
 
+/** How often a list or letter is fetched again while a letter is still being read. */
+export const READING_REFETCH_MS = 5000;
+
 export const documentQuery = (workspaceId: string, documentId: string) =>
   queryOptions({
     queryKey: ["workspaces", workspaceId, "documents", documentId],
+    refetchInterval: (query) =>
+      query.state.data?.status === "processing" ? READING_REFETCH_MS : false,
     queryFn: async () => {
       const { data, error } = await api.GET(
         "/api/v1/workspaces/{workspace_id}/documents/{document_id}",
@@ -101,6 +111,7 @@ export const membersQuery = (workspaceId: string) =>
 export const inboxCountsQuery = (workspaceId: string) =>
   queryOptions({
     queryKey: ["workspaces", workspaceId, "inbox-counts"],
+    refetchInterval: (query) => ((query.state.data?.new ?? 0) > 0 ? READING_REFETCH_MS : false),
     queryFn: async () => {
       const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/inbox/counts", {
         params: { path: { workspace_id: workspaceId } },

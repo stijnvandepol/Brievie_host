@@ -42,6 +42,73 @@ describe("document", () => {
     expect(second).toHaveAttribute("loading", "lazy");
   });
 
+  it("reserves the page's space with a class, not an inline style", async () => {
+    // jsdom has no layout: the A4 aspect ratio lives in `.document-page` in styles.css.
+    server.use(...loggedInHandlers(), ...documentHandlers());
+    renderApp(path);
+    const image = await screen.findByRole("img", { name: "Pagina 1 van 3" });
+    expect(image).toHaveClass("document-page");
+    expect(image).not.toHaveAttribute("style");
+  });
+
+  it("always has a level 1 heading: while loading, on an error and once loaded", async () => {
+    server.use(
+      ...loggedInHandlers(),
+      http.get(`*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}`, async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        return HttpResponse.json(documentDetail);
+      }),
+      ...documentHandlers(),
+    );
+    renderApp(path);
+    expect(await screen.findByRole("heading", { level: 1, name: "Brief" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Belastingdienst" }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+  });
+
+  it("keeps the heading when the document cannot be found", async () => {
+    server.use(
+      ...loggedInHandlers(),
+      http.get(`*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}`, () =>
+        HttpResponse.json(
+          { code: "not_found", message: "Deze brief bestaat niet." },
+          { status: 404 },
+        ),
+      ),
+      ...documentHandlers(),
+    );
+    renderApp(path);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Deze brief bestaat niet.");
+    expect(screen.getByRole("heading", { level: 1, name: "Brief" })).toBeInTheDocument();
+  });
+
+  it("names the read-only AI fields 'Wat de AI las'", async () => {
+    server.use(
+      ...loggedInHandlers(),
+      ...documentHandlers({
+        ...documentDetail,
+        status: "needs_review",
+        proposals: [
+          {
+            confidence: "0.900",
+            field: "sender",
+            group: 0,
+            model: "m",
+            needs_attention: false,
+            provider: "p",
+            quote: "Belastingdienst Utrecht",
+            value: "Belastingdienst",
+          },
+        ],
+      }),
+    );
+    renderApp(path);
+    expect(await screen.findByRole("heading", { name: "Wat de AI las" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Voorstel van de AI" })).not.toBeInTheDocument();
+  });
+
   it("shows sender, summary, tasks and the letter text", async () => {
     server.use(...loggedInHandlers(), ...documentHandlers());
     renderApp(path);
@@ -144,7 +211,7 @@ describe("document", () => {
       }),
     );
     renderApp(path);
-    expect(await screen.findByText(/Controleer deze brief in de app/)).toBeInTheDocument();
+    expect(await screen.findByText(/Controleer deze brief in de app\./)).toBeInTheDocument();
     expect(screen.getByText("Belastingdienst Utrecht")).toBeInTheDocument();
   });
 

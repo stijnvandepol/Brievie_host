@@ -1,6 +1,7 @@
 import { t } from "@lingui/core/macro";
 import { useQuery } from "@tanstack/react-query";
 import { createRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useRef } from "react";
 import { Tab, TabList, TabPanel, Tabs } from "react-aria-components";
 import { documentsQuery, inboxCountsQuery, labelsQuery, personsQuery } from "../api/queries";
 import type { components } from "../api/schema";
@@ -29,6 +30,7 @@ function InboxRow({
   persons,
   labels,
   canEdit,
+  onAssign,
 }: {
   workspaceId: string;
   document: DocumentSummary;
@@ -36,6 +38,8 @@ function InboxRow({
   persons: Person[];
   labels: LabelOut[];
   canEdit: boolean;
+  /** Called right before the letter is put on a name, while the row is still there. */
+  onAssign: () => void;
 }) {
   const setAddressees = useSetAddressees(workspaceId, document.id);
   return (
@@ -60,13 +64,16 @@ function InboxRow({
             <PersonPicker
               persons={persons}
               selectedIds={document.addressee_ids}
-              onChange={(ids) => setAddressees.mutate(ids)}
+              onChange={(ids) => {
+                onAssign();
+                setAddressees.mutate(ids);
+              }}
               disabled={!canEdit || setAddressees.isPending}
             />
             <ErrorAlert error={setAddressees.error} />
           </>
         ) : null}
-        {tab === "review" ? t`Controleer deze brief in de app` : null}
+        {tab === "review" ? t`Controleer deze brief in de app.` : null}
         {tab === "new" ? t`Deze brief wordt nog gelezen.` : null}
       </td>
     </tr>
@@ -77,19 +84,39 @@ function InboxList({
   workspaceId,
   tab,
   canEdit,
+  poll,
 }: {
   workspaceId: string;
   tab: InboxTab;
   canEdit: boolean;
+  /** Fetch the list again by itself (letters are still being read). */
+  poll: boolean;
 }) {
-  const documents = useQuery(documentsQuery(workspaceId, { inbox_state: tab }));
+  const documents = useQuery(documentsQuery(workspaceId, { inbox_state: tab }, { poll }));
   const persons = useQuery(personsQuery(workspaceId));
   const labels = useQuery(labelsQuery(workspaceId));
+  const body = useRef<HTMLTableSectionElement>(null);
+  const emptyPanel = useRef<HTMLElement>(null);
+  // The row a letter was put on a name from: when it leaves the list, focus must not fall to <body>.
+  const assigned = useRef<{ id: string; index: number } | null>(null);
+  const { data, isFetching } = documents;
+  useEffect(() => {
+    const pending = assigned.current;
+    if (!pending || !data || isFetching) return;
+    assigned.current = null;
+    if (data.some((document) => document.id === pending.id)) return;
+    if (data.length === 0) {
+      emptyPanel.current?.focus();
+      return;
+    }
+    const row = body.current?.querySelectorAll("tr")[Math.min(pending.index, data.length - 1)];
+    row?.querySelector<HTMLElement>(".picker-button")?.focus();
+  }, [data, isFetching]);
   if (documents.isPending) return <p>{t`Even laden...`}</p>;
   if (documents.error) return <ErrorAlert error={documents.error} />;
   if (documents.data.length === 0) {
     return (
-      <section className="panel">
+      <section className="panel" ref={emptyPanel} tabIndex={-1}>
         <p className="panel-note">{t`Hier is niets te doen.`}</p>
       </section>
     );
@@ -108,8 +135,8 @@ function InboxList({
             <th scope="col">{tab === "unassigned" ? t`Op naam van` : t`Wat te doen`}</th>
           </tr>
         </thead>
-        <tbody>
-          {documents.data.map((document) => (
+        <tbody ref={body}>
+          {documents.data.map((document, index) => (
             <InboxRow
               key={document.id}
               workspaceId={workspaceId}
@@ -118,6 +145,9 @@ function InboxList({
               persons={persons.data ?? []}
               labels={labels.data ?? []}
               canEdit={canEdit}
+              onAssign={() => {
+                assigned.current = { id: document.id, index };
+              }}
             />
           ))}
         </tbody>
@@ -137,9 +167,20 @@ function InboxPage() {
   const tab: InboxTab | undefined =
     search.tab ??
     (counts ? (TABS.find((candidate) => counts[candidate] > 0) ?? TABS[0]) : undefined);
+  // Once a tab is chosen it is in the URL, so it does not jump when that tab becomes empty.
+  const chosen = search.tab === undefined ? tab : undefined;
+  useEffect(() => {
+    if (!chosen) return;
+    void navigate({
+      to: "/w/$workspaceId/inbox",
+      params: { workspaceId: workspace.id },
+      search: { tab: chosen },
+      replace: true,
+    });
+  }, [chosen, navigate, workspace.id]);
   const labels: Record<InboxTab, string> = {
     review: t`Te controleren`,
-    unassigned: t`Zonder eigenaar`,
+    unassigned: t`Op niemands naam`,
     new: t`Nieuw`,
   };
 
@@ -169,7 +210,12 @@ function InboxPage() {
             ))}
           </TabList>
           <TabPanel id={tab} className="tab-panel">
-            <InboxList workspaceId={workspace.id} tab={tab} canEdit={workspace.role !== "viewer"} />
+            <InboxList
+              workspaceId={workspace.id}
+              tab={tab}
+              canEdit={workspace.role !== "viewer"}
+              poll={tab === "new" && counts.new > 0}
+            />
           </TabPanel>
         </Tabs>
       ) : (
