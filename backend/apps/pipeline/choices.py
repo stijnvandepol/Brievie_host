@@ -5,12 +5,14 @@ copies a short alias more reliably than a UUID, and the real ids never leave the
 server.
 """
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from uuid import UUID
 
 MAX_PERSONS = 50
 MAX_LABELS = 100
+_SEPARATORS = re.compile(r"[;=]")
 
 
 @dataclass(frozen=True)
@@ -53,10 +55,16 @@ def choices_block(request: ExtractionRequest) -> str:
     if request.persons:
         lines.append("Personen (op naam van): " + "; ".join(map(_person, request.persons)))
     if request.labels:
-        lines.append("Labels: " + "; ".join(f"{c.alias} = {c.name}" for c in request.labels))
+        lines.append("Labels: " + "; ".join(f"{c.alias} = {_flat(c.name)}" for c in request.labels))
     return "\n".join(lines)
 
 
 def _person(choice: Choice) -> str:
-    also = f" (ook: {', '.join(choice.also)})" if choice.also else ""
-    return f"{choice.alias} = {choice.name}{also}"
+    also = f" (ook: {', '.join(map(_flat, choice.also))})" if choice.also else ""
+    return f"{choice.alias} = {_flat(choice.name)}{also}"
+
+
+def _flat(name: str) -> str:
+    """The name on one line, without the block's separators: a name cannot add a line
+    or an entry to the block."""
+    return " ".join(_SEPARATORS.sub(" ", name).split())
