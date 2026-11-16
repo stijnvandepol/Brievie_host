@@ -163,6 +163,8 @@ def update_person(
 
 def delete_person(*, workspace: Workspace, person_id: UUID) -> None:
     with transaction.atomic():
+        # Rules first, in id order: a running rule holds its rules and then needs the person.
+        rules = list(Rule.objects.select_for_update().filter(workspace=workspace).order_by("id"))
         person = _get_for_update(workspace, person_id)
         if _in_use(person):
             raise ApiError(
@@ -170,7 +172,7 @@ def delete_person(*, workspace: Workspace, person_id: UUID) -> None:
                 "person_in_use",
                 _("Deze persoon is nog in gebruik. Je kunt de persoon wel archiveren."),
             )
-        for rule in Rule.objects.select_for_update().filter(workspace=workspace):
+        for rule in rules:
             if person.id in named_ids(rule)[1]:
                 raise ApiError(
                     409,

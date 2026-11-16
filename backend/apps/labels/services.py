@@ -103,9 +103,11 @@ def delete_label(*, workspace: Workspace, label_id: UUID) -> None:
     rule that names the label is a conflict: the rule would point at nothing.
     """
     with transaction.atomic():
+        # Rules first, in id order: a running rule holds its rules and then needs the label.
+        rules = list(Rule.objects.select_for_update().filter(workspace=workspace).order_by("id"))
         label = _get_for_update(workspace, label_id)
         own_rules: list[Rule] = []
-        for rule in Rule.objects.select_for_update().filter(workspace=workspace):
+        for rule in rules:
             if label.id not in named_ids(rule)[0]:
                 continue
             if (

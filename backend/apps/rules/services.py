@@ -118,7 +118,10 @@ def delete_rule(*, workspace: Workspace, rule_id: UUID) -> None:
 def reorder_rules(*, workspace: Workspace, rule_ids: list[UUID]) -> list[Rule]:
     """Put the rules in this order; every rule of the workspace exactly once."""
     with transaction.atomic():
-        rules = Rule.objects.select_for_update().filter(workspace=workspace).in_bulk()
+        # Id order, as everywhere rules are locked (no deadlock with a running rule).
+        rules = (
+            Rule.objects.select_for_update().filter(workspace=workspace).order_by("id").in_bulk()
+        )
         if len(rule_ids) != len(set(rule_ids)) or set(rule_ids) != set(rules):
             raise _invalid(_("Noem elke regel precies één keer."))
         for position, rule_id in enumerate(rule_ids, start=1):
