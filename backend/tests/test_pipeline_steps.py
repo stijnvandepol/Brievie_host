@@ -466,9 +466,10 @@ def test_failure_while_proposing_still_marks_the_document_failed(
     assert state(ws_a, document)[:2] == ("failed", "ai_rejected")
 
 
-def test_failure_while_proposing_after_the_ai_ends_failed(
-    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+def test_failure_while_organising_keeps_the_ais_proposals(
+    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
+    # B3: organising runs in a savepoint; the AI's result is not lost with it.
     monkeypatch.setattr(steps, "match_addressees", _failing_match)
     document = make_document(ws_a, text=LETTER)
     provider = FakeProvider(answer())
@@ -480,8 +481,12 @@ def test_failure_while_proposing_after_the_ai_ends_failed(
         run=lambda w, d: run_pipeline(w, d, provider_factory=lambda _: provider),
     )
 
-    assert state(ws_a, document)[:2] == ("failed", "internal_error")
+    status, failure_code, proposals = state(ws_a, document)
+    assert (status, failure_code) == ("needs_review", "")
+    assert proposals
     assert open_suggestions(ws_a, document) == []
+    errors = [r.getMessage() for r in caplog.records if r.levelname == "ERROR"]
+    assert errors == [f"Unexpected RuntimeError while proposing for document {document.id}"]
 
 
 def test_rule_takes_over_the_ais_proposal_of_the_same_label(ws_a: Workspace) -> None:

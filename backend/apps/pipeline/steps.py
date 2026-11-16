@@ -74,7 +74,7 @@ def run_pipeline(
             logger.info("Document %s changed during processing; result dropped", document_id)
             return
         store_proposals(document, values, provider)
-        organise_processed(document, text, persons, choices)
+        _organise_guarded(document, text, persons, choices)
         document.status = Document.Status.NEEDS_REVIEW
         document.save(update_fields=["status", "updated_at"])
         suggestion_count = _open_suggestion_count(document)
@@ -230,21 +230,30 @@ def mark_failed(workspace_id: UUID, document_id: UUID, code: str) -> None:
         document = _lock_processing(document_id)
         if document is None:
             return
-        try:
-            # A savepoint: when proposing fails, the failure is still recorded.
-            with transaction.atomic():
-                organise_processed(document, load_text(document), active_persons(), [])
-        except Exception as exc:  # noqa: BLE001 - the document must not stay processing
-            # The type only: an exception message may quote the document.
-            logger.error(
-                "Unexpected %s while proposing for failed document %s",
-                type(exc).__name__,
-                document_id,
-            )
+        _organise_guarded(document, load_text(document), active_persons(), [])
         document.status = Document.Status.FAILED
         document.failure_code = code
         document.save(update_fields=["status", "failure_code", "updated_at"])
     logger.warning("Document %s failed: %s", document_id, code)
+
+
+def _organise_guarded(
+    document: Document,
+    text: str,
+    persons: Sequence[PersonNames],
+    ai_choices: Sequence[ValidatedChoice],
+) -> None:
+    """`organise_processed` in a savepoint: when proposing fails, its writes are rolled
+    back and the caller still stores what it has (the AI's proposals, a failure) and
+    moves the document on, so it never stays `processing`."""
+    try:
+        with transaction.atomic():
+            organise_processed(document, text, persons, ai_choices)
+    except Exception as exc:  # noqa: BLE001 - the document must not stay processing
+        # The type only: an exception message may quote the document.
+        logger.error(
+            "Unexpected %s while proposing for document %s", type(exc).__name__, document.id
+        )
 
 
 def _lock_processing(document_id: UUID) -> Document | None:

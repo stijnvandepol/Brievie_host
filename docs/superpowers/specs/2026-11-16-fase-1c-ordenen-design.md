@@ -771,6 +771,11 @@ A document whose processing fails for good (`mark_failed`) still gets the determ
 layer in that same transaction: name matching and the rules, without AI picks. The
 user reviews it by hand and finds the proposals there.
 
+Proposing (name matching, AI picks, rules) runs in a savepoint inside that
+transaction. When it fails, only its own writes are rolled back: the AI's proposals
+are still stored and the status still becomes `needs_review` (or `failed` with the
+original code); the log names the exception type and the document id, nothing more.
+
 Persons, labels and rules are read into plain dataclasses in the first short
 transaction; ids are checked again when storing. A retry of the job replaces the `open`
 suggestions of this run and never touches `accepted` or `dismissed` ones.
