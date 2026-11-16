@@ -676,6 +676,10 @@ msgstr "Jouw account"
 msgid "Keuring"
 msgstr "Keuring"
 
+#: src/routes/rule-editor.tsx
+msgid "Kies bij elke voorwaarde en actie een label of persoon."
+msgstr "Kies bij elke voorwaarde en actie een label of persoon."
+
 #: src/routes/persons.tsx
 msgid "Kies een account"
 msgstr "Kies een account"
@@ -764,6 +768,10 @@ msgstr "Loonstrook"
 #: src/routes/rule-editor.tsx
 msgid "Maak eerst een label"
 msgstr "Maak eerst een label"
+
+#: src/routes/rule-editor.tsx
+msgid "Maak eerst een label of voeg een persoon toe."
+msgstr "Maak eerst een label of voeg een persoon toe."
 
 #: src/components/rule-sentence.ts
 msgid "Mail"

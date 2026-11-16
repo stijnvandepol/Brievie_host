@@ -352,4 +352,82 @@ describe("rule editor", () => {
       within(action(1)).getByRole("option", { name: "Papa (gearchiveerd)" }),
     ).toBeInTheDocument();
   });
+
+  it("starts on a person action when there are no labels, and posts person_id", async () => {
+    const posts: unknown[] = [];
+    server.use(
+      http.get(`${base}/labels`, () => HttpResponse.json([])),
+      http.post(`${base}/rules`, async ({ request }) => {
+        posts.push(await request.json());
+        return HttpResponse.json(apkRule, { status: 201 });
+      }),
+      ...loggedInHandlers(),
+      ...ruleHandlers([]),
+    );
+    const user = userEvent.setup();
+    renderApp(newPath);
+    await user.type(await screen.findByRole("textbox", { name: "Naam" }), "Papa");
+    expect(within(action(1)).getByRole("combobox", { name: "Actie" })).toHaveValue("add_addressee");
+    await user.type(within(condition(1)).getByRole("textbox", { name: "Waarde" }), "APK");
+    await user.click(screen.getByRole("button", { name: "Actie toevoegen" }));
+    expect(within(action(2)).getByRole("combobox", { name: "Actie" })).toHaveValue("add_addressee");
+    await user.click(screen.getByRole("button", { name: "Opslaan" }));
+    await waitFor(() => expect(posts).toHaveLength(1));
+    expect(posts[0]).toEqual(
+      expect.objectContaining({
+        actions: [
+          { type: "add_addressee", person_id: papa.id },
+          { type: "add_addressee", person_id: papa.id },
+        ],
+      }),
+    );
+  });
+
+  it("sends nothing when there are no labels and no persons", async () => {
+    const requests: string[] = [];
+    server.use(
+      http.get(`${base}/labels`, () => HttpResponse.json([])),
+      http.get(`${base}/persons`, () => HttpResponse.json([])),
+      http.post(`${base}/rules`, () => {
+        requests.push("save");
+        return HttpResponse.json(apkRule, { status: 201 });
+      }),
+      http.post(`${base}/rules/test`, () => {
+        requests.push("test");
+        return HttpResponse.json({});
+      }),
+      ...loggedInHandlers(),
+      ...ruleHandlers([]),
+    );
+    const user = userEvent.setup();
+    renderApp(newPath);
+    await user.type(await screen.findByRole("textbox", { name: "Naam" }), "X");
+    await user.type(within(condition(1)).getByRole("textbox", { name: "Waarde" }), "APK");
+    await user.click(screen.getByRole("button", { name: "Opslaan" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Maak eerst een label of voeg een persoon toe.",
+    );
+    await user.click(screen.getByRole("button", { name: "Test op bestaande post" }));
+    expect(requests).toEqual([]);
+  });
+
+  it("sends nothing when a row still has no label or person", async () => {
+    const requests: string[] = [];
+    const rule = { ...apkRule, actions: [{ type: "add_label", label_id: null }] };
+    server.use(
+      http.put(`${base}/rules/${apkRule.id}`, () => {
+        requests.push("save");
+        return HttpResponse.json(apkRule);
+      }),
+      ...loggedInHandlers(),
+      ...ruleHandlers([rule]),
+    );
+    const user = userEvent.setup();
+    renderApp(`/w/${workspace.id}/automatisering/${apkRule.id}`);
+    await user.click(await screen.findByRole("button", { name: "Opslaan" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Kies bij elke voorwaarde en actie een label of persoon.",
+    );
+    expect(requests).toEqual([]);
+  });
 });

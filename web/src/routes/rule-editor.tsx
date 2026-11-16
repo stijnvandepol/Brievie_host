@@ -76,6 +76,13 @@ function defaultAction(type: string, { labels, persons }: Choices): string {
   return type === "add_label" ? (labels[0]?.id ?? "") : (persons[0]?.id ?? "");
 }
 
+/** A new action on a type that has choices: a label first, else a person. */
+function newAction(choices: Choices): { type: string; id: string } {
+  const type =
+    choices.labels.length === 0 && choices.persons.length > 0 ? "add_addressee" : "add_label";
+  return { type, id: defaultAction(type, choices) };
+}
+
 let nextKey = 0;
 const newKey = () => {
   nextKey += 1;
@@ -268,7 +275,7 @@ function RuleForm({
           type: action.type,
           id: (action.type === "add_label" ? action.label_id : action.person_id) ?? "",
         }))
-      : [{ key: newKey(), type: "add_label", id: defaultAction("add_label", choices) }],
+      : [{ key: newKey(), ...newAction(choices) }],
   );
   // A rule that was just created is changed, not created again, by the next save.
   const [savedId, setSavedId] = useState<string | null>(rule?.id ?? null);
@@ -289,6 +296,28 @@ function RuleForm({
           : { type: action.type, person_id: action.id },
       ),
     };
+  }
+
+  const [blocked, setBlocked] = useState<string | null>(null);
+
+  /** Whether the form can go to the server; else why not, as a sentence. */
+  function check(): boolean {
+    const empty =
+      conditions.some(
+        (row) =>
+          (row.field === "label" || (row.field === "addressee" && row.op !== "is_empty")) &&
+          row.value === "",
+      ) || actions.some((row) => row.id === "");
+    if (choices.labels.length === 0 && choices.persons.length === 0) {
+      setBlocked(t`Maak eerst een label of voeg een persoon toe.`);
+      return false;
+    }
+    if (empty) {
+      setBlocked(t`Kies bij elke voorwaarde en actie een label of persoon.`);
+      return false;
+    }
+    setBlocked(null);
+    return true;
   }
 
   const save = useMutation({
@@ -341,7 +370,10 @@ function RuleForm({
   const formKey = JSON.stringify(body());
   const { reset: resetTest } = test;
   // biome-ignore lint/correctness/useExhaustiveDependencies: the key is the trigger.
-  useEffect(() => resetTest(), [formKey, resetTest]);
+  useEffect(() => {
+    resetTest();
+    setBlocked(null);
+  }, [formKey, resetTest]);
 
   const params = { workspaceId };
   const matched = test.data?.matched_count ?? 0;
@@ -356,7 +388,7 @@ function RuleForm({
         test.reset();
         run.reset();
         setSavedActive(null);
-        save.mutate();
+        if (check()) save.mutate();
       }}
     >
       <TextField className="field" value={name} onChange={setName} isRequired maxLength={100}>
@@ -423,12 +455,7 @@ function RuleForm({
         <Button
           className="button secondary"
           isDisabled={actions.length >= 10}
-          onPress={() =>
-            setActions([
-              ...actions,
-              { key: newKey(), type: "add_label", id: defaultAction("add_label", choices) },
-            ])
-          }
+          onPress={() => setActions([...actions, { key: newKey(), ...newAction(choices) }])}
         >
           {t`Actie toevoegen`}
         </Button>
@@ -458,6 +485,11 @@ function RuleForm({
       {choices.persons.length === 0 ? (
         <p className="panel-note">{t`Voeg eerst een persoon toe`}</p>
       ) : null}
+      {blocked ? (
+        <div role="alert" className="alert">
+          {blocked}
+        </div>
+      ) : null}
       <ErrorAlert error={save.error ?? test.error ?? run.error} />
 
       <div className="form-actions">
@@ -469,7 +501,7 @@ function RuleForm({
           isPending={test.isPending}
           onPress={() => {
             save.reset();
-            test.mutate();
+            if (check()) test.mutate();
           }}
         >
           {t`Test op bestaande post`}
