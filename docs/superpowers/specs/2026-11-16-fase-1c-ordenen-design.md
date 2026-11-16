@@ -276,7 +276,7 @@ Data in `apps/labels/presets.py`: per workspace kind a list of
 
 | Label | Colour | Recognised by |
 |---|---|---|
-| Belastingdienst | blue | words: belastingdienst, toeslagen, aanslag |
+| Belastingdienst | blue | words: belastingdienst, toeslagen |
 | Zorg | red | words: zorgverzekering, zorgverzekeraar, CAK, huisarts, ziekenhuis, apotheek, tandarts |
 | Verzekering | purple | words: polis, polisblad, verzekering, verzekeringen |
 | Wonen | green | words: hypotheek, huur, huurovereenkomst, WOZ, VvE |
@@ -291,7 +291,7 @@ Data in `apps/labels/presets.py`: per workspace kind a list of
 
 | Label | Colour | Recognised by |
 |---|---|---|
-| Belastingdienst | blue | words: belastingdienst, aanslag, naheffing, aangifte |
+| Belastingdienst | blue | words: belastingdienst, naheffing, aangifte |
 | Inkoop | orange | document type is invoice |
 | Verkoop | green | words: offerte, opdrachtbevestiging |
 | Bank | grey | sender contains "bank"; words: rekeningafschrift, creditcard |
@@ -437,7 +437,9 @@ whose conditions held, whether or not anything would change) and `planned`, a li
 
 - Rules run in `position` order; inactive rules are skipped. A matching rule with
   `stop` ends the run after its own actions.
-- An action that changes nothing (the label is there already) is not planned.
+- An action that changes nothing (the label is there already, or this run already
+  planned it) is not planned. A target that is only an open suggestion from name
+  matching or the AI is still planned, so the suggestion gets the rule as its origin.
 - Later rules see what earlier rules did. The engine keeps two states: **settled**
   (the facts plus every planned `auto` action) and **hoped** (settled plus the
   document's open suggestions plus every planned `propose` action). So the order in
