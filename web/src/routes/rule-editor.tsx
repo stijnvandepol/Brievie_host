@@ -1,7 +1,7 @@
 import { t } from "@lingui/core/macro";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, Form, Input, Label, Switch, TextField } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import { labelsQuery, personsQuery, rulesQuery } from "../api/queries";
@@ -27,7 +27,33 @@ type PersonOut = components["schemas"]["PersonOut"];
 type ConditionRow = { key: number; field: string; op: string; value: string };
 type ActionRow = { key: number; type: string; id: string };
 
-type Choices = { labels: LabelOut[]; persons: PersonOut[] };
+/** `persons` are the active ones; `everyone` also holds the archived, to name a saved value. */
+type Choices = { labels: LabelOut[]; persons: PersonOut[]; everyone: PersonOut[] };
+
+type Option = { value: string; text: string; disabled?: boolean };
+
+/** The current value as an extra option when the list no longer holds it, so what shows is what is saved. */
+function withCurrent(options: Option[], value: string, text: () => string): Option[] {
+  return value === "" || options.some((option) => option.value === value)
+    ? options
+    : [...options, { value, text: text() }];
+}
+
+function personOptions(choices: Choices, value: string): Option[] {
+  const options = choices.persons.map((person) => ({
+    value: person.id,
+    text: person.display_name,
+  }));
+  return withCurrent(options, value, () => {
+    const known = choices.everyone.find((person) => person.id === value);
+    return known ? `${known.display_name} ${t`(gearchiveerd)`}` : t`(verwijderd)`;
+  });
+}
+
+function labelOptions(choices: Choices, value: string): Option[] {
+  const options = choices.labels.map((label) => ({ value: label.id, text: label.name }));
+  return withCurrent(options, value, () => t`(verwijderd)`);
+}
 
 /** The value a condition starts with after its field changed. */
 function defaultValue(field: string, op: string, { labels, persons }: Choices): string {
@@ -65,12 +91,12 @@ function SelectField({
   label: string;
   value: string;
   onChange: (value: string) => void;
-  options: { value: string; text: string }[];
+  options: Option[];
 }) {
   return (
     <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>
       {options.map((option) => (
-        <option key={option.value} value={option.value}>
+        <option key={option.value} value={option.value} disabled={option.disabled}>
           {option.text}
         </option>
       ))}
@@ -93,10 +119,10 @@ function ConditionEditor({
   onChange: (row: ConditionRow) => void;
   onRemove: () => void;
 }) {
-  const valueOptions: Record<string, { value: string; text: string }[]> = {
+  const valueOptions: Record<string, Option[]> = {
     document_type: DOCUMENT_TYPES.map((type) => ({ value: type, text: typeLabel(type) })),
-    label: choices.labels.map((label) => ({ value: label.id, text: label.name })),
-    addressee: choices.persons.map((person) => ({ value: person.id, text: person.display_name })),
+    label: labelOptions(choices, row.value),
+    addressee: personOptions(choices, row.value),
     source: SOURCES.map((source) => ({ value: source, text: sourceLabel(source) })),
   };
   const options = valueOptions[row.field];
@@ -106,7 +132,13 @@ function ConditionEditor({
       <SelectField
         label={t`Veld`}
         value={row.field}
-        options={FIELDS.map((field) => ({ value: field, text: fieldLabel(field) }))}
+        options={FIELDS.map((field) => ({
+          value: field,
+          text: fieldLabel(field),
+          disabled:
+            (field === "label" && choices.labels.length === 0) ||
+            (field === "addressee" && choices.persons.length === 0),
+        }))}
         onChange={(field) => {
           const op = FIELD_OPERATORS[field]?.[0] ?? "";
           onChange({ ...row, field, op, value: defaultValue(field, op, choices) });
@@ -119,7 +151,16 @@ function ConditionEditor({
           value: op,
           text: operatorLabel(op),
         }))}
-        onChange={(op) => onChange({ ...row, op, value: defaultValue(row.field, op, choices) })}
+        onChange={(op) => {
+          // Only a switch to or from "is leeg" changes what the value can be.
+          const value =
+            op === "is_empty"
+              ? ""
+              : row.op === "is_empty"
+                ? defaultValue(row.field, op, choices)
+                : row.value;
+          onChange({ ...row, op, value });
+        }}
       />
       {row.op === "is_empty" ? null : options ? (
         <SelectField
@@ -173,19 +214,19 @@ function ActionEditor({
         label={t`Actie`}
         value={row.type}
         options={[
-          { value: "add_label", text: t`Label toevoegen` },
-          { value: "add_addressee", text: t`Op naam zetten van` },
+          { value: "add_label", text: t`Label toevoegen`, disabled: choices.labels.length === 0 },
+          {
+            value: "add_addressee",
+            text: t`Op naam zetten van`,
+            disabled: choices.persons.length === 0,
+          },
         ]}
         onChange={(type) => onChange({ ...row, type, id: defaultAction(type, choices) })}
       />
       <SelectField
         label={isLabel ? t`Label` : t`Persoon`}
         value={row.id}
-        options={
-          isLabel
-            ? choices.labels.map((label) => ({ value: label.id, text: label.name }))
-            : choices.persons.map((person) => ({ value: person.id, text: person.display_name }))
-        }
+        options={isLabel ? labelOptions(choices, row.id) : personOptions(choices, row.id)}
         onChange={(id) => onChange({ ...row, id })}
       />
       <Button
@@ -295,6 +336,12 @@ function RuleForm({
     },
     onSuccess: () => setRunning(true),
   });
+
+  // A result belongs to the form it tested: any edit makes it stale.
+  const formKey = JSON.stringify(body());
+  const { reset: resetTest } = test;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the key is the trigger.
+  useEffect(() => resetTest(), [formKey, resetTest]);
 
   const params = { workspaceId };
   const matched = test.data?.matched_count ?? 0;
@@ -407,6 +454,10 @@ function RuleForm({
         </Switch>
       </section>
 
+      {choices.labels.length === 0 ? <p className="panel-note">{t`Maak eerst een label`}</p> : null}
+      {choices.persons.length === 0 ? (
+        <p className="panel-note">{t`Voeg eerst een persoon toe`}</p>
+      ) : null}
       <ErrorAlert error={save.error ?? test.error ?? run.error} />
 
       <div className="form-actions">
@@ -497,6 +548,7 @@ function RuleEditorPage({ ruleId }: { ruleId: string | null }) {
           choices={{
             labels: labels.data ?? [],
             persons: (persons.data ?? []).filter((person) => !person.archived),
+            everyone: persons.data ?? [],
           }}
         />
       ) : null}

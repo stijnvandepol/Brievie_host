@@ -138,4 +138,31 @@ describe("automations", () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "APK naar Auto" })).not.toBeInTheDocument();
   });
+
+  it("disables a rule's switches while its update is pending", async () => {
+    server.use(
+      http.put(`${base}/rules/${apkRule.id}`, async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        return HttpResponse.json({ ...apkRule, mode: "auto" });
+      }),
+      ...loggedInHandlers(),
+      ...ruleHandlers(),
+    );
+    const user = userEvent.setup();
+    renderApp(path);
+    await user.click(
+      await screen.findByRole("switch", { name: "Automatisch toepassen: APK naar Auto" }),
+    );
+    expect(screen.getByRole("switch", { name: "Actief: APK naar Auto" })).toBeDisabled();
+    await waitFor(() =>
+      expect(screen.getByRole("switch", { name: "Actief: APK naar Auto" })).toBeEnabled(),
+    );
+  });
+
+  it("offers the start set to an admin only", async () => {
+    server.use(asMember(), ...loggedInHandlers(), ...ruleHandlers([]));
+    renderApp(path);
+    expect(await screen.findByText("Je hebt nog geen regels.")).toBeVisible();
+    expect(screen.queryByRole("link", { name: "Startset toevoegen" })).not.toBeInTheDocument();
+  });
 });

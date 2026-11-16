@@ -8,6 +8,7 @@ msgstr ""
 "Language: nl\n"
 
 #: src/components/person-picker.tsx
+#: src/routes/rule-editor.tsx
 msgid "(gearchiveerd)"
 msgstr "(gearchiveerd)"
 
@@ -17,6 +18,7 @@ msgid "(nog {0})"
 msgstr "(nog {0})"
 
 #: src/components/rule-sentence.ts
+#: src/routes/rule-editor.tsx
 msgid "(verwijderd)"
 msgstr "(verwijderd)"
 
@@ -759,6 +761,10 @@ msgstr "Lid"
 msgid "Loonstrook"
 msgstr "Loonstrook"
 
+#: src/routes/rule-editor.tsx
+msgid "Maak eerst een label"
+msgstr "Maak eerst een label"
+
 #: src/components/rule-sentence.ts
 msgid "Mail"
 msgstr "Mail"
@@ -1160,6 +1166,10 @@ msgstr "Verwijderen: {0}"
 #: src/routes/labels.tsx
 msgid "Verwijderen: {name}"
 msgstr "Verwijderen: {name}"
+
+#: src/routes/rule-editor.tsx
+msgid "Voeg eerst een persoon toe"
+msgstr "Voeg eerst een persoon toe"
 
 #: src/routes/setup.tsx
 msgid "Voor de post van je bedrijf."

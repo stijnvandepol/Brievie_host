@@ -140,6 +140,7 @@ function RuleItem({
             className="switch"
             aria-label={t`Automatisch toepassen: ${name}`}
             isSelected={rule.mode === "auto"}
+            isDisabled={update.isPending}
             onChange={(on) => update.mutate({ mode: on ? "auto" : "propose" })}
           >
             <span className="switch-track" aria-hidden="true" />
@@ -149,6 +150,7 @@ function RuleItem({
             className="switch"
             aria-label={t`Actief: ${name}`}
             isSelected={rule.active}
+            isDisabled={update.isPending}
             onChange={(on) => update.mutate({ active: on })}
           >
             <span className="switch-track" aria-hidden="true" />
@@ -234,9 +236,11 @@ function AutomationsPage() {
         <section className="panel" aria-label={t`Regels`}>
           <p className="panel-note">{t`Je hebt nog geen regels.`}</p>
           <div className="header-actions">
-            <Link to="/w/$workspaceId/labels" params={params} className="button secondary">
-              {t`Startset toevoegen`}
-            </Link>
+            {canEdit ? (
+              <Link to="/w/$workspaceId/labels" params={params} className="button secondary">
+                {t`Startset toevoegen`}
+              </Link>
+            ) : null}
             {canEdit ? (
               <Link to="/w/$workspaceId/automatisering/nieuw" params={params} className="button">
                 {t`Nieuwe regel`}
