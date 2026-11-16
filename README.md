@@ -78,8 +78,17 @@ docker compose --project-directory deploy -f deploy/docker-compose.yml exec api 
 ```
 
 It asks for the API key (or reads `BRIEVIE_AI_API_KEY`) and defaults to Mistral
-(`https://api.mistral.ai/v1`, model `mistral-small-latest`); `--base-url` and `--model`
-choose another OpenAI-compatible service. `--mode local --base-url http://ollama:11434/v1
+(`https://api.mistral.ai/v1`, model `mistral-small-latest`). Choose another supplier with
+`--supplier`:
+
+```sh
+... configure_ai --workspace <workspace-id> --mode external --supplier claude
+... configure_ai --workspace <workspace-id> --mode external --supplier openai --model <name>
+```
+
+`claude` defaults to model `claude-opus-5-5` (`--model claude-haiku-5-5` is cheaper);
+`openai` has no default model, so `--model` is required. Any other OpenAI-compatible
+service works with `--base-url ... --model ...`. `--mode local --base-url http://ollama:11434/v1
 --model <name>` uses a model on your own network, `--mode off` switches AI off.
 
 `BRIEVIE_MASTER_KEY` in `deploy/.env` encrypts the documents. `sh deploy/init-env.sh`

@@ -12,7 +12,7 @@ sections 11, 12, 14, 18 and 19 before changing architecture). Decisions live in
 - `make typecheck`: `mypy --strict`
 - `make migrate`: apply migrations as the owner role
 - `make openapi`: write `docs/api/openapi.json`
-- `uv run python manage.py configure_ai --workspace <id> --mode off|external|local`: AI per workspace
+- `uv run python manage.py configure_ai --workspace <id> --mode off|external|local [--supplier mistral|openai|claude]`: AI per workspace
 
 Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
 

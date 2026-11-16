@@ -456,3 +456,31 @@ Choices:
 - Encrypted page files can still stay behind when the request transaction fails after the intake service returned (a lost connection at commit); a storage sweep comes with back-ups (1d), which must also cover `BRIEVIE_MASTER_KEY`.
 - AI settings are set with `manage.py configure_ai`; the web settings screen comes with the wizard (1d). The `external` mode was not run against a real service by the builder (no key): the owner checks it with their own Mistral key.
 - The API key for an AI service lives in the database sealed with the workspace key; the worker therefore holds `BRIEVIE_MASTER_KEY` too.
+
+## 2026-11-16: more than one AI supplier
+
+- **`AISettings.api`** (`openai` or `anthropic`, default `openai`) says what kind of API
+  sits at `base_url`. `settings_service` has presets per supplier: `mistral` (openai API,
+  `https://api.mistral.ai/v1`, `mistral-small-latest`), `openai` (`https://api.openai.com/v1`,
+  no default model) and `claude` (anthropic API, `https://api.anthropic.com`,
+  `claude-opus-5-5`). `configure_ai --supplier` picks one; `--base-url` and `--model`
+  override the preset (a custom URL with mistral/openai stays the OpenAI-compatible API;
+  `claude` is always the Messages API). `local` and `off` are always `openai`.
+- **OpenAI has no default model on purpose**: model ids change often and we do not invent
+  one. `--supplier openai` without `--model` is refused.
+- **New dependency `anthropic` (2.8.0)**, built on `httpx2`. We chose httpx over the
+  `openai` SDK before because the OpenAI-compatible call is one plain POST. Claude's
+  Messages API is not OpenAI-compatible (other request and response shape, own error
+  types), so here the official SDK is the smaller risk: it tracks the request shape
+  (`output_config` with a JSON schema) and gives typed errors. The SDK retries nothing
+  (`max_retries=0`): the job queue does. Its DEBUG logging includes request bodies, so
+  the `anthropic` logger is held at WARNING.
+- **Claude's default model is `claude-opus-5-5`**, overridable with `--model` (for
+  example `claude-haiku-5-5` for a lower cost). No server-side refusal fallback is
+  requested, so a letter only ever goes to the configured model. A refusal or a cut-off
+  answer (`stop_reason` other than `end_turn`) is `ai_invalid_output`.
+- Errors map as for the OpenAI provider: 401/403 `ai_key_rejected`; 429, 5xx (also 529),
+  408, 409 and connection errors `ai_unavailable` (retry); other 4xx `ai_request_rejected`.
+  Timeout is 120 s because the model may reason before it answers.
+- Not run against the real Claude API by the builder (tests use a mock transport): the
+  owner checks it with their own key.

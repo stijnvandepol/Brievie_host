@@ -55,3 +55,33 @@ def test_local_with_a_public_address_is_refused(ws_a: Workspace) -> None:
 def test_unknown_workspace_is_refused() -> None:
     with pytest.raises(CommandError, match="workspace"):
         run("--workspace", "00000000-0000-0000-0000-000000000000", "--mode", "off")
+
+
+def test_supplier_claude_reads_the_key_from_the_environment(
+    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("BRIEVIE_AI_API_KEY", API_KEY)
+
+    output = run("--workspace", str(ws_a.id), "--mode", "external", "--supplier", "claude")
+
+    with workspace_context(ws_a.id):
+        stored = AISettings.objects.get()
+    assert (stored.api, stored.base_url, stored.model) == (
+        "anthropic", "https://api.anthropic.com", "claude-opus-5-5",
+    )  # fmt: skip
+    assert API_KEY not in output
+    assert "api.anthropic.com" in output
+
+
+def test_supplier_openai_without_a_model_is_refused(
+    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("BRIEVIE_AI_API_KEY", API_KEY)
+
+    with pytest.raises(CommandError, match="model"):
+        run("--workspace", str(ws_a.id), "--mode", "external", "--supplier", "openai")
+
+
+def test_unknown_supplier_is_refused_by_the_parser(ws_a: Workspace) -> None:
+    with pytest.raises((CommandError, SystemExit)):
+        run("--workspace", str(ws_a.id), "--mode", "external", "--supplier", "gemini")
