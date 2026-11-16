@@ -15,3 +15,11 @@ class WorkspaceOut(Schema):
     def from_membership(cls, membership: Membership) -> "WorkspaceOut":
         workspace = membership.workspace
         return cls(id=workspace.id, name=workspace.name, kind=workspace.kind, role=membership.role)
+
+
+class MemberOut(Schema):
+    user_id: UUID
+    name: str
+    role: str
+    # The person linked to this member, if any.
+    person_id: UUID | None

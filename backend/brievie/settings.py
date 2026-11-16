@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.workspaces",
     "apps.documents",
+    "apps.people",
     "apps.tasks",
     "apps.pipeline",
     "apps.devices",

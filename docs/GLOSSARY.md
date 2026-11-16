@@ -10,6 +10,8 @@ the translation. Add a line before introducing a new domain term.
 | meekijker | viewer |
 | beheerder | admin |
 | persoon | person |
+| naamvariant | name_variant |
+| gearchiveerd | archived |
 | relatie | relation |
 | map | folder |
 | regel | rule |
