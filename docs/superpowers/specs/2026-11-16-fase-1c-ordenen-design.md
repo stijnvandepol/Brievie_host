@@ -205,10 +205,13 @@ confidence)]`. No database, no network.
 - Text and names are normalised the same way (case folded, accents removed, whitespace
   collapsed; `apps.common.text.normalise`, shared with the rules engine). A name matches
   as a whole phrase on word boundaries: "Jan de Vries" does not match "Jan de Vriesema".
-- Confidence: 0.95 when the match follows an address word within 40 characters
-  (`t.a.v.`, `ter attentie van`, `aan`, `de heer`, `dhr.`, `mevrouw`, `mevr.`, `geachte`,
-  `beste`, `familie`, `fam.`); 0.85 when it stands in the first 600 characters of the
-  first page (the address block); 0.60 elsewhere.
+- Confidence: 0.95 when an address word stands directly before the name on the same
+  line, within 40 characters, with nothing between them but whitespace, punctuation
+  and other address words (`t.a.v.`, `ter attentie van`, `aan`, `de heer`, `dhr.`,
+  `mevrouw`, `mevr.`, `geachte`, `beste`, `familie`, `fam.`): "T.a.v. de heer J. de
+  Vries" counts, "de beste in hypotheken voor Jan de Vries" does not; 0.85 when the
+  name stands in the first 600 characters of the first page (the address block);
+  0.60 elsewhere.
 - `quote` is the matched words with up to 40 characters of the letter before them, so
   "waar staat dit?" works.
 - The longest match per person wins; several persons can match one letter.
