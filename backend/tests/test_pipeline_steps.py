@@ -9,11 +9,11 @@ import pytest
 from django.db import connection
 from django.utils import timezone
 
-from apps.documents import suggestions
+from apps.documents import organise, suggestions
 from apps.documents.models import Document, DocumentSuggestion, Extraction
 from apps.labels.models import Label
 from apps.people.models import Person
-from apps.pipeline import jobs
+from apps.pipeline import jobs, steps
 from apps.pipeline.choices import ExtractionRequest
 from apps.pipeline.errors import PermanentError
 from apps.pipeline.providers import LLMProvider, ProviderUnavailable
@@ -333,7 +333,8 @@ def picking(
 
 def test_name_in_letter_becomes_a_preselected_suggestion(ws_a: Workspace) -> None:
     jan = make_person(ws_a, "Jan de Vries", "J. de Vries")
-    make_person(ws_a, "Oud", "J. de Vries 2", archived=True)
+    # An archived person whose variant is in the letter is not proposed.
+    make_person(ws_a, "Oud", "J. de Vries", archived=True)
     document = make_document(ws_a, text=LETTER)
 
     run(ws_a, document, None)
@@ -392,14 +393,19 @@ def test_ai_pick_of_deleted_label_is_skipped(ws_a: Workspace) -> None:
 
 def test_rerun_replaces_open_and_keeps_dismissed(ws_a: Workspace) -> None:
     jan = make_person(ws_a, "Jan de Vries", "J. de Vries")
-    belasting, zorg, auto = (preset_label(ws_a, key) for key in ("belastingdienst", "zorg", "auto"))
+    belasting, zorg, auto, bank = (
+        preset_label(ws_a, key) for key in ("belastingdienst", "zorg", "auto", "bank")
+    )
     document = make_document(ws_a, text=LETTER)
-    run(ws_a, document, FakeProvider(picking(labels=["Belastingdienst", "Zorg"])))
+    run(ws_a, document, FakeProvider(picking(labels=["Belastingdienst", "Zorg", "Bank"])))
     with workspace_context(ws_a.id):
         suggestions.mark_dismissed(document, "add_label", belasting.id)
+        organise.add_label(document, zorg, actor=None, origin="suggestion")
+        suggestions.mark_accepted(document, "add_label", zorg.id)
+        accepted = DocumentSuggestion.objects.get(document=document, label_id=zorg.id)
         Document.objects.filter(id=document.id).update(status="processing")
 
-    run(ws_a, document, FakeProvider(picking(labels=["Belastingdienst", "Auto"])))
+    run(ws_a, document, FakeProvider(picking(labels=["Belastingdienst", "Auto", "Zorg"])))
 
     assert {(r.label_id, r.person_id) for r in open_suggestions(ws_a, document)} == {
         (None, jan.id),
@@ -407,7 +413,14 @@ def test_rerun_replaces_open_and_keeps_dismissed(ws_a: Workspace) -> None:
     }
     with workspace_context(ws_a.id):
         assert suggestions.is_dismissed(document, "add_label", belasting.id)
-        assert not DocumentSuggestion.objects.filter(label_id=zorg.id).exists()
+        assert not DocumentSuggestion.objects.filter(label_id=bank.id).exists()
+        after = DocumentSuggestion.objects.get(id=accepted.id)
+    assert (after.state, after.origin, after.confidence, after.updated_at) == (
+        "accepted",
+        accepted.origin,
+        accepted.confidence,
+        accepted.updated_at,
+    )
 
 
 def test_failed_processing_still_proposes_the_name(ws_a: Workspace) -> None:
@@ -425,3 +438,43 @@ def test_failed_processing_still_proposes_the_name(ws_a: Workspace) -> None:
     assert state(ws_a, document)[:2] == ("failed", "ai_rejected")
     [row] = open_suggestions(ws_a, document)
     assert (row.person_id, row.origin, row.preselected) == (jan.id, "name_match", True)
+
+
+def _failing_match(*args: object) -> list[object]:
+    raise RuntimeError("matching broke")
+
+
+def test_failure_while_proposing_still_marks_the_document_failed(
+    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # mark_failed is run_job's last resort: it must always end in `failed`.
+    monkeypatch.setattr(steps, "match_addressees", _failing_match)
+    document = make_document(ws_a, text=LETTER)
+    provider = FakeProvider(PermanentError("ai_rejected"))
+
+    jobs.run_job(
+        ws_a.id,
+        document.id,
+        attempts=0,
+        run=lambda w, d: run_pipeline(w, d, provider_factory=lambda _: provider),
+    )
+
+    assert state(ws_a, document)[:2] == ("failed", "ai_rejected")
+
+
+def test_failure_while_proposing_after_the_ai_ends_failed(
+    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(steps, "match_addressees", _failing_match)
+    document = make_document(ws_a, text=LETTER)
+    provider = FakeProvider(answer())
+
+    jobs.run_job(
+        ws_a.id,
+        document.id,
+        attempts=0,
+        run=lambda w, d: run_pipeline(w, d, provider_factory=lambda _: provider),
+    )
+
+    assert state(ws_a, document)[:2] == ("failed", "internal_error")
+    assert open_suggestions(ws_a, document) == []

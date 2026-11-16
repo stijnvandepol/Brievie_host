@@ -23,7 +23,7 @@ Every member of a workspace sees all its post, whoever the letters are addressed
 | AI setting of the workspace | What is sent, and where |
 |---|---|
 | `off` (default) | Nothing |
-| `local` | The masked text, with the names of the workspace's labels and the names and name variants of its persons, to an address inside your own network only (for example Ollama) |
+| `local` | The masked text, with the names of the workspace's labels and the names and name variants of its persons, to an address inside your own network only (for example Ollama). Never ids, rules or the page images |
 | `external` | The masked text of the letter, with the names of the workspace's labels and the names and name variants of its persons, to the AI service you configured (default: Mistral, Paris). Never ids, rules or the page images |
 
 The names go along so the AI can choose labels and addressees from the workspace's own

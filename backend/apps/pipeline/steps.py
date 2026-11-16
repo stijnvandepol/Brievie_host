@@ -10,6 +10,7 @@ from collections.abc import Callable, Sequence
 from datetime import date
 from uuid import UUID
 
+from django.db import transaction
 from django.utils import timezone
 from pydantic import ValidationError
 
@@ -227,7 +228,17 @@ def mark_failed(workspace_id: UUID, document_id: UUID, code: str) -> None:
         document = _lock_processing(document_id)
         if document is None:
             return
-        organise_processed(document, load_text(document), active_persons(), [])
+        try:
+            # A savepoint: when proposing fails, the failure is still recorded.
+            with transaction.atomic():
+                organise_processed(document, load_text(document), active_persons(), [])
+        except Exception as exc:  # noqa: BLE001 - the document must not stay processing
+            # The type only: an exception message may quote the document.
+            logger.error(
+                "Unexpected %s while proposing for failed document %s",
+                type(exc).__name__,
+                document_id,
+            )
         document.status = Document.Status.FAILED
         document.failure_code = code
         document.save(update_fields=["status", "failure_code", "updated_at"])
