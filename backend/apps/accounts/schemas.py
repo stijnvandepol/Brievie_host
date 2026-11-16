@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from ninja import Schema
@@ -28,6 +28,11 @@ class SetupIn(InputSchema):
     name: str = Field(min_length=1, max_length=150)
     workspace_name: str = Field(min_length=1, max_length=150)
     workspace_kind: Literal["home", "business"]
+    # Own labels next to the start set (for a business: its departments). Trimmed;
+    # names that exist already are skipped.
+    extra_labels: list[Annotated[str, Field(min_length=1, max_length=50)]] = Field(
+        default=[], max_length=20
+    )
 
 
 class SetupOut(Schema):

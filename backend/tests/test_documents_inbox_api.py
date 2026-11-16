@@ -111,7 +111,9 @@ def test_list_filters(client_a: Client, ws_a: Workspace) -> None:
     assert by_person.json()[0]["addressee_ids"] == [str(papa.id)]
 
 
-def test_label_filter_finds_nothing_until_labels_exist(client_a: Client, ws_a: Workspace) -> None:
+def test_label_filter_with_an_unknown_label_finds_nothing(
+    client_a: Client, ws_a: Workspace
+) -> None:
     make_document(ws_a, "done")
 
     r = client_a.get(documents_url(ws_a.id), {"label_id": str(uuid.uuid4())})

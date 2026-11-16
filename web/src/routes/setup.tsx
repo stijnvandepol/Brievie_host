@@ -39,6 +39,7 @@ function SetupPage() {
       email: String(form.get("email")),
       password: String(form.get("password")),
       setup_token: String(form.get("setup_token")).trim(),
+      extra_labels: [],
     });
   }
 

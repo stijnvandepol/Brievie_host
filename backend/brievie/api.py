@@ -11,6 +11,7 @@ from apps.devices.api import router as devices_router
 from apps.devices.auth import DeviceTokenAuth
 from apps.documents.api import router as documents_router
 from apps.documents.schemas import UploadMetadataIn
+from apps.labels.api import router as labels_router
 from apps.people.api import router as people_router
 from apps.workspaces.api import router as workspaces_router
 
@@ -51,4 +52,5 @@ api.add_router("", accounts_router)
 api.add_router("", workspaces_router)
 api.add_router("", documents_router)
 api.add_router("", people_router)
+api.add_router("", labels_router)
 api.add_router("", devices_router)

@@ -94,6 +94,11 @@ def _addressee_ids(document: Document) -> list[UUID]:
     return [link.person_id for link in document.addressee_links.all()]
 
 
+def _label_ids(document: Document) -> list[UUID]:
+    # `.all()` so a prefetch (list_documents) is used.
+    return [link.label_id for link in document.label_links.all()]
+
+
 def _has_addressee() -> models.Exists:
     return models.Exists(DocumentAddressee.objects.filter(document=models.OuterRef("pk")))
 
@@ -116,9 +121,6 @@ def list_documents(
     """The newest documents of the workspace (at most 200; paging comes later), filtered."""
     if inbox_state and inbox_state not in INBOX_STATES:
         raise ApiError(422, "validation_error", _("Deze stand van de inbox kennen we niet."))
-    if label_id is not None:
-        # Labels arrive in a later step; until then no document has one.
-        return []
     documents = Document.objects.filter(workspace=workspace).annotate(
         has_addressee=_has_addressee()
     )
@@ -126,7 +128,13 @@ def list_documents(
         documents = documents.filter(_in_state(inbox_state))
     if person_id is not None:
         documents = documents.filter(addressee_links__person_id=person_id)
-    return list(documents.prefetch_related("addressee_links").order_by("-created_at", "-id")[:200])
+    if label_id is not None:
+        documents = documents.filter(label_links__label_id=label_id)
+    return list(
+        documents.prefetch_related("addressee_links", "label_links").order_by("-created_at", "-id")[
+            :200
+        ]
+    )
 
 
 def inbox_counts(workspace: Workspace) -> dict[str, int]:
@@ -159,8 +167,8 @@ def document_summary_out(document: Document) -> DocumentSummaryOut:
         document_type=document.document_type,
         letter_date=document.letter_date,
         addressee_ids=_addressee_ids(document),
-        # Labels and suggestions arrive in later steps.
-        label_ids=[],
+        label_ids=_label_ids(document),
+        # Suggestions arrive in a later step.
         inbox_state=inbox_state(document),
         open_suggestion_count=0,
     )
@@ -244,18 +252,34 @@ def set_document_addressees(
 ) -> Document:
     """The document's addressees become exactly `person_ids`."""
     with transaction.atomic():
-        document = (
-            Document.objects.select_for_update().filter(workspace=workspace, id=document_id).first()
-        )
-        if document is None:
-            raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
-        if document.status == Document.Status.PROCESSING:
-            raise ApiError(
-                409,
-                "document_processing",
-                _("Dit document wordt nog verwerkt. Probeer het zo opnieuw."),
-            )
+        document = _lock_for_organising(workspace, document_id)
         organise.set_addressees(document=document, person_ids=person_ids, actor=user)
+    return document
+
+
+def set_document_labels(
+    *, workspace: Workspace, user: User, document_id: UUID, label_ids: list[UUID]
+) -> Document:
+    """The document's labels become exactly `label_ids`."""
+    with transaction.atomic():
+        document = _lock_for_organising(workspace, document_id)
+        organise.set_labels(document=document, label_ids=label_ids, actor=user)
+    return document
+
+
+def _lock_for_organising(workspace: Workspace, document_id: UUID) -> Document:
+    """The document, locked; refused while it is still being processed."""
+    document = (
+        Document.objects.select_for_update().filter(workspace=workspace, id=document_id).first()
+    )
+    if document is None:
+        raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
+    if document.status == Document.Status.PROCESSING:
+        raise ApiError(
+            409,
+            "document_processing",
+            _("Dit document wordt nog verwerkt. Probeer het zo opnieuw."),
+        )
     return document
 
 

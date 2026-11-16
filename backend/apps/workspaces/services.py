@@ -1,6 +1,10 @@
+from collections.abc import Sequence
+
 from django.db import transaction
 
 from apps.accounts.models import User
+from apps.labels.presets import apply_preset
+from apps.labels.services import create_extra_labels
 from apps.people.models import Person
 from apps.people.services import ensure_person_for_member
 from apps.workspaces.context import workspace_context
@@ -9,7 +13,10 @@ from apps.workspaces.models import Membership, Workspace
 from apps.workspaces.schemas import MemberOut
 
 
-def create_workspace(*, name: str, kind: str, admin: User) -> Workspace:
+def create_workspace(
+    *, name: str, kind: str, admin: User, extra_labels: Sequence[str] = ()
+) -> Workspace:
+    """The workspace with its admin, the start set of labels and `extra_labels` as own labels."""
     if kind not in Workspace.Kind.values:
         raise ValueError(f"Unknown workspace kind: {kind!r}")
     with transaction.atomic():
@@ -18,6 +25,8 @@ def create_workspace(*, name: str, kind: str, admin: User) -> Workspace:
         with workspace_context(workspace.id):
             workspace_key(workspace.id)
             ensure_person_for_member(workspace=workspace, user=admin)
+            apply_preset(workspace)
+            create_extra_labels(workspace=workspace, names=extra_labels)
     return workspace
 
 

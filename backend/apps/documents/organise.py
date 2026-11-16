@@ -1,4 +1,6 @@
-"""The only code that adds or removes a document's addressees; every change writes an event.
+"""The only code that adds or removes a document's addressees and labels.
+
+Every change writes an event.
 
 Callers hold the document locked (`select_for_update`) and the workspace's RLS context.
 """
@@ -11,10 +13,13 @@ from django.utils.translation import gettext as _
 
 from apps.accounts.models import User
 from apps.common.errors import ApiError
-from apps.documents.models import Document, DocumentAddressee, DocumentEvent
+from apps.documents.models import Document, DocumentAddressee, DocumentEvent, DocumentLabel
+from apps.labels.models import Label
+from apps.labels.services import label_not_found
 from apps.people.models import Person
 
 ADDRESSEES_MAX = 10
+LABELS_MAX = 30
 
 
 def set_addressees(
@@ -60,7 +65,11 @@ def set_addressees(
             if link.person_id not in persons:
                 link.delete()
                 _write_event(
-                    document, DocumentEvent.Kind.ADDRESSEE_REMOVED, link.person, actor, origin
+                    document,
+                    DocumentEvent.Kind.ADDRESSEE_REMOVED,
+                    actor,
+                    origin,
+                    person=link.person,
                 )
         for person_id in wanted:
             add_addressee(document, persons[person_id], actor=actor, origin=origin)
@@ -74,7 +83,52 @@ def add_addressee(document: Document, person: Person, *, actor: User | None, ori
         DocumentAddressee.objects.create(
             workspace_id=document.workspace_id, document=document, person=person
         )
-        _write_event(document, DocumentEvent.Kind.ADDRESSEE_ADDED, person, actor, origin)
+        _write_event(document, DocumentEvent.Kind.ADDRESSEE_ADDED, actor, origin, person=person)
+        return True
+
+
+def set_labels(
+    *,
+    document: Document,
+    label_ids: Sequence[UUID],
+    actor: User | None,
+    origin: str = DocumentEvent.Origin.USER,
+) -> None:
+    """Make the document's labels exactly `label_ids` (repeats count once)."""
+    wanted = list(dict.fromkeys(label_ids))
+    if len(wanted) > LABELS_MAX:
+        raise ApiError(
+            422,
+            "validation_error",
+            _("Een document heeft hoogstens %(max)d labels.") % {"max": LABELS_MAX},
+        )
+    with transaction.atomic():
+        labels = {
+            label.id: label
+            for label in Label.objects.filter(workspace_id=document.workspace_id, id__in=wanted)
+        }
+        if len(labels) != len(wanted):
+            raise label_not_found()
+        links = DocumentLabel.objects.filter(document=document).select_related("label")
+        for link in links.order_by("created_at", "id"):
+            if link.label_id not in labels:
+                link.delete()
+                _write_event(
+                    document, DocumentEvent.Kind.LABEL_REMOVED, actor, origin, label=link.label
+                )
+        for label_id in wanted:
+            add_label(document, labels[label_id], actor=actor, origin=origin)
+
+
+def add_label(document: Document, label: Label, *, actor: User | None, origin: str) -> bool:
+    """Put `label` on the document; False when it was already there."""
+    with transaction.atomic():
+        if DocumentLabel.objects.filter(document=document, label=label).exists():
+            return False
+        DocumentLabel.objects.create(
+            workspace_id=document.workspace_id, document=document, label=label
+        )
+        _write_event(document, DocumentEvent.Kind.LABEL_ADDED, actor, origin, label=label)
         return True
 
 
@@ -90,7 +144,13 @@ def record_confirmed(document: Document, *, actor: User) -> None:
 
 
 def _write_event(
-    document: Document, kind: str, person: Person, actor: User | None, origin: str
+    document: Document,
+    kind: str,
+    actor: User | None,
+    origin: str,
+    *,
+    person: Person | None = None,
+    label: Label | None = None,
 ) -> None:
     DocumentEvent.objects.create(
         workspace_id=document.workspace_id,
@@ -99,5 +159,7 @@ def _write_event(
         origin=origin,
         actor=actor,
         person=person,
-        person_name=person.display_name,
+        person_name=person.display_name if person is not None else "",
+        label=label,
+        label_name=label.name if label is not None else "",
     )

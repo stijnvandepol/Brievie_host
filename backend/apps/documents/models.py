@@ -244,10 +244,32 @@ class DocumentAddressee(WorkspaceModel):
         return f"{self.document_id} {self.person_id}"
 
 
+class DocumentLabel(WorkspaceModel):
+    """A label on a document; a document has zero or more."""
+
+    same_workspace_fields = ("document", "label")
+
+    document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="label_links")
+    # Deleting a label takes it off its documents.
+    label = models.ForeignKey(
+        "labels.Label", on_delete=models.CASCADE, related_name="document_links"
+    )
+
+    class Meta:
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["document", "label"], name="documents_documentlabel_unique"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.document_id} {self.label_id}"
+
+
 class DocumentEvent(WorkspaceModel):
     """One change in a document's history. Names are copied so they outlive a delete."""
 
-    same_workspace_fields = ("document", "person", "undoes")
+    same_workspace_fields = ("document", "person", "label", "undoes")
 
     class Kind(models.TextChoices):
         LABEL_ADDED = "label_added"
@@ -276,6 +298,9 @@ class DocumentEvent(WorkspaceModel):
         "people.Person", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
     person_name = models.TextField(blank=True, default="")
+    label = models.ForeignKey(
+        "labels.Label", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
     label_name = models.TextField(blank=True, default="")
     rule_name = models.TextField(blank=True, default="")
     # The event this one reverses.

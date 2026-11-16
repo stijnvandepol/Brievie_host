@@ -1,0 +1,140 @@
+import uuid
+from typing import TYPE_CHECKING
+
+import pytest
+from django.test import Client
+
+from apps.labels.models import Label
+from apps.workspaces.context import workspace_context
+from apps.workspaces.models import Membership, Workspace
+from tests.documents_support import admin_of
+from tests.factories import UserFactory
+from tests.helpers import post_json
+
+if TYPE_CHECKING:
+    from tests.helpers import Response
+
+
+def labels_url(workspace_id: object) -> str:
+    return f"/api/v1/workspaces/{workspace_id}/labels"
+
+
+def create(client: Client, workspace_id: object, body: dict[str, object]) -> "Response":
+    return post_json(client, f"/workspaces/{workspace_id}/labels", body)
+
+
+@pytest.fixture
+def client_a(client: Client, ws_a: Workspace) -> Client:
+    client.force_login(admin_of(ws_a))
+    return client
+
+
+def test_list_labels_by_name_with_counts(client_a: Client, ws_a: Workspace) -> None:
+    r = client_a.get(labels_url(ws_a.id))
+
+    assert r.status_code == 200
+    rows = r.json()
+    assert [row["name"] for row in rows] == sorted((row["name"] for row in rows), key=str.lower)
+    zorg = next(row for row in rows if row["name"] == "Zorg")
+    assert set(zorg) == {"id", "name", "color", "system_key", "document_count"}
+    assert (zorg["color"], zorg["system_key"], zorg["document_count"]) == ("red", "zorg", 0)
+
+
+def test_create_update_and_delete_a_label(client_a: Client, ws_a: Workspace) -> None:
+    r = create(client_a, ws_a.id, {"name": " Hobby 111222333 "})
+    assert r.status_code == 201
+    hobby = r.json()
+    assert (hobby["name"], hobby["color"], hobby["system_key"]) == ("Hobby [BSN]", "grey", "")
+
+    r = client_a.put(
+        f"{labels_url(ws_a.id)}/{hobby['id']}",
+        {"name": "Sport", "color": "teal"},
+        content_type="application/json",
+    )
+    assert r.status_code == 200
+    assert (r.json()["name"], r.json()["color"]) == ("Sport", "teal")
+
+    r = client_a.delete(f"{labels_url(ws_a.id)}/{hobby['id']}")
+    assert r.status_code == 204
+    with workspace_context(ws_a.id):
+        assert not Label.objects.filter(id=hobby["id"]).exists()
+
+
+def test_label_name_unique_ignoring_case(client_a: Client, ws_a: Workspace) -> None:
+    r = create(client_a, ws_a.id, {"name": "zorg"})
+
+    assert r.status_code == 409
+    assert r.json()["code"] == "label_exists"
+
+    sport = create(client_a, ws_a.id, {"name": "Sport"}).json()
+    r = client_a.put(
+        f"{labels_url(ws_a.id)}/{sport['id']}",
+        {"name": "BANK", "color": "grey"},
+        content_type="application/json",
+    )
+    assert r.status_code == 409
+    assert r.json()["code"] == "label_exists"
+
+
+def test_unknown_color_is_422(client_a: Client, ws_a: Workspace) -> None:
+    r = create(client_a, ws_a.id, {"name": "Sport", "color": "pink"})
+
+    assert r.status_code == 422
+    assert r.json()["code"] == "validation_error"
+
+
+def test_blank_name_is_422(client_a: Client, ws_a: Workspace) -> None:
+    r = create(client_a, ws_a.id, {"name": "   "})
+
+    assert r.status_code == 422
+    assert r.json()["code"] == "validation_error"
+
+
+def test_label_of_another_workspace_is_not_found(
+    client_a: Client, ws_a: Workspace, ws_b: Workspace
+) -> None:
+    with workspace_context(ws_b.id):
+        stranger = Label.objects.get(workspace=ws_b, system_key="bank")
+
+    for r in (
+        client_a.put(
+            f"{labels_url(ws_a.id)}/{stranger.id}",
+            {"name": "X1", "color": "grey"},
+            content_type="application/json",
+        ),
+        client_a.delete(f"{labels_url(ws_a.id)}/{stranger.id}"),
+        client_a.delete(f"{labels_url(ws_a.id)}/{uuid.uuid4()}"),
+    ):
+        assert r.status_code == 404
+        assert r.json()["code"] == "label_not_found"
+
+
+def test_apply_preset_needs_admin(client: Client, ws_a: Workspace) -> None:
+    member = UserFactory.create()
+    Membership.objects.create(user=member, workspace=ws_a, role="member")
+    client.force_login(member)
+
+    r = post_json(client, f"/workspaces/{ws_a.id}/labels/preset")
+
+    assert r.status_code == 403
+    assert r.json()["code"] == "forbidden"
+
+
+def test_apply_preset_returns_the_label_list(client_a: Client, ws_a: Workspace) -> None:
+    with workspace_context(ws_a.id):
+        Label.objects.get(workspace=ws_a, system_key="wonen").delete()
+
+    r = post_json(client_a, f"/workspaces/{ws_a.id}/labels/preset")
+
+    assert r.status_code == 200
+    assert len(r.json()) == 10
+    assert "Wonen" in {row["name"] for row in r.json()}
+
+
+def test_viewer_may_list_but_not_create(client: Client, ws_a: Workspace) -> None:
+    viewer = UserFactory.create()
+    Membership.objects.create(user=viewer, workspace=ws_a, role="viewer")
+    client.force_login(viewer)
+
+    assert client.get(labels_url(ws_a.id)).status_code == 200
+    assert create(client, ws_a.id, {"name": "Sport"}).status_code == 403

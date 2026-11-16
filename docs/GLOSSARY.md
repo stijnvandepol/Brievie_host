@@ -18,6 +18,7 @@ the translation. Add a line before introducing a new domain term.
 | taak | task |
 | post | entry |
 | op naam van | addressee |
+| startset | preset |
 | thuis | home |
 | zakelijk | business |
 | document | document |

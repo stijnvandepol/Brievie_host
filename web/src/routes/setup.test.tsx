@@ -59,6 +59,7 @@ describe("setup", () => {
       email: "anna@example.nl",
       password: "een-lang-wachtwoord",
       setup_token: "abc-def",
+      extra_labels: [],
     });
     expect(contentType).toContain("application/json");
     expect(await screen.findByRole("heading", { name: /werkruimtes/i })).toBeInTheDocument();

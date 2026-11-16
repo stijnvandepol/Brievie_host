@@ -20,6 +20,7 @@ from apps.documents.schemas import (
     FolderIn,
     FolderOut,
     InboxCountsOut,
+    LabelsIn,
     UploadMetadataIn,
 )
 from apps.workspaces.deps import workspace_member
@@ -219,6 +220,30 @@ def set_document_addressees(
         user=current_user(request),
         document_id=document_id,
         person_ids=payload.person_ids,
+    )
+    return services.document_out(document)
+
+
+@router.put(
+    "/workspaces/{workspace_id}/documents/{document_id}/labels",
+    response={
+        200: DocumentOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    operation_id="setDocumentLabels",
+)
+def set_document_labels(
+    request: HttpRequest, workspace_id: UUID, document_id: UUID, payload: LabelsIn
+) -> DocumentOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    document = services.set_document_labels(
+        workspace=membership.workspace,
+        user=current_user(request),
+        document_id=document_id,
+        label_ids=payload.label_ids,
     )
     return services.document_out(document)
 

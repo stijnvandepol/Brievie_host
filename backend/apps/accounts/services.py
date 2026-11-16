@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import secrets
+from collections.abc import Sequence
 
 from axes.handlers.proxy import AxesProxyHandler
 from django.conf import settings
@@ -92,6 +93,7 @@ def setup_server(
     name: str,
     workspace_name: str,
     workspace_kind: str,
+    extra_labels: Sequence[str] = (),
 ) -> Membership:
     """Create the first user, their workspace and admin membership, and log them in.
 
@@ -120,6 +122,7 @@ def setup_server(
             name=_required(workspace_name, _("Geef de werkruimte een naam.")),
             kind=workspace_kind,
             admin=user,
+            extra_labels=extra_labels,
         )
         SetupToken.objects.all().delete()
         django_login(request, user, backend=MODEL_BACKEND)

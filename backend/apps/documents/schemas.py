@@ -123,6 +123,11 @@ class AddresseesIn(InputSchema):
     person_ids: list[UUID] = Field(max_length=10)
 
 
+class LabelsIn(InputSchema):
+    # The document's labels become exactly these labels.
+    label_ids: list[UUID] = Field(max_length=30)
+
+
 class InboxCountsOut(Schema):
     new: int
     review: int
