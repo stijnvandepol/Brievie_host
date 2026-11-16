@@ -42,6 +42,10 @@ def propose(
 
     A second proposal of the same change strengthens the open row: the strongest origin
     (with its quote and rule name), the highest confidence, preselected when either was.
+
+    The caller holds the document's row lock (`select_for_update`, as the pipeline's
+    `_lock_processing` does) for its whole transaction: two runs on the same document
+    could otherwise both create the row.
     """
     target_id = _target_id(action, label, person)
     with transaction.atomic():
@@ -64,8 +68,16 @@ def propose(
         if row.state == State.DISMISSED:
             return None
         if row.state == State.ACCEPTED:
-            # Accepted once, but the change is gone again: a fresh proposal.
+            # Accepted once, but the change is gone again: a fresh proposal, so
+            # nothing of the old one carries over.
             row.state = State.OPEN
+            row.origin = origin
+            row.rule_name = rule_name
+            row.quote = mask_bsns(quote.strip())
+            row.confidence = confidence
+            row.preselected = preselected
+            row.save()
+            return row
         if _STRENGTH[Origin(origin)] > _STRENGTH[Origin(row.origin)]:
             row.origin = origin
             row.rule_name = rule_name
@@ -100,7 +112,10 @@ def mark_accepted(document: Document, action: str, target_id: UUID) -> None:
 
 
 def clear_open(document: Document, origins: Collection[str]) -> None:
-    """Remove the open proposals of these origins (before they are made again)."""
+    """Remove the open proposals of these origins (before they are made again).
+
+    The caller holds the document's row lock, as for `propose`.
+    """
     DocumentSuggestion.objects.filter(
         document=document, state=State.OPEN, origin__in=origins
     ).delete()

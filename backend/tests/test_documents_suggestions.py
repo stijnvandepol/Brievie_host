@@ -60,7 +60,12 @@ def propose_label(
 
 
 def propose_person(
-    document: Document, target: Person, *, origin: str = "name_match", confidence: str = "0.950"
+    document: Document,
+    target: Person,
+    *,
+    origin: str = "name_match",
+    confidence: str = "0.950",
+    preselected: bool = True,
 ) -> DocumentSuggestion | None:
     with workspace_context(document.workspace_id):
         return suggestions.propose(
@@ -69,7 +74,7 @@ def propose_person(
             person=target,
             origin=origin,
             confidence=Decimal(confidence),
-            preselected=True,
+            preselected=preselected,
         )
 
 
@@ -138,7 +143,7 @@ def test_two_origins_merge_into_the_strongest(ws_a: Workspace) -> None:
     document = make_document(ws_a, "needs_review")
     anna = make_person(ws_a, "Anna")
 
-    propose_person(document, anna, origin="ai", confidence="0.6")
+    propose_person(document, anna, origin="ai", confidence="0.6", preselected=False)
     with workspace_context(ws_a.id):
         suggestions.propose(
             document,
@@ -150,7 +155,7 @@ def test_two_origins_merge_into_the_strongest(ws_a: Workspace) -> None:
             preselected=True,
         )
     # A weaker origin afterwards changes nothing.
-    propose_person(document, anna, origin="ai", confidence="0.7")
+    propose_person(document, anna, origin="ai", confidence="0.7", preselected=False)
 
     [row] = rows(document)
     assert (row.origin, row.confidence, row.preselected) == ("name_match", Decimal("0.950"), True)
@@ -198,6 +203,28 @@ def test_accepted_row_whose_change_is_gone_opens_again(ws_a: Workspace) -> None:
 
     assert propose_label(document, zorg) is not None
     assert state_of(row) == "open"
+
+
+def test_reopened_accepted_row_takes_the_new_proposal(ws_a: Workspace) -> None:
+    document = make_document(ws_a, "needs_review")
+    anna = make_person(ws_a, "Anna")
+    with workspace_context(ws_a.id):
+        suggestions.propose(
+            document,
+            action=ADD_ADDRESSEE,
+            person=anna,
+            origin="name_match",
+            quote="T.a.v. Anna",
+            confidence=Decimal("0.95"),
+            preselected=True,
+        )
+        suggestions.mark_accepted(document, ADD_ADDRESSEE, anna.id)
+
+    propose_person(document, anna, origin="ai", confidence="0.6", preselected=False)
+
+    [row] = rows(document)
+    assert (row.state, row.origin, row.quote, row.rule_name) == ("open", "ai", "", "")
+    assert (row.confidence, row.preselected) == (Decimal("0.600"), False)
 
 
 def test_clear_open_removes_only_open_rows_of_those_origins(ws_a: Workspace) -> None:
