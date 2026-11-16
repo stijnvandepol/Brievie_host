@@ -25,7 +25,7 @@ def apply_rule(workspace_id: UUID, rule_id: UUID) -> None:
     """Walk the documents that are not `processing` in batches, each its own transaction.
 
     The rule is read again for every batch: once it is deleted or switched off, the
-    walk stops. A document locked by someone else right now is skipped.
+    walk stops. A document someone else is editing right now is waited for, never skipped.
     """
     after: UUID | None = None
     while True:
@@ -44,7 +44,7 @@ def apply_rule(workspace_id: UUID, rule_id: UUID) -> None:
             locked = (
                 Document.objects.filter(id__in=ids)
                 .exclude(status=Document.Status.PROCESSING)
-                .select_for_update(skip_locked=True)
+                .select_for_update()
                 .order_by("id")
             )
             for document in locked:

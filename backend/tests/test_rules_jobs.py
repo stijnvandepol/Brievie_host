@@ -1,4 +1,6 @@
 import pytest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 
 from apps.documents import suggestions
 from apps.documents.models import DocumentEvent, DocumentLabel
@@ -106,3 +108,16 @@ def test_job_with_another_workspace_id_does_nothing(ws_a: Workspace, ws_b: Works
     run(ws_b, rule)
 
     assert labelled(ws_a, auto) == set()
+
+
+def test_job_waits_for_a_locked_document_instead_of_skipping_it(ws_a: Workspace) -> None:
+    remove_rules(ws_a)
+    rule = make_rule(ws_a, text_word("APK"), actions=[add_label(label(ws_a, "auto"))], mode="auto")
+    make_document(ws_a, LETTER)
+
+    with CaptureQueriesContext(connection) as queries:
+        run(ws_a, rule)
+
+    locking = [q["sql"] for q in queries if "FOR UPDATE" in q["sql"]]
+    assert locking
+    assert not any("SKIP LOCKED" in sql for sql in locking)

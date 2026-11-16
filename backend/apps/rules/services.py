@@ -8,6 +8,7 @@ from uuid import UUID
 from django.db import models, transaction
 from django.db.models import Max, prefetch_related_objects
 from django.utils.translation import gettext as _
+from procrastinate.exceptions import AlreadyEnqueued
 
 from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
@@ -159,4 +160,12 @@ def run_rule(*, workspace: Workspace, rule_id: UUID) -> None:
             raise rule_not_found()
         if not rule.active:
             raise ApiError(409, "rule_inactive", _("Deze regel staat uit. Zet hem eerst aan."))
-        jobs.apply_rule_to_existing.defer(workspace_id=str(workspace.id), rule_id=str(rule.id))
+        # One waiting run per rule: a second click while the first is queued is the same ask.
+        # The savepoint keeps the refused insert from aborting the request's transaction.
+        try:
+            with transaction.atomic():
+                jobs.apply_rule_to_existing.configure(queueing_lock=f"rule-{rule.id}").defer(
+                    workspace_id=str(workspace.id), rule_id=str(rule.id)
+                )
+        except AlreadyEnqueued:
+            pass

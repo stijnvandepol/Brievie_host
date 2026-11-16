@@ -306,6 +306,18 @@ def test_run_rule_queues_job_with_ids_only(client_a: Client, ws_a: Workspace) ->
     assert job.args == {"workspace_id": str(ws_a.id), "rule_id": str(rule.id)}
 
 
+def test_running_a_rule_twice_queues_one_job(client_a: Client, ws_a: Workspace) -> None:
+    rule = make_rule(ws_a, text_word("APK"), actions=[add_label(label(ws_a, "auto"))])
+    url = f"/workspaces/{ws_a.id}/rules/{rule.id}/run"
+
+    first = post_json(client_a, url)
+    second = post_json(client_a, url)
+
+    assert (first.status_code, second.status_code) == (202, 202)
+    assert second.json() == {"queued": True}
+    assert ProcrastinateJob.objects.filter(task_name="apply_rule_to_existing").count() == 1
+
+
 def test_run_inactive_rule_is_409(client_a: Client, ws_a: Workspace) -> None:
     rule = make_rule(ws_a, text_word("APK"), actions=[add_label(label(ws_a, "auto"))], active=False)
 
