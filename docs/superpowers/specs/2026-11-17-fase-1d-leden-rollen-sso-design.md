@@ -116,7 +116,8 @@ departments and shares.** Correct by construction, nothing to keep in sync. Reje
 because it cannot work: those tables are themselves under policies that must check
 whether their document is visible, and a query through policies that refer to each
 other in a circle fails in PostgreSQL ("infinite recursion detected in policy"). A function that bypasses row-level security would need a role with
-`BYPASSRLS`, which this installation deliberately does not have.
+`BYPASSRLS`, which the application's roles deliberately do not have (the only
+such role is the read-only one of the back-up design).
 
 **C. Row-level security with a small table of readers (chosen).** `DocumentReader`
 holds, per private document, the users who may read it. The document's policy checks
@@ -383,8 +384,9 @@ default and restores the previous one on exit, as it does with the workspace; it
 used in requests and commands too, so "job" does not imply "system". A job that works
 for a user (the export) runs as that user. Inside a request, `system_actor()` is a
 narrow context manager for the few services that must write rows the user cannot see;
-it is used only in `documents.visibility`, in removing a member, and in the deletes
-named below, always after the authorisation check. The policies read the setting
+it is used only in `documents.visibility`, in removing a member, in the deletes
+named below (always after the authorisation check), and in the archive-folder job of
+the back-up design. A test lists its callers. The policies read the setting
 through two helper functions (`brievie_actor_id()`, null for `system` or empty, and
 `brievie_is_system()`), because a cast of the text `system` to a uuid fails and
 PostgreSQL does not promise the order in which it evaluates an OR.
