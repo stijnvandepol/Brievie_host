@@ -37,7 +37,7 @@ def test_list_is_newest_first_with_summary_fields(client_a: Client, ws_a: Worksp
     assert [row["id"] for row in rows] == [second["id"], first["id"]]
     assert set(rows[0]) == {
         "id", "client_id", "status", "page_count", "created_at", "sender", "document_type",
-        "letter_date",
+        "letter_date", "addressee_ids", "label_ids", "inbox_state", "open_suggestion_count",
     }  # fmt: skip
     assert rows[0]["page_count"] == 2
     assert rows[0]["status"] == "processing"
@@ -82,6 +82,7 @@ def test_detail_shows_proposals_and_tasks(client_a: Client, ws_a: Workspace) -> 
     assert task["deadline_source"] == "in_document"
     assert task["deadline_quote"] == "vóór 1 december 2026"
     assert task["status"] == "open"
+    assert task["completed_at"] is None
     assert body["failure_code"] == ""
     assert body["summary_by_ai"] is False
 

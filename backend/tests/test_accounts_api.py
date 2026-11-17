@@ -6,6 +6,8 @@ from django.test import Client
 from pytest_django import Settings
 
 from apps.accounts.models import User
+from apps.labels.models import Label
+from apps.workspaces.context import workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.factories import TEST_PASSWORD, UserFactory
 from tests.helpers import SETUP_TOKEN, post_json
@@ -83,6 +85,80 @@ def test_setup_rejects_an_unknown_workspace_kind(client: Client) -> None:
 
     assert r.status_code == 422
     assert User.objects.count() == 0
+
+
+def labels_of_the_workspace() -> list[tuple[str, str]]:
+    """(name, system_key) of the only workspace's labels, by name."""
+    workspace = Workspace.objects.get()
+    with workspace_context(workspace.id):
+        return list(
+            Label.objects.filter(workspace=workspace)
+            .order_by("name")
+            .values_list("name", "system_key")
+        )
+
+
+def test_setup_home_creates_the_ten_labels(client: Client) -> None:
+    assert post(client, "/setup", SETUP_BODY).status_code == 201
+
+    assert labels_of_the_workspace() == [
+        ("Abonnementen", "abonnementen"),
+        ("Auto", "auto"),
+        ("Bank", "bank"),
+        ("Belastingdienst", "belastingdienst"),
+        ("Energie en water", "energie"),
+        ("Gemeente", "gemeente"),
+        ("Inkomen", "inkomen"),
+        ("Verzekering", "verzekering"),
+        ("Wonen", "wonen"),
+        ("Zorg", "zorg"),
+    ]
+
+
+def test_setup_business_with_extra_labels(client: Client) -> None:
+    body = {
+        **SETUP_BODY,
+        "workspace_kind": "business",
+        "extra_labels": [" Sales ", "Finance", "sales", "BANK", "Team 111222333"],
+    }
+
+    assert post(client, "/setup", body).status_code == 201
+
+    assert labels_of_the_workspace() == [
+        ("Bank", "bank"),
+        ("Belastingdienst", "belastingdienst"),
+        ("Contracten", "contracten"),
+        ("Finance", ""),
+        ("Huisvesting", "huisvesting"),
+        ("Inkoop", "inkoop"),
+        ("KVK en overheid", "kvk"),
+        ("Personeel", "personeel"),
+        ("Sales", ""),
+        ("Team [BSN]", ""),
+        ("Verkoop", "verkoop"),
+        ("Verzekering", "verzekering"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "extra_labels",
+    [["x" * 51], [""], [f"Afdeling {i}" for i in range(21)], ["Na\x00am"]],
+)
+def test_setup_refuses_invalid_extra_labels(client: Client, extra_labels: list[str]) -> None:
+    r = post(client, "/setup", {**SETUP_BODY, "extra_labels": extra_labels})
+
+    assert r.status_code == 422
+    assert r.json()["code"] == "validation_error"
+    assert User.objects.count() == 0
+
+
+def test_old_setup_body_without_extra_labels_still_works(client: Client) -> None:
+    assert "extra_labels" not in SETUP_BODY
+
+    r = post(client, "/setup", {**SETUP_BODY, "workspace_kind": "business"})
+
+    assert r.status_code == 201
+    assert len(labels_of_the_workspace()) == 9
 
 
 @pytest.mark.django_db(transaction=True)

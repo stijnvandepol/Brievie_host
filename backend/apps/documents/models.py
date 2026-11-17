@@ -119,6 +119,9 @@ class Document(WorkspaceModel):
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
     )
     confirmed_at = models.DateTimeField(null=True, blank=True)
+    # The sorted label and addressee ids as the user confirmed them in the review
+    # ({"label_ids": [...], "addressee_ids": [...]}); null when confirmed without them.
+    confirmed_organisation = models.JSONField(null=True, blank=True)
 
     class Meta:
         constraints: ClassVar[list[models.BaseConstraint]] = [
@@ -220,3 +223,170 @@ _ATTENTION_FIELDS = {
 def needs_attention(field: str, confidence: Decimal) -> bool:
     """Only deadlines and amounts: a wrong one costs money or a missed term."""
     return field in _ATTENTION_FIELDS and confidence < NEEDS_ATTENTION_BELOW
+
+
+class DocumentAddressee(WorkspaceModel):
+    """A person a document is "op naam van"; a document has zero or more."""
+
+    same_workspace_fields = ("document", "person")
+
+    document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="addressee_links")
+    # Deleting a person who is still on a document is refused (archive instead).
+    person = models.ForeignKey(
+        "people.Person", on_delete=models.PROTECT, related_name="document_links"
+    )
+
+    class Meta:
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["document", "person"], name="documents_documentaddressee_unique"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.document_id} {self.person_id}"
+
+
+class DocumentLabel(WorkspaceModel):
+    """A label on a document; a document has zero or more."""
+
+    same_workspace_fields = ("document", "label")
+
+    document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="label_links")
+    # Deleting a label takes it off its documents.
+    label = models.ForeignKey(
+        "labels.Label", on_delete=models.CASCADE, related_name="document_links"
+    )
+
+    class Meta:
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["document", "label"], name="documents_documentlabel_unique"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.document_id} {self.label_id}"
+
+
+class DocumentEvent(WorkspaceModel):
+    """One change in a document's history. Names are copied so they outlive a delete."""
+
+    same_workspace_fields = ("document", "person", "label", "rule", "undoes")
+
+    class Kind(models.TextChoices):
+        LABEL_ADDED = "label_added"
+        LABEL_REMOVED = "label_removed"
+        ADDRESSEE_ADDED = "addressee_added"
+        ADDRESSEE_REMOVED = "addressee_removed"
+        CONFIRMED = "confirmed"
+        TASK_COMPLETED = "task_completed"
+        TASK_REOPENED = "task_reopened"
+
+    class Origin(models.TextChoices):
+        USER = "user"
+        RULE = "rule"
+        # The user accepted a proposal.
+        SUGGESTION = "suggestion"
+        UNDO = "undo"
+
+    document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="events")
+    kind = models.CharField(max_length=30, choices=Kind.choices)
+    origin = models.CharField(max_length=20, choices=Origin.choices, default=Origin.USER)
+    # Null for a rule that ran in a job.
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    person = models.ForeignKey(
+        "people.Person", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    person_name = models.TextField(blank=True, default="")
+    label = models.ForeignKey(
+        "labels.Label", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    label_name = models.TextField(blank=True, default="")
+    rule = models.ForeignKey(
+        "rules.Rule", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    rule_name = models.TextField(blank=True, default="")
+    # The event this one reverses.
+    undoes = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="undone_by"
+    )
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"{self.document_id} {self.kind}"
+
+
+class DocumentSuggestion(WorkspaceModel):
+    """A proposed change to a document (a label or an addressee), one per change.
+
+    A `dismissed` row is the document's memory of "no": nothing automatic proposes or
+    applies that change on this document again.
+    """
+
+    same_workspace_fields = ("document", "label", "person", "rule")
+
+    class Action(models.TextChoices):
+        ADD_LABEL = "add_label"
+        ADD_ADDRESSEE = "add_addressee"
+
+    class Origin(models.TextChoices):
+        # In order of strength: a rule's proposal outweighs a name match, which
+        # outweighs the AI's.
+        RULE = "rule"
+        NAME_MATCH = "name_match"
+        AI = "ai"
+        # A row nothing proposed: only the user's "no" (removed by hand).
+        NONE = ""
+
+    class State(models.TextChoices):
+        OPEN = "open"
+        ACCEPTED = "accepted"
+        DISMISSED = "dismissed"
+
+    document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="suggestions")
+    action = models.CharField(max_length=20, choices=Action.choices)
+    label = models.ForeignKey(
+        "labels.Label", null=True, blank=True, on_delete=models.CASCADE, related_name="+"
+    )
+    person = models.ForeignKey(
+        "people.Person", null=True, blank=True, on_delete=models.CASCADE, related_name="+"
+    )
+    origin = models.CharField(max_length=20, choices=Origin.choices, blank=True, default="")
+    rule = models.ForeignKey(
+        "rules.Rule", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    rule_name = models.TextField(blank=True, default="")
+    # The words in the letter that led to it; may be empty. BSN-masked.
+    quote = models.TextField(blank=True, default="")
+    confidence = models.DecimalField(max_digits=4, decimal_places=3, default=Decimal("0"))
+    # True once a name match of 0.85 or higher contributed to this row.
+    preselected = models.BooleanField(default=False)
+    state = models.CharField(max_length=20, choices=State.choices, default=State.OPEN)
+
+    class Meta:
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["document", "action", "label", "person"],
+                nulls_distinct=False,
+                name="documents_documentsuggestion_unique",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(action="add_label", label__isnull=False, person__isnull=True)
+                    | models.Q(action="add_addressee", label__isnull=True, person__isnull=False)
+                ),
+                name="documents_documentsuggestion_one_target",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(confidence__gte=0) & models.Q(confidence__lte=1),
+                name="documents_documentsuggestion_confidence_range",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.document_id} {self.action} {self.state}"

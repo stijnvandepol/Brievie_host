@@ -10,13 +10,17 @@ from apps.accounts.services import current_user
 from apps.common.errors import ApiError
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.documents import intake, review, services
-from apps.documents.models import Document, Folder
+from apps.documents.models import DocumentEvent, Folder
 from apps.documents.schemas import (
+    AddresseesIn,
     ConfirmIn,
+    DocumentEventOut,
     DocumentOut,
     DocumentSummaryOut,
     FolderIn,
     FolderOut,
+    InboxCountsOut,
+    LabelsIn,
     UploadMetadataIn,
 )
 from apps.workspaces.deps import workspace_member
@@ -92,12 +96,35 @@ def create_document(
 
 @router.get(
     "/workspaces/{workspace_id}/documents",
-    response={200: list[DocumentSummaryOut], 404: ErrorOut, **AUTH_ERRORS},
+    response={200: list[DocumentSummaryOut], 404: ErrorOut, 422: ErrorOut, **AUTH_ERRORS},
     operation_id="listDocuments",
+    description=(
+        "The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), "
+        "`person_id` and `label_id` narrow the list; together they all apply."
+    ),
 )
-def list_documents(request: HttpRequest, workspace_id: UUID) -> list[Document]:
+def list_documents(
+    request: HttpRequest,
+    workspace_id: UUID,
+    inbox_state: str = "",
+    person_id: UUID | None = None,
+    label_id: UUID | None = None,
+) -> list[DocumentSummaryOut]:
     membership = workspace_member(request, workspace_id)
-    return services.list_documents(membership.workspace)
+    documents = services.list_documents(
+        membership.workspace, inbox_state=inbox_state, person_id=person_id, label_id=label_id
+    )
+    return [services.document_summary_out(document) for document in documents]
+
+
+@router.get(
+    "/workspaces/{workspace_id}/inbox/counts",
+    response={200: InboxCountsOut, 404: ErrorOut, **AUTH_ERRORS},
+    operation_id="getInboxCounts",
+)
+def get_inbox_counts(request: HttpRequest, workspace_id: UUID) -> InboxCountsOut:
+    membership = workspace_member(request, workspace_id)
+    return InboxCountsOut(**services.inbox_counts(membership.workspace))
 
 
 @router.get(
@@ -169,5 +196,132 @@ def confirm_document(
         user=current_user(request),
         document_id=document_id,
         data=payload,
+    )
+    return services.document_out(document)
+
+
+@router.put(
+    "/workspaces/{workspace_id}/documents/{document_id}/addressees",
+    response={
+        200: DocumentOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    operation_id="setDocumentAddressees",
+)
+def set_document_addressees(
+    request: HttpRequest, workspace_id: UUID, document_id: UUID, payload: AddresseesIn
+) -> DocumentOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    document = services.set_document_addressees(
+        workspace=membership.workspace,
+        user=current_user(request),
+        document_id=document_id,
+        person_ids=payload.person_ids,
+    )
+    return services.document_out(document)
+
+
+@router.put(
+    "/workspaces/{workspace_id}/documents/{document_id}/labels",
+    response={
+        200: DocumentOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    operation_id="setDocumentLabels",
+)
+def set_document_labels(
+    request: HttpRequest, workspace_id: UUID, document_id: UUID, payload: LabelsIn
+) -> DocumentOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    document = services.set_document_labels(
+        workspace=membership.workspace,
+        user=current_user(request),
+        document_id=document_id,
+        label_ids=payload.label_ids,
+    )
+    return services.document_out(document)
+
+
+@router.post(
+    "/workspaces/{workspace_id}/documents/{document_id}/suggestions/{suggestion_id}/accept",
+    response={
+        200: DocumentOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        422: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+    },
+    operation_id="acceptSuggestion",
+    description="Make the proposed change. Accepting an accepted proposal changes nothing.",
+)
+def accept_suggestion(
+    request: HttpRequest, workspace_id: UUID, document_id: UUID, suggestion_id: UUID
+) -> DocumentOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    document = services.accept_suggestion(
+        workspace=membership.workspace,
+        user=current_user(request),
+        document_id=document_id,
+        suggestion_id=suggestion_id,
+    )
+    return services.document_out(document)
+
+
+@router.post(
+    "/workspaces/{workspace_id}/documents/{document_id}/suggestions/{suggestion_id}/dismiss",
+    response={200: DocumentOut, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS},
+    operation_id="dismissSuggestion",
+    description=(
+        "Say no to a proposal; the document does not change and nothing automatic "
+        "proposes or makes this change on it again."
+    ),
+)
+def dismiss_suggestion(
+    request: HttpRequest, workspace_id: UUID, document_id: UUID, suggestion_id: UUID
+) -> DocumentOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    document = services.dismiss_suggestion(
+        workspace=membership.workspace, document_id=document_id, suggestion_id=suggestion_id
+    )
+    return services.document_out(document)
+
+
+@router.get(
+    "/workspaces/{workspace_id}/documents/{document_id}/events",
+    response={200: list[DocumentEventOut], 404: ErrorOut, **AUTH_ERRORS},
+    operation_id="listDocumentEvents",
+)
+def list_document_events(
+    request: HttpRequest, workspace_id: UUID, document_id: UUID
+) -> list[DocumentEvent]:
+    membership = workspace_member(request, workspace_id)
+    return services.list_document_events(workspace=membership.workspace, document_id=document_id)
+
+
+@router.post(
+    "/workspaces/{workspace_id}/documents/{document_id}/events/{event_id}/undo",
+    response={200: DocumentOut, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS},
+    operation_id="undoDocumentEvent",
+    description=(
+        "Reverse a change a rule made (`can_undo`); the rule does not make it again on "
+        "this document. 409 `event_not_undoable` when the change is not a rule's, was "
+        "undone already or is gone anyway."
+    ),
+)
+def undo_document_event(
+    request: HttpRequest, workspace_id: UUID, document_id: UUID, event_id: UUID
+) -> DocumentOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    document = services.undo_document_event(
+        workspace=membership.workspace,
+        user=current_user(request),
+        document_id=document_id,
+        event_id=event_id,
     )
     return services.document_out(document)

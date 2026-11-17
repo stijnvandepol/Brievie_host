@@ -9,6 +9,7 @@ import {
   loggedInHandlers,
   renderApp,
   server,
+  twoWorkspaces,
   user,
 } from "../test-utils";
 
@@ -60,7 +61,7 @@ describe("login", () => {
         body = await request.json();
         contentType = request.headers.get("content-type");
         // From now on the session exists.
-        server.use(...loggedInHandlers());
+        server.use(twoWorkspaces(), ...loggedInHandlers());
         return HttpResponse.json(user);
       }),
     );

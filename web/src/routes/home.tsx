@@ -1,6 +1,6 @@
 import { t } from "@lingui/core/macro";
 import { useQuery } from "@tanstack/react-query";
-import { createRoute, useNavigate } from "@tanstack/react-router";
+import { createRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { ApiFailure } from "../api/client";
 import { workspacesQuery } from "../api/queries";
@@ -33,14 +33,26 @@ function HomePage() {
     }
   }, [error, navigate]);
 
+  // With one workspace there is nothing to choose.
+  const only = data?.length === 1 ? data[0] : undefined;
+  useEffect(() => {
+    if (only) {
+      void navigate({
+        to: "/w/$workspaceId/inbox",
+        params: { workspaceId: only.id },
+        replace: true,
+      });
+    }
+  }, [only, navigate]);
+
   return (
     <Shell>
       <header className="page-header">
         <h1>{t`Werkruimtes`}</h1>
       </header>
-      {isPending ? <p>{t`Even laden...`}</p> : null}
+      {isPending || only ? <p>{t`Even laden...`}</p> : null}
       <ErrorAlert error={error} />
-      {data ? (
+      {data && !only ? (
         // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrolling box must be reachable by keyboard (WCAG 2.1.1).
         <section className="panel table-scroll" aria-label={t`Werkruimtes`} tabIndex={0}>
           <div>
@@ -56,7 +68,9 @@ function HomePage() {
                 {data.map((workspace) => (
                   <tr key={workspace.id}>
                     <th scope="row" className="cell-strong">
-                      {workspace.name}
+                      <Link to="/w/$workspaceId/inbox" params={{ workspaceId: workspace.id }}>
+                        {workspace.name}
+                      </Link>
                     </th>
                     <td>{kindLabel(workspace.kind)}</td>
                     <td>

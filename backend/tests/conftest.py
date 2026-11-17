@@ -59,3 +59,13 @@ def ws_a() -> Workspace:
 @pytest.fixture
 def ws_b() -> Workspace:
     return create_workspace(name="Bedrijf", kind="business", admin=UserFactory.create())
+
+
+@pytest.fixture
+def without_preset_rules(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Workspaces made in the test get the preset labels but not their rules.
+
+    For tests of name matching, AI picks and the review that do not want the preset
+    rules' proposals mixed in (those rules have their own tests).
+    """
+    monkeypatch.setattr("apps.rules.presets.ensure_preset_rules", lambda workspace: None)

@@ -10,7 +10,7 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import { Button } from "react-aria-components";
-import { ErrorAlert, Plain, usePageTitle } from "../components/page";
+import { ErrorAlert, focusPageHeading, Plain, usePageTitle } from "../components/page";
 
 /** After a route change, screen reader and keyboard users start at the new page's title. */
 function RootComponent() {
@@ -21,11 +21,7 @@ function RootComponent() {
     previous.current = pathname;
     // The first page load keeps the browser's own focus.
     if (before === undefined || before === pathname) return;
-    const heading = document.querySelector("h1");
-    if (heading) {
-      heading.tabIndex = -1;
-      heading.focus();
-    }
+    focusPageHeading();
   }, [pathname]);
   return <Outlet />;
 }

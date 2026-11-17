@@ -411,7 +411,8 @@ a:hover {
 }
 
 input,
-textarea {
+textarea,
+select {
   font: inherit;
   min-height: 44px;
   padding: 0 12px;
@@ -500,6 +501,12 @@ textarea {
   border-color: transparent;
   background: transparent;
   color: var(--link);
+}
+
+.button-text[data-disabled] {
+  color: var(--muted);
+  opacity: 0.55;
+  cursor: default;
 }
 
 .button-text.danger {
@@ -819,4 +826,520 @@ textarea:focus-visible {
   * {
     scroll-behavior: auto;
   }
+}
+
+/* Workspace entries in the sidebar */
+
+.sidebar-workspace {
+  padding: 8px 12px 4px;
+  color: var(--brand-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sidebar-rule {
+  width: 100%;
+  margin: 6px 0;
+  border: 0;
+  border-top: 1px solid var(--brand-divider);
+}
+
+/* The document page: the pages left, the details right */
+
+.back-link {
+  margin-bottom: 12px;
+}
+
+.document {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.document-pages {
+  display: flex;
+  flex: 1 1 420px;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.document-page {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  /* An A4 box until the image has loaded, then the image's own ratio. */
+  aspect-ratio: auto 210 / 297;
+  border: 1px solid var(--border);
+  /* Shows as an empty sheet until the image has loaded and covers it. */
+  background: var(--hairline);
+}
+
+.document-side {
+  display: flex;
+  flex: 1 1 320px;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.notice {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  font-weight: 500;
+}
+
+.detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 16px;
+}
+
+.detail-list dt {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.detail-list dd {
+  margin: 0;
+}
+
+.block {
+  display: block;
+}
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 16px;
+  list-style: none;
+}
+
+.task-list li {
+  display: flex;
+  flex-direction: column;
+}
+
+.task-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-done span {
+  text-decoration: line-through;
+}
+
+.suggestion-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 12px 16px;
+  list-style: none;
+}
+
+.suggestion {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.suggestion-question {
+  margin: 0;
+  font-weight: 500;
+}
+
+.suggestion-actions {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.letter-text {
+  padding: 12px 16px;
+}
+
+.letter-text summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.letter-page {
+  margin-top: 12px;
+  white-space: pre-wrap;
+}
+
+/* Inbox count in the sidebar */
+
+.nav-count {
+  min-width: 22px;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 11px;
+  background: var(--brand-active);
+  color: #ffffff;
+  font-size: 12px;
+  text-align: center;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Filters, tabs and the person picker */
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 16px;
+}
+
+.filter-bar label {
+  font-weight: 500;
+}
+
+.inline-select {
+  max-width: 200px;
+  margin-left: 8px;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-bottom: 3px solid transparent;
+  color: var(--muted);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.tab[data-selected] {
+  border-bottom-color: var(--brand);
+  color: var(--text);
+}
+
+.picker-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  max-width: 260px;
+  padding: 0 12px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.picker-button[data-disabled] {
+  color: var(--muted);
+  cursor: default;
+}
+
+.picker-popover {
+  min-width: var(--trigger-width);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgb(23 33 43 / 20%);
+}
+
+.picker-list {
+  max-height: 280px;
+  padding: 4px;
+  overflow: auto;
+  outline: none;
+}
+
+.picker-option {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.picker-option[data-focused] {
+  background: var(--ground);
+}
+
+.picker-option[data-selected] {
+  font-weight: 600;
+}
+
+.picker-option[data-selected]::after {
+  content: "\2713";
+  margin-left: auto;
+  padding-left: 12px;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 16px 12px 36px;
+}
+
+.history-list time {
+  display: block;
+}
+
+/* Labels: each colour is a class; the name is always shown, colour is a second signal. */
+
+.label-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.label-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.label-grey {
+  background: #e3e8ed;
+  color: #17212b;
+}
+
+.label-blue {
+  background: #dbe8f8;
+  color: #153e75;
+}
+
+.label-teal {
+  background: #d4efec;
+  color: #0f5048;
+}
+
+.label-green {
+  background: #dcefe3;
+  color: #14573a;
+}
+
+.label-yellow {
+  background: #fbefc4;
+  color: #5c4300;
+}
+
+.label-orange {
+  background: #fbe3cf;
+  color: #7a3a06;
+}
+
+.label-red {
+  background: #fbdcdc;
+  color: #8a1c1c;
+}
+
+.label-purple {
+  background: #e8def6;
+  color: #4d2a82;
+}
+
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.color-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.color-option {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.color-option[data-selected] {
+  border-color: var(--text);
+  font-weight: 600;
+}
+
+.color-option[data-selected]::before {
+  content: "\2713";
+  margin-right: 6px;
+}
+
+.color-option[data-focus-visible] {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Automatisering */
+
+.rule-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.rule-item {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.rule-item:first-child {
+  border-top: 0;
+}
+
+.rule-main {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+.rule-name {
+  margin: 0;
+  font-size: 16px;
+}
+
+.rule-sentence {
+  margin: 4px 0;
+}
+
+.rule-counts {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.rule-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.rule-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.rule-form {
+  max-width: 880px;
+}
+
+.rule-row {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+
+.rule-match,
+.rule-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.rule-value {
+  flex: 1 1 200px;
+}
+
+.rule-value input {
+  width: 100%;
+}
+
+.rule-switches {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.switch-track {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 22px;
+  border-radius: 11px;
+  background: var(--input-border);
+}
+
+.switch-track::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--surface);
+}
+
+.switch[data-selected] .switch-track {
+  background: var(--brand);
+}
+
+.switch[data-selected] .switch-track::after {
+  left: 21px;
+}
+
+.switch[data-focus-visible] .switch-track {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }

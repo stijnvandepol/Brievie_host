@@ -7,6 +7,8 @@ useDefault = true
 description = "Made-up passwords and setup tokens in test fixtures"
 regexes = [
   '''^een-lang-wachtwoord-2026$''',
+  # Stands in an earlier commit of phase 1c; the test now uses the value above.
+  '''^een-lang-wachtwoord-123$''',
   '''^uit-de-omgeving-123$''',
   '''^sk-geheime-sleutel-123$''',
 ]

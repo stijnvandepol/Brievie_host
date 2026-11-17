@@ -8,13 +8,16 @@ import {
   http,
   loggedInHandlers,
   renderApp,
+  secondWorkspace,
   server,
+  twoWorkspaces,
   user,
+  workspace,
 } from "../test-utils";
 
 describe("home", () => {
   it("lists the workspaces in a table with kind and role, and links to the devices page", async () => {
-    server.use(...loggedInHandlers());
+    server.use(twoWorkspaces(), ...loggedInHandlers());
     renderApp("/");
     expect(
       await screen.findByRole("heading", { level: 1, name: /werkruimtes/i }),
@@ -28,7 +31,7 @@ describe("home", () => {
   });
 
   it("marks the current page in the menu and shows who is logged in", async () => {
-    server.use(...loggedInHandlers());
+    server.use(twoWorkspaces(), ...loggedInHandlers());
     renderApp("/");
     const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
     expect(within(nav).getByRole("link", { name: "Werkruimtes" })).toHaveAttribute(
@@ -42,8 +45,23 @@ describe("home", () => {
     expect(screen.getByText("Anna")).toBeInTheDocument();
   });
 
-  it("logs out with the CSRF token and returns to the login screen", async () => {
+  it("links each workspace when there are several", async () => {
+    server.use(twoWorkspaces(), ...loggedInHandlers());
+    renderApp("/");
+    expect(await screen.findByRole("link", { name: "Bedrijf" })).toHaveAttribute(
+      "href",
+      `/w/${secondWorkspace.id}/inbox`,
+    );
+  });
+
+  it("redirects to the only workspace", async () => {
     server.use(...loggedInHandlers());
+    const { router } = renderApp("/");
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/w/${workspace.id}/inbox`));
+  });
+
+  it("logs out with the CSRF token and returns to the login screen", async () => {
+    server.use(twoWorkspaces(), ...loggedInHandlers());
     document.cookie = "csrftoken=tok123; path=/";
     let csrf: string | null = null;
     server.use(

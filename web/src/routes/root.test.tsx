@@ -9,6 +9,7 @@ import {
   loggedInHandlers,
   renderApp,
   server,
+  twoWorkspaces,
 } from "../test-utils";
 
 describe("router screens", () => {
@@ -35,13 +36,13 @@ describe("router screens", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Er ging iets mis op de server.");
     expect(screen.queryByText(/something went wrong/i)).not.toBeInTheDocument();
 
-    server.use(...loggedInHandlers());
+    server.use(twoWorkspaces(), ...loggedInHandlers());
     await u.click(screen.getByRole("button", { name: "Probeer opnieuw" }));
     expect(await screen.findByRole("heading", { name: /werkruimtes/i })).toBeInTheDocument();
   });
 
   it("moves focus to the heading of the new page after a route change", async () => {
-    server.use(...loggedInHandlers());
+    server.use(twoWorkspaces(), ...loggedInHandlers());
     const u = userEvent.setup();
     renderApp("/");
     await screen.findByRole("heading", { name: /werkruimtes/i });

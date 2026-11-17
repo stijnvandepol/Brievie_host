@@ -4,13 +4,23 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { type ReactNode, useEffect, useId } from "react";
 import { Button, FieldError, Input, Label, Text, TextField } from "react-aria-components";
 import { ApiFailure, api, errorMessage } from "../api/client";
-import { meQuery } from "../api/queries";
+import { inboxCountsQuery, meQuery } from "../api/queries";
 
 /** Every page gets its own title (WCAG 2.4.2). */
 export function usePageTitle(title: string) {
   useEffect(() => {
     document.title = `${title} - Brievie`;
   }, [title]);
+}
+
+/** Moves keyboard and screen reader focus to the page's title (`h1`), for example after
+ * the element that had focus went away with a deleted row. */
+export function focusPageHeading() {
+  const heading = document.querySelector("h1");
+  if (heading) {
+    heading.tabIndex = -1;
+    heading.focus();
+  }
 }
 
 /** The envelope mark; decorative, the word next to it names the product. */
@@ -91,8 +101,52 @@ export function Split({ children, wide = false }: { children: ReactNode; wide?: 
 
 const NAV_LINK = "nav-link";
 
+/** The workspace a page belongs to, as far as the navigation needs it. */
+type NavWorkspace = { id: string; name: string; role?: string };
+
+/** The entries of one workspace; the inbox shows what waits for you (review plus unassigned).
+ * A viewer may not read the rules, so Automatisering is left out for them. */
+function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
+  const { data: counts } = useQuery(inboxCountsQuery(workspace.id));
+  const todo = counts ? counts.review + counts.unassigned : 0;
+  const params = { workspaceId: workspace.id };
+  return (
+    <>
+      <p className="sidebar-workspace">{workspace.name}</p>
+      <Link
+        to="/w/$workspaceId/inbox"
+        params={params}
+        className={NAV_LINK}
+        aria-label={todo > 0 ? t`Inbox, ${todo} te doen` : undefined}
+      >
+        {t`Inbox`}
+        {todo > 0 ? (
+          <span className="nav-count" aria-hidden="true">
+            {todo}
+          </span>
+        ) : null}
+      </Link>
+      <Link to="/w/$workspaceId/post" params={params} className={NAV_LINK}>
+        {t`Post`}
+      </Link>
+      <Link to="/w/$workspaceId/personen" params={params} className={NAV_LINK}>
+        {t`Personen`}
+      </Link>
+      <Link to="/w/$workspaceId/labels" params={params} className={NAV_LINK}>
+        {t`Labels`}
+      </Link>
+      {workspace.role === "viewer" ? null : (
+        <Link to="/w/$workspaceId/automatisering" params={params} className={NAV_LINK}>
+          {t`Automatisering`}
+        </Link>
+      )}
+      <hr className="sidebar-rule" />
+    </>
+  );
+}
+
 /** Layout of the screens after login: sidebar with navigation and account, then the page. */
-export function Shell({ children }: { children: ReactNode }) {
+export function Shell({ children, workspace }: { children: ReactNode; workspace?: NavWorkspace }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { data: me } = useQuery(meQuery);
@@ -117,6 +171,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <span>Brievie</span>
         </Link>
         <nav aria-label={t`Hoofdmenu`} className="sidebar-nav">
+          {workspace ? <WorkspaceNav workspace={workspace} /> : null}
           <Link to="/" activeOptions={{ exact: true }} className={NAV_LINK}>
             {t`Werkruimtes`}
           </Link>

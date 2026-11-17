@@ -1,5 +1,6 @@
 """Confirming a document: the user's review becomes its fields and its tasks."""
 
+import logging
 from collections import Counter
 from dataclasses import dataclass
 from datetime import date
@@ -10,13 +11,17 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from apps.accounts.models import User
-from apps.common.errors import ApiError
+from apps.common.errors import ApiError, is_try_again
 from apps.common.privacy import mask_bsns
-from apps.documents.models import Document
+from apps.documents import organise
+from apps.documents.models import Document, DocumentSuggestion
 from apps.documents.schemas import ConfirmIn, TaskIn
 from apps.pipeline.validation import dates_in, quote_in_text
+from apps.rules import triggers
 from apps.tasks.models import Task
 from apps.workspaces.models import Workspace
+
+logger = logging.getLogger(__name__)
 
 _REVIEWABLE = {Document.Status.NEEDS_REVIEW, Document.Status.FAILED}
 _CLIENT_SOURCES = {Task.DeadlineSource.IN_DOCUMENT, Task.DeadlineSource.MANUAL}
@@ -41,7 +46,11 @@ def confirm_document(
     Allowed while the document waits for review, or after processing failed (the
     user then fills everything in by hand). Repeating the same review on a `done`
     document (a retry after a lost answer) changes nothing and answers the same;
-    another review is a conflict. Needs the workspace's RLS context.
+    another review is a conflict. With `sets_organisation` the review also makes the
+    document's labels and addressees exactly the given lists (design 8). Then the rules
+    run (trigger `confirmed`); a repeat does not run them, and a failure in them leaves
+    the confirm standing. Needs the workspace's RLS
+    context.
     """
     with transaction.atomic():
         document = (
@@ -68,7 +77,11 @@ def confirm_document(
         document.failure_code = ""
         document.confirmed_by = user
         document.confirmed_at = timezone.now()
+        document.confirmed_organisation = _organisation(data) if data.sets_organisation else None
         document.save()
+        if data.sets_organisation:
+            _set_organisation(document, data, user)
+        organise.record_confirmed(document, actor=user)
         for task in _stored_tasks(data, document):
             Task.objects.create(
                 workspace=workspace,
@@ -79,7 +92,56 @@ def confirm_document(
                 deadline_source=task.deadline_source,
                 deadline_quote=task.deadline_quote,
             )
+        # After the user's own choices, now with the confirmed sender and type.
+        _rules_guarded(document)
     return document
+
+
+def _rules_guarded(document: Document) -> None:
+    """The rules in a savepoint: when they fail, only their writes are rolled back and
+    the user's review is still stored.
+
+    A deadlock or serialization failure is not swallowed: the whole confirm rolls back
+    and the user tries again (409 `try_again`), so this letter's rules still run.
+    """
+    try:
+        with transaction.atomic():
+            triggers.on_confirmed(document)
+    except Exception as exc:  # a broken rule must not lose the review
+        if is_try_again(exc):
+            raise
+        # The type only: an exception message may quote the document.
+        logger.error(
+            "Unexpected %s while running rules for document %s", type(exc).__name__, document.id
+        )
+
+
+def _organisation(data: ConfirmIn) -> dict[str, list[str]]:
+    """The confirmed lists as stored, also what a repeated confirm is compared on."""
+    return {
+        "label_ids": sorted({str(i) for i in data.label_ids}),
+        "addressee_ids": sorted({str(i) for i in data.addressee_ids}),
+    }
+
+
+def _set_organisation(document: Document, data: ConfirmIn, user: User) -> None:
+    """Labels and addressees become the confirmed lists; the proposals not taken are
+    dismissed. A change the user took from an open proposal gets origin `suggestion`."""
+    open_rows = DocumentSuggestion.objects.filter(
+        document=document, state=DocumentSuggestion.State.OPEN
+    )
+    proposed_labels = {s.label_id for s in open_rows if s.label_id is not None}
+    proposed_persons = {s.person_id for s in open_rows if s.person_id is not None}
+    organise.set_labels(
+        document=document, label_ids=data.label_ids, actor=user, suggested_ids=proposed_labels
+    )
+    organise.set_addressees(
+        document=document,
+        person_ids=data.addressee_ids,
+        actor=user,
+        suggested_ids=proposed_persons,
+    )
+    open_rows.update(state=DocumentSuggestion.State.DISMISSED)
 
 
 def _stored_tasks(data: ConfirmIn, document: Document) -> list[_StoredTask]:
@@ -109,7 +171,9 @@ def _is_repeat(data: ConfirmIn, document: Document) -> bool:
 
     Compared on what was stored (trimmed, BSNs masked, tasks in any order), so the
     exact same request always matches. Task fields the user may change later (status)
-    are not part of it.
+    are not part of it. Labels and addressees are compared with the confirmed snapshot,
+    not the current ones (a rule may have added to them since); a review with
+    `sets_organisation` never repeats one without it, nor the reverse.
     """
     stored = Counter(
         _StoredTask(
@@ -128,6 +192,8 @@ def _is_repeat(data: ConfirmIn, document: Document) -> bool:
         and document.summary == mask_bsns(data.summary.strip())
         and document.summary_by_ai == data.summary_by_ai
         and stored == Counter(_stored_tasks(data, document))
+        and document.confirmed_organisation
+        == (_organisation(data) if data.sets_organisation else None)
     )
 
 

@@ -5,6 +5,7 @@ from ninja import Schema
 from pydantic import Field
 
 from apps.common.schemas import InputSchema
+from apps.documents.models import DocumentEvent
 
 
 class FolderOut(Schema):
@@ -45,6 +46,14 @@ class DocumentSummaryOut(Schema):
     sender: str
     document_type: str
     letter_date: date | None
+    # The persons the document is "op naam van"; join with `listPersons`.
+    addressee_ids: list[UUID] = Field(default_factory=list)
+    # Join with `listLabels`.
+    label_ids: list[UUID] = Field(default_factory=list)
+    # "new", "review", "unassigned", or empty when the document is sorted.
+    inbox_state: str = ""
+    # Proposals (labels, addressees) waiting for the user.
+    open_suggestion_count: int = 0
 
 
 class PageOut(Schema):
@@ -73,6 +82,25 @@ class TaskOut(Schema):
     deadline_source: str
     deadline_quote: str
     status: str
+    completed_at: datetime | None = None
+
+
+class SuggestionOut(Schema):
+    id: UUID
+    # "add_label" (then `label_id` is set) or "add_addressee" (then `person_id`).
+    action: str
+    label_id: UUID | None
+    person_id: UUID | None
+    # "rule", "name_match" or "ai".
+    origin: str
+    # The rule that proposed it; empty otherwise.
+    rule_name: str
+    # The words in the document that led to it; may be empty.
+    quote: str
+    # Between 0 and 1, as a decimal string.
+    confidence: str
+    # Shown ticked in the review (a strong name match).
+    preselected: bool
 
 
 class DocumentOut(DocumentSummaryOut):
@@ -83,6 +111,8 @@ class DocumentOut(DocumentSummaryOut):
     pages: list[PageOut]
     proposals: list[ProposalOut]
     tasks: list[TaskOut]
+    # Open proposals only, preselected first, then by confidence.
+    suggestions: list[SuggestionOut] = Field(default_factory=list)
 
 
 class TaskIn(InputSchema):
@@ -107,3 +137,57 @@ class ConfirmIn(InputSchema):
     # Whether `summary` is the AI's text (shown with a label) or the user's own.
     summary_by_ai: bool
     tasks: list[TaskIn] = Field(max_length=20)
+    # When true, the document's labels and addressees become exactly `label_ids` and
+    # `addressee_ids`, and the open suggestions not taken are dismissed. When false
+    # (clients that do not know these fields), they are left alone.
+    sets_organisation: bool = False
+    label_ids: list[UUID] = Field(default=[], max_length=30)
+    addressee_ids: list[UUID] = Field(default=[], max_length=10)
+
+
+class AddresseesIn(InputSchema):
+    # The document's addressees become exactly these persons.
+    person_ids: list[UUID] = Field(max_length=10)
+
+
+class LabelsIn(InputSchema):
+    # The document's labels become exactly these labels.
+    label_ids: list[UUID] = Field(max_length=30)
+
+
+class InboxCountsOut(Schema):
+    new: int
+    review: int
+    unassigned: int
+
+
+class DocumentEventOut(Schema):
+    id: UUID
+    created_at: datetime
+    kind: str
+    origin: str
+    # The user who made the change; null for a rule, the system, or a deleted user.
+    actor_id: UUID | None = None
+    # Names are copies, so they stay readable after a delete; empty when not applicable.
+    actor_name: str
+    rule_name: str
+    label_name: str
+    person_name: str
+    can_undo: bool
+    undone: bool
+
+    @staticmethod
+    def resolve_actor_name(obj: DocumentEvent) -> str:
+        return obj.actor.name if obj.actor is not None else ""
+
+    @staticmethod
+    def resolve_can_undo(obj: DocumentEvent) -> bool:
+        # A change a rule made, not undone yet, whose label or person is still there and
+        # had nothing happen to it since (annotations of `list_document_events`).
+        return (
+            obj.origin == DocumentEvent.Origin.RULE
+            and obj.kind in (DocumentEvent.Kind.LABEL_ADDED, DocumentEvent.Kind.ADDRESSEE_ADDED)
+            and not getattr(obj, "undone", False)
+            and bool(getattr(obj, "still_linked", False))
+            and not getattr(obj, "superseded", True)
+        )

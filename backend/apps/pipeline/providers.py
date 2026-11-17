@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 import anthropic
 import httpx
 
+from apps.pipeline.choices import ExtractionRequest, choices_block
 from apps.pipeline.errors import PermanentError, PipelineError, RetryableError
 from apps.pipeline.schema import json_schema
 
@@ -37,8 +38,8 @@ class LLMProvider(Protocol):
     name: str
     model: str
 
-    def extract(self, text: str) -> str:
-        """The model's answer for the letter `text`: a JSON string."""
+    def extract(self, request: ExtractionRequest) -> str:
+        """The model's answer for the letter in `request`: a JSON string."""
         ...
 
 
@@ -61,19 +62,19 @@ class OpenAICompatibleProvider:
         self.name = urlsplit(base_url).hostname or "unknown"
         self.model = model
 
-    def extract(self, text: str) -> str:
+    def extract(self, request: ExtractionRequest) -> str:
         body = {
             "model": self.model,
             "temperature": 0,
             "messages": [
                 {"role": "system", "content": _system_prompt()},
-                {"role": "user", "content": _cut(text)},
+                {"role": "user", "content": _user_message(request)},
             ],
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {
                     "name": "brievie_extraction",
-                    "schema": json_schema(),
+                    "schema": json_schema(request),
                     "strict": True,
                 },
             },
@@ -124,7 +125,7 @@ class AnthropicProvider:
         self.name = urlsplit(base_url).hostname or "unknown"
         self.model = model
 
-    def extract(self, text: str) -> str:
+    def extract(self, request: ExtractionRequest) -> str:
         # The error is built inside the handler but raised outside it, `from None`: the
         # SDK's exceptions and the response body can carry the key or the letter and
         # must not travel with ours, not even as implicit context.
@@ -134,8 +135,8 @@ class AnthropicProvider:
                 model=self.model,
                 max_tokens=_MAX_OUTPUT_TOKENS,
                 system=_system_prompt(),
-                messages=[{"role": "user", "content": _cut(text)}],
-                output_config={"format": {"type": "json_schema", "schema": json_schema()}},
+                messages=[{"role": "user", "content": _user_message(request)}],
+                output_config={"format": {"type": "json_schema", "schema": json_schema(request)}},
             )
         except (anthropic.AuthenticationError, anthropic.PermissionDeniedError):
             error = ProviderRejected("ai_key_rejected")
@@ -160,6 +161,13 @@ class AnthropicProvider:
 @cache
 def _system_prompt() -> str:
     return _PROMPT.read_text(encoding="utf-8")
+
+
+def _user_message(request: ExtractionRequest) -> str:
+    """The letter, cut to size, and under it the lists to choose from (never cut)."""
+    block = choices_block(request)
+    letter = _cut(request.text)
+    return f"{letter}\n\n{block}" if block else letter
 
 
 def _cut(text: str) -> str:

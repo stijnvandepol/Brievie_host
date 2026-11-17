@@ -145,3 +145,197 @@ def test_folder_parent_id_is_nullable_uuid() -> None:
     parent_id = schemas["FolderOut"]["properties"]["parent_id"]
     assert parent_id["type"] == ["string", "null"]
     assert parent_id["format"] == "uuid"
+
+
+RELEASED = Path(__file__).parent / "fixtures" / "openapi_1b.json"
+
+
+def released_contract() -> dict[str, dict[str, dict[str, object]]]:
+    contract: dict[str, dict[str, dict[str, object]]] = json.loads(
+        RELEASED.read_text(encoding="utf-8")
+    )
+    return contract
+
+
+def current_contract() -> dict[str, dict[str, dict[str, object]]]:
+    contract: dict[str, dict[str, dict[str, object]]] = json.loads(export_openapi.render_schema())
+    return contract
+
+
+def contract_operations(
+    contract: dict[str, dict[str, dict[str, object]]],
+) -> dict[tuple[str, str], dict[str, object]]:
+    """(path, method) -> operation."""
+    found: dict[tuple[str, str], dict[str, object]] = {}
+    for path, item in contract["paths"].items():
+        for method, operation in item.items():
+            if method in HTTP_METHODS and isinstance(operation, dict):
+                found[(path, method)] = operation
+    return found
+
+
+def required_parameters(operation: dict[str, object]) -> set[tuple[str, str]]:
+    """(in, name) of the operation's required parameters."""
+    parameters = operation.get("parameters", [])
+    assert isinstance(parameters, list)
+    return {(p["in"], p["name"]) for p in parameters if p.get("required")}
+
+
+def schema_properties(schema: object) -> dict[str, dict[str, object]]:
+    assert schema is None or isinstance(schema, dict)
+    properties = (schema or {}).get("properties", {})
+    assert isinstance(properties, dict)
+    return properties
+
+
+def schema_required(schema: object) -> set[str]:
+    assert isinstance(schema, dict)
+    required = schema.get("required", [])
+    assert isinstance(required, list)
+    return set(required)
+
+
+def test_released_schemas_still_exist() -> None:
+    released = released_contract()["components"]["schemas"]
+    current = current_contract()["components"]["schemas"]
+    missing = sorted(set(released) - set(current))
+    assert missing == [], f"schemas of the released contract are gone: {missing}"
+
+
+def test_released_operations_still_exist_with_the_same_operation_id() -> None:
+    released = contract_operations(released_contract())
+    current = contract_operations(current_contract())
+    missing = sorted(f"{method.upper()} {path}" for path, method in set(released) - set(current))
+    assert missing == [], f"operations of the released contract are gone: {missing}"
+    renamed = {
+        f"{method.upper()} {path}": (
+            operation["operationId"],
+            current[(path, method)]["operationId"],
+        )
+        for (path, method), operation in released.items()
+        if operation["operationId"] != current[(path, method)]["operationId"]
+    }
+    assert renamed == {}, f"released operations changed their operationId (old, new): {renamed}"
+
+
+def test_released_operations_gain_no_required_parameters() -> None:
+    released = contract_operations(released_contract())
+    current = contract_operations(current_contract())
+    gained = {
+        str(operation["operationId"]): sorted(
+            required_parameters(current[key]) - required_parameters(operation)
+        )
+        for key, operation in released.items()
+        if key in current
+    }
+    gained = {name: params for name, params in gained.items() if params}
+    assert gained == {}, f"released operations gained required parameters (in, name): {gained}"
+
+
+# Keys that document a property but do not change what goes over the wire.
+DOCUMENTING_KEYS = frozenset({"title", "description", "default"})
+
+# Request bodies whose schema was renamed on purpose, keeping the same wire shape:
+# operationId -> (released schema, current schema). The generated iOS type name changes
+# at the next contract sync. `updateLabel` arrived in 1c, so it is not in the 1b fixture
+# yet; the entry records the rename for whoever compares against a 1c contract.
+RENAMED_REQUEST_BODIES: dict[str, tuple[str, str]] = {
+    "updateLabel": ("#/components/schemas/LabelIn", "#/components/schemas/LabelUpdateIn"),
+}
+
+
+def wire_shape(definition: object) -> object:
+    """`definition` without the keys that only document it, at every depth."""
+    if isinstance(definition, dict):
+        return {
+            key: wire_shape(value)
+            for key, value in definition.items()
+            if key not in DOCUMENTING_KEYS
+        }
+    if isinstance(definition, list):
+        return [wire_shape(value) for value in definition]
+    return definition
+
+
+def request_body_refs(operation: dict[str, object]) -> dict[str, object]:
+    """Content type -> the body schema's `$ref` (or its inline wire shape)."""
+    body = operation.get("requestBody", {})
+    assert isinstance(body, dict)
+    content = body.get("content", {})
+    assert isinstance(content, dict)
+    refs: dict[str, object] = {}
+    for content_type, media in content.items():
+        schema = media.get("schema", {})
+        refs[content_type] = schema["$ref"] if "$ref" in schema else wire_shape(schema)
+    return refs
+
+
+def test_released_schemas_lose_no_properties() -> None:
+    released = released_contract()["components"]["schemas"]
+    current = current_contract()["components"]["schemas"]
+    lost = {
+        name: sorted(set(schema_properties(old)) - set(schema_properties(current.get(name))))
+        for name, old in released.items()
+        if name in current
+    }
+    lost = {name: props for name, props in lost.items() if props}
+    assert lost == {}, f"released schemas lost properties: {lost}"
+
+
+def test_released_schema_properties_keep_their_definition() -> None:
+    """Type, format, $ref, items, enum, ...: all but title, description and default."""
+    released = released_contract()["components"]["schemas"]
+    current = current_contract()["components"]["schemas"]
+    changed: dict[str, tuple[object, object]] = {}
+    for name, old in released.items():
+        new_properties = schema_properties(current.get(name))
+        for prop, old_prop in schema_properties(old).items():
+            new_prop = new_properties.get(prop)
+            if new_prop is not None and wire_shape(old_prop) != wire_shape(new_prop):
+                changed[f"{name}.{prop}"] = (wire_shape(old_prop), wire_shape(new_prop))
+    assert changed == {}, f"released properties changed their definition (old, new): {changed}"
+
+
+def test_released_request_bodies_do_not_become_required() -> None:
+    released = contract_operations(released_contract())
+    current = contract_operations(current_contract())
+    became = sorted(
+        str(operation["operationId"])
+        for key, operation in released.items()
+        if key in current and not _body_required(operation) and _body_required(current[key])
+    )
+    assert became == [], f"released operations' request bodies became required: {became}"
+
+
+def _body_required(operation: dict[str, object]) -> bool:
+    body = operation.get("requestBody")
+    return isinstance(body, dict) and bool(body.get("required"))
+
+
+def test_released_request_bodies_keep_their_schema() -> None:
+    released = contract_operations(released_contract())
+    current = contract_operations(current_contract())
+    changed: dict[str, tuple[object, object]] = {}
+    for key, operation in released.items():
+        if key not in current:
+            continue
+        operation_id = str(operation["operationId"])
+        new_refs = request_body_refs(current[key])
+        for content_type, old_ref in request_body_refs(operation).items():
+            new_ref = new_refs.get(content_type)
+            if new_ref == old_ref or RENAMED_REQUEST_BODIES.get(operation_id) == (old_ref, new_ref):
+                continue
+            changed[f"{operation_id} {content_type}"] = (old_ref, new_ref)
+    assert changed == {}, f"released request bodies changed their schema (old, new): {changed}"
+
+
+def test_released_schemas_gain_no_required_properties() -> None:
+    """A new app must read an old server: nothing that was optional becomes required."""
+    released = released_contract()["components"]["schemas"]
+    current = current_contract()["components"]["schemas"]
+    gained = {
+        name: sorted(schema_required(current[name]) - schema_required(old))
+        for name, old in released.items()
+        if name in current
+    }
+    assert {name: props for name, props in gained.items() if props} == {}
