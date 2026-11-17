@@ -83,7 +83,18 @@ def execute(document: Document, evaluation: Evaluation, *, trigger: str) -> None
                 document, action, target, rule
             ):
                 outcomes.setdefault(rule.id, RuleRun.Outcome.PROPOSED)
+        # A letter processed again had its open proposals cleared and made anew; the
+        # rule proposed it before, so it counts once.
+        proposed_before = set(
+            RuleRun.objects.filter(
+                document=document,
+                rule_id__in=[r for r, o in outcomes.items() if o == RuleRun.Outcome.PROPOSED],
+                outcome=RuleRun.Outcome.PROPOSED,
+            ).values_list("rule_id", flat=True)
+        )
         for rule_id, outcome in outcomes.items():
+            if outcome == RuleRun.Outcome.PROPOSED and rule_id in proposed_before:
+                continue
             RuleRun.objects.create(
                 workspace_id=document.workspace_id,
                 rule=rules[rule_id],

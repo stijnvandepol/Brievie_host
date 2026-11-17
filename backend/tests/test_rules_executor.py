@@ -126,6 +126,21 @@ def test_same_propose_rule_twice_leaves_one_run(ws_a: Workspace) -> None:
     assert runs(ws_a) == [("Label Auto", "processed", "proposed")]
 
 
+def test_reprocessing_after_clearing_proposals_leaves_one_proposed_run(ws_a: Workspace) -> None:
+    remove_rules(ws_a)
+    auto = label(ws_a, "auto")
+    make_rule(ws_a, text_word("APK"), actions=[add_label(auto)], name="Label Auto")
+    document = make_document(ws_a, LETTER)
+    run_rules(ws_a, document)
+    with workspace_context(ws_a.id):
+        suggestions.clear_open(document, ["rule"])
+
+    run_rules(ws_a, document)
+
+    assert len(open_rows(ws_a, document)) == 1
+    assert runs(ws_a) == [("Label Auto", "processed", "proposed")]
+
+
 def test_rule_that_takes_over_an_ai_suggestion_gets_a_run(ws_a: Workspace) -> None:
     remove_rules(ws_a)
     auto = label(ws_a, "auto")
