@@ -459,6 +459,7 @@ Choices:
 - From phase 1c, for 1d and later:
   - Removing a member must unlink their person, and deleting a user must clear `Person.user` inside each workspace's context (row-level security).
   - `listDocuments` now documents 422, so the iOS app's generated switch gains a case at the next contract sync.
+  - `updateLabel`'s body schema is now named `LabelUpdateIn`: the generated iOS type name changes at the next contract sync, the wire shape does not.
   - Events written in the same call can tie on `created_at` (the ordering falls back to the id).
   - There is no undo of a whole manual run.
   - Visibility per document and "Zorg private" wait for members (inviting members, 1d).
@@ -614,9 +615,9 @@ only reads the optional lists with `?? []`.
 1. Migration `rules.0003` gives an unedited old Contracten or Belastingdienst preset rule the current definition; a rule the user changed is left alone.
 2. A rule writes at most one `proposed` `RuleRun` per document, so processing a letter again does not count it twice.
 3. A PostgreSQL deadlock or serialization failure is answered with 409 `try_again`, and the request transaction is rolled back.
-4. A failure in the rules during `confirm_document` is caught in a savepoint (logged as type and document id); the user's review is stored.
+4. A failure in the rules during `confirm_document` is caught in a savepoint (logged as type and document id); the user's review is stored. A deadlock or serialization failure is not caught: the whole confirm rolls back with 409 `try_again`, so the letter's rules still run on the retry.
 5. `DocumentEventOut.actor_id` (additive); the web says "Jij" by id and compares names only when an old server sends no id.
-6. `updateLabel` takes `LabelUpdateIn`; an empty or missing colour keeps the label's colour.
+6. `updateLabel` takes `LabelUpdateIn`; an empty or missing colour keeps the label's colour. The body schema's name changes (the generated iOS type at the next contract sync); the wire shape does not.
 7. `testRule` reads the facts of all checked documents in bulk (`facts.facts_for_many`): a fixed number of queries (11).
 8. `create_extra_labels` saves each label in a savepoint and skips a name PostgreSQL's `lower()` sees as taken.
-9. The contract test also checks that released schemas and operations (with their `operationId`) still exist, that no released operation gained a required parameter and that no released property changed its type.
+9. The contract test also checks that released schemas and operations (with their `operationId`) still exist, that no released schema lost a property or changed a property's definition (all but `title`, `description` and `default`), that no released operation gained a required parameter, and that no released request body became required or changed its schema (one recorded rename: `updateLabel`).
