@@ -182,7 +182,9 @@ services:
       - caddy-data:/caddy-data
       - caddy-authority:/data/authority
       - backup-config:/data/backup-config
-      - ${BRIEVIE_BACKUP_DIR:-backup-unset}:/backup
+      # ./brievie sets BRIEVIE_BACKUP_MOUNT_MODE=ro for the restore steps: a restore
+      # source is never written to (restic reads it with --no-lock).
+      - ${BRIEVIE_BACKUP_DIR:-backup-unset}:/backup:${BRIEVIE_BACKUP_MOUNT_MODE:-rw}
 
   caddy:
     image: caddy:2.11

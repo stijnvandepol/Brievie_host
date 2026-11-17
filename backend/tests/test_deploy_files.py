@@ -144,6 +144,22 @@ def test_backup_dir_falls_back_to_an_unset_volume() -> None:
         assert "BRIEVIE_BACKUP_DIR_SET: ${BRIEVIE_BACKUP_DIR:+true}" in text, name
 
 
+def test_only_the_admin_backup_mount_takes_its_mode_from_a_variable() -> None:
+    # ./brievie exports BRIEVIE_BACKUP_MOUNT_MODE=ro for the restore steps: a restore
+    # source is then read-only in the container (restic reads it with --no-lock).
+    admin = service("admin")
+    assert re.search(
+        r"^\s+- \$\{BRIEVIE_BACKUP_DIR:-backup-unset\}:/backup:"
+        r"\$\{BRIEVIE_BACKUP_MOUNT_MODE:-rw\}$",
+        admin,
+        re.MULTILINE,
+    )
+    keeper = service("keeper")
+    assert re.search(r"^\s+- \$\{BRIEVIE_BACKUP_DIR:-backup-unset\}:/backup$", keeper, re.MULTILINE)
+    assert "BRIEVIE_BACKUP_MOUNT_MODE" not in keeper
+    assert COMPOSE.count("${BRIEVIE_BACKUP_MOUNT_MODE") == 1
+
+
 def test_admin_is_one_off_behind_a_profile() -> None:
     admin = service("admin")
     assert 'profiles: ["admin"]' in admin
