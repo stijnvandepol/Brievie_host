@@ -147,13 +147,110 @@ def test_folder_parent_id_is_nullable_uuid() -> None:
     assert parent_id["format"] == "uuid"
 
 
+RELEASED = Path(__file__).parent / "fixtures" / "openapi_1b.json"
+
+
+def released_contract() -> dict[str, dict[str, dict[str, object]]]:
+    contract: dict[str, dict[str, dict[str, object]]] = json.loads(
+        RELEASED.read_text(encoding="utf-8")
+    )
+    return contract
+
+
+def current_contract() -> dict[str, dict[str, dict[str, object]]]:
+    contract: dict[str, dict[str, dict[str, object]]] = json.loads(export_openapi.render_schema())
+    return contract
+
+
+def contract_operations(
+    contract: dict[str, dict[str, dict[str, object]]],
+) -> dict[tuple[str, str], dict[str, object]]:
+    """(path, method) -> operation."""
+    found: dict[tuple[str, str], dict[str, object]] = {}
+    for path, item in contract["paths"].items():
+        for method, operation in item.items():
+            if method in HTTP_METHODS and isinstance(operation, dict):
+                found[(path, method)] = operation
+    return found
+
+
+def required_parameters(operation: dict[str, object]) -> set[tuple[str, str]]:
+    """(in, name) of the operation's required parameters."""
+    parameters = operation.get("parameters", [])
+    assert isinstance(parameters, list)
+    return {(p["in"], p["name"]) for p in parameters if p.get("required")}
+
+
+def schema_properties(schema: object) -> dict[str, dict[str, object]]:
+    assert schema is None or isinstance(schema, dict)
+    properties = (schema or {}).get("properties", {})
+    assert isinstance(properties, dict)
+    return properties
+
+
+def schema_required(schema: object) -> set[str]:
+    assert isinstance(schema, dict)
+    required = schema.get("required", [])
+    assert isinstance(required, list)
+    return set(required)
+
+
+def test_released_schemas_still_exist() -> None:
+    released = released_contract()["components"]["schemas"]
+    current = current_contract()["components"]["schemas"]
+    missing = sorted(set(released) - set(current))
+    assert missing == [], f"schemas of the released contract are gone: {missing}"
+
+
+def test_released_operations_still_exist_with_the_same_operation_id() -> None:
+    released = contract_operations(released_contract())
+    current = contract_operations(current_contract())
+    missing = sorted(f"{method.upper()} {path}" for path, method in set(released) - set(current))
+    assert missing == [], f"operations of the released contract are gone: {missing}"
+    renamed = {
+        f"{method.upper()} {path}": (
+            operation["operationId"],
+            current[(path, method)]["operationId"],
+        )
+        for (path, method), operation in released.items()
+        if operation["operationId"] != current[(path, method)]["operationId"]
+    }
+    assert renamed == {}, f"released operations changed their operationId (old, new): {renamed}"
+
+
+def test_released_operations_gain_no_required_parameters() -> None:
+    released = contract_operations(released_contract())
+    current = contract_operations(current_contract())
+    gained = {
+        str(operation["operationId"]): sorted(
+            required_parameters(current[key]) - required_parameters(operation)
+        )
+        for key, operation in released.items()
+        if key in current
+    }
+    gained = {name: params for name, params in gained.items() if params}
+    assert gained == {}, f"released operations gained required parameters (in, name): {gained}"
+
+
+def test_released_schema_properties_keep_their_type() -> None:
+    released = released_contract()["components"]["schemas"]
+    current = current_contract()["components"]["schemas"]
+    changed: dict[str, tuple[object, object]] = {}
+    for name, old in released.items():
+        new_properties = schema_properties(current.get(name))
+        for prop, old_prop in schema_properties(old).items():
+            new_prop = new_properties.get(prop)
+            if new_prop is not None and old_prop.get("type") != new_prop.get("type"):
+                changed[f"{name}.{prop}"] = (old_prop.get("type"), new_prop.get("type"))
+    assert changed == {}, f"released properties changed their type (old, new): {changed}"
+
+
 def test_released_schemas_gain_no_required_properties() -> None:
     """A new app must read an old server: nothing that was optional becomes required."""
-    fixture = Path(__file__).parent / "fixtures" / "openapi_1b.json"
-    released = json.loads(fixture.read_text(encoding="utf-8"))["components"]["schemas"]
-    current = json.loads(export_openapi.render_schema())["components"]["schemas"]
+    released = released_contract()["components"]["schemas"]
+    current = current_contract()["components"]["schemas"]
     gained = {
-        name: sorted(set(current[name].get("required", [])) - set(old.get("required", [])))
+        name: sorted(schema_required(current[name]) - schema_required(old))
         for name, old in released.items()
         if name in current
     }
