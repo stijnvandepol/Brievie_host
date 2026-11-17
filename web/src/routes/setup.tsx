@@ -15,6 +15,7 @@ import {
 import { ApiFailure, api } from "../api/client";
 import { meQuery } from "../api/queries";
 import type { components } from "../api/schema";
+import { Icon } from "../components/icons";
 import { ErrorAlert, Field, Split, usePageTitle } from "../components/page";
 import { requireVisitor } from "../guards";
 import { rootRoute } from "./root";
@@ -79,10 +80,18 @@ function SetupPage() {
           <Label className="choice-label">{t`Waar gebruik je Brievie voor?`}</Label>
           <div className="cards">
             <Radio value="home" className="card">
+              <span className="card-top" aria-hidden="true">
+                <Icon name="home" className="card-icon" />
+                <span className="radio-indicator" />
+              </span>
               <strong>{t`Thuis`}</strong>
               <span>{t`Voor je eigen post en die van je gezin. Alles bij elkaar, rustig en overzichtelijk.`}</span>
             </Radio>
             <Radio value="business" className="card">
+              <span className="card-top" aria-hidden="true">
+                <Icon name="building" className="card-icon" />
+                <span className="radio-indicator" />
+              </span>
               <strong>{t`Zakelijk`}</strong>
               <span>{t`Voor de post van je bedrijf.`}</span>
             </Radio>

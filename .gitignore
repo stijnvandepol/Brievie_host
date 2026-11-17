@@ -19,3 +19,6 @@ deploy/.env
 .vscode/
 node_modules/
 web/dist/
+
+# Worktrees of coding agents
+.claude/worktrees/

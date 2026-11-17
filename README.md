@@ -69,7 +69,10 @@ letter says, checks every answer against the letter text, and offers the result 
 review in the app. Nothing becomes a task until you confirm it there.
 
 A new workspace has AI **off**: you fill in the review by hand. To let an AI service
-read your letters (only the text, with BSNs masked; never the page images):
+read your letters (only the text, with BSNs masked; never the page images), an
+administrator opens **AI** in the web interface, chooses the service, pastes the API
+key and agrees to the notice that says what leaves the server. The same from a
+terminal:
 
 ```sh
 # The workspace id is in the address bar of the web interface, or in GET /api/v1/workspaces.
@@ -77,7 +80,14 @@ docker compose --project-directory deploy -f deploy/docker-compose.yml exec api 
   python manage.py configure_ai --workspace <workspace-id> --mode external
 ```
 
-It asks for the API key (or reads `BRIEVIE_AI_API_KEY`) and defaults to Mistral
+It first tells you, in Dutch, what leaves your server with every letter and to which
+service and country, and asks you to type `akkoord`: you decide this for everyone whose
+post is in the workspace. Your answer is recorded (who, when, which service), and every
+member sees in the web interface that AI is on. In a script, pass `--accept-external-ai`
+instead of typing. Another model at the same address does not ask again; another
+address does. `--mode off` switches it off again and records that too.
+
+It then asks for the API key (or reads `BRIEVIE_AI_API_KEY`) and defaults to Mistral
 (`https://api.mistral.ai/v1`, model `mistral-small-latest`). Choose another supplier with
 `--supplier`:
 
@@ -121,8 +131,9 @@ Give the computer a fixed address in your router, so the address in the QR code 
 valid. After changing `BRIEVIE_HOSTNAME`, run `docker compose ... up -d` again.
 
 The phone must be on the same network (Wi-Fi) as the server. Then open the web interface,
-choose "App koppelen", make a code and scan the QR code with the app. Does scanning fail?
-Use "Kopieer koppelgegevens" and paste the text in the app.
+choose "Apparaten" in the menu, make a code ("Koppelcode maken") and scan the QR code
+with the app. Does scanning fail? Use "Kopieer koppelgegevens" and paste the text in the
+app.
 
 **The private certificate.** Caddy makes its own certificate authority (CA) and signs the
 server certificate with it, because a home server has no public name that a public CA could
@@ -133,8 +144,13 @@ server without the CA's private key (which stays in the Caddy volume).
 
 ## Web interface
 
-`https://localhost` serves the web app (setup, login, workspaces, pairing the iOS app).
-It lives in `web/` and is built into the API image; there is no Node in the running
+`https://localhost` serves the web app: setup, login, workspaces, inbox, post, persons,
+labels, Automatisering and pairing the iOS app. It follows the Fluent 2 design language
+(the calm, dense look of Microsoft 365 admin and Outlook on the web) with Brievie's own
+name, mark and navy app bar: a navigation pane on the left that folds to icons (the menu
+button; below 1200 px it is icons by default, on a phone it opens as a drawer), a page
+header with a command bar, and tables for lists. Colours, type and spacing are tokens at
+the top of `web/src/styles.css`; screenshots are in `docs/ui/fluent/`. It lives in `web/` and is built into the API image; there is no Node in the running
 stack. For development you need Node 24+ and pnpm: `make web-install`, then
 `cd web && pnpm dev` (proxies `/api` to the running stack; `BRIEVIE_DEV_API` changes the
 target). `make web-test`, `make web-lint` and `make web-build` are the checks. After

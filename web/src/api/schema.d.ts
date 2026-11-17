@@ -207,9 +207,53 @@ export interface paths {
         };
         /**
          * Get Ai Status
-         * @description How the workspace's letters are read: `off`, `external` or `local`. No address, model or key.
+         * @description How the workspace's letters are read: `off`, `external` or `local`. For `external` also the supplier, the host the text goes to and since when (the moment of consent). An administrator also gets the model. No full address and no key.
          */
         get: operations["getAiStatus"];
+        /**
+         * Update Ai Settings
+         * @description Set how the workspace's letters are read. Administrators only. Switching to an external address without consent in force answers 409 `ai_consent_required` unless `consent_address` is exactly the address these settings lead to: first show the notice of `previewAiSettings`. Without `api_key` the stored key stays, at the same address only. The key is never returned.
+         */
+        put: operations["updateAiSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/ai/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Ai Settings
+         * @description Check AI settings without saving them. When saving them needs consent, `notice` is the text to show (the same `configure_ai` prints) and `address` is what to send back as `consent_address`. Administrators only.
+         */
+        post: operations["previewAiSettings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/ai/suppliers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Ai Suppliers
+         * @description The external AI services with a preset, and the country each one is in.
+         */
+        get: operations["listAiSuppliers"];
         put?: never;
         post?: never;
         delete?: never;
@@ -759,10 +803,92 @@ export interface components {
             /** Person Ids */
             person_ids: string[];
         };
-        /** AiStatusOut */
-        AiStatusOut: {
+        /** AiSettingsIn */
+        AiSettingsIn: {
+            /** Api Key */
+            api_key?: string | null;
+            /**
+             * Base Url
+             * @default
+             */
+            base_url: string;
+            /** Consent Address */
+            consent_address?: string | null;
             /** Mode */
             mode: string;
+            /**
+             * Model
+             * @default
+             */
+            model: string;
+            /**
+             * Supplier
+             * @default mistral
+             */
+            supplier: string;
+        };
+        /** AiSettingsPreviewIn */
+        AiSettingsPreviewIn: {
+            /**
+             * Base Url
+             * @default
+             */
+            base_url: string;
+            /** Mode */
+            mode: string;
+            /**
+             * Model
+             * @default
+             */
+            model: string;
+            /**
+             * Supplier
+             * @default mistral
+             */
+            supplier: string;
+        };
+        /** AiSettingsPreviewOut */
+        AiSettingsPreviewOut: {
+            /** Address */
+            address: string;
+            /** Needs Consent */
+            needs_consent: boolean;
+            /** Notice */
+            notice: string;
+        };
+        /** AiStatusOut */
+        AiStatusOut: {
+            /**
+             * Has Api Key
+             * @default false
+             */
+            has_api_key: boolean;
+            /** Host */
+            host?: string | null;
+            /** Mode */
+            mode: string;
+            /** Model */
+            model?: string | null;
+            /**
+             * Since
+             * Format: date-time
+             */
+            since?: string | null;
+            /** Supplier */
+            supplier?: string | null;
+        };
+        /** AiSupplierOut */
+        AiSupplierOut: {
+            /** Country */
+            country: string;
+            /** Default Model */
+            default_model: string;
+            /** Host */
+            host: string;
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
         };
         /** CaCertificateOut */
         CaCertificateOut: {
@@ -2024,6 +2150,242 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AiStatusOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    updateAiSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiSettingsIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiStatusOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    previewAiSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiSettingsPreviewIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiSettingsPreviewOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    listAiSuppliers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiSupplierOut"][];
                 };
             };
             /** @description Unauthorized */

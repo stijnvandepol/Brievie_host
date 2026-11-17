@@ -6,6 +6,7 @@ import { HttpResponse, http } from "msw";
 import type { components } from "./api/schema";
 import { i18n } from "./i18n";
 import { createAppRouter } from "./router";
+import { trackApp } from "./test-apps";
 import { server } from "./test-server";
 
 export const API = "/api/v1";
@@ -66,6 +67,7 @@ export function errorBody(code: string, message: string) {
 export function renderApp(path: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createAppRouter(queryClient, createMemoryHistory({ initialEntries: [path] }));
+  trackApp({ router, queryClient });
   render(
     <I18nProvider i18n={i18n}>
       <QueryClientProvider client={queryClient}>
@@ -181,9 +183,14 @@ export function labelHandlers(labels: Label[] = [belasting, sales]) {
   ];
 }
 
-/** The AI mode of the first workspace (default: off). */
-export function aiHandlers(mode = "off") {
-  return [http.get(`*${API}/workspaces/${workspace.id}/ai`, () => HttpResponse.json({ mode }))];
+/** The AI mode of the first workspace (default: off), with what the server says besides. */
+export function aiHandlers(
+  mode = "off",
+  rest: Partial<Omit<components["schemas"]["AiStatusOut"], "mode">> = {},
+) {
+  return [
+    http.get(`*${API}/workspaces/${workspace.id}/ai`, () => HttpResponse.json({ mode, ...rest })),
+  ];
 }
 
 /** The persons, members and labels of the first workspace. */

@@ -41,8 +41,11 @@ describe("home", () => {
     expect(within(nav).getByRole("link", { name: "Apparaten" })).not.toHaveAttribute(
       "aria-current",
     );
-    expect(await screen.findByText("anna@example.nl")).toBeInTheDocument();
-    expect(screen.getByText("Anna")).toBeInTheDocument();
+    // The name is in the app bar; the e-mail address is in the account menu.
+    expect(await screen.findByText("Anna")).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Account" }));
+    const menu = await screen.findByRole("dialog", { name: "Account" });
+    expect(within(menu).getByText("anna@example.nl")).toBeInTheDocument();
   });
 
   it("links each workspace when there are several", async () => {
@@ -58,6 +61,13 @@ describe("home", () => {
     server.use(...loggedInHandlers());
     const { router } = renderApp("/");
     await waitFor(() => expect(router.state.location.pathname).toBe(`/w/${workspace.id}/inbox`));
+    // The inbox picks its first tab and writes it into the URL: the test ends on that page,
+    // not halfway through the navigation (a late update would land after jsdom is gone).
+    expect(await screen.findByRole("tab", { name: /Te controleren/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await waitFor(() => expect(router.state.resolvedLocation?.search).toEqual({ tab: "review" }));
   });
 
   it("logs out with the CSRF token and returns to the login screen", async () => {
@@ -79,6 +89,7 @@ describe("home", () => {
     );
     const u = userEvent.setup();
     const { router } = renderApp("/");
+    await u.click(await screen.findByRole("button", { name: "Account" }));
     await u.click(await screen.findByRole("button", { name: /uitloggen/i }));
     expect(await screen.findByRole("button", { name: /^inloggen$/i })).toBeInTheDocument();
     expect(csrf).toBe("tok123");
@@ -100,5 +111,6 @@ describe("home", () => {
     );
     const { router } = renderApp("/");
     await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
+    expect(await screen.findByRole("button", { name: /^inloggen$/i })).toBeVisible();
   });
 });

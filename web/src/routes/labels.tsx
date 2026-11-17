@@ -20,8 +20,10 @@ import { ApiFailure, api } from "../api/client";
 import { labelsQuery } from "../api/queries";
 import type { components } from "../api/schema";
 import { ExternalAiNotice } from "../components/external-ai-notice";
+import { Icon } from "../components/icons";
 import { colorName, LABEL_COLORS, LabelChip } from "../components/label-chip";
-import { ErrorAlert, focusPageHeading, Shell, usePageTitle } from "../components/page";
+import { ErrorAlert, focusPageHeading, PageHeader, Shell, usePageTitle } from "../components/page";
+import { Loading, MessageBar } from "../components/ui";
 import { workspaceRoute } from "./workspace";
 
 type LabelOut = components["schemas"]["LabelOut"];
@@ -190,12 +192,12 @@ function BulkDialog({
           <TextArea rows={4} />
         </TextField>
         {result ? (
-          <p role="status">
+          <MessageBar intent="success" role="status">
             {plural(result.added, { one: "# label toegevoegd", other: "# labels toegevoegd" })}
             {result.existing > 0
               ? `, ${plural(result.existing, { one: "# bestond al", other: "# bestonden al" })}`
               : ""}
-          </p>
+          </MessageBar>
         ) : null}
         <ErrorAlert error={add.error ?? result?.error} />
         <div className="dialog-actions">
@@ -222,6 +224,7 @@ function DeleteButton({ label, onConfirm }: { label: LabelOut; onConfirm: () => 
         aria-label={t`Verwijderen: ${name}`}
         onPress={() => setOpen(true)}
       >
+        <Icon name="delete" />
         {t`Verwijderen`}
       </Button>
       <ModalOverlay isOpen={open} onOpenChange={setOpen} isDismissable className="overlay">
@@ -297,12 +300,13 @@ function LabelRow({
       <td className="num">{label.document_count}</td>
       <td className="cell-action">
         {canEdit ? (
-          <>
+          <span className="row-actions">
             <Button className="button-text" aria-label={t`Wijzigen: ${name}`} onPress={onEdit}>
+              <Icon name="edit" />
               {t`Wijzigen`}
             </Button>
             <DeleteButton label={label} onConfirm={() => remove.mutate()} />
-          </>
+          </span>
         ) : null}
       </td>
     </tr>
@@ -340,45 +344,55 @@ function LabelsPage() {
 
   return (
     <Shell workspace={workspace}>
-      <header className="page-header">
-        <h1>{t`Labels`}</h1>
-        {canEdit ? (
-          <div className="header-actions">
-            {showPreset ? (
+      <PageHeader
+        title={t`Labels`}
+        description={
+          showPreset
+            ? t`Met labels zet je orde in je post, bijvoorbeeld Belasting of Zorg. Met de startset krijg je in één keer de gebruikelijke labels.`
+            : t`Met labels zet je orde in je post, bijvoorbeeld Belasting of Zorg.`
+        }
+        commands={
+          canEdit ? (
+            <>
               <Button
-                className="button secondary"
-                isPending={applyPreset.isPending}
+                className="button"
                 onPress={() => {
                   setRowError(null);
-                  applyPreset.mutate();
+                  setOpen("new");
                 }}
               >
-                {t`Startset toevoegen`}
+                <Icon name="add" />
+                {t`Label toevoegen`}
               </Button>
-            ) : null}
-            <Button
-              className="button secondary"
-              onPress={() => {
-                setRowError(null);
-                setOpen("bulk");
-              }}
-            >
-              {t`Meerdere tegelijk toevoegen`}
-            </Button>
-            <Button
-              className="button"
-              onPress={() => {
-                setRowError(null);
-                setOpen("new");
-              }}
-            >
-              {t`Label toevoegen`}
-            </Button>
-          </div>
-        ) : null}
-      </header>
+              {showPreset ? (
+                <Button
+                  className="button-text"
+                  isPending={applyPreset.isPending}
+                  onPress={() => {
+                    setRowError(null);
+                    applyPreset.mutate();
+                  }}
+                >
+                  <Icon name="layers" />
+                  {t`Startset toevoegen`}
+                </Button>
+              ) : null}
+              <Button
+                className="button-text"
+                onPress={() => {
+                  setRowError(null);
+                  setOpen("bulk");
+                }}
+              >
+                <Icon name="add" />
+                {t`Meerdere tegelijk toevoegen`}
+              </Button>
+            </>
+          ) : null
+        }
+      />
       <ExternalAiNotice workspaceId={workspace.id} />
-      {labels.isPending ? <p>{t`Even laden...`}</p> : null}
+      {labels.isPending ? <Loading /> : null}
       <ErrorAlert error={labels.error ?? applyPreset.error ?? rowError} />
       {labels.data ? (
         // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrolling box must be reachable by keyboard (WCAG 2.1.1).

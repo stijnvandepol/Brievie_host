@@ -1,10 +1,17 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, configure } from "@testing-library/react";
-import { afterAll, afterEach, beforeAll } from "vitest";
+import { afterAll, afterEach, beforeAll, expect } from "vitest";
+import { settleApps } from "./test-apps";
 import { server } from "./test-server";
 
 beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
-afterEach(() => {
+afterEach(async () => {
+  const leftover = await settleApps();
+  if (process.env.DEBUG_SETTLE && leftover.length > 0) {
+    process.stderr.write(
+      `UNSETTLED ${expect.getState().currentTestName}: ${leftover.join("; ")}\n`,
+    );
+  }
   cleanup();
   server.resetHandlers();
   document.cookie = "csrftoken=; Max-Age=0; path=/";

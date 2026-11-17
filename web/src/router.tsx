@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { createRouter, type RouterHistory } from "@tanstack/react-router";
+import { aiRoute } from "./routes/ai";
 import { automationsRoute } from "./routes/automations";
 import { documentRoute } from "./routes/document";
 import { homeRoute } from "./routes/home";
@@ -26,6 +27,7 @@ const routeTree = rootRoute.addChildren([
     personsRoute,
     labelsRoute,
     automationsRoute,
+    aiRoute,
     newRuleRoute,
     ruleRoute,
   ]),

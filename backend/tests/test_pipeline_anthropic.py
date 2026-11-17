@@ -184,7 +184,7 @@ def test_configure_claude_stores_the_preset_and_builds_the_provider(ws_a: Worksp
     with workspace_context(ws_a.id):
         settings_service.configure(
             workspace_id=ws_a.id, mode="external", supplier="claude", base_url="", model="",
-            api_key=API_KEY,
+            consent=True, api_key=API_KEY,
         )  # fmt: skip
         stored = AISettings.objects.get()
         built = settings_service.provider_for(ws_a.id)
@@ -199,7 +199,7 @@ def test_configure_claude_stores_the_preset_and_builds_the_provider(ws_a: Worksp
 def test_claude_model_can_be_overridden(ws_a: Workspace) -> None:
     with workspace_context(ws_a.id):
         settings_service.configure(
-            workspace_id=ws_a.id, mode="external", supplier="claude", base_url="",
+            workspace_id=ws_a.id, mode="external", consent=True, supplier="claude", base_url="",
             model="claude-haiku-5-5", api_key=API_KEY,
         )  # fmt: skip
         stored = AISettings.objects.get()
@@ -211,12 +211,12 @@ def test_claude_still_needs_https_and_a_key(ws_a: Workspace) -> None:
     with workspace_context(ws_a.id):
         with pytest.raises(ValueError, match="https"):
             settings_service.configure(
-                workspace_id=ws_a.id, mode="external", supplier="claude",
+                workspace_id=ws_a.id, mode="external", consent=True, supplier="claude",
                 base_url="http://api.anthropic.com", model="", api_key=API_KEY,
             )  # fmt: skip
         with pytest.raises(ValueError, match="key"):
             settings_service.configure(
-                workspace_id=ws_a.id, mode="external", supplier="claude", base_url="",
+                workspace_id=ws_a.id, mode="external", consent=True, supplier="claude", base_url="",
                 model="", api_key=None,
             )  # fmt: skip
         assert not AISettings.objects.exists()
@@ -226,11 +226,11 @@ def test_openai_needs_a_model_name(ws_a: Workspace) -> None:
     with workspace_context(ws_a.id):
         with pytest.raises(ValueError, match="needs a model name"):
             settings_service.configure(
-                workspace_id=ws_a.id, mode="external", supplier="openai", base_url="",
+                workspace_id=ws_a.id, mode="external", consent=True, supplier="openai", base_url="",
                 model="", api_key=API_KEY,
             )  # fmt: skip
         settings_service.configure(
-            workspace_id=ws_a.id, mode="external", supplier="openai", base_url="",
+            workspace_id=ws_a.id, mode="external", consent=True, supplier="openai", base_url="",
             model="some-model", api_key=API_KEY,
         )  # fmt: skip
         stored = AISettings.objects.get()
@@ -245,7 +245,7 @@ def test_openai_needs_a_model_name(ws_a: Workspace) -> None:
 def test_custom_url_with_mistral_stays_openai_compatible(ws_a: Workspace) -> None:
     with workspace_context(ws_a.id):
         settings_service.configure(
-            workspace_id=ws_a.id, mode="external", supplier="mistral",
+            workspace_id=ws_a.id, mode="external", consent=True, supplier="mistral",
             base_url="https://llm.example.com/v1", model="m", api_key=API_KEY,
         )  # fmt: skip
         stored = AISettings.objects.get()
@@ -257,7 +257,7 @@ def test_unknown_supplier_is_refused(ws_a: Workspace) -> None:
     with workspace_context(ws_a.id), pytest.raises(ValueError, match="supplier"):
         settings_service.configure(
             workspace_id=ws_a.id, mode="external", supplier="gemini", base_url="", model="",
-            api_key=API_KEY,
+            consent=True, api_key=API_KEY,
         )  # fmt: skip
 
 
@@ -265,7 +265,7 @@ def test_mode_off_and_local_reset_the_api(ws_a: Workspace) -> None:
     with workspace_context(ws_a.id):
         settings_service.configure(
             workspace_id=ws_a.id, mode="external", supplier="claude", base_url="", model="",
-            api_key=API_KEY,
+            consent=True, api_key=API_KEY,
         )  # fmt: skip
         settings_service.configure(
             workspace_id=ws_a.id, mode="local", base_url="http://ollama:11434/v1", model="q",
@@ -274,7 +274,7 @@ def test_mode_off_and_local_reset_the_api(ws_a: Workspace) -> None:
         assert AISettings.objects.get().api == "openai"
         settings_service.configure(
             workspace_id=ws_a.id, mode="external", supplier="claude", base_url="", model="",
-            api_key=API_KEY,
+            consent=True, api_key=API_KEY,
         )  # fmt: skip
         settings_service.configure(
             workspace_id=ws_a.id, mode="off", base_url="", model="", api_key=None
@@ -285,7 +285,12 @@ def test_mode_off_and_local_reset_the_api(ws_a: Workspace) -> None:
 def test_default_supplier_is_still_mistral(ws_a: Workspace) -> None:
     with workspace_context(ws_a.id):
         settings_service.configure(
-            workspace_id=ws_a.id, mode="external", base_url="", model="", api_key=API_KEY
+            workspace_id=ws_a.id,
+            mode="external",
+            consent=True,
+            base_url="",
+            model="",
+            api_key=API_KEY,
         )
         stored = AISettings.objects.get()
 

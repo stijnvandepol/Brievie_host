@@ -180,7 +180,12 @@ def test_provider_for_is_none_when_ai_is_off(ws_a: Workspace) -> None:
 def test_configure_external_seals_the_key_and_builds_the_provider(ws_a: Workspace) -> None:
     with workspace_context(ws_a.id):
         settings_service.configure(
-            workspace_id=ws_a.id, mode="external", base_url="", model="", api_key=API_KEY
+            workspace_id=ws_a.id,
+            mode="external",
+            consent=True,
+            base_url="",
+            model="",
+            api_key=API_KEY,
         )
         stored = AISettings.objects.get()
         sealed = bytes(stored.api_key_sealed or b"")
@@ -197,7 +202,12 @@ def test_configure_external_seals_the_key_and_builds_the_provider(ws_a: Workspac
 def test_configure_again_replaces_the_settings(ws_a: Workspace) -> None:
     with workspace_context(ws_a.id):
         settings_service.configure(
-            workspace_id=ws_a.id, mode="external", base_url="", model="", api_key=API_KEY
+            workspace_id=ws_a.id,
+            mode="external",
+            consent=True,
+            base_url="",
+            model="",
+            api_key=API_KEY,
         )
         settings_service.configure(
             workspace_id=ws_a.id, mode="off", base_url="", model="", api_key=None
@@ -213,11 +223,16 @@ def test_external_needs_https_and_a_key(ws_a: Workspace) -> None:
         with pytest.raises(ValueError, match="https"):
             settings_service.configure(
                 workspace_id=ws_a.id, mode="external", base_url="http://api.mistral.ai/v1",
-                model="m", api_key=API_KEY,
+                consent=True, model="m", api_key=API_KEY,
             )  # fmt: skip
         with pytest.raises(ValueError, match="key"):
             settings_service.configure(
-                workspace_id=ws_a.id, mode="external", base_url="", model="", api_key=None
+                workspace_id=ws_a.id,
+                mode="external",
+                consent=True,
+                base_url="",
+                model="",
+                api_key=None,
             )
         assert not AISettings.objects.exists()
 
@@ -315,7 +330,12 @@ def test_host_or_address_that_cannot_be_stored_is_refused(ws_a: Workspace, url: 
     with workspace_context(ws_a.id):
         with pytest.raises(ValueError, match="AI service"):
             settings_service.configure(
-                workspace_id=ws_a.id, mode="external", base_url=url, model="m", api_key=API_KEY
+                workspace_id=ws_a.id,
+                mode="external",
+                consent=True,
+                base_url=url,
+                model="m",
+                api_key=API_KEY,
             )
         assert not AISettings.objects.exists()
 

@@ -139,17 +139,27 @@ describe("pair the app", () => {
   it("goes to the login screen when the session has ended", async () => {
     server.use(
       ...loggedInHandlers(),
-      http.post(`*${API}/devices/pairing-codes`, () =>
-        HttpResponse.json(
+      http.post(`*${API}/devices/pairing-codes`, () => {
+        // The session is gone for every call from now on, as on a real server.
+        server.use(
+          http.get(`*${API}/me`, () =>
+            HttpResponse.json(
+              { code: "not_authenticated", message: "Je bent niet ingelogd." },
+              { status: 401 },
+            ),
+          ),
+        );
+        return HttpResponse.json(
           { code: "not_authenticated", message: "Je bent niet ingelogd." },
           { status: 401 },
-        ),
-      ),
+        );
+      }),
     );
     const u = userEvent.setup();
     const { router } = renderApp("/koppel-app");
     await u.click(await screen.findByRole("button", { name: /koppelcode maken/i }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
+    expect(await screen.findByRole("button", { name: /^inloggen$/i })).toBeVisible();
   });
 
   it("shows the server message when no code can be made", async () => {
