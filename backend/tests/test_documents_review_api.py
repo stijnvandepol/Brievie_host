@@ -1,3 +1,4 @@
+import logging
 import uuid
 from decimal import Decimal
 from typing import TYPE_CHECKING
@@ -14,6 +15,7 @@ from apps.workspaces.models import Membership, Workspace
 from tests.documents_support import admin_of, documents_url, jpeg, make_person, upload
 from tests.factories import UserFactory
 from tests.helpers import post_json
+from tests.rules_support import add_label, make_rule, text_word
 
 if TYPE_CHECKING:
     from tests.helpers import Response
@@ -471,3 +473,33 @@ def test_repeated_confirm_with_other_lists_is_409(
 
     assert r.status_code == 409
     assert r.json()["code"] == "document_not_reviewable"
+
+
+def test_a_failure_in_the_rules_keeps_the_confirm(
+    client_a: Client,
+    ws_a: Workspace,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    document_id, _, bank, auto = organised_document(client_a, ws_a)
+    make_rule(ws_a, text_word("Belastingdienst"), actions=[add_label(auto)], mode="auto")
+
+    def broken(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("Belastingdienst geheim")
+
+    monkeypatch.setattr("apps.rules.triggers.evaluate", broken)
+    body = review(sets_organisation=True, label_ids=[str(bank.id)], addressee_ids=[])
+
+    with caplog.at_level(logging.ERROR):
+        r = confirm(client_a, ws_a.id, document_id, body)
+
+    assert r.status_code == 200
+    assert r.json()["status"] == "done"
+    assert r.json()["label_ids"] == [str(bank.id)]
+    with workspace_context(ws_a.id):
+        document = Document.objects.get(id=document_id)
+        assert document.status == "done"
+        assert Task.objects.filter(document=document).count() == 1
+    assert "RuntimeError" in caplog.text
+    assert document_id in caplog.text
+    assert "geheim" not in caplog.text

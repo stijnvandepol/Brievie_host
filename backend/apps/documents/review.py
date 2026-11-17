@@ -1,5 +1,6 @@
 """Confirming a document: the user's review becomes its fields and its tasks."""
 
+import logging
 from collections import Counter
 from dataclasses import dataclass
 from datetime import date
@@ -19,6 +20,8 @@ from apps.pipeline.validation import dates_in, quote_in_text
 from apps.rules import triggers
 from apps.tasks.models import Task
 from apps.workspaces.models import Workspace
+
+logger = logging.getLogger(__name__)
 
 _REVIEWABLE = {Document.Status.NEEDS_REVIEW, Document.Status.FAILED}
 _CLIENT_SOURCES = {Task.DeadlineSource.IN_DOCUMENT, Task.DeadlineSource.MANUAL}
@@ -45,7 +48,8 @@ def confirm_document(
     document (a retry after a lost answer) changes nothing and answers the same;
     another review is a conflict. With `sets_organisation` the review also makes the
     document's labels and addressees exactly the given lists (design 8). Then the rules
-    run (trigger `confirmed`); a repeat does not run them. Needs the workspace's RLS
+    run (trigger `confirmed`); a repeat does not run them, and a failure in them leaves
+    the confirm standing. Needs the workspace's RLS
     context.
     """
     with transaction.atomic():
@@ -89,8 +93,21 @@ def confirm_document(
                 deadline_quote=task.deadline_quote,
             )
         # After the user's own choices, now with the confirmed sender and type.
-        triggers.on_confirmed(document)
+        _rules_guarded(document)
     return document
+
+
+def _rules_guarded(document: Document) -> None:
+    """The rules in a savepoint: when they fail, only their writes are rolled back and
+    the user's review is still stored."""
+    try:
+        with transaction.atomic():
+            triggers.on_confirmed(document)
+    except Exception as exc:  # noqa: BLE001 - a broken rule must not lose the review
+        # The type only: an exception message may quote the document.
+        logger.error(
+            "Unexpected %s while running rules for document %s", type(exc).__name__, document.id
+        )
 
 
 def _organisation(data: ConfirmIn) -> dict[str, list[str]]:
