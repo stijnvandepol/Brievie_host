@@ -22,20 +22,21 @@ from pathlib import Path, PurePosixPath
 
 import psycopg
 from django.conf import settings
+from django.db import connection
 from django.utils import timezone
 
 from apps.backup.database import backup_conninfo
 from apps.backup.errors import BackupError
 from apps.backup.locks import backup_lock
-from apps.documents.storage import FileSystemStorage
 
 ORPHAN_MIN_AGE = timedelta(hours=24)
 
 _UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
-_PAGE_NAME = re.compile(r"\d+\.page")
+_PAGE_NAME = re.compile(r"[0-9]+\.page")
 _TEMP_NAME = re.compile(r"\.tmp-[A-Za-z0-9_]+")
 _UUID_NAME = re.compile(_UUID)
-_LAYOUT = re.compile(rf"({_UUID})/({_UUID})/(\d+\.page|\.tmp-[A-Za-z0-9_]+)")
+_LAYOUT = re.compile(rf"({_UUID})/({_UUID})/([0-9]+\.page|\.tmp-[A-Za-z0-9_]+)")
+_PAGE_PATH = re.compile(rf"{_UUID}/{_UUID}/[0-9]+\.page")
 
 
 @dataclass(frozen=True)
@@ -134,6 +135,9 @@ def find_orphans(*, conninfo: str, storage_root: Path, now: datetime) -> list[Or
     # Order matters: the disk first, the database after (see the module docstring).
     on_disk = _scan_disk(storage_root)
     known = _known_paths(conninfo, storage_root)
+    if not all(_PAGE_PATH.fullmatch(path) for path in known):
+        # A stored path in a form this code cannot place: its file would look orphaned.
+        raise BackupError("internal_error")
     pages_on_disk = {item.path for item in on_disk if item.is_page}
     if known and pages_on_disk and not (known & pages_on_disk):
         # Probably a path form this code does not read: refuse rather than list everything.
@@ -149,39 +153,52 @@ def find_orphans(*, conninfo: str, storage_root: Path, now: datetime) -> list[Or
     )
 
 
-def _deletable(path: str, root: Path) -> bool:
+def _unlink_if_old(root: Path, path: str) -> bool:
+    """Unlink one layout file through directory descriptors; False when it is not ours to delete.
+
+    Every component is opened with O_NOFOLLOW relative to its parent, so a directory
+    swapped for a symlink after the listing cannot redirect the unlink.
+    """
     if _LAYOUT.fullmatch(path) is None:
         return False
-    real_root = Path(os.path.realpath(root))
-    target = real_root / path
-    # The directories on the way must be real ones, not links out of the root.
-    if Path(os.path.realpath(target.parent)) != target.parent:
-        return False
+    *directories, name = path.split("/")
+    flags = os.O_RDONLY | os.O_DIRECTORY
+    opened: list[int] = []
     try:
-        info = target.lstat()
-    except OSError:
+        opened.append(os.open(root, flags))
+        for directory in directories:
+            opened.append(os.open(directory, flags | os.O_NOFOLLOW, dir_fd=opened[-1]))
+        info = os.stat(name, dir_fd=opened[-1], follow_symlinks=False)
+        if not stat.S_ISREG(info.st_mode) or _modified(info) >= timezone.now() - ORPHAN_MIN_AGE:
+            return False
+        os.unlink(name, dir_fd=opened[-1])
+    except FileNotFoundError:
         return False
-    return stat.S_ISREG(info.st_mode) and _modified(info) < timezone.now() - ORPHAN_MIN_AGE
+    except OSError:
+        # A link or a plain file where a directory should be, or no permission.
+        return False
+    finally:
+        for descriptor in opened:
+            os.close(descriptor)
+    return True
 
 
 def delete_orphans(orphans: Sequence[Orphan], storage_root: Path) -> int:
     """Delete what is still a regular, old file of the layout; returns how many went."""
-    storage = FileSystemStorage(storage_root)
-    deleted = 0
-    for orphan in orphans:
-        if not _deletable(orphan.path, storage_root):
-            continue
-        try:
-            storage.delete(orphan.path)
-        except OSError:
-            raise BackupError("internal_error") from None
-        deleted += 1
-    return deleted
+    return sum(1 for orphan in orphans if _unlink_if_old(storage_root, orphan.path))
 
 
 def sweep(*, delete: bool) -> SweepResult:
     root = Path(settings.BRIEVIE_STORAGE_ROOT)
     with backup_lock():
-        orphans = find_orphans(conninfo=backup_conninfo(), storage_root=root, now=timezone.now())
+        try:
+            orphans = find_orphans(
+                conninfo=backup_conninfo(dbname=str(connection.settings_dict["NAME"])),
+                storage_root=root,
+                now=timezone.now(),
+            )
+        except psycopg.Error:
+            # The driver's message can quote the connection string; say only the code.
+            raise BackupError("backup_role_missing") from None
         deleted = delete_orphans(orphans, root) if delete else 0
     return SweepResult(orphans=orphans, deleted=deleted)

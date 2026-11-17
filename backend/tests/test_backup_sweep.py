@@ -6,7 +6,7 @@ from pathlib import Path
 import psycopg
 import pytest
 from django.conf import settings as django_settings
-from django.core.management import call_command
+from django.core.management import CommandError, call_command
 from django.db import connection
 from django.test import Client
 from django.utils import timezone
@@ -14,6 +14,7 @@ from psycopg import errors as pg_errors
 
 from apps.backup import sweep as sweep_module
 from apps.backup.errors import BackupError
+from apps.backup.locks import BACKUP_LOCK_KEY
 from apps.backup.sweep import Orphan, delete_orphans, find_orphans, sweep
 from apps.documents.models import DocumentPage
 from apps.workspaces.context import workspace_context
@@ -271,7 +272,7 @@ def test_the_command_prints_numbers_and_no_paths(
     listed = capsys.readouterr().out
     assert str(ws_a.id) not in listed
     assert extra.name not in listed
-    assert "1" in listed
+    assert "1 losse bestanden gevonden (6\xa0bytes)" in listed
     assert extra.exists()
 
     call_command("sweep_storage", "--delete")
@@ -289,9 +290,7 @@ def test_the_command_says_so_when_nothing_is_left(
     assert "Geen losse bestanden" in capsys.readouterr().out
 
 
-def test_the_sweep_waits_for_a_running_backup(ws_a: Workspace) -> None:
-    from apps.backup.locks import backup_lock
-
+def test_the_sweep_refuses_while_a_backup_runs(ws_a: Workspace) -> None:
     other = psycopg.connect(
         f"dbname={connection.settings_dict['NAME']} user={connection.settings_dict['USER']} "
         f"password={connection.settings_dict['PASSWORD']} host={connection.settings_dict['HOST']} "
@@ -299,13 +298,74 @@ def test_the_sweep_waits_for_a_running_backup(ws_a: Workspace) -> None:
         autocommit=True,
     )
     try:
-        from apps.backup.locks import BACKUP_LOCK_KEY
-
         other.execute("SELECT pg_advisory_lock(%s)", [BACKUP_LOCK_KEY])
         with pytest.raises(BackupError) as raised:
             sweep(delete=False)
         assert raised.value.code == "busy"
     finally:
         other.close()
-    with backup_lock():
-        pass
+
+
+def test_one_unplaceable_stored_path_stops_everything(
+    ws_a: Workspace, ws_b: Workspace, backup_conninfo: str
+) -> None:
+    upload_letter(ws_a)
+    upload_letter(ws_b)
+    victim = page_file(ws_a)
+    with workspace_context(ws_a.id):
+        DocumentPage.objects.update(storage_path=f"/old-root/{relative(victim)}")
+    age(victim, timedelta(days=2))
+
+    with pytest.raises(BackupError) as raised:
+        found(backup_conninfo)
+    assert raised.value.code == "internal_error"
+    with pytest.raises(BackupError):
+        sweep(delete=True)
+    assert victim.exists()
+    assert page_file(ws_b).exists()
+
+
+def test_a_non_ascii_digit_is_not_a_candidate(ws_a: Workspace, backup_conninfo: str) -> None:
+    stray(ws_a, "\u0661.page")
+
+    assert found(backup_conninfo) == set()
+
+
+def test_a_directory_swapped_for_a_link_cannot_redirect_the_delete(
+    ws_a: Workspace, backup_conninfo: str, tmp_path: Path
+) -> None:
+    extra = stray(ws_a)
+    orphans = find_orphans(
+        conninfo=backup_conninfo, storage_root=storage_root(), now=timezone.now()
+    )
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    victim = outside / extra.name
+    victim.write_bytes(b"not ours")
+    age(victim, timedelta(days=2))
+    directory = extra.parent
+    extra.unlink()
+    directory.rmdir()
+    directory.symlink_to(outside, target_is_directory=True)
+
+    assert delete_orphans(orphans, storage_root()) == 0
+    assert victim.exists()
+
+
+def test_database_errors_become_one_dutch_sentence(
+    ws_a: Workspace, settings: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bad = dict(settings.DATABASE_BACKUP)  # type: ignore[attr-defined]
+    bad["PASSWORD"] = "secret-wrong-password"
+    bad["PORT"] = "1"
+    settings.DATABASE_BACKUP = bad  # type: ignore[attr-defined]
+
+    with pytest.raises(BackupError) as raised:
+        sweep(delete=False)
+    assert raised.value.code == "backup_role_missing"
+    with pytest.raises(CommandError) as command_error:
+        call_command("sweep_storage")
+    message = str(command_error.value)
+    assert "secret-wrong-password" not in message
+    assert "host=" not in message
+    assert command_error.value.returncode == 1
