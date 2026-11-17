@@ -37,6 +37,7 @@ EXPECTED_CODES = {
     "master_key_malformed",
     "hostname_unusable",
     "documents_incomplete",
+    "unsafe_path",
 }
 
 

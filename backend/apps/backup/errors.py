@@ -59,6 +59,9 @@ REASONS: dict[str, Promise] = {
         "Het terugzetten van de documenten is afgebroken, dus de documenten zijn nu niet "
         "compleet. Voer deze stap gewoon opnieuw uit."
     ),
+    "unsafe_path": _(
+        "Brievie weigert deze map te wissen of te overschrijven, omdat dat niet veilig is."
+    ),
     "interrupted_by_restore": _("Afgebroken door herstel."),
     "abandoned": _("De vorige back-up is afgebroken. Er is een nieuwe gestart."),
     "internal_error": _("Er ging iets mis. Probeer het later opnieuw."),
