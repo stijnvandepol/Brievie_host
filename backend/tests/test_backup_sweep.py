@@ -13,7 +13,7 @@ from django.utils import timezone
 from psycopg import errors as pg_errors
 
 from apps.backup import sweep as sweep_module
-from apps.backup.errors import BackupError
+from apps.backup.errors import REASONS, BackupError
 from apps.backup.locks import BACKUP_LOCK_KEY
 from apps.backup.sweep import Orphan, delete_orphans, find_orphans, sweep
 from apps.documents.models import DocumentPage
@@ -186,6 +186,7 @@ def test_deleting_never_leaves_the_root(tmp_path: Path) -> None:
 
 
 def test_deleting_checks_the_age_again(ws_a: Workspace, backup_conninfo: str) -> None:
+    upload_letter(ws_a)
     extra = stray(ws_a)
     orphans = find_orphans(
         conninfo=backup_conninfo, storage_root=storage_root(), now=timezone.now()
@@ -221,12 +222,41 @@ def test_a_path_form_nobody_matches_is_refused(ws_a: Workspace, backup_conninfo:
     assert raised.value.code == "internal_error"
 
 
-def test_without_pages_in_the_database_every_old_file_is_an_orphan(
+def test_an_empty_database_with_page_files_is_refused(
     ws_a: Workspace, backup_conninfo: str
 ) -> None:
     extra = stray(ws_a)
 
+    with pytest.raises(BackupError) as raised:
+        found(backup_conninfo)
+    assert raised.value.code == "internal_error"
+    with pytest.raises(BackupError):
+        sweep(delete=True)
+    assert extra.exists()
+
+
+def test_an_empty_database_still_lists_old_temp_files(
+    ws_a: Workspace, backup_conninfo: str
+) -> None:
+    extra = stray(ws_a, ".tmp-x")
+
     assert found(backup_conninfo) == {relative(extra)}
+
+
+def test_a_symlinked_storage_root_keeps_working(
+    ws_a: Workspace, backup_conninfo: str, settings: object, tmp_path: Path
+) -> None:
+    real = storage_root()
+    link = tmp_path / "root-link"
+    link.symlink_to(real, target_is_directory=True)
+    upload_letter(ws_a)
+    extra = stray(ws_a)
+    expected = relative(extra)
+    settings.BRIEVIE_STORAGE_ROOT = str(link)  # type: ignore[attr-defined]
+
+    assert [o.path for o in sweep(delete=False).orphans] == [expected]
+    assert sweep(delete=True).deleted == 1
+    assert not extra.exists()
 
 
 def test_the_files_are_listed_before_the_database_is_read(
@@ -334,6 +364,7 @@ def test_a_non_ascii_digit_is_not_a_candidate(ws_a: Workspace, backup_conninfo: 
 def test_a_directory_swapped_for_a_link_cannot_redirect_the_delete(
     ws_a: Workspace, backup_conninfo: str, tmp_path: Path
 ) -> None:
+    upload_letter(ws_a)
     extra = stray(ws_a)
     orphans = find_orphans(
         conninfo=backup_conninfo, storage_root=storage_root(), now=timezone.now()
@@ -366,6 +397,7 @@ def test_database_errors_become_one_dutch_sentence(
     with pytest.raises(CommandError) as command_error:
         call_command("sweep_storage")
     message = str(command_error.value)
+    assert message == str(REASONS["backup_role_missing"])
     assert "secret-wrong-password" not in message
     assert "host=" not in message
     assert command_error.value.returncode == 1

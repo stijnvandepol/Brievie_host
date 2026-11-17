@@ -139,8 +139,9 @@ def find_orphans(*, conninfo: str, storage_root: Path, now: datetime) -> list[Or
         # A stored path in a form this code cannot place: its file would look orphaned.
         raise BackupError("internal_error")
     pages_on_disk = {item.path for item in on_disk if item.is_page}
-    if known and pages_on_disk and not (known & pages_on_disk):
-        # Probably a path form this code does not read: refuse rather than list everything.
+    if pages_on_disk and not (known & pages_on_disk):
+        # No known path matches any page file: an empty or wrong database, or a path form
+        # this code does not read. Refuse rather than list the whole store.
         raise BackupError("internal_error")
     cutoff = now - ORPHAN_MIN_AGE
     return sorted(
