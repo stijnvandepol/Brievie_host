@@ -1,3 +1,4 @@
+import logging
 import uuid
 from typing import TYPE_CHECKING
 
@@ -5,6 +6,7 @@ import pytest
 from django.test import Client
 
 from apps.labels.models import Label
+from apps.labels.services import create_extra_labels
 from apps.workspaces.context import workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.documents_support import admin_of
@@ -151,3 +153,16 @@ def test_viewer_may_list_but_not_create(client: Client, ws_a: Workspace) -> None
 
     assert client.get(labels_url(ws_a.id)).status_code == 200
     assert create(client, ws_a.id, {"name": "Sport"}).status_code == 403
+
+
+def test_extra_labels_that_only_postgresql_sees_as_equal_are_skipped(
+    ws_a: Workspace, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Python lowers "İ" to "i" + a combining dot, PostgreSQL to a plain "i".
+    with caplog.at_level(logging.DEBUG), workspace_context(ws_a.id):
+        create_extra_labels(workspace=ws_a, names=["İstanbul", "istanbul", "Reizen"])
+        names = set(Label.objects.filter(workspace=ws_a).values_list("name", flat=True))
+
+    assert {"İstanbul", "Reizen"} <= names
+    assert "istanbul" not in names
+    assert "stanbul" not in caplog.text

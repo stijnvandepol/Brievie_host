@@ -142,4 +142,9 @@ def create_extra_labels(*, workspace: Workspace, names: Sequence[str]) -> None:
             if not name or name.lower() in taken:
                 continue
             taken.add(name.lower())
-            Label.objects.create(workspace=workspace, name=name)
+            try:
+                _save(Label(workspace=workspace, name=name))
+            except ApiError:
+                # Taken after all: PostgreSQL's lower() differs from Python's for a few
+                # letters (the unique index uses PostgreSQL's).
+                continue
