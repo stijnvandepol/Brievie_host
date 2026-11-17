@@ -264,7 +264,7 @@ def test_run_hands_the_dump_command_to_the_fake_tool(
         [found, "--format=custom", "--no-password"], capture_output=True, check=False
     )
     assert done.stdout == b"bytes"
-    assert pg_dump.calls == [["pg_dump", "--format=custom", "--no-password"][1:]]
+    assert pg_dump.calls == [["--format=custom", "--no-password"]]
 
 
 def test_summary_bytes_reads_the_summary_line() -> None:
@@ -310,3 +310,44 @@ def test_parse_snapshots_newest_first() -> None:
 
 def test_parse_snapshots_of_nothing() -> None:
     assert restic.parse_snapshots(b"null") == []
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["s3:key:secret@host/bucket", "rest:u@h/r", "s3:https://k:p@ss@h/b"],
+)
+def test_repository_userinfo_is_refused_with_or_without_scheme_separator(value: str) -> None:
+    with pytest.raises(BackupError) as caught:
+        restic.check_repository_value(value)
+    assert caught.value.code == "repository_has_credentials"
+
+
+def test_redact_hides_a_password_that_contains_an_at_sign() -> None:
+    out = restic.redact("open rest:https://anne:p@ss@nas/r failed", [])
+    assert "ss" not in out.replace("failed", "")
+    assert "anne" not in out
+    assert "rest:https://***@nas/r" in out
+
+
+def test_redact_hides_userinfo_without_a_scheme_separator() -> None:
+    out = restic.redact("Fatal: s3:key:secret@host/bucket unreachable", [])
+    assert "key" not in out
+    assert "secret" not in out
+    assert "s3:***@host/bucket" in out
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b"not json",
+        b'{"id": "a"}',
+        b"[1]",
+        b'[{"id": "a"}]',
+        b'[{"time": "2026-11-17T10:00:00Z"}]',
+        b'[{"id": "a", "time": "yesterday"}]',
+    ],
+)
+def test_parse_snapshots_of_garbage_fails_as_restic_failed(payload: bytes) -> None:
+    with pytest.raises(BackupError) as caught:
+        restic.parse_snapshots(payload)
+    assert caught.value.code == "restic_failed"

@@ -230,8 +230,10 @@ PROCRASTINATE_AUTODISCOVER_MODULE_NAME = "jobs"
 # Wraps every workspace's data key. Read lazily (apps.common.crypto.master_key), so
 # migrate and export_openapi run without it; the api and worker check it at start.
 BRIEVIE_MASTER_KEY: str = env.str("BRIEVIE_MASTER_KEY", default="")
-# Encrypted document files. A volume in Compose; never a path elsewhere in the code.
+# The restic binary for back-ups (apps.backup.restic).
 BRIEVIE_RESTIC_BINARY: str = env.str("BRIEVIE_RESTIC_BINARY", default="restic")
+
+# Encrypted document files. A volume in Compose; never a path elsewhere in the code.
 BRIEVIE_STORAGE_ROOT: str = env.str("BRIEVIE_STORAGE_ROOT", default="/data/documents")
 
 # Back-up destination (apps.backup.destination reads these lazily). The password is

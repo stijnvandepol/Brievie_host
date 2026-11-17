@@ -34,8 +34,10 @@ RETENTION = (
 CHECK_SUBSET = "5%"
 SUPPORTED_SCHEMES = ("rest:", "s3:")
 
-_USERINFO_IN_REPOSITORY = re.compile(r"^[a-z0-9+.-]+://[^/@]*@", re.IGNORECASE)
-_USERINFO_IN_TEXT = re.compile(r"([a-z][a-z0-9+.-]*)://[^/\s@]*@", re.IGNORECASE)
+_NESTED_SCHEME = re.compile(r"^[a-z0-9+.-]+://", re.IGNORECASE)
+# Greedy: a password may contain "@", so the userinfo ends at the last "@" of the authority.
+_USERINFO_IN_TEXT = re.compile(r"([a-z][a-z0-9+.-]*)://[^/\s]*@", re.IGNORECASE)
+_USERINFO_AFTER_PREFIX = re.compile(r"\b(rest:|s3:)[^/\s]*@", re.IGNORECASE)
 _MAX_STDERR = 2000
 _DEFAULT_PATH = "/usr/local/bin:/usr/bin:/bin"
 
@@ -67,7 +69,8 @@ def check_repository_value(value: str) -> None:
     scheme = next((s for s in SUPPORTED_SCHEMES if value.startswith(s)), None)
     if scheme is None:
         raise BackupError("repository_unsupported")
-    if _USERINFO_IN_REPOSITORY.match(value[len(scheme) :]):
+    rest = _NESTED_SCHEME.sub("", value[len(scheme) :])
+    if "@" in rest.split("/", 1)[0]:
         raise BackupError("repository_has_credentials")
 
 
@@ -154,6 +157,7 @@ def redact(text: str, secrets: Iterable[str]) -> str:
     for secret in sorted((s for s in secrets if s), key=len, reverse=True):
         text = text.replace(secret, "***")
     text = _USERINFO_IN_TEXT.sub(r"\1://***@", text)
+    text = _USERINFO_AFTER_PREFIX.sub(r"\1***@", text)
     return text[:_MAX_STDERR]
 
 
@@ -229,14 +233,19 @@ def summary_bytes(stdout: bytes) -> int:
 
 def parse_snapshots(stdout: bytes) -> list[Snapshot]:
     """Snapshots of `restic snapshots --json`, newest first."""
-    records = json.loads(stdout) or []
-    snapshots = [
-        Snapshot(
-            id=str(record["id"]),
-            time=datetime.fromisoformat(str(record["time"])),
-            tags=tuple(record.get("tags") or ()),
-            paths=tuple(record.get("paths") or ()),
-        )
-        for record in records
-    ]
+    try:
+        records = json.loads(stdout) or []
+        if not isinstance(records, list):
+            raise BackupError("restic_failed")
+        snapshots = [
+            Snapshot(
+                id=str(record["id"]),
+                time=datetime.fromisoformat(str(record["time"])),
+                tags=tuple(record.get("tags") or ()),
+                paths=tuple(record.get("paths") or ()),
+            )
+            for record in records
+        ]
+    except (ValueError, KeyError, TypeError, AttributeError) as error:
+        raise BackupError("restic_failed") from error
     return sorted(snapshots, key=lambda snapshot: snapshot.time, reverse=True)
