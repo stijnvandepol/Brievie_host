@@ -346,7 +346,11 @@ function LabelsPage() {
     <Shell workspace={workspace}>
       <PageHeader
         title={t`Labels`}
-        description={t`Met labels zet je orde in je post, bijvoorbeeld Belasting of Zorg.`}
+        description={
+          showPreset
+            ? t`Met labels zet je orde in je post, bijvoorbeeld Belasting of Zorg. Met de startset krijg je in één keer de gebruikelijke labels.`
+            : t`Met labels zet je orde in je post, bijvoorbeeld Belasting of Zorg.`
+        }
         commands={
           canEdit ? (
             <>

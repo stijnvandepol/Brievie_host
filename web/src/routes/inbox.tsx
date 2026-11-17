@@ -121,7 +121,12 @@ function InboxList({
   if (documents.data.length === 0) {
     return (
       <section className="panel" ref={emptyPanel} tabIndex={-1}>
-        <EmptyState icon="success">{t`Hier is niets te doen.`}</EmptyState>
+        <EmptyState
+          icon="success"
+          hint={t`Komt er een brief binnen die je moet controleren of op een naam moet zetten, dan staat die hier.`}
+        >
+          {t`Hier is niets te doen.`}
+        </EmptyState>
       </section>
     );
   }

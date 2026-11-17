@@ -730,6 +730,10 @@ msgstr "Klaar"
 msgid "Kleur"
 msgstr "Kleur"
 
+#: src/routes/inbox.tsx
+msgid "Komt er een brief binnen die je moet controleren of op een naam moet zetten, dan staat die hier."
+msgstr "Komt er een brief binnen die je moet controleren of op een naam moet zetten, dan staat die hier."
+
 #: src/routes/pair-app.tsx
 msgid "Kopieer koppelgegevens"
 msgstr "Kopieer koppelgegevens"
@@ -834,6 +838,10 @@ msgstr "Menu"
 #: src/routes/labels.tsx
 msgid "Met labels zet je orde in je post, bijvoorbeeld Belasting of Zorg."
 msgstr "Met labels zet je orde in je post, bijvoorbeeld Belasting of Zorg."
+
+#: src/routes/labels.tsx
+msgid "Met labels zet je orde in je post, bijvoorbeeld Belasting of Zorg. Met de startset krijg je in één keer de gebruikelijke labels."
+msgstr "Met labels zet je orde in je post, bijvoorbeeld Belasting of Zorg. Met de startset krijg je in één keer de gebruikelijke labels."
 
 #: src/routes/login.tsx
 msgid "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."

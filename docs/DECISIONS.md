@@ -657,12 +657,15 @@ product name or icon is used. Behaviour, routes, API calls and roles are unchang
 - **Layout.** A 48 px app bar (menu button, mark and name, account menu with the name,
   e-mail address and "Uitloggen"), a navigation pane with icon and name and a brand bar on
   the selected page, then the page: title, optional breadcrumb (document and rule editor),
-  a short description and a command bar (main action first, the rest as subtle buttons).
+  a short description and a command bar (a plain row: main action first, the rest as
+  subtle buttons).
   The pane folds to a 48 px icon rail with the menu button (remembered in `localStorage`,
   wrapped in try/catch); below 1200 px it is a rail by default and opens over the page;
   below 640 px it is hidden and opens as a drawer (Escape or a click on the backdrop
   closes it; it is not a focus trap). Tables are a details list: 36 px header, 40 px rows,
-  row hover, no sort arrows (nothing sorts).
+  row hover, no sort arrows (nothing sorts). On a phone (below 640 px) the post list is a
+  card per letter (sender, status, kind, date, persons, labels) instead of a table that
+  scrolls sideways.
 - **Icons.** Our own line icons (`web/src/components/icons.tsx`): 20 px, 1.5 px stroke,
   inline SVG, always `aria-hidden` next to a text. Dropped: `@fluentui/react-icons`
   (a dependency for some twenty icons, and its look is Microsoft's own).

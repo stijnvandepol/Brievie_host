@@ -743,16 +743,13 @@ q {
   color: var(--neutral-fg3);
 }
 
-/* Main action first, then quieter ones; wraps on a narrow screen. */
+/* Main action first, then quieter ones; wraps on a narrow screen. A plain row: a bar
+   around one or two buttons only adds weight. */
 .command-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--s-xs);
-  padding: var(--s-xs);
-  border-radius: var(--radius-medium);
-  background: var(--neutral-bg1);
-  box-shadow: var(--shadow2);
+  gap: var(--s-s);
 }
 
 .header-actions,
@@ -1593,6 +1590,47 @@ input[type="checkbox"]:checked:disabled {
 }
 
 .cell-hint {
+  color: var(--neutral-fg3);
+}
+
+/* Letters on a phone: a card per letter instead of a seven-column table. */
+
+.letter-cards {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.letter-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-xs);
+  padding: var(--s-m) var(--s-l);
+}
+
+.letter-card + .letter-card {
+  border-top: 1px solid var(--neutral-stroke2);
+}
+
+.letter-card-top {
+  align-self: stretch;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--s-s);
+}
+
+.letter-card-sender {
+  color: var(--neutral-fg1);
+  font-weight: var(--weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.letter-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-m);
   color: var(--neutral-fg3);
 }
 

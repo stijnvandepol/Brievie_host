@@ -1,5 +1,5 @@
 import { t } from "@lingui/core/macro";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Icon, type IconName } from "./icons";
 
 /** The four kinds of message and status, each with its own icon: colour is never the only signal. */
@@ -120,4 +120,20 @@ export function Personas({ people }: { people: { id: string; name: string }[] })
       ))}
     </span>
   );
+}
+
+/** Whether a media query matches, kept up to date; `fallback` where the browser cannot say (tests). */
+export function useMediaQuery(query: string, fallback = false): boolean {
+  const [matches, setMatches] = useState(() =>
+    typeof window.matchMedia === "function" ? window.matchMedia(query).matches : fallback,
+  );
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const list = window.matchMedia(query);
+    const update = () => setMatches(list.matches);
+    update();
+    list.addEventListener("change", update);
+    return () => list.removeEventListener("change", update);
+  }, [query]);
+  return matches;
 }

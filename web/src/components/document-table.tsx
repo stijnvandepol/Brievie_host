@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import type { components } from "../api/schema";
 import { LabelChips } from "./label-chip";
 import { SuggestionMark } from "./suggestion-list";
-import { Badge, EmptyState, type Intent, Personas } from "./ui";
+import { Badge, EmptyState, type Intent, Personas, useMediaQuery } from "./ui";
 
 type DocumentSummary = components["schemas"]["DocumentSummaryOut"];
 type Person = components["schemas"]["PersonOut"];
@@ -95,6 +95,8 @@ export function formatLetterDate(value: string): string {
   return date.format(new Date(`${value}T12:00:00`));
 }
 
+const PHONE = "(max-width: 639px)";
+
 /** The post of one workspace: a row per document, the sender links to the document. */
 export function DocumentTable({
   workspaceId,
@@ -113,12 +115,48 @@ export function DocumentTable({
   /** What to do about an empty list, in a sentence. */
   hint?: string;
 }) {
+  // A phone shows a card per letter: seven columns do not fit, and a sideways scroll hides
+  // the status. Tests (no media queries) and wider screens get the table.
+  const phone = useMediaQuery(PHONE);
   if (documents.length === 0) {
     return (
       <section className="panel" aria-label={t`Post`}>
         <EmptyState icon="mail" hint={hint}>
           {empty}
         </EmptyState>
+      </section>
+    );
+  }
+  if (phone) {
+    return (
+      <section className="panel" aria-label={t`Post`}>
+        <ul className="letter-cards">
+          {documents.map((document) => (
+            <li key={document.id} className="letter-card">
+              <div className="letter-card-top">
+                <Link
+                  to="/w/$workspaceId/post/$documentId"
+                  params={{ workspaceId, documentId: document.id }}
+                  className="letter-card-sender"
+                >
+                  {document.sender || t`Onbekende afzender`}
+                </Link>
+                <StatusBadge status={document.status} />
+              </div>
+              <p className="letter-card-meta">
+                <span>{typeLabel(document.document_type)}</span>
+                {document.letter_date ? (
+                  <span className="num">{formatLetterDate(document.letter_date)}</span>
+                ) : null}
+              </p>
+              <Addressees persons={persons} ids={document.addressee_ids ?? []} />
+              <span className="cell-badges">
+                <LabelChips labels={labels} ids={document.label_ids ?? []} />
+                <SuggestionMark count={document.open_suggestion_count} />
+              </span>
+            </li>
+          ))}
+        </ul>
       </section>
     );
   }
