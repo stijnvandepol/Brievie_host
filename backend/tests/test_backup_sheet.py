@@ -98,3 +98,87 @@ def test_sheet_command_logs_nothing(
     assert GROUPED in out.out
     assert KEY_HEX not in out.err
     assert GROUPED not in out.err
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["change-me-later", "  ", "", "  change-me  ", "5A" * 32],
+)
+def test_no_second_line_for_placeholder_blank_or_derived_value(
+    settings: object, value: str
+) -> None:
+    if value == "5A" * 32:
+        value = crypto.derive_backup_password(crypto.master_key()).upper()
+    settings.BRIEVIE_BACKUP_PASSWORD = value  # type: ignore[attr-defined]
+    data = sheet.sheet_data()
+    assert data.separate_password is None
+    assert "Apart wachtwoord" not in sheet.render_sheet(data)
+
+
+def test_separate_password_is_stripped(settings: object) -> None:
+    settings.BRIEVIE_BACKUP_PASSWORD = "  eigen  "  # type: ignore[attr-defined]
+    assert sheet.sheet_data().separate_password == "eigen"
+
+
+def test_hex_separate_password_is_grouped_and_wraps(settings: object) -> None:
+    settings.BRIEVIE_BACKUP_PASSWORD = "ab12" * 16  # type: ignore[attr-defined]
+    html = sheet.render_sheet(sheet.sheet_data())
+    assert " ".join(["ab12"] * 16) in html
+    assert 'class="key password"' in html
+    assert "overflow-wrap: anywhere" in html
+
+
+def test_non_hex_separate_password_is_shown_as_is(settings: object) -> None:
+    settings.BRIEVIE_BACKUP_PASSWORD = "Geheim-Wachtwoord-123"  # type: ignore[attr-defined]
+    html = sheet.render_sheet(sheet.sheet_data())
+    assert 'class="key password"' in html
+    assert "Geheim-Wachtwoord-123" in html
+
+
+def test_repr_hides_key_and_password(settings: object) -> None:
+    settings.BRIEVIE_BACKUP_PASSWORD = "eigen-wachtwoord-1"  # type: ignore[attr-defined]
+    text = repr(sheet.sheet_data())
+    assert "5a5a" not in text
+    assert "eigen-wachtwoord-1" not in text
+
+
+def test_repository_with_credentials_is_not_shown(settings: object) -> None:
+    settings.BRIEVIE_BACKUP_REPOSITORY = "rest:https://u:p@h/r"  # type: ignore[attr-defined]
+    html = sheet.render_sheet(sheet.sheet_data())
+    assert "Nog niet ingesteld" in html
+    assert "u:p" not in html
+
+
+def test_text_names_both_secrets_only_with_a_separate_password(settings: object) -> None:
+    plain = sheet.render_sheet(sheet.sheet_data())
+    assert "Zonder deze sleutel kan niemand de back-up openen." in plain
+    assert "het aparte wachtwoord" not in plain
+    assert "./brievie restore" in plain
+    assert "Herstel gelukt." in plain
+
+    settings.BRIEVIE_BACKUP_PASSWORD = "eigen-wachtwoord-1"  # type: ignore[attr-defined]
+    both = sheet.render_sheet(sheet.sheet_data())
+    assert (
+        "Zonder deze sleutel en het aparte wachtwoord kan niemand de back-up openen. "
+        "De makers van Brievie ook niet."
+    ) in both
+    assert "vraagt dan om twee dingen" in both
+    assert "./brievie restore" in both
+    assert "Herstel gelukt." in both
+
+
+def test_date_is_dutch_even_when_another_language_is_active() -> None:
+    from django.utils import translation
+
+    data = sheet.SheetData(
+        hostname="h",
+        created_on=date(2026, 3, 5),
+        master_key_groups=GROUPED,
+        separate_password=None,
+        authority_sha256=None,
+        destination="x",
+        restore_steps=[],
+    )
+    with translation.override("en"):
+        html = sheet.render_sheet(data)
+    assert "5 maart 2026" in html
