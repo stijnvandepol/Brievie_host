@@ -19,7 +19,9 @@ import { ApiFailure, api } from "../api/client";
 import { membersQuery, personsQuery } from "../api/queries";
 import type { components } from "../api/schema";
 import { ExternalAiNotice } from "../components/external-ai-notice";
-import { ErrorAlert, focusPageHeading, Shell, usePageTitle } from "../components/page";
+import { Icon } from "../components/icons";
+import { ErrorAlert, focusPageHeading, PageHeader, Shell, usePageTitle } from "../components/page";
+import { Badge, Loading, Persona } from "../components/ui";
 import { workspaceRoute } from "./workspace";
 
 type Person = components["schemas"]["PersonOut"];
@@ -184,59 +186,66 @@ function PersonRow({
   return (
     <tr>
       <th scope="row" className="cell-strong">
-        {person.display_name}
-        {person.archived ? <span className="tag">{t`Gearchiveerd`}</span> : null}
+        <span className="cell-with-badge">
+          <Persona name={person.display_name} />
+          {person.archived ? <Badge>{t`Gearchiveerd`}</Badge> : null}
+        </span>
       </th>
       <td>{person.name_variants.join(", ")}</td>
       <td>{account?.name ?? ""}</td>
       <td className="num">{person.document_count}</td>
       <td className="cell-action">
-        {canEdit ? (
-          <>
-            <Button
-              className="button-text"
-              aria-label={t`Wijzigen: ${person.display_name}`}
-              onPress={onEdit}
+        <span className="row-actions">
+          {canEdit ? (
+            <>
+              <Button
+                className="button-text"
+                aria-label={t`Wijzigen: ${person.display_name}`}
+                onPress={onEdit}
+              >
+                <Icon name="edit" />
+                {t`Wijzigen`}
+              </Button>
+              {person.archived ? (
+                <Button
+                  className="button-text"
+                  aria-label={t`Terugzetten: ${person.display_name}`}
+                  onPress={() => archive.mutate(false)}
+                >
+                  <Icon name="restore" />
+                  {t`Terugzetten`}
+                </Button>
+              ) : (
+                <Button
+                  className="button-text"
+                  aria-label={t`Archiveren: ${person.display_name}`}
+                  onPress={() => archive.mutate(true)}
+                >
+                  <Icon name="archive" />
+                  {t`Archiveren`}
+                </Button>
+              )}
+              <DeleteButton person={person} onConfirm={() => remove.mutate()} />
+            </>
+          ) : null}
+          {canLink ? (
+            <select
+              className="inline-select"
+              aria-label={t`Koppel aan account: ${person.display_name}`}
+              value=""
+              onChange={(event) => {
+                if (event.target.value) link.mutate(event.target.value);
+              }}
             >
-              {t`Wijzigen`}
-            </Button>
-            {person.archived ? (
-              <Button
-                className="button-text"
-                aria-label={t`Terugzetten: ${person.display_name}`}
-                onPress={() => archive.mutate(false)}
-              >
-                {t`Terugzetten`}
-              </Button>
-            ) : (
-              <Button
-                className="button-text"
-                aria-label={t`Archiveren: ${person.display_name}`}
-                onPress={() => archive.mutate(true)}
-              >
-                {t`Archiveren`}
-              </Button>
-            )}
-            <DeleteButton person={person} onConfirm={() => remove.mutate()} />
-          </>
-        ) : null}
-        {canLink ? (
-          <select
-            className="inline-select"
-            aria-label={t`Koppel aan account: ${person.display_name}`}
-            value=""
-            onChange={(event) => {
-              if (event.target.value) link.mutate(event.target.value);
-            }}
-          >
-            <option value="">{t`Kies een account`}</option>
-            {free.map((member) => (
-              <option key={member.user_id} value={member.user_id}>
-                {member.name}
-              </option>
-            ))}
-          </select>
-        ) : null}
+              <option value="">{t`Kies een account`}</option>
+              {free.map((member) => (
+                <option key={member.user_id} value={member.user_id}>
+                  {member.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
+        </span>
       </td>
     </tr>
   );
@@ -251,6 +260,7 @@ function DeleteButton({ person, onConfirm }: { person: Person; onConfirm: () => 
         aria-label={t`Verwijderen: ${person.display_name}`}
         onPress={() => setOpen(true)}
       >
+        <Icon name="delete" />
         {t`Verwijderen`}
       </Button>
       <ModalOverlay isOpen={open} onOpenChange={setOpen} isDismissable className="overlay">
@@ -292,22 +302,26 @@ function PersonsPage() {
 
   return (
     <Shell workspace={workspace}>
-      <header className="page-header">
-        <h1>{t`Personen`}</h1>
-        {canEdit ? (
-          <Button
-            className="button"
-            onPress={() => {
-              setRowError(null);
-              setEditing("new");
-            }}
-          >
-            {t`Persoon toevoegen`}
-          </Button>
-        ) : null}
-      </header>
+      <PageHeader
+        title={t`Personen`}
+        description={t`De mensen op wiens naam post binnenkomt. Brievie herkent ze aan hun naam en naamvarianten.`}
+        commands={
+          canEdit ? (
+            <Button
+              className="button"
+              onPress={() => {
+                setRowError(null);
+                setEditing("new");
+              }}
+            >
+              <Icon name="add" />
+              {t`Persoon toevoegen`}
+            </Button>
+          ) : null
+        }
+      />
       <ExternalAiNotice workspaceId={workspace.id} />
-      {persons.isPending ? <p>{t`Even laden...`}</p> : null}
+      {persons.isPending ? <Loading /> : null}
       <ErrorAlert error={persons.error ?? members.error ?? rowError} />
       {persons.data ? (
         // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrolling box must be reachable by keyboard (WCAG 2.1.1).

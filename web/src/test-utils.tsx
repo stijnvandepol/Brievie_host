@@ -6,6 +6,7 @@ import { HttpResponse, http } from "msw";
 import type { components } from "./api/schema";
 import { i18n } from "./i18n";
 import { createAppRouter } from "./router";
+import { trackApp } from "./test-apps";
 import { server } from "./test-server";
 
 export const API = "/api/v1";
@@ -66,6 +67,7 @@ export function errorBody(code: string, message: string) {
 export function renderApp(path: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createAppRouter(queryClient, createMemoryHistory({ initialEntries: [path] }));
+  trackApp({ router, queryClient });
   render(
     <I18nProvider i18n={i18n}>
       <QueryClientProvider client={queryClient}>

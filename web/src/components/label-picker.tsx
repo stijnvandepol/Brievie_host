@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button, ListBox, ListBoxItem, Popover, Select, SelectValue } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import type { components } from "../api/schema";
+import { Icon } from "./icons";
 import { LabelChip } from "./label-chip";
 
 type Label = components["schemas"]["LabelOut"];
@@ -30,7 +31,7 @@ export function LabelPicker({
       className="picker"
     >
       <Button className="picker-button">
-        <SelectValue>
+        <SelectValue className="picker-value">
           {selected.length > 0 ? (
             <span className="label-chips">
               {selected.map((label) => (
@@ -41,6 +42,7 @@ export function LabelPicker({
             t`Geen`
           )}
         </SelectValue>
+        <Icon name="chevronDown" className="picker-chevron" />
       </Button>
       <Popover className="picker-popover">
         <ListBox className="picker-list" items={labels}>

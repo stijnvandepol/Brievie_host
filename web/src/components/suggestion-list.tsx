@@ -3,7 +3,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import type { components } from "../api/schema";
+import { Icon } from "./icons";
 import { ErrorAlert } from "./page";
+import { Badge } from "./ui";
 
 type Document = components["schemas"]["DocumentOut"];
 type Suggestion = components["schemas"]["SuggestionOut"];
@@ -109,19 +111,21 @@ export function SuggestionList({
             {canEdit ? (
               <div className="suggestion-actions">
                 <Button
-                  className="button-text"
+                  className="button small"
                   aria-label={t`Toevoegen: ${text}`}
                   isDisabled={disabled}
                   onPress={() => answer.mutate({ id: suggestion.id, verb: "accept" })}
                 >
+                  <Icon name="checkmark" />
                   {t`Toevoegen`}
                 </Button>
                 <Button
-                  className="button-text"
+                  className="button secondary small"
                   aria-label={t`Negeren: ${text}`}
                   isDisabled={disabled}
                   onPress={() => answer.mutate({ id: suggestion.id, verb: "dismiss" })}
                 >
+                  <Icon name="dismiss" />
                   {t`Negeren`}
                 </Button>
               </div>
@@ -137,5 +141,9 @@ export function SuggestionList({
 /** The mark in a list for a letter with open suggestions. */
 export function SuggestionMark({ count }: { count: number }) {
   if (count <= 0) return null;
-  return <span className="tag">{t`voorstel`}</span>;
+  return (
+    <Badge intent="brand" icon="lightbulb">
+      {t`voorstel`}
+    </Badge>
+  );
 }

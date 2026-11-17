@@ -82,6 +82,8 @@ describe("setup", () => {
     await fillIn(u);
     await u.click(screen.getByRole("button", { name: /^start/i }));
     await waitFor(() => expect(body.workspace_kind).toBe("business"));
+    // Setting up lands on the workspace list; wait for it, so no navigation outlives the test.
+    expect(await screen.findByRole("heading", { level: 1, name: /werkruimtes/i })).toBeVisible();
   });
 
   it("asks for departments with Zakelijk and sends them as extra labels", async () => {
@@ -106,6 +108,8 @@ describe("setup", () => {
     await fillIn(u);
     await u.click(screen.getByRole("button", { name: /^start/i }));
     await waitFor(() => expect(body.extra_labels).toEqual(["Sales", "Finance", "HR"]));
+    // Setting up lands on the workspace list; wait for it, so no navigation outlives the test.
+    expect(await screen.findByRole("heading", { level: 1, name: /werkruimtes/i })).toBeVisible();
   });
 
   it("sends no extra labels when Thuis is chosen after typing departments", async () => {
@@ -127,6 +131,8 @@ describe("setup", () => {
     await fillIn(u);
     await u.click(screen.getByRole("button", { name: /^start/i }));
     await waitFor(() => expect(body.extra_labels).toEqual([]));
+    // Setting up lands on the workspace list; wait for it, so no navigation outlives the test.
+    expect(await screen.findByRole("heading", { level: 1, name: /werkruimtes/i })).toBeVisible();
   });
 
   it("shows the server message for a wrong installation code and stays on the form", async () => {
@@ -173,6 +179,8 @@ describe("setup", () => {
     await u.type(screen.getByRole("textbox", { name: /installatiecode/i }), "  ");
     await u.click(screen.getByRole("button", { name: /^start/i }));
     await waitFor(() => expect(body.setup_token).toBe("abc-def"));
+    // Setting up lands on the workspace list; wait for it, so no navigation outlives the test.
+    expect(await screen.findByRole("heading", { level: 1, name: /werkruimtes/i })).toBeVisible();
   });
 
   it("explains where to find the installation code", async () => {

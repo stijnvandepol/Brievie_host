@@ -7,9 +7,10 @@ import { documentsQuery, inboxCountsQuery, labelsQuery, personsQuery } from "../
 import type { components } from "../api/schema";
 import { formatLetterDate, typeLabel } from "../components/document-table";
 import { LabelChips } from "../components/label-chip";
-import { ErrorAlert, Shell, usePageTitle } from "../components/page";
+import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
 import { PersonPicker, useSetAddressees } from "../components/person-picker";
 import { SuggestionMark } from "../components/suggestion-list";
+import { EmptyState, Loading } from "../components/ui";
 import { workspaceRoute } from "./workspace";
 
 type DocumentSummary = components["schemas"]["DocumentSummaryOut"];
@@ -55,8 +56,10 @@ function InboxRow({
       <td>{typeLabel(document.document_type)}</td>
       <td className="num">{document.letter_date ? formatLetterDate(document.letter_date) : ""}</td>
       <td>
-        <LabelChips labels={labels} ids={document.label_ids ?? []} />{" "}
-        <SuggestionMark count={document.open_suggestion_count} />
+        <span className="cell-badges">
+          <LabelChips labels={labels} ids={document.label_ids ?? []} />
+          <SuggestionMark count={document.open_suggestion_count} />
+        </span>
       </td>
       <td>
         {tab === "unassigned" ? (
@@ -70,8 +73,12 @@ function InboxRow({
             <ErrorAlert error={setAddressees.error} />
           </>
         ) : null}
-        {tab === "review" ? t`Controleer deze brief in de app.` : null}
-        {tab === "new" ? t`Deze brief wordt nog gelezen.` : null}
+        {tab === "review" ? (
+          <span className="cell-hint">{t`Controleer deze brief in de app.`}</span>
+        ) : null}
+        {tab === "new" ? (
+          <span className="cell-hint">{t`Deze brief wordt nog gelezen.`}</span>
+        ) : null}
       </td>
     </tr>
   );
@@ -109,12 +116,17 @@ function InboxList({
     const row = body.current?.querySelectorAll("tr")[Math.min(pending.index, data.length - 1)];
     row?.querySelector<HTMLElement>(".picker-button")?.focus();
   }, [data, isFetching]);
-  if (documents.isPending) return <p>{t`Even laden...`}</p>;
+  if (documents.isPending) return <Loading />;
   if (documents.error) return <ErrorAlert error={documents.error} />;
   if (documents.data.length === 0) {
     return (
       <section className="panel" ref={emptyPanel} tabIndex={-1}>
-        <p className="panel-note">{t`Hier is niets te doen.`}</p>
+        <EmptyState
+          icon="success"
+          hint={t`Komt er een brief binnen die je moet controleren of op een naam moet zetten, dan staat die hier.`}
+        >
+          {t`Hier is niets te doen.`}
+        </EmptyState>
       </section>
     );
   }
@@ -183,9 +195,10 @@ function InboxPage() {
 
   return (
     <Shell workspace={workspace}>
-      <header className="page-header">
-        <h1>{t`Inbox`}</h1>
-      </header>
+      <PageHeader
+        title={t`Inbox`}
+        description={t`Post die op jou wacht: brieven om te controleren of op een naam te zetten.`}
+      />
       <ErrorAlert error={error} />
       {tab && counts ? (
         <Tabs
@@ -202,7 +215,7 @@ function InboxPage() {
           <TabList aria-label={t`Inbox`} className="tabs">
             {TABS.map((id) => (
               <Tab key={id} id={id} className="tab">
-                {labels[id]} <span className="tag">{counts[id]}</span>
+                {labels[id]} <span className="tab-count">{counts[id]}</span>
               </Tab>
             ))}
           </TabList>
@@ -216,7 +229,7 @@ function InboxPage() {
           </TabPanel>
         </Tabs>
       ) : (
-        !error && <p>{t`Even laden...`}</p>
+        !error && <Loading />
       )}
     </Shell>
   );

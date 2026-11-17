@@ -18,6 +18,17 @@ import {
 const path = `/w/${workspace.id}/inbox`;
 const base = `*${API}/workspaces/${workspace.id}`;
 
+type App = ReturnType<typeof renderApp>;
+
+/**
+ * Waits until the inbox has written its tab into the URL and that navigation has finished.
+ * The inbox does that by itself after loading; a test that ends before it would leave a
+ * navigation running that lands after the test.
+ */
+async function onTab({ router }: App, tab: string) {
+  await waitFor(() => expect(router.state.resolvedLocation?.search).toEqual({ tab }));
+}
+
 function counts(value: { new: number; review: number; unassigned: number }) {
   return http.get(`${base}/inbox/counts`, () => HttpResponse.json(value));
 }
@@ -30,11 +41,12 @@ describe("inbox", () => {
       ...personHandlers(),
       http.get(`${base}/documents`, () => HttpResponse.json([documentSummary])),
     );
-    renderApp(path);
+    const app = renderApp(path);
     const selected = await screen.findByRole("tab", { name: /Op niemands naam/, selected: true });
     expect(selected).toHaveTextContent("2");
     expect(screen.getByRole("tab", { name: /Te controleren/ })).toHaveTextContent("0");
     expect(screen.getByRole("tab", { name: /Nieuw/ })).toHaveTextContent("1");
+    await onTab(app, "unassigned");
   });
 
   it("honours the tab in the URL", async () => {
@@ -62,9 +74,9 @@ describe("inbox", () => {
       http.get(`${base}/documents`, () => HttpResponse.json([])),
     );
     const user = userEvent.setup();
-    const { router } = renderApp(path);
+    const app = renderApp(path);
     await user.click(await screen.findByRole("tab", { name: /Op niemands naam/ }));
-    await waitFor(() => expect(router.state.location.search).toEqual({ tab: "unassigned" }));
+    await onTab(app, "unassigned");
   });
 
   it("points a letter to review at the app", async () => {
@@ -76,8 +88,9 @@ describe("inbox", () => {
         HttpResponse.json([{ ...documentSummary, status: "needs_review" }]),
       ),
     );
-    renderApp(path);
+    const app = renderApp(path);
     expect(await screen.findByText("Controleer deze brief in de app.")).toBeInTheDocument();
+    await onTab(app, "review");
   });
 
   it("puts a letter on a name and removes the row", async () => {
@@ -116,11 +129,12 @@ describe("inbox labels and roles", () => {
         HttpResponse.json([{ ...documentSummary, label_ids: [belasting.id] }]),
       ),
     );
-    renderApp(path);
+    const app = renderApp(path);
     const row = (await screen.findByRole("link", { name: "Belastingdienst" })).closest("tr");
     expect(
       await within(row as HTMLElement).findByText("Belastingdienst", { selector: ".label-chip" }),
     ).toHaveClass("label-blue");
+    await onTab(app, "unassigned");
   });
 
   it("disables the person picker for a viewer", async () => {
@@ -131,8 +145,9 @@ describe("inbox labels and roles", () => {
       ...personHandlers(),
       http.get(`${base}/documents`, () => HttpResponse.json([documentSummary])),
     );
-    renderApp(path);
+    const app = renderApp(path);
     expect(await screen.findByRole("button", { name: /Op naam van/ })).toBeDisabled();
+    await onTab(app, "unassigned");
   });
 });
 
@@ -238,9 +253,9 @@ describe("inbox focus and URL", () => {
       ...personHandlers(),
       http.get(`${base}/documents`, () => HttpResponse.json([])),
     );
-    const { router } = renderApp(path);
-    await waitFor(() => expect(router.state.location.search).toEqual({ tab: "review" }));
-    expect(router.history.length).toBe(1);
+    const app = renderApp(path);
+    await onTab(app, "review");
+    expect(app.router.history.length).toBe(1);
   });
 
   it("keeps focus on the picker and shows the error when the PUT fails", async () => {

@@ -4,7 +4,8 @@ import { createRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { ApiFailure } from "../api/client";
 import { workspacesQuery } from "../api/queries";
-import { ErrorAlert, Shell, usePageTitle } from "../components/page";
+import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
+import { Badge, Loading } from "../components/ui";
 import { requireUser } from "../guards";
 import { rootRoute } from "./root";
 
@@ -47,10 +48,8 @@ function HomePage() {
 
   return (
     <Shell>
-      <header className="page-header">
-        <h1>{t`Werkruimtes`}</h1>
-      </header>
-      {isPending || only ? <p>{t`Even laden...`}</p> : null}
+      <PageHeader title={t`Werkruimtes`} description={t`Kies de werkruimte die je wilt openen.`} />
+      {isPending || only ? <Loading /> : null}
       <ErrorAlert error={error} />
       {data && !only ? (
         // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrolling box must be reachable by keyboard (WCAG 2.1.1).
@@ -74,7 +73,7 @@ function HomePage() {
                     </th>
                     <td>{kindLabel(workspace.kind)}</td>
                     <td>
-                      <span className="tag">{roleLabel(workspace.role)}</span>
+                      <Badge>{roleLabel(workspace.role)}</Badge>
                     </td>
                   </tr>
                 ))}

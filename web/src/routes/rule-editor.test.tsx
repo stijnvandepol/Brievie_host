@@ -59,6 +59,8 @@ describe("rule editor", () => {
       conditions: [{ field: "text", op: "contains_word", value: "APK" }],
       actions: [{ type: "add_label", label_id: sales.id }],
     });
+    // The save opens the saved rule: wait for that page, so no navigation outlives the test.
+    expect(await screen.findByRole("heading", { level: 1, name: "Regel wijzigen" })).toBeVisible();
   });
 
   it("resets the operator and value when the field changes", async () => {
@@ -378,6 +380,8 @@ describe("rule editor", () => {
         actions: [{ type: "add_addressee", person_id: papa.id }],
       }),
     );
+    // The save opens the saved rule: wait for that page, so no navigation outlives the test.
+    expect(await screen.findByRole("heading", { level: 1, name: "Regel wijzigen" })).toBeVisible();
   });
 
   it("clears the test result when the form is edited", async () => {
@@ -464,6 +468,8 @@ describe("rule editor", () => {
         ],
       }),
     );
+    // The save opens the saved rule: wait for that page, so no navigation outlives the test.
+    expect(await screen.findByRole("heading", { level: 1, name: "Regel wijzigen" })).toBeVisible();
   });
 
   it("sends nothing when there are no labels and no persons", async () => {

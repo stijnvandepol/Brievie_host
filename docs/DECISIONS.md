@@ -627,3 +627,66 @@ only reads the optional lists with `?? []`.
 1. `listRules` needs role `member`, as design 9.5 says (it was open to a viewer). Every other rules endpoint already needed `admin`. The web leaves Automatisering out of a viewer's navigation, and the rules pages do not ask a viewer's rules (a sentence instead of a 403 alert).
 2. `testRule` runs inside the request, so it has a hard budget: at most the first 100,000 characters of each document (`TEST_TEXT_CHARS`) and 2,000,000 characters in all (`TEST_TEXT_BUDGET`, about 0.7 s of normalising). It stops before the document that would go over; `checked_count` is the number of documents it checked, and the web already says "N van de nieuwste M" when that is below the total. Only the first characters are loaded from the database. No contract change apart from the operation's description. Processing a letter still evaluates its whole text (at most 30 pages of 20,000 characters, in a background job), so for a document longer than 100,000 characters the test can miss a match, or report a "does not contain" match, that the real run would see differently.
 3. Accepted, stays as is for now: before a document is confirmed, the sender and document type the AI proposed count as settled facts for rules, so a crafted letter can make an automatic rule on sender or type fire. The result is only a label or addressee from the workspace's own lists, and it can be undone. Label choices of the AI never trigger automatic rules.
+
+## 2026-11-17: web interface moves to the Fluent 2 design language
+
+The owner asked for a more enterprise look, "meer richting Microsoft". The web now follows
+Fluent 2 (the calm, dense look of Microsoft 365 admin, Azure portal and Outlook on the
+web) and keeps Brievie's own name, envelope-with-tick mark and navy. No Microsoft logo,
+product name or icon is used. Behaviour, routes, API calls and roles are unchanged.
+
+- **Tokens in one place.** Every colour, type size, radius, shadow and spacing step is a
+  custom property on `:root` at the top of `web/src/styles.css`; components use only
+  tokens. Type: the system stack led by `"Segoe UI Variable", "Segoe UI"`, no web font;
+  Fluent ramp (caption 12/16, body 14/20, subtitle 16/22, title 20/28, large title 28/36),
+  weights 400 and 600 only. 4 px spacing grid; radius 4 px (8 px on dialogs); Fluent
+  shadows (`shadow2`/`shadow4` on surfaces, `shadow16` on menus, `shadow64` on dialogs);
+  no gradients. Controls are 32 px high, 40 px on a touch screen (`pointer: coarse`).
+- **Brand colour.** Interactive elements (primary buttons, links, selection, focus) use
+  Fluent's brand blue ramp (`#0F6CBD`, hover `#115EA3`, pressed `#0C3B5E`, tint
+  `#EBF3FC`). Its hue (208°) is that of Brievie's navy (212°), so it reads as Brievie, and
+  white on it is 5.4:1. The navy `#16293F` stays for the app bar and the brand panel of the
+  login and setup screens. Dropped: the navy as the button colour (on navy chrome a navy
+  button disappears, and a second, lighter blue was needed for links and focus anyway).
+  Every text/background pair is checked for WCAG AA (lowest: white on `#0F6CBD`, 5.4:1;
+  secondary text `#616161` on `#F5F5F5`, 5.7:1; status, label and persona tints 5.9:1 or
+  more). Disabled text (`#BDBDBD`) is exempt, as WCAG allows.
+- **Status** in the Fluent way: success, warning, error and info as a tint, a border, a
+  darker text colour and an icon, never colour alone. Message bars replace the ad hoc
+  `alert` and `notice` blocks; badges replace `tag`.
+- **Layout.** A 48 px app bar (menu button, mark and name, account menu with the name,
+  e-mail address and "Uitloggen"), a navigation pane with icon and name and a brand bar on
+  the selected page, then the page: title, optional breadcrumb (document and rule editor),
+  a short description and a command bar (a plain row: main action first, the rest as
+  subtle buttons).
+  The pane folds to a 48 px icon rail with the menu button (remembered in `localStorage`,
+  wrapped in try/catch); below 1200 px it is a rail by default and opens over the page;
+  below 640 px it is hidden and opens as a drawer (Escape or a click on the backdrop
+  closes it; it is not a focus trap). Tables are a details list: 36 px header, 40 px rows,
+  row hover, no sort arrows (nothing sorts). On a phone (below 640 px) the post list is a
+  card per letter (sender, status, kind, date, persons, labels) instead of a table that
+  scrolls sideways.
+- **Icons.** Our own line icons (`web/src/components/icons.tsx`): 20 px, 1.5 px stroke,
+  inline SVG, always `aria-hidden` next to a text. Dropped: `@fluentui/react-icons`
+  (a dependency for some twenty icons, and its look is Microsoft's own).
+- **No component library.** React Aria Components stay for the accessible behaviour;
+  Fluent UI React (`@fluentui/react-components`) is not adopted. It would bring a good
+  data grid, combobox and dialog, but it styles through Griffel (CSS-in-JS that injects
+  `<style>` elements at runtime), which the strict CSP (`style-src 'self'`) blocks unless
+  styles are extracted at build time with an extra build plugin; it adds roughly 150 to
+  250 kB gzip, and every screen and its tests would be rewritten. Revisit when the data
+  grid needs sorting, column resizing or row selection.
+- **CSP.** No inline style or script was added: the select chevron and checkbox tick are
+  `data:` SVGs in the stylesheet (allowed by `img-src 'self' data:`). Checked in a browser
+  against a build served with the production CSP: no violations.
+- **Accessible names.** None changed. The account menu moves "Uitloggen" and the e-mail
+  address one click deeper (behind the button "Account"); two tests open the menu first.
+  New names: the button "Menu" (with `aria-expanded`), the dialog "Account" and the
+  breadcrumb navigation "Kruimelpad".
+- **Dark mode** is not built. The tokens are structured for it: a dark theme is one block
+  that redefines them under `prefers-color-scheme: dark` and `[data-theme="dark"]`.
+- **Dropped:** upper-case table headers and section labels (sentence case, as Fluent),
+  44 px controls on desktop (32 px, enterprise density; 40 px on touch), the full-height
+  navy sidebar, and an overflow menu in the command bar (the few commands wrap instead).
+- Screenshots of the post list, a document, the inbox and the rule builder at 1440, 1024
+  and 390 px are in `docs/ui/fluent/` (made-up letters and names).

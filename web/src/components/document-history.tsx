@@ -4,6 +4,7 @@ import { Button } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import { documentEventsQuery, meQuery } from "../api/queries";
 import type { components } from "../api/schema";
+import { Icon } from "./icons";
 import { ErrorAlert } from "./page";
 
 type DocumentEvent = components["schemas"]["DocumentEventOut"];
@@ -114,11 +115,13 @@ export function DocumentHistory({
         <ol className="history-list">
           {lines.map(({ event, text }) => (
             <li key={event.id}>
-              <span>{text}</span>
-              <time className="muted small" dateTime={event.created_at}>
-                {dateTime.format(new Date(event.created_at))}
-              </time>
-              {event.undone ? <span className="muted small">{t`Teruggedraaid`}</span> : null}
+              <span className="history-text">{text}</span>
+              <span className="history-meta">
+                <time dateTime={event.created_at}>
+                  {dateTime.format(new Date(event.created_at))}
+                </time>
+                {event.undone ? <span>{t`Teruggedraaid`}</span> : null}
+              </span>
               {canEdit && event.can_undo ? (
                 <Button
                   className="button-text"
@@ -126,6 +129,7 @@ export function DocumentHistory({
                   isDisabled={undo.isPending}
                   onPress={() => undo.mutate(event.id)}
                 >
+                  <Icon name="undo" />
                   {t`Terugdraaien`}
                 </Button>
               ) : null}
