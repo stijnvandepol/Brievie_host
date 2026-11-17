@@ -19,7 +19,7 @@ import { ApiFailure, api } from "../api/client";
 import { membersQuery, personsQuery } from "../api/queries";
 import type { components } from "../api/schema";
 import { ExternalAiNotice } from "../components/external-ai-notice";
-import { ErrorAlert, Shell, usePageTitle } from "../components/page";
+import { ErrorAlert, focusPageHeading, Shell, usePageTitle } from "../components/page";
 import { workspaceRoute } from "./workspace";
 
 type Person = components["schemas"]["PersonOut"];
@@ -157,7 +157,11 @@ function PersonRow({
       );
       if (!response.ok) throw new ApiFailure(error);
     },
-    onSuccess: refresh,
+    onSuccess: async () => {
+      await refresh();
+      // The dialog gave focus back to this row's button, which is gone now.
+      focusPageHeading();
+    },
     onError,
   });
   const link = useMutation({

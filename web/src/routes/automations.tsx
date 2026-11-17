@@ -6,7 +6,7 @@ import { Button, Dialog, Heading, Modal, ModalOverlay, Switch } from "react-aria
 import { ApiFailure, api } from "../api/client";
 import { labelsQuery, personsQuery, rulesQuery } from "../api/queries";
 import type { components } from "../api/schema";
-import { ErrorAlert, Shell, usePageTitle } from "../components/page";
+import { ErrorAlert, focusPageHeading, Shell, usePageTitle } from "../components/page";
 import { ruleSentence } from "../components/rule-sentence";
 import { workspaceRoute } from "./workspace";
 
@@ -110,7 +110,11 @@ function RuleItem({
       );
       if (!response.ok) throw new ApiFailure(error);
     },
-    onSuccess: refresh,
+    onSuccess: async () => {
+      await refresh();
+      // The dialog gave focus back to this row's button, which is gone now.
+      focusPageHeading();
+    },
     onError,
   });
 

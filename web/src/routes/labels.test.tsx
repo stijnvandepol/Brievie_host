@@ -129,6 +129,30 @@ describe("labels", () => {
     await waitFor(() => expect(deleted).toBe(true));
   });
 
+  it("moves focus to the page heading after a delete, as the row is gone", async () => {
+    let deleted = false;
+    server.use(
+      http.delete(`${base}/labels/${belasting.id}`, () => {
+        deleted = true;
+        return new HttpResponse(null, { status: 204 });
+      }),
+      http.get(`${base}/labels`, () => HttpResponse.json(deleted ? [sales] : [belasting, sales])),
+      ...loggedInHandlers(),
+      ...labelHandlers(),
+    );
+    const user = userEvent.setup();
+    renderApp(path);
+    await user.click(await screen.findByRole("button", { name: /Verwijderen: Belastingdienst/ }));
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: "Verwijderen" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /Verwijderen: Belastingdienst/ })).toBeNull(),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { level: 1, name: "Labels" })).toHaveFocus(),
+    );
+  });
+
   it("shows the server's sentence when a label is in use by a rule", async () => {
     server.use(
       http.delete(`${base}/labels/${sales.id}`, () =>

@@ -21,7 +21,7 @@ import { labelsQuery } from "../api/queries";
 import type { components } from "../api/schema";
 import { ExternalAiNotice } from "../components/external-ai-notice";
 import { colorName, LABEL_COLORS, LabelChip } from "../components/label-chip";
-import { ErrorAlert, Shell, usePageTitle } from "../components/page";
+import { ErrorAlert, focusPageHeading, Shell, usePageTitle } from "../components/page";
 import { workspaceRoute } from "./workspace";
 
 type LabelOut = components["schemas"]["LabelOut"];
@@ -284,6 +284,8 @@ function LabelRow({
     onSuccess: async () => {
       onDone();
       await refresh();
+      // The dialog gave focus back to this row's button, which is gone now.
+      focusPageHeading();
     },
     onError,
   });

@@ -13,6 +13,16 @@ export function usePageTitle(title: string) {
   }, [title]);
 }
 
+/** Moves keyboard and screen reader focus to the page's title (`h1`), for example after
+ * the element that had focus went away with a deleted row. */
+export function focusPageHeading() {
+  const heading = document.querySelector("h1");
+  if (heading) {
+    heading.tabIndex = -1;
+    heading.focus();
+  }
+}
+
 /** The envelope mark; decorative, the word next to it names the product. */
 function BrandMark() {
   // The tick is the flap of the envelope: it is punched out where it crosses the envelope
