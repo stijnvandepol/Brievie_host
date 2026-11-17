@@ -10,11 +10,12 @@ from django.core.exceptions import (
     SuspiciousOperation,
 )
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import transaction
+from django.db import OperationalError, transaction
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.utils.translation import gettext as _
 from ninja import NinjaAPI
 from ninja.errors import HttpError, Throttled, ValidationError
+from psycopg import errors as pg_errors
 
 from apps.common.schemas import ErrorOut
 
@@ -122,6 +123,20 @@ def install_error_handlers(api: NinjaAPI) -> None:
         message = _("Er ging iets mis op de server. Probeer het later opnieuw.")
         return error_response(500, "internal_error", message)
 
+    def handle_operational_error(request: HttpRequest, exc: OperationalError) -> JsonResponse:
+        # A deadlock or serialization failure: two changes met (for example deleting a
+        # label while a rule runs). PostgreSQL aborted this one; trying again works.
+        if not isinstance(
+            exc.__cause__, pg_errors.DeadlockDetected | pg_errors.SerializationFailure
+        ):
+            return handle_unexpected_error(request, exc)
+        transaction.set_rollback(True)
+        logger.warning(
+            "Conflict in %s %s: %s", request.method, request.path, type(exc.__cause__).__name__
+        )
+        message = _("Dit lukte niet door een andere wijziging. Probeer het opnieuw.")
+        return error_response(409, "try_again", message)
+
     # Ninja types the handler argument as "instance or class"; it always passes an instance.
     api.add_exception_handler(ApiError, handle_api_error)  # type: ignore[arg-type]
     api.add_exception_handler(HttpError, handle_http_error)  # type: ignore[arg-type]
@@ -133,6 +148,7 @@ def install_error_handlers(api: NinjaAPI) -> None:
     api.add_exception_handler(RequestDataTooBig, handle_request_data_too_big)
     api.add_exception_handler(PermissionDenied, handle_permission_denied)
     api.add_exception_handler(DjangoValidationError, handle_model_validation_error)  # type: ignore[arg-type]
+    api.add_exception_handler(OperationalError, handle_operational_error)  # type: ignore[arg-type]
     api.add_exception_handler(Exception, handle_unexpected_error)
 
 

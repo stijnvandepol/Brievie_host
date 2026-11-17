@@ -7,10 +7,12 @@ from django.core.exceptions import (
     SuspiciousOperation,
     ValidationError,
 )
+from django.db import OperationalError
 from django.http import Http404, HttpRequest
 from django.urls import path
 from ninja import NinjaAPI, Schema
 from ninja.errors import AuthenticationError, AuthorizationError, HttpError, Throttled
+from psycopg import errors as pg_errors
 
 from apps.common.errors import ApiError, install_error_handlers
 from apps.workspaces.models import Workspace
@@ -87,6 +89,29 @@ def permission_denied(request: HttpRequest) -> None:
 @errors_api.get("/model-validation", auth=None)
 def model_validation(request: HttpRequest) -> None:
     raise ValidationError({"name": ValidationError("Een map heeft een naam nodig.", code="blank")})
+
+
+def _database_failure(cause: Exception) -> None:
+    Workspace.objects.create(name="Half af", kind="home")
+    try:
+        raise cause
+    except Exception as exc:
+        raise OperationalError(str(exc)) from exc
+
+
+@errors_api.get("/deadlock", auth=None)
+def deadlock(request: HttpRequest) -> None:
+    _database_failure(pg_errors.DeadlockDetected("deadlock detected"))
+
+
+@errors_api.get("/serialization", auth=None)
+def serialization(request: HttpRequest) -> None:
+    _database_failure(pg_errors.SerializationFailure("could not serialize access"))
+
+
+@errors_api.get("/database-down", auth=None)
+def database_down(request: HttpRequest) -> None:
+    _database_failure(RuntimeError("connection lost"))
 
 
 urlpatterns = [path("api/", errors_api.urls)]

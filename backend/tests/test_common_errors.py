@@ -86,6 +86,26 @@ def test_unhandled_exception_is_500_internal_error_and_rolls_back(
     assert "geheim-123" not in caplog.text
 
 
+@pytest.mark.parametrize("url", ["/api/deadlock", "/api/serialization"])
+def test_deadlock_or_serialization_failure_is_409_try_again_and_rolls_back(
+    client: Client, url: str
+) -> None:
+    r = client.get(url)
+    assert r.status_code == 409
+    assert r.json() == {
+        "code": "try_again",
+        "message": "Dit lukte niet door een andere wijziging. Probeer het opnieuw.",
+    }
+    assert Workspace.objects.count() == 0
+
+
+def test_other_operational_error_is_500_and_rolls_back(client: Client) -> None:
+    r = client.get("/api/database-down")
+    assert r.status_code == 500
+    assert_error(r.json(), "internal_error")
+    assert Workspace.objects.count() == 0
+
+
 def assert_no_error_logs(caplog: pytest.LogCaptureFixture) -> None:
     assert [r for r in caplog.records if r.levelno >= logging.ERROR] == []
 
