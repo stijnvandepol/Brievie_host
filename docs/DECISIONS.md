@@ -690,3 +690,46 @@ product name or icon is used. Behaviour, routes, API calls and roles are unchang
   navy sidebar, and an overflow menu in the command bar (the few commands wrap instead).
 - Screenshots of the post list, a document, the inbox and the rule builder at 1440, 1024
   and 390 px are in `docs/ui/fluent/` (made-up letters and names).
+
+## 2026-11-17: recorded consent for AI
+
+Design: `docs/superpowers/specs/2026-11-17-ai-consent-design.md`. Choices 1 to 4 were
+put to the owner and taken as proposed.
+
+- **An append-only table, not columns on `AISettings`.** `AIConsentEvent`
+  (`pipeline_aiconsentevent`, RLS enabled and forced): `event` (`granted`, `changed`,
+  `switched_off`), `mode`, `supplier`, `host`, `model`, `actor` (user, null for the
+  command line), `actor_label`; `created_at` is the moment. It is the history. The state in
+  force is `AISettings.consented_base_url`, written in the same transaction under a row
+  lock, so it depends neither on the order of rows nor on the server's clock (a Pi
+  without a clock battery can start in the past). Only `settings_service.configure` writes it, in the transaction that writes
+  the settings. A generic audit log was not built: its shape is not known yet.
+- **Consent covers one address** (host, port and path; behind a gateway the path picks
+  the service). `granted` is written when somebody agreed to an external service;
+  another model or key at the same address is `changed` without a question; any other
+  address needs a new consent. The event keeps only the host. Switching off or moving to `local` ends it.
+- **`local` is recorded, not asked** (owner): nothing leaves the network.
+- **The pipeline enforces it** (owner). `provider_for` raises `ai_not_configured` for
+  `external` unless `consented_base_url` equals `base_url`. This also covers an
+  address changed by hand. Consequence: a workspace already on `external` reads no
+  letters with AI after this upgrade until `configure_ai` is run once; letters scanned
+  in between fail (as with a wrong `local` address) and are retried by hand. The
+  Claude SDK client no longer follows redirects, like the OpenAI-compatible one.
+- **The supplier is `custom` when the address is not the preset's host**, so the name
+  and country of Mistral are never shown for somebody else's server. For `custom` the
+  country is "unknown": we do not guess it from a host name.
+- **`configure_ai`**: types `akkoord` at a terminal, or `--accept-external-ai` in a
+  script; the notice is printed in both cases and the settings are checked before the
+  question. Without a terminal and without the flag it refuses. The API key is asked
+  after the consent.
+- **`AiStatusOut` gains `supplier`, `host`, `since`** (nullable, default null). This
+  replaces "nothing about the service itself" from phase 1c: a member may know where
+  the text of their post goes. Still no model, full address or key, and no host for
+  `local`. `since` empty with mode `external` means: no consent, no letter is read.
+- **One line for every member** (owner) on the Inbox and Post pages; no per-member
+  "read" click until members can be invited (1d). The countries per supplier are
+  repeated in `web/` (and will be in the iOS app): the API gives the supplier key, the
+  client the sentence.
+- Not done: consent in the web interface (comes with the AI settings screen, 1d; the
+  service already takes an `Actor` with a user), a database rule that forbids UPDATE and
+  DELETE on the table, a screen that lists the history.

@@ -18,11 +18,11 @@ def test_ai_status_is_off_without_settings(client: Client, ws_a: Workspace) -> N
     r = client.get(ai_url(ws_a))
 
     assert r.status_code == 200
-    assert r.json() == {"mode": "off"}
+    assert r.json() == {"mode": "off", "supplier": None, "host": None, "since": None}
 
 
 @pytest.mark.parametrize("role", ["viewer", "admin"])
-def test_ai_status_is_mode_only(client: Client, ws_a: Workspace, role: str) -> None:
+def test_ai_status_has_no_address_model_or_key(client: Client, ws_a: Workspace, role: str) -> None:
     with workspace_context(ws_a.id):
         configure(
             workspace_id=ws_a.id,
@@ -30,6 +30,7 @@ def test_ai_status_is_mode_only(client: Client, ws_a: Workspace, role: str) -> N
             base_url="",
             model="",
             api_key="sk-geheim",
+            consent=True,
         )
     user = admin_of(ws_a)
     if role == "viewer":
@@ -40,9 +41,10 @@ def test_ai_status_is_mode_only(client: Client, ws_a: Workspace, role: str) -> N
     r = client.get(ai_url(ws_a))
 
     assert r.status_code == 200
-    assert r.json() == {"mode": "external"}
-    assert set(r.json()) == {"mode"}
-    assert "mistral" not in r.content.decode()
+    assert set(r.json()) == {"mode", "supplier", "host", "since"}
+    assert (r.json()["mode"], r.json()["host"]) == ("external", "api.mistral.ai")
+    for hidden in ("/v1", "mistral-small", "sk-geheim"):
+        assert hidden not in r.content.decode()
 
 
 def test_ai_status_of_another_workspace_is_404(

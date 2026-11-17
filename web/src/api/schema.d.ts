@@ -207,7 +207,7 @@ export interface paths {
         };
         /**
          * Get Ai Status
-         * @description How the workspace's letters are read: `off`, `external` or `local`. No address, model or key.
+         * @description How the workspace's letters are read: `off`, `external` or `local`. For `external` also the supplier, the host the text goes to and since when (the moment of consent). No full address, model or key.
          */
         get: operations["getAiStatus"];
         put?: never;
@@ -761,8 +761,17 @@ export interface components {
         };
         /** AiStatusOut */
         AiStatusOut: {
+            /** Host */
+            host?: string | null;
             /** Mode */
             mode: string;
+            /**
+             * Since
+             * Format: date-time
+             */
+            since?: string | null;
+            /** Supplier */
+            supplier?: string | null;
         };
         /** CaCertificateOut */
         CaCertificateOut: {

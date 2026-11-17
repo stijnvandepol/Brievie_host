@@ -2,6 +2,7 @@ import { t } from "@lingui/core/macro";
 import { useQuery } from "@tanstack/react-query";
 import { createRoute, useNavigate } from "@tanstack/react-router";
 import { documentsQuery, labelsQuery, personsQuery } from "../api/queries";
+import { AiStatusLine } from "../components/ai-status-line";
 import { DocumentTable } from "../components/document-table";
 import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
 import { Loading } from "../components/ui";
@@ -41,6 +42,7 @@ function PostPage() {
   return (
     <Shell workspace={workspace}>
       <PageHeader title={t`Post`} />
+      <AiStatusLine workspaceId={workspace.id} />
       <div className="filter-bar">
         <div className="filter">
           <label htmlFor="filter-person">{t`Persoon`}</label>

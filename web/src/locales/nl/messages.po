@@ -197,6 +197,22 @@ msgstr "Afgerond op {0}"
 msgid "Afzender"
 msgstr "Afzender"
 
+#: src/components/ai-status-line.tsx
+msgid "AI aan op je eigen netwerk: de tekst van brieven gaat niet naar een dienst daarbuiten."
+msgstr "AI aan op je eigen netwerk: de tekst van brieven gaat niet naar een dienst daarbuiten."
+
+#: src/components/ai-status-line.tsx
+msgid "AI aan: tekst van brieven gaat naar {service}, ingesteld op {since}."
+msgstr "AI aan: tekst van brieven gaat naar {service}, ingesteld op {since}."
+
+#: src/components/ai-status-line.tsx
+msgid "AI is ingesteld, maar niemand heeft daar akkoord voor gegeven. De AI leest daarom geen brieven. De beheerder kan AI opnieuw instellen."
+msgstr "AI is ingesteld, maar niemand heeft daar akkoord voor gegeven. De AI leest daarom geen brieven. De beheerder kan AI opnieuw instellen."
+
+#: src/components/ai-status-line.tsx
+msgid "AI uit: de tekst van brieven gaat naar geen enkele AI-dienst."
+msgstr "AI uit: de tekst van brieven gaat naar geen enkele AI-dienst."
+
 #: src/routes/rule-editor.tsx
 msgid "alle"
 msgstr "alle"
@@ -330,6 +346,10 @@ msgstr "Brievie instellen"
 #: src/routes/pair-app.tsx
 msgid "Certificaat"
 msgstr "Certificaat"
+
+#: src/components/ai-status-line.tsx
+msgid "Claude van Anthropic in de Verenigde Staten ({host})"
+msgstr "Claude van Anthropic in de Verenigde Staten ({host})"
 
 #: src/routes/pair-app.tsx
 msgid "Code"
@@ -843,6 +863,10 @@ msgstr "Met labels zet je orde in je post, bijvoorbeeld Belasting of Zorg."
 msgid "Met labels zet je orde in je post, bijvoorbeeld Belasting of Zorg. Met de startset krijg je in één keer de gebruikelijke labels."
 msgstr "Met labels zet je orde in je post, bijvoorbeeld Belasting of Zorg. Met de startset krijg je in één keer de gebruikelijke labels."
 
+#: src/components/ai-status-line.tsx
+msgid "Mistral in Frankrijk ({host})"
+msgstr "Mistral in Frankrijk ({host})"
+
 #: src/routes/login.tsx
 msgid "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
 msgstr "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
@@ -952,6 +976,10 @@ msgstr "Op niemands naam"
 #: src/routes/pair-app.tsx
 msgid "Open de app op je telefoon en scan de code. De telefoon moet op hetzelfde netwerk zitten als deze server."
 msgstr "Open de app op je telefoon en scan de code. De telefoon moet op hetzelfde netwerk zitten als deze server."
+
+#: src/components/ai-status-line.tsx
+msgid "OpenAI in de Verenigde Staten ({host})"
+msgstr "OpenAI in de Verenigde Staten ({host})"
 
 #: src/routes/labels.tsx
 #: src/routes/persons.tsx

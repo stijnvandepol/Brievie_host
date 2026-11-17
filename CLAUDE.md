@@ -12,7 +12,7 @@ sections 11, 12, 14, 18 and 19 before changing architecture). Decisions live in
 - `make typecheck`: `mypy --strict`
 - `make migrate`: apply migrations as the owner role
 - `make openapi`: write `docs/api/openapi.json`
-- `uv run python manage.py configure_ai --workspace <id> --mode off|external|local [--supplier mistral|openai|claude]`: AI per workspace
+- `uv run python manage.py configure_ai --workspace <id> --mode off|external|local [--supplier mistral|openai|claude] [--accept-external-ai]`: AI per workspace (`external` asks to type `akkoord`)
 
 Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
 
@@ -39,6 +39,9 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
   it rolls back its own writes. An error response (`ApiError`, Ninja `HttpError`,
   `Http404`) does not roll back the request transaction; only a 500 does.
 - No document content, tokens, passwords or BSNs in logs.
+- Text goes to an external AI service only with a recorded consent for that address
+  (`AISettings.consented_base_url` and the history `AIConsentEvent`, both written only by
+  `apps.pipeline.settings_service.configure`).
 - No new dependency without a line in `docs/DECISIONS.md`.
 - Apps of phase 1c: `people` (persons, name matching), `labels`, `rules` (engine, executor,
   presets) and `tasks`; `documents.organise` and `documents.suggestions` order post.

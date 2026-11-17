@@ -215,6 +215,21 @@ q {
   color: var(--neutral-fg3);
 }
 
+/* The line that says whether an AI reads the letters. */
+.ai-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 0 16px;
+}
+
+.ai-status-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+}
+
 .small {
   font-size: var(--caption-size);
   line-height: var(--caption-line);

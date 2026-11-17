@@ -9,6 +9,7 @@ from apps.workspaces.context import workspace_context
 from apps.workspaces.models import Workspace
 
 API_KEY = "sk-geheime-sleutel-123"
+ACCEPT = "--accept-external-ai"
 
 
 def run(*args: str) -> str:
@@ -22,7 +23,7 @@ def test_external_reads_the_key_from_the_environment(
 ) -> None:
     monkeypatch.setenv("BRIEVIE_AI_API_KEY", API_KEY)
 
-    output = run("--workspace", str(ws_a.id), "--mode", "external")
+    output = run("--workspace", str(ws_a.id), "--mode", "external", ACCEPT)
 
     with workspace_context(ws_a.id):
         stored = AISettings.objects.get()
@@ -62,7 +63,7 @@ def test_supplier_claude_reads_the_key_from_the_environment(
 ) -> None:
     monkeypatch.setenv("BRIEVIE_AI_API_KEY", API_KEY)
 
-    output = run("--workspace", str(ws_a.id), "--mode", "external", "--supplier", "claude")
+    output = run("--workspace", str(ws_a.id), "--mode", "external", "--supplier", "claude", ACCEPT)
 
     with workspace_context(ws_a.id):
         stored = AISettings.objects.get()

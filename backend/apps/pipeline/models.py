@@ -1,5 +1,6 @@
 from typing import ClassVar
 
+from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -26,6 +27,9 @@ class AISettings(WorkspaceModel):
     model = models.CharField(max_length=100, blank=True, default="")
     # The API key, sealed with the workspace key.
     api_key_sealed = models.BinaryField(null=True, blank=True)
+    # The external address somebody agreed to send letters to; "" = no consent in force.
+    # Text only goes out while this equals `base_url`. The history is `AIConsentEvent`.
+    consented_base_url = models.CharField(max_length=300, blank=True, default="")
 
     class Meta:
         constraints: ClassVar[list[models.BaseConstraint]] = [
@@ -34,3 +38,42 @@ class AISettings(WorkspaceModel):
 
     def __str__(self) -> str:
         return f"AI {self.mode} for {self.workspace_id}"
+
+
+class AIConsentEvent(WorkspaceModel):
+    """One decision about a workspace's AI: who switched it on, changed it or switched it off.
+
+    The history: the application only ever adds rows. The state in force is
+    `AISettings.consented_base_url`, so it does not depend on the server's clock.
+    `created_at` is the moment of the decision. Never the API key, the full address or
+    document text.
+    """
+
+    class Event(models.TextChoices):
+        # Somebody read what leaves the server and agreed to this external service.
+        GRANTED = "granted"
+        # A change that needs no new question: another model or key at the same address,
+        # or a service on the own network.
+        CHANGED = "changed"
+        SWITCHED_OFF = "switched_off"
+
+    event = models.CharField(max_length=20, choices=Event.choices)
+    mode = models.CharField(max_length=10, choices=AISettings.Mode.choices)
+    # A key of `settings_service.SUPPLIERS`, `custom` for another address, "" when not external.
+    supplier = models.CharField(max_length=20, blank=True, default="")
+    # Host of the service's address only: no path, query or port.
+    host = models.CharField(max_length=253, blank=True, default="")
+    model = models.CharField(max_length=100, blank=True, default="")
+    # Null for the command line.
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    actor_label = models.CharField(max_length=50)
+
+    class Meta:
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(fields=["workspace", "-created_at"], name="pipeline_aiconsent_latest"),
+        ]
+
+    def __str__(self) -> str:
+        return f"AI {self.event} ({self.mode}) for {self.workspace_id}"

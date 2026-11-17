@@ -114,6 +114,9 @@ class AnthropicProvider:
         timeout: float = 120.0,
         http_client: anthropic.DefaultHttpxClient | None = None,
     ) -> None:
+        # The SDK's own client follows redirects: a redirect would carry the letter to a
+        # host nobody agreed to. The OpenAI-compatible client does not follow them either.
+        http_client = http_client or anthropic.DefaultHttpxClient(follow_redirects=False)
         # The job queue retries, not the SDK.
         self._client = anthropic.Anthropic(
             api_key=api_key,

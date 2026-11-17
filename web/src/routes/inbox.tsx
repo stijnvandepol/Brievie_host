@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { Tab, TabList, TabPanel, Tabs } from "react-aria-components";
 import { documentsQuery, inboxCountsQuery, labelsQuery, personsQuery } from "../api/queries";
 import type { components } from "../api/schema";
+import { AiStatusLine } from "../components/ai-status-line";
 import { formatLetterDate, typeLabel } from "../components/document-table";
 import { LabelChips } from "../components/label-chip";
 import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
@@ -199,6 +200,7 @@ function InboxPage() {
         title={t`Inbox`}
         description={t`Post die op jou wacht: brieven om te controleren of op een naam te zetten.`}
       />
+      <AiStatusLine workspaceId={workspace.id} />
       <ErrorAlert error={error} />
       {tab && counts ? (
         <Tabs
