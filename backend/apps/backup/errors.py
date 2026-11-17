@@ -40,6 +40,10 @@ REASONS: dict[str, Promise] = {
     "run_not_found": _("Deze back-up is niet gevonden."),
     "wrong_master_key": _("De hoofdsleutel hoort niet bij deze back-up."),
     "restore_failed": _("Het herstel is niet gelukt."),
+    "backup_password_unwritable": _(
+        "Het aparte wachtwoord van de back-up bevat een aanhalingsteken of een regeleinde. "
+        "Zo'n wachtwoord past niet in de instellingen."
+    ),
     "interrupted_by_restore": _("Afgebroken door herstel."),
     "abandoned": _("De vorige back-up is afgebroken. Er is een nieuwe gestart."),
     "internal_error": _("Er ging iets mis. Probeer het later opnieuw."),

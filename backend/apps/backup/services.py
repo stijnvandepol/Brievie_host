@@ -147,7 +147,7 @@ def _finish(run_id: UUID, status: str, **fields: object) -> None:
     )
 
 
-def _location_secrets(repository: restic.Repository) -> list[str]:
+def location_secrets(repository: restic.Repository) -> list[str]:
     """The repository address and its host: they never reach a log or a reason."""
     values = [repository.location]
     if repository.kind != "folder":
@@ -165,7 +165,7 @@ class _Restic:
     def __init__(self, repository: restic.Repository, password: str, failures: list[str]) -> None:
         self.repository = repository
         self.password = password
-        self.secrets = [*destination.secrets(), *_location_secrets(repository)]
+        self.secrets = [*destination.secrets(), *location_secrets(repository)]
         self.failures = failures
 
     def result(

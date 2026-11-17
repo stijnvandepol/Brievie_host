@@ -32,6 +32,7 @@ EXPECTED_CODES = {
     "internal_error",
     "restic_failed",
     "abandoned",
+    "backup_password_unwritable",
 }
 
 
