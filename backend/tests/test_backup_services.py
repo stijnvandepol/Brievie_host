@@ -245,6 +245,27 @@ def test_failed_dump_records_no_files_snapshot(
 
 
 @pytest.mark.django_db(transaction=True)
+def test_a_host_name_a_restore_could_not_read_fails_the_back_up(
+    settings: Settings,
+    configured_folder: Path,
+    fake_restic: FakeBinary,
+    fake_pg_dump: FakeBinary,
+) -> None:
+    # Loudly now, never as an unreadable back-up at restore time.
+    settings.BRIEVIE_HOSTNAME = "brievie.local\nrun_id=forged"
+    run = queued_run()
+    answer_both_backups(fake_restic, run.id)
+
+    services.perform_run(run.id)
+
+    run.refresh_from_db()
+    assert run.status == BackupRun.Status.FAILED
+    assert run.reason_code == "manifest_unreadable"
+    assert restic.backup_files_argv(run.id, services.file_paths()) not in fake_restic.calls
+    assert restic.forget_run_argv(run.id) in fake_restic.calls
+
+
+@pytest.mark.django_db(transaction=True)
 def test_incomplete_files_backup_is_kept_and_retention_runs(
     configured_folder: Path, fake_restic: FakeBinary, fake_pg_dump: FakeBinary
 ) -> None:

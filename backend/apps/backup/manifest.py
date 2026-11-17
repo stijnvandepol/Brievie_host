@@ -19,9 +19,13 @@ from apps.devices.pki import certificate_sha256
 MANIFEST_FORMAT = 1
 MANIFEST_NAME = "manifest.json"
 AUTHORITY_FILE = "root.crt"
-# What a manifest may hold in the fields a restore prints as `key=value` lines.
-_HOSTNAME = re.compile(r"[A-Za-z0-9._-]{1,253}")
-_VERSION = re.compile(r"[\x21-\x7e]{1,64}")
+# The fields a restore prints as `key=value` lines may hold any text but a line break
+# or another control character (a host name may be an IP address, IPv6 included).
+# Checked when a manifest is written as well as read: a value a restore would refuse
+# fails the back-up itself, never the restore.
+_CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]")
+_HOSTNAME_MAX = 253
+_VERSION_MAX = 64
 
 
 @dataclass(frozen=True)
@@ -94,27 +98,30 @@ def build_manifest(
         for app, name in conn.execute("SELECT app, name FROM django_migrations ORDER BY app, name"):
             migrations.setdefault(app, []).append(name)
         version_row = conn.execute("SHOW server_version").fetchone()
-    return Manifest(
-        format=MANIFEST_FORMAT,
-        run_id=run_id,
-        created_at=timezone.now(),
-        brievie_version=brievie_version(),
-        migrations=migrations,
-        postgres_version=str(version_row[0]) if version_row else "",
-        hostname=host_name(),
-        authority_sha256=authority_fingerprint(authority_dir),
-        workspaces={
-            workspace_id: WorkspaceCounts(
-                documents=int(documents.get(workspace_id, 0)),
-                pages=int(pages.get(workspace_id, 0)),
-                page_files=_count_page_files(storage_root, workspace_id),
-            )
-            for workspace_id in workspace_ids
-        },
+    return _checked(
+        Manifest(
+            format=MANIFEST_FORMAT,
+            run_id=run_id,
+            created_at=timezone.now(),
+            brievie_version=brievie_version(),
+            migrations=migrations,
+            postgres_version=str(version_row[0]) if version_row else "",
+            hostname=host_name(),
+            authority_sha256=authority_fingerprint(authority_dir),
+            workspaces={
+                workspace_id: WorkspaceCounts(
+                    documents=int(documents.get(workspace_id, 0)),
+                    pages=int(pages.get(workspace_id, 0)),
+                    page_files=_count_page_files(storage_root, workspace_id),
+                )
+                for workspace_id in workspace_ids
+            },
+        )
     )
 
 
 def manifest_to_json(m: Manifest) -> str:
+    _checked(m)
     return json.dumps(
         {
             "format": m.format,
@@ -150,11 +157,32 @@ def _names(value: object) -> list[str]:
     return list(value)
 
 
-def _matching(value: object, pattern: re.Pattern[str]) -> str:
-    """A text field that lands in `key=value` output: refuse anything but plain text."""
-    if not isinstance(value, str) or pattern.fullmatch(value) is None:
+def _plain(value: object, *, min_length: int, max_length: int) -> str:
+    """A text field that lands in `key=value` output: one line, of bounded length."""
+    if not isinstance(value, str) or not min_length <= len(value) <= max_length:
+        raise ValueError("unexpected length")
+    if _CONTROL.search(value) is not None:
         raise ValueError("unexpected characters")
     return value
+
+
+def _hostname(value: object) -> str:
+    # Empty is allowed: BRIEVIE_HOSTNAME has no default outside compose.
+    return _plain(value, min_length=0, max_length=_HOSTNAME_MAX)
+
+
+def _version(value: object) -> str:
+    return _plain(value, min_length=1, max_length=_VERSION_MAX)
+
+
+def _checked(m: Manifest) -> Manifest:
+    """The manifest when a restore can read it back, else `manifest_unreadable`."""
+    try:
+        _hostname(m.hostname)
+        _version(m.brievie_version)
+    except ValueError:
+        raise BackupError("manifest_unreadable") from None
+    return m
 
 
 def manifest_from_json(text: str) -> Manifest:
@@ -167,10 +195,10 @@ def manifest_from_json(text: str) -> Manifest:
             format=MANIFEST_FORMAT,
             run_id=UUID(data["run_id"]),
             created_at=_aware(datetime.fromisoformat(data["created_at"])),
-            brievie_version=_matching(data["brievie_version"], _VERSION),
+            brievie_version=_version(data["brievie_version"]),
             migrations={str(app): _names(names) for app, names in data["migrations"].items()},
             postgres_version=str(data["postgres_version"]),
-            hostname=_matching(data["hostname"], _HOSTNAME),
+            hostname=_hostname(data["hostname"]),
             authority_sha256=None if authority is None else str(authority),
             workspaces={
                 UUID(key): WorkspaceCounts(

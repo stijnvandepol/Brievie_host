@@ -193,12 +193,14 @@ def _manifest_data() -> dict[str, object]:
         ("hostname", "brievie.local\nrun_id=forged"),
         ("hostname", "brievie.local\r"),
         ("hostname", "brievie\tlocal"),
-        ("hostname", "brievie local"),
-        ("hostname", ""),
+        ("hostname", "brievie\x00local"),
+        ("hostname", "brievie\x7flocal"),
+        ("hostname", "brievie\x85local"),
+        ("hostname", "brievie\u2028local"),
         ("hostname", "a" * 254),
+        ("hostname", 5),
         ("brievie_version", "0.1.0\nhostname=x"),
         ("brievie_version", "0.1.0\x1b[31m"),
-        ("brievie_version", "0.1 .0"),
         ("brievie_version", ""),
         ("brievie_version", "1" * 65),
     ],
@@ -237,7 +239,16 @@ def test_manifest_is_read_in_one_repeatable_read_transaction(
 
 @pytest.mark.parametrize(
     ("hostname", "version"),
-    [("brievie.local", "0.1.0"), ("192.168.1.20", "1.2.3rc1+g1a2b"), ("my_host-1", "v1")],
+    [
+        ("brievie.local", "0.1.0"),
+        ("192.168.1.20", "1.2.3rc1+g1a2b"),
+        ("my_host-1", "v1"),
+        ("2001:db8::1", "0.1 .0"),
+        ("[fe80::1%eth0]", "1.0"),
+        ("brievie local", "1.0"),
+        ("", "1.0"),
+        ("a" * 253, "1" * 64),
+    ],
 )
 def test_manifest_accepts_plain_host_names_and_versions(hostname: str, version: str) -> None:
     data = _manifest_data()
@@ -245,3 +256,39 @@ def test_manifest_accepts_plain_host_names_and_versions(hostname: str, version: 
     data["brievie_version"] = version
     manifest = manifest_from_json(json.dumps(data))
     assert (manifest.hostname, manifest.brievie_version) == (hostname, version)
+
+
+@pytest.mark.parametrize("hostname", ["2001:db8::1", "fe80::1%eth0", "192.168.1.20", ""])
+def test_a_host_name_brievie_accepts_round_trips(hostname: str) -> None:
+    manifest = sample_manifest(hostname=hostname)
+    assert manifest_from_json(manifest_to_json(manifest)) == manifest
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("hostname", "brievie.local\nrun_id=forged"),
+        ("hostname", "a" * 254),
+        ("brievie_version", "0.1.0\r"),
+        ("brievie_version", ""),
+    ],
+)
+def test_a_manifest_that_could_not_be_read_back_is_never_written(field: str, value: str) -> None:
+    with pytest.raises(BackupError) as caught:
+        manifest_to_json(sample_manifest(**{field: value}))
+    assert caught.value.code == "manifest_unreadable"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_building_a_manifest_refuses_a_host_name_with_a_line_break(
+    ws_a: Workspace, backup_conninfo: str, tmp_path: Path, settings: Settings
+) -> None:
+    settings.BRIEVIE_HOSTNAME = "brievie.local\nrun_id=forged"
+    with pytest.raises(BackupError) as caught:
+        build_manifest(
+            run_id=uuid.uuid4(),
+            conninfo=backup_conninfo,
+            storage_root=tmp_path,
+            authority_dir=tmp_path,
+        )
+    assert caught.value.code == "manifest_unreadable"
