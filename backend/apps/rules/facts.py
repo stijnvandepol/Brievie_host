@@ -3,6 +3,8 @@
 Callers hold the workspace's RLS context.
 """
 
+from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import replace
 from uuid import UUID
 
@@ -55,6 +57,61 @@ def facts_for(document: Document) -> DocumentFacts:
     )
 
 
+def facts_for_many(documents: Sequence[Document]) -> dict[UUID, DocumentFacts]:
+    """`facts_for` of every document, by id, in a fixed number of queries.
+
+    The same facts as `facts_for` gives one by one.
+    """
+    ids = [document.id for document in documents]
+    labels: dict[UUID, set[UUID]] = defaultdict(set)
+    for document_id, label_id in DocumentLabel.objects.filter(document_id__in=ids).values_list(
+        "document_id", "label_id"
+    ):
+        labels[document_id].add(label_id)
+    addressees: dict[UUID, set[UUID]] = defaultdict(set)
+    for document_id, person_id in DocumentAddressee.objects.filter(document_id__in=ids).values_list(
+        "document_id", "person_id"
+    ):
+        addressees[document_id].add(person_id)
+    # (document id, state, label or person) -> ids
+    targets: dict[tuple[UUID, str, str], set[UUID]] = defaultdict(set)
+    states = (DocumentSuggestion.State.OPEN, DocumentSuggestion.State.DISMISSED)
+    for document_id, state, label_id, person_id in DocumentSuggestion.objects.filter(
+        document_id__in=ids, state__in=states
+    ).values_list("document_id", "state", "label_id", "person_id"):
+        if label_id is not None:
+            targets[(document_id, state, "label")].add(label_id)
+        if person_id is not None:
+            targets[(document_id, state, "person")].add(person_id)
+    proposed = _proposed_many([d.id for d in documents if d.confirmed_at is None])
+
+    def found(document_id: UUID, state: str, kind: str) -> frozenset[UUID]:
+        return frozenset(targets.get((document_id, state, kind), ()))
+
+    facts: dict[UUID, DocumentFacts] = {}
+    for document in documents:
+        if document.confirmed_at is not None:
+            sender, document_type = document.sender, document.document_type
+        else:
+            sender = proposed.get((document.id, Extraction.Field.SENDER), "")
+            document_type = proposed.get((document.id, Extraction.Field.DOCUMENT_TYPE), "")
+        open_state = DocumentSuggestion.State.OPEN
+        dismissed = DocumentSuggestion.State.DISMISSED
+        facts[document.id] = DocumentFacts(
+            text=document.ocr_text,
+            sender=sender,
+            document_type=document_type,
+            source=document.source,
+            label_ids=frozenset(labels.get(document.id, ())),
+            addressee_ids=frozenset(addressees.get(document.id, ())),
+            hoped_label_ids=found(document.id, open_state, "label"),
+            hoped_addressee_ids=found(document.id, open_state, "person"),
+            dismissed_label_ids=found(document.id, dismissed, "label"),
+            dismissed_addressee_ids=found(document.id, dismissed, "person"),
+        )
+    return facts
+
+
 def active_specs(workspace_id: UUID) -> list[RuleSpec]:
     """The workspace's active rules in `position` order, as `evaluate` expects them.
 
@@ -97,6 +154,27 @@ def _proposed(document: Document, field: str, *, above_zero: bool) -> str:
         rows = rows.filter(confidence__gt=0)
     value = rows.order_by("-confidence", "created_at").values_list("value", flat=True).first()
     return value or ""
+
+
+def _proposed_many(document_ids: Sequence[UUID]) -> dict[tuple[UUID, str], str]:
+    """`_proposed` of the sender and the type of these documents, in one query."""
+    if not document_ids:
+        return {}
+    rows = (
+        Extraction.objects.filter(
+            document_id__in=document_ids,
+            field__in=(Extraction.Field.SENDER, Extraction.Field.DOCUMENT_TYPE),
+            group=0,
+        )
+        .order_by("document_id", "field", "-confidence", "created_at")
+        .values_list("document_id", "field", "value", "confidence")
+    )
+    best: dict[tuple[UUID, str], str] = {}
+    for document_id, field, value, confidence in rows:
+        if field == Extraction.Field.SENDER and not confidence > 0:
+            continue
+        best.setdefault((document_id, field), value)
+    return best
 
 
 def _ids(rows: QuerySet[DocumentSuggestion], column: str) -> frozenset[UUID]:

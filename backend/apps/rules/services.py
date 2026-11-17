@@ -17,7 +17,7 @@ from apps.labels.models import Label
 from apps.people.models import Person
 from apps.rules import definition, jobs
 from apps.rules.engine import Condition, evaluate
-from apps.rules.facts import facts_for
+from apps.rules.facts import facts_for_many
 from apps.rules.models import Rule, RuleRun
 from apps.rules.schemas import RuleIn, RuleTestOut
 from apps.workspaces.models import Workspace
@@ -143,7 +143,8 @@ def test_rule(*, workspace: Workspace, data: RuleIn) -> RuleTestOut:
     )
     total = documents.count()
     checked = list(documents.order_by("-created_at", "-id")[:TEST_LIMIT])
-    matched = [d for d in checked if spec.id in evaluate(facts_for(d), [spec]).matched_rule_ids]
+    facts = facts_for_many(checked)
+    matched = [d for d in checked if spec.id in evaluate(facts[d.id], [spec]).matched_rule_ids]
     shown = matched[:TEST_SHOWN]
     prefetch_related_objects(shown, "addressee_links", "label_links", SUGGESTIONS)
     return RuleTestOut(
