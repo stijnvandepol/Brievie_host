@@ -1,10 +1,22 @@
 import { t } from "@lingui/core/macro";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { type ReactNode, useEffect, useId } from "react";
-import { Button, FieldError, Input, Label, Text, TextField } from "react-aria-components";
+import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
+import {
+  Button,
+  Dialog,
+  DialogTrigger,
+  FieldError,
+  Input,
+  Label,
+  Popover,
+  Text,
+  TextField,
+} from "react-aria-components";
 import { ApiFailure, api, errorMessage } from "../api/client";
 import { inboxCountsQuery, meQuery } from "../api/queries";
+import { Icon, type IconName } from "./icons";
+import { initials, MessageBar } from "./ui";
 
 /** Every page gets its own title (WCAG 2.4.2). */
 export function usePageTitle(title: string) {
@@ -73,7 +85,7 @@ export function Plain({ children }: { children: ReactNode }) {
         <BrandMark />
         <span>Brievie</span>
       </p>
-      {children}
+      <div className="plain-card">{children}</div>
     </main>
   );
 }
@@ -99,7 +111,90 @@ export function Split({ children, wide = false }: { children: ReactNode; wide?: 
   );
 }
 
+/**
+ * The title of a page, with what sits above it (a breadcrumb or a caption) and a command
+ * bar below it: the main action first, the others as quieter buttons.
+ */
+export function PageHeader({
+  title,
+  eyebrow,
+  breadcrumb,
+  description,
+  commands,
+}: {
+  title: string;
+  eyebrow?: string;
+  breadcrumb?: { to: BreadcrumbTarget; params: { workspaceId: string }; label: string };
+  description?: ReactNode;
+  commands?: ReactNode;
+}) {
+  return (
+    <div className="page-top">
+      <header className="page-header">
+        {breadcrumb ? (
+          <nav aria-label={t`Kruimelpad`} className="breadcrumb">
+            <Link to={breadcrumb.to} params={breadcrumb.params} className="breadcrumb-link">
+              {breadcrumb.label}
+            </Link>
+            <Icon name="chevronRight" className="breadcrumb-sep" />
+          </nav>
+        ) : null}
+        {eyebrow ? <span className="eyebrow">{eyebrow}</span> : null}
+        <h1>{title}</h1>
+        {description ? <p className="page-description">{description}</p> : null}
+      </header>
+      {commands ? <div className="command-bar">{commands}</div> : null}
+    </div>
+  );
+}
+
+type BreadcrumbTarget = "/w/$workspaceId/post" | "/w/$workspaceId/automatisering";
+
 const NAV_LINK = "nav-link";
+
+/** A link in the navigation pane: an icon and its name (the name stays readable when only the icon shows). */
+function NavItem({
+  to,
+  params,
+  icon,
+  label,
+  exact = false,
+  ariaLabel,
+  count,
+}: {
+  to:
+    | "/"
+    | "/koppel-app"
+    | "/w/$workspaceId/inbox"
+    | "/w/$workspaceId/post"
+    | "/w/$workspaceId/personen"
+    | "/w/$workspaceId/labels"
+    | "/w/$workspaceId/automatisering";
+  params?: { workspaceId: string };
+  icon: IconName;
+  label: string;
+  exact?: boolean;
+  ariaLabel?: string;
+  count?: number;
+}) {
+  return (
+    <Link
+      to={to}
+      params={params}
+      activeOptions={{ exact }}
+      className={NAV_LINK}
+      aria-label={ariaLabel}
+    >
+      <Icon name={icon} className="nav-icon" />
+      <span className="nav-label">{label}</span>
+      {count ? (
+        <span className="nav-count" aria-hidden="true">
+          {count}
+        </span>
+      ) : null}
+    </Link>
+  );
+}
 
 /** The workspace a page belongs to, as far as the navigation needs it. */
 type NavWorkspace = { id: string; name: string; role?: string };
@@ -112,44 +207,137 @@ function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
   const params = { workspaceId: workspace.id };
   return (
     <>
-      <p className="sidebar-workspace">{workspace.name}</p>
-      <Link
+      <p className="nav-section">
+        <span className="nav-section-name">{workspace.name}</span>
+      </p>
+      <NavItem
         to="/w/$workspaceId/inbox"
         params={params}
-        className={NAV_LINK}
-        aria-label={todo > 0 ? t`Inbox, ${todo} te doen` : undefined}
-      >
-        {t`Inbox`}
-        {todo > 0 ? (
-          <span className="nav-count" aria-hidden="true">
-            {todo}
-          </span>
-        ) : null}
-      </Link>
-      <Link to="/w/$workspaceId/post" params={params} className={NAV_LINK}>
-        {t`Post`}
-      </Link>
-      <Link to="/w/$workspaceId/personen" params={params} className={NAV_LINK}>
-        {t`Personen`}
-      </Link>
-      <Link to="/w/$workspaceId/labels" params={params} className={NAV_LINK}>
-        {t`Labels`}
-      </Link>
+        icon="inbox"
+        label={t`Inbox`}
+        ariaLabel={todo > 0 ? t`Inbox, ${todo} te doen` : undefined}
+        count={todo}
+      />
+      <NavItem to="/w/$workspaceId/post" params={params} icon="mail" label={t`Post`} />
+      <NavItem to="/w/$workspaceId/personen" params={params} icon="people" label={t`Personen`} />
+      <NavItem to="/w/$workspaceId/labels" params={params} icon="tag" label={t`Labels`} />
       {workspace.role === "viewer" ? null : (
-        <Link to="/w/$workspaceId/automatisering" params={params} className={NAV_LINK}>
-          {t`Automatisering`}
-        </Link>
+        <NavItem
+          to="/w/$workspaceId/automatisering"
+          params={params}
+          icon="flash"
+          label={t`Automatisering`}
+        />
       )}
-      <hr className="sidebar-rule" />
+      <hr className="nav-divider" />
     </>
   );
 }
 
-/** Layout of the screens after login: sidebar with navigation and account, then the page. */
+const WIDE = "(min-width: 1024px)";
+const NAV_STORAGE_KEY = "brievie.nav-collapsed";
+
+function matches(query: string): boolean {
+  return typeof window.matchMedia === "function" ? window.matchMedia(query).matches : true;
+}
+
+function readCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(NAV_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function storeCollapsed(collapsed: boolean) {
+  try {
+    window.localStorage.setItem(NAV_STORAGE_KEY, collapsed ? "1" : "0");
+  } catch {
+    // Storage blocked (private window): the choice lasts until the next page.
+  }
+}
+
+/**
+ * Whether the navigation pane shows its names. Wide screens show the full pane unless the
+ * user folded it to icons (remembered in this browser). Narrower screens show icons only, or
+ * nothing on a phone, and open the full pane over the page on request.
+ */
+function useNavPane() {
+  const [wide, setWide] = useState(() => matches(WIDE));
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const [overlay, setOverlay] = useState(false);
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia(WIDE);
+    const update = () => {
+      setWide(query.matches);
+      setOverlay(false);
+    };
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  const expanded = wide ? !collapsed : overlay;
+  const close = useCallback(() => setOverlay(false), []);
+  function toggle() {
+    if (wide) {
+      storeCollapsed(!collapsed);
+      setCollapsed(!collapsed);
+    } else {
+      setOverlay(!overlay);
+    }
+  }
+  return { expanded, overlay: !wide && overlay, toggle, close };
+}
+
+/** Who is logged in, behind their initials in the app bar; the menu holds "Uitloggen". */
+function AccountMenu({
+  me,
+  onLogout,
+}: {
+  me: { name: string; email: string } | null | undefined;
+  onLogout: () => void;
+}) {
+  return (
+    <DialogTrigger>
+      <Button className="topbar-button account-button" aria-label={t`Account`}>
+        <span className="avatar" aria-hidden="true">
+          {me ? initials(me.name) : ""}
+        </span>
+        {me ? <span className="account-name">{me.name}</span> : null}
+        <Icon name="chevronDown" className="account-chevron" />
+      </Button>
+      <Popover className="popover account-popover" placement="bottom end" offset={4}>
+        <Dialog className="account-dialog" aria-label={t`Account`}>
+          {me ? (
+            <div className="account-card">
+              <span className="avatar avatar-large" aria-hidden="true">
+                {initials(me.name)}
+              </span>
+              <div className="account-who">
+                <span className="account-card-name">{me.name}</span>
+                <span className="account-email">{me.email}</span>
+              </div>
+            </div>
+          ) : null}
+          <Button className="menu-item" onPress={onLogout}>
+            <Icon name="signOut" />
+            {t`Uitloggen`}
+          </Button>
+        </Dialog>
+      </Popover>
+    </DialogTrigger>
+  );
+}
+
+/** Layout of the screens after login: app bar, navigation pane, then the page. */
 export function Shell({ children, workspace }: { children: ReactNode; workspace?: NavWorkspace }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { data: me } = useQuery(meQuery);
+  const nav = useNavPane();
+  const navId = useId();
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const paneRef = useRef<HTMLDivElement>(null);
 
   const logout = useMutation({
     mutationFn: async () => {
@@ -163,40 +351,61 @@ export function Shell({ children, workspace }: { children: ReactNode; workspace?
     },
   });
 
+  // A pane opened over the page takes focus; Escape closes it and returns to the menu button.
+  const { overlay, close } = nav;
+  useEffect(() => {
+    if (!overlay) return;
+    paneRef.current?.querySelector<HTMLElement>("a")?.focus();
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      close();
+      toggleRef.current?.focus();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [overlay, close]);
+
   return (
-    <div className="shell">
-      <div className="sidebar">
+    <div className="app" data-nav={nav.expanded ? "expanded" : "collapsed"}>
+      <header className="topbar">
+        <Button
+          ref={toggleRef}
+          className="topbar-button nav-toggle"
+          aria-label={t`Menu`}
+          aria-expanded={nav.expanded}
+          aria-controls={navId}
+          onPress={nav.toggle}
+        >
+          <Icon name="menu" />
+        </Button>
         <Link to="/" className="brand">
           <BrandMark />
           <span>Brievie</span>
         </Link>
-        <nav aria-label={t`Hoofdmenu`} className="sidebar-nav">
-          {workspace ? <WorkspaceNav workspace={workspace} /> : null}
-          <Link to="/" activeOptions={{ exact: true }} className={NAV_LINK}>
-            {t`Werkruimtes`}
-          </Link>
-          <Link to="/koppel-app" className={NAV_LINK}>
-            {t`Apparaten`}
-          </Link>
-        </nav>
-        <div className="sidebar-account">
-          {me ? (
-            <>
-              <span className="account-name">{me.name}</span>
-              <span className="account-email">{me.email}</span>
-            </>
-          ) : null}
-          <Button className="sidebar-button" onPress={() => logout.mutate()}>
-            {t`Uitloggen`}
-          </Button>
+        <div className="topbar-end">
+          <AccountMenu me={me} onLogout={() => logout.mutate()} />
         </div>
+      </header>
+      <div className="app-body">
+        <div className="navpane" id={navId} ref={paneRef}>
+          {/* A pane over the page closes by itself: every page change draws a new shell. */}
+          <nav aria-label={t`Hoofdmenu`} className="nav">
+            {workspace ? <WorkspaceNav workspace={workspace} /> : null}
+            <NavItem to="/" exact icon="grid" label={t`Werkruimtes`} />
+            <NavItem to="/koppel-app" icon="phone" label={t`Apparaten`} />
+          </nav>
+        </div>
+        {overlay ? (
+          // A pointer shortcut; Escape and the menu button close the pane by keyboard.
+          <div className="scrim" aria-hidden="true" onClick={close} />
+        ) : null}
+        <main className="content">
+          <div className="content-inner">
+            <ErrorAlert error={logout.error} />
+            {children}
+          </div>
+        </main>
       </div>
-      <main className="main">
-        <div className="main-inner">
-          <ErrorAlert error={logout.error} />
-          {children}
-        </div>
-      </main>
     </div>
   );
 }
@@ -205,9 +414,9 @@ export function Shell({ children, workspace }: { children: ReactNode; workspace?
 export function ErrorAlert({ error }: { error: unknown }) {
   if (error === null || error === undefined) return null;
   return (
-    <div role="alert" className="alert">
+    <MessageBar intent="error" role="alert">
       {errorMessage(error)}
-    </div>
+    </MessageBar>
   );
 }
 

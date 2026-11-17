@@ -144,6 +144,7 @@ msgstr "Aanslag"
 msgid "Aantal brieven"
 msgstr "Aantal brieven"
 
+#: src/components/page.tsx
 #: src/routes/persons.tsx
 msgid "Account"
 msgstr "Account"
@@ -252,6 +253,10 @@ msgid "Archiveren: {0}"
 msgstr "Archiveren: {0}"
 
 #: src/routes/automations.tsx
+msgid "Automatisch"
+msgstr "Automatisch"
+
+#: src/routes/automations.tsx
 #: src/routes/rule-editor.tsx
 msgid "Automatisch toepassen"
 msgstr "Automatisch toepassen"
@@ -262,12 +267,17 @@ msgstr "Automatisch toepassen: {name}"
 
 #: src/components/page.tsx
 #: src/routes/automations.tsx
+#: src/routes/rule-editor.tsx
 msgid "Automatisering"
 msgstr "Automatisering"
 
 #: src/routes/document.tsx
 msgid "Bedrag incl. btw"
 msgstr "Bedrag incl. btw"
+
+#: src/routes/automations.tsx
+msgid "Begin met de startset, of maak zelf een regel."
+msgstr "Begin met de startset, of maak zelf een regel."
 
 #: src/routes/home.tsx
 msgid "Beheerder"
@@ -376,6 +386,10 @@ msgstr "De bron"
 msgid "de bron {source} is"
 msgstr "de bron {source} is"
 
+#: src/routes/persons.tsx
+msgid "De mensen op wiens naam post binnenkomt. Brievie herkent ze aan hun naam en naamvarianten."
+msgstr "De mensen op wiens naam post binnenkomt. Brievie herkent ze aan hun naam en naamvarianten."
+
 #: src/routes/rule-editor.tsx
 msgid "De regel is opgeslagen."
 msgstr "De regel is opgeslagen."
@@ -466,15 +480,7 @@ msgstr "Er is nog niets gebeurd."
 msgid "Er zijn nog geen apparaten gekoppeld."
 msgstr "Er zijn nog geen apparaten gekoppeld."
 
-#: src/components/device-table.tsx
-#: src/routes/automations.tsx
-#: src/routes/document.tsx
-#: src/routes/home.tsx
-#: src/routes/inbox.tsx
-#: src/routes/labels.tsx
-#: src/routes/persons.tsx
-#: src/routes/post.tsx
-#: src/routes/rule-editor.tsx
+#: src/components/ui.tsx
 msgid "Even laden..."
 msgstr "Even laden..."
 
@@ -700,6 +706,14 @@ msgstr "Keuring"
 msgid "Kies bij elke voorwaarde en actie een label of persoon."
 msgstr "Kies bij elke voorwaarde en actie een label of persoon."
 
+#: src/routes/post.tsx
+msgid "Kies bij Persoon of Label een andere waarde."
+msgstr "Kies bij Persoon of Label een andere waarde."
+
+#: src/routes/home.tsx
+msgid "Kies de werkruimte die je wilt openen."
+msgstr "Kies de werkruimte die je wilt openen."
+
 #: src/routes/persons.tsx
 msgid "Kies een account"
 msgstr "Kies een account"
@@ -730,6 +744,10 @@ msgid "Koppel aan account: {0}"
 msgstr "Koppel aan account: {0}"
 
 #: src/routes/pair-app.tsx
+msgid "Koppel de Brievie-app op je telefoon aan deze server. Daarna scan je brieven met de app."
+msgstr "Koppel de Brievie-app op je telefoon aan deze server. Daarna scan je brieven met de app."
+
+#: src/routes/pair-app.tsx
 msgid "Koppelcode"
 msgstr "Koppelcode"
 
@@ -740,6 +758,10 @@ msgstr "Koppelcode maken"
 #: src/routes/pair-app.tsx
 msgid "Koppelgegevens"
 msgstr "Koppelgegevens"
+
+#: src/components/page.tsx
+msgid "Kruimelpad"
+msgstr "Kruimelpad"
 
 #: src/routes/labels.tsx
 #: src/routes/post.tsx
@@ -804,6 +826,14 @@ msgstr "Meekijker"
 #: src/routes/labels.tsx
 msgid "Meerdere tegelijk toevoegen"
 msgstr "Meerdere tegelijk toevoegen"
+
+#: src/components/page.tsx
+msgid "Menu"
+msgstr "Menu"
+
+#: src/routes/labels.tsx
+msgid "Met labels zet je orde in je post, bijvoorbeeld Belasting of Zorg."
+msgstr "Met labels zet je orde in je post, bijvoorbeeld Belasting of Zorg."
 
 #: src/routes/login.tsx
 msgid "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
@@ -970,9 +1000,14 @@ msgstr "Polis"
 
 #: src/components/document-table.tsx
 #: src/components/page.tsx
+#: src/routes/document.tsx
 #: src/routes/post.tsx
 msgid "Post"
 msgstr "Post"
+
+#: src/routes/inbox.tsx
+msgid "Post die op jou wacht: brieven om te controleren of op een naam te zetten."
+msgstr "Post die op jou wacht: brieven om te controleren of op een naam te zetten."
 
 #: src/routes/root.tsx
 msgid "Probeer opnieuw"
@@ -981,6 +1016,10 @@ msgstr "Probeer opnieuw"
 #: src/routes/pair-app.tsx
 msgid "QR-code om de app te koppelen"
 msgstr "QR-code om de app te koppelen"
+
+#: src/routes/rule-editor.tsx
+msgid "Regel"
+msgstr "Regel"
 
 #: src/components/document-history.tsx
 msgid "Regel {ruleName}"
@@ -1021,6 +1060,10 @@ msgstr "Samenvatting"
 #: src/components/rule-sentence.ts
 msgid "Scan"
 msgstr "Scan"
+
+#: src/routes/post.tsx
+msgid "Scan een brief met de Brievie-app op je telefoon. Daarna staat hij hier."
+msgstr "Scan een brief met de Brievie-app op je telefoon. Daarna staat hij hier."
 
 #: src/routes/pair-app.tsx
 msgid "Scan met de Brievie-app"
@@ -1090,10 +1133,6 @@ msgstr "Tekst van de brief"
 msgid "Terug naar de regels"
 msgstr "Terug naar de regels"
 
-#: src/routes/document.tsx
-msgid "Terug naar Post"
-msgstr "Terug naar Post"
-
 #: src/components/document-history.tsx
 msgid "Terugdraaien"
 msgstr "Terugdraaien"
@@ -1144,6 +1183,10 @@ msgstr "Toevoegen"
 #: src/components/suggestion-list.tsx
 msgid "Toevoegen: {text}"
 msgstr "Toevoegen: {text}"
+
+#: src/routes/automations.tsx
+msgid "Uit"
+msgstr "Uit"
 
 #: src/routes/rule-editor.tsx
 msgid "Uit: de regel doet een voorstel dat jij bevestigt."
@@ -1214,6 +1257,10 @@ msgstr "Voor je eigen post en die van je gezin. Alles bij elkaar, rustig en over
 #: src/components/suggestion-list.tsx
 msgid "voorstel"
 msgstr "voorstel"
+
+#: src/routes/automations.tsx
+msgid "Voorstel"
+msgstr "Voorstel"
 
 #: src/components/suggestion-list.tsx
 msgid "Voorstel van AI"

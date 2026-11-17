@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button, ListBox, ListBoxItem, Popover, Select, SelectValue } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import type { components } from "../api/schema";
+import { Icon } from "./icons";
 
 type Person = components["schemas"]["PersonOut"];
 
@@ -41,7 +42,10 @@ export function PersonPicker({
       className="picker"
     >
       <Button className="picker-button">
-        <SelectValue>{names.length > 0 ? names.join(", ") : t`Niemand`}</SelectValue>
+        <SelectValue className="picker-value">
+          {names.length > 0 ? names.join(", ") : t`Niemand`}
+        </SelectValue>
+        <Icon name="chevronDown" className="picker-chevron" />
       </Button>
       <Popover className="picker-popover">
         <ListBox className="picker-list" items={options}>

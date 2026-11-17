@@ -6,8 +6,10 @@ import { Button, Dialog, Heading, Modal, ModalOverlay, Switch } from "react-aria
 import { ApiFailure, api } from "../api/client";
 import { labelsQuery, personsQuery, rulesQuery } from "../api/queries";
 import type { components } from "../api/schema";
-import { ErrorAlert, focusPageHeading, Shell, usePageTitle } from "../components/page";
+import { Icon } from "../components/icons";
+import { ErrorAlert, focusPageHeading, PageHeader, Shell, usePageTitle } from "../components/page";
 import { ruleSentence } from "../components/rule-sentence";
+import { Badge, EmptyState, Loading } from "../components/ui";
 import { workspaceRoute } from "./workspace";
 
 type RuleOut = components["schemas"]["RuleOut"];
@@ -37,6 +39,7 @@ function DeleteButton({ rule, onConfirm }: { rule: RuleOut; onConfirm: () => voi
         aria-label={t`Verwijderen: ${name}`}
         onPress={() => setOpen(true)}
       >
+        <Icon name="delete" />
         {t`Verwijderen`}
       </Button>
       <ModalOverlay isOpen={open} onOpenChange={setOpen} isDismissable className="overlay">
@@ -121,20 +124,29 @@ function RuleItem({
   const applied = rule.applied_count;
   const proposed = rule.proposed_count;
   return (
-    <li className="rule-item" data-rule-id={rule.id}>
+    <li className={rule.active ? "rule-item" : "rule-item rule-inactive"} data-rule-id={rule.id}>
       <div className="rule-main">
-        <h2 className="rule-name">
-          {canEdit ? (
-            <Link
-              to="/w/$workspaceId/automatisering/$ruleId"
-              params={{ workspaceId, ruleId: rule.id }}
-            >
-              {rule.name}
-            </Link>
+        <div className="rule-title">
+          <h2 className="rule-name">
+            {canEdit ? (
+              <Link
+                to="/w/$workspaceId/automatisering/$ruleId"
+                params={{ workspaceId, ruleId: rule.id }}
+              >
+                {rule.name}
+              </Link>
+            ) : (
+              rule.name
+            )}
+          </h2>
+          {/* Without the switches (a member), the state shows as badges. */}
+          {canEdit ? null : rule.mode === "auto" ? (
+            <Badge intent="brand" icon="flash">{t`Automatisch`}</Badge>
           ) : (
-            rule.name
+            <Badge>{t`Voorstel`}</Badge>
           )}
-        </h2>
+          {canEdit || rule.active ? null : <Badge>{t`Uit`}</Badge>}
+        </div>
         <p className="rule-sentence">{sentence}</p>
         <p className="rule-counts">{t`${applied} keer toegepast, ${proposed} keer voorgesteld`}</p>
       </div>
@@ -168,6 +180,7 @@ function RuleItem({
               data-move="up"
               onPress={() => onMove(-1)}
             >
+              <Icon name="arrowUp" />
               {t`Omhoog`}
             </Button>
             <Button
@@ -177,6 +190,7 @@ function RuleItem({
               data-move="down"
               onPress={() => onMove(1)}
             >
+              <Icon name="arrowDown" />
               {t`Omlaag`}
             </Button>
             <DeleteButton rule={rule} onConfirm={() => remove.mutate()} />
@@ -259,29 +273,35 @@ function AutomationsPage() {
 
   return (
     <Shell workspace={workspace}>
-      <header className="page-header">
-        <h1>{t`Automatisering`}</h1>
-        {canEdit ? (
-          <div className="header-actions">
+      <PageHeader
+        title={t`Automatisering`}
+        description={
+          canEdit
+            ? t`Een regel zet labels of een naam op nieuwe post. De regels draaien van boven naar beneden.`
+            : canRead
+              ? t`Alleen een beheerder kan regels wijzigen.`
+              : t`Alleen leden en beheerders van deze werkruimte zien de regels.`
+        }
+        commands={
+          canEdit ? (
             <Link to="/w/$workspaceId/automatisering/nieuw" params={params} className="button">
+              <Icon name="add" />
               {t`Nieuwe regel`}
             </Link>
-          </div>
-        ) : null}
-      </header>
-      <p className="panel-note">
-        {canEdit
-          ? t`Een regel zet labels of een naam op nieuwe post. De regels draaien van boven naar beneden.`
-          : canRead
-            ? t`Alleen een beheerder kan regels wijzigen.`
-            : t`Alleen leden en beheerders van deze werkruimte zien de regels.`}
-      </p>
-      {canRead && rules.isPending ? <p>{t`Even laden...`}</p> : null}
+          ) : null
+        }
+      />
+      {canRead && rules.isPending ? <Loading /> : null}
       <ErrorAlert error={rules.error ?? reorder.error ?? applyPreset.error ?? rowError} />
       {rules.data && list.length === 0 ? (
         <section className="panel" aria-label={t`Regels`}>
-          <p className="panel-note">{t`Je hebt nog geen regels.`}</p>
-          <div className="header-actions">
+          <EmptyState
+            icon="flash"
+            hint={canEdit ? t`Begin met de startset, of maak zelf een regel.` : undefined}
+          >
+            {t`Je hebt nog geen regels.`}
+          </EmptyState>
+          <div className="empty-actions">
             {canEdit ? (
               <Button
                 className="button secondary"
@@ -291,11 +311,13 @@ function AutomationsPage() {
                   applyPreset.mutate();
                 }}
               >
+                <Icon name="layers" />
                 {t`Startset toevoegen`}
               </Button>
             ) : null}
             {canEdit ? (
               <Link to="/w/$workspaceId/automatisering/nieuw" params={params} className="button">
+                <Icon name="add" />
                 {t`Nieuwe regel`}
               </Link>
             ) : null}

@@ -3,7 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { createRoute, useNavigate } from "@tanstack/react-router";
 import { documentsQuery, labelsQuery, personsQuery } from "../api/queries";
 import { DocumentTable } from "../components/document-table";
-import { ErrorAlert, Shell, usePageTitle } from "../components/page";
+import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
+import { Loading } from "../components/ui";
 import { workspaceRoute } from "./workspace";
 
 type FilterOption = { value: string; text: string };
@@ -39,56 +40,58 @@ function PostPage() {
 
   return (
     <Shell workspace={workspace}>
-      <header className="page-header">
-        <h1>{t`Post`}</h1>
-      </header>
+      <PageHeader title={t`Post`} />
       <div className="filter-bar">
-        <label htmlFor="filter-person">{t`Persoon`}</label>
-        <select
-          id="filter-person"
-          value={persoon ?? ""}
-          onChange={(event) =>
-            void navigate({
-              to: "/w/$workspaceId/post",
-              params: { workspaceId: workspace.id },
-              search: {
-                ...(event.target.value ? { persoon: event.target.value } : {}),
-                ...(label ? { label } : {}),
-              },
-            })
-          }
-        >
-          <option value="">{t`Iedereen`}</option>
-          {personOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.text}
-            </option>
-          ))}
-        </select>
-        <label htmlFor="filter-label">{t`Label`}</label>
-        <select
-          id="filter-label"
-          value={label ?? ""}
-          onChange={(event) =>
-            void navigate({
-              to: "/w/$workspaceId/post",
-              params: { workspaceId: workspace.id },
-              search: {
-                ...(persoon ? { persoon } : {}),
-                ...(event.target.value ? { label: event.target.value } : {}),
-              },
-            })
-          }
-        >
-          <option value="">{t`Alle labels`}</option>
-          {labelOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.text}
-            </option>
-          ))}
-        </select>
+        <div className="filter">
+          <label htmlFor="filter-person">{t`Persoon`}</label>
+          <select
+            id="filter-person"
+            value={persoon ?? ""}
+            onChange={(event) =>
+              void navigate({
+                to: "/w/$workspaceId/post",
+                params: { workspaceId: workspace.id },
+                search: {
+                  ...(event.target.value ? { persoon: event.target.value } : {}),
+                  ...(label ? { label } : {}),
+                },
+              })
+            }
+          >
+            <option value="">{t`Iedereen`}</option>
+            {personOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.text}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="filter">
+          <label htmlFor="filter-label">{t`Label`}</label>
+          <select
+            id="filter-label"
+            value={label ?? ""}
+            onChange={(event) =>
+              void navigate({
+                to: "/w/$workspaceId/post",
+                params: { workspaceId: workspace.id },
+                search: {
+                  ...(persoon ? { persoon } : {}),
+                  ...(event.target.value ? { label: event.target.value } : {}),
+                },
+              })
+            }
+          >
+            <option value="">{t`Alle labels`}</option>
+            {labelOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.text}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
-      {isPending ? <p>{t`Even laden...`}</p> : null}
+      {isPending ? <Loading /> : null}
       <ErrorAlert error={error ?? persons.error ?? labels.error} />
       {data ? (
         <DocumentTable
@@ -97,6 +100,11 @@ function PostPage() {
           persons={persons.data ?? []}
           labels={labels.data ?? []}
           empty={filtered ? t`Geen brieven met deze filters.` : t`Er is nog geen post.`}
+          hint={
+            filtered
+              ? t`Kies bij Persoon of Label een andere waarde.`
+              : t`Scan een brief met de Brievie-app op je telefoon. Daarna staat hij hier.`
+          }
         />
       ) : null}
     </Shell>

@@ -41,8 +41,11 @@ describe("home", () => {
     expect(within(nav).getByRole("link", { name: "Apparaten" })).not.toHaveAttribute(
       "aria-current",
     );
-    expect(await screen.findByText("anna@example.nl")).toBeInTheDocument();
-    expect(screen.getByText("Anna")).toBeInTheDocument();
+    // The name is in the app bar; the e-mail address is in the account menu.
+    expect(await screen.findByText("Anna")).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Account" }));
+    const menu = await screen.findByRole("dialog", { name: "Account" });
+    expect(within(menu).getByText("anna@example.nl")).toBeInTheDocument();
   });
 
   it("links each workspace when there are several", async () => {
@@ -79,6 +82,7 @@ describe("home", () => {
     );
     const u = userEvent.setup();
     const { router } = renderApp("/");
+    await u.click(await screen.findByRole("button", { name: "Account" }));
     await u.click(await screen.findByRole("button", { name: /uitloggen/i }));
     expect(await screen.findByRole("button", { name: /^inloggen$/i })).toBeInTheDocument();
     expect(csrf).toBe("tok123");

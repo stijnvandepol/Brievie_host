@@ -2,8 +2,8 @@ import { t } from "@lingui/core/macro";
 import { Link } from "@tanstack/react-router";
 import type { components } from "../api/schema";
 import { LabelChips } from "./label-chip";
-import { personNames } from "./person-picker";
 import { SuggestionMark } from "./suggestion-list";
+import { Badge, EmptyState, type Intent, Personas } from "./ui";
 
 type DocumentSummary = components["schemas"]["DocumentSummaryOut"];
 type Person = components["schemas"]["PersonOut"];
@@ -61,6 +61,35 @@ export function statusLabel(status: string): string {
   }
 }
 
+function statusIntent(status: string): Intent | "brand" | undefined {
+  switch (status) {
+    case "processing":
+      return "info";
+    case "needs_review":
+      return "warning";
+    case "done":
+      return "success";
+    case "failed":
+      return "error";
+    default:
+      return undefined;
+  }
+}
+
+/** The status of a letter as a badge: its word, a tint and an icon. */
+export function StatusBadge({ status }: { status: string }) {
+  return <Badge intent={statusIntent(status)}>{statusLabel(status)}</Badge>;
+}
+
+/** The persons a letter is addressed to, each with initials; ids nobody knows are skipped. */
+export function Addressees({ persons, ids }: { persons: Person[]; ids: string[] }) {
+  const people = ids.flatMap((id) => {
+    const person = persons.find((candidate) => candidate.id === id);
+    return person ? [{ id: person.id, name: person.display_name }] : [];
+  });
+  return <Personas people={people} />;
+}
+
 /** A date-only value (`2026-11-05`) shown without a timezone shift. */
 export function formatLetterDate(value: string): string {
   return date.format(new Date(`${value}T12:00:00`));
@@ -73,6 +102,7 @@ export function DocumentTable({
   persons,
   labels,
   empty,
+  hint,
 }: {
   workspaceId: string;
   documents: DocumentSummary[];
@@ -80,11 +110,15 @@ export function DocumentTable({
   labels: LabelOut[];
   /** What to say when there are no letters. */
   empty: string;
+  /** What to do about an empty list, in a sentence. */
+  hint?: string;
 }) {
   if (documents.length === 0) {
     return (
       <section className="panel" aria-label={t`Post`}>
-        <p className="panel-note">{empty}</p>
+        <EmptyState icon="mail" hint={hint}>
+          {empty}
+        </EmptyState>
       </section>
     );
   }
@@ -118,13 +152,17 @@ export function DocumentTable({
               <td className="num">
                 {document.letter_date ? formatLetterDate(document.letter_date) : ""}
               </td>
-              <td>{personNames(persons, document.addressee_ids ?? []).join(", ")}</td>
+              <td>
+                <Addressees persons={persons} ids={document.addressee_ids ?? []} />
+              </td>
               <td>
                 <LabelChips labels={labels} ids={document.label_ids ?? []} />
               </td>
               <td>
-                <span className="tag">{statusLabel(document.status)}</span>{" "}
-                <SuggestionMark count={document.open_suggestion_count} />
+                <span className="cell-badges">
+                  <StatusBadge status={document.status} />
+                  <SuggestionMark count={document.open_suggestion_count} />
+                </span>
               </td>
               <td className="num">
                 <time dateTime={document.created_at}>

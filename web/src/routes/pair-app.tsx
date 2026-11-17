@@ -6,7 +6,9 @@ import { useEffect, useRef, useState } from "react";
 import { Button, Label, TextArea, TextField } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import { DeviceTable } from "../components/device-table";
-import { ErrorAlert, Shell, usePageTitle } from "../components/page";
+import { Icon } from "../components/icons";
+import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
+import { MessageBar } from "../components/ui";
 import { requireUser } from "../guards";
 import { rootRoute } from "./root";
 
@@ -121,34 +123,45 @@ function PairAppPage() {
 
   return (
     <Shell>
-      <header className="page-header">
-        <div className="page-title">
-          <span className="eyebrow">{t`Apparaten`}</span>
-          <h1>{t`App koppelen`}</h1>
-        </div>
-        {pairing === undefined ? (
-          <Button className="button" onPress={() => create.mutate()} isPending={create.isPending}>
-            {t`Koppelcode maken`}
-          </Button>
-        ) : null}
-        {expired ? (
-          <Button
-            ref={newCode}
-            className="button"
-            onPress={() => create.mutate()}
-            isPending={create.isPending}
-          >
-            {t`Nieuwe code`}
-          </Button>
-        ) : null}
-      </header>
+      <PageHeader
+        eyebrow={t`Apparaten`}
+        title={t`App koppelen`}
+        description={t`Koppel de Brievie-app op je telefoon aan deze server. Daarna scan je brieven met de app.`}
+        commands={
+          pairing === undefined || expired ? (
+            <>
+              {pairing === undefined ? (
+                <Button
+                  className="button"
+                  onPress={() => create.mutate()}
+                  isPending={create.isPending}
+                >
+                  <Icon name="link" />
+                  {t`Koppelcode maken`}
+                </Button>
+              ) : null}
+              {expired ? (
+                <Button
+                  ref={newCode}
+                  className="button"
+                  onPress={() => create.mutate()}
+                  isPending={create.isPending}
+                >
+                  <Icon name="refresh" />
+                  {t`Nieuwe code`}
+                </Button>
+              ) : null}
+            </>
+          ) : null
+        }
+      />
 
       <ErrorAlert error={create.error} />
 
       {pairing !== undefined && onlyReachableOnTheServer(pairing.qr_payload) ? (
-        <div role="alert" className="alert">
+        <MessageBar intent="warning" role="alert">
           {t`Je server staat ingesteld op 'localhost'. Je telefoon kan die niet bereiken. Stel in het bestand .env de naam of het IP-adres van je server in (BRIEVIE_HOSTNAME).`}
-        </div>
+        </MessageBar>
       ) : null}
 
       <p role="status" aria-live="polite" className="status">
@@ -200,6 +213,7 @@ function PairAppPage() {
             <p className="muted">{t`Open de app op je telefoon en scan de code. De telefoon moet op hetzelfde netwerk zitten als deze server.`}</p>
             <div>
               <Button className="button secondary" onPress={() => copyPayload(pairing.qr_payload)}>
+                <Icon name="copy" />
                 {t`Kopieer koppelgegevens`}
               </Button>
             </div>

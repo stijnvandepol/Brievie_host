@@ -1,13 +1,14 @@
 import { plural, t } from "@lingui/core/macro";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button, Form, Input, Label, Switch, TextField } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import { labelsQuery, personsQuery, rulesQuery } from "../api/queries";
 import type { components } from "../api/schema";
 import { DocumentTable, typeLabel } from "../components/document-table";
-import { ErrorAlert, Shell, usePageTitle } from "../components/page";
+import { Icon } from "../components/icons";
+import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
 import {
   DOCUMENT_TYPES,
   FIELD_OPERATORS,
@@ -17,6 +18,7 @@ import {
   SOURCES,
   sourceLabel,
 } from "../components/rule-sentence";
+import { Loading, MessageBar } from "../components/ui";
 import { workspaceRoute } from "./workspace";
 
 type RuleOut = components["schemas"]["RuleOut"];
@@ -192,6 +194,7 @@ function ConditionEditor({
         isDisabled={!canRemove}
         onPress={onRemove}
       >
+        <Icon name="delete" />
         {t`Verwijderen`}
       </Button>
     </fieldset>
@@ -242,6 +245,7 @@ function ActionEditor({
         isDisabled={!canRemove}
         onPress={onRemove}
       >
+        <Icon name="delete" />
         {t`Verwijderen`}
       </Button>
     </fieldset>
@@ -414,6 +418,7 @@ function RuleForm({
   }, [hasResult]);
 
   const params = { workspaceId };
+  const formId = useId();
   const matched = test.data?.matched_count ?? 0;
   const checked = test.data?.checked_count ?? 0;
   const total = test.data?.total_count ?? 0;
@@ -429,12 +434,20 @@ function RuleForm({
         if (check()) save.mutate();
       }}
     >
-      <TextField className="field" value={name} onChange={setName} isRequired maxLength={100}>
-        <Label>{t`Naam`}</Label>
-        <Input />
-      </TextField>
+      <section className="builder-section" aria-labelledby={`${formId}-name`}>
+        <h2 id={`${formId}-name`} className="builder-title">
+          {t`Regel`}
+        </h2>
+        <TextField className="field" value={name} onChange={setName} isRequired maxLength={100}>
+          <Label>{t`Naam`}</Label>
+          <Input />
+        </TextField>
+      </section>
 
-      <section className="form-section" aria-label={t`Voorwaarden`}>
+      <section className="builder-section" aria-labelledby={`${formId}-if`}>
+        <h2 id={`${formId}-if`} className="builder-title">
+          {t`Voorwaarden`}
+        </h2>
         <div className="rule-match">
           <span>{t`Als`}</span>
           <SelectField
@@ -462,7 +475,7 @@ function RuleForm({
           />
         ))}
         <Button
-          className="button secondary"
+          className="button-text"
           isDisabled={conditions.length >= 20}
           onPress={() =>
             setConditions([
@@ -471,12 +484,16 @@ function RuleForm({
             ])
           }
         >
+          <Icon name="add" />
           {t`Voorwaarde toevoegen`}
         </Button>
       </section>
 
-      <section className="form-section" aria-label={t`Acties`}>
-        <p className="choice-label">{t`Dan`}</p>
+      <section className="builder-section" aria-labelledby={`${formId}-then`}>
+        <h2 id={`${formId}-then`} className="builder-title">
+          {t`Acties`}
+        </h2>
+        <p className="rule-then">{t`Dan`}</p>
         {actions.map((row, index) => (
           <ActionEditor
             key={row.key}
@@ -491,15 +508,19 @@ function RuleForm({
           />
         ))}
         <Button
-          className="button secondary"
+          className="button-text"
           isDisabled={actions.length >= 10}
           onPress={() => setActions([...actions, { key: newKey(), ...newAction(choices) }])}
         >
+          <Icon name="add" />
           {t`Actie toevoegen`}
         </Button>
       </section>
 
-      <section className="form-section rule-switches" aria-label={t`Instellingen`}>
+      <section className="builder-section rule-switches" aria-labelledby={`${formId}-settings`}>
+        <h2 id={`${formId}-settings`} className="builder-title">
+          {t`Instellingen`}
+        </h2>
         <Switch
           className="switch"
           isSelected={mode === "auto"}
@@ -508,7 +529,7 @@ function RuleForm({
           <span className="switch-track" aria-hidden="true" />
           {t`Automatisch toepassen`}
         </Switch>
-        <p className="panel-note">{t`Uit: de regel doet een voorstel dat jij bevestigt.`}</p>
+        <p className="switch-hint">{t`Uit: de regel doet een voorstel dat jij bevestigt.`}</p>
         <Switch className="switch" isSelected={stop} onChange={setStop}>
           <span className="switch-track" aria-hidden="true" />
           {t`Stop daarna met de volgende regels`}
@@ -520,20 +541,21 @@ function RuleForm({
       </section>
 
       {choices.labels.length === 0 ? (
-        <p className="panel-note">{t`Maak eerst een label.`}</p>
+        <MessageBar intent="info">{t`Maak eerst een label.`}</MessageBar>
       ) : null}
       {choices.persons.length === 0 ? (
-        <p className="panel-note">{t`Voeg eerst een persoon toe.`}</p>
+        <MessageBar intent="info">{t`Voeg eerst een persoon toe.`}</MessageBar>
       ) : null}
       {blocked ? (
-        <div role="alert" className="alert">
+        <MessageBar intent="error" role="alert">
           {blocked}
-        </div>
+        </MessageBar>
       ) : null}
       <ErrorAlert error={save.error ?? test.error ?? run.error} />
 
       <div className="form-actions">
         <Button type="submit" className="button" isPending={save.isPending}>
+          <Icon name="save" />
           {t`Opslaan`}
         </Button>
         <Button
@@ -544,6 +566,7 @@ function RuleForm({
             if (check()) test.mutate();
           }}
         >
+          <Icon name="beaker" />
           {t`Test op bestaande post`}
         </Button>
         <Link to="/w/$workspaceId/automatisering" params={params} className="button-text">
@@ -554,17 +577,17 @@ function RuleForm({
       {test.data ? (
         <section
           ref={resultRef}
-          className="panel"
+          className="test-result"
           role="status"
           aria-label={t`Uitkomst van de test`}
         >
-          <p>
+          <p className="test-result-count">
             {plural(matched, {
               one: `# van de nieuwste ${checked} brieven past`,
               other: `# van de nieuwste ${checked} brieven passen`,
             })}
           </p>
-          {total > checked ? <p>{t`Je hebt ${total} brieven`}</p> : null}
+          {total > checked ? <p className="muted">{t`Je hebt ${total} brieven`}</p> : null}
           <DocumentTable
             workspaceId={workspaceId}
             documents={test.data.documents}
@@ -576,7 +599,10 @@ function RuleForm({
       ) : null}
 
       {savedActive === true ? (
-        <section className="panel" aria-label={t`Toepassen op bestaande post`}>
+        <section
+          className="panel panel-pad apply-offer"
+          aria-label={t`Toepassen op bestaande post`}
+        >
           <h2>{t`Toepassen op bestaande post?`}</h2>
           <p>
             {limited
@@ -584,7 +610,9 @@ function RuleForm({
               : t`De regel wordt op al je post toegepast.`}
           </p>
           {running ? (
-            <p role="status">{t`Bezig. Je ziet het resultaat bij de brieven zelf.`}</p>
+            <MessageBar intent="info" role="status">
+              {t`Bezig. Je ziet het resultaat bij de brieven zelf.`}
+            </MessageBar>
           ) : (
             <Button
               className="button"
@@ -594,12 +622,17 @@ function RuleForm({
                 run.mutate();
               }}
             >
+              <Icon name="play" />
               {t`Toepassen`}
             </Button>
           )}
         </section>
       ) : null}
-      {savedActive === false ? <p role="status">{t`De regel is opgeslagen.`}</p> : null}
+      {savedActive === false ? (
+        <MessageBar intent="success" role="status">
+          {t`De regel is opgeslagen.`}
+        </MessageBar>
+      ) : null}
     </Form>
   );
 }
@@ -617,18 +650,23 @@ function RuleEditorPage({ ruleId, justCreated }: { ruleId: string | null; justCr
 
   return (
     <Shell workspace={workspace}>
-      <header className="page-header">
-        <h1>{ruleId ? t`Regel wijzigen` : t`Nieuwe regel`}</h1>
-      </header>
+      <PageHeader
+        title={ruleId ? t`Regel wijzigen` : t`Nieuwe regel`}
+        breadcrumb={{
+          to: "/w/$workspaceId/automatisering",
+          params: { workspaceId: workspace.id },
+          label: t`Automatisering`,
+        }}
+      />
       {canEdit ? null : (
-        <p className="panel-note">{t`Alleen een beheerder kan regels wijzigen.`}</p>
+        <MessageBar intent="info">{t`Alleen een beheerder kan regels wijzigen.`}</MessageBar>
       )}
-      {canEdit && !ready ? <p>{t`Even laden...`}</p> : null}
+      {canEdit && !ready ? <Loading /> : null}
       <ErrorAlert error={rules.error ?? labels.error ?? persons.error} />
       {canEdit && ready && ruleId && !rule ? (
-        <p role="alert" className="alert">
+        <MessageBar intent="error" role="alert">
           {t`Deze regel bestaat niet (meer).`}
-        </p>
+        </MessageBar>
       ) : null}
       {canEdit && ready && (!ruleId || rule) ? (
         <RuleForm

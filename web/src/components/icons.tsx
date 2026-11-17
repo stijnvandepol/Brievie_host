@@ -1,0 +1,75 @@
+/**
+ * Brievie's line icons: 20 px, 1.5 px stroke, round ends, drawn after the Fluent 2 system
+ * icons but our own. Inline SVG, so no font and no download at runtime, and no inline
+ * style (the CSP forbids it). Always decorative: the text next to an icon names the control.
+ */
+
+const PATHS = {
+  menu: "M3 5.5h14M3 10h14M3 14.5h14",
+  inbox: "M3 11l2-6.5h10L17 11v4.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1zM3 11h4l1 2h4l1-2h4",
+  mail: "M4.5 4.5h11a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 3 14V6a1.5 1.5 0 0 1 1.5-1.5zM3.5 5.5 10 10.5l6.5-5",
+  people:
+    "M7.5 9.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM2.5 16c.4-2.6 2.4-4.5 5-4.5s4.6 1.9 5 4.5M14 9.5a2 2 0 1 0 0-4M14.5 11.5c1.6.2 2.7 1.6 3 3.5",
+  tag: "M3.5 3.5h6l7 7a1 1 0 0 1 0 1.4l-4.6 4.6a1 1 0 0 1-1.4 0l-7-7zM7 7.25h.01",
+  flash: "M11 2.5 4.5 11h5l-1 6.5L15.5 9h-5z",
+  grid: "M4 3.5h3.5a.5.5 0 0 1 .5.5v3.5a.5.5 0 0 1-.5.5H4a.5.5 0 0 1-.5-.5V4a.5.5 0 0 1 .5-.5zM12.5 3.5H16a.5.5 0 0 1 .5.5v3.5a.5.5 0 0 1-.5.5h-3.5a.5.5 0 0 1-.5-.5V4a.5.5 0 0 1 .5-.5zM4 12h3.5a.5.5 0 0 1 .5.5V16a.5.5 0 0 1-.5.5H4a.5.5 0 0 1-.5-.5v-3.5A.5.5 0 0 1 4 12zM12.5 12H16a.5.5 0 0 1 .5.5V16a.5.5 0 0 1-.5.5h-3.5a.5.5 0 0 1-.5-.5v-3.5a.5.5 0 0 1 .5-.5z",
+  phone:
+    "M7.5 2.5h5A1.5 1.5 0 0 1 14 4v12a1.5 1.5 0 0 1-1.5 1.5h-5A1.5 1.5 0 0 1 6 16V4a1.5 1.5 0 0 1 1.5-1.5zM9 15h2",
+  signOut:
+    "M8 3.5H5A1.5 1.5 0 0 0 3.5 5v10A1.5 1.5 0 0 0 5 16.5h3M12 6.5l3.5 3.5-3.5 3.5M15.5 10H8",
+  chevronDown: "M6 8l4 4 4-4",
+  chevronRight: "M8 6l4 4-4 4",
+  chevronLeft: "M12 6l-4 4 4 4",
+  add: "M10 4v12M4 10h12",
+  edit: "M13.5 3.5l3 3-9 9h-3v-3zM11.5 5.5l3 3",
+  delete: "M4 6h12M8 6V4.5h4V6M5.5 6l.8 9.6a1 1 0 0 0 1 .9h5.4a1 1 0 0 0 1-.9L14.5 6",
+  archive:
+    "M3.75 4h12.5a.75.75 0 0 1 .75.75v2a.75.75 0 0 1-.75.75H3.75A.75.75 0 0 1 3 6.75v-2A.75.75 0 0 1 3.75 4zM4.5 7.5V15a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V7.5M8 10.5h4",
+  restore: "M4 10a6 6 0 1 0 1.8-4.3M4 3.5v3h3",
+  arrowUp: "M10 16V4M5.5 8.5 10 4l4.5 4.5",
+  arrowDown: "M10 4v12M5.5 11.5 10 16l4.5-4.5",
+  info: "M10 17a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM10 9v4.5M10 6.5h.01",
+  success: "M10 17a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM7 10.2l2 2 4-4.4",
+  warning:
+    "M8.7 3.8a1.5 1.5 0 0 1 2.6 0l6 10.5A1.5 1.5 0 0 1 16 16.5H4a1.5 1.5 0 0 1-1.3-2.2zM10 8v3.5M10 13.75h.01",
+  error: "M10 17a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM7.5 7.5l5 5M12.5 7.5l-5 5",
+  checkmark: "M4.5 10.5 8 14l7.5-8",
+  dismiss: "M5 5l10 10M15 5 5 15",
+  copy: "M8.5 7h7A1.5 1.5 0 0 1 17 8.5v7a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 7 15.5v-7A1.5 1.5 0 0 1 8.5 7zM13 7V4.5A1.5 1.5 0 0 0 11.5 3h-7A1.5 1.5 0 0 0 3 4.5v7A1.5 1.5 0 0 0 4.5 13H7",
+  beaker: "M7.5 3h5M8.5 3v5L4.2 15.4a1 1 0 0 0 .9 1.6h9.8a1 1 0 0 0 .9-1.6L11.5 8V3M6.3 12h7.4",
+  save: "M4.5 3.5h9l3 3v9a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1v-11a1 1 0 0 1 1-1zM7 3.5V7h5.5V3.5M6.5 16.5V11h7v5.5",
+  play: "M6.5 4.2v11.6a.5.5 0 0 0 .8.4l8.7-5.8a.5.5 0 0 0 0-.8L7.3 3.8a.5.5 0 0 0-.8.4z",
+  link: "M8.5 11.5a3 3 0 0 0 4.2 0l2.6-2.6a3 3 0 0 0-4.2-4.2l-.8.8M11.5 8.5a3 3 0 0 0-4.2 0l-2.6 2.6a3 3 0 0 0 4.2 4.2l.8-.8",
+  undo: "M7 4.5 3.5 8 7 11.5M3.5 8H12a4.5 4.5 0 0 1 0 9H9",
+  lightbulb:
+    "M7.5 14.5h5M8.5 17h3M10 3a4.5 4.5 0 0 0-2.7 8.1c.4.3.7.8.7 1.3v.6h4v-.6c0-.5.3-1 .7-1.3A4.5 4.5 0 0 0 10 3z",
+  document:
+    "M5.5 2.5h6l3.5 3.5v10.5a1 1 0 0 1-1 1h-8.5a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1zM11.5 2.5V6H15M7 10h6M7 13h4",
+  refresh: "M16 10a6 6 0 1 1-1.8-4.3M16 3.5v3h-3",
+  home: "M3.5 9 10 3.5 16.5 9v7a.5.5 0 0 1-.5.5h-4V12H8v4.5H4a.5.5 0 0 1-.5-.5z",
+  building:
+    "M4 16.5V4a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 .5.5v12.5M12 8h3.5a.5.5 0 0 1 .5.5v8M2.5 16.5h15M7 6.5h2M7 9.5h2M7 12.5h2",
+  layers: "M10 3 17 6.5 10 10 3 6.5zM3 10l7 3.5 7-3.5M3 13.5 10 17l7-3.5",
+} as const;
+
+export type IconName = keyof typeof PATHS;
+
+export function Icon({ name, className }: { name: IconName; className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      focusable="false"
+      className={className ? `icon ${className}` : "icon"}
+      viewBox="0 0 20 20"
+      width="20"
+      height="20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d={PATHS[name]} />
+    </svg>
+  );
+}

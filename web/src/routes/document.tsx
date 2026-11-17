@@ -1,15 +1,16 @@
 import { t } from "@lingui/core/macro";
 import { useQuery } from "@tanstack/react-query";
-import { createRoute, Link } from "@tanstack/react-router";
+import { createRoute } from "@tanstack/react-router";
 import { documentQuery, labelsQuery, personsQuery } from "../api/queries";
 import type { components } from "../api/schema";
 import { DocumentHistory } from "../components/document-history";
-import { formatLetterDate, statusLabel, typeLabel } from "../components/document-table";
+import { formatLetterDate, StatusBadge, typeLabel } from "../components/document-table";
 import { LabelPicker, useSetLabels } from "../components/label-picker";
-import { ErrorAlert, Shell, usePageTitle } from "../components/page";
+import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
 import { PersonPicker, useSetAddressees } from "../components/person-picker";
 import { SuggestionList } from "../components/suggestion-list";
 import { TaskList } from "../components/task-list";
+import { Loading, MessageBar } from "../components/ui";
 import { workspaceRoute } from "./workspace";
 
 type Document = components["schemas"]["DocumentOut"];
@@ -66,10 +67,10 @@ function Proposals({ proposals }: { proposals: Proposal[] }) {
 
 function StatusNotice({ document }: { document: Document }) {
   if (document.status === "processing") {
-    return <p className="notice">{t`Deze brief wordt nog gelezen.`}</p>;
+    return <MessageBar intent="info">{t`Deze brief wordt nog gelezen.`}</MessageBar>;
   }
   if (document.status === "needs_review" || document.status === "failed") {
-    return <p className="notice">{t`Controleer deze brief in de app.`}</p>;
+    return <MessageBar intent="warning">{t`Controleer deze brief in de app.`}</MessageBar>;
   }
   return null;
 }
@@ -121,7 +122,9 @@ function DocumentView({
             </div>
             <div>
               <dt>{t`Status`}</dt>
-              <dd>{statusLabel(document.status)}</dd>
+              <dd>
+                <StatusBadge status={document.status} />
+              </dd>
             </div>
             <div>
               <dt>{t`Op naam van`}</dt>
@@ -201,16 +204,16 @@ function DocumentPage() {
 
   return (
     <Shell workspace={workspace}>
-      <p className="back-link">
-        <Link to="/w/$workspaceId/post" params={{ workspaceId: workspace.id }}>
-          {t`Terug naar Post`}
-        </Link>
-      </p>
       {/* Always there, so the focus after a route change has a heading to land on. */}
-      <header className="page-header">
-        <h1>{title}</h1>
-      </header>
-      {isPending ? <p>{t`Even laden...`}</p> : null}
+      <PageHeader
+        title={title}
+        breadcrumb={{
+          to: "/w/$workspaceId/post",
+          params: { workspaceId: workspace.id },
+          label: t`Post`,
+        }}
+      />
+      {isPending ? <Loading /> : null}
       <ErrorAlert error={error} />
       {data ? (
         <DocumentView

@@ -5,7 +5,9 @@ import { Button, Dialog, DialogTrigger, Heading, Modal, ModalOverlay } from "rea
 import { ApiFailure, api } from "../api/client";
 import { devicesQuery } from "../api/queries";
 import type { components } from "../api/schema";
+import { Icon } from "./icons";
 import { ErrorAlert } from "./page";
+import { Badge, EmptyState, Loading } from "./ui";
 
 type Device = components["schemas"]["DeviceOut"];
 
@@ -34,11 +36,12 @@ function DeviceRow({ device }: { device: Device }) {
       </td>
       <td>
         {/* The list only holds devices that have not been revoked. */}
-        <span className="tag tag-success">{t`Actief`}</span>
+        <Badge intent="success">{t`Actief`}</Badge>
       </td>
       <td className="cell-action">
         <DialogTrigger>
           <Button className="button-text danger" aria-label={t`Intrekken: ${device.name}`}>
+            <Icon name="dismiss" />
             {t`Intrekken`}
           </Button>
           <ModalOverlay isDismissable className="overlay">
@@ -95,14 +98,18 @@ export function DeviceTable() {
           </span>
         ) : null}
       </div>
-      {isPending ? <p className="panel-note">{t`Even laden...`}</p> : null}
+      {isPending ? (
+        <div className="panel-note">
+          <Loading />
+        </div>
+      ) : null}
       {error ? (
         <div className="panel-note">
           <ErrorAlert error={error} />
         </div>
       ) : null}
       {data && data.length === 0 ? (
-        <p className="panel-note">{t`Er zijn nog geen apparaten gekoppeld.`}</p>
+        <EmptyState icon="phone">{t`Er zijn nog geen apparaten gekoppeld.`}</EmptyState>
       ) : null}
       {data && data.length > 0 ? (
         // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrolling box must be reachable by keyboard (WCAG 2.1.1).

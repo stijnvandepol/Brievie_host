@@ -10,6 +10,7 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import { Button } from "react-aria-components";
+import { Icon } from "../components/icons";
 import { ErrorAlert, focusPageHeading, Plain, usePageTitle } from "../components/page";
 
 /** After a route change, screen reader and keyboard users start at the new page's title. */
@@ -38,6 +39,7 @@ function RouteError({ error, reset }: ErrorComponentProps) {
       <h1>{t`Er ging iets mis`}</h1>
       <ErrorAlert error={error} />
       <Button className="button" onPress={retry}>
+        <Icon name="refresh" />
         {t`Probeer opnieuw`}
       </Button>
     </Plain>
