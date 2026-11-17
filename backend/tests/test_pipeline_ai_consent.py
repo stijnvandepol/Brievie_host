@@ -14,7 +14,7 @@ from apps.workspaces.context import workspace_context
 from apps.workspaces.models import Workspace
 from tests.documents_support import admin_of
 
-API_KEY = "sk-geheime-sleutel-123"
+API_KEY = "nep-sleutel-voor-tests"
 ACCEPT = "--accept-external-ai"
 
 
@@ -396,6 +396,8 @@ def test_status_names_the_service_and_the_day_of_consent(client: Client, ws_a: W
         "supplier": "mistral",
         "host": "api.mistral.ai",
         "since": api_time(granted.created_at),
+        "has_api_key": True,
+        "model": "mistral-large-latest",
     }
 
 
@@ -405,7 +407,8 @@ def test_status_after_switching_off_names_nothing(client: Client, ws_a: Workspac
         off(ws_a)
 
     assert ai_status(client, ws_a) == {
-        "mode": "off", "supplier": None, "host": None, "since": None,
+        "mode": "off", "supplier": None, "host": None, "since": None, "has_api_key": False,
+        "model": None,
     }  # fmt: skip
 
 
@@ -431,6 +434,8 @@ def test_status_without_recorded_consent_has_no_date(client: Client, ws_a: Works
 
     assert ai_status(client, ws_a) == {
         "mode": "external", "supplier": None, "host": "api.mistral.ai", "since": None,
+        "has_api_key": False,
+        "model": "m",
     }  # fmt: skip
 
 
@@ -440,4 +445,11 @@ def test_status_fields_are_optional_in_the_contract() -> None:
     schema = api.get_openapi_schema()["components"]["schemas"]["AiStatusOut"]
 
     assert schema["required"] == ["mode"]
-    assert set(schema["properties"]) == {"mode", "supplier", "host", "since"}
+    assert set(schema["properties"]) == {
+        "mode",
+        "supplier",
+        "host",
+        "since",
+        "has_api_key",
+        "model",
+    }

@@ -2758,3 +2758,42 @@ section[tabindex="-1"]:focus-visible {
     background: Highlight;
   }
 }
+
+/* AI settings: the form, and the server's notice in the consent dialog. */
+.ai-form {
+  max-width: 720px;
+}
+
+.advanced-summary {
+  cursor: pointer;
+  color: var(--brand-link);
+  margin-bottom: var(--s-m);
+}
+
+.advanced[open] {
+  display: grid;
+  gap: var(--s-l);
+}
+
+.modal-wide {
+  max-width: 640px;
+}
+
+.consent-notice {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.check {
+  margin-top: var(--s-l);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-s);
+}
+
+.check input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+}

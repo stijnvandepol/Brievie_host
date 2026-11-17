@@ -182,6 +182,10 @@ msgstr "Actief: {name}"
 msgid "Acties"
 msgstr "Acties"
 
+#: src/routes/ai.tsx
+msgid "Adres van de AI op je netwerk"
+msgstr "Adres van de AI op je netwerk"
+
 #: src/routes/setup.tsx
 msgid "Afdelingen"
 msgstr "Afdelingen"
@@ -197,6 +201,11 @@ msgstr "Afgerond op {0}"
 msgid "Afzender"
 msgstr "Afzender"
 
+#: src/components/page.tsx
+#: src/routes/ai.tsx
+msgid "AI"
+msgstr "AI"
+
 #: src/components/ai-status-line.tsx
 msgid "AI aan op je eigen netwerk: de tekst van brieven gaat niet naar een dienst daarbuiten."
 msgstr "AI aan op je eigen netwerk: de tekst van brieven gaat niet naar een dienst daarbuiten."
@@ -205,9 +214,21 @@ msgstr "AI aan op je eigen netwerk: de tekst van brieven gaat niet naar een dien
 msgid "AI aan: tekst van brieven gaat naar {service}, ingesteld op {since}."
 msgstr "AI aan: tekst van brieven gaat naar {service}, ingesteld op {since}."
 
+#: src/routes/ai.tsx
+msgid "AI aanzetten"
+msgstr "AI aanzetten"
+
+#: src/routes/ai.tsx
+msgid "AI aanzetten?"
+msgstr "AI aanzetten?"
+
 #: src/components/ai-status-line.tsx
 msgid "AI is ingesteld, maar niemand heeft daar akkoord voor gegeven. De AI leest daarom geen brieven. De beheerder kan AI opnieuw instellen."
 msgstr "AI is ingesteld, maar niemand heeft daar akkoord voor gegeven. De AI leest daarom geen brieven. De beheerder kan AI opnieuw instellen."
+
+#: src/routes/ai.tsx
+msgid "AI op je eigen netwerk"
+msgstr "AI op je eigen netwerk"
 
 #: src/components/ai-status-line.tsx
 msgid "AI uit: de tekst van brieven gaat naar geen enkele AI-dienst."
@@ -221,6 +242,10 @@ msgstr "alle"
 msgid "Alle labels"
 msgstr "Alle labels"
 
+#: src/routes/ai.tsx
+msgid "Alleen de beheerder van deze werkruimte kan dit veranderen."
+msgstr "Alleen de beheerder van deze werkruimte kan dit veranderen."
+
 #: src/routes/automations.tsx
 #: src/routes/rule-editor.tsx
 msgid "Alleen een beheerder kan regels wijzigen."
@@ -230,12 +255,17 @@ msgstr "Alleen een beheerder kan regels wijzigen."
 msgid "Alleen leden en beheerders van deze werkruimte zien de regels."
 msgstr "Alleen leden en beheerders van deze werkruimte zien de regels."
 
+#: src/routes/ai.tsx
+msgid "Alleen voor een andere dienst die werkt zoals OpenAI. Begint met https://. Vul je dit in, dan geldt de dienst die je hierboven koos niet meer en is een model verplicht."
+msgstr "Alleen voor een andere dienst die werkt zoals OpenAI. Begint met https://. Vul je dit in, dan geldt de dienst die je hierboven koos niet meer en is een model verplicht."
+
 #: src/components/rule-sentence.ts
 #: src/routes/rule-editor.tsx
 msgid "Als"
 msgstr "Als"
 
 #: src/components/device-table.tsx
+#: src/routes/ai.tsx
 #: src/routes/automations.tsx
 #: src/routes/labels.tsx
 #: src/routes/persons.tsx
@@ -322,6 +352,10 @@ msgstr "Bewaakte map"
 #: src/routes/rule-editor.tsx
 msgid "Bezig. Je ziet het resultaat bij de brieven zelf."
 msgstr "Bezig. Je ziet het resultaat bij de brieven zelf."
+
+#: src/routes/ai.tsx
+msgid "Bijvoorbeeld http://ollama:11434/v1"
+msgstr "Bijvoorbeeld http://ollama:11434/v1"
 
 #: src/routes/setup.tsx
 msgid "Bijvoorbeeld: Sales, Finance, HR. Je krijgt per afdeling een label."
@@ -430,6 +464,10 @@ msgstr "de tekst"
 msgid "De tekst"
 msgstr "De tekst"
 
+#: src/routes/ai.tsx
+msgid "De tekst van elke brief gaat naar een bedrijf dat de AI levert. Je krijgt eerst te zien wat er precies weggaat."
+msgstr "De tekst van elke brief gaat naar een bedrijf dat de AI levert. Je krijgt eerst te zien wat er precies weggaat."
+
 #: src/routes/document.tsx
 msgid "Deadline"
 msgstr "Deadline"
@@ -455,10 +493,27 @@ msgstr "Deze regel bestaat niet (meer)."
 msgid "deze voorwaarden kloppen"
 msgstr "deze voorwaarden kloppen"
 
+#. placeholder {0}: status.host ?? ""
+#: src/routes/ai.tsx
+msgid "Deze werkruimte gebruikt nu een eigen adres ({0}). Vul dat adres opnieuw in onder Geavanceerd als je het wilt houden."
+msgstr "Deze werkruimte gebruikt nu een eigen adres ({0}). Vul dat adres opnieuw in onder Geavanceerd als je het wilt houden."
+
 #: src/routes/login.tsx
 #: src/routes/setup.tsx
 msgid "E-mailadres"
 msgstr "E-mailadres"
+
+#: src/routes/ai.tsx
+msgid "Een AI die je zelf thuis of op kantoor draait, zoals Ollama. Brievie stuurt de tekst alleen naar een adres op je eigen netwerk."
+msgstr "Een AI die je zelf thuis of op kantoor draait, zoals Ollama. Brievie stuurt de tekst alleen naar een adres op je eigen netwerk."
+
+#: src/routes/ai.tsx
+msgid "Een AI kan je brieven lezen en voorstellen wat erin staat. Hier zie je of dat aan staat en waar de tekst dan naartoe gaat."
+msgstr "Een AI kan je brieven lezen en voorstellen wat erin staat. Hier zie je of dat aan staat en waar de tekst dan naartoe gaat."
+
+#: src/routes/ai.tsx
+msgid "Een AI-dienst op internet"
+msgstr "Een AI-dienst op internet"
 
 #: src/components/rule-sentence.ts
 msgid "Een label"
@@ -472,6 +527,10 @@ msgstr "Een regel zet labels of een naam op nieuwe post. De regels draaien van b
 msgid "een van"
 msgstr "een van"
 
+#: src/routes/ai.tsx
+msgid "Eigen adres"
+msgstr "Eigen adres"
+
 #: src/routes/pair-app.tsx
 msgid "Eigen CA, vingerafdruk zit in de code"
 msgstr "Eigen CA, vingerafdruk zit in de code"
@@ -483,6 +542,10 @@ msgstr "en"
 #: src/routes/root.tsx
 msgid "Er ging iets mis"
 msgstr "Er ging iets mis"
+
+#: src/routes/ai.tsx
+msgid "Er is al een sleutel opgeslagen. Laat dit leeg om die te houden."
+msgstr "Er is al een sleutel opgeslagen. Laat dit leeg om die te houden."
 
 #: src/api/client.ts
 msgid "Er is iets misgegaan. Probeer het later opnieuw."
@@ -516,6 +579,10 @@ msgstr "Factuurnummer"
 msgid "Gearchiveerd"
 msgstr "Gearchiveerd"
 
+#: src/routes/ai.tsx
+msgid "Geavanceerd"
+msgstr "Geavanceerd"
+
 #: src/routes/login.tsx
 msgid "Gebruik het account van deze server."
 msgstr "Gebruik het account van deze server."
@@ -527,6 +594,10 @@ msgstr "Geel"
 #: src/components/label-picker.tsx
 msgid "Geen"
 msgstr "Geen"
+
+#: src/routes/ai.tsx
+msgid "Geen AI"
+msgstr "Geen AI"
 
 #: src/routes/post.tsx
 msgid "Geen brieven met deze filters."
@@ -628,6 +699,10 @@ msgstr "Iedereen"
 msgid "Iemand"
 msgstr "Iemand"
 
+#: src/routes/ai.tsx
+msgid "Ik heb dit gelezen en ga akkoord, ook voor iedereen van wie post in deze werkruimte staat."
+msgstr "Ik heb dit gelezen en ga akkoord, ook voor iedereen van wie post in deze werkruimte staat."
+
 #: src/components/page.tsx
 #: src/routes/inbox.tsx
 msgid "Inbox"
@@ -694,6 +769,10 @@ msgstr "Je hebt {total} brieven"
 msgid "Je hebt nog geen regels."
 msgstr "Je hebt nog geen regels."
 
+#: src/routes/ai.tsx
+msgid "Je maakt de sleutel aan in je account bij de dienst. Brievie bewaart hem versleuteld en laat hem nooit meer zien."
+msgstr "Je maakt de sleutel aan in je account bij de dienst. Brievie bewaart hem versleuteld en laat hem nooit meer zien."
+
 #: src/routes/setup.tsx
 msgid "Je naam"
 msgstr "Je naam"
@@ -709,6 +788,10 @@ msgstr "Je server staat ingesteld op 'localhost'. Je telefoon kan die niet berei
 #: src/routes/setup.tsx
 msgid "Je vindt de installatiecode in het logboek van de Brievie-container."
 msgstr "Je vindt de installatiecode in het logboek van de Brievie-container."
+
+#: src/routes/ai.tsx
+msgid "Je vult zelf in wat er in een brief staat. Er gaat niets naar een AI."
+msgstr "Je vult zelf in wat er in een brief staat. Er gaat niets naar een AI."
 
 #: src/components/document-history.tsx
 msgid "Jij"
@@ -823,6 +906,11 @@ msgstr "Label wijzigen"
 msgid "Labels"
 msgstr "Labels"
 
+#. placeholder {0}: chosen?.default_model ?? ""
+#: src/routes/ai.tsx
+msgid "Leeg laten kiest {0}."
+msgstr "Leeg laten kiest {0}."
+
 #: src/routes/home.tsx
 msgid "Lid"
 msgstr "Lid"
@@ -866,6 +954,10 @@ msgstr "Met labels zet je orde in je post, bijvoorbeeld Belasting of Zorg. Met d
 #: src/components/ai-status-line.tsx
 msgid "Mistral in Frankrijk ({host})"
 msgstr "Mistral in Frankrijk ({host})"
+
+#: src/routes/ai.tsx
+msgid "Model"
+msgstr "Model"
 
 #: src/routes/login.tsx
 msgid "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
@@ -981,6 +1073,11 @@ msgstr "Open de app op je telefoon en scan de code. De telefoon moet op hetzelfd
 msgid "OpenAI in de Verenigde Staten ({host})"
 msgstr "OpenAI in de Verenigde Staten ({host})"
 
+#: src/routes/ai.tsx
+msgid "Opgeslagen."
+msgstr "Opgeslagen."
+
+#: src/routes/ai.tsx
 #: src/routes/labels.tsx
 #: src/routes/persons.tsx
 #: src/routes/rule-editor.tsx
@@ -1105,6 +1202,10 @@ msgstr "Scan met de Brievie-app"
 #: src/components/page.tsx
 msgid "Server: {0}"
 msgstr "Server: {0}"
+
+#: src/routes/ai.tsx
+msgid "Sleutel van de dienst (API-sleutel)"
+msgstr "Sleutel van de dienst (API-sleutel)"
 
 #: src/routes/labels.tsx
 msgid "Sluiten"
@@ -1318,6 +1419,10 @@ msgstr "Voorwaarde toevoegen"
 msgid "Voorwaarden"
 msgstr "Voorwaarden"
 
+#: src/routes/ai.tsx
+msgid "Vul de naam van het model in, zoals de dienst die noemt."
+msgstr "Vul de naam van het model in, zoals de dienst die noemt."
+
 #: src/routes/setup.tsx
 msgid "Waar gebruik je Brievie voor?"
 msgstr "Waar gebruik je Brievie voor?"
@@ -1343,6 +1448,10 @@ msgstr "Wat te doen"
 msgid "We kunnen de server niet bereiken. Controleer je verbinding en probeer het opnieuw."
 msgstr "We kunnen de server niet bereiken. Controleer je verbinding en probeer het opnieuw."
 
+#: src/routes/ai.tsx
+msgid "Welke dienst?"
+msgstr "Welke dienst?"
+
 #: src/routes/setup.tsx
 msgid "Welkom bij Brievie"
 msgstr "Welkom bij Brievie"
@@ -1351,6 +1460,10 @@ msgstr "Welkom bij Brievie"
 #: src/routes/home.tsx
 msgid "Werkruimtes"
 msgstr "Werkruimtes"
+
+#: src/routes/ai.tsx
+msgid "Wie leest je brieven?"
+msgstr "Wie leest je brieven?"
 
 #: src/routes/labels.tsx
 #: src/routes/persons.tsx

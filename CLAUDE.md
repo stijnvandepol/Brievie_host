@@ -41,7 +41,8 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
 - No document content, tokens, passwords or BSNs in logs.
 - Text goes to an external AI service only with a recorded consent for that address
   (`AISettings.consented_base_url` and the history `AIConsentEvent`, both written only by
-  `apps.pipeline.settings_service.configure`).
+  `apps.pipeline.settings_service.configure`). An AI API key is write-only: no response
+  or log line holds it.
 - No new dependency without a line in `docs/DECISIONS.md`.
 - Apps of phase 1c: `people` (persons, name matching), `labels`, `rules` (engine, executor,
   presets) and `tasks`; `documents.organise` and `documents.suggestions` order post.

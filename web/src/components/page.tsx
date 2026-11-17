@@ -169,7 +169,8 @@ function NavItem({
     | "/w/$workspaceId/post"
     | "/w/$workspaceId/personen"
     | "/w/$workspaceId/labels"
-    | "/w/$workspaceId/automatisering";
+    | "/w/$workspaceId/automatisering"
+    | "/w/$workspaceId/ai";
   params?: { workspaceId: string };
   icon: IconName;
   label: string;
@@ -229,6 +230,7 @@ function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
           label={t`Automatisering`}
         />
       )}
+      <NavItem to="/w/$workspaceId/ai" params={params} icon="lightbulb" label={t`AI`} />
       <hr className="nav-divider" />
     </>
   );

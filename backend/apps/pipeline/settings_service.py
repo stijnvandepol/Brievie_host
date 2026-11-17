@@ -9,6 +9,7 @@ from uuid import UUID
 
 from django.db import transaction
 from django.utils.functional import Promise
+from django.utils.translation import gettext
 from django.utils.translation import gettext_lazy as _
 
 from apps.common import crypto
@@ -61,6 +62,14 @@ SUPPLIERS: dict[str, SupplierPreset] = {
 }
 
 
+class AiSettingsError(ValueError):
+    """Settings that cannot be saved; `reason` says why in a word, for a Dutch answer."""
+
+    def __init__(self, reason: str, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
 class ConsentRequiredError(ValueError):
     """Switching to this external service needs somebody's explicit consent first."""
 
@@ -94,6 +103,19 @@ class AiStatus:
     supplier: str | None = None
     host: str | None = None
     since: datetime | None = None
+    has_api_key: bool = False
+    model: str | None = None
+
+
+@dataclass(frozen=True)
+class Preview:
+    """What saving these settings would ask of whoever saves them."""
+
+    needs_consent: bool
+    # The text to agree to; "" when no consent is needed.
+    notice: str
+    # The external address the consent is about; "" when not external.
+    address: str
 
 
 _KEY_AAD = b"ai-api-key"
@@ -113,10 +135,10 @@ def resolve(*, mode: str, base_url: str, model: str, supplier: str = DEFAULT_SUP
     network only, so no document text leaves it. `off`: nothing.
     """
     if mode not in AISettings.Mode.values:
-        raise ValueError(f"Unknown mode: {mode!r}")
+        raise AiSettingsError("unknown_mode", f"Unknown mode: {mode!r}")
     preset = SUPPLIERS.get(supplier)
     if preset is None:
-        raise ValueError(f"Unknown supplier: {supplier!r}")
+        raise AiSettingsError("unknown_supplier", f"Unknown supplier: {supplier!r}")
     if mode == AISettings.Mode.OFF:
         return Target(mode, AISettings.Api.OPENAI, "", "", "", "")
     api: str = AISettings.Api.OPENAI
@@ -125,19 +147,21 @@ def resolve(*, mode: str, base_url: str, model: str, supplier: str = DEFAULT_SUP
         base_url = base_url or preset.base_url
         model = model or preset.model
         if not model:
-            raise ValueError(f"Supplier {supplier} needs a model name.")
+            raise AiSettingsError("model_required", f"Supplier {supplier} needs a model name.")
+    if len(model) > (AISettings._meta.get_field("model").max_length or 0):
+        raise AiSettingsError("model_invalid", "The model name is too long.")
     _check_address(base_url or DEFAULT_EXTERNAL_URL)
     host = _host(base_url)
     if mode == AISettings.Mode.EXTERNAL:
         if urlsplit(base_url).scheme != "https":
-            raise ValueError("An external AI service needs an https address.")
+            raise AiSettingsError("not_https", "An external AI service needs an https address.")
         # A preset's name on somebody else's server would be a false statement.
         named = supplier if host == _host(preset.base_url) else CUSTOM_SUPPLIER
         return Target(mode, api, named, base_url, model, host)
     if not is_on_own_network(base_url):
-        raise ValueError("A local AI service must be on the own network.")
+        raise AiSettingsError("not_local", "A local AI service must be on the own network.")
     if not model:
-        raise ValueError("A local AI service needs a model name.")
+        raise AiSettingsError("model_required", "A local AI service needs a model name.")
     return Target(mode, api, "", base_url, model, host)
 
 
@@ -151,16 +175,21 @@ def configure(
     supplier: str = DEFAULT_SUPPLIER,
     actor: Actor | None = None,
     consent: bool = False,
+    consent_address: str | None = None,
 ) -> AISettings:
     """Set the workspace's AI mode and record the decision. Needs the workspace's RLS context.
 
     See `resolve` for the settings. Switching to an external service whose address has no
-    consent in force raises `ConsentRequiredError` unless `consent` says `actor` was told
-    what leaves the server and agreed.
+    consent in force raises `ConsentRequiredError` unless `actor` was told what leaves
+    the server and agreed: `consent` when the caller showed the notice for these very
+    settings itself (the command), `consent_address` when the caller only knows which
+    address the actor agreed to (the API); that counts for exactly that address.
+
+    Without `api_key` the stored key stays, but only at the same address: a key never
+    moves to another service.
     """
     target = resolve(mode=mode, base_url=base_url, model=model, supplier=supplier)
-    if target.mode == AISettings.Mode.EXTERNAL and not api_key:
-        raise ValueError("An external AI service needs an API key.")
+    consent = consent or (consent_address is not None and consent_address == target.base_url)
     actor = actor or Actor()
     with transaction.atomic():
         # Locked, so a decision taken at the same moment cannot slip in between the
@@ -180,6 +209,14 @@ def configure(
         sealed: bytes | None = None
         if api_key and target.mode != AISettings.Mode.OFF:
             sealed = crypto.seal(workspace_key(workspace_id), api_key.encode(), aad=_KEY_AAD)
+        elif target.mode == AISettings.Mode.EXTERNAL:
+            # Only a key that is already at this very address may stay.
+            kept = None
+            if api_key is None and current is not None and current.base_url == target.base_url:
+                kept = current.api_key_sealed if current.mode == target.mode else None
+            if kept is None:
+                raise AiSettingsError("key_required", "An external AI service needs an API key.")
+            sealed = bytes(kept)
         settings, _created = AISettings.objects.update_or_create(
             workspace_id=workspace_id,
             defaults={
@@ -228,19 +265,102 @@ def status(workspace_id: UUID) -> AiStatus:
     if settings is None or settings.mode == AISettings.Mode.OFF:
         return AiStatus(mode=AISettings.Mode.OFF)
     events = AIConsentEvent.objects.filter(workspace_id=workspace_id).order_by("-created_at")
+    has_key = settings.api_key_sealed is not None
     if settings.mode == AISettings.Mode.LOCAL:
         latest = events.first()
         since = latest.created_at if latest and latest.mode == AISettings.Mode.LOCAL else None
-        return AiStatus(mode=settings.mode, since=since)
+        return AiStatus(mode=settings.mode, since=since, has_api_key=has_key, model=settings.model)
     host = _host(settings.base_url)
-    if settings.consented_base_url != settings.base_url:
-        return AiStatus(mode=settings.mode, host=host or None)
-    granted = events.filter(event=AIConsentEvent.Event.GRANTED, host=host).first()
+    granted = None
+    if settings.consented_base_url == settings.base_url:
+        granted = events.filter(event=AIConsentEvent.Event.GRANTED, host=host).first()
     if granted is None:
-        return AiStatus(mode=settings.mode, host=host or None)
+        return AiStatus(
+            mode=settings.mode, host=host or None, has_api_key=has_key, model=settings.model
+        )
     return AiStatus(
-        mode=settings.mode, supplier=granted.supplier, host=host, since=granted.created_at
+        mode=settings.mode,
+        supplier=granted.supplier,
+        host=host,
+        since=granted.created_at,
+        has_api_key=has_key,
+        model=settings.model,
     )
+
+
+def preview(
+    *,
+    workspace_id: UUID,
+    workspace_name: str,
+    mode: str,
+    base_url: str,
+    model: str,
+    supplier: str = DEFAULT_SUPPLIER,
+) -> Preview:
+    """Check the settings without saving them, and say what saving would ask.
+
+    Raises `AiSettingsError`. Needs the workspace's RLS context.
+    """
+    target = resolve(mode=mode, base_url=base_url, model=model, supplier=supplier)
+    if target.mode != AISettings.Mode.EXTERNAL:
+        return Preview(needs_consent=False, notice="", address="")
+    if consent_in_force(workspace_id, target.base_url):
+        return Preview(needs_consent=False, notice="", address=target.base_url)
+    return Preview(
+        needs_consent=True,
+        notice=external_notice(workspace_name, target),
+        address=target.base_url,
+    )
+
+
+def external_notice(workspace_name: str, target: Target) -> str:
+    """What whoever decides must know before letters go to an external AI service.
+
+    The command and the web interface show this same text.
+    """
+    preset = SUPPLIERS.get(target.supplier)
+    if preset is None or target.base_url != preset.base_url:
+        # The consent is for this very address, so that is what is shown: behind one
+        # host another port or path can lead to another service, also at a preset's host.
+        parts = urlsplit(target.base_url)
+        service = f"{parts.scheme}://{parts.netloc.rpartition('@')[2]}{parts.path}"
+        country = gettext("onbekend. Zoek zelf op in welk land deze dienst staat.")
+    else:
+        service = f"{preset.name} ({target.host})"
+        country = str(preset.country)
+    return gettext(
+        "Je zet AI aan voor werkruimte %(workspace)s. Lees dit eerst.\n"
+        "\n"
+        "Dit gaat naar de AI-dienst, bij elke brief:\n"
+        "- De tekst van elke brief. Een BSN is daarin vervangen door [BSN]. Andere "
+        "gegevens staan er gewoon in, ook over geld, gezondheid en andere mensen.\n"
+        "- De namen van de labels in deze werkruimte.\n"
+        "- De namen van de personen in deze werkruimte, ook andere schrijfwijzen van "
+        "hun naam.\n"
+        "\n"
+        "Dit gaat er nooit naartoe:\n"
+        "- De foto's of scans van de pagina's.\n"
+        "- Je regels en de interne nummers van brieven, labels en personen.\n"
+        "\n"
+        "Hier gaat het naartoe:\n"
+        "- Dienst: %(service)s, model %(model)s\n"
+        "- Land: %(country)s\n"
+        "\n"
+        "Let op:\n"
+        "- Wat de dienst met de tekst doet en hoe lang de dienst die bewaart, staat in "
+        "de voorwaarden van de dienst zelf. Brievie heeft daar geen invloed op.\n"
+        "- Jij beslist dit voor iedereen van wie post in deze werkruimte staat. Vertel "
+        "het hun.\n"
+        "- Brievie legt vast dat je akkoord bent, en wanneer. Elk lid van de werkruimte "
+        "kan zien dat AI aan staat.\n"
+        "- Je kunt AI altijd weer uitzetten. Wat al verstuurd is, haal je daarmee niet "
+        "terug.\n"
+    ) % {
+        "workspace": workspace_name,
+        "service": service,
+        "model": target.model,
+        "country": country,
+    }
 
 
 def _host(url: str) -> str:
@@ -289,16 +409,18 @@ def _check_address(url: str) -> None:
     stored would fail every document later instead of here.
     """
     if len(url) > (AISettings._meta.get_field("base_url").max_length or 0):
-        raise ValueError("The address of the AI service is too long.")
+        raise AiSettingsError("address_invalid", "The address of the AI service is too long.")
     try:
         host = urlsplit(url).hostname or ""
     except ValueError:
-        raise ValueError("The address of the AI service is not valid.") from None
+        raise AiSettingsError(
+            "address_invalid", "The address of the AI service is not valid."
+        ) from None
     if host.startswith("[") or _is_ip_literal(host):
         return
     labels = host.rstrip(".").split(".")
     if len(host) > _MAX_HOST or not all(_HOST_LABEL.fullmatch(label) for label in labels):
-        raise ValueError("The host name of the AI service is not valid.")
+        raise AiSettingsError("address_invalid", "The host name of the AI service is not valid.")
 
 
 def _is_ip_literal(host: str) -> bool:
@@ -331,4 +453,12 @@ def is_on_own_network(url: str) -> bool:
         if _NUMERIC_HOST.fullmatch(host):
             return False
         return "." not in host or host == "localhost" or host.endswith(".local")
+    if isinstance(address, ipaddress.IPv6Address):
+        # Addresses that carry a public IPv4 address inside count as private to Python.
+        if address.sixtofour is not None or address.teredo is not None:
+            return False
+        address = address.ipv4_mapped or address
+    # Link-local is where a cloud keeps its metadata service, never an AI service.
+    if address.is_link_local:
+        return False
     return address.is_loopback or address.is_private
