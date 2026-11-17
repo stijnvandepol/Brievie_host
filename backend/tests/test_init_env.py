@@ -1,5 +1,6 @@
 """deploy/init-env.sh creates a working .env; the shipped example never is one."""
 
+import re
 import runpy
 import shutil
 import stat
@@ -262,3 +263,19 @@ def test_generated_env_is_accepted_by_the_settings(
     values = runpy.run_path(str(Path(brievie.settings.__file__)))
 
     assert values["DEBUG"] is False
+
+
+def test_every_path_it_removes_moves_or_writes_is_a_fixed_name_in_its_own_folder() -> None:
+    # Rule after the incident of 17-11: no rm, mv or redirect on a path built from a
+    # variable that was not proved non-empty and inside the script's own folder.
+    script = (DEPLOY / "init-env.sh").read_text()
+    assert "case ${dir:?} in\n/?*) ;;" in script
+    assert 'target="$dir/.env"' in script
+    assert 'tmp="${dir:?}/.env.tmp.$$"' in script
+    assert "trap 'rm -f \"$tmp\"' EXIT" in script
+    for line in script.splitlines():
+        code = line.split("#", 1)[0]
+        if "rm " in code or "mv " in code:
+            assert set(re.findall(r'"\$(\w+)"', code)) <= {"tmp", "target"}, line
+        for written in re.findall(r'>>?"\$(\w+)"', code):
+            assert written in {"tmp", "target"}, line

@@ -12,6 +12,15 @@
 set -eu
 
 dir=$(cd "$(dirname "$0")" && pwd)
+# Every file this script writes, appends to, moves or removes is a fixed name in its
+# own directory: refuse to go on unless that directory is a real absolute path.
+case ${dir:?} in
+/?*) ;;
+*)
+	echo "init-env.sh cannot tell which folder it is in." >&2
+	exit 1
+	;;
+esac
 example="$dir/.env.example"
 target="$dir/.env"
 
@@ -79,7 +88,7 @@ app_pw=$(random hex)
 port=${POSTGRES_PORT:-5432}
 
 umask 077
-tmp="$target.tmp.$$"
+tmp="${dir:?}/.env.tmp.$$"
 trap 'rm -f "$tmp"' EXIT
 
 while IFS= read -r line || [ -n "$line" ]; do
