@@ -69,7 +69,10 @@ letter says, checks every answer against the letter text, and offers the result 
 review in the app. Nothing becomes a task until you confirm it there.
 
 A new workspace has AI **off**: you fill in the review by hand. To let an AI service
-read your letters (only the text, with BSNs masked; never the page images):
+read your letters (only the text, with BSNs masked; never the page images), an
+administrator opens **AI** in the web interface, chooses the service, pastes the API
+key and agrees to the notice that says what leaves the server. The same from a
+terminal:
 
 ```sh
 # The workspace id is in the address bar of the web interface, or in GET /api/v1/workspaces.

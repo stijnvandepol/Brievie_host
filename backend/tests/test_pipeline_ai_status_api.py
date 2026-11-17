@@ -18,7 +18,10 @@ def test_ai_status_is_off_without_settings(client: Client, ws_a: Workspace) -> N
     r = client.get(ai_url(ws_a))
 
     assert r.status_code == 200
-    assert r.json() == {"mode": "off", "supplier": None, "host": None, "since": None}
+    assert r.json() == {
+        "mode": "off", "supplier": None, "host": None, "since": None, "has_api_key": False,
+        "model": None,
+    }  # fmt: skip
 
 
 @pytest.mark.parametrize("role", ["viewer", "admin"])
@@ -41,10 +44,12 @@ def test_ai_status_has_no_address_model_or_key(client: Client, ws_a: Workspace, 
     r = client.get(ai_url(ws_a))
 
     assert r.status_code == 200
-    assert set(r.json()) == {"mode", "supplier", "host", "since"}
+    assert set(r.json()) == {"mode", "supplier", "host", "since", "has_api_key", "model"}
     assert (r.json()["mode"], r.json()["host"]) == ("external", "api.mistral.ai")
-    for hidden in ("/v1", "mistral-small", "sk-geheim"):
+    for hidden in ("/v1", "sk-geheim"):
         assert hidden not in r.content.decode()
+    # Only an administrator gets the model, for the settings form.
+    assert r.json()["model"] == ("mistral-small-latest" if role == "admin" else None)
 
 
 def test_ai_status_of_another_workspace_is_404(

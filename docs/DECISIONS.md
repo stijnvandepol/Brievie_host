@@ -733,3 +733,61 @@ put to the owner and taken as proposed.
 - Not done: consent in the web interface (comes with the AI settings screen, 1d; the
   service already takes an `Actor` with a user), a database rule that forbids UPDATE and
   DELETE on the table, a screen that lists the history.
+
+## 2026-11-17: AI settings in the web interface
+
+Design: `docs/superpowers/specs/2026-11-17-ai-settings-web-design.md`. The owner
+delegated the choices.
+
+- **One place for the rules.** `updateAiSettings` (`PUT /workspaces/{id}/ai`, role
+  admin) calls `settings_service.configure`, as `configure_ai` does. `external_notice`
+  moved from the command to the service; the command and `previewAiSettings` give the
+  same text (its last line no longer names `--mode off`).
+- **The client echoes what it agreed to.** `previewAiSettings` returns the notice and
+  the `address` it is about; `updateAiSettings` takes `consent_address` and `configure`
+  counts it as consent only when it equals the address it resolves itself, under the
+  row lock. Otherwise 409 `ai_consent_required`. Rejected: a bare `consent: true` (says
+  nothing about what was read) and a signed token (more machinery than the address
+  comparison, which is exactly what a consent covers).
+- **A tick box, not a typed word**, in the browser: the dialog, the tick and the
+  server's comparison are the explicit act. The command keeps `akkoord`.
+- **The key is write-only.** `AiStatusOut.has_api_key` (default false) is all that is
+  read back. Without `api_key` the stored key stays when mode and address are the same;
+  otherwise 422. A key that moved to a new address would be sent to another company.
+- **Errors.** Settings that do not pass are `AiSettingsError` with a reason; the API
+  answers 422 `ai_settings_invalid` with a Dutch sentence per reason. The command still
+  prints the English message.
+- **Throttled**: 10 per 10 minutes per caller and workspace
+  (`CallerThrottle("ai_settings")`), not per client address as setup and pairing are:
+  Ninja throttles before the role check, so with a shared address a viewer could use
+  up the administrator's attempts and keep them from switching AI off.
+  `previewAiSettings` writes nothing and is not throttled.
+- **`listAiSuppliers`** gives name, country, host and default model per preset, so the
+  form does not repeat them. (`AiStatusLine` still has its own sentence per supplier.)
+- **No "Test de verbinding" button.** Possible without letter text (a fixed one-word
+  prompt), but it needs a new provider method for both APIs and an outbound call from
+  inside a web request, where the request transaction is open. A wrong key shows at the
+  first letter as `ai_key_rejected`. Belongs with the wizard (1d).
+- **The model is read back to an administrator only** (`AiStatusOut.model`), so that
+  replacing the key does not silently put the model back to the preset's default. The
+  full address is still never read back: a workspace on an own address is told to type
+  it again, and with the same address is asked nothing and keeps its key.
+- **An own address through the web interface is always OpenAI-compatible** (the form
+  sends supplier `openai`, so a model is required). An own address that speaks Claude's
+  API stays a job for `configure_ai`.
+- **The notice names a preset only for the preset's exact address.** Another port or
+  path at the same host is shown as the whole address with country unknown, because
+  that address is what the consent is for.
+- **`local` got stricter** now that it can be set from a browser: link-local addresses
+  (where a cloud keeps its metadata service) and IPv6 forms that carry a public IPv4
+  address (6to4, Teredo, IPv4-mapped) are refused. Accepted: an administrator of a
+  workspace can make the server post letter text to a service on the server's own
+  network; that is what `local` is. On a server shared by workspaces that do not trust
+  each other's administrators this needs a server-wide switch; noted for the
+  enterprise layer.
+- **The actor label is `api`** for the web interface and the app alike (an
+  administrator's paired device may call the endpoint too); the user is recorded.
+- **The page "AI" is for every member**; only an administrator gets the form.
+- Checked in a browser against a local server with a throwaway database and a made-up
+  key: switching on with the dialog, the status line after it, the phone width. Not
+  checked: a real AI service.

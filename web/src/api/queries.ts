@@ -150,6 +150,20 @@ export const labelsQuery = (workspaceId: string) =>
     },
   });
 
+/** The AI services with a preset, each with the country it is in. */
+export const aiSuppliersQuery = (workspaceId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "ai", "suppliers"],
+    staleTime: Number.POSITIVE_INFINITY,
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/ai/suppliers", {
+        params: { path: { workspace_id: workspaceId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
 /** How the workspace's letters are read: `off`, `external` or `local`. */
 export const aiStatusQuery = (workspaceId: string) =>
   queryOptions({

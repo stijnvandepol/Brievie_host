@@ -2,7 +2,6 @@ import os
 import sys
 from argparse import ArgumentParser
 from getpass import getpass
-from urllib.parse import urlsplit
 from uuid import UUID
 
 from django.core.management.base import BaseCommand, CommandError
@@ -10,7 +9,6 @@ from django.utils.translation import gettext as _
 
 from apps.pipeline import settings_service
 from apps.pipeline.models import AISettings
-from apps.pipeline.settings_service import Target
 from apps.workspaces.context import workspace_context
 from apps.workspaces.models import Workspace
 
@@ -76,7 +74,7 @@ class Command(BaseCommand):
                     settings_service.consent_in_force(workspace, target.base_url)
                 )
             if asks:
-                self.stdout.write(external_notice(found.name, target))
+                self.stdout.write(settings_service.external_notice(found.name, target))
                 self._confirm(accepted=accept_external_ai)
             elif target.mode == AISettings.Mode.LOCAL:
                 self.stdout.write(
@@ -129,49 +127,3 @@ class Command(BaseCommand):
         self.stdout.flush()
         if sys.stdin.readline().strip().lower() != ACCEPT_WORD:
             raise CommandError(_("AI is niet aangezet. Je hebt geen akkoord gegeven."))
-
-
-def external_notice(workspace_name: str, target: Target) -> str:
-    """What the administrator must know before letters go to an external AI service."""
-    preset = settings_service.SUPPLIERS.get(target.supplier)
-    if preset is None:
-        # Behind one host a path can lead to another service: show the whole address.
-        parts = urlsplit(target.base_url)
-        service = f"{parts.scheme}://{parts.netloc.rpartition('@')[2]}{parts.path}"
-        country = _("onbekend. Zoek zelf op in welk land deze dienst staat.")
-    else:
-        service = f"{preset.name} ({target.host})"
-        country = str(preset.country)
-    return _(
-        "Je zet AI aan voor werkruimte %(workspace)s. Lees dit eerst.\n"
-        "\n"
-        "Dit gaat naar de AI-dienst, bij elke brief:\n"
-        "- De tekst van elke brief. Een BSN is daarin vervangen door [BSN]. Andere "
-        "gegevens staan er gewoon in, ook over geld, gezondheid en andere mensen.\n"
-        "- De namen van de labels in deze werkruimte.\n"
-        "- De namen van de personen in deze werkruimte, ook andere schrijfwijzen van "
-        "hun naam.\n"
-        "\n"
-        "Dit gaat er nooit naartoe:\n"
-        "- De foto's of scans van de pagina's.\n"
-        "- Je regels en de interne nummers van brieven, labels en personen.\n"
-        "\n"
-        "Hier gaat het naartoe:\n"
-        "- Dienst: %(service)s, model %(model)s\n"
-        "- Land: %(country)s\n"
-        "\n"
-        "Let op:\n"
-        "- Wat de dienst met de tekst doet en hoe lang de dienst die bewaart, staat in "
-        "de voorwaarden van de dienst zelf. Brievie heeft daar geen invloed op.\n"
-        "- Jij beslist dit voor iedereen van wie post in deze werkruimte staat. Vertel "
-        "het hun.\n"
-        "- Brievie legt vast dat je akkoord bent, en wanneer. Elk lid van de werkruimte "
-        "kan zien dat AI aan staat.\n"
-        "- Je kunt AI weer uitzetten met --mode off. Wat al verstuurd is, haal je "
-        "daarmee niet terug.\n"
-    ) % {
-        "workspace": workspace_name,
-        "service": service,
-        "model": target.model,
-        "country": country,
-    }

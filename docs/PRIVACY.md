@@ -39,7 +39,8 @@ names are still recognised in the letter and rules still run, on the server itse
 
 ## Consent for AI
 
-AI is off until an administrator switches it on with `manage.py configure_ai`.
+AI is off until an administrator of the workspace switches it on: on the page "AI" of
+the web interface, or with `manage.py configure_ai`. Both go through the same rules.
 
 - **Asked first.** Before a workspace is switched to `external`, the command says in
   Dutch what is sent with every letter (the table above), to which service, host and
@@ -47,9 +48,14 @@ AI is off until an administrator switches it on with `manage.py configure_ai`.
   unknown, look it up yourself), that the service's own terms and retention apply, and
   that the administrator decides for everyone whose post is in the workspace. It goes on
   only after the word `akkoord` is typed, or with `--accept-external-ai` in a script,
-  which states the same. Without either, nothing changes.
+  which states the same. Without either, nothing changes. The web interface shows the
+  same text, written by the server, in a dialog with a tick box "Ik heb dit gelezen en
+  ga akkoord"; the browser then sends back the address the text was about, and the
+  server refuses when that is not exactly the address it is asked to switch on. An
+  agreement for one service can therefore not switch on another.
 - **Recorded.** Every decision is a row the application only adds, never changes: who
-  (`command line` today; a user once AI can be set in the web interface), when, the
+  (the administrator's account from the web interface or the app, `command line` from
+  the command), when, the
   mode, the supplier, the host of the address and the model. Switching AI off, moving to
   another service and moving to the own network are rows too. The database itself does
   not forbid changing a row, and the rows go when the workspace is deleted.
@@ -61,10 +67,16 @@ AI is off until an administrator switches it on with `manage.py configure_ai`.
   one. A workspace that was set to `external` before consent was recorded reads no
   letters with AI until `configure_ai` is run once more; letters scanned in between
   fail and are started again by hand.
-- **Visible.** Every member sees on the Inbox and Post pages whether AI is on, which
-  service and country the text goes to and since when. The API gives the same
-  (`GET /api/v1/workspaces/{id}/ai`: mode, supplier, host, since), never the model, the
-  full address or the key.
+- **Visible.** Every member sees on the Inbox, Post and AI pages whether AI is on, which
+  service and country the text goes to and since when. Only an administrator can change
+  it; a member or viewer gets no buttons and the server refuses them. The API gives the same
+  (`GET /api/v1/workspaces/{id}/ai`: mode, supplier, host, since, and whether a key is
+  stored; the model for an administrator only), never the full address or the key.
+- **The API key only goes in.** It is typed in the form or asked by the command, stored
+  encrypted with the workspace key, and never sent back to a browser or an app, not
+  shown again and not logged. Changing the model keeps the stored key; a key never
+  moves along to another address, there it must be typed again. Changing the AI
+  settings is limited to 10 attempts per 10 minutes per administrator and workspace.
 - **Limits.** Consent is the administrator's, for the whole workspace: there is no
   consent per member or per letter. Switching off stops sending; it does not take back
   what a service already received. The people who write to you are not asked.
