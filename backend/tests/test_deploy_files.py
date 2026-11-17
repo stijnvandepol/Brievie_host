@@ -81,9 +81,11 @@ def test_restic_is_pinned() -> None:
 
 def test_pg_client_major_matches_the_server() -> None:
     # pg_dump refuses a server newer than itself: client and server move together.
-    server = r"image: postgres:(\d+)"
-    compose = re.findall(server, COMPOSE)
-    ci = re.findall(server, CI)
+    # Every image reference counts; "@postgres:5432" in a URL is a host and port.
+    # Only CI's backend job starts a PostgreSQL image; its stack job uses compose.
+    image = r"(?<!@)\bpostgres:(\d+)"
+    compose = re.findall(image, COMPOSE)
+    ci = re.findall(image, CI)
     client = re.findall(r"postgresql-client-(\d+)", DOCKERFILE)
     assert compose
     assert ci
@@ -149,6 +151,11 @@ def test_admin_is_one_off_behind_a_profile() -> None:
     assert 'user: "0"' in admin
 
 
+def test_admin_never_starts_the_image_default_command() -> None:
+    # `--profile admin up` would otherwise start gunicorn as root with the master key.
+    assert 'command: ["python", "manage.py", "help"]' in service("admin")
+
+
 def test_admin_mounts_the_documents_volume() -> None:
     # backup --init compares the device of /backup with that of /data/documents; without
     # the volume it would compare against the container's own filesystem.
@@ -181,5 +188,9 @@ def test_image_has_the_backup_directories() -> None:
     # restic fails on a missing source path, so the authority copy directory exists even
     # while its volume is empty.
     runtime = DOCKERFILE.split("AS builder", 1)[1].split("FROM ", 1)[1]
+    mkdir = next(line for line in runtime.splitlines() if "mkdir -p" in line)
+    chown = next(line for line in runtime.splitlines() if "chown brievie:brievie" in line)
     for path in ("/data/documents", "/data/backup-config", "/data/authority", "/backup"):
-        assert path in runtime, path
+        own_path = rf"\s{re.escape(path)}(\s|$)"
+        assert re.search(own_path, mkdir), path
+        assert re.search(own_path, chown), path

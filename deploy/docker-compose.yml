@@ -114,7 +114,8 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-    # A running back-up gets time to finish its step and record its status.
+    # A running step gets a minute to finish; a longer one is killed and the stall
+    # retry (retry_stalled_backup_jobs) picks the run up again.
     stop_grace_period: 1m
     environment:
       DATABASE_URL: postgres://brievie_app:${BRIEVIE_APP_PASSWORD}@postgres:5432/brievie
@@ -152,6 +153,9 @@ services:
     profiles: ["admin"]
     restart: "no"
     user: "0"
+    # Always run with an explicit command; `--profile admin up` then only prints help,
+    # never the image's default (gunicorn, as root, with the master key).
+    command: ["python", "manage.py", "help"]
     environment:
       # The keeper's, plus what set-up and restore need.
       DATABASE_URL: postgres://brievie_app:${BRIEVIE_APP_PASSWORD}@postgres:5432/brievie
