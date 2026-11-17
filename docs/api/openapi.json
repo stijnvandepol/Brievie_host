@@ -597,6 +597,26 @@
         "title": "LabelOut",
         "type": "object"
       },
+      "LabelUpdateIn": {
+        "properties": {
+          "color": {
+            "default": "",
+            "title": "Color",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "LabelUpdateIn",
+        "type": "object"
+      },
       "LabelsIn": {
         "properties": {
           "label_ids": {
@@ -4240,7 +4260,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/LabelIn"
+                "$ref": "#/components/schemas/LabelUpdateIn"
               }
             }
           },

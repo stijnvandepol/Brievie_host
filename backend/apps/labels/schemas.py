@@ -20,3 +20,9 @@ class LabelIn(InputSchema):
     name: str = Field(min_length=1, max_length=50)
     # One of grey, blue, teal, green, yellow, orange, red, purple.
     color: str = "grey"
+
+
+class LabelUpdateIn(InputSchema):
+    name: str = Field(min_length=1, max_length=50)
+    # One of grey, blue, teal, green, yellow, orange, red, purple; empty keeps the colour.
+    color: str = ""

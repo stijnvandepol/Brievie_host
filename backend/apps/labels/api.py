@@ -6,7 +6,7 @@ from ninja import Router, Status
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.labels import presets, services
 from apps.labels.models import Label
-from apps.labels.schemas import LabelIn, LabelOut
+from apps.labels.schemas import LabelIn, LabelOut, LabelUpdateIn
 from apps.workspaces.deps import workspace_member
 from apps.workspaces.models import Membership
 
@@ -59,7 +59,7 @@ def apply_label_preset(request: HttpRequest, workspace_id: UUID) -> list[Label]:
     operation_id="updateLabel",
 )
 def update_label(
-    request: HttpRequest, workspace_id: UUID, label_id: UUID, payload: LabelIn
+    request: HttpRequest, workspace_id: UUID, label_id: UUID, payload: LabelUpdateIn
 ) -> Label:
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
     return services.update_label(

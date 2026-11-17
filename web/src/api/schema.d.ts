@@ -1042,6 +1042,16 @@ export interface components {
             /** System Key */
             system_key: string;
         };
+        /** LabelUpdateIn */
+        LabelUpdateIn: {
+            /**
+             * Color
+             * @default
+             */
+            color: string;
+            /** Name */
+            name: string;
+        };
         /** LabelsIn */
         LabelsIn: {
             /** Label Ids */
@@ -3256,7 +3266,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["LabelIn"];
+                "application/json": components["schemas"]["LabelUpdateIn"];
             };
         };
         responses: {

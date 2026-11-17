@@ -60,6 +60,19 @@ def test_create_update_and_delete_a_label(client_a: Client, ws_a: Workspace) -> 
         assert not Label.objects.filter(id=hobby["id"]).exists()
 
 
+@pytest.mark.parametrize("body", [{"name": "Gezondheid"}, {"name": "Gezondheid", "color": ""}])
+def test_update_without_a_colour_keeps_the_colour(
+    client_a: Client, ws_a: Workspace, body: dict[str, object]
+) -> None:
+    with workspace_context(ws_a.id):
+        zorg = Label.objects.get(workspace=ws_a, system_key="zorg")
+
+    r = client_a.put(f"{labels_url(ws_a.id)}/{zorg.id}", body, content_type="application/json")
+
+    assert r.status_code == 200
+    assert (r.json()["name"], r.json()["color"]) == ("Gezondheid", "red")
+
+
 def test_label_name_unique_ignoring_case(client_a: Client, ws_a: Workspace) -> None:
     r = create(client_a, ws_a.id, {"name": "zorg"})
 

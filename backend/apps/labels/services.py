@@ -88,10 +88,12 @@ def create_label(*, workspace: Workspace, name: str, color: str) -> Label:
 
 
 def update_label(*, workspace: Workspace, label_id: UUID, name: str, color: str) -> Label:
+    """An empty `color` keeps the label's colour."""
     with transaction.atomic():
         label = _get_for_update(workspace, label_id)
         label.name = _valid_name(name)
-        label.color = _valid_color(color)
+        if color:
+            label.color = _valid_color(color)
         _save(label)
         return _labels(workspace).get(id=label.id)
 
