@@ -234,6 +234,25 @@ BRIEVIE_MASTER_KEY: str = env.str("BRIEVIE_MASTER_KEY", default="")
 BRIEVIE_RESTIC_BINARY: str = env.str("BRIEVIE_RESTIC_BINARY", default="restic")
 BRIEVIE_STORAGE_ROOT: str = env.str("BRIEVIE_STORAGE_ROOT", default="/data/documents")
 
+# Back-up destination (apps.backup.destination reads these lazily). The password is
+# derived in the container (`manage.py derive_backup_password`) and may be absent on
+# a first run. A folder (compose mounts it at BRIEVIE_BACKUP_MOUNT) or a remote
+# repository is set, never both.
+BRIEVIE_BACKUP_PASSWORD: str = env.str("BRIEVIE_BACKUP_PASSWORD", default="")
+BRIEVIE_BACKUP_REPOSITORY: str = env.str("BRIEVIE_BACKUP_REPOSITORY", default="")
+BRIEVIE_BACKUP_DIR_SET: bool = env.bool("BRIEVIE_BACKUP_DIR_SET", default=False)
+BRIEVIE_BACKUP_MOUNT: str = env.str("BRIEVIE_BACKUP_MOUNT", default="/backup")
+BRIEVIE_BACKUP_APPEND_ONLY: bool = env.bool("BRIEVIE_BACKUP_APPEND_ONLY", default=False)
+BRIEVIE_BACKUP_S3_ACCESS_KEY_ID: str = env.str("BRIEVIE_BACKUP_S3_ACCESS_KEY_ID", default="")
+BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY: str = env.str(
+    "BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY", default=""
+)
+BRIEVIE_BACKUP_REST_USERNAME: str = env.str("BRIEVIE_BACKUP_REST_USERNAME", default="")
+BRIEVIE_BACKUP_REST_PASSWORD: str = env.str("BRIEVIE_BACKUP_REST_PASSWORD", default="")
+BRIEVIE_BACKUP_CONFIG_DIR: str = env.str("BRIEVIE_BACKUP_CONFIG_DIR", default="/data/backup-config")
+BRIEVIE_AUTHORITY_COPY_DIR: str = env.str("BRIEVIE_AUTHORITY_COPY_DIR", default="/data/authority")
+BRIEVIE_HOSTNAME: str = env.str("BRIEVIE_HOSTNAME", default="")
+
 # Every handler masks BSNs: no log line may carry one, whatever code wrote it.
 LOGGING = {
     "version": 1,

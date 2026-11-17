@@ -4,6 +4,9 @@ from django.utils.translation import gettext_lazy as _
 # Dutch (B1) reasons shown to the user; the code is what is stored and tested.
 REASONS: dict[str, Promise] = {
     "not_configured": _("Er is nog geen back-up ingesteld."),
+    "destination_conflict": _(
+        "Je kunt maar één bestemming instellen: een map of een adres. Haal er één weg."
+    ),
     "destination_not_ready": _("De bestemming voor de back-up is nog niet klaar voor gebruik."),
     "same_disk": _("De back-up staat op dezelfde schijf als de gegevens. Kies een andere schijf."),
     "already_initialised": _("Op deze bestemming staat al een back-up."),
