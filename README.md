@@ -170,6 +170,15 @@ docker compose --project-directory deploy -f deploy/docker-compose.yml logs api 
 Lost it? `docker compose ... exec api python manage.py prepare_setup_token --new`
 prints a new one (the old one stops working). After setup the code is deleted.
 
+## Back-up
+
+Brievie can back up the database, the document files and the server's certificate
+authority to an external disk, a NAS share, a restic REST server or S3-compatible
+storage, encrypted. The master key is never in a back-up: keep the recovery sheet
+(`./brievie recovery-sheet`). Set-up, restore and advice for organisations are in
+[docs/SELFHOST.md](docs/SELFHOST.md). A nightly schedule comes in a later version; for
+now run `./brievie backup` yourself.
+
 ## Licence
 
 Brievie host is free software: you can redistribute it and/or modify it under the terms of

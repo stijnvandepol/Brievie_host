@@ -47,3 +47,10 @@ the translation. Add a line before introducing a new domain term.
 | opzeggen | cancel |
 | verlengen | renew |
 | aangifte | file_tax |
+| herstelblad | recovery sheet |
+| back-up | backup |
+| terugzetten, herstellen | restore |
+| opruimen | sweep |
+| hoofdsleutel | master key |
+| back-updienst | keeper |
+| bestemming | destination |
