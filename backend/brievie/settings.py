@@ -231,6 +231,7 @@ PROCRASTINATE_AUTODISCOVER_MODULE_NAME = "jobs"
 # migrate and export_openapi run without it; the api and worker check it at start.
 BRIEVIE_MASTER_KEY: str = env.str("BRIEVIE_MASTER_KEY", default="")
 # Encrypted document files. A volume in Compose; never a path elsewhere in the code.
+BRIEVIE_RESTIC_BINARY: str = env.str("BRIEVIE_RESTIC_BINARY", default="restic")
 BRIEVIE_STORAGE_ROOT: str = env.str("BRIEVIE_STORAGE_ROOT", default="/data/documents")
 
 # Every handler masks BSNs: no log line may carry one, whatever code wrote it.
