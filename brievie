@@ -160,12 +160,35 @@ unquote() {
 	esac
 }
 
+# The key line $1 sets (any spelling), in `key`; empty for a comment or a blank line.
+line_key() {
+	rest=$1
+	rest=${rest#"${rest%%[![:space:]]*}"}
+	case $rest in
+	export[[:space:]]*)
+		rest=${rest#export}
+		rest=${rest#"${rest%%[![:space:]]*}"}
+		;;
+	esac
+	case $rest in
+	\"* | \'*) rest=${rest#?} ;;
+	esac
+	key=${rest%%[!A-Za-z0-9_]*}
+}
+
 # stdin to stdout with every line that sets $2 (any spelling) dropped; with $1 = set,
-# `$2=$3` takes the place of the first one (or is added at the end).
+# `$2=$3` takes the place of the first one (or is added at the end). With $1 =
+# drop-docker, every COMPOSE_* and DOCKER_* line is dropped instead.
 rewrite_env() {
 	done_setting=""
 	while IFS= read -r line || [ -n "$line" ]; do
-		if line_sets "$2" "$line"; then
+		if [ "$1" = drop-docker ]; then
+			line_key "$line"
+			case $key in
+			COMPOSE_* | DOCKER_*) ;;
+			*) printf '%s\n' "$line" ;;
+			esac
+		elif line_sets "$2" "$line"; then
 			if [ "$1" = set ] && [ -z "$done_setting" ]; then
 				printf '%s=%s\n' "$2" "$3"
 				done_setting=yes
@@ -179,7 +202,7 @@ rewrite_env() {
 	fi
 }
 
-# edit_env set|remove KEY VALUE env|restore: changes deploy/.env or the restored
+# edit_env set|remove|drop-docker KEY VALUE env|restore: changes deploy/.env or the restored
 # deploy/.restore/env through a temporary file and mv (mode 0600). Returns non-zero
 # when a step fails; nothing is half-written.
 edit_env() {
@@ -245,6 +268,9 @@ setup_installation() {
 			image=brievie/backend:$project
 		fi
 	fi
+	if [ "$project" != brievie ] && [ "$image" = brievie/backend:local ]; then
+		fail "BRIEVIE_IMAGE=brievie/backend:local hoort bij de installatie met de naam brievie. Laat BRIEVIE_IMAGE weg (dan wordt het brievie/backend:$project) of kies een eigen naam; er is niets veranderd."
+	fi
 	BRIEVIE_IMAGE=$image
 	export BRIEVIE_IMAGE
 }
@@ -279,8 +305,13 @@ EOF
 }
 
 # Refuses when the project's data exists but this checkout has no settings for it.
+# Sets `data_existed` when the database volume was already there.
 check_settings() {
-	if [ ! -e "$env_file" ] && docker volume inspect "${project}_pgdata" >/dev/null 2>&1; then
+	data_existed=""
+	if docker volume inspect "${project}_pgdata" >/dev/null 2>&1; then
+		data_existed=yes
+	fi
+	if [ ! -e "$env_file" ] && [ -n "$data_existed" ]; then
 		fail "Er staan al gegevens van een Brievie-installatie met de naam $project, maar deze map heeft geen instellingen (deploy/.env). Er is niets veranderd. Geef deze installatie een eigen naam (bijvoorbeeld: COMPOSE_PROJECT_NAME=thuis2 ./brievie start) of zet de instellingen terug in deploy/.env."
 	fi
 }
@@ -290,14 +321,41 @@ claim_installation() {
 	check_settings
 }
 
-# Refuses when the data volume carries the id of another installation. Sets
-# `volume_id` (empty: a volume from before the id, or a new one).
+# Reads the installation id in the data volume as the app user, without following a
+# link. Refuses when it cannot be read, is a link or is not 32 hex characters, and when
+# it is not this checkout's id. Sets `volume_id` (empty: the volume has none yet).
 check_installation_id() {
-	volume_id=$(compose run --rm --no-deps -T admin sh -c 'cat /data/backup-config/installation-id 2>/dev/null || true') ||
+	raw=$(compose run --rm --no-deps -T --user 10001 admin sh -c \
+		'f=/data/backup-config/installation-id; if [ -L "$f" ]; then echo LINK; elif [ ! -e "$f" ]; then echo NONE; elif [ ! -r "$f" ]; then echo UNREADABLE; else printf ID=; cat "$f"; fi') ||
 		fail "De gegevens van Brievie '$project' konden niet worden gecontroleerd. Lees de melding hierboven; er is niets veranderd."
-	volume_id=$(printf '%s' "$volume_id" | tr -d ' \t\r\n')
+	case $raw in
+	NONE) volume_id="" ;;
+	ID=*)
+		volume_id=$(printf '%s' "${raw#ID=}" | tr -d ' \t\r\n')
+		if ! valid_hex "$volume_id" 32; then
+			fail "Het kenmerk in de gegevens van Brievie '$project' is ongeldig. Er is niets veranderd. Controleer het volume ${project}_backup-config."
+		fi
+		;;
+	*) fail "Het kenmerk in de gegevens van Brievie '$project' is niet te lezen (een link, of geen leesrechten). Er is niets veranderd. Controleer het volume ${project}_backup-config." ;;
+	esac
 	if [ -n "$volume_id" ] && [ "$volume_id" != "$(unquote "$(env_value BRIEVIE_INSTALLATION_ID)")" ]; then
 		fail "De gegevens van Brievie '$project' horen niet bij deze map: het opslagvolume hoort bij een andere installatie. Dit commando doet daarom niets. Geef deze installatie een eigen naam: zet COMPOSE_PROJECT_NAME=<andere naam> in deploy/.env."
+	fi
+}
+
+# Data from before the installation id is only marked as this checkout's after a typed
+# JA (a terminal, or BRIEVIE_ADOPT_INSTALLATION=JA; piped input never counts).
+confirm_adopt() {
+	echo "Deze gegevens hebben nog geen kenmerk: Brievie '$project', gebruikt vanuit de map $here. Horen ze bij deze map?"
+	answer=${BRIEVIE_ADOPT_INSTALLATION:-}
+	if [ -z "$answer" ]; then
+		if [ ! -t 0 ]; then
+			fail "Er is geen terminal om JA te typen. Zet BRIEVIE_ADOPT_INSTALLATION=JA als deze gegevens echt bij deze map horen. Er is niets veranderd."
+		fi
+		ask "Typ JA als ze bij deze map horen:"
+	fi
+	if [ "$answer" != JA ]; then
+		fail "Je typte geen JA. Er is niets veranderd."
 	fi
 }
 
@@ -315,10 +373,12 @@ ensure_env_installation_id() {
 	edit_env set BRIEVIE_INSTALLATION_ID "$new_id" env
 }
 
-# The data volume gets this installation's id (on stdin, at a fixed path inside).
+# The data volume gets this installation's id: on stdin, as the app user, through a
+# temporary file and a rename, never through a link.
 write_volume_id() {
 	printf '%s\n' "$(unquote "$(env_value BRIEVIE_INSTALLATION_ID)")" |
-		compose run --rm --no-deps -T admin sh -c 'cat > /data/backup-config/installation-id'
+		compose run --rm --no-deps -T --user 10001 admin sh -c \
+			'umask 077; [ ! -L /data/backup-config/installation-id.tmp ] && [ ! -L /data/backup-config/installation-id ] && cat > /data/backup-config/installation-id.tmp && mv /data/backup-config/installation-id.tmp /data/backup-config/installation-id'
 }
 
 running() {
@@ -415,16 +475,20 @@ cmd_start() {
 	[ $# -eq 0 ] || usage_error "./brievie start heeft geen extra woorden."
 	claim_installation
 	bring_along
-	# With an image at hand, the data is checked before anything is (re)created.
-	if docker image inspect "$image" >/dev/null 2>&1; then
-		check_installation_id
+	# The data is checked before anything is (re)created: build the image first if need be.
+	if ! docker image inspect "$image" >/dev/null 2>&1; then
+		compose build ||
+			fail "Brievie kon niet worden gebouwd. Lees de melding hierboven en typ daarna opnieuw ./brievie start."
+	fi
+	check_installation_id
+	if [ -z "$volume_id" ] && [ -n "$data_existed" ]; then
+		confirm_adopt
 	fi
 	compose up -d --build --wait ||
 		fail "Brievie is niet goed gestart. Lees de melding hierboven en typ daarna opnieuw ./brievie start."
 	ensure_backup_role ||
 		fail "De database kon niet worden bijgewerkt voor de back-up. Lees de melding hierboven."
 	ensure_backup_password
-	check_installation_id
 	ensure_env_installation_id ||
 		fail "Het installatienummer kon niet worden gemaakt. Lees de melding hierboven en typ opnieuw ./brievie start."
 	if [ -z "$volume_id" ]; then
@@ -455,9 +519,7 @@ cmd_backup() {
 	claim_installation
 	bring_along
 	require_keeper
-	if [ -n "$init" ]; then
-		check_installation_id
-	fi
+	check_installation_id
 
 	previous=""
 	if [ -n "$separate" ]; then
@@ -527,6 +589,7 @@ cmd_recovery_sheet() {
 	[ $# -eq 0 ] || usage_error "./brievie recovery-sheet heeft geen extra woorden."
 	claim_installation
 	bring_along
+	check_installation_id
 	ensure_backup_password
 	write_recovery_sheet
 }
@@ -555,12 +618,44 @@ ask_secret() {
 }
 
 # A step after the restored deploy/.env is in place failed: say so and what to type.
+# The safety back-up is only skippable when nothing of value would be lost by it.
 step_failed() {
 	status=$1
+	again="./brievie restore $run_id --replace${separate:+ --separate-password}"
 	printf '%s\n' "$2" >&2
-	printf 'Het herstel bleef halverwege steken. Los de melding hierboven op en typ daarna: ./brievie restore %s --replace%s\n' \
-		"$run_id" "${separate:+ --separate-password}" >&2
+	printf 'Het herstel bleef halverwege steken. Los de melding hierboven op en typ daarna: %s\n' "$again" >&2
+	if [ -z "$data_present" ]; then
+		printf 'Hier stonden nog geen gegevens, dus een veiligheidsback-up is niet nodig: typ %s\n' \
+			"$again --skip-safety-backup" >&2
+	elif [ -n "$safety_done" ] || [ -n "$skip_safety" ]; then
+		printf 'Lukt de veiligheidsback-up dan niet? De veiligheidsback-up van je oude gegevens is bij deze poging al gemaakt (of je koos ervoor zonder), dus dan mag ook: %s\n' \
+			"$again --skip-safety-backup" >&2
+	fi
 	exit "$status"
+}
+
+# $1 with the port of its host replaced by $2 (postgres://user:pw@host:port/db).
+with_port() {
+	case $1 in
+	*@*) ;;
+	*)
+		printf '%s\n' "$1"
+		return 0
+		;;
+	esac
+	front=${1%@*}
+	hostpart=${1##*@}
+	case $hostpart in
+	*/*)
+		tail=/${hostpart#*/}
+		hostport=${hostpart%%/*}
+		;;
+	*)
+		tail=""
+		hostport=$hostpart
+		;;
+	esac
+	printf '%s\n' "$front@${hostport%%:*}:$2$tail"
 }
 
 # The restored env takes this installation's value of $1, or loses the line when this
@@ -577,6 +672,8 @@ keep_current() {
 # The installation's identity is this checkout, not the back-up: its project name and
 # image and, when it had settings of its own, its host ports, id and back-up destination.
 pin_restored_identity() {
+	# The back-up's own docker settings never steer this installation.
+	edit_env drop-docker "" "" restore || return 1
 	if [ "$project" = brievie ]; then
 		edit_env remove COMPOSE_PROJECT_NAME "" restore || return 1
 	else
@@ -593,7 +690,25 @@ pin_restored_identity() {
 			keep_current BRIEVIE_BACKUP_PASSWORD || return 1
 			destination_note="Deze server maakt back-ups naar dezelfde plek als voor het herstel."
 		fi
+	else
+		# A new machine: the host ports this restore runs with, when given.
+		for pair in "POSTGRES_PORT:${POSTGRES_PORT:-}" "BRIEVIE_HTTP_PORT:${BRIEVIE_HTTP_PORT:-}" \
+			"BRIEVIE_HTTPS_PORT:${BRIEVIE_HTTPS_PORT:-}"; do
+			case ${pair#*:} in
+			'') ;;
+			*[!0-9]*) fail "${pair%%:*} is geen poortnummer; er is niets veranderd." ;;
+			*) edit_env set "${pair%%:*}" "${pair#*:}" restore || return 1 ;;
+			esac
+		done
 	fi
+	# The host-side database URLs (make test) follow this installation's port.
+	port=$(unquote "$(env_value POSTGRES_PORT "$restore_env")")
+	for key in DATABASE_URL DATABASE_OWNER_URL DATABASE_BACKUP_URL; do
+		url=$(unquote "$(env_value "$key" "$restore_env")")
+		if [ -n "$url" ]; then
+			edit_env set "$key" "$(with_port "$url" "${port:-5432}")" restore || return 1
+		fi
+	done
 }
 
 # A server restored on a new machine only backs up to the source when that is asked
@@ -608,8 +723,8 @@ decide_destination() {
 	done
 	case $answer in
 	j | J | ja | Ja | JA | y | yes)
-		if [ -n "$folder" ]; then
-			edit_env set BRIEVIE_BACKUP_DIR "$folder" restore || return 1
+		if [ -n "$source_dir" ]; then
+			edit_env set BRIEVIE_BACKUP_DIR "$source_dir" restore || return 1
 		else
 			edit_env set BRIEVIE_BACKUP_REPOSITORY "$repository" restore || return 1
 			for pair in "BRIEVIE_BACKUP_S3_ACCESS_KEY_ID:$s3_id" \
@@ -626,11 +741,37 @@ decide_destination() {
 	esac
 }
 
+# The full name of volume $1 as a restore source, or a refusal. Only a volume of this
+# project that compose declares and that holds no data of the installation itself.
+source_volume() {
+	name=$1
+	case $name in
+	'' | *[!a-zA-Z0-9_.-]*) fail "Een volumenaam bestaat alleen uit letters, cijfers, punt, - en _. Typ opnieuw ./brievie restore." ;;
+	esac
+	short=${name#"$project"_}
+	case $short in
+	pgdata | documents | caddy-data | caddy-config | caddy-ca | caddy-authority | backup-config)
+		fail "Het volume $short bevat de gegevens van deze installatie zelf en kan geen bron zijn. Er is niets veranderd."
+		;;
+	esac
+	if ! awk -v want="  $short:" '/^volumes:/ { inside = 1; next } /^[^ ]/ { inside = 0 } inside && $0 == want { found = 1 } END { exit !found }' \
+		"$here/deploy/docker-compose.yml"; then
+		fail "Het volume $name hoort niet bij Brievie '$project'. Gebruik een volume van deze installatie (bijvoorbeeld volume:backup-unset). Er is niets veranderd."
+	fi
+	label=$(docker volume inspect --format '{{index .Labels "com.docker.compose.project"}}' "${project}_$short" 2>/dev/null) ||
+		fail "Het volume ${project}_$short bestaat niet. Controleer de naam en typ opnieuw ./brievie restore."
+	case $label in
+	'' | \<no\ value\> | "$project") ;;
+	*) fail "Het volume ${project}_$short hoort bij een andere installatie ($label). Er is niets veranderd." ;;
+	esac
+	printf '%s\n' "${project}_$short"
+}
+
 # compose with the restore source as the back-up destination, for the steps that read
 # the back-up; deploy/.env is not changed by it.
 from_source() {
 	(
-		BRIEVIE_BACKUP_DIR=$folder
+		BRIEVIE_BACKUP_DIR=$source_dir
 		BRIEVIE_BACKUP_REPOSITORY=$repository
 		BRIEVIE_BACKUP_PASSWORD=$opening_password
 		BRIEVIE_BACKUP_S3_ACCESS_KEY_ID=$s3_id
@@ -683,7 +824,7 @@ confirm_replace() {
 }
 
 cmd_restore() {
-	run="" replace="" skip_safety="" separate="" keep_hostname=""
+	run="" replace="" skip_safety="" separate="" keep_hostname="" safety_done=""
 	for arg in "$@"; do
 		case $arg in
 		--replace) replace=yes ;;
@@ -714,11 +855,17 @@ cmd_restore() {
 	# 1. The source and the secrets.
 	source=${BRIEVIE_RESTORE_SOURCE:-}
 	if [ -z "$source" ]; then
-		ask "Waar staat de back-up? Typ het pad van de map (bijvoorbeeld /Volumes/Backup/brievie), of een adres dat begint met rest: of s3:"
+		ask "Waar staat de back-up? Typ het pad van de map (bijvoorbeeld /Volumes/Backup/brievie), een volume (zoals volume:backup-unset) of een adres dat begint met rest: of s3:"
 		source=$answer
 	fi
-	folder="" repository="" s3_id="" s3_secret="" rest_user="" rest_password=""
+	folder="" backup_volume="" source_dir="" repository=""
+	s3_id="" s3_secret="" rest_user="" rest_password=""
 	case $source in
+	volume:*)
+		backup_volume=$(source_volume "${source#volume:}")
+		# compose mounts it by its short name, as BRIEVIE_BACKUP_DIR
+		source_dir=${backup_volume#"$project"_}
+		;;
 	rest:*)
 		repository=$source
 		rest_user=${BRIEVIE_BACKUP_REST_USERNAME:-}
@@ -753,9 +900,10 @@ cmd_restore() {
 		if [ ! -f "$folder/brievie-backup.json" ]; then
 			fail "In deze map staat geen back-up van Brievie (brievie-backup.json ontbreekt). Controleer het pad en typ opnieuw ./brievie restore."
 		fi
+		source_dir=$folder
 		;;
 	'') fail "Je hebt geen plek van de back-up getypt. Typ opnieuw ./brievie restore." ;;
-	*) fail "Typ het volledige pad van de map (beginnend met /), of een adres dat begint met rest: of s3:." ;;
+	*) fail "Typ het volledige pad van de map (beginnend met /), een volume (zoals volume:backup-unset) of een adres dat begint met rest: of s3:." ;;
 	esac
 
 	master_key=${BRIEVIE_RESTORE_MASTER_KEY:-}
@@ -794,6 +942,8 @@ cmd_restore() {
 	set -- run --rm --user 0 -v "${here:?}/deploy/.restore:/out"
 	if [ -n "$folder" ]; then
 		set -- "$@" -v "$folder:/backup:ro"
+	elif [ -n "$backup_volume" ]; then
+		set -- "$@" -v "$backup_volume:/backup:ro"
 	fi
 	set -- "$@" -e BRIEVIE_MASTER_KEY -e BRIEVIE_BACKUP_PASSWORD -e BRIEVIE_BACKUP_DIR_SET \
 		-e BRIEVIE_BACKUP_REPOSITORY -e BRIEVIE_BACKUP_S3_ACCESS_KEY_ID \
@@ -809,7 +959,7 @@ cmd_restore() {
 	echo "De back-up wordt geopend…"
 	status=0
 	fetched=$(BRIEVIE_MASTER_KEY=$master_key BRIEVIE_BACKUP_PASSWORD=$backup_password \
-		BRIEVIE_BACKUP_DIR_SET=${folder:+true} BRIEVIE_BACKUP_REPOSITORY=$repository \
+		BRIEVIE_BACKUP_DIR_SET=${source_dir:+true} BRIEVIE_BACKUP_REPOSITORY=$repository \
 		BRIEVIE_BACKUP_S3_ACCESS_KEY_ID=$s3_id BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY=$s3_secret \
 		BRIEVIE_BACKUP_REST_USERNAME=$rest_user BRIEVIE_BACKUP_REST_PASSWORD=$rest_password \
 		SECRET_KEY=$build_secret_key DATABASE_URL=$build_database_url \
@@ -872,6 +1022,9 @@ EOF
 	# 4. What is here now: proven ours, confirmed, backed up, stopped.
 	if [ -n "$data_present" ]; then
 		check_installation_id
+		if [ -z "$volume_id" ]; then
+			confirm_adopt
+		fi
 		confirm_replace
 		compose stop api worker caddy ||
 			fail "Brievie kon niet worden gestopt; er is niets teruggezet. Lees de melding hierboven en start Brievie weer met ./brievie start."
@@ -880,6 +1033,7 @@ EOF
 			if ! sh "${here:?}/brievie" backup; then
 				fail "De veiligheidsback-up is niet gelukt; er is niets teruggezet. Start Brievie weer met ./brievie start en los eerst de melding hierboven op."
 			fi
+			safety_done=yes
 		fi
 		compose stop keeper ||
 			fail "De back-updienst kon niet worden gestopt; er is niets teruggezet. Start Brievie weer met ./brievie start."

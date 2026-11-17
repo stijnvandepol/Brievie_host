@@ -9,7 +9,24 @@
 set -eu
 
 env_file=deploy/.env
-compose="docker compose --project-directory deploy -f deploy/docker-compose.yml"
+
+# The compose project: COMPOSE_PROJECT_NAME from the environment, else from deploy/.env,
+# else brievie; always passed with -p, so this never reaches another installation.
+project=${COMPOSE_PROJECT_NAME:-}
+if [ -z "$project" ]; then
+	project=$(sed -n 's/^COMPOSE_PROJECT_NAME=//p' "$env_file" 2>/dev/null | tail -n 1) || true
+fi
+project=${project:-brievie}
+case $project in
+[!a-z0-9]* | *[!a-z0-9_-]*)
+	echo "COMPOSE_PROJECT_NAME may only hold lower-case letters, digits, - and _." >&2
+	exit 1
+	;;
+esac
+
+compose() {
+	docker compose -p "$project" --project-directory deploy -f deploy/docker-compose.yml "$@"
+}
 
 password=$(grep '^BRIEVIE_BACKUP_DB_PASSWORD=' "$env_file" 2>/dev/null | tail -n 1 | cut -d= -f2-) || true
 if [ -z "$password" ]; then
@@ -17,7 +34,7 @@ if [ -z "$password" ]; then
 	exit 1
 fi
 
-if [ -z "$($compose ps --status running --quiet postgres 2>/dev/null)" ]; then
+if [ -z "$(compose ps --status running --quiet postgres 2>/dev/null)" ]; then
 	echo "PostgreSQL is not running; start it first (make dev)." >&2
 	exit 1
 fi
@@ -25,4 +42,4 @@ fi
 # Inside psql's single quotes a quote is doubled and a backslash escaped.
 quoted=$(printf '%s' "$password" | sed -e 's/\\/\\\\/g' -e "s/'/''/g")
 printf "\\\\set backup_password '%s'\n\\\\i /docker-entrypoint-initdb.d/backup-role.psql\n" "$quoted" |
-	$compose exec -T postgres psql -U postgres -v ON_ERROR_STOP=1 -q
+	compose exec -T postgres psql -U postgres -v ON_ERROR_STOP=1 -q

@@ -1,4 +1,8 @@
-COMPOSE := docker compose --project-directory deploy -f deploy/docker-compose.yml
+## The compose project: COMPOSE_PROJECT_NAME from the environment, else from deploy/.env,
+## else brievie. Always passed with -p, so a missing or stray line never leads a make
+## target into another installation's project.
+PROJECT := $(or $(COMPOSE_PROJECT_NAME),$(shell sed -n 's/^COMPOSE_PROJECT_NAME=//p' deploy/.env 2>/dev/null | tail -n 1),brievie)
+COMPOSE := docker compose -p $(PROJECT) --project-directory deploy -f deploy/docker-compose.yml
 BACKEND := cd backend &&
 
 .PHONY: dev down migrate test lint format typecheck openapi web-install web-test web-lint web-build web-api web-i18n

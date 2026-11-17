@@ -194,3 +194,21 @@ def test_image_has_the_backup_directories() -> None:
         own_path = rf"\s{re.escape(path)}(\s|$)"
         assert re.search(own_path, mkdir), path
         assert re.search(own_path, chown), path
+
+
+def test_make_passes_the_project_to_every_compose_call() -> None:
+    makefile = (ROOT / "Makefile").read_text()
+    assert "COMPOSE := docker compose -p $(PROJECT) --project-directory deploy" in makefile
+    assert "$(COMPOSE_PROJECT_NAME)" in makefile
+    assert "s/^COMPOSE_PROJECT_NAME=//p' deploy/.env" in makefile
+    # Every docker compose call goes through $(COMPOSE).
+    assert makefile.count("docker compose") == 1
+
+
+def test_ensure_backup_role_passes_the_project() -> None:
+    script = (ROOT / "deploy" / "ensure-backup-role.sh").read_text()
+    assert 'docker compose -p "$project" --project-directory deploy' in script
+    assert "${COMPOSE_PROJECT_NAME:-}" in script
+    assert 's/^COMPOSE_PROJECT_NAME=//p\' "$env_file"' in script
+    assert script.count("docker compose") == 1
+    assert "$compose" not in script
