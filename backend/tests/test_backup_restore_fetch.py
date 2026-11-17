@@ -115,10 +115,11 @@ class Backup:
 
     def snapshots(self, db: list[dict[str, object]], files: list[dict[str, object]]) -> None:
         self.restic.respond(
-            ("snapshots", "--json", "--tag", "kind:db"), stdout=json.dumps(db).encode()
+            ("snapshots", "--no-lock", "--json", "--tag", "kind:db"), stdout=json.dumps(db).encode()
         )
         self.restic.respond(
-            ("snapshots", "--json", "--tag", "kind:files"), stdout=json.dumps(files).encode()
+            ("snapshots", "--no-lock", "--json", "--tag", "kind:files"),
+            stdout=json.dumps(files).encode(),
         )
 
     def contents(
@@ -131,11 +132,15 @@ class Backup:
         keys: bytes | None = None,
     ) -> None:
         self.restic.respond(
-            ("dump", "--", files_id, f"{self.config_dir}/{MANIFEST_NAME}"),
+            ("dump", "--no-lock", "--", files_id, f"{self.config_dir}/{MANIFEST_NAME}"),
             stdout=manifest if manifest is not None else manifest_json(self.run_id),
         )
-        self.restic.respond(("dump", "--", files_id, f"{self.config_dir}/env"), stdout=env.encode())
-        self.restic.respond(("dump", "--", db_id, restic.DB_FILENAME), stdout=b"PGDMP fake archive")
+        self.restic.respond(
+            ("dump", "--no-lock", "--", files_id, f"{self.config_dir}/env"), stdout=env.encode()
+        )
+        self.restic.respond(
+            ("dump", "--no-lock", "--", db_id, restic.DB_FILENAME), stdout=b"PGDMP fake archive"
+        )
         self.pg_restore.respond(
             (), stdout=keys if keys is not None else copy_block([(WORKSPACE, sealed_key(MASTER))])
         )
@@ -373,7 +378,7 @@ def test_a_failing_dump_of_the_manifest_never_says_a_backup_was_made(
     backup: Backup, out_dir: Path, code: int, stderr: str, expected: str
 ) -> None:
     backup.one_run()
-    backup.restic.respond(("dump", "--", "f0000001"), stderr=stderr, code=code)
+    backup.restic.respond(("dump", "--no-lock", "--", "f0000001"), stderr=stderr, code=code)
     with pytest.raises(BackupError) as caught:
         do_fetch(out_dir)
     assert caught.value.code == expected
@@ -530,7 +535,7 @@ def test_a_backup_without_workspaces_passes_the_check(backup: Backup) -> None:
 def test_a_failing_dump_is_not_masked_by_pg_restore(backup: Backup) -> None:
     backup.contents()
     backup.restic.respond(
-        ("dump", "--", "d0000001"), stdout=b"PGDMP trunc", stderr="read error", code=1
+        ("dump", "--no-lock", "--", "d0000001"), stdout=b"PGDMP trunc", stderr="read error", code=1
     )
     with pytest.raises(BackupError) as caught:
         check(backup, MASTER)
@@ -539,7 +544,7 @@ def test_a_failing_dump_is_not_masked_by_pg_restore(backup: Backup) -> None:
 
 def test_a_wrong_password_on_the_dump_is_reported_as_such(backup: Backup) -> None:
     backup.contents()
-    backup.restic.respond(("dump", "--", "d0000001"), stderr="wrong password", code=12)
+    backup.restic.respond(("dump", "--no-lock", "--", "d0000001"), stderr="wrong password", code=12)
     with pytest.raises(BackupError) as caught:
         check(backup, MASTER)
     assert caught.value.code == "wrong_password"
@@ -593,7 +598,7 @@ def test_pg_restore_that_stops_reading_early_does_not_fail_the_dump(backup: Back
     # pg_restore may stop reading once it has the table; restic must still end cleanly.
     backup.contents()
     backup.restic.respond(
-        ("dump", "--", "d0000001", restic.DB_FILENAME), stdout=b"x" * (4 * 1024 * 1024)
+        ("dump", "--no-lock", "--", "d0000001", restic.DB_FILENAME), stdout=b"x" * (4 * 1024 * 1024)
     )
     check(backup, MASTER)
 
@@ -940,3 +945,10 @@ def test_a_key_that_only_starts_like_compose_is_kept() -> None:
     values = env_values(restored.text)
     assert values["MY_COMPOSE_NOTE"] == "keep"
     assert values["DOCKERFILE_NOTE"] == "keep"
+
+
+def test_every_restic_call_of_a_fetch_reads_without_a_lock(backup: Backup, out_dir: Path) -> None:
+    backup.one_run()
+    do_fetch(out_dir)
+    assert backup.restic.calls
+    assert all(call[1] == "--no-lock" for call in backup.restic.calls), backup.restic.calls

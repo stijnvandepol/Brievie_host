@@ -49,17 +49,17 @@ def snapshot(snapshot_id: str, when: datetime, run_id: UUID, kind: str) -> dict[
 def one_run(fake_restic: FakeBinary) -> UUID:
     run_id = uuid4()
     fake_restic.respond(
-        ("snapshots", "--json", "--tag", "kind:db"),
+        ("snapshots", "--no-lock", "--json", "--tag", "kind:db"),
         stdout=json.dumps([snapshot("d0000001", T0, run_id, "db")]).encode(),
     )
     fake_restic.respond(
-        ("snapshots", "--json", "--tag", "kind:files"),
+        ("snapshots", "--no-lock", "--json", "--tag", "kind:files"),
         stdout=json.dumps(
             [snapshot("f0000001", T0 + timedelta(minutes=5), run_id, "files")]
         ).encode(),
     )
     fake_restic.respond(
-        ("dump", "--", "d0000001", restic.DB_FILENAME), stdout=b"PGDMP fake archive"
+        ("dump", "--no-lock", "--", "d0000001", restic.DB_FILENAME), stdout=b"PGDMP fake archive"
     )
     return run_id
 
@@ -146,7 +146,7 @@ def test_dump_is_piped_into_pg_restore_as_the_superuser(
 
     assert closed == 2
     assert pg_restore.calls == [[*PG_RESTORE_COMMAND[1:], "--dbname=restore_probe"]]
-    assert fake_restic.calls[-1] == restic.dump_argv("d0000001", restic.DB_FILENAME)
+    assert fake_restic.calls[-1] == restic.dump_argv("d0000001", restic.DB_FILENAME, no_lock=True)
     (env,) = [
         env for argv, env in zip(started.argv, started.env, strict=True) if argv[0] == "pg_restore"
     ]
@@ -181,7 +181,10 @@ def test_a_failing_dump_or_restore_stops(
     one_run(fake_restic)
     if failing == "dump":
         fake_restic.respond(
-            ("dump", "--", "d0000001"), stdout=b"PGDMP trunc", stderr="read error", code=1
+            ("dump", "--no-lock", "--", "d0000001"),
+            stdout=b"PGDMP trunc",
+            stderr="read error",
+            code=1,
         )
     else:
         pg_restore.respond((), stderr="pg_restore: error: could not execute query", code=1)
@@ -413,7 +416,9 @@ def test_files_are_restored_and_the_authority_placed(
     restored = restore_files(run=None, authority_target=caddy, clear_documents=False)
 
     assert restored.authority_placed is True
-    assert fake_restic.calls[-1] == restic.restore_argv("f0000001", "/", services.file_paths())
+    assert fake_restic.calls[-1] == restic.restore_argv(
+        "f0000001", "/", services.file_paths(), no_lock=True
+    )
     assert sorted(p.name for p in caddy.iterdir()) == sorted(files)
     for name in files:
         assert (caddy / name).read_text() == f"restored {name}"
@@ -853,7 +858,7 @@ def test_restic_restores_exactly_the_three_judged_directories(
     one_run(fake_restic)
     restore_files(run=None, authority_target=caddy, clear_documents=False)
     call = fake_restic.calls[-1]
-    assert call[:3] == ["restore", "--target", "/"]
+    assert call[:4] == ["restore", "--no-lock", "--target", "/"]
     assert call[-2:] == ["--", "f0000001"]
     includes = [call[i + 1] for i, arg in enumerate(call) if arg == "--include"]
     assert includes == [
@@ -861,3 +866,21 @@ def test_restic_restores_exactly_the_three_judged_directories(
         django_settings.BRIEVIE_AUTHORITY_COPY_DIR,
         django_settings.BRIEVIE_BACKUP_CONFIG_DIR,
     ]
+
+
+@pytest.mark.django_db(transaction=True)
+def test_every_restic_call_of_a_restore_reads_without_a_lock(
+    configured_folder: Path,
+    fake_restic: FakeBinary,
+    pg_restore: FakeBinary,
+    superuser: None,
+    no_database: list[str],
+    caddy: Path,
+    chowned: Chowned,
+) -> None:
+    # The source may be mounted read-only: restic must not try to write a lock there.
+    one_run(fake_restic)
+    restore_database(run=None, dbname="brievie")
+    restore_files(run=None, authority_target=caddy, clear_documents=False)
+    assert fake_restic.calls
+    assert all(call[1] == "--no-lock" for call in fake_restic.calls), fake_restic.calls

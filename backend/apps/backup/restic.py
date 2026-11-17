@@ -85,9 +85,17 @@ def init_argv() -> list[str]:
     return ["init"]
 
 
-def cat_config_argv() -> list[str]:
+def _lock(no_lock: bool) -> list[str]:
+    """`--no-lock` for a read on a repository that may be read-only (a restore source).
+
+    Never for a back-up, forget, check or unlock: those need the repository's lock.
+    """
+    return ["--no-lock"] if no_lock else []
+
+
+def cat_config_argv(*, no_lock: bool = False) -> list[str]:
     """Opens the repository's config: proves the password fits an existing repository."""
-    return ["cat", "config"]
+    return ["cat", *_lock(no_lock), "config"]
 
 
 def unlock_argv() -> list[str]:
@@ -143,8 +151,8 @@ def check_argv() -> list[str]:
     return ["check", "--read-data-subset", CHECK_SUBSET]
 
 
-def snapshots_argv(tag: str) -> list[str]:
-    return ["snapshots", "--json", "--tag", tag]
+def snapshots_argv(tag: str, *, no_lock: bool = False) -> list[str]:
+    return ["snapshots", *_lock(no_lock), "--json", "--tag", tag]
 
 
 def snapshot_id_value(snapshot_id: str) -> str:
@@ -154,14 +162,16 @@ def snapshot_id_value(snapshot_id: str) -> str:
     return snapshot_id
 
 
-def dump_argv(snapshot_id: str, path: str) -> list[str]:
+def dump_argv(snapshot_id: str, path: str, *, no_lock: bool = False) -> list[str]:
     # `--` ends the options: neither the id nor the path is ever read as one.
-    return ["dump", "--", snapshot_id_value(snapshot_id), path]
+    return ["dump", *_lock(no_lock), "--", snapshot_id_value(snapshot_id), path]
 
 
-def restore_argv(snapshot_id: str, target: str, includes: Sequence[str]) -> list[str]:
+def restore_argv(
+    snapshot_id: str, target: str, includes: Sequence[str], *, no_lock: bool = False
+) -> list[str]:
     """`restore` of `includes` (absolute paths without glob characters) to `target`."""
-    argv = ["restore", "--target", target]
+    argv = ["restore", *_lock(no_lock), "--target", target]
     for include in includes:
         if not include.startswith("/") or _GLOB.search(include):
             raise BackupError("unsafe_path")

@@ -131,7 +131,7 @@ def _newest_by_run(snapshots: list[restic.Snapshot]) -> dict[UUID, restic.Snapsh
 def _snapshots_of_kind(
     repository: restic.Repository, password: str, kind: str, extra_secrets: Sequence[str]
 ) -> dict[UUID, restic.Snapshot]:
-    argv = restic.snapshots_argv(f"kind:{kind}")
+    argv = restic.snapshots_argv(f"kind:{kind}", no_lock=True)
     stdout = _restic_output(repository, password, argv, extra_secrets)
     try:
         snapshots = restic.parse_snapshots(stdout)
@@ -223,7 +223,7 @@ def _dump_through(
     consumer_err: list[bytes] = []
     try:
         try:
-            dump_argv = restic.dump_argv(snapshot.id, restic.DB_FILENAME)
+            dump_argv = restic.dump_argv(snapshot.id, restic.DB_FILENAME, no_lock=True)
             dump = subprocess.Popen(  # noqa: S603 - argv without secrets
                 [settings.BRIEVIE_RESTIC_BINARY, *dump_argv],
                 env=restic.restic_env(repository, password),
@@ -489,7 +489,7 @@ def fetch(
     found = find_run(repository, password, run, extra_secrets=hidden)
 
     config_dir = safepaths.configured_path(settings.BRIEVIE_BACKUP_CONFIG_DIR)
-    manifest_argv = restic.dump_argv(found.files.id, str(config_dir / MANIFEST_NAME))
+    manifest_argv = restic.dump_argv(found.files.id, str(config_dir / MANIFEST_NAME), no_lock=True)
     manifest_out = _restic_output(repository, password, manifest_argv, hidden)
     manifest_text = _text(manifest_out, "manifest_unreadable")
     manifest = manifest_from_json(manifest_text)
@@ -497,7 +497,7 @@ def fetch(
         raise BackupError("manifest_unreadable")
     if unknown_migrations(manifest):
         raise BackupError("newer_backup")
-    env_argv = restic.dump_argv(found.files.id, str(config_dir / ENV_COPY_NAME))
+    env_argv = restic.dump_argv(found.files.id, str(config_dir / ENV_COPY_NAME), no_lock=True)
     env_copy = _text(_restic_output(repository, password, env_argv, hidden), "restore_failed")
     check_master_key_against_dump(
         repository=repository, password=password, db_snapshot=found.db, master_key=master_key
@@ -710,7 +710,9 @@ def restore_files(
                     _empty(directory)
             except OSError:
                 raise BackupError("documents_incomplete") from None
-        argv = restic.restore_argv(found.files.id, "/", [str(path) for path in directories])
+        argv = restic.restore_argv(
+            found.files.id, "/", [str(path) for path in directories], no_lock=True
+        )
         try:
             _restic_output(repository, password, argv)
         except BackupError as error:

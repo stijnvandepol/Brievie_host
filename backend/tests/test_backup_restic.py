@@ -395,3 +395,50 @@ def test_parse_snapshots_of_garbage_fails_as_restic_failed(payload: bytes) -> No
     with pytest.raises(BackupError) as caught:
         restic.parse_snapshots(payload)
     assert caught.value.code == "restic_failed"
+
+
+def test_the_reading_builders_can_skip_the_lock_for_a_read_only_repository() -> None:
+    # A restore reads from a repository that may be mounted read-only: no lock file.
+    assert restic.snapshots_argv("run:x", no_lock=True) == [
+        "snapshots",
+        "--no-lock",
+        "--json",
+        "--tag",
+        "run:x",
+    ]
+    assert restic.dump_argv("abcdef12", "/brievie.pgdump", no_lock=True) == [
+        "dump",
+        "--no-lock",
+        "--",
+        "abcdef12",
+        "/brievie.pgdump",
+    ]
+    assert restic.restore_argv("abcdef12", "/", ["/data/documents"], no_lock=True) == [
+        "restore",
+        "--no-lock",
+        "--target",
+        "/",
+        "--include",
+        "/data/documents",
+        "--",
+        "abcdef12",
+    ]
+    assert restic.cat_config_argv(no_lock=True) == ["cat", "--no-lock", "config"]
+
+
+def test_the_writing_and_locking_builders_never_skip_the_lock() -> None:
+    run_id = uuid.uuid4()
+    for argv in (
+        restic.init_argv(),
+        restic.unlock_argv(),
+        restic.backup_stdin_argv(run_id, ["pg_dump"]),
+        restic.backup_files_argv(run_id, ["/data/documents"]),
+        restic.forget_argv(),
+        restic.forget_run_argv(run_id),
+        restic.check_argv(),
+        restic.snapshots_argv("run:x"),
+        restic.dump_argv("abcdef12", "/x"),
+        restic.restore_argv("abcdef12", "/", ["/data/documents"]),
+        restic.cat_config_argv(),
+    ):
+        assert "--no-lock" not in argv, argv
