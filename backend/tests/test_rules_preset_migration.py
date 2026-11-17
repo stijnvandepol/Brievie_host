@@ -89,3 +89,15 @@ def test_current_presets_stay_the_same(ws_a: Workspace, ws_b: Workspace) -> None
     _run()
 
     assert [_stored(ws_a, "belastingdienst"), _stored(ws_b, "contracten")] == before
+
+
+def test_old_preset_pointing_at_another_label_is_left_alone(ws_b: Workspace) -> None:
+    _set(ws_b, "contracten", OLD_CONTRACTEN)
+    with workspace_context(ws_b.id):
+        other = Label.objects.get(workspace=ws_b, system_key="inkoop")
+        moved = _definition(other.id, OLD_CONTRACTEN)
+        Rule.objects.filter(workspace=ws_b, system_key="contracten").update(definition=moved)
+
+    _run()
+
+    assert _stored(ws_b, "contracten") == moved

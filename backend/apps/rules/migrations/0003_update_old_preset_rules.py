@@ -2,7 +2,8 @@ from django.apps.registry import Apps
 from django.db import migrations
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
 
-from apps.workspaces.rls import SETTING_NAME
+# Frozen copy of apps.workspaces.rls.SETTING_NAME.
+SETTING_NAME = "brievie.workspace_id"
 
 # (field, op, value) conditions of a preset rule: the old form and its replacement.
 # A frozen copy: the presets in apps.labels.presets may change again later.
@@ -40,15 +41,15 @@ def _definition(conditions: Conditions, label_id: str) -> dict[str, object]:
     }
 
 
-def _replacement(key: str, stored: object) -> dict[str, object] | None:
-    """The new definition when `stored` is exactly an old preset's; else None (edited)."""
+def _replacement(key: str, stored: object, label_id: str | None) -> dict[str, object] | None:
+    """The new definition when `stored` is exactly an old preset's that adds `label_id`
+    (the workspace's label with the rule's `system_key`); else None (edited)."""
     if not isinstance(stored, dict):
         return None
     actions = stored.get("actions")
     if not isinstance(actions, list) or len(actions) != 1 or not isinstance(actions[0], dict):
         return None
-    label_id = actions[0].get("label_id")
-    if not isinstance(label_id, str):
+    if label_id is None or actions[0].get("label_id") != label_id:
         return None
     for old, new in _REPLACEMENTS[key].items():
         if stored == _definition(old, label_id):
@@ -59,11 +60,13 @@ def _replacement(key: str, stored: object) -> dict[str, object] | None:
 def update_old_preset_rules(apps: Apps, schema_editor: BaseDatabaseSchemaEditor) -> None:
     """Give an unedited old Contracten or Belastingdienst preset rule the current definition.
 
-    A rule the user changed in any way is left alone. The owner role is under forced RLS,
+    A rule the user changed in any way is left alone, also one whose action points at
+    another label than the workspace's label with the rule's `system_key`. The owner role is under forced RLS,
     so each workspace's context is entered before its rules are read or written.
     """
     workspace_model = apps.get_model("workspaces", "Workspace")
     rule_model = apps.get_model("rules", "Rule")
+    label_model = apps.get_model("labels", "Label")
     workspace_ids = list(workspace_model._default_manager.values_list("id", flat=True))
     with schema_editor.connection.cursor() as cursor:
         for workspace_id in workspace_ids:
@@ -71,8 +74,14 @@ def update_old_preset_rules(apps: Apps, schema_editor: BaseDatabaseSchemaEditor)
             rules = rule_model._default_manager.filter(
                 workspace_id=workspace_id, system_key__in=list(_REPLACEMENTS)
             )
+            labels = {
+                key: str(label_id)
+                for key, label_id in label_model._default_manager.filter(
+                    workspace_id=workspace_id, system_key__in=list(_REPLACEMENTS)
+                ).values_list("system_key", "id")
+            }
             for rule in rules:
-                new = _replacement(rule.system_key, rule.definition)
+                new = _replacement(rule.system_key, rule.definition, labels.get(rule.system_key))
                 if new is not None:
                     rule.definition = new
                     rule.save(update_fields=["definition", "updated_at"])
@@ -81,6 +90,7 @@ def update_old_preset_rules(apps: Apps, schema_editor: BaseDatabaseSchemaEditor)
 
 class Migration(migrations.Migration):
     dependencies = [
+        ("labels", "0001_initial"),
         ("rules", "0002_rulerun"),
         ("workspaces", "0002_workspacekey"),
     ]
