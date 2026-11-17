@@ -1,7 +1,11 @@
 """Text checks on deploy/: the compose defaults, the image contents and Caddy's answers."""
 
 import re
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 COMPOSE = (ROOT / "deploy" / "docker-compose.yml").read_text()
@@ -216,9 +220,49 @@ def test_make_passes_the_project_to_every_compose_call() -> None:
     makefile = (ROOT / "Makefile").read_text()
     assert "COMPOSE := docker compose -p $(PROJECT) --project-directory deploy" in makefile
     assert "$(COMPOSE_PROJECT_NAME)" in makefile
-    assert "s/^COMPOSE_PROJECT_NAME=//p' deploy/.env" in makefile
+    assert "COMPOSE_PROJECT_NAME=//p' deploy/.env" in makefile
     # Every docker compose call goes through $(COMPOSE).
     assert makefile.count("docker compose") == 1
+
+
+def make_project(tmp_path: Path, env_text: str | None) -> str:
+    """The project `make` would pass, from a copy of the Makefile in tmp_path.
+
+    `make -n` only prints the recipe (docker is never started); the env file is the
+    copy's own deploy/.env.
+    """
+    shutil.copy(ROOT / "Makefile", tmp_path / "Makefile")
+    if env_text is not None:
+        (tmp_path / "deploy").mkdir()
+        (tmp_path / "deploy" / ".env").write_text(env_text)
+    done = subprocess.run(  # noqa: S603
+        ["make", "-n", "-s", "-C", str(tmp_path), "down"],  # noqa: S607
+        capture_output=True,
+        text=True,
+        check=True,
+        env={"PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin"},
+    )
+    match = re.search(r"docker compose -p (\S+) ", done.stdout)
+    assert match, done.stdout
+    return match.group(1)
+
+
+@pytest.mark.parametrize(
+    ("env_text", "project"),
+    [
+        ("COMPOSE_PROJECT_NAME=plain\n", "plain"),
+        ("export COMPOSE_PROJECT_NAME=exported\n", "exported"),
+        ("export  COMPOSE_PROJECT_NAME=spaces\n", "spaces"),
+        ("COMPOSE_PROJECT_NAME=first\nexport COMPOSE_PROJECT_NAME=last\n", "last"),
+        ("# COMPOSE_PROJECT_NAME=commented\n", "brievie"),
+        ("MY_COMPOSE_PROJECT_NAME=other\n", "brievie"),
+        (None, "brievie"),
+    ],
+)
+def test_make_reads_the_project_name_in_both_forms(
+    tmp_path: Path, env_text: str | None, project: str
+) -> None:
+    assert make_project(tmp_path, env_text) == project
 
 
 def test_ensure_backup_role_passes_the_project() -> None:

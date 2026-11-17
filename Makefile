@@ -1,7 +1,8 @@
-## The compose project: COMPOSE_PROJECT_NAME from the environment, else from deploy/.env,
-## else brievie. Always passed with -p, so a missing or stray line never leads a make
-## target into another installation's project.
-PROJECT := $(or $(COMPOSE_PROJECT_NAME),$(shell sed -n 's/^COMPOSE_PROJECT_NAME=//p' deploy/.env 2>/dev/null | tail -n 1),brievie)
+## The compose project: COMPOSE_PROJECT_NAME from the environment, else from deploy/.env
+## (plain or `export COMPOSE_PROJECT_NAME=...`, the last one counts), else brievie.
+## Always passed with -p, so a missing or stray line never leads a make target into
+## another installation's project.
+PROJECT := $(or $(COMPOSE_PROJECT_NAME),$(shell sed -n 's/^[[:space:]]*\(export[[:space:]][[:space:]]*\)\{0,1\}COMPOSE_PROJECT_NAME=//p' deploy/.env 2>/dev/null | tail -n 1),brievie)
 COMPOSE := docker compose -p $(PROJECT) --project-directory deploy -f deploy/docker-compose.yml
 BACKEND := cd backend &&
 
