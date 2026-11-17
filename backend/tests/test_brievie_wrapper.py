@@ -66,6 +66,7 @@ class Call(TypedDict, total=False):
     watch_mode: str
     image_env: str
     backup_dir_env: str
+    mount_mode_env: str
 
 
 # The fake: logs each call as a JSON line, answers from FAKE_* variables, and writes the
@@ -88,6 +89,7 @@ if argv[:1] == ["compose"]:
     entry["secret_env"] = [name for name in secret_names if os.environ.get(name)]
     entry["image_env"] = os.environ.get("BRIEVIE_IMAGE", "")
     entry["backup_dir_env"] = os.environ.get("BRIEVIE_BACKUP_DIR", "<unset>")
+    entry["mount_mode_env"] = os.environ.get("BRIEVIE_BACKUP_MOUNT_MODE", "<unset>")
 if "restore_fetch" in argv:
     names = ("BRIEVIE_MASTER_KEY", "BRIEVIE_BACKUP_PASSWORD", "BRIEVIE_BACKUP_DIR_SET",
              "BRIEVIE_BACKUP_REPOSITORY", "BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY", "SECRET_KEY")
@@ -103,6 +105,7 @@ if remove_at and remove_at in joined:
     os.remove(os.environ["FAKE_REMOVE_PATH"])
 fail = os.environ.get("FAKE_DOCKER_FAIL", "")
 if fail and fail in joined:
+    sys.stderr.write(os.environ.get("FAKE_DOCKER_FAIL_STDERR", ""))
     sys.exit(int(os.environ.get("FAKE_DOCKER_FAIL_CODE", "1")))
 
 running = os.environ.get("FAKE_DOCKER_RUNNING", "").split()
@@ -1862,3 +1865,69 @@ def test_make_passes_the_project(
 
     assert result.returncode == 0, result.stderr
     assert f"docker compose -p {expected} --project-directory deploy" in result.stdout
+
+
+# --- fix round 4: the back-up is read read-only while restoring ----------------------------
+
+
+READ_ONLY_STEPS = ("restore_database", "restore_files", "verify_restore")
+
+
+@pytest.mark.parametrize("flags", [(), ("--replace",)])
+def test_only_the_restore_steps_mount_the_source_read_only(
+    installed: Install, flags: tuple[str, ...]
+) -> None:
+    if not flags:
+        installed.dotenv.unlink()
+
+    result = installed.run(
+        "restore",
+        *flags,
+        "--keep-hostname",
+        BRIEVIE_BACKUP_MOUNT_MODE="rw",  # a stray value in the shell never counts
+        **restore_inputs(installed),
+    )
+
+    assert result.returncode == 0, result.stderr
+    compose_calls = [c for c in installed.calls() if c["argv"][0] == "compose"]
+    for call in compose_calls:
+        read_only = any(step in call["argv"] for step in READ_ONLY_STEPS)
+        assert call["mount_mode_env"] == ("ro" if read_only else "<unset>"), call["argv"]
+    assert sum(any(s in c["argv"] for s in READ_ONLY_STEPS) for c in compose_calls) == 3
+
+
+def test_backup_init_keeps_the_default_mount(installed: Install) -> None:
+    result = installed.run("backup", "--init", BRIEVIE_BACKUP_MOUNT_MODE="ro")
+
+    assert result.returncode == 0, result.stderr
+    init = next(c for c in installed.calls() if "backup_init" in c["argv"])
+    assert init["mount_mode_env"] == "<unset>"
+
+
+def test_a_fresh_restore_checks_no_id_before_postgres(install: Install) -> None:
+    result = install.run("restore", "--keep-hostname", **restore_inputs(install))
+
+    assert result.returncode == 0, result.stderr
+    postgres = install.index("up -d --wait postgres")
+    commands = install.commands()
+    # The data volume is looked for right before postgres starts; there is none, so no
+    # id is read (a volume without deploy/.env was refused at the start).
+    assert "volume inspect brievie_pgdata" in commands[postgres - 1]
+    assert not any("UNREADABLE" in c for c in commands[:postgres])
+
+
+def test_the_images_own_sentence_comes_before_the_next_command(install: Install) -> None:
+    sentence = "Er staat al een snelkoppeling in de doelmap; gebruik --replace."
+    result = install.run(
+        "restore",
+        "--keep-hostname",
+        FAKE_DOCKER_FAIL="restore_files",
+        FAKE_DOCKER_FAIL_STDERR=f"CommandError: {sentence}\n",
+        **restore_inputs(install),
+    )
+
+    assert result.returncode == 1
+    stderr = result.stderr
+    assert sentence in stderr
+    assert stderr.index(sentence) < stderr.index(f"./brievie restore {RUN_ID} --replace")
+    assert "niet compleet" not in stderr
