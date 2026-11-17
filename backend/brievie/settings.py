@@ -244,6 +244,8 @@ BRIEVIE_BACKUP_PASSWORD: str = env.str("BRIEVIE_BACKUP_PASSWORD", default="")
 BRIEVIE_BACKUP_REPOSITORY: str = env.str("BRIEVIE_BACKUP_REPOSITORY", default="")
 BRIEVIE_BACKUP_DIR_SET: bool = env.bool("BRIEVIE_BACKUP_DIR_SET", default=False)
 BRIEVIE_BACKUP_MOUNT: str = env.str("BRIEVIE_BACKUP_MOUNT", default="/backup")
+# The back-up folder as the host knows it (for the recovery sheet only).
+BRIEVIE_BACKUP_DIR_HOST: str = env.str("BRIEVIE_BACKUP_DIR_HOST", default="")
 BRIEVIE_BACKUP_APPEND_ONLY: bool = env.bool("BRIEVIE_BACKUP_APPEND_ONLY", default=False)
 BRIEVIE_BACKUP_S3_ACCESS_KEY_ID: str = env.str("BRIEVIE_BACKUP_S3_ACCESS_KEY_ID", default="")
 BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY: str = env.str(

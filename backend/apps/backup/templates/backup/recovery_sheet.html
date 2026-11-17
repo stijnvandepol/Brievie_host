@@ -1,0 +1,50 @@
+{% load i18n %}<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>{% translate "Herstelblad Brievie" %}</title>
+<style>
+  @page { size: A4; margin: 18mm; }
+  body { font-family: Helvetica, Arial, sans-serif; font-size: 12pt; line-height: 1.5; color: #000; background: #fff; max-width: 170mm; margin: 0 auto; padding: 8mm; }
+  h1 { font-size: 22pt; margin: 0 0 4mm; }
+  h2 { font-size: 14pt; margin: 8mm 0 2mm; }
+  .key { font-family: Menlo, Consolas, monospace; font-size: 14pt; letter-spacing: 0.05em; border: 2px solid #000; padding: 4mm; word-spacing: 0.4em; }
+  .warning { border-left: 4px solid #000; padding-left: 4mm; font-weight: bold; }
+  dl { margin: 0; }
+  dt { font-weight: bold; margin-top: 3mm; }
+  dd { margin: 0; word-break: break-all; }
+  ol li { margin-bottom: 2mm; }
+  @media print { body { padding: 0; } .key, .warning { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<h1>{% translate "Herstelblad Brievie" %}</h1>
+<p class="warning">{% translate "Print dit blad. Bewaar het op een andere plek dan deze computer." %}</p>
+
+<dl>
+  <dt>{% translate "Naam van deze Brievie" %}</dt>
+  <dd>{{ data.hostname|default:"-" }}</dd>
+  <dt>{% translate "Gemaakt op" %}</dt>
+  <dd>{{ data.created_on|date:"j F Y" }}</dd>
+  <dt>{% translate "Plek van de back-up" %}</dt>
+  <dd>{{ data.destination }}</dd>
+  {% if data.authority_sha256 %}
+  <dt>{% translate "Vingerafdruk van het certificaat" %}</dt>
+  <dd>{{ data.authority_sha256 }}</dd>
+  {% endif %}
+</dl>
+
+<h2>{% translate "Je sleutel" %}</h2>
+<p class="key">{{ data.master_key_groups }}</p>
+{% if data.separate_password %}
+<h2>{% translate "Apart wachtwoord van de back-up" %}</h2>
+<p class="key">{{ data.separate_password }}</p>
+{% endif %}
+<p>{% translate "Zonder deze sleutel kan niemand de back-up openen. De makers van Brievie ook niet." %}</p>
+
+<h2>{% translate "Zo herstel je Brievie" %}</h2>
+<ol>
+{% for step in data.restore_steps %}  <li>{{ step }}</li>
+{% endfor %}</ol>
+</body>
+</html>
