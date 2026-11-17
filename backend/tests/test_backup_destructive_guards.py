@@ -415,3 +415,29 @@ def test_delete_orphans_refuses_a_custom_storage_root_off_the_fixed_list(
         lambda: sweep.delete_orphans(ORPHANS, Path(setting)),
         codes=("directory_not_allowed",),
     )
+
+
+def test_delete_orphans_never_follows_a_root_swapped_after_the_check(
+    configured: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    documents = configured / "documents"
+    outside = configured / "outside"
+    relative = "00000000-0000-0000-0000-000000000000/11111111-1111-1111-1111-111111111111/1.page"
+    victim = outside / relative
+    victim.parent.mkdir(parents=True)
+    victim.write_text("not ours")
+    old = (datetime.now(UTC) - timedelta(days=2)).timestamp()
+    os.utime(victim, (old, old))
+    real_guard = safepaths.require_emptiable
+
+    def guard_then_swap(directory: Path, **kwargs: object) -> Path:
+        judged = real_guard(directory, **kwargs)  # type: ignore[arg-type]
+        documents.rename(configured / "documents-moved")
+        documents.symlink_to(outside, target_is_directory=True)
+        return judged
+
+    monkeypatch.setattr(safepaths, "require_emptiable", guard_then_swap)
+    orphans = [sweep.Orphan(relative, 1, datetime.now(UTC) - timedelta(days=2))]
+    with pytest.raises((BackupError, OSError)):
+        sweep.delete_orphans(orphans, documents)
+    assert victim.read_text() == "not ours"

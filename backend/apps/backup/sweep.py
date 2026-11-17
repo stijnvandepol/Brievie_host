@@ -155,25 +155,21 @@ def find_orphans(*, conninfo: str, storage_root: Path, now: datetime) -> list[Or
     )
 
 
-def _unlink_if_old(root: Path, path: str) -> bool:
+def _unlink_if_old(root: int, path: str) -> bool:
     """Unlink one layout file through directory descriptors; False when it is not ours to delete.
 
-    Every component is opened with O_NOFOLLOW relative to its parent, so a directory
-    swapped for a symlink after the listing cannot redirect the unlink.
+    `root` is a descriptor of the storage root. Every component below it is opened with
+    O_NOFOLLOW relative to its parent, so a directory swapped for a symlink after the
+    listing cannot redirect the unlink.
     """
     if _LAYOUT.fullmatch(path) is None:
         return False
-    try:
-        safepaths.require_inside(root / path, root)
-    except BackupError:
-        return False  # resolves outside the root (through a link): never ours
     *directories, name = path.split("/")
-    flags = os.O_RDONLY | os.O_DIRECTORY
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
     opened: list[int] = []
     try:
-        opened.append(os.open(root, flags))
         for directory in directories:
-            opened.append(os.open(directory, flags | os.O_NOFOLLOW, dir_fd=opened[-1]))
+            opened.append(os.open(directory, flags, dir_fd=opened[-1] if opened else root))
         info = os.stat(name, dir_fd=opened[-1], follow_symlinks=False)
         if not stat.S_ISREG(info.st_mode) or _modified(info) >= timezone.now() - ORPHAN_MIN_AGE:
             return False
@@ -194,7 +190,8 @@ def delete_orphans(orphans: Sequence[Orphan], storage_root: Path) -> int:
 
     Refuses a `storage_root` that is not the configured one, not /data/documents (or in
     a safe temporary folder: `directory_not_allowed`), or overlaps the back-up mount,
-    whoever calls it.
+    whoever calls it. The root is then opened component by component without following
+    a link and checked to be the directory that was judged.
     """
     configured = safepaths.configured_path(settings.BRIEVIE_STORAGE_ROOT)
     safepaths.require_emptiable(
@@ -203,7 +200,14 @@ def delete_orphans(orphans: Sequence[Orphan], storage_root: Path) -> int:
         avoid=[safepaths.configured_path(settings.BRIEVIE_BACKUP_MOUNT)],
         fixed=[safepaths.DOCUMENTS],
     )
-    return sum(1 for orphan in orphans if _unlink_if_old(storage_root, orphan.path))
+    expected = safepaths.identity(storage_root)
+    if expected is None:
+        return 0
+    root = safepaths.open_dir_nofollow(storage_root, expect=expected)
+    try:
+        return sum(1 for orphan in orphans if _unlink_if_old(root, orphan.path))
+    finally:
+        os.close(root)
 
 
 def sweep(*, delete: bool) -> SweepResult:
