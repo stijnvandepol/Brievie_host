@@ -1,6 +1,8 @@
+import contextlib
 from collections.abc import Iterator
 from contextlib import contextmanager
 
+import psycopg
 from django.db import DatabaseError, connection
 
 from apps.backup.errors import BackupError
@@ -39,3 +41,34 @@ def _unlock() -> None:
             cursor.execute("SELECT pg_advisory_unlock(%s)", [BACKUP_LOCK_KEY])
     except DatabaseError:
         connection.close()
+
+
+@contextmanager
+def database_lock(conninfo: str) -> Iterator[None]:
+    """The same lock, on its own connection to the database `conninfo` names.
+
+    For the steps of a restore that cannot use the default connection: the database
+    is being replaced. Advisory locks belong to one database, so this one keeps out
+    a back-up or sweep of *that* database (they take `backup_lock` there). Released
+    when the body ends, also when it raised; if that fails, closing the connection
+    releases it.
+    """
+    try:
+        conn = psycopg.connect(conninfo, autocommit=True)
+    except psycopg.Error:
+        # The driver's message can quote the connection string; say only the code.
+        raise BackupError("restore_failed") from None
+    with conn:
+        try:
+            row = conn.execute("SELECT pg_try_advisory_lock(%s)", [BACKUP_LOCK_KEY]).fetchone()
+        except psycopg.Error:
+            raise BackupError("restore_failed") from None
+        if row is None or not row[0]:
+            raise BackupError("busy")
+        try:
+            yield
+        finally:
+            # Unlocked explicitly: the server ends a closed session (and so drops its
+            # locks) only some moments after the client has gone.
+            with contextlib.suppress(psycopg.Error):
+                conn.execute("SELECT pg_advisory_unlock(%s)", [BACKUP_LOCK_KEY])

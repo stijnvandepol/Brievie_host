@@ -127,6 +127,26 @@ def fake_tool(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Callable[[str]
 
 
 @pytest.fixture
+def owner_conninfo() -> str:
+    """libpq conninfo for the test database as the owner role (it owns backup_backuprun)."""
+    # Imported here: this module imports no Django code at import time.
+    from django.conf import settings
+    from django.db import connection
+    from psycopg.conninfo import make_conninfo
+
+    owner = settings.DATABASE_OWNER
+    if owner is None:
+        pytest.fail("The test run needs DATABASE_OWNER_URL (see deploy/.env.example).")
+    return make_conninfo(
+        dbname=str(connection.settings_dict["NAME"]),
+        user=str(owner["USER"]),
+        password=str(owner["PASSWORD"]),
+        host=str(owner["HOST"]),
+        port=str(owner["PORT"]),
+    )
+
+
+@pytest.fixture
 def configured_folder(tmp_path: Path, settings: object) -> Path:
     """A folder destination that `initialise` already prepared, plus private config dirs.
 

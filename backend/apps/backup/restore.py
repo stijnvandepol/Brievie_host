@@ -1,31 +1,48 @@
-"""Restore onto an empty machine, part 1: open the back-up and write the restored .env.
+"""Restore onto an empty machine (D 4.6), in one-off containers.
 
-Runs in a one-off container that has the master key (typed from the recovery sheet)
-and, when the back-ups have their own password, that password. Every refusal comes
-before anything is written: a wrong password, a wrong master key, a back-up of a
-newer Brievie, or a run that does not exist leave the output folder as it was.
+Part 1, `fetch`: open the back-up with the master key (typed from the recovery sheet)
+and, when the back-ups have their own password, that password, and write the restored
+.env. Every refusal comes before anything is written: a wrong password, a wrong master
+key, a back-up of a newer Brievie, or a run that does not exist leave the output
+folder as it was.
+
+Part 2, once the restored .env is in place: `restore_database` loads the dump as the
+superuser and closes the runs it brought back as open, `restore_files` puts the
+documents and Caddy's authority back. Both hold the back-up lock of the database they
+restore (or restore into), so a keeper that still runs cannot start a back-up or a
+sweep meanwhile.
 """
 
 import contextlib
 import logging
 import os
 import re
+import shutil
 import subprocess
 import threading
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import IO
 from uuid import UUID
 
+import psycopg
 from django.conf import settings
+from django.utils import timezone
 
 from apps.backup import destination, restic
+from apps.backup.database import libpq_env, superuser_conninfo
 from apps.backup.envcopy import ENV_COPY_NAME, restored_env
-from apps.backup.errors import BackupError
-from apps.backup.manifest import MANIFEST_NAME, manifest_from_json, unknown_migrations
+from apps.backup.errors import REASONS, BackupError
+from apps.backup.locks import backup_lock, database_lock
+from apps.backup.manifest import (
+    AUTHORITY_FILE,
+    MANIFEST_NAME,
+    manifest_from_json,
+    unknown_migrations,
+)
 from apps.backup.privatefile import write_private
-from apps.backup.services import location_secrets
+from apps.backup.services import file_paths, location_secrets
 from apps.common import crypto
 
 logger = logging.getLogger(__name__)
@@ -34,6 +51,11 @@ KEY_TABLE = "workspaces_workspacekey"
 # Reads the custom-format archive from stdin (no file name given) and prints the
 # key table's COPY block on stdout. Connects to no database, so it needs no secret.
 PG_RESTORE_KEYS_COMMAND = ("pg_restore", "--data-only", f"--table={KEY_TABLE}", "--file=-")
+# Loads the archive from stdin as the superuser: only a superuser loads rows into tables
+# with forced row-level security. Owners and grants are kept (the roles exist from
+# 01-roles.sh); one transaction, so a failure leaves the database as it was. Host, user
+# and password come from the environment (libpq_env), never from argv.
+PG_RESTORE_COMMAND = ("pg_restore", "--exit-on-error", "--single-transaction", "--no-password")
 
 _COPY_HEADER = re.compile(
     r'^COPY (?:"?public"?\.)?"?' + KEY_TABLE + r'"? \((?P<columns>[^)]*)\) FROM stdin;$'
@@ -49,6 +71,10 @@ _KEY_HEX = re.compile(rf"[0-9a-f]{{{2 * crypto.KEY_BYTES}}}")
 _CHUNK = 1 << 16
 _STDERR_TAIL = 500
 _DEFAULT_PATH = "/usr/local/bin:/usr/bin:/bin"
+# Caddy issues its leaf certificates here, next to `pki/authorities/<name>`.
+_LEAF_DIR = "certificates"
+# What caddy-publish-root.sh copies of Caddy's authority (never its temporary files).
+_AUTHORITY_FILES = (AUTHORITY_FILE, "root.key", "intermediate.crt", "intermediate.key")
 
 
 @dataclass(frozen=True)
@@ -162,8 +188,15 @@ def _collect(stream: IO[bytes], into: list[bytes]) -> None:
     into.append(stream.read())
 
 
-def _tool_env() -> dict[str, str]:
-    return {"PATH": os.environ.get("PATH", _DEFAULT_PATH)}
+def _tool_env(extra: Mapping[str, str] | None = None) -> dict[str, str]:
+    return {"PATH": os.environ.get("PATH", _DEFAULT_PATH), **(extra or {})}
+
+
+def _tool_messages(stderr: str, tool: str) -> str:
+    """Only the tool's own message lines: DETAIL, CONTEXT and the failing command can
+    quote rows of the dump (names, document text), and never reach the log."""
+    prefix = f"{os.path.basename(tool)}:"
+    return "\n".join(line for line in stderr.splitlines() if line.startswith(prefix))
 
 
 def _dump_through(
@@ -172,15 +205,18 @@ def _dump_through(
     snapshot: restic.Snapshot,
     consumer: Sequence[str],
     extra_secrets: Sequence[str] = (),
+    consumer_env: Mapping[str, str] | None = None,
 ) -> bytes:
     """`restic dump <snapshot> brievie.pgdump | <consumer>`; the consumer's stdout.
 
     Both run as child processes joined by a pipe through this process: the dump is
     never written to disk. Both exit codes count, so a dump that broke off is not
     passed off by a consumer that read a truncated archive without complaint. On any
-    error neither process is left running.
+    error neither process is left running. `consumer_env` is added to the consumer's
+    environment only (libpq settings); its passwords are hidden from the log as well.
     """
-    secrets = _secrets(repository, password, extra_secrets)
+    passwords = [value for name, value in (consumer_env or {}).items() if "PASSWORD" in name]
+    secrets = _secrets(repository, password, [*extra_secrets, *passwords])
     processes: list[subprocess.Popen[bytes]] = []
     threads: list[threading.Thread] = []
     dump_err: list[bytes] = []
@@ -198,7 +234,7 @@ def _dump_through(
             processes.append(dump)
             reader = subprocess.Popen(  # noqa: S603 - fixed argv
                 list(consumer),
-                env=_tool_env(),
+                env=_tool_env(consumer_env),
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -241,7 +277,8 @@ def _dump_through(
         dump_stderr_text = b"".join(dump_err).decode(errors="replace")
         raise _failure(dump_code, restic.redact(dump_stderr_text, secrets))
     if dump_code != 0 or reader_code != 0:
-        stderr = restic.redact(b"".join(consumer_err).decode(errors="replace"), secrets)
+        stderr = _tool_messages(b"".join(consumer_err).decode(errors="replace"), consumer[0])
+        stderr = restic.redact(stderr, secrets)
         logger.warning("Restore: %s exited with %s: %s", consumer[0], reader_code, stderr)
         raise BackupError("restore_failed")
     return output
@@ -314,7 +351,7 @@ def check_master_key_against_dump(
         raise BackupError("wrong_master_key") from None
 
 
-def _master_key(master_key_hex: str) -> bytes:
+def parse_master_key(master_key_hex: str) -> bytes:
     """The key as typed from the recovery sheet: spaces, dashes and capitals allowed."""
     cleaned = _KEY_NOISE.sub("", master_key_hex).lower()
     if _KEY_HEX.fullmatch(cleaned) is None:
@@ -377,7 +414,7 @@ def fetch(
     nothing at all when any check fails. The password is the separate one when given,
     else the one derived from the master key.
     """
-    master_key = _master_key(master_key_hex)
+    master_key = parse_master_key(master_key_hex)
     hidden = _key_spellings(master_key, master_key_hex)
     password = separate_password or crypto.derive_backup_password(master_key)
     repository = destination.configured_repository()
@@ -405,3 +442,119 @@ def fetch(
     )
     _write_out(out_dir, {MANIFEST_NAME: manifest_text, ENV_COPY_NAME: env}, out_owner)
     return found
+
+
+# --- part 2: the database and the files ------------------------------------------------
+
+
+def close_interrupted_runs(conninfo: str) -> int:
+    """Close the runs the dump brought back as open; returns how many.
+
+    Done straight after pg_restore, before any service starts: the keeper would
+    otherwise resume a restored `running` run. Their jobs are left alone:
+    `perform_run` does nothing for a closed run.
+    """
+    try:
+        with psycopg.connect(conninfo) as conn:
+            cursor = conn.execute(
+                "UPDATE backup_backuprun"
+                " SET status = 'interrupted', reason_code = 'interrupted_by_restore',"
+                " reason = %s, finished_at = %s, updated_at = %s"
+                " WHERE status IN ('queued', 'running')",
+                [str(REASONS["interrupted_by_restore"]), timezone.now(), timezone.now()],
+            )
+            return cursor.rowcount
+    except psycopg.Error:
+        raise BackupError("restore_failed") from None
+
+
+def restore_database(*, run: str | None, dbname: str = "brievie") -> int:
+    """Load the run's dump into the empty database `dbname`; returns the runs closed.
+
+    `restic dump | pg_restore` as the superuser, under the back-up lock of `dbname`
+    (held on a connection of its own: the default connection's database is the one
+    being replaced). The dump is never on disk.
+    """
+    repository = destination.configured_repository()
+    password = destination.backup_password()
+    found = find_run(repository, password, run)
+    conninfo = superuser_conninfo(dbname=dbname)
+    with database_lock(conninfo):
+        _dump_through(
+            repository,
+            password,
+            found.db,
+            [*PG_RESTORE_COMMAND, f"--dbname={dbname}"],
+            consumer_env=libpq_env(conninfo),
+        )
+        return close_interrupted_runs(conninfo)
+
+
+def _empty(directory: Path) -> None:
+    """Remove what is in `directory` (a volume's mount point stays); links are not followed."""
+    if not directory.exists():
+        return
+    with os.scandir(directory) as entries:
+        for entry in entries:
+            if entry.is_dir(follow_symlinks=False):
+                shutil.rmtree(entry.path)
+            else:
+                os.unlink(entry.path)
+
+
+def _leaf_dir(authority_target: Path) -> Path:
+    """`<caddy>/certificates/<name>` for `<caddy>/pki/authorities/<name>`."""
+    return authority_target.parents[2] / _LEAF_DIR / authority_target.name
+
+
+def _place_authority(source: Path, target: Path) -> None:
+    """Make `target` an exact copy of the restored authority, root-owned, 0700/0600.
+
+    Without an authority in the back-up (a public certificate) nothing changes. Caddy's
+    leaf certificates are removed, so it issues new ones from the restored authority.
+    """
+    if not (source / AUTHORITY_FILE).is_file():
+        return
+    names = [name for name in _AUTHORITY_FILES if (source / name).is_file()]
+    target.mkdir(mode=0o700, parents=True, exist_ok=True)
+    os.chown(target, 0, 0)
+    target.chmod(0o700)
+    for entry in os.scandir(target):
+        if entry.name not in names and not entry.is_dir(follow_symlinks=False):
+            os.unlink(entry.path)
+    for name in names:
+        data = (source / name).read_bytes()
+        temporary = target / f".{name}.tmp"
+        temporary.unlink(missing_ok=True)
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, target / name)
+        os.chown(target / name, 0, 0)
+    shutil.rmtree(_leaf_dir(target), ignore_errors=True)
+
+
+def restore_files(*, run: str | None, authority_target: Path, clear_documents: bool) -> None:
+    """Put the run's files back, then Caddy's authority (before Caddy starts).
+
+    restic restores the documents, the authority copy and the config folder at their
+    own paths (as root it restores their owner, uid 10001). `clear_documents` (a
+    restore with --replace) empties the documents first, so no page of the replaced
+    installation stays behind.
+    """
+    repository = destination.configured_repository()
+    password = destination.backup_password()
+    found = find_run(repository, password, run)
+    with backup_lock():
+        try:
+            if clear_documents:
+                _empty(Path(settings.BRIEVIE_STORAGE_ROOT))
+        except OSError:
+            raise BackupError("restore_failed") from None
+        _restic_output(repository, password, restic.restore_argv(found.files.id, "/", file_paths()))
+        try:
+            _place_authority(Path(settings.BRIEVIE_AUTHORITY_COPY_DIR), authority_target)
+        except OSError:
+            raise BackupError("restore_failed") from None
