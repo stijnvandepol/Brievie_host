@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError, CommandParser
+from django.utils.translation import gettext as _
 
 from apps.backup import restore
 from apps.backup.errors import BackupError
@@ -24,10 +25,14 @@ class Command(BaseCommand):
     def handle(self, *args: object, **options: object) -> None:
         run = options["run"]
         try:
-            restore.restore_files(
+            placed = restore.restore_files(
                 run=None if run is None else str(run),
                 authority_target=AUTHORITY_TARGET,
                 clear_documents=bool(options["replace"]),
             )
         except BackupError as error:
             raise CommandError(error.message, returncode=1) from error
+        if not placed:
+            self.stdout.write(
+                _("De back-up heeft geen eigen certificaat; Caddy houdt zijn huidige certificaat.")
+            )

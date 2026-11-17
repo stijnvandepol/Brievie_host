@@ -2,6 +2,7 @@ from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError, CommandParser
 from django.utils.translation import gettext as _
+from django.utils.translation import ngettext
 
 from apps.backup import verify
 from apps.backup.errors import BackupError
@@ -37,9 +38,14 @@ class Command(BaseCommand):
         if report.problems:
             for problem in report.problems:
                 self.stderr.write(problem)
+            count = len(report.problems)
             raise CommandError(
-                _("Het herstel is niet compleet: %(count)s problemen gevonden.")
-                % {"count": len(report.problems)},
+                ngettext(
+                    "Het herstel is niet compleet: %(count)d probleem gevonden.",
+                    "Het herstel is niet compleet: %(count)d problemen gevonden.",
+                    count,
+                )
+                % {"count": count},
                 returncode=1,
             )
         self.stdout.write(_("Het herstel is gecontroleerd. Alles klopt."))

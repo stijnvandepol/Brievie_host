@@ -266,7 +266,7 @@ def test_a_host_name_a_restore_could_not_read_fails_the_back_up(
 
     run.refresh_from_db()
     assert run.status == BackupRun.Status.FAILED
-    assert run.reason_code == "manifest_unreadable"
+    assert run.reason_code == "hostname_unusable"
     # Refused while counting, before the dump: no snapshot was made.
     assert [call[0] for call in fake_restic.calls] == ["unlock"]
 

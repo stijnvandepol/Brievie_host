@@ -7,9 +7,11 @@ role that is bound by row-level security fails instead of passing on zero rows.
 Each problem is one Dutch sentence that names ids only, never a name or a path.
 """
 
+import os
+import stat
 from collections import defaultdict
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from uuid import UUID
 
 import psycopg
@@ -80,12 +82,35 @@ def _read(conninfo: str) -> _Restored:
     return _Restored(workspaces, documents, pages, wrapped_keys)
 
 
-def _page_file(storage_root: Path, stored: str) -> Path | None:
-    """The page's file under the root; None for a stored path that leaves it."""
-    path = PurePosixPath(stored)
-    if path.is_absolute() or ".." in path.parts:
-        return None
-    return storage_root / path
+def _page_file(storage_root: Path, stored: str) -> tuple[Path | None, str]:
+    """The page's regular file inside the root, or None and the problem's sentence.
+
+    A stored path is confined to the root after resolving links, and the file itself
+    must be a regular file, not a link (a page outside the store would pass otherwise).
+    """
+    candidate = storage_root / stored  # an absolute stored path replaces the root
+    try:
+        inside = candidate.resolve().is_relative_to(storage_root.resolve())
+    except (OSError, RuntimeError):  # a link loop
+        inside = False
+    if not inside:
+        return None, _(
+            "Pagina %(index)s van document %(document)s in werkruimte %(workspace)s "
+            "ligt buiten de opslag."
+        )
+    try:
+        info = os.lstat(candidate)
+    except OSError:
+        return None, _(
+            "Pagina %(index)s van document %(document)s in werkruimte %(workspace)s "
+            "ontbreekt in de opslag."
+        )
+    if not stat.S_ISREG(info.st_mode):
+        return None, _(
+            "Pagina %(index)s van document %(document)s in werkruimte %(workspace)s "
+            "is geen gewoon bestand in de opslag."
+        )
+    return candidate, ""
 
 
 def _counts(manifest: Manifest, restored: _Restored, pages: dict[UUID, list[_Page]]) -> list[str]:
@@ -157,8 +182,15 @@ def _open_one_page(
 
 
 def _authority(manifest: Manifest, authority_dir: Path | None) -> list[str]:
-    if manifest.authority_sha256 is None or authority_dir is None:
+    if manifest.authority_sha256 is None:
         return []
+    if authority_dir is None:
+        return [
+            _(
+                "Het certificaat van de server is niet gecontroleerd: geef de map met de "
+                "certificaatautoriteit op."
+            )
+        ]
     found = authority_fingerprint(authority_dir)
     if found is None:
         return [_("Het certificaat van de server ontbreekt.")]
@@ -183,19 +215,11 @@ def verify_restore(
 
     files: dict[_Page, Path] = {}
     for page in restored.pages:
-        path = _page_file(storage_root, page.storage_path)
-        if path is not None and path.is_file():
+        path, why = _page_file(storage_root, page.storage_path)
+        if path is not None:
             files[page] = path
         else:
-            problems.append(
-                _page_sentence(
-                    _(
-                        "Pagina %(index)s van document %(document)s in werkruimte "
-                        "%(workspace)s ontbreekt in de opslag."
-                    ),
-                    page,
-                )
-            )
+            problems.append(_page_sentence(why, page))
 
     opened = 0
     for workspace_id in restored.workspaces:

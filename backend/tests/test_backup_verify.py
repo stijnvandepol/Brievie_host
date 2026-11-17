@@ -1,9 +1,11 @@
 """Checking a restored installation against its manifest (Task 10, D 4.6 step 8)."""
 
 import dataclasses
+import os
 import subprocess
 import uuid
 from pathlib import Path
+from typing import Literal
 
 import psycopg
 import pytest
@@ -51,6 +53,11 @@ def storage_root() -> Path:
     return Path(django_settings.BRIEVIE_STORAGE_ROOT)
 
 
+def authority_dir() -> Path:
+    """Where the installation fixture puts its authority (next to the storage root)."""
+    return storage_root().parent / "authority"
+
+
 def manifest_now(conninfo: str, authority_dir: Path) -> Manifest:
     return build_manifest(
         run_id=uuid.uuid4(),
@@ -67,7 +74,7 @@ def installation(
     """Two workspaces with a letter each, an authority, and the manifest of that moment."""
     upload_letter(ws_a, pages=2)
     upload_letter(ws_b)
-    authority = tmp_path / "authority"
+    authority = authority_dir()
     authority.mkdir()
     (authority / "root.crt").write_text(CA_FIXTURE.read_text())
     return manifest_now(backup_conninfo, authority)
@@ -78,14 +85,14 @@ def verify(
     manifest: Manifest,
     *,
     master_key: bytes = MASTER,
-    authority_dir: Path | None = None,
+    authority: Path | Literal["default"] | None = "default",
 ) -> VerifyReport:
     return verify_restore(
         conninfo=conninfo,
         storage_root=storage_root(),
         manifest=manifest,
         master_key=master_key,
-        authority_dir=authority_dir,
+        authority_dir=authority_dir() if authority == "default" else authority,
     )
 
 
@@ -102,7 +109,7 @@ def assert_plain(problem: str) -> None:
 def test_verify_passes_on_a_complete_installation(
     installation: Manifest, backup_conninfo: str, tmp_path: Path
 ) -> None:
-    report = verify(backup_conninfo, installation, authority_dir=tmp_path / "authority")
+    report = verify(backup_conninfo, installation, authority=tmp_path / "authority")
     assert report == VerifyReport(problems=[], workspaces=2, pages_opened=2)
 
 
@@ -155,7 +162,7 @@ def test_verify_reports_another_authority(
     installation: Manifest, backup_conninfo: str, tmp_path: Path
 ) -> None:
     other = dataclasses.replace(installation, authority_sha256="ab" * 32)
-    (problem,) = verify(backup_conninfo, other, authority_dir=tmp_path / "authority").problems
+    (problem,) = verify(backup_conninfo, other, authority=tmp_path / "authority").problems
     assert_plain(problem)
     assert certificate_sha256(CA_FIXTURE.read_text()) not in problem
 
@@ -164,7 +171,7 @@ def test_verify_reports_another_authority(
 def test_verify_reports_a_missing_authority(
     installation: Manifest, backup_conninfo: str, tmp_path: Path
 ) -> None:
-    (problem,) = verify(backup_conninfo, installation, authority_dir=tmp_path / "empty").problems
+    (problem,) = verify(backup_conninfo, installation, authority=tmp_path / "empty").problems
     assert_plain(problem)
 
 
@@ -173,7 +180,7 @@ def test_verify_without_an_authority_in_the_backup_checks_none(
     installation: Manifest, backup_conninfo: str, tmp_path: Path
 ) -> None:
     public = dataclasses.replace(installation, authority_sha256=None)
-    assert verify(backup_conninfo, public, authority_dir=tmp_path / "empty").problems == []
+    assert verify(backup_conninfo, public, authority=tmp_path / "empty").problems == []
 
 
 @pytest.mark.django_db(transaction=True)
@@ -354,3 +361,103 @@ def test_verify_restore_command_refuses_an_unreadable_manifest(
             str(tmp_path / "missing.json"),
         )
     assert str(caught.value) == "De inhoudsopgave van de back-up kon niet worden gelezen."
+
+
+@pytest.mark.django_db(transaction=True)
+def test_verify_reports_an_authority_it_was_not_given(
+    installation: Manifest, backup_conninfo: str
+) -> None:
+    # The back-up has an authority: no --authority-dir is not a silent pass.
+    (problem,) = verify(backup_conninfo, installation, authority=None).problems
+    assert "niet gecontroleerd" in problem
+    assert_plain(problem)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_verify_reports_a_page_file_that_is_a_link_out_of_the_storage(
+    installation: Manifest, backup_conninfo: str, ws_a: Workspace, tmp_path: Path
+) -> None:
+    document_id, storage_path = first_page(backup_conninfo, ws_a)
+    page = storage_root() / storage_path
+    outside = tmp_path / "outside.page"
+    outside.write_bytes(page.read_bytes())  # it would even open
+    page.unlink()
+    page.symlink_to(outside)
+
+    report = verify(backup_conninfo, installation)
+
+    (problem,) = report.problems
+    assert str(document_id) in problem
+    assert_plain(problem)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_verify_reports_a_link_inside_the_storage_as_well(
+    installation: Manifest, backup_conninfo: str, ws_a: Workspace
+) -> None:
+    document_id, storage_path = first_page(backup_conninfo, ws_a)
+    page = storage_root() / storage_path
+    other = page.with_name("copy.bin")
+    os.replace(page, other)
+    page.symlink_to(other)
+    (problem,) = verify(backup_conninfo, installation).problems
+    assert str(document_id) in problem
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("stored", ["../outside/{doc}/1.page", "/etc/{doc}/1.page"])
+def test_verify_reports_a_stored_path_that_leaves_the_storage(
+    installation: Manifest,
+    backup_conninfo: str,
+    owner_conninfo: str,
+    ws_b: Workspace,
+    tmp_path: Path,
+    stored: str,
+) -> None:
+    from apps.workspaces.rls import SETTING_NAME
+
+    document_id, storage_path = first_page(backup_conninfo, ws_b)
+    escaped = stored.format(doc=document_id)
+    if escaped.startswith(".."):
+        # A real file there, so only the confinement can catch it.
+        target = (storage_root() / escaped).resolve()
+        target.parent.mkdir(parents=True)
+        target.write_bytes((storage_root() / storage_path).read_bytes())
+    with psycopg.connect(owner_conninfo) as conn:
+        conn.execute("SELECT set_config(%s, %s, true)", [SETTING_NAME, str(ws_b.id)])
+        conn.execute(
+            "UPDATE documents_documentpage SET storage_path = %s WHERE document_id = %s",
+            [escaped, document_id],
+        )
+
+    report = verify(backup_conninfo, installation)
+
+    assert any(str(document_id) in problem for problem in report.problems)
+    for problem in report.problems:
+        assert_plain(problem)
+    assert report.pages_opened == 1
+
+
+@pytest.mark.parametrize(
+    ("count", "sentence"),
+    [
+        (1, "Het herstel is niet compleet: 1 probleem gevonden."),
+        (2, "Het herstel is niet compleet: 2 problemen gevonden."),
+    ],
+)
+def test_verify_restore_command_counts_problems_in_good_dutch(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, count: int, sentence: str
+) -> None:
+    report = VerifyReport(problems=["Probleem."] * count, workspaces=1, pages_opened=0)
+    monkeypatch.setattr("apps.backup.verify.verify_installation", lambda **_kwargs: report)
+    with pytest.raises(CommandError) as caught:
+        call_command(
+            "verify_restore",
+            "--dbname",
+            "x",
+            "--storage-root",
+            str(tmp_path),
+            "--manifest",
+            str(tmp_path / "m.json"),
+        )
+    assert str(caught.value) == sentence

@@ -35,6 +35,8 @@ EXPECTED_CODES = {
     "backup_password_unwritable",
     "backup_folder_unwritable",
     "master_key_malformed",
+    "hostname_unusable",
+    "documents_incomplete",
 }
 
 

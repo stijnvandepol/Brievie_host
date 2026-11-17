@@ -490,6 +490,13 @@ def restore_database(*, run: str | None, dbname: str = "brievie") -> int:
         return close_interrupted_runs(conninfo)
 
 
+def _emptiable(directory: Path) -> Path:
+    """`directory` when it is safe to empty: absolute, not `/`, not itself a link."""
+    if not directory.is_absolute() or directory == Path("/") or directory.is_symlink():
+        raise BackupError("restore_failed")
+    return directory
+
+
 def _empty(directory: Path) -> None:
     """Remove what is in `directory` (a volume's mount point stays); links are not followed."""
     if not directory.exists():
@@ -507,14 +514,15 @@ def _leaf_dir(authority_target: Path) -> Path:
     return authority_target.parents[2] / _LEAF_DIR / authority_target.name
 
 
-def _place_authority(source: Path, target: Path) -> None:
+def _place_authority(source: Path, target: Path) -> bool:
     """Make `target` an exact copy of the restored authority, root-owned, 0700/0600.
 
-    Without an authority in the back-up (a public certificate) nothing changes. Caddy's
-    leaf certificates are removed, so it issues new ones from the restored authority.
+    Returns False, and leaves Caddy's own pki alone, when the back-up has no authority
+    (a public certificate). Caddy's leaf certificates are removed, so it issues new ones
+    from the restored authority.
     """
     if not (source / AUTHORITY_FILE).is_file():
-        return
+        return False
     names = [name for name in _AUTHORITY_FILES if (source / name).is_file()]
     target.mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chown(target, 0, 0)
@@ -534,27 +542,45 @@ def _place_authority(source: Path, target: Path) -> None:
         os.replace(temporary, target / name)
         os.chown(target / name, 0, 0)
     shutil.rmtree(_leaf_dir(target), ignore_errors=True)
+    return True
 
 
-def restore_files(*, run: str | None, authority_target: Path, clear_documents: bool) -> None:
+def restore_files(*, run: str | None, authority_target: Path, clear_documents: bool) -> bool:
     """Put the run's files back, then Caddy's authority (before Caddy starts).
 
     restic restores the documents, the authority copy and the config folder at their
     own paths (as root it restores their owner, uid 10001). `clear_documents` (a
-    restore with --replace) empties the documents first, so no page of the replaced
-    installation stays behind.
+    restore with --replace) first empties all three, so no page, authority or manifest
+    of the replaced installation stays behind or is taken for the back-up's. Returns
+    whether an authority was placed (False: the back-up has none; Caddy keeps its own).
     """
     repository = destination.configured_repository()
     password = destination.backup_password()
     found = find_run(repository, password, run)
+    authority_copy = Path(settings.BRIEVIE_AUTHORITY_COPY_DIR)
     with backup_lock():
+        if clear_documents:
+            replaced = [
+                _emptiable(Path(path))
+                for path in (
+                    settings.BRIEVIE_STORAGE_ROOT,
+                    settings.BRIEVIE_AUTHORITY_COPY_DIR,
+                    settings.BRIEVIE_BACKUP_CONFIG_DIR,
+                )
+            ]
+            try:
+                for directory in replaced:
+                    _empty(directory)
+            except OSError:
+                raise BackupError("documents_incomplete") from None
+        argv = restic.restore_argv(found.files.id, "/", file_paths())
         try:
+            _restic_output(repository, password, argv)
+        except BackupError as error:
             if clear_documents:
-                _empty(Path(settings.BRIEVIE_STORAGE_ROOT))
-        except OSError:
-            raise BackupError("restore_failed") from None
-        _restic_output(repository, password, restic.restore_argv(found.files.id, "/", file_paths()))
+                raise BackupError("documents_incomplete") from error
+            raise
         try:
-            _place_authority(Path(settings.BRIEVIE_AUTHORITY_COPY_DIR), authority_target)
+            return _place_authority(authority_copy, authority_target)
         except OSError:
             raise BackupError("restore_failed") from None

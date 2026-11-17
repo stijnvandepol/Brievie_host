@@ -276,7 +276,8 @@ def test_a_host_name_brievie_accepts_round_trips(hostname: str) -> None:
 def test_a_manifest_that_could_not_be_read_back_is_never_written(field: str, value: str) -> None:
     with pytest.raises(BackupError) as caught:
         manifest_to_json(sample_manifest(**{field: value}))
-    assert caught.value.code == "manifest_unreadable"
+    expected = "hostname_unusable" if field == "hostname" else "manifest_unreadable"
+    assert caught.value.code == expected
 
 
 @pytest.mark.django_db(transaction=True)
@@ -291,7 +292,8 @@ def test_building_a_manifest_refuses_a_host_name_with_a_line_break(
             storage_root=tmp_path,
             authority_dir=tmp_path,
         )
-    assert caught.value.code == "manifest_unreadable"
+    assert caught.value.code == "hostname_unusable"
+    assert "BRIEVIE_HOSTNAME" in caught.value.message
 
 
 @pytest.mark.django_db(transaction=True)

@@ -210,9 +210,16 @@ def _version(value: object) -> str:
 
 
 def _checked(m: Manifest) -> Manifest:
-    """The manifest when a restore can read it back, else `manifest_unreadable`."""
+    """The manifest when a restore can read it back.
+
+    A host name that cannot be: `hostname_unusable` (the setting must change); anything
+    else: `manifest_unreadable`.
+    """
     try:
         _hostname(m.hostname)
+    except ValueError:
+        raise BackupError("hostname_unusable") from None
+    try:
         _version(m.brievie_version)
     except ValueError:
         raise BackupError("manifest_unreadable") from None

@@ -51,6 +51,14 @@ REASONS: dict[str, Promise] = {
         "Het aparte wachtwoord van de back-up bevat een aanhalingsteken of een regeleinde. "
         "Zo'n wachtwoord past niet in de instellingen."
     ),
+    "hostname_unusable": _(
+        "De servernaam in BRIEVIE_HOSTNAME is niet bruikbaar: haal regeleindes en andere "
+        "stuurtekens weg, en houd hem korter dan 254 tekens."
+    ),
+    "documents_incomplete": _(
+        "Het terugzetten van de documenten is afgebroken, dus de documenten zijn nu niet "
+        "compleet. Voer deze stap gewoon opnieuw uit."
+    ),
     "interrupted_by_restore": _("Afgebroken door herstel."),
     "abandoned": _("De vorige back-up is afgebroken. Er is een nieuwe gestart."),
     "internal_error": _("Er ging iets mis. Probeer het later opnieuw."),

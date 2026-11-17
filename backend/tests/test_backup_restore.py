@@ -416,19 +416,62 @@ def test_a_backup_without_an_authority_leaves_caddy_alone(
     leaf = leaf_dir(caddy)
     leaf.mkdir(parents=True)
 
-    restore_files(run=None, authority_target=caddy, clear_documents=False)
+    placed = restore_files(run=None, authority_target=caddy, clear_documents=False)
 
+    assert placed is False
     assert (caddy / "root.crt").read_text() == "current"
     assert leaf.exists()
     assert chowned == []
 
 
 @pytest.mark.django_db(transaction=True)
+def test_replace_never_places_the_authority_of_the_replaced_installation(
+    configured_folder: Path,
+    fake_restic: FakeBinary,
+    caddy: Path,
+    chowned: list[tuple[str, int, int]],
+) -> None:
+    # The back-up has no authority; the copy and the config folder still hold the old ones.
+    one_run(fake_restic)
+    restored_authority(AUTHORITY_FILES)
+    config = Path(django_settings.BRIEVIE_BACKUP_CONFIG_DIR)
+    config.mkdir(parents=True)
+    (config / "manifest.json").write_text("{}")
+    (config / "env").write_text("OLD=1")
+    caddy.mkdir(parents=True)
+    (caddy / "root.crt").write_text("current")
+
+    placed = restore_files(run=None, authority_target=caddy, clear_documents=True)
+
+    assert placed is False
+    assert list(Path(django_settings.BRIEVIE_AUTHORITY_COPY_DIR).iterdir()) == []
+    assert list(config.iterdir()) == []
+    assert Path(django_settings.BRIEVIE_AUTHORITY_COPY_DIR).is_dir()  # the mount point stays
+    assert (caddy / "root.crt").read_text() == "current"
+    assert chowned == []
+
+
+@pytest.mark.django_db(transaction=True)
 def test_replace_empties_the_documents_first(
-    configured_folder: Path, fake_restic: FakeBinary, caddy: Path, chowned: list[object]
+    configured_folder: Path,
+    fake_restic: FakeBinary,
+    caddy: Path,
+    chowned: list[object],
+    tmp_path: Path,
+    settings: Settings,
 ) -> None:
     one_run(fake_restic)
     documents = Path(django_settings.BRIEVIE_STORAGE_ROOT)
+    # restic "restores" a file: it must survive, so the emptying came before.
+    writer = tmp_path / "restic-that-writes"
+    writer.write_text(
+        "#!/bin/sh\n"
+        f"if [ \"$1\" = restore ]; then mkdir -p '{documents}' && "
+        f"echo restored > '{documents}/restored.page'; fi\n"
+        f"exec '{fake_restic.path}' \"$@\"\n"
+    )
+    writer.chmod(0o755)
+    settings.BRIEVIE_RESTIC_BINARY = str(writer)
     old = documents / str(uuid4()) / str(uuid4())
     old.mkdir(parents=True)
     (old / "1.page").write_bytes(b"old page")
@@ -441,8 +484,56 @@ def test_replace_empties_the_documents_first(
     restore_files(run=None, authority_target=caddy, clear_documents=True)
 
     assert documents.is_dir()
-    assert list(documents.iterdir()) == []
+    assert [p.name for p in documents.iterdir()] == ["restored.page"]
     assert (outside / "keep").exists()  # a link is removed, never followed
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("root", ["relative/documents", "/", "link"])
+def test_replace_refuses_a_documents_root_it_cannot_trust(
+    configured_folder: Path,
+    fake_restic: FakeBinary,
+    caddy: Path,
+    tmp_path: Path,
+    settings: Settings,
+    root: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def never_list(path: object) -> None:
+        # Never reach the real `/`: a refusal comes before anything is listed.
+        raise AssertionError("the root was listed")
+
+    monkeypatch.setattr("apps.backup.restore.os.scandir", never_list)
+    one_run(fake_restic)
+    if root == "link":
+        real = tmp_path / "real-documents"
+        real.mkdir()
+        (real / "keep.page").write_text("keep")
+        (tmp_path / "link").symlink_to(real)
+        settings.BRIEVIE_STORAGE_ROOT = str(tmp_path / "link")
+    else:
+        settings.BRIEVIE_STORAGE_ROOT = root
+
+    with pytest.raises(BackupError) as caught:
+        restore_files(run=None, authority_target=caddy, clear_documents=True)
+
+    assert caught.value.code == "restore_failed"
+    assert not any(call[:1] == ["restore"] for call in fake_restic.calls)
+    if root == "link":
+        assert (tmp_path / "real-documents" / "keep.page").exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_failing_restore_after_emptying_says_the_documents_are_incomplete(
+    configured_folder: Path, fake_restic: FakeBinary, caddy: Path
+) -> None:
+    one_run(fake_restic)
+    fake_restic.respond(("restore",), stderr="Fatal: disk full", code=1)
+    with pytest.raises(BackupError) as caught:
+        restore_files(run=None, authority_target=caddy, clear_documents=True)
+    assert caught.value.code == "documents_incomplete"
+    assert "opnieuw" in caught.value.message
+    assert "niet compleet" in caught.value.message
 
 
 @pytest.mark.django_db(transaction=True)
@@ -570,7 +661,12 @@ def test_restore_files_command_places_the_authority_for_caddy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     seen: list[dict[str, object]] = []
-    monkeypatch.setattr("apps.backup.restore.restore_files", lambda **kwargs: seen.append(kwargs))
+
+    def fake(**kwargs: object) -> bool:
+        seen.append(kwargs)
+        return True
+
+    monkeypatch.setattr("apps.backup.restore.restore_files", fake)
     call_command("restore_files", "--run", "r1", "--replace")
     call_command("restore_files")
     target = Path("/caddy-data/caddy/pki/authorities/local")
@@ -578,6 +674,17 @@ def test_restore_files_command_places_the_authority_for_caddy(
         {"run": "r1", "authority_target": target, "clear_documents": True},
         {"run": None, "authority_target": target, "clear_documents": False},
     ]
+
+
+@pytest.mark.parametrize("placed", [True, False])
+def test_restore_files_command_says_when_caddy_keeps_its_own_authority(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], placed: bool
+) -> None:
+    monkeypatch.setattr("apps.backup.restore.restore_files", lambda **_kwargs: placed)
+    call_command("restore_files")
+    out = capsys.readouterr().out
+    sentence = "De back-up heeft geen eigen certificaat; Caddy houdt zijn huidige certificaat."
+    assert (sentence in out) is not placed
 
 
 def test_restore_files_command_says_why_it_failed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -603,3 +710,16 @@ def test_documents_root_mode_is_kept(
     restore_files(run=None, authority_target=caddy, clear_documents=True)
     assert documents.stat().st_ino == inode
     assert stat.S_IMODE(documents.stat().st_mode) == 0o700
+
+
+def test_restore_files_command_says_the_step_can_run_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail(**_kwargs: object) -> bool:
+        raise BackupError("documents_incomplete")
+
+    monkeypatch.setattr("apps.backup.restore.restore_files", fail)
+    with pytest.raises(CommandError) as caught:
+        call_command("restore_files", "--replace")
+    assert str(caught.value) == (
+        "Het terugzetten van de documenten is afgebroken, dus de documenten zijn nu niet "
+        "compleet. Voer deze stap gewoon opnieuw uit."
+    )
