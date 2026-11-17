@@ -134,6 +134,8 @@ def test_init_hands_the_tree_to_the_keeper(
     assert folder / destination.REPOSITORY_DIR in owned
     assert folder / destination.REPOSITORY_DIR / "data" in owned
     assert all(call.args[1:] == (10001, 10001) for call in chown.call_args_list)
+    tree = [c for c in chown.call_args_list if Path(c.args[0]) != folder / destination.MARKER_NAME]
+    assert all(call.kwargs == {"follow_symlinks": False} for call in tree)  # links: never followed
 
 
 def test_init_without_owner_does_not_chown(
@@ -298,7 +300,7 @@ def test_marker_is_removed_when_its_chown_fails(
     (folder / destination.REPOSITORY_DIR).mkdir()
     marker = folder / destination.MARKER_NAME
 
-    def chown(path: str | Path, uid: int, gid: int) -> None:
+    def chown(path: str | Path, uid: int, gid: int, *, follow_symlinks: bool = True) -> None:
         if Path(path) == marker:
             raise PermissionError
 
@@ -318,7 +320,7 @@ def test_marker_is_written_after_the_tree_is_handed_over(
     (folder / destination.REPOSITORY_DIR).mkdir()
     seen: list[bool] = []
 
-    def chown(path: str | Path, uid: int, gid: int) -> None:
+    def chown(path: str | Path, uid: int, gid: int, *, follow_symlinks: bool = True) -> None:
         seen.append((folder / destination.MARKER_NAME).exists())
 
     with mock.patch.object(os, "chown", side_effect=chown):

@@ -243,8 +243,12 @@ def test_an_empty_database_still_lists_old_temp_files(
     assert found(backup_conninfo) == {relative(extra)}
 
 
-def test_a_symlinked_storage_root_keeps_working(
-    ws_a: Workspace, backup_conninfo: str, settings: object, tmp_path: Path
+def test_a_symlinked_storage_root_is_listed_but_never_deleted_from(
+    ws_a: Workspace,
+    backup_conninfo: str,
+    settings: object,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     real = storage_root()
     link = tmp_path / "root-link"
@@ -255,8 +259,17 @@ def test_a_symlinked_storage_root_keeps_working(
     settings.BRIEVIE_STORAGE_ROOT = str(link)  # type: ignore[attr-defined]
 
     assert [o.path for o in sweep(delete=False).orphans] == [expected]
-    assert sweep(delete=True).deleted == 1
-    assert not extra.exists()
+
+    def never(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("a file was unlinked under a linked root")
+
+    # Deleting refuses a root that is a link (the guard of delete_orphans itself).
+    monkeypatch.setattr("apps.backup.sweep.os.unlink", never)
+    with pytest.raises(BackupError) as caught:
+        sweep(delete=True)
+    assert caught.value.code == "unsafe_path"
+    monkeypatch.undo()
+    assert extra.exists()
 
 
 def test_the_files_are_listed_before_the_database_is_read(

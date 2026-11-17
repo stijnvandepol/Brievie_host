@@ -489,7 +489,9 @@ def test_replace_empties_the_documents_first(
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("root", ["relative/documents", "/", "link"])
+@pytest.mark.parametrize(
+    "root", ["relative/documents", "/", "/data", str(Path.home()), "link", "through-link"]
+)
 def test_replace_refuses_a_documents_root_it_cannot_trust(
     configured_folder: Path,
     fake_restic: FakeBinary,
@@ -499,28 +501,47 @@ def test_replace_refuses_a_documents_root_it_cannot_trust(
     root: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def never_list(path: object) -> None:
-        # Never reach the real `/`: a refusal comes before anything is listed.
-        raise AssertionError("the root was listed")
+    called: list[str] = []
 
-    monkeypatch.setattr("apps.backup.restore.os.scandir", never_list)
+    def recorder(name: str) -> Callable[..., None]:
+        def refuse(*_args: object, **_kwargs: object) -> None:
+            # Never reach the real `/` or a home directory: the refusal comes first.
+            called.append(name)
+            raise AssertionError(f"{name} was called")
+
+        return refuse
+
     one_run(fake_restic)
-    if root == "link":
+    if root in ("link", "through-link"):
         real = tmp_path / "real-documents"
-        real.mkdir()
+        (real / "documents").mkdir(parents=True)
         (real / "keep.page").write_text("keep")
-        (tmp_path / "link").symlink_to(real)
-        settings.BRIEVIE_STORAGE_ROOT = str(tmp_path / "link")
+        (real / "documents" / "keep.page").write_text("keep")
+        (tmp_path / "link").symlink_to(real, target_is_directory=True)
+        configured = tmp_path / "link" / ("documents" if root == "through-link" else "")
+        settings.BRIEVIE_STORAGE_ROOT = str(configured)
     else:
         settings.BRIEVIE_STORAGE_ROOT = root
+    for module, name in [
+        ("apps.backup.restore.os", "scandir"),
+        ("apps.backup.restore.os", "unlink"),
+        ("apps.backup.restore.os", "rmdir"),
+        ("apps.backup.restore.os", "replace"),
+        ("apps.backup.restore.shutil", "rmtree"),
+    ]:
+        monkeypatch.setattr(f"{module}.{name}", recorder(name))
+    monkeypatch.setattr(Path, "unlink", recorder("Path.unlink"))
 
     with pytest.raises(BackupError) as caught:
         restore_files(run=None, authority_target=caddy, clear_documents=True)
 
-    assert caught.value.code == "restore_failed"
+    assert caught.value.code == "unsafe_path"
+    assert called == []
     assert not any(call[:1] == ["restore"] for call in fake_restic.calls)
-    if root == "link":
+    monkeypatch.undo()
+    if root in ("link", "through-link"):
         assert (tmp_path / "real-documents" / "keep.page").exists()
+        assert (tmp_path / "real-documents" / "documents" / "keep.page").exists()
 
 
 @pytest.mark.django_db(transaction=True)

@@ -25,6 +25,7 @@ from django.conf import settings
 from django.db import connection
 from django.utils import timezone
 
+from apps.backup import safepaths
 from apps.backup.database import backup_conninfo
 from apps.backup.errors import BackupError
 from apps.backup.locks import backup_lock
@@ -162,6 +163,10 @@ def _unlink_if_old(root: Path, path: str) -> bool:
     """
     if _LAYOUT.fullmatch(path) is None:
         return False
+    try:
+        safepaths.require_inside(root / path, root)
+    except BackupError:
+        return False  # resolves outside the root (through a link): never ours
     *directories, name = path.split("/")
     flags = os.O_RDONLY | os.O_DIRECTORY
     opened: list[int] = []
@@ -185,7 +190,12 @@ def _unlink_if_old(root: Path, path: str) -> bool:
 
 
 def delete_orphans(orphans: Sequence[Orphan], storage_root: Path) -> int:
-    """Delete what is still a regular, old file of the layout; returns how many went."""
+    """Delete what is still a regular, old file of the layout; returns how many went.
+
+    Refuses (`unsafe_path`) a `storage_root` that is not the configured one, whoever
+    calls it.
+    """
+    safepaths.require_emptiable(storage_root, allowed=[settings.BRIEVIE_STORAGE_ROOT])
     return sum(1 for orphan in orphans if _unlink_if_old(storage_root, orphan.path))
 
 

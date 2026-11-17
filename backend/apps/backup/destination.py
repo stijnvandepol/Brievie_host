@@ -13,7 +13,7 @@ from pathlib import Path
 
 from django.conf import settings
 
-from apps.backup import restic
+from apps.backup import restic, safepaths
 from apps.backup.errors import BackupError
 
 MARKER_NAME = "brievie-backup.json"
@@ -120,10 +120,20 @@ def secrets() -> list[str]:
 
 
 def _chown_tree(root: Path, uid: int) -> None:
-    os.chown(root, uid, uid)
-    for directory, names, files in os.walk(root):
-        for name in (*names, *files):
-            os.chown(Path(directory) / name, uid, uid)
+    """Hand `root` and everything below it to `uid`; only ever inside the mount.
+
+    Every path is judged before the first chown (`unsafe_path` for one that resolves
+    outside the mount, a link out of it included). Links are neither followed by the
+    walk nor by the chown.
+    """
+    mount = _mount()
+    paths = [safepaths.require_inside(root, mount)]  # before the walk lists anything
+    for directory, names, files in os.walk(root, followlinks=False):
+        paths.extend(Path(directory) / name for name in (*names, *files))
+    for path in paths:
+        safepaths.require_inside(path, mount)
+    for path in paths:
+        os.chown(path, uid, uid, follow_symlinks=False)
 
 
 def _run_init(repository: restic.Repository) -> bool:
@@ -143,7 +153,7 @@ def _verify_password(repository: restic.Repository) -> None:
 
 def _finish_folder(owner_uid: int | None) -> None:
     """Hand the tree over, then write the marker last: it means "ready"."""
-    marker = _marker()
+    marker = safepaths.require_inside(_marker(), _mount())
     try:
         if owner_uid is not None:
             _chown_tree(_mount() / REPOSITORY_DIR, owner_uid)

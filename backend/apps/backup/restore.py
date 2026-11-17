@@ -30,7 +30,7 @@ import psycopg
 from django.conf import settings
 from django.utils import timezone
 
-from apps.backup import destination, restic
+from apps.backup import destination, restic, safepaths
 from apps.backup.database import libpq_env, superuser_conninfo
 from apps.backup.envcopy import ENV_COPY_NAME, restored_env
 from apps.backup.errors import REASONS, BackupError
@@ -71,8 +71,6 @@ _KEY_HEX = re.compile(rf"[0-9a-f]{{{2 * crypto.KEY_BYTES}}}")
 _CHUNK = 1 << 16
 _STDERR_TAIL = 500
 _DEFAULT_PATH = "/usr/local/bin:/usr/bin:/bin"
-# Caddy issues its leaf certificates here, next to `pki/authorities/<name>`.
-_LEAF_DIR = "certificates"
 # What caddy-publish-root.sh copies of Caddy's authority (never its temporary files).
 _AUTHORITY_FILES = (AUTHORITY_FILE, "root.key", "intermediate.crt", "intermediate.key")
 
@@ -378,14 +376,20 @@ def _write_out(out_dir: Path, files: dict[str, str], owner: tuple[int, int] | No
     A folder this call creates (0700) is handed to `owner` as well, so the host user
     can open it.
     """
+    # Every target is a plain name strictly inside `out_dir`, and only those are ever
+    # removed again: checked before anything is created or written.
+    targets = {
+        name: safepaths.require_inside(out_dir / safepaths.require_plain_name(name), out_dir)
+        for name in files
+    }
     created = not out_dir.exists()
     written: list[Path] = []
     try:
         for name, text in files.items():
             write_private(out_dir, name, text)
-            written.append(out_dir / name)
+            written.append(targets[name])
             if owner is not None:
-                os.chown(out_dir / name, *owner)
+                os.chown(targets[name], *owner)
         if created and owner is not None:
             os.chown(out_dir, *owner)
     except BaseException as error:
@@ -490,28 +494,34 @@ def restore_database(*, run: str | None, dbname: str = "brievie") -> int:
         return close_interrupted_runs(conninfo)
 
 
-def _emptiable(directory: Path) -> Path:
-    """`directory` when it is safe to empty: absolute, not `/`, not itself a link."""
-    if not directory.is_absolute() or directory == Path("/") or directory.is_symlink():
-        raise BackupError("restore_failed")
-    return directory
+def _replaced_directories() -> list[Path]:
+    """The three directories a restore with --replace empties: nothing else, ever."""
+    return [
+        Path(settings.BRIEVIE_STORAGE_ROOT),
+        Path(settings.BRIEVIE_AUTHORITY_COPY_DIR),
+        Path(settings.BRIEVIE_BACKUP_CONFIG_DIR),
+    ]
 
 
 def _empty(directory: Path) -> None:
-    """Remove what is in `directory` (a volume's mount point stays); links are not followed."""
+    """Remove what is in `directory` (a volume's mount point stays); links are not followed.
+
+    Refuses (`unsafe_path`) anything but one of the three configured directories,
+    whoever calls it. Entries are removed relative to a descriptor of `directory`.
+    """
+    safepaths.require_emptiable(directory, allowed=_replaced_directories())
     if not directory.exists():
         return
-    with os.scandir(directory) as entries:
-        for entry in entries:
-            if entry.is_dir(follow_symlinks=False):
-                shutil.rmtree(entry.path)
-            else:
-                os.unlink(entry.path)
-
-
-def _leaf_dir(authority_target: Path) -> Path:
-    """`<caddy>/certificates/<name>` for `<caddy>/pki/authorities/<name>`."""
-    return authority_target.parents[2] / _LEAF_DIR / authority_target.name
+    descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        with os.scandir(descriptor) as entries:
+            for entry in entries:
+                if entry.is_dir(follow_symlinks=False):
+                    shutil.rmtree(entry.name, dir_fd=descriptor)
+                else:
+                    os.unlink(entry.name, dir_fd=descriptor)
+    finally:
+        os.close(descriptor)
 
 
 def _place_authority(source: Path, target: Path) -> bool:
@@ -521,15 +531,19 @@ def _place_authority(source: Path, target: Path) -> bool:
     (a public certificate). Caddy's leaf certificates are removed, so it issues new ones
     from the restored authority.
     """
+    # Both refusals (`unsafe_path`) come before anything is created or removed.
+    target = safepaths.require_caddy_authority_dir(target)
+    leaf = safepaths.leaf_dir(target)
     if not (source / AUTHORITY_FILE).is_file():
         return False
     names = [name for name in _AUTHORITY_FILES if (source / name).is_file()]
     target.mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chown(target, 0, 0)
     target.chmod(0o700)
-    for entry in os.scandir(target):
-        if entry.name not in names and not entry.is_dir(follow_symlinks=False):
-            os.unlink(entry.path)
+    with os.scandir(target) as entries:
+        for entry in entries:
+            if entry.name not in names and not entry.is_dir(follow_symlinks=False):
+                os.unlink(entry.path)
     for name in names:
         data = (source / name).read_bytes()
         temporary = target / f".{name}.tmp"
@@ -541,7 +555,7 @@ def _place_authority(source: Path, target: Path) -> bool:
             os.fsync(handle.fileno())
         os.replace(temporary, target / name)
         os.chown(target / name, 0, 0)
-    shutil.rmtree(_leaf_dir(target), ignore_errors=True)
+    shutil.rmtree(leaf, ignore_errors=True)
     return True
 
 
@@ -560,14 +574,10 @@ def restore_files(*, run: str | None, authority_target: Path, clear_documents: b
     authority_copy = Path(settings.BRIEVIE_AUTHORITY_COPY_DIR)
     with backup_lock():
         if clear_documents:
-            replaced = [
-                _emptiable(Path(path))
-                for path in (
-                    settings.BRIEVIE_STORAGE_ROOT,
-                    settings.BRIEVIE_AUTHORITY_COPY_DIR,
-                    settings.BRIEVIE_BACKUP_CONFIG_DIR,
-                )
-            ]
+            # All three are judged before any is emptied; `_empty` judges again itself.
+            replaced = _replaced_directories()
+            for directory in replaced:
+                safepaths.require_emptiable(directory, allowed=replaced)
             try:
                 for directory in replaced:
                     _empty(directory)
