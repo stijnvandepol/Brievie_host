@@ -6,7 +6,8 @@ Callers hold the workspace's RLS context (see workspaces.deps).
 from uuid import UUID
 
 from django.db import models, transaction
-from django.db.models import Max, prefetch_related_objects
+from django.db.models import F, Max, Sum, Value, Window, prefetch_related_objects
+from django.db.models.functions import Least, Left, Length
 from django.utils.translation import gettext as _
 
 from apps.common.errors import ApiError
@@ -27,6 +28,13 @@ RULES_MAX = 200
 TEST_LIMIT = 500
 # ...and shows this many of the matches.
 TEST_SHOWN = 50
+# The test runs inside the request, and normalising text costs about 0.3 s per million
+# characters, so it reads at most this many characters of each document (a letter can be
+# 600,000)...
+TEST_TEXT_CHARS = 100_000
+# ...and at most this many characters in all; it stops before the document that would go
+# over, and `checked_count` says how many it got to.
+TEST_TEXT_BUDGET = 2_000_000
 
 
 def _rules(workspace: Workspace) -> "models.QuerySet[Rule]":
@@ -142,7 +150,7 @@ def test_rule(*, workspace: Workspace, data: RuleIn) -> RuleTestOut:
         status=Document.Status.PROCESSING
     )
     total = documents.count()
-    checked = list(documents.order_by("-created_at", "-id")[:TEST_LIMIT])
+    checked = _within_text_budget(documents)
     facts = facts_for_many(checked)
     matched = [d for d in checked if spec.id in evaluate(facts[d.id], [spec]).matched_rule_ids]
     shown = matched[:TEST_SHOWN]
@@ -153,6 +161,33 @@ def test_rule(*, workspace: Workspace, data: RuleIn) -> RuleTestOut:
         matched_count=len(matched),
         documents=[document_summary_out(d) for d in shown],
     )
+
+
+def _within_text_budget(documents: "models.QuerySet[Document]") -> list[Document]:
+    """The first of `documents` (at most `TEST_LIMIT`) whose text fits `TEST_TEXT_BUDGET`,
+    each with only its first `TEST_TEXT_CHARS` characters of `ocr_text` loaded.
+
+    One query: a running sum over the newest documents stops at the budget. The
+    instances are for reading only: saving one would cut its text.
+    """
+    order = [F("created_at").desc(), F("id").desc()]
+    newest = documents.order_by(*order).values("id")[:TEST_LIMIT]
+    rows = (
+        Document.objects.filter(id__in=newest)
+        .annotate(
+            text_cost=Least(Length("ocr_text"), Value(TEST_TEXT_CHARS)),
+            text_spent=Window(Sum("text_cost"), order_by=order),
+            text_head=Left("ocr_text", TEST_TEXT_CHARS),
+        )
+        .filter(text_spent__lte=TEST_TEXT_BUDGET)
+        .defer("ocr_text")
+        .order_by(*order)
+    )
+    result: list[Document] = []
+    for document in rows:
+        document.ocr_text = document.text_head
+        result.append(document)
+    return result
 
 
 def run_rule(*, workspace: Workspace, rule_id: UUID) -> None:

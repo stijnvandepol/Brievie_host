@@ -1,4 +1,5 @@
 import uuid
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import pytest
@@ -8,6 +9,8 @@ from procrastinate.contrib.django.models import ProcrastinateJob
 from apps.documents import organise
 from apps.documents.models import DocumentEvent, DocumentLabel, DocumentSuggestion
 from apps.labels.models import Label
+from apps.rules import engine
+from apps.rules.engine import DocumentFacts, Evaluation, RuleSpec
 from apps.rules.models import Rule, RuleRun
 from apps.workspaces.context import workspace_context
 from apps.workspaces.models import Membership, Workspace
@@ -308,6 +311,54 @@ def test_test_rule_checks_the_newest_500(
 
     assert (out["total_count"], out["checked_count"], out["matched_count"]) == (3, 2, 2)
     assert [d["id"] for d in out["documents"]] == [str(newer[1].id)]
+
+
+def _record_texts(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """The text of every document the test hands to the rules engine."""
+    seen: list[str] = []
+    real = engine.evaluate
+
+    def spy(facts: DocumentFacts, rules: Sequence[RuleSpec]) -> Evaluation:
+        seen.append(facts.text)
+        return real(facts, rules)
+
+    monkeypatch.setattr("apps.rules.services.evaluate", spy)
+    return seen
+
+
+def test_test_rule_stops_at_the_text_budget_and_says_how_many_it_checked(
+    client_a: Client, ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("apps.rules.services.TEST_TEXT_CHARS", 100)
+    monkeypatch.setattr("apps.rules.services.TEST_TEXT_BUDGET", 250)
+    seen = _record_texts(monkeypatch)
+    for _ in range(5):
+        make_document(ws_a, LETTER.ljust(100, "."))
+
+    out = post_json(
+        client_a, f"/workspaces/{ws_a.id}/rules/test", rule_body(label(ws_a, "auto").id)
+    ).json()
+
+    assert (out["total_count"], out["checked_count"], out["matched_count"]) == (5, 2, 2)
+    assert len(seen) == 2
+    assert sum(len(text) for text in seen) <= 250
+
+
+def test_test_rule_reads_only_the_start_of_a_long_document(
+    client_a: Client, ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("apps.rules.services.TEST_TEXT_CHARS", 100)
+    seen = _record_texts(monkeypatch)
+    early = make_document(ws_a, LETTER + " " + "x" * 500)
+    make_document(ws_a, "y " * 100 + LETTER)
+
+    out = post_json(
+        client_a, f"/workspaces/{ws_a.id}/rules/test", rule_body(label(ws_a, "auto").id)
+    ).json()
+
+    assert (out["total_count"], out["checked_count"], out["matched_count"]) == (2, 2, 1)
+    assert [d["id"] for d in out["documents"]] == [str(early.id)]
+    assert sorted(len(text) for text in seen) == [100, 100]
 
 
 def test_invalid_test_rule_is_422(client_a: Client, ws_a: Workspace) -> None:

@@ -88,7 +88,8 @@ class RuleOrderIn(InputSchema):
 class RuleTestOut(Schema):
     # Documents that are not being processed.
     total_count: int
-    # The newest of those, at most 500, that were checked.
+    # The newest of those that were checked: at most 500, fewer when their text ran
+    # over the test's character budget.
     checked_count: int
     # Checked documents whose conditions hold, whether or not the rule would change them.
     matched_count: int

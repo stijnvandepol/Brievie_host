@@ -640,7 +640,7 @@ export interface paths {
         put?: never;
         /**
          * Test Rule
-         * @description Checks the unsaved rule against the newest 500 documents that are not being processed and counts those whose conditions hold. Stores nothing.
+         * @description Checks the unsaved rule against the newest 500 documents that are not being processed and counts those whose conditions hold. Stores nothing. Reads at most the first 100,000 characters of each document and 2,000,000 in all, so it can stop earlier; `checked_count` says how many documents it checked.
          */
         post: operations["testRule"];
         delete?: never;

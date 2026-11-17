@@ -55,8 +55,11 @@ def reorder_rules(request: HttpRequest, workspace_id: UUID, payload: RuleOrderIn
     response={200: RuleTestOut, 404: ErrorOut, **SESSION_WRITE_ERRORS, **BODY_ERRORS},
     operation_id="testRule",
     description=(
-        "Checks the unsaved rule against the newest 500 documents that are not being "
-        "processed and counts those whose conditions hold. Stores nothing."
+        f"Checks the unsaved rule against the newest {services.TEST_LIMIT} documents that "
+        "are not being processed and counts those whose conditions hold. Stores nothing. "
+        f"Reads at most the first {services.TEST_TEXT_CHARS:,} characters of each document "
+        f"and {services.TEST_TEXT_BUDGET:,} in all, so it can stop earlier; `checked_count` "
+        "says how many documents it checked."
     ),
 )
 def test_rule(request: HttpRequest, workspace_id: UUID, payload: RuleIn) -> RuleTestOut:
