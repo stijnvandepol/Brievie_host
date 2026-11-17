@@ -15,6 +15,7 @@ import {
   renderApp,
   sales,
   server,
+  user,
   workspace,
 } from "../test-utils";
 
@@ -364,6 +365,44 @@ describe("document", () => {
     expect(screen.getByText("Jij rondde een taak af")).toBeInTheDocument();
     expect(screen.getByText("Jij zette een taak weer open")).toBeInTheDocument();
     expect(screen.getAllByRole("listitem").filter((li) => li.closest("ol"))).toHaveLength(5);
+  });
+
+  it("says Jij by the actor's id, not by the name", async () => {
+    const event = {
+      can_undo: false,
+      undone: false,
+      label_name: "",
+      rule_name: "",
+      origin: "user",
+      person_name: "",
+    };
+    server.use(
+      http.get(`*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/events`, () =>
+        HttpResponse.json([
+          {
+            ...event,
+            id: "e1",
+            kind: "confirmed",
+            actor_id: "11111111-2222-4333-8444-555555555555",
+            actor_name: user.name,
+            created_at: "2026-11-10T10:00:00Z",
+          },
+          {
+            ...event,
+            id: "e2",
+            kind: "task_completed",
+            actor_id: user.id,
+            actor_name: "Anna de Vries",
+            created_at: "2026-11-10T11:00:00Z",
+          },
+        ]),
+      ),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
+    renderApp(path);
+    expect(await screen.findByText("Jij rondde een taak af")).toBeInTheDocument();
+    expect(screen.getByText(`${user.name} bevestigde deze brief`)).toBeInTheDocument();
   });
 
   const eventsUrl = `*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/events`;

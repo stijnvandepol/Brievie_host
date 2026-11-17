@@ -154,6 +154,14 @@
       },
       "DocumentEventOut": {
         "properties": {
+          "actor_id": {
+            "format": "uuid",
+            "title": "Actor Id",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "actor_name": {
             "title": "Actor Name",
             "type": "string"

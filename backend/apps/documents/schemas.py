@@ -166,6 +166,8 @@ class DocumentEventOut(Schema):
     created_at: datetime
     kind: str
     origin: str
+    # The user who made the change; null for a rule, the system, or a deleted user.
+    actor_id: UUID | None = None
     # Names are copies, so they stay readable after a delete; empty when not applicable.
     actor_name: str
     rule_name: str

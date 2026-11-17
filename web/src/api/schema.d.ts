@@ -827,6 +827,11 @@ export interface components {
         };
         /** DocumentEventOut */
         DocumentEventOut: {
+            /**
+             * Actor Id
+             * Format: uuid
+             */
+            actor_id?: string | null;
             /** Actor Name */
             actor_name: string;
             /** Can Undo */

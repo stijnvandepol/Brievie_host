@@ -11,12 +11,15 @@ type DocumentEvent = components["schemas"]["DocumentEventOut"];
 const dateTime = new Intl.DateTimeFormat("nl-NL", { dateStyle: "medium", timeStyle: "short" });
 
 /** One event as a sentence, or `null` for a kind this version does not know yet. */
-function sentence(event: DocumentEvent, myName: string | undefined): string | null {
+function sentence(
+  event: DocumentEvent,
+  me: { id: string; name: string } | null | undefined,
+): string | null {
   const ruleName = event.rule_name;
   const who =
     event.origin === "rule" && ruleName
       ? t`Regel ${ruleName}`
-      : event.actor_name && event.actor_name === myName
+      : isMine(event, me)
         ? t`Jij`
         : event.actor_name || t`Iemand`;
   const person = event.person_name;
@@ -39,6 +42,16 @@ function sentence(event: DocumentEvent, myName: string | undefined): string | nu
     default:
       return null;
   }
+}
+
+/** By the actor's id; by the name only for an older server that sends no id. */
+function isMine(
+  event: DocumentEvent,
+  me: { id: string; name: string } | null | undefined,
+): boolean {
+  if (!me) return false;
+  if (event.actor_id !== undefined) return event.actor_id === me.id;
+  return event.actor_name !== "" && event.actor_name === me.name;
 }
 
 /** Reverses a change a rule made; the answer is the document as it is now. */
@@ -85,7 +98,7 @@ export function DocumentHistory({
   const { data: me } = useQuery(meQuery);
   const undo = useUndoEvent(workspaceId, documentId);
   const lines = (data ?? []).flatMap((event) => {
-    const text = sentence(event, me?.name);
+    const text = sentence(event, me);
     return text === null ? [] : [{ event, text }];
   });
   return (
