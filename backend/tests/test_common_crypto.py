@@ -123,3 +123,17 @@ def test_random_bytes_are_used_for_keys(ws_a: Workspace, monkeypatch: pytest.Mon
         WorkspaceKey.objects.all().delete()
         monkeypatch.setattr(os, "urandom", lambda n: b"\x07" * n)
         assert workspace_key(ws_a.id) == b"\x07" * 32
+
+
+def test_backup_password_has_a_fixed_vector() -> None:
+    # Never change this: existing back-ups are encrypted with the derived password.
+    assert crypto.derive_backup_password(bytes.fromhex("5a" * 32)) == (
+        "cc224115e04b5ef8d0fabc864ae85ef455c6ee2a24d4fef9182f6c0884257571"
+    )
+
+
+def test_backup_password_differs_per_master_key() -> None:
+    other = crypto.derive_backup_password(bytes(32))
+
+    assert other.startswith("43f6f658")
+    assert other != crypto.derive_backup_password(bytes.fromhex("5a" * 32))

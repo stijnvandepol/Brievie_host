@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 from django.conf import settings
 from django.db import connection
+from psycopg.conninfo import make_conninfo
 from pytest_django import DjangoDbBlocker, Settings
 
 from apps.workspaces.models import Workspace
@@ -25,6 +26,23 @@ def django_db_modify_db_settings(django_db_modify_db_settings_parallel_suffix: N
     default = settings.DATABASES["default"]
     for key in _CONNECTION_KEYS:
         default[key] = owner[key]
+
+
+@pytest.fixture
+def backup_conninfo() -> str:
+    """libpq conninfo for the test database as the read-only back-up role."""
+    backup = settings.DATABASE_BACKUP
+    if backup is None:
+        pytest.fail(
+            "The test run needs DATABASE_BACKUP_URL (see deploy/.env.example); run make dev."
+        )
+    return make_conninfo(
+        dbname=str(connection.settings_dict["NAME"]),
+        user=str(backup["USER"]),
+        password=str(backup["PASSWORD"]),
+        host=str(backup["HOST"]),
+        port=str(backup["PORT"]),
+    )
 
 
 @pytest.fixture(autouse=True)

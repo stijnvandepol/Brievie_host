@@ -36,6 +36,8 @@ jobs:
       BRIEVIE_APP_PASSWORD: ci-app
       DATABASE_URL: postgres://brievie_app:ci-app@localhost:5432/brievie
       DATABASE_OWNER_URL: postgres://brievie_owner:ci-owner@localhost:5432/brievie
+      BRIEVIE_BACKUP_DB_PASSWORD: ci-backup
+      DATABASE_BACKUP_URL: postgres://brievie_backup:ci-backup@localhost:5432/brievie
       # At least 50 characters: the settings refuse shorter keys.
       SECRET_KEY: ci-only-not-secret-ci-only-not-secret-ci-only-not-secret
     defaults:

@@ -8,6 +8,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
       BRIEVIE_OWNER_PASSWORD: ${BRIEVIE_OWNER_PASSWORD:?set BRIEVIE_OWNER_PASSWORD in deploy/.env}
       BRIEVIE_APP_PASSWORD: ${BRIEVIE_APP_PASSWORD:?set BRIEVIE_APP_PASSWORD in deploy/.env}
+      BRIEVIE_BACKUP_DB_PASSWORD: ${BRIEVIE_BACKUP_DB_PASSWORD:?set BRIEVIE_BACKUP_DB_PASSWORD in deploy/.env (./brievie or sh deploy/init-env.sh adds it)}
     volumes:
       - pgdata:/var/lib/postgresql
       - ./postgres-init:/docker-entrypoint-initdb.d:ro

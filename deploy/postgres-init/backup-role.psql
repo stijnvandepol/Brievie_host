@@ -1,0 +1,15 @@
+-- The read-only back-up role brievie_backup. Needs the psql variable backup_password.
+-- Run as the PostgreSQL superuser by 01-roles.sh on a new server and by
+-- deploy/ensure-backup-role.sh on an existing one; safe to run again.
+--
+-- BYPASSRLS so pg_dump reads every workspace past forced row-level security; the
+-- application's roles never have it. pg_read_all_data gives SELECT on every table and
+-- nothing else; INHERIT makes that membership apply without SET ROLE.
+-- A second run would otherwise print a notice for the GRANT already given.
+SET client_min_messages = warning;
+SELECT 'CREATE ROLE brievie_backup'
+    WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'brievie_backup')\gexec
+ALTER ROLE brievie_backup LOGIN BYPASSRLS NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT
+    PASSWORD :'backup_password';
+GRANT CONNECT ON DATABASE brievie TO brievie_backup;
+GRANT pg_read_all_data TO brievie_backup;

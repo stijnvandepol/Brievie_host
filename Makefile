@@ -3,12 +3,13 @@ BACKEND := cd backend &&
 
 .PHONY: dev down migrate test lint format typecheck openapi web-install web-test web-lint web-build web-api web-i18n
 
-deploy/.env:
+## Start PostgreSQL for local development and tests. init-env.sh only adds missing
+## lines to an existing deploy/.env; ensure-backup-role.sh brings an existing database
+## up to date with the back-up role.
+dev:
 	sh deploy/init-env.sh
-
-## Start PostgreSQL for local development and tests.
-dev: deploy/.env
 	$(COMPOSE) up -d --wait postgres
+	sh deploy/ensure-backup-role.sh
 
 ## Stop the local stack (data volume is kept).
 down:

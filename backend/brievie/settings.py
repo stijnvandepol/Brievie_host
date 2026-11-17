@@ -99,6 +99,11 @@ _use_owner_role = env.str("BRIEVIE_DB_ROLE", default="app") == "owner"
 DATABASE_OWNER: dict[str, object] | None = (
     env.db("DATABASE_OWNER_URL") if env.str("DATABASE_OWNER_URL", default="") else None
 )
+# The read-only back-up role (BYPASSRLS, member of pg_read_all_data). On the host only
+# the test run uses it (tests/conftest.py); in the container only the keeper.
+DATABASE_BACKUP: dict[str, object] | None = (
+    env.db("DATABASE_BACKUP_URL") if env.str("DATABASE_BACKUP_URL", default="") else None
+)
 if _use_owner_role and DATABASE_OWNER is None:
     raise ImproperlyConfigured("BRIEVIE_DB_ROLE=owner needs DATABASE_OWNER_URL.")
 DATABASES = {

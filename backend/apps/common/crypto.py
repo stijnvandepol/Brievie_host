@@ -4,6 +4,8 @@ import os
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.hashes import SHA256
+from cryptography.hazmat.primitives.kdf.hkdf import HKDFExpand
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
@@ -11,6 +13,9 @@ KEY_BYTES = 32
 _MAGIC = b"BRV1"
 _NONCE_BYTES = 12
 _TAG_BYTES = 16
+# Label of the back-up password derived from the master key. Never change it: existing
+# back-ups are encrypted with the password it gives (docs/DECISIONS.md, B1).
+BACKUP_PASSWORD_INFO = b"brievie/backup-password/v1"
 
 
 class DecryptionError(Exception):
@@ -56,3 +61,14 @@ def master_key() -> bytes:
             "without it the stored documents cannot be read."
         )
     return key
+
+
+def derive_backup_password(master_key: bytes) -> str:
+    """The default back-up (restic) password: 64 lower-case hex characters.
+
+    HKDF-Expand only: the master key is already 32 uniformly random bytes (RFC 5869
+    section 3.3). The result equals HMAC-SHA256(master_key, BACKUP_PASSWORD_INFO + 0x01),
+    which deploy/init-env.sh computes with openssl.
+    """
+    derived = HKDFExpand(algorithm=SHA256(), length=KEY_BYTES, info=BACKUP_PASSWORD_INFO)
+    return derived.derive(master_key).hex()
