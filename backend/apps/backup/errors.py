@@ -66,6 +66,9 @@ REASONS: dict[str, Promise] = {
         "Brievie wist en herstelt alleen in de vaste mappen /data/documents, "
         "/data/authority en /data/backup-config. Deze map hoort daar niet bij."
     ),
+    "out_dir_not_empty": _(
+        "In de map voor het herstel staan al bestanden. Kies een nieuwe of lege map."
+    ),
     "interrupted_by_restore": _("Afgebroken door herstel."),
     "abandoned": _("De vorige back-up is afgebroken. Er is een nieuwe gestart."),
     "internal_error": _("Er ging iets mis. Probeer het later opnieuw."),

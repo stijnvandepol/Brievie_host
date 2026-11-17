@@ -64,9 +64,19 @@ def _test_role_is_subject_to_rls(django_db_setup: None, django_db_blocker: Djang
 
 @pytest.fixture(autouse=True)
 def _storage_and_master_key(settings: Settings, tmp_path: Path) -> None:
-    """A fixed master key and a private storage root for every test."""
+    """A fixed master key and private directories for every test.
+
+    No test can reach /data/..., /backup or a real restic by default (on a Linux CI
+    runner or in a dev container those paths may exist and be writable): every
+    directory setting points into the test's own tmp_path, and restic at a path that
+    does not exist. Tests that need the fake restic or the production values set them.
+    """
     settings.BRIEVIE_MASTER_KEY = "5a" * 32
     settings.BRIEVIE_STORAGE_ROOT = str(tmp_path / "documents")
+    settings.BRIEVIE_AUTHORITY_COPY_DIR = str(tmp_path / "authority")
+    settings.BRIEVIE_BACKUP_CONFIG_DIR = str(tmp_path / "backup-config")
+    settings.BRIEVIE_BACKUP_MOUNT = str(tmp_path / "backup")
+    settings.BRIEVIE_RESTIC_BINARY = str(tmp_path / "no-restic-here" / "restic")
 
 
 @pytest.fixture

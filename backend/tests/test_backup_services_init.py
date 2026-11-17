@@ -30,11 +30,11 @@ def test_initialise_destination_returns_the_kind(ready: Path, fake_restic: FakeB
 def test_services_chowns_only_as_root(ready: Path, fake_restic: FakeBinary) -> None:
     with (
         mock.patch("os.geteuid", return_value=0),
-        mock.patch("os.chown") as chown,
+        mock.patch("os.fchown") as fchown,
     ):
         services.initialise_destination(allow_same_disk=False)
-    assert chown.call_args_list
-    assert all(call.args[1:] == (10001, 10001) for call in chown.call_args_list)
+    assert fchown.call_args_list
+    assert all(call.args[1:] == (10001, 10001) for call in fchown.call_args_list)
 
 
 def test_command_prints_one_sentence(
@@ -56,7 +56,7 @@ def test_command_reports_an_unwritable_destination_in_one_sentence(
     ready: Path, fake_restic: FakeBinary
 ) -> None:
     with (
-        mock.patch("os.chown", side_effect=PermissionError),
+        mock.patch("os.fchown", side_effect=PermissionError),
         mock.patch("os.geteuid", return_value=0),
         pytest.raises(CommandError) as caught,
     ):

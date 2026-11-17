@@ -121,29 +121,56 @@ def test_init_on_the_disk_of_the_documents_is_refused(
     assert (folder / destination.MARKER_NAME).exists()
 
 
+def inode_of(path: Path) -> int:
+    return path.stat().st_ino
+
+
 def test_init_hands_the_tree_to_the_keeper(
     folder: Path, fake_restic: FakeBinary, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _other_disk(monkeypatch, folder)
     # The fake restic creates nothing, so make the tree the real one would.
     (folder / destination.REPOSITORY_DIR / "data").mkdir(parents=True)
-    with mock.patch.object(os, "chown") as chown:
-        destination.initialise(allow_same_disk=False, owner_uid=10001)
-    owned = {Path(call.args[0]) for call in chown.call_args_list}
-    assert folder / destination.MARKER_NAME in owned
-    assert folder / destination.REPOSITORY_DIR in owned
-    assert folder / destination.REPOSITORY_DIR / "data" in owned
-    assert all(call.args[1:] == (10001, 10001) for call in chown.call_args_list)
-    tree = [c for c in chown.call_args_list if Path(c.args[0]) != folder / destination.MARKER_NAME]
-    assert all(call.kwargs == {"follow_symlinks": False} for call in tree)  # links: never followed
+    (folder / destination.REPOSITORY_DIR / "config").write_text("c")
+    (folder / destination.REPOSITORY_DIR / "escape").symlink_to(folder.parent)
+    owned: list[tuple[int, int, int]] = []
+    monkeypatch.setattr(os, "fchown", lambda fd, u, g: owned.append((os.fstat(fd).st_ino, u, g)))
+    monkeypatch.setattr(os, "chown", mock.Mock(side_effect=AssertionError("chown by path")))
+
+    destination.initialise(allow_same_disk=False, owner_uid=10001)
+
+    inodes = {inode for inode, _u, _g in owned}
+    repository = folder / destination.REPOSITORY_DIR
+    for path in (folder / destination.MARKER_NAME, repository, repository / "data"):
+        assert inode_of(path) in inodes, path
+    assert inode_of(repository / "config") in inodes
+    assert inode_of(folder.parent) not in inodes  # a link is never followed nor handed over
+    assert all((u, g) == (10001, 10001) for _inode, u, g in owned)
+
+
+def test_init_hands_over_no_file_with_more_than_one_hard_link(
+    folder: Path, fake_restic: FakeBinary, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _other_disk(monkeypatch, folder)
+    (folder / destination.REPOSITORY_DIR).mkdir()
+    outside = tmp_path / "outside-file"
+    outside.write_text("not ours")
+    os.link(outside, folder / destination.REPOSITORY_DIR / "linked")
+    owned: list[int] = []
+    monkeypatch.setattr(os, "fchown", lambda fd, _u, _g: owned.append(os.fstat(fd).st_ino))
+
+    destination.initialise(allow_same_disk=False, owner_uid=10001)
+
+    assert inode_of(outside) not in owned
 
 
 def test_init_without_owner_does_not_chown(
     folder: Path, fake_restic: FakeBinary, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _other_disk(monkeypatch, folder)
-    with mock.patch.object(os, "chown") as chown:
+    with mock.patch.object(os, "fchown") as fchown, mock.patch.object(os, "chown") as chown:
         destination.initialise(allow_same_disk=False, owner_uid=None)
+    fchown.assert_not_called()
     chown.assert_not_called()
 
 
@@ -272,7 +299,8 @@ def test_marker_write_failure_leaves_no_marker(
     folder: Path, fake_restic: FakeBinary, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _other_disk(monkeypatch, folder)
-    monkeypatch.setattr(Path, "write_text", mock.Mock(side_effect=PermissionError))
+    # The marker is created, then its write fails: it must be gone again.
+    monkeypatch.setattr(os, "fsync", mock.Mock(side_effect=PermissionError))
     with pytest.raises(BackupError) as caught:
         destination.initialise(allow_same_disk=False, owner_uid=None)
     assert caught.value.code == "destination_not_writable"
@@ -285,7 +313,7 @@ def test_chown_failure_leaves_no_marker(
     _other_disk(monkeypatch, folder)
     (folder / destination.REPOSITORY_DIR).mkdir()
     with (
-        mock.patch.object(os, "chown", side_effect=PermissionError),
+        mock.patch.object(os, "fchown", side_effect=PermissionError),
         pytest.raises(BackupError) as caught,
     ):
         destination.initialise(allow_same_disk=False, owner_uid=10001)
@@ -300,12 +328,12 @@ def test_marker_is_removed_when_its_chown_fails(
     (folder / destination.REPOSITORY_DIR).mkdir()
     marker = folder / destination.MARKER_NAME
 
-    def chown(path: str | Path, uid: int, gid: int, *, follow_symlinks: bool = True) -> None:
-        if Path(path) == marker:
+    def fchown(fd: int, uid: int, gid: int) -> None:
+        if marker.exists() and os.fstat(fd).st_ino == marker.stat().st_ino:
             raise PermissionError
 
     with (
-        mock.patch.object(os, "chown", side_effect=chown),
+        mock.patch.object(os, "fchown", side_effect=fchown),
         pytest.raises(BackupError) as caught,
     ):
         destination.initialise(allow_same_disk=False, owner_uid=10001)
@@ -320,10 +348,10 @@ def test_marker_is_written_after_the_tree_is_handed_over(
     (folder / destination.REPOSITORY_DIR).mkdir()
     seen: list[bool] = []
 
-    def chown(path: str | Path, uid: int, gid: int, *, follow_symlinks: bool = True) -> None:
+    def fchown(fd: int, uid: int, gid: int) -> None:
         seen.append((folder / destination.MARKER_NAME).exists())
 
-    with mock.patch.object(os, "chown", side_effect=chown):
+    with mock.patch.object(os, "fchown", side_effect=fchown):
         destination.initialise(allow_same_disk=False, owner_uid=10001)
     assert seen == [False, True]  # the tree first, the marker last
 

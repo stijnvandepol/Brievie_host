@@ -25,14 +25,21 @@ class Command(BaseCommand):
     def handle(self, *args: object, **options: object) -> None:
         run = options["run"]
         try:
-            placed = restore.restore_files(
+            restored = restore.restore_files(
                 run=None if run is None else str(run),
                 authority_target=AUTHORITY_TARGET,
                 clear_documents=bool(options["replace"]),
             )
         except BackupError as error:
             raise CommandError(error.message, returncode=1) from error
-        if not placed:
+        self.stdout.write(
+            _(
+                "Opgeruimd na het terugzetten: %(count)d onderdelen die geen gewoon bestand "
+                "of map waren (zoals snelkoppelingen)."
+            )
+            % {"count": restored.removed}
+        )
+        if not restored.authority_placed:
             self.stdout.write(
                 _("De back-up heeft geen eigen certificaat; Caddy houdt zijn huidige certificaat.")
             )

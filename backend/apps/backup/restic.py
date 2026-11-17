@@ -38,6 +38,9 @@ _NESTED_SCHEME = re.compile(r"^[a-z0-9+.-]+://", re.IGNORECASE)
 # Greedy: a password may contain "@", so the userinfo ends at the last "@" of the authority.
 _USERINFO_IN_TEXT = re.compile(r"([a-z][a-z0-9+.-]*)://[^/\s]*@", re.IGNORECASE)
 _USERINFO_AFTER_PREFIX = re.compile(r"\b(rest:|s3:)[^/\s]*@", re.IGNORECASE)
+# restic prints a snapshot id as 64 hex characters, the short form as 8.
+_SNAPSHOT_ID = re.compile(r"[0-9a-f]{8,64}")
+_GLOB = re.compile(r"[*?[\\]")
 _MAX_STDERR = 2000
 _DEFAULT_PATH = "/usr/local/bin:/usr/bin:/bin"
 
@@ -116,6 +119,7 @@ def backup_files_argv(run_id: UUID, paths: Sequence[str]) -> list[str]:
         *tags(run_id, "files"),
         "--exclude",
         TMP_EXCLUDE,
+        "--",
         *paths,
     ]
 
@@ -143,15 +147,26 @@ def snapshots_argv(tag: str) -> list[str]:
     return ["snapshots", "--json", "--tag", tag]
 
 
+def snapshot_id_value(snapshot_id: str) -> str:
+    """A snapshot id as restic prints it: 8 to 64 lowercase hex characters, or refused."""
+    if _SNAPSHOT_ID.fullmatch(snapshot_id) is None:
+        raise BackupError("restore_failed")
+    return snapshot_id
+
+
 def dump_argv(snapshot_id: str, path: str) -> list[str]:
-    return ["dump", snapshot_id, path]
+    # `--` ends the options: neither the id nor the path is ever read as one.
+    return ["dump", "--", snapshot_id_value(snapshot_id), path]
 
 
 def restore_argv(snapshot_id: str, target: str, includes: Sequence[str]) -> list[str]:
-    argv = ["restore", snapshot_id, "--target", target]
+    """`restore` of `includes` (absolute paths without glob characters) to `target`."""
+    argv = ["restore", "--target", target]
     for include in includes:
+        if not include.startswith("/") or _GLOB.search(include):
+            raise BackupError("unsafe_path")
         argv += ["--include", include]
-    return argv
+    return [*argv, "--", snapshot_id_value(snapshot_id)]
 
 
 def restic_env(

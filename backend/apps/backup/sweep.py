@@ -192,10 +192,17 @@ def _unlink_if_old(root: Path, path: str) -> bool:
 def delete_orphans(orphans: Sequence[Orphan], storage_root: Path) -> int:
     """Delete what is still a regular, old file of the layout; returns how many went.
 
-    Refuses (`unsafe_path`) a `storage_root` that is not the configured one, whoever
-    calls it.
+    Refuses a `storage_root` that is not the configured one, not /data/documents (or in
+    a safe temporary folder: `directory_not_allowed`), or overlaps the back-up mount,
+    whoever calls it.
     """
-    safepaths.require_emptiable(storage_root, allowed=[settings.BRIEVIE_STORAGE_ROOT])
+    configured = safepaths.configured_path(settings.BRIEVIE_STORAGE_ROOT)
+    safepaths.require_emptiable(
+        storage_root,
+        allowed=[configured],
+        avoid=[safepaths.configured_path(settings.BRIEVIE_BACKUP_MOUNT)],
+        fixed=[safepaths.DOCUMENTS],
+    )
     return sum(1 for orphan in orphans if _unlink_if_old(storage_root, orphan.path))
 
 

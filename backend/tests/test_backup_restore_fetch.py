@@ -15,7 +15,7 @@ from django.core.management.base import CommandError
 from pytest_django import Settings
 
 from apps.backup import restic
-from apps.backup.envcopy import EXCLUDED_KEYS, restored_env
+from apps.backup.envcopy import EXCLUDED_KEYS, HOST_KEYS, restored_env
 from apps.backup.errors import BackupError
 from apps.backup.manifest import MANIFEST_NAME
 from apps.backup.restore import (
@@ -124,26 +124,26 @@ class Backup:
     def contents(
         self,
         *,
-        files_id: str = "files1",
-        db_id: str = "db1",
+        files_id: str = "f0000001",
+        db_id: str = "d0000001",
         manifest: bytes | None = None,
         env: str = ENV_COPY,
         keys: bytes | None = None,
     ) -> None:
         self.restic.respond(
-            ("dump", files_id, f"{self.config_dir}/{MANIFEST_NAME}"),
+            ("dump", "--", files_id, f"{self.config_dir}/{MANIFEST_NAME}"),
             stdout=manifest if manifest is not None else manifest_json(self.run_id),
         )
-        self.restic.respond(("dump", files_id, f"{self.config_dir}/env"), stdout=env.encode())
-        self.restic.respond(("dump", db_id, restic.DB_FILENAME), stdout=b"PGDMP fake archive")
+        self.restic.respond(("dump", "--", files_id, f"{self.config_dir}/env"), stdout=env.encode())
+        self.restic.respond(("dump", "--", db_id, restic.DB_FILENAME), stdout=b"PGDMP fake archive")
         self.pg_restore.respond(
             (), stdout=keys if keys is not None else copy_block([(WORKSPACE, sealed_key(MASTER))])
         )
 
     def one_run(self, **kwargs: object) -> None:
         self.snapshots(
-            [snapshot("db1", T0, self.run_id, "db")],
-            [snapshot("files1", T0 + timedelta(minutes=5), self.run_id, "files")],
+            [snapshot("d0000001", T0, self.run_id, "db")],
+            [snapshot("f0000001", T0 + timedelta(minutes=5), self.run_id, "files")],
         )
         self.contents(**kwargs)  # type: ignore[arg-type]
 
@@ -164,6 +164,22 @@ def out_dir(tmp_path: Path) -> Path:
     directory = tmp_path / "restore-out"
     directory.mkdir()
     return directory
+
+
+def record_fchown(monkeypatch: pytest.MonkeyPatch) -> list[tuple[int, int, int]]:
+    """The restore hands its files over through descriptors: record (inode, uid, gid)."""
+    calls: list[tuple[int, int, int]] = []
+    monkeypatch.setattr(
+        "apps.backup.restore.os.fchown",
+        lambda fd, uid, gid: calls.append((os.fstat(fd).st_ino, uid, gid)),
+    )
+    return calls
+
+
+def owned_names(calls: list[tuple[int, int, int]], directory: Path) -> list[tuple[str, int, int]]:
+    """The names in (and of) `directory` that were handed over, with uid and gid."""
+    names = {path.stat().st_ino: path.name for path in [directory, *directory.iterdir()]}
+    return sorted((names[inode], uid, gid) for inode, uid, gid in calls if inode in names)
 
 
 def env_values(text: str) -> dict[str, str]:
@@ -272,11 +288,7 @@ def test_fetch_hands_a_folder_it_creates_to_the_owner(
     backup: Backup, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     backup.one_run()
-    owned: list[tuple[str, int, int]] = []
-    monkeypatch.setattr(
-        "apps.backup.restore.os.chown",
-        lambda path, uid, gid: owned.append((Path(path).name, uid, gid)),
-    )
+    calls = record_fchown(monkeypatch)
     created = tmp_path / "new-out"
     fetch(
         run=None,
@@ -286,7 +298,7 @@ def test_fetch_hands_a_folder_it_creates_to_the_owner(
         out_dir=created,
         out_owner=(501, 20),
     )
-    assert ("new-out", 501, 20) in owned
+    assert ("new-out", 501, 20) in owned_names(calls, created)
     assert stat.S_IMODE(os.stat(created).st_mode) == 0o700
 
 
@@ -294,10 +306,7 @@ def test_fetch_leaves_the_owner_of_an_existing_folder(
     backup: Backup, out_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     backup.one_run()
-    owned: list[str] = []
-    monkeypatch.setattr(
-        "apps.backup.restore.os.chown", lambda path, _u, _g: owned.append(Path(path).name)
-    )
+    calls = record_fchown(monkeypatch)
     fetch(
         run=None,
         master_key_hex=MASTER,
@@ -306,7 +315,7 @@ def test_fetch_leaves_the_owner_of_an_existing_folder(
         out_dir=out_dir,
         out_owner=(501, 20),
     )
-    assert out_dir.name not in owned
+    assert out_dir.name not in [name for name, _uid, _gid in owned_names(calls, out_dir)]
 
 
 def test_fetch_refuses_a_backup_with_unknown_migrations(backup: Backup, out_dir: Path) -> None:
@@ -364,7 +373,7 @@ def test_a_failing_dump_of_the_manifest_never_says_a_backup_was_made(
     backup: Backup, out_dir: Path, code: int, stderr: str, expected: str
 ) -> None:
     backup.one_run()
-    backup.restic.respond(("dump", "files1"), stderr=stderr, code=code)
+    backup.restic.respond(("dump", "--", "f0000001"), stderr=stderr, code=code)
     with pytest.raises(BackupError) as caught:
         do_fetch(out_dir)
     assert caught.value.code == expected
@@ -375,11 +384,7 @@ def test_fetch_sets_the_owner_of_the_files(
     backup: Backup, out_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     backup.one_run()
-    owned: list[tuple[str, int, int]] = []
-    monkeypatch.setattr(
-        "apps.backup.restore.os.chown",
-        lambda path, uid, gid: owned.append((Path(path).name, uid, gid)),
-    )
+    calls = record_fchown(monkeypatch)
     fetch(
         run=None,
         master_key_hex=MASTER,
@@ -388,7 +393,7 @@ def test_fetch_sets_the_owner_of_the_files(
         out_dir=out_dir,
         out_owner=(501, 20),
     )
-    assert sorted(owned) == [("env", 501, 20), ("manifest.json", 501, 20)]
+    assert owned_names(calls, out_dir) == [("env", 501, 20), ("manifest.json", 501, 20)]
     assert env_values((out_dir / "env").read_text())["BRIEVIE_BACKUP_DIR"] == "/media/backup"
 
 
@@ -418,14 +423,14 @@ def test_latest_run_needs_both_snapshots(backup: Backup, configured_folder: Path
     complete, newest = uuid4(), uuid4()
     backup.snapshots(
         [
-            snapshot("db-new", T0 + timedelta(days=1), newest, "db"),
-            snapshot("db-old", T0, complete, "db"),
+            snapshot("d0000022", T0 + timedelta(days=1), newest, "db"),
+            snapshot("d0000021", T0, complete, "db"),
         ],
-        [snapshot("files-old", T0 + timedelta(minutes=5), complete, "files")],
+        [snapshot("f0000021", T0 + timedelta(minutes=5), complete, "files")],
     )
     found = find_run(restic_repository(), "pw", None)
     assert found.run_id == complete
-    assert (found.db.id, found.files.id) == ("db-old", "files-old")
+    assert (found.db.id, found.files.id) == ("d0000021", "f0000021")
 
 
 def test_a_resumed_run_takes_the_newest_snapshot_of_each_kind(
@@ -434,25 +439,25 @@ def test_a_resumed_run_takes_the_newest_snapshot_of_each_kind(
     run_id = backup.run_id
     backup.snapshots(
         [
-            snapshot("db-first", T0, run_id, "db"),
-            snapshot("db-second", T0 + timedelta(hours=1), run_id, "db"),
+            snapshot("d0000011", T0, run_id, "db"),
+            snapshot("d0000012", T0 + timedelta(hours=1), run_id, "db"),
         ],
         [
-            snapshot("files-second", T0 + timedelta(hours=1, minutes=5), run_id, "files"),
-            snapshot("files-first", T0 + timedelta(minutes=5), run_id, "files"),
+            snapshot("f0000012", T0 + timedelta(hours=1, minutes=5), run_id, "files"),
+            snapshot("f0000011", T0 + timedelta(minutes=5), run_id, "files"),
         ],
     )
     for run in (None, str(run_id)):
         found = find_run(restic_repository(), "pw", run)
-        assert (found.db.id, found.files.id) == ("db-second", "files-second")
+        assert (found.db.id, found.files.id) == ("d0000012", "f0000012")
 
 
 def test_an_incomplete_files_run_is_restorable(backup: Backup, configured_folder: Path) -> None:
     # A run whose files step ended with restic exit 3 still has both snapshots.
     run_id = backup.run_id
     backup.snapshots(
-        [snapshot("db1", T0, run_id, "db")],
-        [snapshot("files1", T0 + timedelta(minutes=5), run_id, "files")],
+        [snapshot("d0000001", T0, run_id, "db")],
+        [snapshot("f0000001", T0 + timedelta(minutes=5), run_id, "files")],
     )
     assert find_run(restic_repository(), "pw", str(run_id)).run_id == run_id
 
@@ -460,8 +465,8 @@ def test_an_incomplete_files_run_is_restorable(backup: Backup, configured_folder
 @pytest.mark.parametrize("run", ["not-a-uuid", "pre-update-0.9.0"])
 def test_unknown_run_is_refused(backup: Backup, configured_folder: Path, run: str) -> None:
     backup.snapshots(
-        [snapshot("db1", T0, backup.run_id, "db")],
-        [snapshot("files1", T0, backup.run_id, "files")],
+        [snapshot("d0000001", T0, backup.run_id, "db")],
+        [snapshot("f0000001", T0, backup.run_id, "files")],
     )
     for wanted in (run, str(uuid4())):
         with pytest.raises(BackupError) as caught:
@@ -472,7 +477,7 @@ def test_unknown_run_is_refused(backup: Backup, configured_folder: Path, run: st
 def test_a_run_with_only_a_database_snapshot_is_refused(
     backup: Backup, configured_folder: Path
 ) -> None:
-    backup.snapshots([snapshot("db1", T0, backup.run_id, "db")], [])
+    backup.snapshots([snapshot("d0000001", T0, backup.run_id, "db")], [])
     with pytest.raises(BackupError) as caught:
         find_run(restic_repository(), "pw", str(backup.run_id))
     assert caught.value.code == "run_not_found"
@@ -490,7 +495,7 @@ def restic_repository() -> restic.Repository:
 
 
 def check(backup: Backup, master: str) -> None:
-    db = restic.Snapshot(id="db1", time=T0, tags=(), paths=())
+    db = restic.Snapshot(id="d0000001", time=T0, tags=(), paths=())
     check_master_key_against_dump(
         repository=restic_repository(),
         password="pw",
@@ -524,7 +529,9 @@ def test_a_backup_without_workspaces_passes_the_check(backup: Backup) -> None:
 
 def test_a_failing_dump_is_not_masked_by_pg_restore(backup: Backup) -> None:
     backup.contents()
-    backup.restic.respond(("dump", "db1"), stdout=b"PGDMP trunc", stderr="read error", code=1)
+    backup.restic.respond(
+        ("dump", "--", "d0000001"), stdout=b"PGDMP trunc", stderr="read error", code=1
+    )
     with pytest.raises(BackupError) as caught:
         check(backup, MASTER)
     assert caught.value.code == "restore_failed"
@@ -532,7 +539,7 @@ def test_a_failing_dump_is_not_masked_by_pg_restore(backup: Backup) -> None:
 
 def test_a_wrong_password_on_the_dump_is_reported_as_such(backup: Backup) -> None:
     backup.contents()
-    backup.restic.respond(("dump", "db1"), stderr="wrong password", code=12)
+    backup.restic.respond(("dump", "--", "d0000001"), stderr="wrong password", code=12)
     with pytest.raises(BackupError) as caught:
         check(backup, MASTER)
     assert caught.value.code == "wrong_password"
@@ -585,7 +592,9 @@ def test_output_without_the_key_table_is_refused(backup: Backup) -> None:
 def test_pg_restore_that_stops_reading_early_does_not_fail_the_dump(backup: Backup) -> None:
     # pg_restore may stop reading once it has the table; restic must still end cleanly.
     backup.contents()
-    backup.restic.respond(("dump", "db1", restic.DB_FILENAME), stdout=b"x" * (4 * 1024 * 1024))
+    backup.restic.respond(
+        ("dump", "--", "d0000001", restic.DB_FILENAME), stdout=b"x" * (4 * 1024 * 1024)
+    )
     check(backup, MASTER)
 
 
@@ -612,7 +621,7 @@ def restore(text: str = ENV_COPY, **kwargs: object) -> str:
         "backup_dir_host": None,
     }
     options.update(kwargs)
-    return restored_env(text, **options)  # type: ignore[arg-type]
+    return restored_env(text, **options).text  # type: ignore[arg-type]
 
 
 def test_restored_env_regenerates_the_superuser_and_owner_passwords() -> None:
@@ -666,17 +675,25 @@ def test_restored_env_keeps_hostname_and_secret_key() -> None:
         "BRIEVIE_APP_PASSWORD",
         "BRIEVIE_BACKUP_DB_PASSWORD",
         "DATABASE_BACKUP_URL",
-        "POSTGRES_PORT",
         "DEBUG",
-        "BRIEVIE_BACKUP_DIR",
     ):
         assert values[key] == original[key], key
-    # Every original line keeps its place, comments included; only the password changed.
-    kept = [line for line in ENV_COPY.splitlines() if not line.startswith(PASSWORD_LINE)]
+    # The host lines (port, back-up folder) are this installation's, never the back-up's.
+    assert "POSTGRES_PORT" not in values
+    assert "BRIEVIE_BACKUP_DIR" not in values
+    # Every other original line keeps its order, comments included; only the password
+    # changed.
+    host = ("POSTGRES_PORT=", "BRIEVIE_BACKUP_DIR=")
+    kept = [
+        line
+        for line in ENV_COPY.splitlines()
+        if not line.startswith(PASSWORD_LINE) and not line.startswith(host)
+    ]
     restored_lines = restored.splitlines()
     assert [line for line in restored_lines if line in kept] == kept
-    index = ENV_COPY.splitlines().index("BRIEVIE_BACKUP_PASSWORD=old-password")
-    assert restored_lines[index] == f"BRIEVIE_BACKUP_PASSWORD={DERIVED}"
+    index = kept.index("BRIEVIE_HOSTNAME=brievie.example")
+    password = restored_lines.index(f"BRIEVIE_BACKUP_PASSWORD={DERIVED}")
+    assert restored_lines.index(kept[index]) < password
     assert restored.endswith("\n")
 
 
@@ -833,9 +850,64 @@ def test_restore_fetch_reads_the_owner(
     backup.one_run()
     settings.BRIEVIE_MASTER_KEY = MASTER
     settings.BRIEVIE_BACKUP_PASSWORD = ""
-    owned: list[tuple[int, int]] = []
-    monkeypatch.setattr("apps.backup.restore.os.chown", lambda _p, u, g: owned.append((u, g)))
+    calls = record_fchown(monkeypatch)
     call_command("restore_fetch", "--out", str(out_dir), "--out-owner", "501:20")
-    assert owned == [(501, 20), (501, 20)]
+    assert [(uid, gid) for _inode, uid, gid in calls] == [(501, 20), (501, 20)]
     with pytest.raises(CommandError):
         call_command("restore_fetch", "--out", str(out_dir), "--out-owner", "me")
+
+
+def test_restored_env_drops_every_host_line_and_says_which() -> None:
+    # Ports carry a port (the owner URL is still built from it); the rest a marker.
+    lines = [f"{key}={'5433' if 'PORT' in key else 'from-the-backup'}" for key in HOST_KEYS]
+    text = ENV_COPY + "\n".join(["# BRIEVIE_IMAGE=a comment stays", *lines]) + "\n"
+
+    restored = restored_env(
+        text, master_key_hex=MASTER, backup_password=DERIVED, backup_dir_host=None
+    )
+
+    values = env_values(restored.text)
+    for key in HOST_KEYS:
+        assert key not in values, key
+    assert "from-the-backup" not in restored.text
+    assert "/mnt/old-disk" not in restored.text
+    assert "# BRIEVIE_IMAGE=a comment stays" in restored.text
+    assert set(restored.dropped) == set(HOST_KEYS)
+
+
+@pytest.mark.parametrize("spelling", ["export {key}=x", "{lower}=x", "'{key}'=x", "{key}: x"])
+def test_restored_env_drops_a_host_line_in_any_spelling(spelling: str) -> None:
+    line = spelling.format(key="BRIEVIE_IMAGE", lower="brievie_image")
+    restored = restored_env(
+        ENV_COPY + line + "\n", master_key_hex=MASTER, backup_password=DERIVED, backup_dir_host=None
+    )
+    assert line not in restored.text
+    assert "BRIEVIE_IMAGE" in restored.dropped
+
+
+def test_an_explicit_backup_folder_is_still_written_and_not_reported() -> None:
+    restored = restored_env(
+        ENV_COPY, master_key_hex=MASTER, backup_password=DERIVED, backup_dir_host="/media/new"
+    )
+    assert env_values(restored.text)["BRIEVIE_BACKUP_DIR"] == "/media/new"
+    assert "BRIEVIE_BACKUP_DIR" not in restored.dropped
+    assert restored.dropped == ("POSTGRES_PORT",)
+
+
+def test_restore_fetch_says_which_settings_it_left_out(
+    backup: Backup,
+    out_dir: Path,
+    settings: Settings,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    backup.one_run()
+    settings.BRIEVIE_MASTER_KEY = MASTER
+    settings.BRIEVIE_BACKUP_PASSWORD = ""
+    call_command("restore_fetch", "--out", str(out_dir))
+    captured = capsys.readouterr()
+    assert "run_id=" in captured.out
+    assert "niet uit de back-up overgenomen" not in captured.out  # stdout stays key=value
+    assert captured.err.strip().splitlines() == [
+        "Deze instellingen zijn niet uit de back-up overgenomen; deze installatie zet ze "
+        "zelf: POSTGRES_PORT, BRIEVIE_BACKUP_DIR."
+    ]

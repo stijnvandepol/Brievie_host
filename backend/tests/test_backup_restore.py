@@ -1,6 +1,7 @@
 """Restore, part 2: the database, the files, and closing the runs the dump brought (Task 10)."""
 
 import json
+import os
 import stat
 import subprocess
 from collections.abc import Callable, Iterator, Mapping
@@ -23,11 +24,12 @@ from apps.backup.locks import BACKUP_LOCK_KEY, backup_lock, database_lock
 from apps.backup.models import BackupRun
 from apps.backup.restore import (
     PG_RESTORE_COMMAND,
+    FilesRestored,
     close_interrupted_runs,
     restore_database,
     restore_files,
 )
-from tests.backup_support import FakeBinary
+from tests.backup_support import FakeBinary, Recorder
 
 T0 = datetime(2026, 11, 10, 3, 0, tzinfo=UTC)
 SUPERUSER_PASSWORD = "superuser-secret-pw-0123"
@@ -48,15 +50,17 @@ def one_run(fake_restic: FakeBinary) -> UUID:
     run_id = uuid4()
     fake_restic.respond(
         ("snapshots", "--json", "--tag", "kind:db"),
-        stdout=json.dumps([snapshot("db1", T0, run_id, "db")]).encode(),
+        stdout=json.dumps([snapshot("d0000001", T0, run_id, "db")]).encode(),
     )
     fake_restic.respond(
         ("snapshots", "--json", "--tag", "kind:files"),
         stdout=json.dumps(
-            [snapshot("files1", T0 + timedelta(minutes=5), run_id, "files")]
+            [snapshot("f0000001", T0 + timedelta(minutes=5), run_id, "files")]
         ).encode(),
     )
-    fake_restic.respond(("dump", "db1", restic.DB_FILENAME), stdout=b"PGDMP fake archive")
+    fake_restic.respond(
+        ("dump", "--", "d0000001", restic.DB_FILENAME), stdout=b"PGDMP fake archive"
+    )
     return run_id
 
 
@@ -142,7 +146,7 @@ def test_dump_is_piped_into_pg_restore_as_the_superuser(
 
     assert closed == 2
     assert pg_restore.calls == [[*PG_RESTORE_COMMAND[1:], "--dbname=restore_probe"]]
-    assert fake_restic.calls[-1] == restic.dump_argv("db1", restic.DB_FILENAME)
+    assert fake_restic.calls[-1] == restic.dump_argv("d0000001", restic.DB_FILENAME)
     (env,) = [
         env for argv, env in zip(started.argv, started.env, strict=True) if argv[0] == "pg_restore"
     ]
@@ -176,7 +180,9 @@ def test_a_failing_dump_or_restore_stops(
 ) -> None:
     one_run(fake_restic)
     if failing == "dump":
-        fake_restic.respond(("dump", "db1"), stdout=b"PGDMP trunc", stderr="read error", code=1)
+        fake_restic.respond(
+            ("dump", "--", "d0000001"), stdout=b"PGDMP trunc", stderr="read error", code=1
+        )
     else:
         pg_restore.respond((), stderr="pg_restore: error: could not execute query", code=1)
 
@@ -357,14 +363,29 @@ def restored_authority(files: tuple[str, ...]) -> Path:
     return copy
 
 
+class Chowned:
+    """Records every fchown (the restore hands files over through descriptors)."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[int, int, int]] = []
+
+    def __eq__(self, other: object) -> bool:
+        return self.calls == other
+
+    def owners(self, *paths: Path) -> list[tuple[int, int] | None]:
+        """For each path: the (uid, gid) it was handed to, or None."""
+        found = {inode: (uid, gid) for inode, uid, gid in self.calls}
+        return [found.get(path.stat().st_ino) for path in paths]
+
+
 @pytest.fixture
-def chowned(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, int, int]]:
-    calls: list[tuple[str, int, int]] = []
+def chowned(monkeypatch: pytest.MonkeyPatch) -> Chowned:
+    recorded = Chowned()
     monkeypatch.setattr(
-        "apps.backup.restore.os.chown",
-        lambda path, uid, gid: calls.append((Path(path).name, uid, gid)),
+        "apps.backup.restore.os.fchown",
+        lambda fd, uid, gid: recorded.calls.append((os.fstat(fd).st_ino, uid, gid)),
     )
-    return calls
+    return recorded
 
 
 @pytest.mark.parametrize("files", [AUTHORITY_FILES, ("root.crt", "root.key")])
@@ -374,7 +395,7 @@ def test_files_are_restored_and_the_authority_placed(
     configured_folder: Path,
     fake_restic: FakeBinary,
     caddy: Path,
-    chowned: list[tuple[str, int, int]],
+    chowned: Chowned,
     files: tuple[str, ...],
     target_exists: bool,
 ) -> None:
@@ -389,16 +410,16 @@ def test_files_are_restored_and_the_authority_placed(
     leaf.mkdir(parents=True)
     (leaf / "brievie.local.crt").write_text("leaf of the new authority")
 
-    restore_files(run=None, authority_target=caddy, clear_documents=False)
+    restored = restore_files(run=None, authority_target=caddy, clear_documents=False)
 
-    assert fake_restic.calls[-1] == restic.restore_argv("files1", "/", services.file_paths())
+    assert restored.authority_placed is True
+    assert fake_restic.calls[-1] == restic.restore_argv("f0000001", "/", services.file_paths())
     assert sorted(p.name for p in caddy.iterdir()) == sorted(files)
     for name in files:
         assert (caddy / name).read_text() == f"restored {name}"
         assert stat.S_IMODE((caddy / name).stat().st_mode) == 0o600
-        assert (name, 0, 0) in chowned
+    assert chowned.owners(caddy, *(caddy / name for name in files)) == [(0, 0)] * (len(files) + 1)
     assert stat.S_IMODE(caddy.stat().st_mode) == 0o700
-    assert (caddy.name, 0, 0) in chowned
     assert not leaf.exists()
 
 
@@ -407,7 +428,7 @@ def test_a_backup_without_an_authority_leaves_caddy_alone(
     configured_folder: Path,
     fake_restic: FakeBinary,
     caddy: Path,
-    chowned: list[tuple[str, int, int]],
+    chowned: Chowned,
 ) -> None:
     # A public certificate (no internal authority): nothing to put back.
     one_run(fake_restic)
@@ -418,7 +439,7 @@ def test_a_backup_without_an_authority_leaves_caddy_alone(
 
     placed = restore_files(run=None, authority_target=caddy, clear_documents=False)
 
-    assert placed is False
+    assert placed.authority_placed is False
     assert (caddy / "root.crt").read_text() == "current"
     assert leaf.exists()
     assert chowned == []
@@ -429,7 +450,7 @@ def test_replace_never_places_the_authority_of_the_replaced_installation(
     configured_folder: Path,
     fake_restic: FakeBinary,
     caddy: Path,
-    chowned: list[tuple[str, int, int]],
+    chowned: Chowned,
 ) -> None:
     # The back-up has no authority; the copy and the config folder still hold the old ones.
     one_run(fake_restic)
@@ -443,7 +464,7 @@ def test_replace_never_places_the_authority_of_the_replaced_installation(
 
     placed = restore_files(run=None, authority_target=caddy, clear_documents=True)
 
-    assert placed is False
+    assert placed.authority_placed is False
     assert list(Path(django_settings.BRIEVIE_AUTHORITY_COPY_DIR).iterdir()) == []
     assert list(config.iterdir()) == []
     assert Path(django_settings.BRIEVIE_AUTHORITY_COPY_DIR).is_dir()  # the mount point stays
@@ -489,28 +510,32 @@ def test_replace_empties_the_documents_first(
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("clear", [True, False])
 @pytest.mark.parametrize(
-    "root", ["relative/documents", "/", "/data", str(Path.home()), "link", "through-link"]
+    ("root", "expected"),
+    [
+        ("relative/documents", {"unsafe_path"}),
+        ("", {"unsafe_path"}),
+        ("/", {"unsafe_path"}),
+        ("/data", {"unsafe_path"}),
+        ("/usr/local", {"directory_not_allowed"}),
+        ("/data/docu*", {"unsafe_path"}),
+        (str(Path.home()), {"unsafe_path"}),
+        ("link", {"unsafe_path"}),
+        ("through-link", {"unsafe_path"}),
+    ],
 )
-def test_replace_refuses_a_documents_root_it_cannot_trust(
+def test_restore_refuses_a_documents_root_it_cannot_trust(
     configured_folder: Path,
     fake_restic: FakeBinary,
     caddy: Path,
     tmp_path: Path,
     settings: Settings,
     root: str,
-    monkeypatch: pytest.MonkeyPatch,
+    expected: set[str],
+    clear: bool,
+    recorder: Recorder,
 ) -> None:
-    called: list[str] = []
-
-    def recorder(name: str) -> Callable[..., None]:
-        def refuse(*_args: object, **_kwargs: object) -> None:
-            # Never reach the real `/` or a home directory: the refusal comes first.
-            called.append(name)
-            raise AssertionError(f"{name} was called")
-
-        return refuse
-
     one_run(fake_restic)
     if root in ("link", "through-link"):
         real = tmp_path / "real-documents"
@@ -522,23 +547,17 @@ def test_replace_refuses_a_documents_root_it_cannot_trust(
         settings.BRIEVIE_STORAGE_ROOT = str(configured)
     else:
         settings.BRIEVIE_STORAGE_ROOT = root
-    for module, name in [
-        ("apps.backup.restore.os", "scandir"),
-        ("apps.backup.restore.os", "unlink"),
-        ("apps.backup.restore.os", "rmdir"),
-        ("apps.backup.restore.os", "replace"),
-        ("apps.backup.restore.shutil", "rmtree"),
-    ]:
-        monkeypatch.setattr(f"{module}.{name}", recorder(name))
-    monkeypatch.setattr(Path, "unlink", recorder("Path.unlink"))
 
+    # Never reach the real `/` or a home directory: every destructive primitive, and
+    # every process start (restic included), fails the test. The refusal comes first.
+    recorder.arm()
     with pytest.raises(BackupError) as caught:
-        restore_files(run=None, authority_target=caddy, clear_documents=True)
+        restore_files(run=None, authority_target=caddy, clear_documents=clear)
+    recorder.disarm()
 
-    assert caught.value.code == "unsafe_path"
-    assert called == []
+    assert caught.value.code in expected
+    assert recorder.called == []
     assert not any(call[:1] == ["restore"] for call in fake_restic.calls)
-    monkeypatch.undo()
     if root in ("link", "through-link"):
         assert (tmp_path / "real-documents" / "keep.page").exists()
         assert (tmp_path / "real-documents" / "documents" / "keep.page").exists()
@@ -683,9 +702,9 @@ def test_restore_files_command_places_the_authority_for_caddy(
 ) -> None:
     seen: list[dict[str, object]] = []
 
-    def fake(**kwargs: object) -> bool:
+    def fake(**kwargs: object) -> FilesRestored:
         seen.append(kwargs)
-        return True
+        return FilesRestored(authority_placed=True, removed=0)
 
     monkeypatch.setattr("apps.backup.restore.restore_files", fake)
     call_command("restore_files", "--run", "r1", "--replace")
@@ -701,11 +720,16 @@ def test_restore_files_command_places_the_authority_for_caddy(
 def test_restore_files_command_says_when_caddy_keeps_its_own_authority(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], placed: bool
 ) -> None:
-    monkeypatch.setattr("apps.backup.restore.restore_files", lambda **_kwargs: placed)
+    restored = FilesRestored(authority_placed=placed, removed=3)
+    monkeypatch.setattr("apps.backup.restore.restore_files", lambda **_kwargs: restored)
     call_command("restore_files")
     out = capsys.readouterr().out
     sentence = "De back-up heeft geen eigen certificaat; Caddy houdt zijn huidige certificaat."
     assert (sentence in out) is not placed
+    assert (
+        "Opgeruimd na het terugzetten: 3 onderdelen die geen gewoon bestand of map waren "
+        "(zoals snelkoppelingen)." in out
+    )
 
 
 def test_restore_files_command_says_why_it_failed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -744,3 +768,96 @@ def test_restore_files_command_says_the_step_can_run_again(monkeypatch: pytest.M
         "Het terugzetten van de documenten is afgebroken, dus de documenten zijn nu niet "
         "compleet. Voer deze stap gewoon opnieuw uit."
     )
+
+
+# --- after restic: only regular files and directories stay -------------------------------
+
+
+def restic_that_restores(tmp_path: Path, fake: FakeBinary, script: str) -> str:
+    """A restic that runs `script` (sh) on `restore`, then answers as the fake does."""
+    writer = tmp_path / "restic-that-writes"
+    writer.write_text(
+        f'#!/bin/sh\nif [ "$1" = restore ]; then\n{script}\nfi\nexec \'{fake.path}\' "$@"\n'
+    )
+    writer.chmod(0o755)
+    return str(writer)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_restore_removes_links_and_special_files_and_clears_setuid(
+    configured_folder: Path,
+    fake_restic: FakeBinary,
+    caddy: Path,
+    tmp_path: Path,
+    settings: Settings,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    one_run(fake_restic)
+    documents = Path(django_settings.BRIEVIE_STORAGE_ROOT)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "keep").write_text("keep")
+    # What a hostile snapshot could hold inside the documents.
+    settings.BRIEVIE_RESTIC_BINARY = restic_that_restores(
+        tmp_path,
+        fake_restic,
+        f"mkdir -p '{documents}/ws'\n"
+        f"echo page > '{documents}/ws/1.page'\n"
+        f"chmod 4755 '{documents}/ws/1.page'\n"
+        f"ln -s '{outside}' '{documents}/ws/escape'\n"
+        f"ln -s '{outside}/keep' '{documents}/keep-link'\n"
+        f"mkfifo '{documents}/ws/fifo'",
+    )
+
+    restored = restore_files(run=None, authority_target=caddy, clear_documents=False)
+
+    assert restored.removed == 3
+    assert sorted(p.name for p in (documents / "ws").iterdir()) == ["1.page"]
+    assert not (documents / "keep-link").exists()
+    assert stat.S_IMODE((documents / "ws" / "1.page").stat().st_mode) == 0o755
+    assert (outside / "keep").read_text() == "keep"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_as_root_the_restored_trees_go_to_the_keeper(
+    configured_folder: Path,
+    fake_restic: FakeBinary,
+    caddy: Path,
+    tmp_path: Path,
+    settings: Settings,
+    chowned: Chowned,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    one_run(fake_restic)
+    documents = Path(django_settings.BRIEVIE_STORAGE_ROOT)
+    config = Path(django_settings.BRIEVIE_BACKUP_CONFIG_DIR)
+    settings.BRIEVIE_RESTIC_BINARY = restic_that_restores(
+        tmp_path,
+        fake_restic,
+        f"mkdir -p '{documents}/ws' '{config}'\n"
+        f"echo page > '{documents}/ws/1.page'\n"
+        f"echo env > '{config}/env'",
+    )
+    monkeypatch.setattr("apps.backup.restore.os.geteuid", lambda: 0)
+
+    restore_files(run=None, authority_target=caddy, clear_documents=False)
+
+    paths = (documents, documents / "ws", documents / "ws" / "1.page", config, config / "env")
+    assert chowned.owners(*paths) == [(10001, 10001)] * len(paths)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_restic_restores_exactly_the_three_judged_directories(
+    configured_folder: Path, fake_restic: FakeBinary, caddy: Path
+) -> None:
+    one_run(fake_restic)
+    restore_files(run=None, authority_target=caddy, clear_documents=False)
+    call = fake_restic.calls[-1]
+    assert call[:3] == ["restore", "--target", "/"]
+    assert call[-2:] == ["--", "f0000001"]
+    includes = [call[i + 1] for i, arg in enumerate(call) if arg == "--include"]
+    assert includes == [
+        django_settings.BRIEVIE_STORAGE_ROOT,
+        django_settings.BRIEVIE_AUTHORITY_COPY_DIR,
+        django_settings.BRIEVIE_BACKUP_CONFIG_DIR,
+    ]

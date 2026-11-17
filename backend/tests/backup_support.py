@@ -10,10 +10,15 @@ argument names only, never environment values, and prints nothing itself:
 what it answers comes from the table filled with `FakeBinary.respond`.
 """
 
+import builtins
+import io
 import json
 import os
+import shutil
 import stat
-from collections.abc import Callable
+import subprocess
+import tempfile
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
@@ -170,3 +175,139 @@ def configured_folder(tmp_path: Path, settings: object) -> Path:
     for name, value in values.items():
         setattr(settings, name, value)
     return mount
+
+
+# --- the recorder: every destructive primitive fails the test -------------------------
+
+# (owner, name) of every primitive that deletes, moves, creates, overwrites, changes
+# the owner or mode of a file, or starts a process. `os.open` and `open` are replaced
+# by versions that refuse only a write, create or truncate.
+_DESTRUCTIVE: tuple[tuple[object, str], ...] = (
+    *(
+        (os, name)
+        for name in (
+            "scandir",
+            "unlink",
+            "remove",
+            "rmdir",
+            "removedirs",
+            "replace",
+            "rename",
+            "renames",
+            "chown",
+            "lchown",
+            "fchown",
+            "chmod",
+            "fchmod",
+            "truncate",
+            "ftruncate",
+            "symlink",
+            "link",
+            "mkdir",
+            "makedirs",
+            "mkfifo",
+            "mknod",
+            "utime",
+            "system",
+            "posix_spawn",
+            "posix_spawnp",
+            "fork",
+            "execv",
+            "execve",
+            "execvp",
+        )
+        if hasattr(os, name)
+    ),
+    *((os, name) for name in ("lchmod", "chflags", "lchflags") if hasattr(os, name)),
+    *(
+        (shutil, name)
+        for name in (
+            "rmtree",
+            "move",
+            "copy",
+            "copy2",
+            "copyfile",
+            "copytree",
+            "copymode",
+            "copystat",
+            "chown",
+        )
+    ),
+    *((tempfile, name) for name in ("mkstemp", "mkdtemp", "NamedTemporaryFile", "TemporaryFile")),
+    *(
+        (Path, name)
+        for name in (
+            "unlink",
+            "rmdir",
+            "mkdir",
+            "chmod",
+            "lchmod",
+            "write_text",
+            "write_bytes",
+            "touch",
+            "rename",
+            "replace",
+            "symlink_to",
+            "hardlink_to",
+        )
+    ),
+    *((subprocess, name) for name in ("Popen", "run", "call", "check_call", "check_output")),
+)
+_WRITE_FLAGS = os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC | os.O_APPEND
+_WRITE_MODES = frozenset("wax+")
+
+
+class Recorder:
+    """Replaces every destructive primitive by one that records the call and fails.
+
+    Arm it right before the call under test (the test's own set-up under tmp_path may
+    still create files); `disarm` restores everything. Reading stays possible: `stat`,
+    `realpath`, `os.open` and `open` for reading.
+    """
+
+    def __init__(self) -> None:
+        self.called: list[str] = []
+        self._patch = pytest.MonkeyPatch()
+
+    def _refuse(self, name: str) -> Callable[..., None]:
+        def refuse(*_args: object, **_kwargs: object) -> None:
+            self.called.append(name)
+            raise AssertionError(f"destructive primitive called: {name}")
+
+        return refuse
+
+    def arm(self, *, allow: tuple[str, ...] = ()) -> None:
+        tempfile.gettempdir()  # computed (and cached) before anything is replaced
+        for owner, name in _DESTRUCTIVE:
+            if name not in allow:
+                self._patch.setattr(owner, name, self._refuse(name))
+        real_os_open = os.open
+        real_open = builtins.open
+
+        def os_open(path: object, flags: int, *args: object, **kwargs: object) -> int:
+            if flags & _WRITE_FLAGS:
+                self.called.append("os.open for writing")
+                raise AssertionError("destructive primitive called: os.open for writing")
+            return real_os_open(path, flags, *args, **kwargs)  # type: ignore[arg-type]
+
+        def open_(file: object, mode: str = "r", *args: object, **kwargs: object) -> object:
+            if _WRITE_MODES & set(mode):
+                self.called.append("open for writing")
+                raise AssertionError("destructive primitive called: open for writing")
+            return real_open(file, mode, *args, **kwargs)  # type: ignore[call-overload]
+
+        self._patch.setattr(os, "open", os_open)
+        self._patch.setattr(builtins, "open", open_)
+        self._patch.setattr(io, "open", open_)
+
+    def disarm(self) -> None:
+        self._patch.undo()
+
+
+@pytest.fixture
+def recorder() -> Iterator[Recorder]:
+    """A Recorder that is disarmed after the test, which fails if anything was called."""
+    armed = Recorder()
+    yield armed
+    armed.disarm()
+    assert armed.called == []

@@ -2,6 +2,7 @@
 
 import re
 import secrets
+from dataclasses import dataclass
 from pathlib import Path
 
 from django.conf import settings
@@ -59,7 +60,24 @@ def store_env_copy(text: str) -> None:
 # Set by the restore in the line that already holds them, or added at the end.
 _BACKUP_PASSWORD = "BRIEVIE_BACKUP_PASSWORD"  # noqa: S105 - a key name
 _BACKUP_DIR = "BRIEVIE_BACKUP_DIR"
-_REPLACED_LINE = _key_line((_BACKUP_PASSWORD, _BACKUP_DIR))
+_REPLACED_LINE = _key_line((_BACKUP_PASSWORD,))
+# Lines that decide which host folders, images, project and ports the containers get.
+# They are never taken from a back-up: the installation that restores sets them
+# (./brievie, from its own deploy/.env); BRIEVIE_BACKUP_DIR only when given explicitly.
+HOST_KEYS = (
+    _BACKUP_DIR,
+    "BRIEVIE_BACKUP_REPOSITORY",
+    "BRIEVIE_BACKUP_REST_USERNAME",
+    "BRIEVIE_BACKUP_REST_PASSWORD",
+    "BRIEVIE_BACKUP_S3_ACCESS_KEY_ID",
+    "BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY",
+    "BRIEVIE_IMAGE",
+    "COMPOSE_PROJECT_NAME",
+    "POSTGRES_PORT",
+    "BRIEVIE_HTTP_PORT",
+    "BRIEVIE_HTTPS_PORT",
+)
+_HOST_LINE = _key_line(HOST_KEYS)
 _PORT_LINE = _key_line(("POSTGRES_PORT",))
 _PLAIN_VALUE = re.compile(r"[A-Za-z0-9._~+/=@:,-]*")
 _UNQUOTABLE = re.compile(r"['\x00-\x1f\x7f]")
@@ -98,17 +116,25 @@ def _postgres_port(lines: list[str]) -> str:
     return port
 
 
+@dataclass(frozen=True)
+class RestoredEnv:
+    text: str
+    dropped: tuple[str, ...]  # the host keys of the back-up that were left out
+
+
 def restored_env(
     text: str, *, master_key_hex: str, backup_password: str, backup_dir_host: str | None
-) -> str:
+) -> RestoredEnv:
     """deploy/.env for a server restored from a back-up whose copy of it is `text`.
 
     Keeps every line and comment in order, except that an excluded key in any spelling
-    is dropped and the back-up password (and the back-up folder, when given) is set in
-    the line that holds it. Adds the master key and new superuser and owner passwords
-    (hex, as init-env.sh makes them): the dump holds no password, so the new database
-    takes these. `backup_password` is what opened the repository, so the keeper, which
-    has no master key, can make back-ups after the restore.
+    is dropped, the host keys (`HOST_KEYS`: folders, repository, image, project, ports)
+    are dropped and listed in `dropped`, and the back-up password is set in the line
+    that holds it. The back-up folder is written only when `backup_dir_host` is given.
+    Adds the master key and new superuser and owner passwords (hex, as init-env.sh makes
+    them): the dump holds no password, so the new database takes these.
+    `backup_password` is what opened the repository, so the keeper, which has no master
+    key, can make back-ups after the restore.
     """
     lines = text.splitlines()
     owner_password = secrets.token_hex(24)
@@ -119,17 +145,23 @@ def restored_env(
 
     restored: list[str] = []
     written: set[str] = set()
+    dropped: list[str] = []
     for line in lines:
         if _leaks(line):
+            continue
+        host = _HOST_LINE.match(line)
+        if host is not None and host["comment"] is None:
+            key = host["key"].upper()
+            if key not in wanted and key not in dropped:
+                dropped.append(key)
             continue
         match = _REPLACED_LINE.match(line)
         if match is not None and match["comment"] is None:
             key = match["key"].upper()
-            if key in wanted:
-                if key not in written:
-                    restored.append(f"{key}={wanted[key]}")
-                    written.add(key)
-                continue
+            if key not in written:
+                restored.append(f"{key}={wanted[key]}")
+                written.add(key)
+            continue
         restored.append(line)
 
     restored.append(_RESTORED_HEADER)
@@ -140,4 +172,4 @@ def restored_env(
         f"DATABASE_OWNER_URL=postgres://brievie_owner:{owner_password}@localhost:{port}/brievie",
     ]
     restored += [f"{key}={value}" for key, value in wanted.items() if key not in written]
-    return "\n".join(restored) + "\n"
+    return RestoredEnv(text="\n".join(restored) + "\n", dropped=tuple(dropped))

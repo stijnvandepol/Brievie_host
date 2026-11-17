@@ -19,6 +19,7 @@ from apps.backup.sweep import Orphan, delete_orphans, find_orphans, sweep
 from apps.documents.models import DocumentPage
 from apps.workspaces.context import workspace_context
 from apps.workspaces.models import Workspace
+from tests.backup_support import Recorder
 from tests.documents_support import admin_of, jpeg, upload
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -248,7 +249,7 @@ def test_a_symlinked_storage_root_is_listed_but_never_deleted_from(
     backup_conninfo: str,
     settings: object,
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    recorder: Recorder,
 ) -> None:
     real = storage_root()
     link = tmp_path / "root-link"
@@ -258,17 +259,22 @@ def test_a_symlinked_storage_root_is_listed_but_never_deleted_from(
     expected = relative(extra)
     settings.BRIEVIE_STORAGE_ROOT = str(link)  # type: ignore[attr-defined]
 
-    assert [o.path for o in sweep(delete=False).orphans] == [expected]
+    listed = sweep(delete=False)
+    assert [o.path for o in listed.orphans] == [expected]
 
-    def never(*_args: object, **_kwargs: object) -> None:
-        raise AssertionError("a file was unlinked under a linked root")
-
-    # Deleting refuses a root that is a link (the guard of delete_orphans itself).
-    monkeypatch.setattr("apps.backup.sweep.os.unlink", never)
+    # Deleting refuses a root that is a link (the guard of delete_orphans itself),
+    # before any destructive primitive is reached.
+    recorder.arm()
+    with pytest.raises(BackupError) as caught:
+        delete_orphans(listed.orphans, link)
+    recorder.disarm()
+    assert caught.value.code == "unsafe_path"
+    # Through the command as well (listing is reading; it is allowed here).
+    recorder.arm(allow=("scandir",))
     with pytest.raises(BackupError) as caught:
         sweep(delete=True)
+    recorder.disarm()
     assert caught.value.code == "unsafe_path"
-    monkeypatch.undo()
     assert extra.exists()
 
 

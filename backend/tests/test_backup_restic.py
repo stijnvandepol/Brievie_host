@@ -48,6 +48,7 @@ def test_files_backup_excludes_temporary_files() -> None:
         "kind:files",
         "--exclude",
         ".tmp-*",
+        "--",
         "/data/documents",
         "/data/config",
     ]
@@ -98,17 +99,42 @@ def test_other_argv_builders() -> None:
     assert restic.unlock_argv() == ["unlock"]
     assert restic.cat_config_argv() == ["cat", "config"]
     assert restic.snapshots_argv("run:x") == ["snapshots", "--json", "--tag", "run:x"]
-    assert restic.dump_argv("abc", "/brievie.pgdump") == ["dump", "abc", "/brievie.pgdump"]
-    assert restic.restore_argv("abc", "/t", ["/a", "/b"]) == [
+    assert restic.dump_argv("abcdef12", "/brievie.pgdump") == [
+        "dump",
+        "--",
+        "abcdef12",
+        "/brievie.pgdump",
+    ]
+    assert restic.restore_argv("abcdef12", "/t", ["/a", "/b"]) == [
         "restore",
-        "abc",
         "--target",
         "/t",
         "--include",
         "/a",
         "--include",
         "/b",
+        "--",
+        "abcdef12",
     ]
+
+
+@pytest.mark.parametrize(
+    "snapshot_id", ["abc", "--target=/", "-x", "ABCDEF12", "abcdef12 /", "g" * 8, "a" * 65, ""]
+)
+def test_a_snapshot_id_that_restic_would_not_print_is_refused(snapshot_id: str) -> None:
+    with pytest.raises(BackupError) as caught:
+        restic.dump_argv(snapshot_id, "/brievie.pgdump")
+    assert caught.value.code == "restore_failed"
+    with pytest.raises(BackupError) as caught:
+        restic.restore_argv(snapshot_id, "/", ["/data/documents"])
+    assert caught.value.code == "restore_failed"
+
+
+@pytest.mark.parametrize("include", ["/data/docu*", "/data/?", "/data/[a]", "relative", "/a\\*"])
+def test_a_restore_include_with_a_glob_or_relative_path_is_refused(include: str) -> None:
+    with pytest.raises(BackupError) as caught:
+        restic.restore_argv("abcdef12", "/", ["/data/documents", include])
+    assert caught.value.code == "unsafe_path"
 
 
 @pytest.mark.parametrize(
@@ -251,8 +277,8 @@ def test_no_secret_is_ever_in_an_argv(fake_restic: FakeBinary) -> None:
         restic.forget_argv(),
         restic.check_argv(),
         restic.snapshots_argv(f"run:{RUN}"),
-        restic.dump_argv("abc", "/brievie.pgdump"),
-        restic.restore_argv("abc", "/target", ["/data/documents"]),
+        restic.dump_argv("abcdef12", "/brievie.pgdump"),
+        restic.restore_argv("abcdef12", "/target", ["/data/documents"]),
     ]
     env = restic.restic_env(repository, password, extra=libpq)
     for argv in builders:

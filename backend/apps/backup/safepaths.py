@@ -33,6 +33,11 @@ PRODUCTION_DIRECTORIES = (DOCUMENTS, AUTHORITY_COPY, BACKUP_CONFIG)
 CADDY_AUTHORITY = Path("/caddy-data/caddy/pki/authorities/local")
 CADDY_LEAF = Path("/caddy-data/caddy/certificates/local")
 CADDY_AUTHORITY_TAIL = ("caddy", "pki", "authorities", "local")
+# The back-up disk and Caddy's volume: never emptied, never an output folder.
+BACKUP_MOUNT = Path("/backup")
+CADDY_DATA = Path("/caddy-data")
+# Everything a restore output folder must stay clear of.
+PRODUCTION_VOLUMES = (*PRODUCTION_DIRECTORIES, BACKUP_MOUNT, CADDY_DATA)
 _LEAF_DIR = "certificates"
 # "/" plus at least two components: /data/documents may be emptied, /data never.
 _MIN_PARTS = 3

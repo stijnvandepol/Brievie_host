@@ -162,9 +162,9 @@ def test_env_copy_syncs_before_the_replace(
         calls.append("fsync")
         real_fsync(fd)
 
-    def replace(source: str, target: Path) -> None:
+    def replace(source: str, target: str, **kwargs: int) -> None:
         calls.append("replace")
-        real_replace(source, target)
+        real_replace(source, target, **kwargs)
 
     monkeypatch.setattr("os.fsync", fsync)
     monkeypatch.setattr("os.replace", replace)

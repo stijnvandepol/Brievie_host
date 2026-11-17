@@ -39,6 +39,7 @@ EXPECTED_CODES = {
     "documents_incomplete",
     "unsafe_path",
     "directory_not_allowed",
+    "out_dir_not_empty",
 }
 
 

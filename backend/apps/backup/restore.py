@@ -17,7 +17,6 @@ import contextlib
 import logging
 import os
 import re
-import shutil
 import subprocess
 import threading
 from collections.abc import Mapping, Sequence
@@ -41,8 +40,7 @@ from apps.backup.manifest import (
     manifest_from_json,
     unknown_migrations,
 )
-from apps.backup.privatefile import write_private
-from apps.backup.services import file_paths, location_secrets
+from apps.backup.services import location_secrets
 from apps.common import crypto
 
 logger = logging.getLogger(__name__)
@@ -73,6 +71,10 @@ _STDERR_TAIL = 500
 _DEFAULT_PATH = "/usr/local/bin:/usr/bin:/bin"
 # What caddy-publish-root.sh copies of Caddy's authority (never its temporary files).
 _AUTHORITY_FILES = (AUTHORITY_FILE, "root.key", "intermediate.crt", "intermediate.key")
+# A certificate or key of Caddy's authority is a few KiB; anything larger is not one.
+_AUTHORITY_LIMIT = 64 * 1024
+# The uid and gid of the keeper: the restored files are its.
+SERVICE_UID = 10001
 
 
 @dataclass(frozen=True)
@@ -370,37 +372,97 @@ def _text(data: bytes, code: str) -> str:
         raise BackupError(code) from None
 
 
-def _write_out(out_dir: Path, files: dict[str, str], owner: tuple[int, int] | None) -> None:
-    """Write every file (0600) or none: one that fails removes those already written.
+def _configured_directories() -> list[Path]:
+    """The documents, the authority copy and the config folder: absolute or refused."""
+    return [
+        safepaths.configured_path(settings.BRIEVIE_STORAGE_ROOT),
+        safepaths.configured_path(settings.BRIEVIE_AUTHORITY_COPY_DIR),
+        safepaths.configured_path(settings.BRIEVIE_BACKUP_CONFIG_DIR),
+    ]
 
-    A folder this call creates (0700) is handed to `owner` as well, so the host user
-    can open it.
-    """
-    # Every target is a plain name strictly inside `out_dir`, and only those are ever
-    # removed again: checked before anything is created or written.
-    targets = {
-        name: safepaths.require_inside(out_dir / safepaths.require_plain_name(name), out_dir)
-        for name in files
-    }
-    created = not out_dir.exists()
-    written: list[Path] = []
+
+def _backup_mount() -> Path:
+    return safepaths.configured_path(settings.BRIEVIE_BACKUP_MOUNT)
+
+
+def _open_out_dir(out_dir: Path) -> tuple[int, int | None]:
+    """A descriptor of `out_dir`, made (0700) when it does not exist, and of its parent
+    when this call made it (for the roll-back); refused unless new or empty."""
+    expected = safepaths.identity(out_dir)
+    if expected is not None:
+        descriptor = safepaths.open_dir_nofollow(out_dir, expect=expected)
+        with os.scandir(descriptor) as entries:
+            empty = next(iter(entries), None) is None
+        if not empty:
+            os.close(descriptor)
+            raise BackupError("out_dir_not_empty")
+        return descriptor, None
+    parent = safepaths.open_dir_nofollow(out_dir.parent)
     try:
-        for name, text in files.items():
-            write_private(out_dir, name, text)
-            written.append(targets[name])
-            if owner is not None:
-                os.chown(targets[name], *owner)
-        if created and owner is not None:
-            os.chown(out_dir, *owner)
+        os.mkdir(out_dir.name, 0o700, dir_fd=parent)
+        descriptor = os.open(
+            out_dir.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent
+        )
+    except BaseException:
+        os.close(parent)
+        raise
+    return descriptor, parent
+
+
+def _write_out(out_dir: Path, files: dict[str, str], owner: tuple[int, int] | None) -> None:
+    """Write every file (0600) or none into a new or empty folder.
+
+    Refuses (`unsafe_path`) a folder that is `/`, a home directory or above one, is
+    reached through a link, or is, contains or lies inside a configured directory, a
+    production directory or the back-up mount; and (`out_dir_not_empty`) a folder
+    that holds anything. Files are created relative to the folder's descriptor and
+    never replace anything, so the roll-back of a failure removes only files this call
+    created (and the folder, when it made it). A folder this call creates (0700) is
+    handed to `owner` as well, so the host user can open it.
+    """
+    avoid = [*_configured_directories(), *safepaths.PRODUCTION_VOLUMES, _backup_mount()]
+    safepaths.require_out_dir(out_dir, avoid=avoid)
+    names = [safepaths.require_plain_name(name) for name in files]
+    try:
+        descriptor, parent = _open_out_dir(out_dir)
+    except OSError as error:
+        raise BackupError("restore_failed") from error
+    created: list[str] = []
+    try:
+        for name in names:
+            handle = safepaths.write_new_at(descriptor, name, files[name].encode("utf-8"))
+            created.append(name)
+            try:
+                if owner is not None:
+                    os.fchown(handle, *owner)
+            finally:
+                os.close(handle)
+        if parent is not None and owner is not None:
+            os.fchown(descriptor, *owner)
     except BaseException as error:
-        for path in written:
-            path.unlink(missing_ok=True)
-        if created:
+        for name in created:
             with contextlib.suppress(OSError):
-                out_dir.rmdir()
+                os.unlink(name, dir_fd=descriptor)
+        if parent is not None:
+            with contextlib.suppress(OSError):
+                os.rmdir(out_dir.name, dir_fd=parent)
         if isinstance(error, OSError):
             raise BackupError("restore_failed") from error
         raise
+    finally:
+        os.close(descriptor)
+        if parent is not None:
+            os.close(parent)
+
+
+@dataclass(frozen=True)
+class Fetched:
+    snapshots: RunSnapshots
+    dropped_keys: tuple[str, ...]  # host keys of the back-up's .env that were left out
+
+    @property
+    def run_id(self) -> UUID:
+        return self.snapshots.run_id
 
 
 def fetch(
@@ -411,20 +473,22 @@ def fetch(
     backup_dir_host: str | None,
     out_dir: Path,
     out_owner: tuple[int, int] | None,
-) -> RunSnapshots:
+) -> Fetched:
     """Open the back-up, find the run, refuse what cannot be restored, then write.
 
     Writes `out_dir/manifest.json` and `out_dir/env` (the restored deploy/.env), and
     nothing at all when any check fails. The password is the separate one when given,
-    else the one derived from the master key.
+    else the one derived from the master key. The output folder is judged first.
     """
+    avoid = [*_configured_directories(), *safepaths.PRODUCTION_VOLUMES, _backup_mount()]
+    safepaths.require_out_dir(out_dir, avoid=avoid)
     master_key = parse_master_key(master_key_hex)
     hidden = _key_spellings(master_key, master_key_hex)
     password = separate_password or crypto.derive_backup_password(master_key)
     repository = destination.configured_repository()
     found = find_run(repository, password, run, extra_secrets=hidden)
 
-    config_dir = Path(settings.BRIEVIE_BACKUP_CONFIG_DIR)
+    config_dir = safepaths.configured_path(settings.BRIEVIE_BACKUP_CONFIG_DIR)
     manifest_argv = restic.dump_argv(found.files.id, str(config_dir / MANIFEST_NAME))
     manifest_out = _restic_output(repository, password, manifest_argv, hidden)
     manifest_text = _text(manifest_out, "manifest_unreadable")
@@ -444,8 +508,8 @@ def fetch(
         backup_password=password,
         backup_dir_host=backup_dir_host,
     )
-    _write_out(out_dir, {MANIFEST_NAME: manifest_text, ENV_COPY_NAME: env}, out_owner)
-    return found
+    _write_out(out_dir, {MANIFEST_NAME: manifest_text, ENV_COPY_NAME: env.text}, out_owner)
+    return Fetched(snapshots=found, dropped_keys=env.dropped)
 
 
 # --- part 2: the database and the files ------------------------------------------------
@@ -494,34 +558,53 @@ def restore_database(*, run: str | None, dbname: str = "brievie") -> int:
         return close_interrupted_runs(conninfo)
 
 
-def _replaced_directories() -> list[Path]:
-    """The three directories a restore with --replace empties: nothing else, ever."""
-    return [
-        Path(settings.BRIEVIE_STORAGE_ROOT),
-        Path(settings.BRIEVIE_AUTHORITY_COPY_DIR),
-        Path(settings.BRIEVIE_BACKUP_CONFIG_DIR),
-    ]
+def _judged_directories() -> list[Path]:
+    """The three restored directories, each judged against the others and the mount:
+    on the fixed list (or in a safe temporary folder), no glob, no overlap."""
+    directories = _configured_directories()
+    mount = _backup_mount()
+    for directory in directories:
+        others = [other for other in directories if other is not directory]
+        safepaths.require_emptiable(directory, allowed=directories, avoid=[*others, mount])
+    return directories
 
 
 def _empty(directory: Path) -> None:
     """Remove what is in `directory` (a volume's mount point stays); links are not followed.
 
-    Refuses (`unsafe_path`) anything but one of the three configured directories,
-    whoever calls it. Entries are removed relative to a descriptor of `directory`.
+    Refuses anything but one of the three configured directories on the fixed list,
+    whoever calls it. The directory is opened component by component without
+    following a link, checked to be the one judged, and emptied through descriptors.
     """
-    safepaths.require_emptiable(directory, allowed=_replaced_directories())
-    if not directory.exists():
+    directories = _configured_directories()
+    others = [other for other in directories if other != directory]
+    safepaths.require_emptiable(directory, allowed=directories, avoid=[*others, _backup_mount()])
+    expected = safepaths.identity(directory)
+    if expected is None:
         return
-    descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    descriptor = safepaths.open_dir_nofollow(directory, expect=expected)
     try:
-        with os.scandir(descriptor) as entries:
-            for entry in entries:
-                if entry.is_dir(follow_symlinks=False):
-                    shutil.rmtree(entry.name, dir_fd=descriptor)
-                else:
-                    os.unlink(entry.name, dir_fd=descriptor)
+        safepaths.empty_dir(descriptor)
     finally:
         os.close(descriptor)
+
+
+def _clean_restored(directory: Path, owner: int | None) -> int:
+    """After restic: remove what is no regular file or directory, clear setuid bits and
+    hand the tree to `owner`; returns how many entries were removed."""
+    expected = safepaths.identity(directory)
+    if expected is None:
+        return 0
+    descriptor = safepaths.open_dir_nofollow(directory, expect=expected)
+    try:
+        cleaned = safepaths.clean_tree(descriptor, owner=owner)
+    finally:
+        os.close(descriptor)
+    if cleaned.skipped:
+        logger.warning(
+            "Restore: %s files with more than one hard link kept their owner", cleaned.skipped
+        )
+    return cleaned.removed
 
 
 def _place_authority(source: Path, target: Path) -> bool:
@@ -529,61 +612,105 @@ def _place_authority(source: Path, target: Path) -> bool:
 
     Returns False, and leaves Caddy's own pki alone, when the back-up has no authority
     (a public certificate). Caddy's leaf certificates are removed, so it issues new ones
-    from the restored authority.
+    from the restored authority. Every refusal comes before anything is changed. The
+    source files are read without following a link, must be regular and small; the
+    target and the leaf directory are worked on through descriptors only.
     """
-    # Both refusals (`unsafe_path`) come before anything is created or removed.
     target = safepaths.require_caddy_authority_dir(target)
     leaf = safepaths.leaf_dir(target)
-    if not (source / AUTHORITY_FILE).is_file():
+    try:
+        source_fd = safepaths.open_dir_nofollow(source)
+    except FileNotFoundError:
+        return False  # nothing restored there: the back-up has no authority
+    try:
+        contents = {
+            name: data
+            for name in _AUTHORITY_FILES
+            if (data := safepaths.read_regular_at(source_fd, name, limit=_AUTHORITY_LIMIT))
+            is not None
+        }
+    finally:
+        os.close(source_fd)
+    if AUTHORITY_FILE not in contents:
         return False
-    names = [name for name in _AUTHORITY_FILES if (source / name).is_file()]
-    target.mkdir(mode=0o700, parents=True, exist_ok=True)
-    os.chown(target, 0, 0)
-    target.chmod(0o700)
-    with os.scandir(target) as entries:
-        for entry in entries:
-            if entry.name not in names and not entry.is_dir(follow_symlinks=False):
-                os.unlink(entry.path)
-    for name in names:
-        data = (source / name).read_bytes()
-        temporary = target / f".{name}.tmp"
-        temporary.unlink(missing_ok=True)
-        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(descriptor, "wb") as handle:
-            handle.write(data)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, target / name)
-        os.chown(target / name, 0, 0)
-    shutil.rmtree(leaf, ignore_errors=True)
+    target_fd = safepaths.open_dir_nofollow(target, create=0o700)
+    try:
+        os.fchown(target_fd, 0, 0)
+        os.fchmod(target_fd, 0o700)
+        with os.scandir(target_fd) as entries:
+            stale = [
+                entry.name
+                for entry in entries
+                if entry.name not in contents and not entry.is_dir(follow_symlinks=False)
+            ]
+        for name in stale:
+            os.unlink(name, dir_fd=target_fd)
+        for name, data in contents.items():
+            temporary = f".{name}.tmp"
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(temporary, dir_fd=target_fd)
+            handle = safepaths.write_new_at(target_fd, temporary, data)
+            try:
+                os.fchown(handle, 0, 0)
+            finally:
+                os.close(handle)
+            os.replace(temporary, name, src_dir_fd=target_fd, dst_dir_fd=target_fd)
+    finally:
+        os.close(target_fd)
+    _remove_leaf(leaf)
     return True
 
 
-def restore_files(*, run: str | None, authority_target: Path, clear_documents: bool) -> bool:
+def _remove_leaf(leaf: Path) -> None:
+    """Remove Caddy's leaf directory `<caddy>/certificates/local` through descriptors."""
+    certificates = leaf.parent
+    try:
+        parent = safepaths.open_dir_nofollow(certificates)
+    except FileNotFoundError:
+        return
+    try:
+        safepaths.remove_tree_at(parent, leaf.name)
+    except FileNotFoundError:
+        pass
+    finally:
+        os.close(parent)
+
+
+@dataclass(frozen=True)
+class FilesRestored:
+    authority_placed: bool  # False: the back-up has none; Caddy keeps its own
+    removed: int  # links and special files removed after the restore
+
+
+def restore_files(
+    *, run: str | None, authority_target: Path, clear_documents: bool
+) -> FilesRestored:
     """Put the run's files back, then Caddy's authority (before Caddy starts).
 
-    restic restores the documents, the authority copy and the config folder at their
-    own paths (as root it restores their owner, uid 10001). `clear_documents` (a
-    restore with --replace) first empties all three, so no page, authority or manifest
-    of the replaced installation stays behind or is taken for the back-up's. Returns
-    whether an authority was placed (False: the back-up has none; Caddy keeps its own).
+    The three directories are judged first, before any restic call, with or without
+    `clear_documents`: on the fixed list, no glob, no overlap with each other or the
+    back-up mount. restic restores exactly those three at their own paths.
+    `clear_documents` (a restore with --replace) first empties them, so no page,
+    authority or manifest of the replaced installation stays behind or is taken for the
+    back-up's. Afterwards the three trees are cleaned (`safepaths.clean_tree`): only
+    regular files and directories stay, without setuid bits, owned by uid 10001 when
+    this runs as root.
     """
+    directories = _judged_directories()
+    safepaths.require_caddy_authority_dir(authority_target)
     repository = destination.configured_repository()
     password = destination.backup_password()
     found = find_run(repository, password, run)
-    authority_copy = Path(settings.BRIEVIE_AUTHORITY_COPY_DIR)
+    authority_copy = directories[1]
+    owner = SERVICE_UID if os.geteuid() == 0 else None
     with backup_lock():
         if clear_documents:
-            # All three are judged before any is emptied; `_empty` judges again itself.
-            replaced = _replaced_directories()
-            for directory in replaced:
-                safepaths.require_emptiable(directory, allowed=replaced)
             try:
-                for directory in replaced:
+                for directory in directories:
                     _empty(directory)
             except OSError:
                 raise BackupError("documents_incomplete") from None
-        argv = restic.restore_argv(found.files.id, "/", file_paths())
+        argv = restic.restore_argv(found.files.id, "/", [str(path) for path in directories])
         try:
             _restic_output(repository, password, argv)
         except BackupError as error:
@@ -591,6 +718,8 @@ def restore_files(*, run: str | None, authority_target: Path, clear_documents: b
                 raise BackupError("documents_incomplete") from error
             raise
         try:
-            return _place_authority(authority_copy, authority_target)
+            removed = sum(_clean_restored(directory, owner) for directory in directories)
+            placed = _place_authority(authority_copy, authority_target)
         except OSError:
             raise BackupError("restore_failed") from None
+    return FilesRestored(authority_placed=placed, removed=removed)

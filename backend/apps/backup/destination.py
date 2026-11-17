@@ -6,7 +6,9 @@ disk. Only `initialise` may put anything there; every other path refuses unless
 the marker file written by `initialise` is present, and never creates anything.
 """
 
+import contextlib
 import json
+import logging
 import os
 from datetime import UTC, datetime
 from pathlib import Path
@@ -15,6 +17,8 @@ from django.conf import settings
 
 from apps.backup import restic, safepaths
 from apps.backup.errors import BackupError
+
+logger = logging.getLogger(__name__)
 
 MARKER_NAME = "brievie-backup.json"
 REPOSITORY_DIR = "restic"
@@ -41,7 +45,8 @@ def destination_kind() -> str:
 
 
 def _mount() -> Path:
-    return Path(settings.BRIEVIE_BACKUP_MOUNT)
+    """The back-up mount: absolute, or refused (an empty setting is never `.`)."""
+    return safepaths.configured_path(settings.BRIEVIE_BACKUP_MOUNT)
 
 
 def _marker() -> Path:
@@ -122,18 +127,22 @@ def secrets() -> list[str]:
 def _chown_tree(root: Path, uid: int) -> None:
     """Hand `root` and everything below it to `uid`; only ever inside the mount.
 
-    Every path is judged before the first chown (`unsafe_path` for one that resolves
-    outside the mount, a link out of it included). Links are neither followed by the
-    walk nor by the chown.
+    `root` must lie strictly inside the mount (`unsafe_path` otherwise). It is opened
+    component by component without following a link and walked through descriptors:
+    no link is followed or handed over, and a file with more than one hard link is
+    skipped (counted in the log).
     """
-    mount = _mount()
-    paths = [safepaths.require_inside(root, mount)]  # before the walk lists anything
-    for directory, names, files in os.walk(root, followlinks=False):
-        paths.extend(Path(directory) / name for name in (*names, *files))
-    for path in paths:
-        safepaths.require_inside(path, mount)
-    for path in paths:
-        os.chown(path, uid, uid, follow_symlinks=False)
+    safepaths.require_inside(root, _mount())
+    expected = safepaths.identity(root)
+    if expected is None:
+        return  # nothing there to hand over
+    descriptor = safepaths.open_dir_nofollow(root, expect=expected)
+    try:
+        skipped = safepaths.chown_tree(descriptor, uid)
+    finally:
+        os.close(descriptor)
+    if skipped:
+        logger.warning("Back-up init: %s entries were not handed over (links)", skipped)
 
 
 def _run_init(repository: restic.Repository) -> bool:
@@ -152,23 +161,42 @@ def _verify_password(repository: restic.Repository) -> None:
 
 
 def _finish_folder(owner_uid: int | None) -> None:
-    """Hand the tree over, then write the marker last: it means "ready"."""
-    marker = safepaths.require_inside(_marker(), _mount())
+    """Hand the tree over, then write the marker last: it means "ready".
+
+    The marker is created relative to a descriptor of the mount (never through a
+    link, never over an existing file); a failure removes only a marker this call made.
+    """
+    mount = _mount()
+    safepaths.require_inside(_marker(), mount)
+    content = {
+        "format": MARKER_FORMAT,
+        "created_at": datetime.now(UTC).isoformat(),
+        "repository": REPOSITORY_DIR,
+    }
+    try:
+        mount_fd = safepaths.open_dir_nofollow(mount, expect=safepaths.identity(mount))
+    except OSError as error:
+        raise BackupError("destination_not_writable") from error
+    created = False
     try:
         if owner_uid is not None:
-            _chown_tree(_mount() / REPOSITORY_DIR, owner_uid)
-        content = {
-            "format": MARKER_FORMAT,
-            "created_at": datetime.now(UTC).isoformat(),
-            "repository": REPOSITORY_DIR,
-        }
-        marker.write_text(json.dumps(content))
-        marker.chmod(0o644)
-        if owner_uid is not None:
-            os.chown(marker, owner_uid, owner_uid)
+            _chown_tree(mount / REPOSITORY_DIR, owner_uid)
+        handle = safepaths.write_new_at(
+            mount_fd, MARKER_NAME, json.dumps(content).encode(), mode=0o644
+        )
+        created = True
+        try:
+            if owner_uid is not None:
+                os.fchown(handle, owner_uid, owner_uid)
+        finally:
+            os.close(handle)
     except OSError as error:
-        marker.unlink(missing_ok=True)
+        if created:
+            with contextlib.suppress(OSError):
+                os.unlink(MARKER_NAME, dir_fd=mount_fd)
         raise BackupError("destination_not_writable") from error
+    finally:
+        os.close(mount_fd)
 
 
 def initialise(*, allow_same_disk: bool, owner_uid: int | None) -> restic.Repository:

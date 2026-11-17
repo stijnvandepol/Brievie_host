@@ -58,6 +58,15 @@ class Command(BaseCommand):
         except BackupError as error:
             raise CommandError(error.message, returncode=_EXIT_CODES.get(error.code, 1)) from error
         manifest = manifest_from_json((out_dir / MANIFEST_NAME).read_text(encoding="utf-8"))
+        if found.dropped_keys:
+            # On stderr: stdout stays the key=value lines that ./brievie reads.
+            self.stderr.write(
+                _(
+                    "Deze instellingen zijn niet uit de back-up overgenomen; deze installatie "
+                    "zet ze zelf: %(keys)s."
+                )
+                % {"keys": ", ".join(found.dropped_keys)}
+            )
         self.stdout.write(f"run_id={found.run_id}")
         self.stdout.write(f"created_at={manifest.created_at.isoformat()}")
         self.stdout.write(f"hostname={manifest.hostname}")
