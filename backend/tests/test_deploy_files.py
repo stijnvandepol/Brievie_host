@@ -9,6 +9,8 @@ DOCKERFILE = (ROOT / "deploy" / "Dockerfile").read_text()
 DOCKERIGNORE = (ROOT / ".dockerignore").read_text().splitlines()
 CADDYFILE = (ROOT / "deploy" / "Caddyfile").read_text()
 ENV_EXAMPLE = (ROOT / "deploy" / ".env.example").read_text()
+PUBLISH_ROOT = (ROOT / "deploy" / "caddy-publish-root.sh").read_text()
+CI = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
 
 
 def service(name: str) -> str:
@@ -70,3 +72,114 @@ def test_api_server_survives_a_slow_upload() -> None:
     assert "--worker-class gthread" in command
     assert "--threads 4" in command
     assert "--timeout 120" in command
+
+
+def test_restic_is_pinned() -> None:
+    assert re.search(r"restic[:_/]v?\d+\.\d+\.\d+", DOCKERFILE)
+    assert "latest" not in DOCKERFILE
+
+
+def test_pg_client_major_matches_the_server() -> None:
+    # pg_dump refuses a server newer than itself: client and server move together.
+    server = r"image: postgres:(\d+)"
+    compose = re.findall(server, COMPOSE)
+    ci = re.findall(server, CI)
+    client = re.findall(r"postgresql-client-(\d+)", DOCKERFILE)
+    assert compose
+    assert ci
+    assert client
+    assert len(set(compose + ci + client)) == 1, (compose, ci, client)
+
+
+def test_every_service_takes_the_backend_image_from_one_variable() -> None:
+    # A second stack (another worktree) builds and runs its own image tag.
+    for name in ("api", "migrate", "worker", "keeper", "admin"):
+        assert "image: ${BRIEVIE_IMAGE:-brievie/backend:local}" in service(name), name
+    hard_coded = COMPOSE.replace("${BRIEVIE_IMAGE:-brievie/backend:local}", "")
+    assert "brievie/backend:local" not in hard_coded
+
+
+def test_keeper_has_no_master_key_and_no_superuser_password() -> None:
+    keeper = service("keeper")
+    for name in (
+        "BRIEVIE_MASTER_KEY",
+        "POSTGRES_PASSWORD",
+        "BRIEVIE_OWNER_PASSWORD",
+        "DATABASE_OWNER_URL",
+    ):
+        assert name not in keeper, name
+
+
+def test_keeper_serves_the_backup_queue_only() -> None:
+    keeper = service("keeper")
+    assert '"--queues", "backup"' in keeper
+    assert "pipeline" not in keeper
+
+
+def test_keeper_and_admin_start_without_a_backup_password() -> None:
+    # init-env.sh writes none; ./brievie derives it in the container later.
+    for name in ("keeper", "admin"):
+        assert "BRIEVIE_BACKUP_PASSWORD: ${BRIEVIE_BACKUP_PASSWORD:-}" in service(name), name
+
+
+def test_keeper_reaches_the_database_as_the_backup_role() -> None:
+    assert (
+        "@postgres:5432/brievie"
+        in service("keeper").split("DATABASE_BACKUP_URL:", 1)[1].split("\n", 1)[0]
+    )
+
+
+def test_keeper_mounts_documents_and_authority_read_only() -> None:
+    keeper = service("keeper")
+    assert "documents:/data/documents:ro" in keeper
+    assert "caddy-authority:/data/authority:ro" in keeper
+
+
+def test_backup_dir_falls_back_to_an_unset_volume() -> None:
+    for name in ("keeper", "admin"):
+        text = service(name)
+        assert "${BRIEVIE_BACKUP_DIR:-backup-unset}:/backup" in text, name
+        assert "BRIEVIE_BACKUP_DIR_SET: ${BRIEVIE_BACKUP_DIR:+true}" in text, name
+
+
+def test_admin_is_one_off_behind_a_profile() -> None:
+    admin = service("admin")
+    assert 'profiles: ["admin"]' in admin
+    assert 'restart: "no"' in admin
+    assert 'user: "0"' in admin
+
+
+def test_admin_mounts_the_documents_volume() -> None:
+    # backup --init compares the device of /backup with that of /data/documents; without
+    # the volume it would compare against the container's own filesystem.
+    assert re.search(r"^\s+- documents:/data/documents$", service("admin"), re.MULTILINE)
+
+
+def test_migrate_still_runs_before_every_app_container() -> None:
+    for name in ("api", "worker", "keeper"):
+        assert re.search(
+            r"migrate:\n\s+condition: service_completed_successfully", service(name)
+        ), name
+    assert "depends_on" not in service("admin")
+
+
+def test_publish_root_copies_the_authority_for_the_keeper() -> None:
+    for name in ("root.crt", "root.key", "intermediate.crt", "intermediate.key"):
+        assert name in PUBLISH_ROOT, name
+    assert "chown 10001:10001" in PUBLISH_ROOT
+    assert "chmod 0600" in PUBLISH_ROOT
+    assert "chmod 0700 /authority" in PUBLISH_ROOT
+    assert re.search(r"^\s+- caddy-authority:/authority$", service("caddy"), re.MULTILINE)
+
+
+def test_api_never_mounts_the_authority_copy() -> None:
+    assert "caddy-authority" not in service("api")
+    assert "caddy-authority" not in service("worker")
+
+
+def test_image_has_the_backup_directories() -> None:
+    # restic fails on a missing source path, so the authority copy directory exists even
+    # while its volume is empty.
+    runtime = DOCKERFILE.split("AS builder", 1)[1].split("FROM ", 1)[1]
+    for path in ("/data/documents", "/data/backup-config", "/data/authority", "/backup"):
+        assert path in runtime, path

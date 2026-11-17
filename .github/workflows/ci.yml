@@ -134,6 +134,8 @@ jobs:
           grep -qi '<!doctype html>' "$RUNNER_TEMP/index.html"
       - name: The worker is running
         run: test "$($COMPOSE ps --status running --services | grep -c '^worker$')" = 1
+      - name: The keeper is running
+        run: test "$($COMPOSE ps --status running --services | grep -c '^keeper$')" = 1
       - name: The installation code is printed once
         run: test "$($COMPOSE logs api | grep -c 'Installatiecode')" = 1
       - name: Container state on failure

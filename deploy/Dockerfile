@@ -34,6 +34,21 @@ WORKDIR /app
 
 COPY --from=builder /opt/venv /opt/venv
 
+# Back-up tools (the keeper and admin services run them; DECISIONS 2026-11-17 B1).
+# restic: the static binary of the official image, pinned by version and digest.
+COPY --from=restic/restic:0.18.1@sha256:39d9072fb5651c80d75c7a811612eb60b4c06b32ffe87c2e9f3c7222e1797e76 \
+    /usr/bin/restic /usr/local/bin/restic
+# pg_dump/pg_restore from PGDG, the same major as the server (postgres:18 in compose;
+# test_pg_client_major_matches_the_server). The signing key is pinned by checksum.
+ADD --checksum=sha256:0144068502a1eddd2a0280ede10ef607d1ec592ce819940991203941564e8e76 --chmod=0644 \
+    https://www.postgresql.org/media/keys/ACCC4CF8.asc /usr/share/keyrings/pgdg.asc
+RUN . /etc/os-release \
+    && echo "deb [signed-by=/usr/share/keyrings/pgdg.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client-18 \
+    && rm -rf /var/lib/apt/lists/*
+
 # backend/tests is left out by .dockerignore.
 COPY backend/ ./
 # The built web app: WhiteNoise serves its files, apps.common.web its index.html.
@@ -45,8 +60,12 @@ RUN DATABASE_URL=postgres://build@localhost/build \
     python manage.py collectstatic --noinput
 
 RUN useradd --system --create-home --uid 10001 brievie \
-    # The documents volume takes its owner from this directory when it is first created.
-    && mkdir -p /data/documents && chown brievie:brievie /data/documents
+    # A volume takes its owner from this directory when it is first created. The
+    # authority copy directory exists even while its volume is empty: the back-up always
+    # lists it, and restic fails on a missing source path. /backup only ever holds the
+    # fallback volume of an unset BRIEVIE_BACKUP_DIR.
+    && mkdir -p /data/documents /data/backup-config /data/authority /backup \
+    && chown brievie:brievie /data/documents /data/backup-config /data/authority /backup
 USER brievie
 
 EXPOSE 8000

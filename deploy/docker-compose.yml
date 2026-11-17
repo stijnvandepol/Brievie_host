@@ -23,7 +23,7 @@ services:
   # One-shot: applies migrations as the schema owner, then exits. Only this
   # container gets the owner credentials; the api never sees them.
   migrate:
-    image: brievie/backend:local
+    image: ${BRIEVIE_IMAGE:-brievie/backend:local}
     # Same image as api, which builds it.
     pull_policy: never
     depends_on:
@@ -38,7 +38,7 @@ services:
     restart: "no"
 
   api:
-    image: brievie/backend:local
+    image: ${BRIEVIE_IMAGE:-brievie/backend:local}
     build:
       context: ..
       dockerfile: deploy/Dockerfile
@@ -87,7 +87,7 @@ services:
   # Background jobs: same image as api, serves the queue in PostgreSQL. It reads
   # and writes text in the database only; the document files stay with the api.
   worker:
-    image: brievie/backend:local
+    image: ${BRIEVIE_IMAGE:-brievie/backend:local}
     pull_policy: never
     restart: unless-stopped
     depends_on:
@@ -102,6 +102,83 @@ services:
       - -c
       - python manage.py check_master_key && exec python manage.py procrastinate worker --queues pipeline
     # No published port.
+
+  # Back-ups: same image, serves only the `backup` queue. It reads the database as the
+  # read-only back-up role (pg_dump) and as the app role (Procrastinate, BackupRun), and
+  # the document files and Caddy's CA read-only. It holds no master key, no superuser or
+  # owner password: a stolen keeper cannot decrypt documents or change the schema.
+  keeper:
+    image: ${BRIEVIE_IMAGE:-brievie/backend:local}
+    pull_policy: never
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    # A running back-up gets time to finish its step and record its status.
+    stop_grace_period: 1m
+    environment:
+      DATABASE_URL: postgres://brievie_app:${BRIEVIE_APP_PASSWORD}@postgres:5432/brievie
+      DATABASE_BACKUP_URL: postgres://brievie_backup:${BRIEVIE_BACKUP_DB_PASSWORD:?set BRIEVIE_BACKUP_DB_PASSWORD in deploy/.env (./brievie or sh deploy/init-env.sh adds it)}@postgres:5432/brievie
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in deploy/.env}
+      BRIEVIE_HOSTNAME: ${BRIEVIE_HOSTNAME:?set BRIEVIE_HOSTNAME in deploy/.env}
+      # Empty until ./brievie derives it from the master key (in the admin container).
+      BRIEVIE_BACKUP_PASSWORD: ${BRIEVIE_BACKUP_PASSWORD:-}
+      BRIEVIE_BACKUP_REPOSITORY: ${BRIEVIE_BACKUP_REPOSITORY:-}
+      # A folder destination is mounted at /backup; this says whether it is a real one.
+      BRIEVIE_BACKUP_DIR_SET: ${BRIEVIE_BACKUP_DIR:+true}
+      BRIEVIE_BACKUP_APPEND_ONLY: ${BRIEVIE_BACKUP_APPEND_ONLY:-false}
+      BRIEVIE_BACKUP_S3_ACCESS_KEY_ID: ${BRIEVIE_BACKUP_S3_ACCESS_KEY_ID:-}
+      BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY: ${BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY:-}
+      BRIEVIE_BACKUP_REST_USERNAME: ${BRIEVIE_BACKUP_REST_USERNAME:-}
+      BRIEVIE_BACKUP_REST_PASSWORD: ${BRIEVIE_BACKUP_REST_PASSWORD:-}
+    command: ["python", "manage.py", "procrastinate", "worker", "--queues", "backup"]
+    volumes:
+      - documents:/data/documents:ro
+      # Caddy's CA (keys included), copied by caddy-publish-root.sh for the back-up only.
+      - caddy-authority:/data/authority:ro
+      - backup-config:/data/backup-config
+      # A named volume while BRIEVIE_BACKUP_DIR is unset (BRIEVIE_BACKUP_DIR_SET is
+      # then empty and nothing is written there).
+      - ${BRIEVIE_BACKUP_DIR:-backup-unset}:/backup
+    # No published port.
+
+  # One-off maintenance (back-up set-up, restore, deriving the back-up password), run by
+  # ./brievie as `run --rm --no-deps admin ...`; never started by `up`. Root, because a
+  # restore writes every volume; it is the only container that holds both the master
+  # key and the superuser password.
+  admin:
+    image: ${BRIEVIE_IMAGE:-brievie/backend:local}
+    pull_policy: never
+    profiles: ["admin"]
+    restart: "no"
+    user: "0"
+    environment:
+      # The keeper's, plus what set-up and restore need.
+      DATABASE_URL: postgres://brievie_app:${BRIEVIE_APP_PASSWORD}@postgres:5432/brievie
+      DATABASE_BACKUP_URL: postgres://brievie_backup:${BRIEVIE_BACKUP_DB_PASSWORD:?set BRIEVIE_BACKUP_DB_PASSWORD in deploy/.env (./brievie or sh deploy/init-env.sh adds it)}@postgres:5432/brievie
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in deploy/.env}
+      BRIEVIE_HOSTNAME: ${BRIEVIE_HOSTNAME:?set BRIEVIE_HOSTNAME in deploy/.env}
+      # Empty until ./brievie derives it from the master key (in the admin container).
+      BRIEVIE_BACKUP_PASSWORD: ${BRIEVIE_BACKUP_PASSWORD:-}
+      BRIEVIE_BACKUP_REPOSITORY: ${BRIEVIE_BACKUP_REPOSITORY:-}
+      # A folder destination is mounted at /backup; this says whether it is a real one.
+      BRIEVIE_BACKUP_DIR_SET: ${BRIEVIE_BACKUP_DIR:+true}
+      BRIEVIE_BACKUP_APPEND_ONLY: ${BRIEVIE_BACKUP_APPEND_ONLY:-false}
+      BRIEVIE_BACKUP_S3_ACCESS_KEY_ID: ${BRIEVIE_BACKUP_S3_ACCESS_KEY_ID:-}
+      BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY: ${BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY:-}
+      BRIEVIE_BACKUP_REST_USERNAME: ${BRIEVIE_BACKUP_REST_USERNAME:-}
+      BRIEVIE_BACKUP_REST_PASSWORD: ${BRIEVIE_BACKUP_REST_PASSWORD:-}
+      BRIEVIE_MASTER_KEY: ${BRIEVIE_MASTER_KEY:-}
+      DATABASE_SUPERUSER_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/brievie
+      # The host path, for the recovery sheet.
+      BRIEVIE_BACKUP_DIR_HOST: ${BRIEVIE_BACKUP_DIR:-}
+    volumes:
+      # Also needed by `backup --init`: it compares the disk of /backup with this one.
+      - documents:/data/documents
+      - caddy-data:/caddy-data
+      - caddy-authority:/data/authority
+      - backup-config:/data/backup-config
+      - ${BRIEVIE_BACKUP_DIR:-backup-unset}:/backup
 
   caddy:
     image: caddy:2.11
@@ -123,6 +200,8 @@ services:
       - ./caddy-publish-root.sh:/etc/caddy/publish-root.sh:ro
       - caddy-data:/data
       - caddy-ca:/ca
+      # A copy of the CA for the back-up (keeper and admin only; see caddy-publish-root.sh).
+      - caddy-authority:/authority
       - caddy-config:/config
 
 volumes:
@@ -131,3 +210,6 @@ volumes:
   caddy-data:
   caddy-config:
   caddy-ca:
+  caddy-authority:
+  backup-config:
+  backup-unset:
