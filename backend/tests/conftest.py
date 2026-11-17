@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -6,6 +7,7 @@ from django.db import connection
 from psycopg.conninfo import make_conninfo
 from pytest_django import DjangoDbBlocker, Settings
 
+from apps.backup import safepaths
 from apps.workspaces.models import Workspace
 from apps.workspaces.services import create_workspace
 from tests.factories import UserFactory
@@ -63,7 +65,7 @@ def _test_role_is_subject_to_rls(django_db_setup: None, django_db_blocker: Djang
 
 
 @pytest.fixture(autouse=True)
-def _storage_and_master_key(settings: Settings, tmp_path: Path) -> None:
+def _storage_and_master_key(settings: Settings, tmp_path: Path) -> Iterator[None]:
     """A fixed master key and private directories for every test.
 
     No test can reach /data/..., /backup or a real restic by default (on a Linux CI
@@ -71,12 +73,17 @@ def _storage_and_master_key(settings: Settings, tmp_path: Path) -> None:
     directory setting points into the test's own tmp_path, and restic at a path that
     does not exist. Tests that need the fake restic or the production values set them.
     """
+    # The only way paths outside the fixed production list become destroyable: this
+    # test's own tmp_path, installed explicitly (never from TMPDIR or a setting).
+    safepaths.allow_test_root(tmp_path)
     settings.BRIEVIE_MASTER_KEY = "5a" * 32
     settings.BRIEVIE_STORAGE_ROOT = str(tmp_path / "documents")
     settings.BRIEVIE_AUTHORITY_COPY_DIR = str(tmp_path / "authority")
     settings.BRIEVIE_BACKUP_CONFIG_DIR = str(tmp_path / "backup-config")
     settings.BRIEVIE_BACKUP_MOUNT = str(tmp_path / "backup")
     settings.BRIEVIE_RESTIC_BINARY = str(tmp_path / "no-restic-here" / "restic")
+    yield
+    safepaths.clear_test_root()
 
 
 @pytest.fixture

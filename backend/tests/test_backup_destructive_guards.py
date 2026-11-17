@@ -80,7 +80,7 @@ def test_empty_refuses_a_directory_that_is_not_configured(
     (other / "keep").write_text("keep")
 
     refused(recorder, lambda: restore._empty(other))
-    refused(recorder, lambda: restore._empty(configured))
+    refused(recorder, lambda: restore._empty(configured), codes=REFUSED)  # the test root
 
 
 def test_empty_refuses_a_configured_directory_that_is_a_link(

@@ -10,14 +10,13 @@ the destructive code.
 
 What may be emptied or restored into does not come from the settings that name the
 directory: it is a fixed list of the paths the containers use, plus, for tests only,
-a path strictly inside a temporary folder that is itself proven safe.
+a path strictly inside the test root that the test suite installs explicitly.
 """
 
 import errno
 import os
 import pwd
 import stat
-import tempfile
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -44,8 +43,6 @@ _MIN_PARTS = 3
 # Where home directories live (compared case-insensitively: macOS does not care).
 _HOME_TOPS = frozenset({"users", "home"})
 _ROOT_HOMES = (("root",), ("var", "root"), ("private", "var", "root"))
-# Well-known temporary folders that are acceptable although short.
-_SYSTEM_TEMPS = frozenset({Path("/tmp"), Path("/var/tmp"), Path("/private/tmp")})  # noqa: S108
 _GLOB = frozenset("*?[")
 _Identity = tuple[int, int]
 
@@ -164,7 +161,7 @@ def _touches_home(path: Path) -> bool:
     return bool(_identities([resolved, *resolved.parents]) & homes)
 
 
-# --- the temporary folder --------------------------------------------------------------
+# --- the test root --------------------------------------------------------------
 
 
 def _at_or_under(path: Path, ancestor: Path) -> bool:
@@ -175,33 +172,44 @@ def _overlaps(one: Path, other: Path) -> bool:
     return _at_or_under(one, other) or _at_or_under(other, one)
 
 
-def _safe_temp_root() -> Path | None:
-    """The system's temporary folder, resolved, when it is safe to trust for tests.
+# The one exception to the fixed list, for the test suite only: a root installed
+# explicitly by tests/conftest.py (each test's own tmp_path). Never read from the
+# environment (TMPDIR) or a setting, so production accepts only the fixed list.
+_test_root: Path | None = None
+# "/" plus at least three components: /private/var/folders/… or /tmp/pytest-of-…/…
+_MIN_TEST_ROOT_PARTS = 4
 
-    Not `/`, not relative, not a home directory, inside one or above one, not at or
-    above a production directory, and at least three components long unless it is a
-    well-known system temporary folder (`/tmp`).
+
+def allow_test_root(root: Path) -> None:
+    """Accept paths strictly inside `root` as destroyable, for the test suite only.
+
+    Refused (`unsafe_path`): a relative root, `/` or one shallower than three
+    components below it, a home directory or anything at, inside or above one, and a
+    root at or above (or inside) a production path.
     """
-    raw = tempfile.gettempdir()
-    if not raw or not os.path.isabs(raw):
-        return None
-    try:
-        root = Path(raw).resolve()
-        if _touches_home(root):
-            return None
-    except (BackupError, OSError, RuntimeError):
-        return None
-    if root not in _SYSTEM_TEMPS and len(root.parts) < _MIN_PARTS:
-        return None
-    production = (*PRODUCTION_DIRECTORIES, CADDY_AUTHORITY, CADDY_LEAF)
-    if any(_at_or_under(directory, root) for directory in production):
-        return None
-    return root
+    global _test_root
+    _plain_absolute(root)
+    resolved = _resolve(root)
+    if len(resolved.parts) < _MIN_TEST_ROOT_PARTS or _through_link(root):
+        raise _unsafe()
+    if _touches_home(root):
+        raise _unsafe()
+    if any(_overlaps(resolved, path) for path in PRODUCTION_VOLUMES):
+        raise _unsafe()
+    _test_root = resolved
 
 
-def _in_safe_temp(resolved: Path) -> bool:
-    root = _safe_temp_root()
-    return root is not None and root in resolved.parents
+def clear_test_root() -> None:
+    global _test_root
+    _test_root = None
+
+
+def installed_test_root() -> Path | None:
+    return _test_root
+
+
+def _in_test_root(resolved: Path) -> bool:
+    return _test_root is not None and _test_root in resolved.parents
 
 
 # --- the structure of a path -----------------------------------------------------------
@@ -237,7 +245,7 @@ def _structure(path: Path) -> Path:
 
 
 def _require_listed(resolved: Path, fixed: Sequence[Path]) -> None:
-    if resolved not in set(fixed) and not _in_safe_temp(resolved):
+    if resolved not in set(fixed) and not _in_test_root(resolved):
         raise BackupError("directory_not_allowed")
 
 
@@ -263,8 +271,8 @@ def require_emptiable(
     `/` or a single directory below it; a home directory (found by inode from $HOME and
     the password database), anything inside or above one, and anything under `/Users`,
     `/home` or root's home in any spelling. Refused (`directory_not_allowed`): anything
-    not on `fixed` (the production directories) and not strictly inside a safe
-    temporary folder. Refused (`unsafe_path`) again: a directory that is not one of
+    not on `fixed` (the production directories) and not strictly inside the test
+    root (tests only). Refused (`unsafe_path`) again: a directory that is not one of
     `allowed` (what the caller was configured to empty), or that is, contains or lies
     inside one of `avoid` (the back-up mount, the other directories).
     """
@@ -296,7 +304,7 @@ def require_inside(path: Path, root: Path) -> Path:
 
 def require_caddy_authority_dir(target: Path) -> Path:
     """`target` when it is Caddy's `…/caddy/pki/authorities/local` and not reached
-    through a link: the fixed production path, or one in a safe temporary folder."""
+    through a link: the fixed production path, or one inside the test root."""
     _plain_absolute(target)
     if tuple(target.parts[-len(CADDY_AUTHORITY_TAIL) :]) != CADDY_AUTHORITY_TAIL:
         raise _unsafe()

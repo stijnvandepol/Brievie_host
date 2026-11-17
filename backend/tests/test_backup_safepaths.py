@@ -3,8 +3,8 @@
 Nothing here deletes, moves or overwrites anything: the guards only judge a path
 (they may stat it). Every accepting case lives under `tmp_path` or is a fixed
 production path that is only judged, never touched. The home directory and the
-temporary folder are changed through the environment and `tempfile.tempdir`, never
-on disk.
+test root (installed by conftest with the test's own tmp_path) are changed through the
+environment and the hook, never on disk.
 """
 
 import tempfile
@@ -240,39 +240,58 @@ def test_a_home_at_the_root_does_not_make_everything_refused(
     refused(lambda: require_emptiable(Path("/"), allowed=[Path("/")]))
 
 
-# --- the temporary folder -----------------------------------------------------------------
+# --- the test root ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("temp", ["/", "/data", "relative/tmp", "", str(HOME), str(HOME.parent)])
-def test_an_unsafe_temporary_folder_opens_nothing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, temp: str
+@pytest.fixture
+def no_test_root(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Production as it runs: no test root installed (conftest installs tmp_path)."""
+    monkeypatch.setattr(safepaths, "_test_root", None)
+
+
+def test_without_the_hook_nothing_under_the_temporary_folder_is_allowed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_test_root: None
 ) -> None:
-    monkeypatch.setattr(tempfile, "tempdir", temp)
+    # Whatever TMPDIR says: only the fixed list counts in production.
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     documents = tmp_path / "documents"
+    in_system_temp = Path(tempfile.gettempdir()) / "brievie-documents"
     not_allowed(lambda: require_emptiable(documents, allowed=[documents]))
-
-
-def test_a_temporary_folder_inside_home_opens_nothing(
-    fake_home: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(tempfile, "tempdir", str(fake_home / "tmp"))
-    documents = fake_home / "tmp" / "documents"
-    refused(lambda: require_emptiable(documents, allowed=[documents]))
-
-
-def test_a_temporary_folder_above_a_production_directory_opens_nothing(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(tempfile, "tempdir", "/data")
-    refused(
-        lambda: require_emptiable(Path("/data/other"), allowed=["/data/other"]),
-        "directory_not_allowed",
+    not_allowed(lambda: require_emptiable(in_system_temp, allowed=[in_system_temp]))
+    with pytest.raises(BackupError):
+        require_caddy_authority_dir(tmp_path / "caddy" / "pki" / "authorities" / "local")
+    assert require_emptiable(Path("/data/documents"), allowed=["/data/documents"]) == Path(
+        "/data/documents"
     )
 
 
-def test_the_temporary_folder_itself_is_never_emptiable(tmp_path: Path) -> None:
-    temp = Path(tempfile.gettempdir())
-    not_allowed(lambda: require_emptiable(temp, allowed=[temp]))
+@pytest.mark.parametrize(
+    "root",
+    ["/", "/data", "/usr", "relative/tmp", "", str(HOME), str(HOME.parent), "/tmp"],  # noqa: S108
+)
+def test_the_hook_refuses_an_unsafe_root(root: str, no_test_root: None) -> None:
+    refused(lambda: safepaths.allow_test_root(Path(root)))
+    assert safepaths.installed_test_root() is None
+
+
+def test_the_hook_refuses_a_root_above_a_production_directory(no_test_root: None) -> None:
+    refused(lambda: safepaths.allow_test_root(Path("/caddy-data/caddy")))
+    refused(lambda: safepaths.allow_test_root(Path("/data/documents/x")))
+
+
+def test_the_hook_refuses_a_root_in_or_at_a_home_directory(
+    fake_home: Path, no_test_root: None
+) -> None:
+    refused(lambda: safepaths.allow_test_root(fake_home))
+    refused(lambda: safepaths.allow_test_root(fake_home / "tmp"))
+    refused(lambda: safepaths.allow_test_root(fake_home.parent))
+
+
+def test_the_test_root_itself_is_never_emptiable(tmp_path: Path) -> None:
+    # conftest installed tmp_path as the test root: only paths strictly inside it count.
+    assert safepaths.installed_test_root() == tmp_path.resolve()
+    not_allowed(lambda: require_emptiable(tmp_path, allowed=[tmp_path]))
 
 
 # --- require_inside -----------------------------------------------------------------------
