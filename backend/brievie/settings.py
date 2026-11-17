@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     "apps.rules",
     "apps.pipeline",
     "apps.devices",
+    "apps.backup",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
@@ -103,6 +104,11 @@ DATABASE_OWNER: dict[str, object] | None = (
 # the test run uses it (tests/conftest.py); in the container only the keeper.
 DATABASE_BACKUP: dict[str, object] | None = (
     env.db("DATABASE_BACKUP_URL") if env.str("DATABASE_BACKUP_URL", default="") else None
+)
+# A superuser, only for the one-off container that restores a back-up (it creates roles
+# and extensions). Never set on the host or in the serving containers, nor in the tests.
+DATABASE_SUPERUSER: dict[str, object] | None = (
+    env.db("DATABASE_SUPERUSER_URL") if env.str("DATABASE_SUPERUSER_URL", default="") else None
 )
 if _use_owner_role and DATABASE_OWNER is None:
     raise ImproperlyConfigured("BRIEVIE_DB_ROLE=owner needs DATABASE_OWNER_URL.")
