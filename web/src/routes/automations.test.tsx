@@ -213,6 +213,26 @@ describe("automations", () => {
     expect(screen.queryByRole("link", { name: "APK naar Auto" })).not.toBeInTheDocument();
   });
 
+  it("does not offer or fetch the rules for a viewer", async () => {
+    let fetched = false;
+    server.use(
+      http.get(`*${API}/workspaces`, () => HttpResponse.json([{ ...workspace, role: "viewer" }])),
+      http.get(`${base}/rules`, () => {
+        fetched = true;
+        return HttpResponse.json({ code: "forbidden", message: "Nee." }, { status: 403 });
+      }),
+      ...loggedInHandlers(),
+      ...ruleHandlers(),
+    );
+    renderApp(path);
+    expect(
+      await screen.findByText("Alleen leden en beheerders van deze werkruimte zien de regels."),
+    ).toBeVisible();
+    expect(screen.queryByRole("link", { name: "Automatisering" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(fetched).toBe(false);
+  });
+
   it("disables a rule's switches while its update is pending", async () => {
     const answer = gate();
     server.use(

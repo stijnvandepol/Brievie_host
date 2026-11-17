@@ -101,8 +101,12 @@ export function Split({ children, wide = false }: { children: ReactNode; wide?: 
 
 const NAV_LINK = "nav-link";
 
-/** The entries of one workspace; the inbox shows what waits for you (review plus unassigned). */
-function WorkspaceNav({ workspace }: { workspace: { id: string; name: string } }) {
+/** The workspace a page belongs to, as far as the navigation needs it. */
+type NavWorkspace = { id: string; name: string; role?: string };
+
+/** The entries of one workspace; the inbox shows what waits for you (review plus unassigned).
+ * A viewer may not read the rules, so Automatisering is left out for them. */
+function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
   const { data: counts } = useQuery(inboxCountsQuery(workspace.id));
   const todo = counts ? counts.review + counts.unassigned : 0;
   const params = { workspaceId: workspace.id };
@@ -131,22 +135,18 @@ function WorkspaceNav({ workspace }: { workspace: { id: string; name: string } }
       <Link to="/w/$workspaceId/labels" params={params} className={NAV_LINK}>
         {t`Labels`}
       </Link>
-      <Link to="/w/$workspaceId/automatisering" params={params} className={NAV_LINK}>
-        {t`Automatisering`}
-      </Link>
+      {workspace.role === "viewer" ? null : (
+        <Link to="/w/$workspaceId/automatisering" params={params} className={NAV_LINK}>
+          {t`Automatisering`}
+        </Link>
+      )}
       <hr className="sidebar-rule" />
     </>
   );
 }
 
 /** Layout of the screens after login: sidebar with navigation and account, then the page. */
-export function Shell({
-  children,
-  workspace,
-}: {
-  children: ReactNode;
-  workspace?: { id: string; name: string };
-}) {
+export function Shell({ children, workspace }: { children: ReactNode; workspace?: NavWorkspace }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { data: me } = useQuery(meQuery);

@@ -23,7 +23,7 @@ _RULE = "/workspaces/{workspace_id}/rules/{rule_id}"
     description="The workspace's rules in the order they run.",
 )
 def list_rules(request: HttpRequest, workspace_id: UUID) -> list[Rule]:
-    membership = workspace_member(request, workspace_id)
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
     return services.list_rules(membership.workspace)
 
 

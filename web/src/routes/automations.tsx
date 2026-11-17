@@ -191,9 +191,11 @@ function AutomationsPage() {
   usePageTitle(t`Automatisering`);
   const { workspace } = automationsRoute.useRouteContext();
   const queryClient = useQueryClient();
-  const rules = useQuery(rulesQuery(workspace.id));
-  const labels = useQuery(labelsQuery(workspace.id));
-  const persons = useQuery(personsQuery(workspace.id));
+  // A viewer may not read the rules (the server answers 403), so they are not asked for.
+  const canRead = workspace.role !== "viewer";
+  const rules = useQuery({ ...rulesQuery(workspace.id), enabled: canRead });
+  const labels = useQuery({ ...labelsQuery(workspace.id), enabled: canRead });
+  const persons = useQuery({ ...personsQuery(workspace.id), enabled: canRead });
   const [rowError, setRowError] = useState<unknown>(null);
   const canEdit = workspace.role === "admin";
   const params = { workspaceId: workspace.id };
@@ -270,9 +272,11 @@ function AutomationsPage() {
       <p className="panel-note">
         {canEdit
           ? t`Een regel zet labels of een naam op nieuwe post. De regels draaien van boven naar beneden.`
-          : t`Alleen een beheerder kan regels wijzigen.`}
+          : canRead
+            ? t`Alleen een beheerder kan regels wijzigen.`
+            : t`Alleen leden en beheerders van deze werkruimte zien de regels.`}
       </p>
-      {rules.isPending ? <p>{t`Even laden...`}</p> : null}
+      {canRead && rules.isPending ? <p>{t`Even laden...`}</p> : null}
       <ErrorAlert error={rules.error ?? reorder.error ?? applyPreset.error ?? rowError} />
       {rules.data && list.length === 0 ? (
         <section className="panel" aria-label={t`Regels`}>

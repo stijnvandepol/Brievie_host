@@ -607,10 +607,11 @@ function RuleForm({
 function RuleEditorPage({ ruleId, justCreated }: { ruleId: string | null; justCreated: boolean }) {
   const { workspace } = (ruleId ? ruleRoute : newRuleRoute).useRouteContext();
   usePageTitle(ruleId ? t`Regel wijzigen` : t`Nieuwe regel`);
-  const rules = useQuery(rulesQuery(workspace.id));
-  const labels = useQuery(labelsQuery(workspace.id));
-  const persons = useQuery(personsQuery(workspace.id));
   const canEdit = workspace.role === "admin";
+  // Only an admin gets the form; a viewer may not even read the rules (403).
+  const rules = useQuery({ ...rulesQuery(workspace.id), enabled: canEdit });
+  const labels = useQuery({ ...labelsQuery(workspace.id), enabled: canEdit });
+  const persons = useQuery({ ...personsQuery(workspace.id), enabled: canEdit });
   const rule = ruleId ? rules.data?.find((candidate) => candidate.id === ruleId) : undefined;
   const ready = rules.data && labels.data && persons.data;
 

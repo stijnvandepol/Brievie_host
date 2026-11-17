@@ -199,6 +199,30 @@ def test_member_lists_but_cannot_create(client: Client, ws_a: Workspace) -> None
     assert r.json()["code"] == "forbidden"
 
 
+def test_viewer_cannot_read_or_change_rules(client: Client, ws_a: Workspace) -> None:
+    auto = label(ws_a, "auto")
+    rule = make_rule(ws_a, text_word("APK"), actions=[add_label(auto)])
+    viewer = UserFactory.create()
+    Membership.objects.create(user=viewer, workspace=ws_a, role="viewer")
+    client.force_login(viewer)
+    url = rules_url(ws_a.id)
+
+    for r in (
+        client.get(url),
+        post_json(client, f"/workspaces/{ws_a.id}/rules", rule_body(auto.id)),
+        put_json(client, f"{url}/order", {"rule_ids": [str(rule.id)]}),
+        post_json(client, f"/workspaces/{ws_a.id}/rules/test", rule_body(auto.id)),
+        put_json(client, f"{url}/{rule.id}", rule_body(auto.id)),
+        client.delete(f"{url}/{rule.id}"),
+        post_json(client, f"/workspaces/{ws_a.id}/rules/{rule.id}/run"),
+    ):
+        assert r.status_code == 403
+        assert r.json() == {
+            "code": "forbidden",
+            "message": "Je mag dit niet doen in deze werkruimte.",
+        }
+
+
 def test_reorder_sets_the_order(client_a: Client, ws_a: Workspace) -> None:
     ids = [row["id"] for row in client_a.get(rules_url(ws_a.id)).json()]
 

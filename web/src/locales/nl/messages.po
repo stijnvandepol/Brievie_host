@@ -209,6 +209,10 @@ msgstr "Alle labels"
 msgid "Alleen een beheerder kan regels wijzigen."
 msgstr "Alleen een beheerder kan regels wijzigen."
 
+#: src/routes/automations.tsx
+msgid "Alleen leden en beheerders van deze werkruimte zien de regels."
+msgstr "Alleen leden en beheerders van deze werkruimte zien de regels."
+
 #: src/components/rule-sentence.ts
 #: src/routes/rule-editor.tsx
 msgid "Als"

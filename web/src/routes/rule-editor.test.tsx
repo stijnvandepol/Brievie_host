@@ -287,6 +287,23 @@ describe("rule editor", () => {
     expect(screen.queryByRole("button", { name: "Opslaan" })).not.toBeInTheDocument();
   });
 
+  it("shows a viewer no error from the rules it may not read", async () => {
+    let fetched = false;
+    server.use(
+      http.get(`*${API}/workspaces`, () => HttpResponse.json([{ ...workspace, role: "viewer" }])),
+      http.get(`${base}/rules`, () => {
+        fetched = true;
+        return HttpResponse.json(errorBody("forbidden", "Nee."), { status: 403 });
+      }),
+      ...loggedInHandlers(),
+      ...ruleHandlers(),
+    );
+    renderApp(`/w/${workspace.id}/automatisering/${apkRule.id}`);
+    expect(await screen.findByText("Alleen een beheerder kan regels wijzigen.")).toBeVisible();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(fetched).toBe(false);
+  });
+
   it("keeps the value when only the operator changes", async () => {
     server.use(...loggedInHandlers(), ...ruleHandlers([]));
     const user = userEvent.setup();
