@@ -174,7 +174,7 @@ to it.
 
 | Role | Scope | May |
 |---|---|---|
-| Server admin | the server | server settings (SSO, second factor, sessions, addresses), create a workspace, see the server audit log, account actions (6.3). Inside a workspace a server admin has exactly the role of their membership there, nothing more |
+| Server admin | the server | server settings (SSO, second factor, sessions, addresses), create a workspace (not in part A: there only setup creates one), see the server audit log, account actions (6.3). Inside a workspace a server admin has exactly the role of their membership there, nothing more |
 | Admin (`admin`) | one workspace | invite, change roles, remove members, revoke members' devices, manage rules, see the workspace audit log, workspace settings |
 | Member (`member`) | one workspace | scan, review, organise, manage persons and labels |
 | Viewer (`viewer`) | one workspace | read; no changes (as in 1c) |
@@ -184,7 +184,10 @@ gives it to the admin of the oldest workspace on existing servers. A server admi
 not automatically a member of every workspace: they do not see post of a workspace
 they are not in. There is always at least one server admin and every workspace always
 has at least one admin: the last one cannot be removed or demoted (409
-`last_admin`).
+`last_admin`). Another server admin is appointed, or the flag taken away, with the
+management command `set_server_admin --email <address> [--remove]` on the server
+until part C adds a page for it. Creating a workspace stays as it is today: only the
+setup at `/setup` creates one; part A adds no other way.
 
 At home this table never shows. The first person is admin; whoever they invite becomes
 a member; "Rol" is a choice with three plain sentences that only appears on the
@@ -210,8 +213,10 @@ member's own row.
   fragment, which a browser never sends to a server, so it cannot land in a proxy or
   server log; the page reads it and posts it in a request body. The QR code holds the
   same link.
-- **Opening it** shows the workspace's name, who invited and the role. The invitee
-  then either creates an account (name, email address, password with the existing
+- **Opening it** shows the workspace's name, who invited and the role, and, when AI
+  is on for the workspace, the same AI line every member sees ("AI aan: tekst van
+  brieven gaat naar …"), so the invitee reads where the text of letters goes before
+  joining. The invitee then either creates an account (name, email address, password with the existing
   rules), or signs in to an account they already have on this server (they then join
   a second workspace), or, with SSO on, continues with the identity provider.
   A deactivated account (a member who was removed earlier) comes back the same way:
@@ -231,11 +236,29 @@ member's own row.
   through the same code as signing in, so the second step or the required set-up of
   section 10 applies there too.
 - **Straight into the app.** After accepting on a phone the page offers "Open de
-  Brievie-app": a `brievie://server#<addresses and CA fingerprint>` link and, on the
-  page, the eight-character pairing code to type into the app. The link carries no
-  secret: another app on the phone that claims the URL scheme learns only the server's
-  address. The app shows the server's name and asks for the code. On a computer the
-  page shows the pairing QR code instead.
+  Brievie-app": a `brievie://server#<addresses, CA fingerprint, pairing id>` link and,
+  on the page, the eight-character pairing code to type into the app. The link carries
+  no secret: another app on the phone that claims the URL scheme learns only the
+  server's address and the id of the code. The app shows the server's address and
+  waits for the user's tap before contacting anything.
+- **The typed code never leaves the phone.** A hostile link can name another server;
+  if the app sent the typed code there, that server could redeem it at the real one
+  within its ten minutes. So the app sends a proof instead. It checks the server as
+  for a QR code (CA fingerprint, health), fetches a one-time nonce
+  (`createPairingChallenge`, no session, rate limited, five minutes, single use), and
+  sends `HMAC-SHA256(key, "brievie-pair-v1" ‖ nonce ‖ trust binding)`, where the key
+  is `PBKDF2-HMAC-SHA256(code, "brievie-pair-v1" ‖ pairing id, 600,000 iterations)`
+  and the trust binding is the fingerprint of the CA the app pinned for this
+  connection or, for a server with a publicly trusted certificate, the host name it
+  connected to (`pairDeviceWithProof`). The server keeps the derived key of each code,
+  sealed with the master key, for the code's ten minutes (the code itself is still
+  stored only as a hash), recomputes the proof for its own CA fingerprint and host
+  names, compares in constant time, and burns the code after five wrong proofs. A relay
+  with another CA or host cannot produce a valid proof and never learns the code; the
+  key stretching makes guessing the eight characters from a captured proof cost years
+  instead of minutes. The QR path is unchanged: the QR code comes from the server's
+  own page and carries the code to `pairDevice` as in 1c. On a computer the page shows
+  the pairing QR code instead of the link.
 
 ### 6.3 Changing and removing
 
@@ -249,13 +272,20 @@ member's own row.
   writes as the system (8.3), because the admin cannot see the member's private rows
   and would otherwise skip them silently. A user who is still a member elsewhere
   keeps their account and devices; their phone simply no longer lists this workspace.
+  Deactivating is an account action: a workspace admin who removes a server admin's
+  last membership gets 403 `server_admin_only` and nothing changes.
+- **What an admin made stops with the role**: when an admin is demoted or removed,
+  their open invitations in that workspace and their unused reset links are revoked,
+  so an admin-role link cannot bring them back.
 - **Leaving** (the member themselves): the same, started by the member.
 - **Private post of a removed member stays locked**: nobody reads it, unless emergency
   access is on (section 8.5). Inviting the person again with "this is <person>" makes
   them the reader again.
 - **Own export before leaving**: "Mijn post exporteren" builds, in a background job
   that runs as that user (so it contains only what they may read), a ZIP with the
-  page images and a JSON file of every document on the member's name; the file is
+  page images and a JSON file of every document on the member's name (in part A: the
+  letters with an addressee linked to the member; part B makes it "every letter the
+  member may read"); the file is
   sealed on disk, downloadable by that member for 24 hours, then removed. It must be
   made and downloaded before leaving: the leave screen offers it, and after leaving
   there is no account to download with. In a Zakelijk workspace it is off unless the
@@ -269,17 +299,23 @@ member's own row.
   A reset link has the mechanics of an invitation (one use, 24 hours, token in the
   fragment). Each of these actions is an audit event and a notice the member sees at
   their next sign-in ("Je wachtwoord is op 3 mei opnieuw ingesteld door Anne."), so
-  an admin cannot take over an account unseen. A server admin who lost their own
-  password uses the management command `reset_password` on the server.
+  an admin cannot take over an account unseen. The session that completing a reset
+  creates cannot mark that notice as seen; only a later sign-in can. A reset link's
+  authority is checked again when it is used: if the member joined a second workspace
+  or the admin lost the role in the meantime, the link no longer works. A server admin
+  who lost their own password uses the management command `reset_password` on the
+  server.
 
 ### 6.4 API (additive)
 
 `listMembers` exists since 1c. New, under `/workspaces/{workspace_id}`:
 `createInvitation`, `listInvitations`, `revokeInvitation`, `updateMemberRole`,
 `removeMember`, `leaveWorkspace`. Account actions under `/users/{user_id}`:
-`createPasswordReset`, `clearSecondFactor`, `endUserSessions`, `listUserDevices`. Without a session:
-`getInvitation` and `acceptInvitation` (token in the body), `completePasswordReset`.
-For the signed-in user: `changePassword`, `createMyExport`, `getMyExport`.
+`createPasswordReset`, `endUserSessions`, `listUserDevices`, `revokeUserDevice`, and in
+part C `clearSecondFactor`. Without a session: `getInvitation` and `acceptInvitation`
+(token in the body), `completePasswordReset`, `createPairingChallenge` and
+`pairDeviceWithProof`. For the signed-in user: `changePassword`, `createMyExport`,
+`getMyExport`.
 
 ## 7. Devices and sessions
 
@@ -319,7 +355,8 @@ password or switching on the second factor ends all others; an admin can end all
 sessions of a member (it happens anyway on removal).
 
 Session lifetime is a server setting with a home default: 14 days of inactivity, at
-most 90 days. An organisation shortens it.
+most 90 days. An organisation shortens it. Until part C adds the server settings page
+it is an environment setting (`BRIEVIE_SESSION_IDLE_DAYS`, `BRIEVIE_SESSION_MAX_DAYS`).
 
 ## 8. Private post, departments and how the database enforces it
 
@@ -585,9 +622,11 @@ Who did what, when, from where, without document content.
   or SSO), a code from a closed list, the target's kind and id, the actor's and the
   target person's name as they were then, the client address, and a few plain values
   per code (the new role, the reason for emergency access). Never a letter's sender,
-  summary, text or label names.
+  summary, text or label names; rows about labels and rules carry the id only, because
+  a rule's name can hold a label name.
 - **What is logged**: sign-in succeeded, failed, locked out; second factor added,
-  removed, cleared; password changed, reset link made; session ended; invitation
+  removed, cleared; password changed, reset link made; session ended; server admin
+  appointed or removed; invitation
   made, revoked, accepted; member's role changed; member removed or left; device
   paired, revoked, expired; workspace setting changed; SSO settings changed; rule
   made, changed, deleted, run by hand; label or person deleted; visibility changed; a person linked to or
@@ -597,6 +636,8 @@ Who did what, when, from where, without document content.
   the privileges of the app role itself, because the test suite runs as the owner and
   would not notice a forgotten revoke. The rows have no foreign keys (actor and target
   are an id and a name), since a cascade would need the rights that were revoked.
+  The same migration makes 1c's AI consent history (`pipeline_aiconsentevent`)
+  insert-only for the app role, which its decision left open.
   Old rows are removed by a function owned by the schema owner that takes a workspace,
   enters its context itself (the owner cannot bypass row-level security either) and
   refuses a cut-off younger than 90 days; a job calls it after the retention period:
@@ -635,8 +676,8 @@ Each part is delivered and usable on its own, with its own implementation plan.
 A fourth part, **D. Toegang van buiten**, is described in section 19 with its own
 steps; it can follow A.
 
-App work per part: A is small (the server link with the typed pairing code, the app version
-header); B is the lock, "Privé" in the review and on a
+App work per part: A is small (the server link with the typed pairing code and the
+pairing proof, the app version header); B is the lock, "Privé" in the review and on a
 letter, and sharing; C needs nothing.
 
 ## 14. Compatibility
@@ -660,6 +701,10 @@ letter, and sharing; C needs nothing.
   email address that already has an account; for a person who is already linked.
 - The last admin removing themselves; the last server admin being deactivated.
 - A member removed while their phone uploads; while they are confirming a letter.
+  (Part A accepts the race of a request that passed the membership check just before
+  the removal; it tests that every later request is refused. See 21.)
+- A hostile pairing link that names another server: the typed code never leaves the
+  phone; a proof for another CA or host, a replayed nonce and a sixth try are refused.
 - A user who is a member of two workspaces, removed from one.
 - A private letter in: the post list, the inbox counts, a person filter, a rule test,
   a manual rule run, the history of a linked task, a suggestion, the task list, the
@@ -884,6 +929,7 @@ it turns out wrong:
 | An invitation never finds an existing account by the provider's address; linking on address is off by default (9.3) | an address claim is not proof | a first SSO sign-in needs one password sign-in to link |
 | The second factor sits where a session is made (10) | invitation and reset would otherwise skip it | none known |
 | The pairing link carries no secret; the code is typed (6.2) | another app can claim the URL scheme | eight characters to type on the phone |
+| From a link the app sends a proof, never the code: PBKDF2 of the code and the pairing id, HMAC over a one-time nonce and the CA fingerprint or host it connected to; five wrong proofs burn the code (6.2; ruling after the plans' independent check) | a hostile link names an attacker's server, which would harvest the typed code and redeem it at the real server within ten minutes | two extra requests and about half a second of key stretching per code on phone and server; a sealed derived key per code for ten minutes; whoever learns a pairing id can burn that code with five wrong proofs (the user makes a new one); a 1d app cannot pair from a link with a server that lacks the proof path (no 1c server makes links) |
 | Token expiry is computed from `last_seen_at`; expired answers as revoked (7.1) | no extra write, and a 1c app already handles it | no separate text for "expired" |
 | "Privé maken" is a new action type, automatic rules only (8.1) | a version bump would skip all rules; there is no suggestion kind for it | a proposing rule cannot make private |
 | The audit purge enters the workspace context itself; no foreign keys in audit rows (11) | under forced row-level security the owner sees nothing either | none known |
@@ -891,3 +937,25 @@ it turns out wrong:
 Still to verify when the plans are written: what the 1c app does with calendar events
 of tasks that disappear from the list (a letter that became private), and whether it
 matches on the 401 code.
+
+## 21. What the plans changed (2026-11-17)
+
+Writing the part-A plans, and their independent check (`plan-1d-a-controle.md` in the
+session notes), found the points below. Each is written into its section; this list
+is the index.
+
+| Change | Section |
+|---|---|
+| `clearSecondFactor` belongs to part C; part A has the other account actions | 6.4 |
+| The own export in part A holds the letters with an addressee linked to the member; part B switches it to every letter the member may read | 6.3 |
+| Session lifetime is an environment setting until part C adds the server settings page | 7.2 |
+| A second server admin is appointed with the command `set_server_admin --email … [--remove]`; workspace creation stays at setup | 6.1 |
+| Audit rows about labels and rules carry ids only; appointing and removing a server admin is logged | 11 |
+| A workspace admin never deactivates a server admin by removing their last membership (403 `server_admin_only`) | 6.3 |
+| Open invitations and reset links an admin made are revoked when that admin is demoted or removed | 6.3 |
+| A reset link's authority is checked again when it is used | 6.3 |
+| The session that completing a reset creates cannot dismiss the "your password was reset" notice | 6.3 |
+| The AI consent history of 1c becomes insert-only for the app role, in the same migration as the audit tables | 11 |
+| The invitation page shows the workspace's AI line before accepting, which is the per-member "read" step the AI consent decision left for 1d | 6.2 |
+| From a link the app pairs by proof and never sends the typed code | 6.2, 20 |
+| A member removed while their phone uploads or confirms is an accepted race: a request that passed the membership check a moment earlier commits, with the same effect as finishing a moment earlier (the letter stays in the workspace); every later request is refused | 15 |
