@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from apps.accounts.models import User
-from apps.common.errors import ApiError
+from apps.common.errors import ApiError, is_try_again
 from apps.common.privacy import mask_bsns
 from apps.documents import organise
 from apps.documents.models import Document, DocumentSuggestion
@@ -99,11 +99,17 @@ def confirm_document(
 
 def _rules_guarded(document: Document) -> None:
     """The rules in a savepoint: when they fail, only their writes are rolled back and
-    the user's review is still stored."""
+    the user's review is still stored.
+
+    A deadlock or serialization failure is not swallowed: the whole confirm rolls back
+    and the user tries again (409 `try_again`), so this letter's rules still run.
+    """
     try:
         with transaction.atomic():
             triggers.on_confirmed(document)
-    except Exception as exc:  # noqa: BLE001 - a broken rule must not lose the review
+    except Exception as exc:  # a broken rule must not lose the review
+        if is_try_again(exc):
+            raise
         # The type only: an exception message may quote the document.
         logger.error(
             "Unexpected %s while running rules for document %s", type(exc).__name__, document.id

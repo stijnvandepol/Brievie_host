@@ -42,6 +42,14 @@ class ApiError(Exception):
         self.headers = headers or {}
 
 
+def is_try_again(exc: BaseException) -> bool:
+    """A PostgreSQL deadlock or serialization failure: two changes met, and trying again
+    works. The API answers it with 409 `try_again`."""
+    return isinstance(exc, OperationalError) and isinstance(
+        exc.__cause__, pg_errors.DeadlockDetected | pg_errors.SerializationFailure
+    )
+
+
 def error_response(status: int, code: str, message: str) -> JsonResponse:
     return JsonResponse(ErrorOut(code=code, message=message).model_dump(), status=status)
 
@@ -126,9 +134,7 @@ def install_error_handlers(api: NinjaAPI) -> None:
     def handle_operational_error(request: HttpRequest, exc: OperationalError) -> JsonResponse:
         # A deadlock or serialization failure: two changes met (for example deleting a
         # label while a rule runs). PostgreSQL aborted this one; trying again works.
-        if not isinstance(
-            exc.__cause__, pg_errors.DeadlockDetected | pg_errors.SerializationFailure
-        ):
+        if not is_try_again(exc):
             return handle_unexpected_error(request, exc)
         transaction.set_rollback(True)
         logger.warning(

@@ -4,11 +4,16 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 import pytest
+from django.db import OperationalError
 from django.test import Client
+from psycopg import errors as pg_errors
 
 from apps.documents import organise, suggestions
-from apps.documents.models import Document, DocumentEvent, DocumentSuggestion
+from apps.documents.models import Document, DocumentEvent, DocumentLabel, DocumentSuggestion
 from apps.labels.models import Label
+from apps.rules.engine import Evaluation
+from apps.rules.executor import execute
+from apps.rules.models import RuleRun
 from apps.tasks.models import Task
 from apps.workspaces.context import workspace_context
 from apps.workspaces.models import Membership, Workspace
@@ -503,3 +508,68 @@ def test_a_failure_in_the_rules_keeps_the_confirm(
     assert "RuntimeError" in caplog.text
     assert document_id in caplog.text
     assert "geheim" not in caplog.text
+
+
+def _labels_on(workspace: Workspace, document_id: str) -> set[uuid.UUID]:
+    with workspace_context(workspace.id):
+        return set(
+            DocumentLabel.objects.filter(document_id=document_id).values_list("label_id", flat=True)
+        )
+
+
+def test_a_rule_failing_after_it_wrote_leaves_none_of_its_writes(
+    client_a: Client, ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    document_id, _, bank, _ = organised_document(client_a, ws_a)
+    with workspace_context(ws_a.id):
+        wonen = Label.objects.get(workspace=ws_a, system_key="wonen")
+    make_rule(ws_a, text_word("Belastingdienst"), actions=[add_label(wonen)], mode="auto")
+    written: list[bool] = []
+
+    def apply_then_fail(document: Document, evaluation: Evaluation, *, trigger: str) -> None:
+        execute(document, evaluation, trigger=trigger)
+        written.append(DocumentLabel.objects.filter(document=document, label=wonen).exists())
+        raise RuntimeError("after writing")
+
+    monkeypatch.setattr("apps.rules.triggers.execute", apply_then_fail)
+    body = review(sets_organisation=True, label_ids=[str(bank.id)], addressee_ids=[])
+
+    r = confirm(client_a, ws_a.id, document_id, body)
+
+    assert written == [True]
+    assert r.status_code == 200
+    assert r.json()["label_ids"] == [str(bank.id)]
+    assert _labels_on(ws_a, document_id) == {bank.id}
+    with workspace_context(ws_a.id):
+        assert Document.objects.get(id=document_id).status == "done"
+        assert Task.objects.filter(document_id=document_id).count() == 1
+        assert not RuleRun.objects.filter(document_id=document_id).exists()
+
+
+@pytest.mark.parametrize("cause", [pg_errors.DeadlockDetected, pg_errors.SerializationFailure])
+def test_a_deadlock_in_the_rules_fails_the_whole_confirm_with_try_again(
+    client_a: Client,
+    ws_a: Workspace,
+    monkeypatch: pytest.MonkeyPatch,
+    cause: type[Exception],
+) -> None:
+    document_id, zorg, bank, auto = organised_document(client_a, ws_a)
+    make_rule(ws_a, text_word("Belastingdienst"), actions=[add_label(auto)], mode="auto")
+
+    def conflict(*args: object, **kwargs: object) -> None:
+        try:
+            raise cause("conflict")
+        except cause as exc:
+            raise OperationalError("conflict") from exc
+
+    monkeypatch.setattr("apps.rules.triggers.evaluate", conflict)
+    body = review(sets_organisation=True, label_ids=[str(bank.id)], addressee_ids=[])
+
+    r = confirm(client_a, ws_a.id, document_id, body)
+
+    assert r.status_code == 409
+    assert r.json()["code"] == "try_again"
+    assert _labels_on(ws_a, document_id) == {zorg.id}
+    with workspace_context(ws_a.id):
+        assert Document.objects.get(id=document_id).status == "needs_review"
+        assert not Task.objects.filter(document_id=document_id).exists()
