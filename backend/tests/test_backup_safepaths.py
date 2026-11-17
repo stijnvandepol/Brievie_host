@@ -1,9 +1,14 @@
 """The path guards of the back-up app, called as pure functions.
 
-Nothing here deletes, moves or overwrites anything: the guards only judge a path.
-Every accepting case lives under `tmp_path`; the system paths are only judged.
+Nothing here deletes, moves or overwrites anything: the guards only judge a path
+(they may stat it). Every accepting case lives under `tmp_path` or is a fixed
+production path that is only judged, never touched. The home directory and the
+temporary folder are changed through the environment and `tempfile.tempdir`, never
+on disk.
 """
 
+import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -11,27 +16,57 @@ import pytest
 from apps.backup import safepaths
 from apps.backup.errors import BackupError
 from apps.backup.safepaths import (
+    CADDY_AUTHORITY,
+    CADDY_LEAF,
+    PRODUCTION_DIRECTORIES,
+    configured_path,
     leaf_dir,
     require_caddy_authority_dir,
     require_emptiable,
     require_inside,
+    require_out_dir,
     require_plain_name,
 )
 
 HOME = Path.home()
+UNSAFE = "Brievie weigert deze map te wissen of te overschrijven, omdat dat niet veilig is."
 
 
-def refused(call: object) -> None:
-    assert callable(call)
+def refused(call: Callable[[], object], code: str = "unsafe_path") -> None:
     with pytest.raises(BackupError) as caught:
         call()
-    assert caught.value.code == "unsafe_path"
-    assert caught.value.message == (
-        "Brievie weigert deze map te wissen of te overschrijven, omdat dat niet veilig is."
-    )
+    assert caught.value.code == code
+    if code == "unsafe_path":
+        assert caught.value.message == UNSAFE
 
 
-# --- require_emptiable -----------------------------------------------------------------
+def not_allowed(call: Callable[[], object]) -> None:
+    refused(call, "directory_not_allowed")
+
+
+@pytest.fixture
+def fake_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A home directory under tmp_path, from both $HOME and the password database."""
+    home = tmp_path / "homes" / "someone"
+    home.mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(safepaths, "_password_home", lambda: str(home))
+    return home
+
+
+# --- configured paths ------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("value", ["", "relative", "./data", "data/documents", "/data\0/x"])
+def test_a_configured_path_must_be_absolute(value: str) -> None:
+    refused(lambda: configured_path(value))
+
+
+def test_an_absolute_configured_path_is_taken_as_it_is() -> None:
+    assert configured_path("/data/documents") == Path("/data/documents")
+
+
+# --- require_emptiable: structure -------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -39,55 +74,74 @@ def refused(call: object) -> None:
     [
         "/",
         "/Users",
+        "/users",
+        "/USERS/someone",
         "/data",
         "/home",
+        "/home/someone",
+        "/Home/Someone/documents",
         "/root",
+        "/ROOT/documents",
+        "/var/root/documents",
         str(HOME),
         str(HOME.parent),
+        str(HOME).lower(),
+        str(HOME).upper(),
         str(HOME / "Documents" / "brievie-documents"),
         "relative/documents",
         "documents",
         "/data/documents/..",
+        "/data/docu*",
+        "/data/documents?",
+        "/data/[d]ocuments",
     ],
 )
-def test_a_system_home_or_relative_path_is_never_emptiable(directory: str) -> None:
+def test_a_system_home_relative_or_glob_path_is_never_emptiable(directory: str) -> None:
     # Even when the caller lists it as allowed: the guard does not trust its caller.
     refused(lambda: require_emptiable(Path(directory), allowed=[Path(directory)]))
 
 
-def test_a_link_is_never_emptiable(tmp_path: Path) -> None:
-    real = tmp_path / "real-documents"
-    real.mkdir()
-    link = tmp_path / "documents"
+def test_a_path_that_is_or_goes_through_a_link_is_never_emptiable(tmp_path: Path) -> None:
+    real = tmp_path / "real"
+    (real / "documents").mkdir(parents=True)
+    link = tmp_path / "link"
     link.symlink_to(real, target_is_directory=True)
-
-    refused(lambda: require_emptiable(link, allowed=[link]))
-    refused(lambda: require_emptiable(link, allowed=[real]))
-
-
-def test_a_path_through_a_link_is_never_emptiable(tmp_path: Path) -> None:
     holder = tmp_path / "holder"
     holder.mkdir()
     (holder / "up").symlink_to("/", target_is_directory=True)
-    sneaky = holder / "up" / "tmp"  # not itself a link: a link above leads to the root
-    real = tmp_path / "real"
-    (real / "documents").mkdir(parents=True)
-    alias = tmp_path / "alias"
-    alias.symlink_to(real, target_is_directory=True)
 
-    refused(lambda: require_emptiable(sneaky, allowed=[sneaky]))
-    refused(lambda: require_emptiable(alias / "documents", allowed=[real / "documents"]))
-    refused(lambda: require_emptiable(alias / "documents", allowed=[alias / "documents"]))
+    refused(lambda: require_emptiable(link, allowed=[link]))
+    refused(lambda: require_emptiable(link, allowed=[real]))
+    refused(lambda: require_emptiable(link / "documents", allowed=[real / "documents"]))
+    refused(lambda: require_emptiable(holder / "up" / "tmp", allowed=[holder / "up" / "tmp"]))
 
 
-def test_a_directory_not_in_the_allowed_list_is_refused(tmp_path: Path) -> None:
-    documents = tmp_path / "documents"
-    documents.mkdir()
+# --- require_emptiable: the fixed list ---------------------------------------------------
 
-    refused(lambda: require_emptiable(documents, allowed=[tmp_path / "authority"]))
-    refused(lambda: require_emptiable(documents, allowed=[]))
-    refused(lambda: require_emptiable(tmp_path, allowed=[documents]))
-    refused(lambda: require_emptiable(documents / "inner", allowed=[documents]))
+
+@pytest.mark.parametrize("directory", ["/usr/local", "/opt/homebrew/var", "/data/other", "/etc/x"])
+def test_a_configured_directory_off_the_fixed_list_is_not_allowed(directory: str) -> None:
+    not_allowed(lambda: require_emptiable(Path(directory), allowed=[Path(directory)]))
+
+
+@pytest.mark.parametrize("directory", PRODUCTION_DIRECTORIES)
+def test_the_fixed_production_directories_are_emptiable_when_configured(
+    directory: Path,
+) -> None:
+    # Only judged (stat and realpath of a path that need not exist), never touched.
+    assert require_emptiable(directory, allowed=list(PRODUCTION_DIRECTORIES)) == directory
+
+
+def test_a_fixed_directory_that_is_not_the_configured_one_is_refused() -> None:
+    refused(lambda: require_emptiable(Path("/data/documents"), allowed=[Path("/data/authority")]))
+
+
+def test_the_sweep_list_holds_only_the_documents() -> None:
+    fixed = [Path("/data/documents")]
+    refused(
+        lambda: require_emptiable(Path("/data/authority"), allowed=[], fixed=fixed),
+        "directory_not_allowed",
+    )
 
 
 def test_a_configured_directory_under_the_temporary_folder_is_emptiable(tmp_path: Path) -> None:
@@ -96,7 +150,17 @@ def test_a_configured_directory_under_the_temporary_folder_is_emptiable(tmp_path
     authority = tmp_path / "authority"  # need not exist yet
 
     assert require_emptiable(documents, allowed=[documents, authority]) == documents
-    assert require_emptiable(authority, allowed=[str(documents), str(authority)]) == authority
+    assert require_emptiable(authority, allowed=[documents, authority]) == authority
+
+
+def test_a_directory_not_in_the_allowed_list_is_refused(tmp_path: Path) -> None:
+    documents = tmp_path / "documents"
+    documents.mkdir()
+
+    refused(lambda: require_emptiable(documents, allowed=[tmp_path / "authority"]))
+    refused(lambda: require_emptiable(documents, allowed=[]))
+    refused(lambda: require_emptiable(documents / "inner", allowed=[documents]))
+    refused(lambda: require_emptiable(documents, allowed=["relative/documents"]))
 
 
 def test_the_comparison_uses_resolved_paths(tmp_path: Path) -> None:
@@ -114,44 +178,104 @@ def test_the_comparison_uses_resolved_paths(tmp_path: Path) -> None:
             assert require_emptiable(directory, allowed=[configured]) == directory
 
 
-def test_the_home_directory_and_its_ancestors_are_refused_wherever_home_is(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+# --- require_emptiable: no overlap -------------------------------------------------------
+
+
+def test_a_directory_overlapping_the_mount_or_another_directory_is_refused(
+    tmp_path: Path,
 ) -> None:
-    home = tmp_path / "home" / "someone"
-    home.mkdir(parents=True)
-    monkeypatch.setattr(safepaths, "_home", lambda: home.resolve())
+    documents = tmp_path / "documents"
+    mount = tmp_path / "backup"
+    inner = documents / "backup"
 
-    refused(lambda: require_emptiable(home, allowed=[home]))
-    refused(lambda: require_emptiable(home.parent, allowed=[home.parent]))
-    # Inside the home directory, only the temporary folder is acceptable (this one is).
-    inside = home / "documents"
-    assert require_emptiable(inside, allowed=[inside]) == inside
+    refused(lambda: require_emptiable(documents, allowed=[documents], avoid=[documents]))
+    refused(lambda: require_emptiable(documents, allowed=[documents], avoid=[inner]))
+    refused(lambda: require_emptiable(inner, allowed=[inner], avoid=[documents]))
+    refused(lambda: require_emptiable(documents, allowed=[documents], avoid=[""]))
+    refused(lambda: require_emptiable(documents, allowed=[documents], avoid=["relative"]))
+    assert require_emptiable(documents, allowed=[documents], avoid=[mount]) == documents
 
 
-def test_inside_home_only_the_temporary_folder_is_emptiable(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+# --- the home directory -------------------------------------------------------------------
+
+
+def test_the_home_directory_is_found_by_inode_whatever_its_name(
+    fake_home: Path, tmp_path: Path
 ) -> None:
-    home = tmp_path / "home"
-    home.mkdir()
-    monkeypatch.setattr(safepaths, "_home", lambda: home.resolve())
-    monkeypatch.setattr(safepaths, "_temp_root", lambda: (tmp_path / "temp").resolve())
-    folder = home / "brievie" / "documents"
+    alias = tmp_path / "Homes"  # the same directory under another spelling, if any
+    refused(lambda: require_emptiable(fake_home, allowed=[fake_home]))
+    refused(lambda: require_emptiable(fake_home.parent, allowed=[fake_home.parent]))
+    refused(lambda: require_emptiable(fake_home / "documents", allowed=[fake_home / "documents"]))
+    if alias.exists():  # a case-insensitive file system
+        refused(lambda: require_emptiable(alias / "someone", allowed=[alias / "someone"]))
 
-    refused(lambda: require_emptiable(folder, allowed=[folder]))
+
+def test_the_password_database_still_counts_when_home_is_empty(
+    fake_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for value in ("", "relative/home"):
+        monkeypatch.setenv("HOME", value)
+        refused(lambda: require_emptiable(fake_home, allowed=[fake_home]))
+
+
+def test_home_from_the_environment_still_counts_without_a_password_entry(
+    fake_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(safepaths, "_password_home", lambda: None)
+    refused(lambda: require_emptiable(fake_home, allowed=[fake_home]))
 
 
 def test_a_home_at_the_root_does_not_make_everything_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # A service user without a home has HOME=/: the root rule already covers "/".
-    monkeypatch.setattr(safepaths, "_home", lambda: Path("/"))
+    monkeypatch.setenv("HOME", "/")
+    monkeypatch.setattr(safepaths, "_password_home", lambda: "/")
     documents = tmp_path / "documents"
 
     assert require_emptiable(documents, allowed=[documents]) == documents
+    assert require_emptiable(Path("/data/documents"), allowed=["/data/documents"]) == Path(
+        "/data/documents"
+    )
     refused(lambda: require_emptiable(Path("/"), allowed=[Path("/")]))
 
 
-# --- require_inside --------------------------------------------------------------------
+# --- the temporary folder -----------------------------------------------------------------
+
+
+@pytest.mark.parametrize("temp", ["/", "/data", "relative/tmp", "", str(HOME), str(HOME.parent)])
+def test_an_unsafe_temporary_folder_opens_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, temp: str
+) -> None:
+    monkeypatch.setattr(tempfile, "tempdir", temp)
+    documents = tmp_path / "documents"
+    not_allowed(lambda: require_emptiable(documents, allowed=[documents]))
+
+
+def test_a_temporary_folder_inside_home_opens_nothing(
+    fake_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(tempfile, "tempdir", str(fake_home / "tmp"))
+    documents = fake_home / "tmp" / "documents"
+    refused(lambda: require_emptiable(documents, allowed=[documents]))
+
+
+def test_a_temporary_folder_above_a_production_directory_opens_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(tempfile, "tempdir", "/data")
+    refused(
+        lambda: require_emptiable(Path("/data/other"), allowed=["/data/other"]),
+        "directory_not_allowed",
+    )
+
+
+def test_the_temporary_folder_itself_is_never_emptiable(tmp_path: Path) -> None:
+    temp = Path(tempfile.gettempdir())
+    not_allowed(lambda: require_emptiable(temp, allowed=[temp]))
+
+
+# --- require_inside -----------------------------------------------------------------------
 
 
 def test_a_path_strictly_inside_the_root_is_accepted(tmp_path: Path) -> None:
@@ -161,6 +285,7 @@ def test_a_path_strictly_inside_the_root_is_accepted(tmp_path: Path) -> None:
     assert require_inside(root / "a", root) == root / "a"
     assert require_inside(root / "a" / "b.txt", root) == root / "a" / "b.txt"
     assert require_inside(root / "not-yet", root) == root / "not-yet"
+    assert require_inside(Path("/backup/restic"), Path("/backup")) == Path("/backup/restic")
 
 
 @pytest.mark.parametrize(
@@ -186,21 +311,28 @@ def test_a_link_inside_that_leads_outside_is_refused(tmp_path: Path) -> None:
     refused(lambda: require_inside(root / "escape" / "file", root))
 
 
-def test_nothing_is_inside_the_file_system_root() -> None:
-    refused(lambda: require_inside(Path("/etc/passwd"), Path("/")))
+@pytest.mark.parametrize(
+    "root", ["/", "", ".", "relative", "/Users", "/home", "/root", str(HOME), str(HOME.parent)]
+)
+def test_a_relative_empty_or_home_level_root_is_refused(root: str) -> None:
+    refused(lambda: require_inside(Path(root) / "x" / "y", Path(root)))
 
 
-# --- the Caddy authority ---------------------------------------------------------------
+def test_a_home_root_is_refused_by_inode(fake_home: Path) -> None:
+    refused(lambda: require_inside(fake_home / "file", fake_home))
+    refused(lambda: require_inside(fake_home / "file", fake_home.parent))
+
+
+# --- the Caddy authority ------------------------------------------------------------------
 
 
 def test_a_caddy_authority_directory_is_accepted(tmp_path: Path) -> None:
     target = tmp_path / "caddy-data" / "caddy" / "pki" / "authorities" / "local"
 
     assert require_caddy_authority_dir(target) == target
-    assert require_caddy_authority_dir(Path("/caddy-data/caddy/pki/authorities/local")) == (
-        Path("/caddy-data/caddy/pki/authorities/local")
-    )
     assert leaf_dir(target) == tmp_path / "caddy-data" / "caddy" / "certificates" / "local"
+    assert require_caddy_authority_dir(CADDY_AUTHORITY) == CADDY_AUTHORITY
+    assert leaf_dir(CADDY_AUTHORITY) == CADDY_LEAF
 
 
 @pytest.mark.parametrize(
@@ -215,12 +347,18 @@ def test_a_caddy_authority_directory_is_accepted(tmp_path: Path) -> None:
         "/caddy-data/caddy/pki/authorities/local/x",
         "/caddy-data/caddy/../caddy/pki/authorities/local",
         "/caddy-data/kaddy/pki/authorities/local",
+        "/usr/caddy/pki/authorities/local",
+        "/caddy/pki/authorities/local",
+        str(HOME / "caddy" / "pki" / "authorities" / "local"),
         str(HOME),
     ],
 )
 def test_anything_else_is_not_a_caddy_authority_directory(target: str) -> None:
-    refused(lambda: require_caddy_authority_dir(Path(target)))
-    refused(lambda: leaf_dir(Path(target)))
+    with pytest.raises(BackupError) as caught:
+        require_caddy_authority_dir(Path(target))
+    assert caught.value.code in {"unsafe_path", "directory_not_allowed"}
+    with pytest.raises(BackupError):
+        leaf_dir(Path(target))
 
 
 @pytest.mark.parametrize("linked", ["local", "authorities", "pki", "caddy"])
@@ -251,7 +389,54 @@ def test_a_leaf_directory_through_a_link_is_refused(tmp_path: Path, linked: str)
     refused(lambda: leaf_dir(target))
 
 
-# --- plain file names ------------------------------------------------------------------
+# --- the restore output folder -------------------------------------------------------------
+
+
+def test_a_new_output_folder_is_accepted(tmp_path: Path) -> None:
+    documents = tmp_path / "documents"
+    assert require_out_dir(tmp_path / "out", avoid=[documents]) == tmp_path / "out"
+    assert require_out_dir(Path("/out"), avoid=list(PRODUCTION_DIRECTORIES)) == Path("/out")
+
+
+@pytest.mark.parametrize(
+    "out_dir",
+    [
+        "/",
+        "",
+        "relative/out",
+        "/Users",
+        "/home",
+        str(HOME),
+        str(HOME.parent),
+        "/data/documents",
+        "/data/backup-config",
+        "/data/authority/x",
+        "/data",
+        "/backup",
+        "/backup/restic",
+    ],
+)
+def test_an_output_folder_on_a_home_or_a_data_directory_is_refused(out_dir: str) -> None:
+    avoid = [*PRODUCTION_DIRECTORIES, Path("/backup")]
+    refused(lambda: require_out_dir(Path(out_dir), avoid=avoid))
+
+
+def test_an_output_folder_overlapping_a_configured_directory_is_refused(tmp_path: Path) -> None:
+    config = tmp_path / "backup-config"
+    refused(lambda: require_out_dir(config, avoid=[config]))
+    refused(lambda: require_out_dir(config / "out", avoid=[config]))
+    refused(lambda: require_out_dir(tmp_path, avoid=[config]))
+
+
+def test_an_output_folder_through_a_link_is_refused(tmp_path: Path) -> None:
+    real = tmp_path / "real"
+    real.mkdir()
+    (tmp_path / "link").symlink_to(real, target_is_directory=True)
+    refused(lambda: require_out_dir(tmp_path / "link", avoid=[]))
+    refused(lambda: require_out_dir(tmp_path / "link" / "out", avoid=[]))
+
+
+# --- plain file names ---------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("name", ["manifest.json", "env", ".env", "a.b-c_d"])

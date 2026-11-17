@@ -62,6 +62,10 @@ REASONS: dict[str, Promise] = {
     "unsafe_path": _(
         "Brievie weigert deze map te wissen of te overschrijven, omdat dat niet veilig is."
     ),
+    "directory_not_allowed": _(
+        "Brievie wist en herstelt alleen in de vaste mappen /data/documents, "
+        "/data/authority en /data/backup-config. Deze map hoort daar niet bij."
+    ),
     "interrupted_by_restore": _("Afgebroken door herstel."),
     "abandoned": _("De vorige back-up is afgebroken. Er is een nieuwe gestart."),
     "internal_error": _("Er ging iets mis. Probeer het later opnieuw."),

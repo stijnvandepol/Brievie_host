@@ -38,6 +38,7 @@ EXPECTED_CODES = {
     "hostname_unusable",
     "documents_incomplete",
     "unsafe_path",
+    "directory_not_allowed",
 }
 
 
