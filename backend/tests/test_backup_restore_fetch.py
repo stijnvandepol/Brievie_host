@@ -911,3 +911,32 @@ def test_restore_fetch_says_which_settings_it_left_out(
         "Deze instellingen zijn niet uit de back-up overgenomen; deze installatie zet ze "
         "zelf: POSTGRES_PORT, BRIEVIE_BACKUP_DIR."
     ]
+
+
+@pytest.mark.parametrize(
+    "spelling",
+    ["{key}=x", "export {key}=x", "{lower}=x", "'{key}'=x", '"{key}"=x', "{key}: x", "{key} = x"],
+)
+@pytest.mark.parametrize(
+    "key", ["COMPOSE_PROFILES", "COMPOSE_FILE", "DOCKER_HOST", "DOCKER_CONTEXT", "COMPOSE_X_Y"]
+)
+def test_restored_env_drops_every_compose_and_docker_key(spelling: str, key: str) -> None:
+    line = spelling.format(key=key, lower=key.lower())
+    restored = restored_env(
+        ENV_COPY + line + "\n", master_key_hex=MASTER, backup_password=DERIVED, backup_dir_host=None
+    )
+    assert line not in restored.text
+    assert key not in env_values(restored.text)
+    assert key in restored.dropped
+
+
+def test_a_key_that_only_starts_like_compose_is_kept() -> None:
+    restored = restored_env(
+        ENV_COPY + "MY_COMPOSE_NOTE=keep\nDOCKERFILE_NOTE=keep\n",
+        master_key_hex=MASTER,
+        backup_password=DERIVED,
+        backup_dir_host=None,
+    )
+    values = env_values(restored.text)
+    assert values["MY_COMPOSE_NOTE"] == "keep"
+    assert values["DOCKERFILE_NOTE"] == "keep"

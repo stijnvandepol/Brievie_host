@@ -21,15 +21,17 @@ ENV_COPY_NAME = "env"
 DEFAULT_POSTGRES_PORT = "5432"
 
 
-def _key_line(keys: tuple[str, ...]) -> re.Pattern[str]:
-    """One line of a .env file that sets one of `keys`, as a parser may read it.
+def _key_line(keys: tuple[str, ...], *, pattern: str | None = None) -> re.Pattern[str]:
+    """One line of a .env file that sets one of `keys` (or a key matching `pattern`),
+    as a parser may read it.
 
     An optional BOM, an optional comment marker, `export`, a quoted key, and `=` or
     `:`. Deliberately wider than any one parser: refusing too much only costs a refusal.
     """
+    alternatives = pattern if pattern is not None else "|".join(map(re.escape, keys))
     return re.compile(
         r"^[\s﻿]*(?P<comment>#[\s﻿#]*)?(?:export\s+)?[\"']?"
-        r"(?P<key>" + "|".join(map(re.escape, keys)) + r")[\"']?\s*[=:](?P<value>.*)$",
+        r"(?P<key>" + alternatives + r")[\"']?\s*[=:](?P<value>.*)$",
         re.IGNORECASE,
     )
 
@@ -78,6 +80,9 @@ HOST_KEYS = (
     "BRIEVIE_HTTPS_PORT",
 )
 _HOST_LINE = _key_line(HOST_KEYS)
+# Every COMPOSE_* and DOCKER_* key steers docker compose itself (profiles, files, the
+# daemon): never taken from a back-up either.
+_TOOL_LINE = _key_line((), pattern=r"(?:COMPOSE|DOCKER)_[A-Za-z0-9_]+")
 _PORT_LINE = _key_line(("POSTGRES_PORT",))
 _PLAIN_VALUE = re.compile(r"[A-Za-z0-9._~+/=@:,-]*")
 _UNQUOTABLE = re.compile(r"['\x00-\x1f\x7f]")
@@ -129,8 +134,9 @@ def restored_env(
 
     Keeps every line and comment in order, except that an excluded key in any spelling
     is dropped, the host keys (`HOST_KEYS`: folders, repository, image, project, ports)
-    are dropped and listed in `dropped`, and the back-up password is set in the line
-    that holds it. The back-up folder is written only when `backup_dir_host` is given.
+    and every `COMPOSE_*` and `DOCKER_*` key are dropped and listed in `dropped`, and
+    the back-up password is set in the line that holds it. The back-up folder is
+    written only when `backup_dir_host` is given.
     Adds the master key and new superuser and owner passwords (hex, as init-env.sh makes
     them): the dump holds no password, so the new database takes these.
     `backup_password` is what opened the repository, so the keeper, which has no master
@@ -149,7 +155,7 @@ def restored_env(
     for line in lines:
         if _leaks(line):
             continue
-        host = _HOST_LINE.match(line)
+        host = _HOST_LINE.match(line) or _TOOL_LINE.match(line)
         if host is not None and host["comment"] is None:
             key = host["key"].upper()
             if key not in wanted and key not in dropped:
