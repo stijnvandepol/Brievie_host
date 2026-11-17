@@ -53,6 +53,23 @@ def test_files_backup_excludes_temporary_files() -> None:
     ]
 
 
+def test_forget_run_removes_only_the_snapshots_of_one_run() -> None:
+    run_id = uuid.uuid4()
+    argv = restic.forget_run_argv(run_id)
+    # restic 0.18 refuses `forget --tag` without a policy ("no policy was specified");
+    # --unsafe-allow-remove-all removes every snapshot that matches the filters, so the
+    # filters must always be there: this host and exactly this run's tag.
+    assert argv == [
+        "forget",
+        "--unsafe-allow-remove-all",
+        "--host",
+        restic.HOST,
+        "--tag",
+        f"run:{run_id}",
+    ]
+    assert "--prune" not in argv
+
+
 def test_forget_prunes_with_keep_within_and_never_groups_by_tags() -> None:
     argv = restic.forget_argv()
     assert argv == [

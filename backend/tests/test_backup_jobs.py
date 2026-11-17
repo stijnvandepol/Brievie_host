@@ -12,7 +12,11 @@ def test_backup_tasks_are_registered_on_the_app() -> None:
     task = procrastinate_app.tasks["run_backup"]
     assert task.queue == "backup"
     assert task.lock == "backup"
-    assert procrastinate_app.tasks["retry_stalled_backup_jobs"].queue == "backup"
+    retry = procrastinate_app.tasks["retry_stalled_backup_jobs"]
+    assert retry.queue == "backup"
+    # Every worker defers every periodic task; the lock keeps at most one waiting
+    # when no keeper serves the queue.
+    assert retry.queueing_lock == "retry_stalled_backup_jobs"
     periodic = {
         entry.task.name: entry.cron
         for entry in procrastinate_app.periodic_registry.periodic_tasks.values()

@@ -11,7 +11,10 @@ from uuid import UUID
 
 from django.conf import settings
 from django.db import DatabaseError, connection, transaction
+from django.db.models import F, Value
+from django.db.models.functions import Coalesce
 from django.utils import timezone
+from procrastinate.contrib.django.models import ProcrastinateJob
 
 from apps.backup import destination, jobs, restic
 from apps.backup.database import (
@@ -39,6 +42,8 @@ DUMP_COMMAND = ("pg_dump", "--format=custom", "--no-password")
 # A request takes this transaction lock, so two requests never make two open runs.
 _REQUEST_LOCK_KEY = int.from_bytes(b"brvbkreq", "big")
 _STDERR_TAIL = 500
+# For restic calls that start no child and should be quick: unlock and the clean-up.
+SHORT_RESTIC_TIMEOUT = 600
 _VERSION_TIMEOUT = 30
 _DEFAULT_PATH = "/usr/local/bin:/usr/bin:/bin"
 _PG_DUMP_VERSION = re.compile(r"\(PostgreSQL\)\s+(\S+)")
@@ -70,14 +75,31 @@ def _kind_or_blank() -> str:
         return ""
 
 
+def _has_live_job(run_id: UUID) -> bool:
+    return ProcrastinateJob.objects.filter(
+        task_name="run_backup", status__in=["todo", "doing"], args__run_id=str(run_id)
+    ).exists()
+
+
 @transaction.atomic
 def request_run(kind: str, *, requested_by: str = "cli") -> BackupRun:
-    """The open run of this kind, or a new queued one with its job deferred."""
+    """The open run of this kind, or a new queued one with its job deferred.
+
+    An open run without a waiting or running job was abandoned (its job was
+    cancelled, or recording its end failed): it is closed, so it never blocks.
+    """
     with connection.cursor() as cursor:
         cursor.execute("SELECT pg_advisory_xact_lock(%s)", [_REQUEST_LOCK_KEY])
-    existing = BackupRun.objects.filter(kind=kind, status__in=OPEN_STATUSES).first()
-    if existing is not None:
-        return existing
+    for existing in BackupRun.objects.filter(kind=kind, status__in=OPEN_STATUSES):
+        if _has_live_job(existing.id):
+            return existing
+        logger.warning("Backup run %s has no job left; closed as interrupted", existing.id)
+        _finish(
+            existing.id,
+            BackupRun.Status.INTERRUPTED,
+            reason_code="internal_error",
+            reason=str(REASONS["internal_error"]),
+        )
     run = BackupRun.objects.create(
         kind=kind, requested_by=requested_by, destination_kind=_kind_or_blank()
     )
@@ -87,8 +109,12 @@ def request_run(kind: str, *, requested_by: str = "cli") -> BackupRun:
 
 @transaction.atomic
 def _mark_running(run_id: UUID) -> None:
+    # A resumed run (retried stalled job) keeps the moment it first started.
+    now = timezone.now()
     BackupRun.objects.filter(id=run_id, status__in=OPEN_STATUSES).update(
-        status=BackupRun.Status.RUNNING, started_at=timezone.now(), updated_at=timezone.now()
+        status=BackupRun.Status.RUNNING,
+        started_at=Coalesce(F("started_at"), Value(now)),
+        updated_at=now,
     )
 
 
@@ -122,14 +148,28 @@ class _Restic:
         self.secrets = [*destination.secrets(), *_location_secrets(repository)]
         self.failures = failures
 
-    def __call__(self, argv: Sequence[str], *, extra: dict[str, str] | None = None) -> bytes:
-        # No timeout: killing restic during the dump would orphan the pg_dump it started.
+    def __call__(
+        self,
+        argv: Sequence[str],
+        *,
+        extra: dict[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> bytes:
         env = restic.restic_env(self.repository, self.password, extra=extra)
-        result = restic.run(argv, env, secrets=self.secrets)
+        result = restic.run(argv, env, secrets=self.secrets, timeout=timeout)
         if result.returncode != 0:
             self.failures.append(result.stderr[-_STDERR_TAIL:])
             restic.raise_for(result)
         return result.stdout
+
+    def forget_run(self, run_id: UUID) -> None:
+        """Remove the snapshots of one run; a failure is logged (code only), never raised."""
+        if settings.BRIEVIE_BACKUP_APPEND_ONLY:
+            return
+        try:
+            self(restic.forget_run_argv(run_id), timeout=SHORT_RESTIC_TIMEOUT)
+        except BackupError as error:
+            logger.warning("Backup run %s: removing its snapshots failed: %s", run_id, error.code)
 
 
 def _database_conninfo() -> str:
@@ -137,12 +177,17 @@ def _database_conninfo() -> str:
     return backup_conninfo(dbname=str(connection.settings_dict["NAME"]))
 
 
-def _back_up(run: BackupRun, failures: list[str]) -> None:
-    """Steps 3-10 of a run, under the back-up lock (D 4.3: database first, then files)."""
+def _back_up(run: BackupRun, failures: list[str], *, resumed: bool) -> None:
+    """Steps 3-10 of a run, under the back-up lock (D 4.3: database first, then files).
+
+    Only `unlock` and the clean-up have a timeout: killing restic during the dump
+    would orphan the pg_dump it started, and the back-up, prune and check of a
+    large archive can take hours.
+    """
     with backup_lock():
         repository = configured_repository()
         run_restic = _Restic(repository, backup_password(), failures)
-        run_restic(restic.unlock_argv())
+        run_restic(restic.unlock_argv(), timeout=SHORT_RESTIC_TIMEOUT)
         if run.kind == BackupRun.Kind.CHECK:
             run_restic(restic.check_argv())
             _finish(run.id, BackupRun.Status.SUCCEEDED)
@@ -151,56 +196,69 @@ def _back_up(run: BackupRun, failures: list[str]) -> None:
         conninfo = _database_conninfo()
         require_backup_role(conninfo)
         require_client_for(conninfo)
+        if resumed:
+            # An earlier attempt of this run may have left snapshots: never two dumps.
+            run_restic.forget_run(run.id)
         dump_out = run_restic(
             restic.backup_stdin_argv(run.id, DUMP_COMMAND), extra=libpq_env(conninfo)
         )
-        size = restic.summary_bytes(dump_out)
-
-        manifest = build_manifest(
-            run_id=run.id,
-            conninfo=conninfo,
-            storage_root=Path(settings.BRIEVIE_STORAGE_ROOT),
-            authority_dir=Path(settings.BRIEVIE_AUTHORITY_COPY_DIR),
-        )
-        write_private(
-            Path(settings.BRIEVIE_BACKUP_CONFIG_DIR), MANIFEST_NAME, manifest_to_json(manifest)
-        )
-
-        files_out = run_restic(restic.backup_files_argv(run.id, file_paths()))
-        size += restic.summary_bytes(files_out)
+        try:
+            size = restic.summary_bytes(dump_out)
+            manifest = build_manifest(
+                run_id=run.id,
+                conninfo=conninfo,
+                storage_root=Path(settings.BRIEVIE_STORAGE_ROOT),
+                authority_dir=Path(settings.BRIEVIE_AUTHORITY_COPY_DIR),
+            )
+            write_private(
+                Path(settings.BRIEVIE_BACKUP_CONFIG_DIR),
+                MANIFEST_NAME,
+                manifest_to_json(manifest),
+            )
+            files_out = run_restic(restic.backup_files_argv(run.id, file_paths()))
+            size += restic.summary_bytes(files_out)
+        except Exception:
+            # Retention groups by host and paths: a database snapshot without its
+            # files would be kept as if it were a whole back-up.
+            run_restic.forget_run(run.id)
+            raise
         if not settings.BRIEVIE_BACKUP_APPEND_ONLY:
             run_restic(restic.forget_argv())
         _finish(run.id, BackupRun.Status.SUCCEEDED, size_bytes=size)
+
+
+def _record_failure(run_id: UUID, code: str) -> None:
+    try:
+        _finish(run_id, BackupRun.Status.FAILED, reason_code=code, reason=str(REASONS[code]))
+    except Exception as error:  # noqa: BLE001 - the job must end; request_run recovers the run
+        logger.error("Backup run %s: recording the failure raised %s", run_id, type(error).__name__)
 
 
 def perform_run(run_id: UUID) -> None:
     """Make or check a back-up; the job's whole body. Never raises: no automatic retry.
 
     Not one transaction: it runs external programs for hours. Each status change is
-    its own short transaction.
+    its own short transaction. When even recording the end fails, the run stays
+    open without a job, and the next `request_run` closes it.
     """
     run = BackupRun.objects.filter(id=run_id).first()
     if run is None or run.status not in OPEN_STATUSES:
         return
-    _mark_running(run_id)
+    resumed = run.status == BackupRun.Status.RUNNING
     failures: list[str] = []
     try:
-        _back_up(run, failures)
+        _mark_running(run_id)
+        _back_up(run, failures, resumed=resumed)
     except BackupError as error:
-        _finish(run_id, BackupRun.Status.FAILED, reason_code=error.code, reason=error.message)
+        _record_failure(run_id, error.code)
         logger.warning("Backup run %s failed: %s", run_id, error.code)
         for stderr in failures:
             # Never stdout: `backup --json` may carry messages there.
             logger.warning("Backup run %s restic stderr: %s", run_id, stderr)
     except Exception as error:  # noqa: BLE001 - every failure must end in a visible status
-        _finish(
-            run_id,
-            BackupRun.Status.FAILED,
-            reason_code="internal_error",
-            reason=str(REASONS["internal_error"]),
-        )
         # The type only: a message can quote a path or a connection string.
         logger.error("Backup run %s failed with an unexpected %s", run_id, type(error).__name__)
+        _record_failure(run_id, "internal_error")
 
 
 def wait_for_run(

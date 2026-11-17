@@ -3,7 +3,9 @@
 import json
 import logging
 import stat
-from collections.abc import Callable
+import subprocess
+from collections.abc import Callable, Mapping, Sequence
+from datetime import timedelta
 from pathlib import Path
 from unittest import mock
 from uuid import UUID
@@ -13,7 +15,8 @@ import pytest
 from django.conf import settings as django_settings
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.db import connection
+from django.db import DatabaseError, connection
+from django.utils import timezone
 from procrastinate.contrib.django.models import ProcrastinateJob
 from psycopg.conninfo import make_conninfo
 from pytest_django import Settings
@@ -242,7 +245,7 @@ def test_failed_dump_records_no_files_snapshot(
 
 
 @pytest.mark.django_db(transaction=True)
-def test_failed_files_backup_never_forgets(
+def test_failed_files_backup_never_runs_retention(
     configured_folder: Path, fake_restic: FakeBinary, fake_pg_dump: FakeBinary
 ) -> None:
     run = queued_run()
@@ -251,7 +254,7 @@ def test_failed_files_backup_never_forgets(
 
     services.perform_run(run.id)
 
-    assert all(call[0] != "forget" for call in fake_restic.calls)
+    assert restic.forget_argv() not in fake_restic.calls
     run.refresh_from_db()
     assert run.reason_code == "files_incomplete"
 
@@ -695,3 +698,318 @@ def test_status_command_shows_a_bad_destination_setting_without_its_value(
     out = capsys.readouterr().out
     assert "pw@" not in out
     assert "nas" not in out
+
+
+# --- abandoned runs (review round 1) -------------------------------------------------------
+
+
+def _job_of(run: BackupRun) -> ProcrastinateJob:
+    job: ProcrastinateJob = ProcrastinateJob.objects.get(
+        task_name="run_backup", args__run_id=str(run.id)
+    )
+    return job
+
+
+def test_open_run_whose_job_failed_is_closed_and_replaced(configured_folder: Path) -> None:
+    old = services.request_run("backup")
+    ProcrastinateJob.objects.filter(id=_job_of(old).id).update(status="failed")
+
+    new = services.request_run("backup")
+
+    assert new.id != old.id
+    assert new.status == BackupRun.Status.QUEUED
+    assert _job_of(new).status == "todo"
+    old.refresh_from_db()
+    assert old.status == BackupRun.Status.INTERRUPTED
+    assert old.reason_code == "internal_error"
+    assert old.finished_at is not None
+
+
+def test_open_run_without_any_job_is_closed_and_replaced(configured_folder: Path) -> None:
+    old = BackupRun.objects.create(kind="backup", status=BackupRun.Status.RUNNING)
+
+    new = services.request_run("backup")
+
+    assert new.id != old.id
+    old.refresh_from_db()
+    assert old.status == BackupRun.Status.INTERRUPTED
+
+
+def test_open_run_with_a_live_job_is_returned(configured_folder: Path) -> None:
+    old = services.request_run("backup")
+    ProcrastinateJob.objects.filter(id=_job_of(old).id).update(status="doing")
+
+    again = services.request_run("backup")
+
+    assert again.id == old.id
+    assert ProcrastinateJob.objects.count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_mark_running_failing_never_leaves_a_blocking_run(
+    configured_folder: Path, fake_restic: FakeBinary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run = services.request_run("backup")
+
+    def broken(*args: object, **kwargs: object) -> None:
+        raise DatabaseError("database went away")
+
+    monkeypatch.setattr(services, "_mark_running", broken)
+    monkeypatch.setattr(services, "_finish", broken)
+
+    services.perform_run(run.id)  # never raises
+
+    # The job ended (perform_run returned); the run is still open but has no live job.
+    ProcrastinateJob.objects.filter(id=_job_of(run).id).update(status="succeeded")
+    monkeypatch.undo()
+    new = services.request_run("backup")
+    assert new.id != run.id
+    run.refresh_from_db()
+    assert run.status == BackupRun.Status.INTERRUPTED
+    assert fake_restic.calls == []
+
+
+@pytest.mark.django_db(transaction=True)
+def test_failing_final_record_logs_the_type_only(
+    configured_folder: Path,
+    caplog: pytest.LogCaptureFixture,
+    fake_restic: FakeBinary,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    run = queued_run()
+
+    def broken(*args: object, **kwargs: object) -> None:
+        raise DatabaseError("secret-in-db-message")
+
+    monkeypatch.setattr(services, "_finish", broken)
+    with caplog.at_level(logging.DEBUG):
+        services.perform_run(run.id)
+
+    assert "DatabaseError" in caplog.text
+    assert "secret-in-db-message" not in caplog.text
+
+
+@pytest.mark.django_db(transaction=True)
+def test_resumed_run_keeps_its_started_at(
+    configured_folder: Path, fake_restic: FakeBinary, fake_pg_dump: FakeBinary
+) -> None:
+    started = timezone.now() - timedelta(hours=1)
+    run = BackupRun.objects.create(
+        kind="backup", status=BackupRun.Status.RUNNING, started_at=started
+    )
+    answer_both_backups(fake_restic, run.id)
+
+    services.perform_run(run.id)
+
+    run.refresh_from_db()
+    assert run.started_at == started
+    assert run.status == BackupRun.Status.SUCCEEDED
+
+
+# --- orphan database snapshots (ruling 3) --------------------------------------------------
+
+
+@pytest.mark.django_db(transaction=True)
+def test_failed_files_step_removes_the_runs_database_snapshot(
+    configured_folder: Path, fake_restic: FakeBinary, fake_pg_dump: FakeBinary
+) -> None:
+    run = queued_run()
+    fake_restic.respond(db_prefix(run.id), stdout=summary(DB_SIZE))
+    fake_restic.respond(files_prefix(run.id), code=3)
+
+    services.perform_run(run.id)
+
+    assert fake_restic.calls == [
+        restic.unlock_argv(),
+        restic.backup_stdin_argv(run.id, services.DUMP_COMMAND),
+        restic.backup_files_argv(run.id, services.file_paths()),
+        restic.forget_run_argv(run.id),
+    ]
+    run.refresh_from_db()
+    assert run.reason_code == "files_incomplete"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_failure_after_the_dump_of_any_kind_removes_the_snapshot(
+    configured_folder: Path,
+    fake_restic: FakeBinary,
+    fake_pg_dump: FakeBinary,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def explode(**kwargs: object) -> None:
+        raise RuntimeError("manifest")
+
+    monkeypatch.setattr(services, "build_manifest", explode)
+    run = queued_run()
+    fake_restic.respond(db_prefix(run.id), stdout=summary(DB_SIZE))
+
+    services.perform_run(run.id)
+
+    assert fake_restic.calls[-1] == restic.forget_run_argv(run.id)
+    run.refresh_from_db()
+    assert run.reason_code == "internal_error"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_failed_dump_needs_no_clean_up(
+    configured_folder: Path, fake_restic: FakeBinary, fake_pg_dump: FakeBinary
+) -> None:
+    run = queued_run()
+    fake_restic.respond(db_prefix(run.id), code=1)
+
+    services.perform_run(run.id)
+
+    assert restic.forget_run_argv(run.id) not in fake_restic.calls
+
+
+@pytest.mark.django_db(transaction=True)
+def test_append_only_never_removes_the_orphan_snapshot(
+    settings: Settings,
+    configured_folder: Path,
+    fake_restic: FakeBinary,
+    fake_pg_dump: FakeBinary,
+) -> None:
+    settings.BRIEVIE_BACKUP_APPEND_ONLY = True
+    run = queued_run()
+    fake_restic.respond(db_prefix(run.id), stdout=summary(DB_SIZE))
+    fake_restic.respond(files_prefix(run.id), code=3)
+
+    services.perform_run(run.id)
+
+    assert all(call[0] != "forget" for call in fake_restic.calls)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_failed_clean_up_keeps_the_runs_reason(
+    configured_folder: Path,
+    caplog: pytest.LogCaptureFixture,
+    fake_restic: FakeBinary,
+    fake_pg_dump: FakeBinary,
+) -> None:
+    run = queued_run()
+    fake_restic.respond(db_prefix(run.id), stdout=summary(DB_SIZE))
+    fake_restic.respond(files_prefix(run.id), code=3)
+    fake_restic.respond(tuple(restic.forget_run_argv(run.id)), code=11)
+
+    with caplog.at_level(logging.DEBUG):
+        services.perform_run(run.id)
+
+    run.refresh_from_db()
+    assert run.reason_code == "files_incomplete"
+    assert "repository_locked" in caplog.text
+
+
+@pytest.mark.django_db(transaction=True)
+def test_resumed_run_removes_its_earlier_snapshots_before_the_new_dump(
+    configured_folder: Path, fake_restic: FakeBinary, fake_pg_dump: FakeBinary
+) -> None:
+    run = BackupRun.objects.create(
+        kind="backup", status=BackupRun.Status.RUNNING, started_at=timezone.now()
+    )
+    answer_both_backups(fake_restic, run.id)
+
+    services.perform_run(run.id)
+
+    assert fake_restic.calls[:3] == [
+        restic.unlock_argv(),
+        restic.forget_run_argv(run.id),
+        restic.backup_stdin_argv(run.id, services.DUMP_COMMAND),
+    ]
+
+
+@pytest.mark.django_db(transaction=True)
+def test_append_only_resumed_run_removes_nothing(
+    settings: Settings,
+    configured_folder: Path,
+    fake_restic: FakeBinary,
+    fake_pg_dump: FakeBinary,
+) -> None:
+    settings.BRIEVIE_BACKUP_APPEND_ONLY = True
+    run = BackupRun.objects.create(kind="backup", status=BackupRun.Status.RUNNING)
+    answer_both_backups(fake_restic, run.id)
+
+    services.perform_run(run.id)
+
+    assert all(call[0] != "forget" for call in fake_restic.calls)
+
+
+# --- timeouts (ruling 4) -------------------------------------------------------------------
+
+
+@pytest.mark.django_db(transaction=True)
+def test_only_unlock_and_clean_up_have_a_timeout(
+    configured_folder: Path,
+    fake_restic: FakeBinary,
+    fake_pg_dump: FakeBinary,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[tuple[str, float | None]] = []
+    real_run = restic.run
+
+    def recording_run(
+        argv: Sequence[str],
+        env: Mapping[str, str],
+        *,
+        secrets: Sequence[str],
+        timeout: float | None = None,
+    ) -> restic.ResticResult:
+        seen.append((argv[0] if argv[0] != "backup" else argv[-1], timeout))
+        return real_run(argv, env, secrets=secrets, timeout=timeout)
+
+    monkeypatch.setattr(restic, "run", recording_run)
+    run = BackupRun.objects.create(kind="backup", status=BackupRun.Status.RUNNING)
+    answer_both_backups(fake_restic, run.id)
+
+    services.perform_run(run.id)
+
+    dump_last_arg = services.DUMP_COMMAND[-1]
+    files_last_arg = services.file_paths()[-1]
+    assert seen == [
+        ("unlock", services.SHORT_RESTIC_TIMEOUT),
+        ("forget", services.SHORT_RESTIC_TIMEOUT),  # the resumed run's clean-up
+        (dump_last_arg, None),
+        (files_last_arg, None),
+        ("forget", None),  # retention with --prune
+    ]
+    assert services.SHORT_RESTIC_TIMEOUT == 600
+
+
+@pytest.mark.django_db(transaction=True)
+def test_check_has_no_timeout(
+    configured_folder: Path, fake_restic: FakeBinary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[float | None] = []
+    real_run = restic.run
+
+    def recording_run(
+        argv: Sequence[str],
+        env: Mapping[str, str],
+        *,
+        secrets: Sequence[str],
+        timeout: float | None = None,
+    ) -> restic.ResticResult:
+        if argv[0] == "check":
+            seen.append(timeout)
+        return real_run(argv, env, secrets=secrets, timeout=timeout)
+
+    monkeypatch.setattr(restic, "run", recording_run)
+    services.perform_run(queued_run("check").id)
+
+    assert seen == [None]
+
+
+@pytest.mark.django_db(transaction=True)
+def test_unlock_timeout_fails_the_run(
+    configured_folder: Path, fake_restic: FakeBinary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def hanging(*args: object, **kwargs: object) -> None:
+        raise subprocess.TimeoutExpired(cmd="restic", timeout=600)
+
+    monkeypatch.setattr(subprocess, "run", hanging)
+    run = queued_run()
+
+    services.perform_run(run.id)
+
+    run.refresh_from_db()
+    assert run.status == BackupRun.Status.FAILED
+    assert run.reason_code == "restic_failed"

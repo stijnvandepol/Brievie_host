@@ -125,6 +125,16 @@ def forget_argv() -> list[str]:
     return ["forget", "--prune", "--host", HOST, "--group-by", "host,paths", *RETENTION]
 
 
+def forget_run_argv(run_id: UUID) -> list[str]:
+    """Removes every snapshot of one run (no prune: the next retention run prunes).
+
+    restic refuses `forget --tag` without a policy, and --unsafe-allow-remove-all
+    removes all snapshots that match the filters; the host and the run's own tag are
+    therefore always both present.
+    """
+    return ["forget", "--unsafe-allow-remove-all", "--host", HOST, "--tag", f"run:{run_id}"]
+
+
 def check_argv() -> list[str]:
     return ["check", "--read-data-subset", CHECK_SUBSET]
 
