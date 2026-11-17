@@ -69,6 +69,9 @@ def build_manifest(
     of reading zero rows: a manifest that undercounts would make a restore pass.
     """
     with psycopg.connect(conninfo) as conn:
+        # One snapshot, so documents and pages are counted at the same moment.
+        conn.isolation_level = psycopg.IsolationLevel.REPEATABLE_READ
+        conn.read_only = True
         conn.execute("SET row_security = off")
         workspace_ids = [
             row[0] for row in conn.execute("SELECT id FROM workspaces_workspace ORDER BY id")
@@ -131,20 +134,30 @@ def manifest_to_json(m: Manifest) -> str:
     )
 
 
+def _aware(value: datetime) -> datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("created_at has no offset")
+    return value
+
+
+def _names(value: object) -> list[str]:
+    if not isinstance(value, list) or not all(isinstance(name, str) for name in value):
+        raise ValueError("migrations are not a list of names")
+    return list(value)
+
+
 def manifest_from_json(text: str) -> Manifest:
     try:
         data = json.loads(text)
-        if data["format"] != MANIFEST_FORMAT:
+        if type(data["format"]) is not int or data["format"] != MANIFEST_FORMAT:
             raise BackupError("manifest_unreadable")
         authority = data["authority_sha256"]
         return Manifest(
             format=MANIFEST_FORMAT,
             run_id=UUID(data["run_id"]),
-            created_at=datetime.fromisoformat(data["created_at"]),
+            created_at=_aware(datetime.fromisoformat(data["created_at"])),
             brievie_version=str(data["brievie_version"]),
-            migrations={
-                str(app): [str(n) for n in names] for app, names in data["migrations"].items()
-            },
+            migrations={str(app): _names(names) for app, names in data["migrations"].items()},
             postgres_version=str(data["postgres_version"]),
             hostname=str(data["hostname"]),
             authority_sha256=None if authority is None else str(authority),
@@ -162,7 +175,11 @@ def manifest_from_json(text: str) -> Manifest:
 
 
 def unknown_migrations(m: Manifest) -> list[str]:
-    """Migrations of the manifest this code does not have: a back-up of a newer schema."""
+    """Migrations of the manifest this code does not have: a back-up of a newer schema.
+
+    Compares names on disk, so it assumes no squashed migration whose replaced files
+    were deleted.
+    """
     known = MigrationLoader(None, ignore_no_migrations=True).disk_migrations
     return [
         f"{app}.{name}"

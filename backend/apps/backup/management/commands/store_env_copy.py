@@ -11,6 +11,6 @@ class Command(BaseCommand):
 
     def handle(self, *args: object, **options: object) -> None:
         try:
-            store_env_copy(sys.stdin.read())
+            store_env_copy(sys.stdin.buffer.read().decode("utf-8"))
         except BackupError as error:
             raise CommandError(error.message) from error

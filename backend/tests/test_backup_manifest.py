@@ -174,3 +174,51 @@ def test_hostname_comes_from_settings(settings: Settings) -> None:
 
     settings.BRIEVIE_HOSTNAME = "brievie.example"
     assert host_name() == "brievie.example"
+
+
+def _manifest_data() -> dict[str, object]:
+    data: dict[str, object] = json.loads(manifest_to_json(sample_manifest()))
+    return data
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("created_at", "2026-11-17T21:03:00"),
+        ("migrations", {"documents": "0001_initial"}),
+        ("migrations", {"documents": [1]}),
+        ("migrations", ["documents"]),
+        ("format", True),
+        ("format", 1.0),
+    ],
+)
+def test_manifest_with_a_wrong_field_is_refused(field: str, value: object) -> None:
+    data = _manifest_data()
+    data[field] = value
+    with pytest.raises(BackupError) as caught:
+        manifest_from_json(json.dumps(data))
+    assert caught.value.code == "manifest_unreadable"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_manifest_is_read_in_one_repeatable_read_transaction(
+    ws_a: Workspace, backup_conninfo: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    opened: list[psycopg.Connection[tuple[object, ...]]] = []
+    real_connect = psycopg.connect
+
+    def spy(conninfo: str) -> psycopg.Connection[tuple[object, ...]]:
+        conn = real_connect(conninfo)
+        opened.append(conn)
+        return conn
+
+    monkeypatch.setattr("apps.backup.manifest.psycopg.connect", spy)
+    build_manifest(
+        run_id=uuid.uuid4(),
+        conninfo=backup_conninfo,
+        storage_root=tmp_path,
+        authority_dir=tmp_path,
+    )
+    (conn,) = opened
+    assert conn.isolation_level == psycopg.IsolationLevel.REPEATABLE_READ
+    assert conn.read_only is True
