@@ -30,15 +30,19 @@ def test_backup_role_reads_rows_of_two_workspaces(
     assert row == (2,)
 
 
+def _count_workspaces_without_row_security() -> None:
+    with transaction.atomic(), connection.cursor() as c:
+        c.execute("SET LOCAL row_security = off")
+        c.execute(COUNT_WORKSPACES)
+
+
 @pytest.mark.django_db(transaction=True)
 def test_owner_cannot_read_with_row_security_off(ws_a: Workspace) -> None:
     with workspace_context(ws_a.id):
         Folder.objects.create(workspace=ws_a, name="Back-up")
 
-    with transaction.atomic(), connection.cursor() as c:
-        c.execute("SET LOCAL row_security = off")
-        with pytest.raises(ProgrammingError) as raised:
-            c.execute(COUNT_WORKSPACES)
+    with pytest.raises(ProgrammingError) as raised:
+        _count_workspaces_without_row_security()
 
     assert isinstance(raised.value.__cause__, pg_errors.InsufficientPrivilege)
 
@@ -57,12 +61,16 @@ def test_backup_role_cannot_write(ws_a: Workspace, backup_conninfo: str) -> None
 def test_backup_role_attributes(backup_conninfo: str) -> None:
     with psycopg.connect(backup_conninfo) as conn:
         row = conn.execute(
-            "SELECT rolbypassrls, rolsuper, rolcreaterole, rolcreatedb,"
-            " pg_has_role(current_user, 'pg_read_all_data', 'member')"
+            "SELECT rolbypassrls, rolsuper, rolcreaterole, rolcreatedb, rolinherit,"
+            " pg_has_role(current_user, 'pg_read_all_data', 'member'),"
+            " has_database_privilege(current_user, 'brievie', 'CONNECT')"
             " FROM pg_roles WHERE rolname = current_user"
         ).fetchone()
 
-    assert row == (True, False, False, False, True)
+    # CONNECT is checked on the real database `brievie`, where backup-role.psql grants
+    # it (REVOKE ALL FROM PUBLIC there). The test database is a fresh one with the
+    # default CONNECT for PUBLIC, so it would prove nothing.
+    assert row == (True, False, False, False, True, True, True)
 
 
 def test_ensure_backup_role_is_idempotent() -> None:

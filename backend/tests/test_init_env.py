@@ -188,15 +188,20 @@ def test_shell_derivation_equals_python(deploy: Path) -> None:
     assert values["BRIEVIE_BACKUP_PASSWORD"] == derive_backup_password(master)
 
 
-def test_python_fallback_derives_the_same_password(deploy: Path, tmp_path: Path) -> None:
-    # A PATH with python3 but without openssl.
+@pytest.mark.parametrize("deriver", ["python3", "openssl"])
+def test_each_deriver_gives_the_same_password(deploy: Path, tmp_path: Path, deriver: str) -> None:
+    # A PATH with only one of python3 and openssl: python3 is tried first, openssl is the
+    # fallback for hosts without python3.
+    found_deriver = sys.executable if deriver == "python3" else shutil.which("openssl")
+    if found_deriver is None:
+        pytest.skip("openssl is not installed")
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     for tool in ("cat", "chmod", "cut", "dirname", "grep", "mv", "rm", "sed", "tail", "tr"):
         found = shutil.which(tool)
         assert found is not None
         (bin_dir / tool).symlink_to(found)
-    (bin_dir / "python3").symlink_to(sys.executable)
+    (bin_dir / deriver).symlink_to(found_deriver)
     (deploy / ".env").write_text(f"BRIEVIE_MASTER_KEY={MASTER}\n")
 
     run_script(deploy, PATH=str(bin_dir))

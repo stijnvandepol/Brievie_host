@@ -32,6 +32,8 @@ random() {
 # The back-up password derived from the master key $1 (64 hex characters):
 # HMAC-SHA256(key, "brievie/backup-password/v1" || 0x01), which is HKDF-Expand with that
 # label (apps.common.crypto.derive_backup_password). Never change the label.
+# python3 first: it reads the key from stdin. openssl only takes it on its command line,
+# where another local user could see it, so it is the fallback for hosts without python3.
 derive() {
 	case $1 in
 	*[!0-9a-fA-F]* | '') bad_key=1 ;;
@@ -41,11 +43,11 @@ derive() {
 		echo "BRIEVIE_MASTER_KEY in deploy/.env is not 64 hexadecimal characters; the back-up password cannot be derived from it." >&2
 		exit 1
 	fi
-	if command -v openssl >/dev/null 2>&1; then
+	if command -v python3 >/dev/null 2>&1; then
+		derived=$(printf '%s' "$1" | python3 -c "import hashlib, hmac, sys; key = bytes.fromhex(sys.stdin.read()); sys.stdout.write(hmac.new(key, b'brievie/backup-password/v1\x01', hashlib.sha256).hexdigest())")
+	elif command -v openssl >/dev/null 2>&1; then
 		derived=$(printf 'brievie/backup-password/v1\001' |
 			openssl dgst -sha256 -mac HMAC -macopt "hexkey:$1" | sed 's/^.*= *//')
-	elif command -v python3 >/dev/null 2>&1; then
-		derived=$(printf '%s' "$1" | python3 -c "import hashlib, hmac, sys; key = bytes.fromhex(sys.stdin.read()); sys.stdout.write(hmac.new(key, b'brievie/backup-password/v1\x01', hashlib.sha256).hexdigest())")
 	else
 		echo "init-env.sh needs openssl or python3." >&2
 		exit 1
