@@ -452,8 +452,48 @@ def empty_dir(descriptor: int) -> None:
 
 @dataclass(frozen=True)
 class Cleaned:
-    removed: int  # links and special files
-    skipped: int  # files with more than one hard link: not handed over
+    removed: int  # links, special files and files with more than one hard link
+
+
+def open_subdirs(base: int, names: Sequence[str], *, create: int | None = None) -> int:
+    """A descriptor of `base/names[0]/…`, each opened without following a link; with
+    `create`, missing ones are made with that mode. Nothing above `base` is touched."""
+    descriptor = os.dup(base)
+    try:
+        for name in names:
+            require_plain_name(name)
+            try:
+                child = _open_child_dir(descriptor, name)
+            except FileNotFoundError:
+                if create is None:
+                    raise
+                os.mkdir(name, create, dir_fd=descriptor)
+                child = _open_child_dir(descriptor, name)
+            os.close(descriptor)
+            descriptor = child
+    except BaseException:
+        os.close(descriptor)
+        raise
+    return descriptor
+
+
+def check_tree(descriptor: int) -> None:
+    """Before a restore writes into the tree open as `descriptor`: refuse
+    (`restore_target_unsafe`) any entry that is not a directory or a regular file with
+    one name. A link, a special file or a hard link could make a write land elsewhere.
+    Nothing is changed."""
+    with os.scandir(descriptor) as entries:
+        names = [entry.name for entry in entries]
+    for name in names:
+        info = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
+        if stat.S_ISDIR(info.st_mode):
+            child = _open_subdir(descriptor, name, info)
+            try:
+                check_tree(child)
+            finally:
+                os.close(child)
+        elif not stat.S_ISREG(info.st_mode) or info.st_nlink > 1:
+            raise BackupError("restore_target_unsafe")
 
 
 def _open_regular(parent: int, name: str, seen: os.stat_result) -> int | None:
@@ -482,11 +522,11 @@ def _settle(descriptor: int, info: os.stat_result, owner: int | None) -> None:
 def clean_tree(descriptor: int, *, owner: int | None) -> Cleaned:
     """After a restore: keep only regular files and directories in the tree open as
     `descriptor`. Anything else (links, devices, fifos, sockets) is removed and
-    counted; setuid, setgid and sticky bits are cleared; with `owner`, every
-    directory and file is handed to that uid and gid, except a file with more than
-    one hard link (skipped and counted: its other names may lie elsewhere).
+    counted, and so is a file with more than one hard link (its other names may lie
+    elsewhere: it is never kept with a foreign owner); setuid, setgid and sticky bits
+    are cleared; with `owner`, every directory and file is handed to that uid and gid.
     """
-    removed = skipped = 0
+    removed = 0
     _settle(descriptor, os.fstat(descriptor), owner)
     with os.scandir(descriptor) as entries:
         names = [entry.name for entry in entries]
@@ -499,22 +539,20 @@ def clean_tree(descriptor: int, *, owner: int | None) -> Cleaned:
             finally:
                 os.close(child)
             removed += inner.removed
-            skipped += inner.skipped
             continue
         opened = _open_regular(descriptor, name, info) if stat.S_ISREG(info.st_mode) else None
+        if opened is not None and os.fstat(opened).st_nlink > 1:
+            os.close(opened)
+            opened = None
         if opened is None:
             os.unlink(name, dir_fd=descriptor)
             removed += 1
             continue
         try:
-            if info.st_nlink > 1:
-                _settle(opened, info, None)
-                skipped += 1
-            else:
-                _settle(opened, info, owner)
+            _settle(opened, info, owner)
         finally:
             os.close(opened)
-    return Cleaned(removed=removed, skipped=skipped)
+    return Cleaned(removed=removed)
 
 
 def chown_tree(descriptor: int, uid: int) -> int:

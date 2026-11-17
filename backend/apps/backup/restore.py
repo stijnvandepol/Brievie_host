@@ -589,6 +589,19 @@ def _empty(directory: Path) -> None:
         os.close(descriptor)
 
 
+def _check_target(directory: Path) -> None:
+    """Refuse (`restore_target_unsafe`) a target that holds anything but directories and
+    regular files with one name; a missing target is fine (restic makes it)."""
+    expected = safepaths.identity(directory)
+    if expected is None:
+        return
+    descriptor = safepaths.open_dir_nofollow(directory, expect=expected)
+    try:
+        safepaths.check_tree(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 def _clean_restored(directory: Path, owner: int | None) -> int:
     """After restic: remove what is no regular file or directory, clear setuid bits and
     hand the tree to `owner`; returns how many entries were removed."""
@@ -600,10 +613,6 @@ def _clean_restored(directory: Path, owner: int | None) -> int:
         cleaned = safepaths.clean_tree(descriptor, owner=owner)
     finally:
         os.close(descriptor)
-    if cleaned.skipped:
-        logger.warning(
-            "Restore: %s files with more than one hard link kept their owner", cleaned.skipped
-        )
     return cleaned.removed
 
 
@@ -614,7 +623,8 @@ def _place_authority(source: Path, target: Path) -> bool:
     (a public certificate). Caddy's leaf certificates are removed, so it issues new ones
     from the restored authority. Every refusal comes before anything is changed. The
     source files are read without following a link, must be regular and small; the
-    target and the leaf directory are worked on through descriptors only.
+    target and the leaf directory are worked on through descriptors only, and nothing
+    above `…/caddy/pki` is made (`caddy_not_ready` when Caddy's folder is missing).
     """
     target = safepaths.require_caddy_authority_dir(target)
     leaf = safepaths.leaf_dir(target)
@@ -633,7 +643,17 @@ def _place_authority(source: Path, target: Path) -> bool:
         os.close(source_fd)
     if AUTHORITY_FILE not in contents:
         return False
-    target_fd = safepaths.open_dir_nofollow(target, create=0o700)
+    # Caddy's own folder (`…/caddy`) must exist: only `pki/authorities/local` below it
+    # is ever made here, never anything above it.
+    base = target.parents[2]
+    expected = safepaths.identity(base)
+    if expected is None:
+        raise BackupError("caddy_not_ready")
+    base_fd = safepaths.open_dir_nofollow(base, expect=expected)
+    try:
+        target_fd = safepaths.open_subdirs(base_fd, target.parts[-3:], create=0o700)
+    finally:
+        os.close(base_fd)
     try:
         os.fchown(target_fd, 0, 0)
         os.fchmod(target_fd, 0o700)
@@ -710,6 +730,10 @@ def restore_files(
                     _empty(directory)
             except OSError:
                 raise BackupError("documents_incomplete") from None
+        # Whatever restic does with what is already there: a link, a special file or a
+        # hard link in a target is refused before restic writes anything.
+        for directory in directories:
+            _check_target(directory)
         argv = restic.restore_argv(
             found.files.id, "/", [str(path) for path in directories], no_lock=True
         )

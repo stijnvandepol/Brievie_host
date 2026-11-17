@@ -441,3 +441,14 @@ def test_delete_orphans_never_follows_a_root_swapped_after_the_check(
     with pytest.raises((BackupError, OSError)):
         sweep.delete_orphans(orphans, documents)
     assert victim.read_text() == "not ours"
+
+
+def test_place_authority_makes_nothing_above_caddys_own_folder(
+    source: Path, recorder: Recorder, tmp_path: Path
+) -> None:
+    caddy_data = tmp_path / "caddy-data"
+    caddy_data.mkdir()
+    target = caddy_data / "caddy" / "pki" / "authorities" / "local"
+
+    refused(recorder, lambda: restore._place_authority(source, target), codes=("caddy_not_ready",))
+    assert list(caddy_data.iterdir()) == []

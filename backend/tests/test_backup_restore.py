@@ -347,7 +347,11 @@ def test_a_closed_run_is_neither_resumed_nor_taken_for_abandoned(
 
 @pytest.fixture
 def caddy(tmp_path: Path) -> Path:
-    """Caddy's data volume as the admin container mounts it; returns the authority target."""
+    """Caddy's data volume as the admin container mounts it; returns the authority target.
+
+    Caddy has started once, so its own `caddy` folder exists (the restore makes nothing
+    above `…/caddy/pki`)."""
+    (tmp_path / "caddy-data" / "caddy").mkdir(parents=True)
     return tmp_path / "caddy-data" / "caddy" / "pki" / "authorities" / "local"
 
 
@@ -884,3 +888,80 @@ def test_every_restic_call_of_a_restore_reads_without_a_lock(
     restore_files(run=None, authority_target=caddy, clear_documents=False)
     assert fake_restic.calls
     assert all(call[1] == "--no-lock" for call in fake_restic.calls), fake_restic.calls
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("planted", ["link", "dir-link", "hard-link"])
+def test_a_restore_without_replace_refuses_a_link_already_in_a_target(
+    configured_folder: Path,
+    fake_restic: FakeBinary,
+    caddy: Path,
+    tmp_path: Path,
+    recorder: Recorder,
+    planted: str,
+) -> None:
+    one_run(fake_restic)
+    documents = Path(django_settings.BRIEVIE_STORAGE_ROOT)
+    (documents / "ws").mkdir(parents=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "keep").write_text("keep")
+    if planted == "link":
+        (documents / "ws" / "1.page").symlink_to(outside / "keep")
+    elif planted == "dir-link":
+        (documents / "ws" / "doc").symlink_to(outside, target_is_directory=True)
+    else:
+        os.link(outside / "keep", documents / "ws" / "1.page")
+
+    # Listing and the fake restic (find_run) are allowed; nothing destructive is.
+    recorder.arm(allow=("scandir", "Popen", "run"))
+    with pytest.raises(BackupError) as caught:
+        restore_files(run=None, authority_target=caddy, clear_documents=False)
+    recorder.disarm()
+
+    assert caught.value.code == "restore_target_unsafe"
+    assert "--replace" in caught.value.message
+    assert not any(call[:1] == ["restore"] for call in fake_restic.calls)
+    assert (outside / "keep").read_text() == "keep"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_restore_removes_a_restored_file_with_another_name_elsewhere(
+    configured_folder: Path,
+    fake_restic: FakeBinary,
+    caddy: Path,
+    tmp_path: Path,
+    settings: Settings,
+) -> None:
+    one_run(fake_restic)
+    documents = Path(django_settings.BRIEVIE_STORAGE_ROOT)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "keep").write_text("keep")
+    settings.BRIEVIE_RESTIC_BINARY = restic_that_restores(
+        tmp_path,
+        fake_restic,
+        f"mkdir -p '{documents}/ws'\nln '{outside}/keep' '{documents}/ws/1.page'",
+    )
+
+    restored = restore_files(run=None, authority_target=caddy, clear_documents=False)
+
+    assert restored.removed == 1
+    assert not (documents / "ws" / "1.page").exists()
+    assert (outside / "keep").read_text() == "keep"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_the_authority_is_never_placed_when_caddys_folder_is_missing(
+    configured_folder: Path, fake_restic: FakeBinary, tmp_path: Path, chowned: Chowned
+) -> None:
+    one_run(fake_restic)
+    restored_authority(AUTHORITY_FILES)
+    target = tmp_path / "fresh-caddy-data" / "caddy" / "pki" / "authorities" / "local"
+    (tmp_path / "fresh-caddy-data").mkdir()
+
+    with pytest.raises(BackupError) as caught:
+        restore_files(run=None, authority_target=target, clear_documents=False)
+
+    assert caught.value.code == "caddy_not_ready"
+    assert list((tmp_path / "fresh-caddy-data").iterdir()) == []

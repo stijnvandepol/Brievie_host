@@ -40,6 +40,8 @@ EXPECTED_CODES = {
     "unsafe_path",
     "directory_not_allowed",
     "out_dir_not_empty",
+    "restore_target_unsafe",
+    "caddy_not_ready",
 }
 
 

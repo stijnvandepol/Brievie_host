@@ -69,6 +69,15 @@ REASONS: dict[str, Promise] = {
     "out_dir_not_empty": _(
         "In de map voor het herstel staan al bestanden. Kies een nieuwe of lege map."
     ),
+    "restore_target_unsafe": _(
+        "In een map waar het herstel bestanden terugzet, staat een snelkoppeling of een "
+        "ander bijzonder bestand. Brievie zet daar niets overheen. Herstel met --replace, "
+        "dan worden de mappen eerst leeggemaakt."
+    ),
+    "caddy_not_ready": _(
+        "De gegevensmap van Caddy bestaat nog niet. Start Brievie één keer en voer deze "
+        "stap daarna opnieuw uit."
+    ),
     "interrupted_by_restore": _("Afgebroken door herstel."),
     "abandoned": _("De vorige back-up is afgebroken. Er is een nieuwe gestart."),
     "internal_error": _("Er ging iets mis. Probeer het later opnieuw."),

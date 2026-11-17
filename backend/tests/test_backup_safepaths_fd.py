@@ -180,7 +180,7 @@ def test_cleaning_removes_links_and_special_files_and_clears_setuid(
     assert survived(outside)
 
 
-def test_cleaning_hands_everything_to_the_owner_but_skips_hard_links(
+def test_cleaning_hands_everything_to_the_owner_and_removes_hard_links(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     directory = tmp_path / "documents"
@@ -199,8 +199,81 @@ def test_cleaning_hands_everything_to_the_owner_but_skips_hard_links(
 
     inodes = {p.stat().st_ino for p in (directory, directory / "ws", directory / "ws" / "1.page")}
     assert set(owned) == inodes
-    assert (directory / "twice").stat().st_ino not in owned
-    assert result.skipped == 1
+    # A file with another name elsewhere is removed (never kept with a foreign owner),
+    # and the other name is left alone.
+    assert not (directory / "twice").exists()
+    assert (tmp_path / "elsewhere").read_text() == "x"
+    assert result.removed == 1
+
+
+# --- check_tree: before a restore writes into a directory ------------------------------------
+
+
+def test_a_tree_of_plain_files_and_directories_passes(tmp_path: Path) -> None:
+    directory = tmp_path / "documents"
+    (directory / "ws" / "doc").mkdir(parents=True)
+    (directory / "ws" / "doc" / "1.page").write_text("x")
+    fd = safepaths.open_dir_nofollow(directory)
+    try:
+        safepaths.check_tree(fd)
+    finally:
+        os.close(fd)
+
+
+@pytest.mark.parametrize("planted", ["file-link", "dir-link", "deep-link", "fifo", "hard-link"])
+def test_a_tree_with_a_link_or_special_file_is_refused(
+    tmp_path: Path, outside: Path, planted: str
+) -> None:
+    directory = tmp_path / "documents"
+    (directory / "ws" / "doc").mkdir(parents=True)
+    if planted == "file-link":
+        (directory / "1.page").symlink_to(outside / "keep")
+    elif planted == "dir-link":
+        (directory / "ws" / "other").symlink_to(outside, target_is_directory=True)
+    elif planted == "deep-link":
+        (directory / "ws" / "doc" / "1.page").symlink_to(outside / "keep")
+    elif planted == "fifo":
+        if not hasattr(os, "mkfifo"):
+            pytest.skip("no fifos on this platform")
+        os.mkfifo(directory / "ws" / "fifo")
+    else:
+        os.link(outside / "keep", directory / "ws" / "doc" / "1.page")
+    fd = safepaths.open_dir_nofollow(directory)
+    try:
+        with pytest.raises(BackupError) as caught:
+            safepaths.check_tree(fd)
+    finally:
+        os.close(fd)
+    assert caught.value.code == "restore_target_unsafe"
+    assert survived(outside)
+
+
+# --- open_subdirs: below a base that must exist -------------------------------------------------
+
+
+def test_subdirectories_are_made_only_below_an_existing_base(tmp_path: Path) -> None:
+    base = tmp_path / "caddy"
+    base.mkdir()
+    base_fd = safepaths.open_dir_nofollow(base)
+    try:
+        fd = safepaths.open_subdirs(base_fd, ("pki", "authorities", "local"), create=0o700)
+        os.close(fd)
+    finally:
+        os.close(base_fd)
+    assert (base / "pki" / "authorities" / "local").is_dir()
+
+
+def test_subdirectories_never_go_through_a_link(tmp_path: Path, outside: Path) -> None:
+    base = tmp_path / "caddy"
+    base.mkdir()
+    (base / "pki").symlink_to(outside, target_is_directory=True)
+    base_fd = safepaths.open_dir_nofollow(base)
+    try:
+        with pytest.raises(BackupError):
+            safepaths.open_subdirs(base_fd, ("pki", "authorities", "local"), create=0o700)
+    finally:
+        os.close(base_fd)
+    assert sorted(p.name for p in outside.iterdir()) == ["keep"]
 
 
 # --- read_regular_at -------------------------------------------------------------------------
