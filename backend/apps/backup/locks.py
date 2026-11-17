@@ -1,7 +1,7 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from django.db import connection
+from django.db import DatabaseError, connection
 
 from apps.backup.errors import BackupError
 
@@ -24,5 +24,18 @@ def backup_lock() -> Iterator[None]:
     try:
         yield
     finally:
+        _unlock()
+
+
+def _unlock() -> None:
+    """Release the lock without ever replacing the body's exception.
+
+    When the connection died during the body, the session lock died with it. When
+    the unlock fails for any other database reason, closing the connection ends
+    the session and so releases the lock as well.
+    """
+    try:
         with connection.cursor() as cursor:
             cursor.execute("SELECT pg_advisory_unlock(%s)", [BACKUP_LOCK_KEY])
+    except DatabaseError:
+        connection.close()

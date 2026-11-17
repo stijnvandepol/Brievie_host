@@ -56,6 +56,31 @@ def test_lock_taken_elsewhere_raises_busy() -> None:
         assert caught.value.code == "busy"
 
 
+@pytest.mark.django_db(transaction=True)
+def test_lock_is_released_when_the_body_raises() -> None:
+    with pytest.raises(ValueError, match="body"), backup_lock():
+        raise ValueError("body")
+    assert _try_lock_elsewhere() is True
+
+
+@pytest.mark.django_db(transaction=True)
+def test_dead_connection_does_not_mask_the_body_error() -> None:
+    # The session lock dies with the connection; unlocking must not replace the error.
+    def body_that_loses_its_connection() -> None:
+        with backup_lock():
+            raw = connection.connection
+            assert raw is not None
+            raw.close()
+            raise ValueError("body")
+
+    with pytest.raises(ValueError, match="body"):
+        body_that_loses_its_connection()
+    assert _try_lock_elsewhere() is True
+    # The connection is usable again afterwards.
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT 1")
+
+
 def test_lock_refuses_an_open_transaction() -> None:
     with transaction.atomic(), pytest.raises(RuntimeError), backup_lock():
         pass

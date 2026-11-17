@@ -124,3 +124,29 @@ def fake_tool(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Callable[[str]
         return FakeBinary(directory, name)
 
     return make
+
+
+@pytest.fixture
+def configured_folder(tmp_path: Path, settings: object) -> Path:
+    """A folder destination that `initialise` already prepared, plus private config dirs.
+
+    Returns the mount. The back-up password is a real (non-placeholder) value.
+    """
+    # Imported here: this module imports no Django code at import time.
+    from apps.backup import destination
+
+    mount = tmp_path / "backup-mount"
+    (mount / destination.REPOSITORY_DIR).mkdir(parents=True)
+    marker = {"format": destination.MARKER_FORMAT, "repository": destination.REPOSITORY_DIR}
+    (mount / destination.MARKER_NAME).write_text(json.dumps(marker))
+    values = {
+        "BRIEVIE_BACKUP_DIR_SET": True,
+        "BRIEVIE_BACKUP_MOUNT": str(mount),
+        "BRIEVIE_BACKUP_REPOSITORY": "",
+        "BRIEVIE_BACKUP_PASSWORD": "p" * 40,
+        "BRIEVIE_BACKUP_CONFIG_DIR": str(tmp_path / "backup-config"),
+        "BRIEVIE_AUTHORITY_COPY_DIR": str(tmp_path / "authority"),
+    }
+    for name, value in values.items():
+        setattr(settings, name, value)
+    return mount

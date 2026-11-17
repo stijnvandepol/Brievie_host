@@ -1,13 +1,12 @@
 """The copy of deploy/.env that goes into the back-up, without the secrets."""
 
-import os
 import re
-import tempfile
 from pathlib import Path
 
 from django.conf import settings
 
 from apps.backup.errors import BackupError
+from apps.backup.privatefile import write_private
 
 # The master key and the database superuser/owner passwords never enter a back-up.
 EXCLUDED_KEYS = (
@@ -45,16 +44,4 @@ def store_env_copy(text: str) -> None:
     """
     if any(_leaks(line) for line in text.splitlines()):
         raise BackupError("env_copy_has_secret")
-    directory = Path(settings.BRIEVIE_BACKUP_CONFIG_DIR)
-    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-    descriptor, temporary = tempfile.mkstemp(dir=directory, prefix=".env-")
-    try:
-        os.fchmod(descriptor, 0o600)
-        with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as handle:
-            handle.write(text)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, directory / ENV_COPY_NAME)
-    except BaseException:
-        Path(temporary).unlink(missing_ok=True)
-        raise
+    write_private(Path(settings.BRIEVIE_BACKUP_CONFIG_DIR), ENV_COPY_NAME, text)
