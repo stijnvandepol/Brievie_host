@@ -79,6 +79,7 @@ def test_check_reads_a_sample() -> None:
 def test_other_argv_builders() -> None:
     assert restic.init_argv() == ["init"]
     assert restic.unlock_argv() == ["unlock"]
+    assert restic.cat_config_argv() == ["cat", "config"]
     assert restic.snapshots_argv("run:x") == ["snapshots", "--json", "--tag", "run:x"]
     assert restic.dump_argv("abc", "/brievie.pgdump") == ["dump", "abc", "/brievie.pgdump"]
     assert restic.restore_argv("abc", "/t", ["/a", "/b"]) == [

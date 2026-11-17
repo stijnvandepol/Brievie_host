@@ -20,11 +20,15 @@ MARKER_NAME = "brievie-backup.json"
 REPOSITORY_DIR = "restic"
 MARKER_FORMAT = 1
 
-_ALREADY_EXISTS = ("already exists", "config file already exists")
+_ALREADY_EXISTS = "config file already exists"
 
 
 def destination_kind() -> str:
-    """`folder`, `rest`, `s3`, or `` when nothing is set."""
+    """`folder`, `rest`, `s3`, or `` when nothing is set.
+
+    Raises BackupError: `destination_conflict` (folder and repository both set),
+    `repository_unsupported` or `repository_has_credentials` (bad repository value).
+    """
     repository: str = settings.BRIEVIE_BACKUP_REPOSITORY.strip()
     if settings.BRIEVIE_BACKUP_DIR_SET:
         if repository:
@@ -46,6 +50,18 @@ def _marker() -> Path:
 
 def _device(path: Path | str) -> int:
     return os.stat(path).st_dev
+
+
+def _marker_is_valid() -> bool:
+    try:
+        content = json.loads(_marker().read_text())
+    except (OSError, ValueError):
+        return False
+    return (
+        isinstance(content, dict)
+        and content.get("format") == MARKER_FORMAT
+        and content.get("repository") == REPOSITORY_DIR
+    )
 
 
 def _remote_repository(kind: str) -> restic.Repository:
@@ -76,7 +92,7 @@ def configured_repository() -> restic.Repository:
     if not kind:
         raise BackupError("not_configured")
     if kind == "folder":
-        if not _marker().is_file():
+        if not _marker_is_valid():
             raise BackupError("destination_not_ready")
         return _folder_repository()
     return _remote_repository(kind)
@@ -110,12 +126,39 @@ def _chown_tree(root: Path, uid: int) -> None:
             os.chown(Path(directory) / name, uid, uid)
 
 
-def _run_init(repository: restic.Repository) -> None:
+def _run_init(repository: restic.Repository) -> bool:
+    """Run `restic init`; True when the repository already existed."""
     env = restic.restic_env(repository, backup_password())
     result = restic.run(restic.init_argv(), env, secrets=secrets())
-    if result.returncode == 1 and any(text in result.stderr.lower() for text in _ALREADY_EXISTS):
-        raise BackupError("already_initialised")
+    if result.returncode == 1 and _ALREADY_EXISTS in result.stderr.lower():
+        return True
     restic.raise_for(result)
+    return False
+
+
+def _verify_password(repository: restic.Repository) -> None:
+    env = restic.restic_env(repository, backup_password())
+    restic.raise_for(restic.run(restic.cat_config_argv(), env, secrets=secrets()))
+
+
+def _finish_folder(owner_uid: int | None) -> None:
+    """Hand the tree over, then write the marker last: it means "ready"."""
+    marker = _marker()
+    try:
+        if owner_uid is not None:
+            _chown_tree(_mount() / REPOSITORY_DIR, owner_uid)
+        content = {
+            "format": MARKER_FORMAT,
+            "created_at": datetime.now(UTC).isoformat(),
+            "repository": REPOSITORY_DIR,
+        }
+        marker.write_text(json.dumps(content))
+        marker.chmod(0o644)
+        if owner_uid is not None:
+            os.chown(marker, owner_uid, owner_uid)
+    except OSError as error:
+        marker.unlink(missing_ok=True)
+        raise BackupError("destination_not_writable") from error
 
 
 def initialise(*, allow_same_disk: bool, owner_uid: int | None) -> restic.Repository:
@@ -123,6 +166,13 @@ def initialise(*, allow_same_disk: bool, owner_uid: int | None) -> restic.Reposi
 
     `owner_uid` is the keeper's uid; the one-off container runs as root, so the
     files it creates are handed over. Tests pass None.
+
+    The same-disk check compares device ids. It is best-effort: it catches the
+    unplugged disk (an empty directory on the root filesystem) but can miss
+    Docker Desktop, btrfs subvolumes and a separate /var/lib/docker.
+
+    A folder is ready only when the marker exists, and the marker is written
+    last, so a half-finished run is completed by running this again.
     """
     kind = destination_kind()
     if not kind:
@@ -130,7 +180,8 @@ def initialise(*, allow_same_disk: bool, owner_uid: int | None) -> restic.Reposi
     backup_password()
     if kind != "folder":
         repository = _remote_repository(kind)
-        _run_init(repository)
+        if _run_init(repository):
+            raise BackupError("already_initialised")
         return repository
 
     mount = _mount()
@@ -138,18 +189,16 @@ def initialise(*, allow_same_disk: bool, owner_uid: int | None) -> restic.Reposi
         raise BackupError("destination_not_ready")
     if _marker().exists():
         raise BackupError("already_initialised")
-    if not allow_same_disk and _device(mount) == _device(settings.BRIEVIE_STORAGE_ROOT):
-        raise BackupError("same_disk")
+    if not allow_same_disk:
+        try:
+            same = _device(mount) == _device(settings.BRIEVIE_STORAGE_ROOT)
+        except OSError as error:
+            raise BackupError("destination_not_ready") from error
+        if same:
+            raise BackupError("same_disk")
     repository = _folder_repository()
-    _run_init(repository)
-    marker = {
-        "format": MARKER_FORMAT,
-        "created_at": datetime.now(UTC).isoformat(),
-        "repository": REPOSITORY_DIR,
-    }
-    _marker().write_text(json.dumps(marker))
-    _marker().chmod(0o644)
-    if owner_uid is not None:
-        _chown_tree(mount / REPOSITORY_DIR, owner_uid)
-        os.chown(_marker(), owner_uid, owner_uid)
+    if _run_init(repository):
+        # A half-finished earlier run, or a re-plugged disk: take it over only with our password.
+        _verify_password(repository)
+    _finish_folder(owner_uid)
     return repository

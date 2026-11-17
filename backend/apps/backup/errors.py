@@ -7,6 +7,10 @@ REASONS: dict[str, Promise] = {
     "destination_conflict": _(
         "Je kunt maar één bestemming instellen: een map of een adres. Haal er één weg."
     ),
+    "destination_not_writable": _(
+        "De back-updienst kan niet schrijven op deze bestemming. "
+        "Kijk in SELFHOST.md hoe je de schijf klaarzet."
+    ),
     "destination_not_ready": _("De bestemming voor de back-up is nog niet klaar voor gebruik."),
     "same_disk": _("De back-up staat op dezelfde schijf als de gegevens. Kies een andere schijf."),
     "already_initialised": _("Op deze bestemming staat al een back-up."),

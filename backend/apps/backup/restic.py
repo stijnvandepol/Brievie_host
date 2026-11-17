@@ -82,6 +82,11 @@ def init_argv() -> list[str]:
     return ["init"]
 
 
+def cat_config_argv() -> list[str]:
+    """Opens the repository's config: proves the password fits an existing repository."""
+    return ["cat", "config"]
+
+
 def unlock_argv() -> list[str]:
     """Removes stale locks only; never `--remove-all`."""
     return ["unlock"]

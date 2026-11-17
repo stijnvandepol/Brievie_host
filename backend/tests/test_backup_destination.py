@@ -23,10 +23,14 @@ def folder(settings: object, tmp_path: Path) -> Path:
     return mount
 
 
-def _other_disk(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        destination, "_device", lambda path: 2 if str(path).endswith("backup") else 1
-    )
+def _other_disk(monkeypatch: pytest.MonkeyPatch, folder: Path) -> None:
+    mount = str(folder)
+    monkeypatch.setattr(destination, "_device", lambda path: 2 if str(path) == mount else 1)
+
+
+def _write_marker(folder: Path, content: str | None = None) -> None:
+    marker = {"format": 1, "created_at": "2026-01-01T00:00:00+00:00", "repository": "restic"}
+    (folder / destination.MARKER_NAME).write_text(content or json.dumps(marker))
 
 
 def test_nothing_configured_is_not_configured(settings: object) -> None:
@@ -58,7 +62,7 @@ def test_missing_mount_is_not_ready_either(
 
 
 def test_folder_with_marker_points_at_the_restic_dir(folder: Path) -> None:
-    (folder / destination.MARKER_NAME).write_text("{}")
+    _write_marker(folder)
     repository = destination.configured_repository()
     assert repository.kind == "folder"
     assert repository.location == f"{folder}/restic"
@@ -68,7 +72,7 @@ def test_folder_with_marker_points_at_the_restic_dir(folder: Path) -> None:
 def test_init_writes_marker_and_initialises(
     folder: Path, fake_restic: FakeBinary, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _other_disk(monkeypatch)
+    _other_disk(monkeypatch, folder)
     repository = destination.initialise(allow_same_disk=False, owner_uid=None)
     assert fake_restic.calls == [["init"]]
     assert repository.location == f"{folder}/restic"
@@ -83,7 +87,7 @@ def test_init_writes_marker_and_initialises(
 def test_init_does_not_write_a_marker_when_restic_fails(
     folder: Path, fake_restic: FakeBinary, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _other_disk(monkeypatch)
+    _other_disk(monkeypatch, folder)
     fake_restic.respond(("init",), stderr="boom", code=1)
     with pytest.raises(BackupError) as caught:
         destination.initialise(allow_same_disk=False, owner_uid=None)
@@ -94,7 +98,7 @@ def test_init_does_not_write_a_marker_when_restic_fails(
 def test_init_twice_is_refused(
     folder: Path, fake_restic: FakeBinary, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _other_disk(monkeypatch)
+    _other_disk(monkeypatch, folder)
     destination.initialise(allow_same_disk=False, owner_uid=None)
     with pytest.raises(BackupError) as caught:
         destination.initialise(allow_same_disk=False, owner_uid=None)
@@ -120,7 +124,7 @@ def test_init_on_the_disk_of_the_documents_is_refused(
 def test_init_hands_the_tree_to_the_keeper(
     folder: Path, fake_restic: FakeBinary, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _other_disk(monkeypatch)
+    _other_disk(monkeypatch, folder)
     # The fake restic creates nothing, so make the tree the real one would.
     (folder / destination.REPOSITORY_DIR / "data").mkdir(parents=True)
     with mock.patch.object(os, "chown") as chown:
@@ -135,7 +139,7 @@ def test_init_hands_the_tree_to_the_keeper(
 def test_init_without_owner_does_not_chown(
     folder: Path, fake_restic: FakeBinary, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _other_disk(monkeypatch)
+    _other_disk(monkeypatch, folder)
     with mock.patch.object(os, "chown") as chown:
         destination.initialise(allow_same_disk=False, owner_uid=None)
     chown.assert_not_called()
@@ -237,7 +241,118 @@ def test_secrets_lists_every_credential(settings: object) -> None:
 def test_restic_gets_the_password_in_the_environment_only(
     folder: Path, fake_restic: FakeBinary, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _other_disk(monkeypatch)
+    _other_disk(monkeypatch, folder)
     destination.initialise(allow_same_disk=False, owner_uid=None)
     assert all(PASSWORD not in arg for call in fake_restic.calls for arg in call)
     assert "RESTIC_PASSWORD" in fake_restic.env_keys[0]
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "not json",
+        "[]",
+        '{"format": 2, "repository": "restic"}',
+        '{"format": 1, "repository": "elsewhere"}',
+        "{}",
+    ],
+)
+def test_foreign_or_corrupt_marker_is_not_ready(
+    folder: Path, fake_restic: FakeBinary, content: str
+) -> None:
+    _write_marker(folder, content)
+    with pytest.raises(BackupError) as caught:
+        destination.configured_repository()
+    assert caught.value.code == "destination_not_ready"
+
+
+def test_marker_write_failure_leaves_no_marker(
+    folder: Path, fake_restic: FakeBinary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _other_disk(monkeypatch, folder)
+    monkeypatch.setattr(Path, "write_text", mock.Mock(side_effect=PermissionError))
+    with pytest.raises(BackupError) as caught:
+        destination.initialise(allow_same_disk=False, owner_uid=None)
+    assert caught.value.code == "destination_not_writable"
+    assert not (folder / destination.MARKER_NAME).exists()
+
+
+def test_chown_failure_leaves_no_marker(
+    folder: Path, fake_restic: FakeBinary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _other_disk(monkeypatch, folder)
+    (folder / destination.REPOSITORY_DIR).mkdir()
+    with (
+        mock.patch.object(os, "chown", side_effect=PermissionError),
+        pytest.raises(BackupError) as caught,
+    ):
+        destination.initialise(allow_same_disk=False, owner_uid=10001)
+    assert caught.value.code == "destination_not_writable"
+    assert not (folder / destination.MARKER_NAME).exists()
+
+
+def test_marker_is_removed_when_its_chown_fails(
+    folder: Path, fake_restic: FakeBinary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _other_disk(monkeypatch, folder)
+    (folder / destination.REPOSITORY_DIR).mkdir()
+    marker = folder / destination.MARKER_NAME
+
+    def chown(path: str | Path, uid: int, gid: int) -> None:
+        if Path(path) == marker:
+            raise PermissionError
+
+    with (
+        mock.patch.object(os, "chown", side_effect=chown),
+        pytest.raises(BackupError) as caught,
+    ):
+        destination.initialise(allow_same_disk=False, owner_uid=10001)
+    assert caught.value.code == "destination_not_writable"
+    assert not marker.exists()
+
+
+def test_marker_is_written_after_the_tree_is_handed_over(
+    folder: Path, fake_restic: FakeBinary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _other_disk(monkeypatch, folder)
+    (folder / destination.REPOSITORY_DIR).mkdir()
+    seen: list[bool] = []
+
+    def chown(path: str | Path, uid: int, gid: int) -> None:
+        seen.append((folder / destination.MARKER_NAME).exists())
+
+    with mock.patch.object(os, "chown", side_effect=chown):
+        destination.initialise(allow_same_disk=False, owner_uid=10001)
+    assert seen == [False, True]  # the tree first, the marker last
+
+
+def test_second_init_completes_a_half_finished_one(
+    folder: Path, fake_restic: FakeBinary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _other_disk(monkeypatch, folder)
+    fake_restic.respond(("init",), stderr="Fatal: config file already exists", code=1)
+    destination.initialise(allow_same_disk=False, owner_uid=None)
+    assert fake_restic.calls == [["init"], ["cat", "config"]]
+    assert destination.configured_repository().location == f"{folder}/restic"
+
+
+def test_existing_repository_with_another_password_is_refused(
+    folder: Path, fake_restic: FakeBinary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _other_disk(monkeypatch, folder)
+    fake_restic.respond(("init",), stderr="Fatal: config file already exists", code=1)
+    fake_restic.respond(("cat", "config"), stderr="wrong password", code=12)
+    with pytest.raises(BackupError) as caught:
+        destination.initialise(allow_same_disk=False, owner_uid=None)
+    assert caught.value.code == "wrong_password"
+    assert not (folder / destination.MARKER_NAME).exists()
+
+
+def test_missing_storage_root_is_not_ready(
+    folder: Path, settings: object, tmp_path: Path, fake_restic: FakeBinary
+) -> None:
+    settings.BRIEVIE_STORAGE_ROOT = str(tmp_path / "gone")  # type: ignore[attr-defined]
+    with pytest.raises(BackupError) as caught:
+        destination.initialise(allow_same_disk=False, owner_uid=None)
+    assert caught.value.code == "destination_not_ready"
+    assert fake_restic.calls == []

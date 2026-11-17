@@ -41,10 +41,24 @@ def test_command_prints_one_sentence(
     ready: Path, fake_restic: FakeBinary, capsys: pytest.CaptureFixture[str]
 ) -> None:
     call_command("backup_init")
-    assert capsys.readouterr().out.strip()
+    out = capsys.readouterr().out
+    assert out.strip() == "De back-up is ingesteld."
+    assert len(out.strip().splitlines()) == 1
 
 
 def test_command_fails_with_the_dutch_message(settings: object) -> None:
     with pytest.raises(CommandError) as caught:
         call_command("backup_init")
     assert str(caught.value) == "Er is nog geen back-up ingesteld."
+
+
+def test_command_reports_an_unwritable_destination_in_one_sentence(
+    ready: Path, fake_restic: FakeBinary
+) -> None:
+    with (
+        mock.patch("os.chown", side_effect=PermissionError),
+        mock.patch("os.geteuid", return_value=0),
+        pytest.raises(CommandError) as caught,
+    ):
+        call_command("backup_init")
+    assert "SELFHOST.md" in str(caught.value)

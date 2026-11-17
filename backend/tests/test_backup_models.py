@@ -5,6 +5,7 @@ from apps.common.models import WorkspaceModel
 EXPECTED_CODES = {
     "not_configured",
     "destination_conflict",
+    "destination_not_writable",
     "destination_not_ready",
     "same_disk",
     "already_initialised",
