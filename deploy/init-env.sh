@@ -24,6 +24,13 @@ esac
 example="$dir/.env.example"
 target="$dir/.env"
 
+# Never write through a link: appending would change the file it points to, and a
+# dangling link would make a fresh .env appear somewhere else.
+if [ -L "$target" ]; then
+	echo "deploy/.env is a symbolic link; init-env.sh leaves it alone. Make it a normal file first." >&2
+	exit 1
+fi
+
 # $1 = "base64" (48 random bytes), "hex" (24 random bytes) or "hex32" (32 random bytes)
 random() {
 	if command -v openssl >/dev/null 2>&1; then
@@ -109,6 +116,12 @@ while IFS= read -r line || [ -n "$line" ]; do
 done <"$example" >"$tmp"
 
 chmod 600 "$tmp"
-mv "$tmp" "$target"
+# `ln` fails when deploy/.env exists by now (another run made it): never replace a
+# .env, whose master key may already be in use. `mv` would replace it silently.
+if ! ln "$tmp" "$target" 2>/dev/null; then
+	echo "deploy/.env was created by something else meanwhile; left unchanged." >&2
+	exit 1
+fi
+rm -f "$tmp"
 trap - EXIT
 echo "Created deploy/.env with new random secrets."

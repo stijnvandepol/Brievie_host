@@ -186,7 +186,20 @@ def test_no_secret_is_ever_a_process_argument(
     assert tee is not None
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    tools = ["cat", "chmod", "cut", "dirname", "grep", "mv", "rm", "sed", "tail", "tr", "python3"]
+    tools = [
+        "cat",
+        "chmod",
+        "cut",
+        "dirname",
+        "grep",
+        "ln",
+        "mv",
+        "rm",
+        "sed",
+        "tail",
+        "tr",
+        "python3",
+    ]
     if random_source == "openssl":
         tools.append("openssl")
     for tool in tools:
@@ -279,3 +292,53 @@ def test_every_path_it_removes_moves_or_writes_is_a_fixed_name_in_its_own_folder
             assert set(re.findall(r'"\$(\w+)"', code)) <= {"tmp", "target"}, line
         for written in re.findall(r'>>?"\$(\w+)"', code):
             assert written in {"tmp", "target"}, line
+
+
+def test_a_fresh_env_is_linked_into_place_never_moved_over_one() -> None:
+    script = (DEPLOY / "init-env.sh").read_text()
+    assert 'if ! ln "$tmp" "$target"' in script
+    assert 'mv "$tmp"' not in script
+    assert '[ -L "$target" ]' in script
+
+
+def test_a_env_made_meanwhile_is_never_replaced(deploy: Path, tmp_path: Path) -> None:
+    # Another run creates deploy/.env between this run's check and its write: a fake
+    # chmod (called right before the link) plays that other run.
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    chmod = bin_dir / "chmod"
+    chmod.write_text(
+        "#!/bin/sh\n"
+        f"printf 'BRIEVIE_MASTER_KEY=from-the-other-run\\n' > '{deploy}/.env'\n"
+        'exec /bin/chmod "$@"\n'
+    )
+    chmod.chmod(0o755)
+
+    result = run_script(
+        deploy, check=False, PATH=f"{bin_dir}:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin"
+    )
+
+    assert result.returncode == 1
+    assert "left unchanged" in result.stderr
+    assert (deploy / ".env").read_text() == "BRIEVIE_MASTER_KEY=from-the-other-run\n"
+    assert sorted(p.name for p in deploy.iterdir()) == [".env", ".env.example", "init-env.sh"]
+
+
+@pytest.mark.parametrize("dangling", [True, False])
+def test_a_env_that_is_a_link_is_never_written_through(
+    deploy: Path, tmp_path: Path, dangling: bool
+) -> None:
+    elsewhere = tmp_path / "elsewhere.env"
+    if not dangling:
+        elsewhere.write_text("SOMETHING=else\n")
+    (deploy / ".env").symlink_to(elsewhere)
+
+    result = run_script(deploy, check=False)
+
+    assert result.returncode == 1
+    assert "symbolic link" in result.stderr
+    if dangling:
+        assert not elsewhere.exists()
+    else:
+        assert elsewhere.read_text() == "SOMETHING=else\n"
+    assert (deploy / ".env").is_symlink()
