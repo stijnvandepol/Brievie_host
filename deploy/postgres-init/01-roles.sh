@@ -16,14 +16,27 @@ set -euo pipefail
 here=$(dirname "${BASH_SOURCE[0]}")
 superuser=(--username "${POSTGRES_USER:-postgres}" --dbname "${POSTGRES_DB:-postgres}")
 
-psql -v ON_ERROR_STOP=1 "${superuser[@]}" \
-    -v owner_password="$BRIEVIE_OWNER_PASSWORD" \
-    -v app_password="$BRIEVIE_APP_PASSWORD" <<'SQL'
+# A psql \set line for variable $1 with value $2, written by bash built-ins only: the
+# passwords reach psql on stdin, never as an argument (visible in the process list).
+# Inside psql's single quotes a backslash is escaped and a quote doubled.
+set_line() {
+    local value=${2//\\/\\\\}
+    value=${value//\'/\'\'}
+    printf '\\set %s '"'"'%s'"'"'\n' "$1" "$value"
+}
+
+{
+    set_line owner_password "$BRIEVIE_OWNER_PASSWORD"
+    set_line app_password "$BRIEVIE_APP_PASSWORD"
+    cat <<'SQL'
 CREATE ROLE brievie_owner LOGIN CREATEDB NOSUPERUSER NOCREATEROLE NOBYPASSRLS
     PASSWORD :'owner_password';
 CREATE ROLE brievie_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS
     PASSWORD :'app_password';
 SQL
+} | psql -v ON_ERROR_STOP=1 "${superuser[@]}"
 psql -v ON_ERROR_STOP=1 "${superuser[@]}" -f "$here/database.psql"
-psql -v ON_ERROR_STOP=1 "${superuser[@]}" \
-    -v backup_password="$BRIEVIE_BACKUP_DB_PASSWORD" -f "$here/backup-role.psql"
+{
+    set_line backup_password "$BRIEVIE_BACKUP_DB_PASSWORD"
+    cat "$here/backup-role.psql"
+} | psql -v ON_ERROR_STOP=1 "${superuser[@]}"

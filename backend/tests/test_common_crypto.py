@@ -1,3 +1,5 @@
+import io
+import logging
 import os
 
 import pytest
@@ -137,3 +139,24 @@ def test_backup_password_differs_per_master_key() -> None:
 
     assert other.startswith("43f6f658")
     assert other != crypto.derive_backup_password(bytes.fromhex("5a" * 32))
+
+
+def test_derive_backup_password_command(
+    settings: Settings, caplog: pytest.LogCaptureFixture
+) -> None:
+    out = io.StringIO()
+    caplog.set_level(logging.DEBUG)
+
+    call_command("derive_backup_password", stdout=out)
+
+    assert out.getvalue() == crypto.derive_backup_password(bytes.fromhex("5a" * 32)) + "\n"
+    assert not caplog.records
+
+
+def test_derive_backup_password_command_needs_a_valid_master_key(settings: Settings) -> None:
+    settings.BRIEVIE_MASTER_KEY = "abc"
+    out = io.StringIO()
+
+    with pytest.raises(CommandError, match="BRIEVIE_MASTER_KEY"):
+        call_command("derive_backup_password", stdout=out)
+    assert out.getvalue() == ""
