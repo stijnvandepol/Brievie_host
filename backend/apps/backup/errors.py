@@ -23,7 +23,10 @@ REASONS: dict[str, Promise] = {
     "repository_locked": _("De back-up is vergrendeld door een ander proces."),
     "destination_unreachable": _("De bestemming van de back-up is niet bereikbaar."),
     "destination_full": _("Er is geen ruimte meer op de bestemming van de back-up."),
-    "files_incomplete": _("Een of meer bestanden ontbreken of zijn niet compleet."),
+    "files_incomplete": _(
+        "De back-up is gemaakt, maar is niet compleet: "
+        "een of meer bestanden konden niet worden gelezen."
+    ),
     "dump_failed": _("De database kon niet worden veiliggesteld."),
     "backup_role_missing": _(
         "De back-upgebruiker van de database ontbreekt of heeft te weinig rechten."
@@ -38,6 +41,7 @@ REASONS: dict[str, Promise] = {
     "wrong_master_key": _("De hoofdsleutel hoort niet bij deze back-up."),
     "restore_failed": _("Het herstel is niet gelukt."),
     "interrupted_by_restore": _("Afgebroken door herstel."),
+    "abandoned": _("De vorige back-up is afgebroken. Er is een nieuwe gestart."),
     "internal_error": _("Er ging iets mis. Probeer het later opnieuw."),
     "restic_failed": _("Het back-upprogramma gaf een fout."),
 }

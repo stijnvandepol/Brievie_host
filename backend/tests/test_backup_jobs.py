@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Sequence
 from unittest import mock
 from uuid import UUID, uuid4
 
@@ -25,13 +26,18 @@ def test_backup_tasks_are_registered_on_the_app() -> None:
 
 
 def test_run_backup_performs_the_run(monkeypatch: pytest.MonkeyPatch) -> None:
-    seen: list[UUID] = []
-    monkeypatch.setattr(services, "perform_run", seen.append)
-    run_id = uuid4()
+    seen: list[tuple[UUID, list[UUID]]] = []
+
+    def perform(run_id: UUID, *, clean_up: Sequence[UUID] = ()) -> None:
+        seen.append((run_id, list(clean_up)))
+
+    monkeypatch.setattr(services, "perform_run", perform)
+    run_id, old_id = uuid4(), uuid4()
 
     jobs.run_backup(run_id=str(run_id))
+    jobs.run_backup(run_id=str(run_id), clean_up_run_ids=[str(old_id)])
 
-    assert seen == [run_id]
+    assert seen == [(run_id, []), (run_id, [old_id])]
 
 
 def test_stalled_backup_jobs_are_retried() -> None:

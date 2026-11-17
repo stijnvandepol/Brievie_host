@@ -31,6 +31,7 @@ EXPECTED_CODES = {
     "interrupted_by_restore",
     "internal_error",
     "restic_failed",
+    "abandoned",
 }
 
 
@@ -66,3 +67,7 @@ def test_every_reason_code_has_a_dutch_sentence() -> None:
         assert error.message.strip()
     assert BackupError("not_configured").message == "Er is nog geen back-up ingesteld."
     assert BackupError("interrupted_by_restore").message == "Afgebroken door herstel."
+    assert BackupError("abandoned").message == (
+        "De vorige back-up is afgebroken. Er is een nieuwe gestart."
+    )
+    assert BackupError("files_incomplete").message.startswith("De back-up is gemaakt, maar")

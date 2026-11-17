@@ -63,6 +63,15 @@ class Command(BaseCommand):
                     "reason": failure.reason,
                 }
             )
+        interrupted = status.last_interrupted
+        if interrupted is not None:
+            lines.append(
+                _("Laatst afgebroken: %(when)s: %(reason)s")
+                % {
+                    "when": _when(interrupted.finished_at or interrupted.created_at),
+                    "reason": interrupted.reason,
+                }
+            )
         if status.open_run is not None:
             lines.append(_open_run_line(status.open_run))
         self.stdout.write("\n".join(lines))

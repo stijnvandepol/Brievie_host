@@ -86,25 +86,45 @@ def request_run(kind: str, *, requested_by: str = "cli") -> BackupRun:
     """The open run of this kind, or a new queued one with its job deferred.
 
     An open run without a waiting or running job was abandoned (its job was
-    cancelled, or recording its end failed): it is closed, so it never blocks.
+    cancelled, or recording its end failed): it is closed, so it never blocks, and
+    the new run's job removes the snapshots it may have left (its id travels in the
+    job's arguments, together with those its own job still had to remove).
     """
     with connection.cursor() as cursor:
         cursor.execute("SELECT pg_advisory_xact_lock(%s)", [_REQUEST_LOCK_KEY])
+    clean_up: list[str] = []
     for existing in BackupRun.objects.filter(kind=kind, status__in=OPEN_STATUSES):
         if _has_live_job(existing.id):
             return existing
-        logger.warning("Backup run %s has no job left; closed as interrupted", existing.id)
+        logger.warning("Backup run %s has no job left; closed as abandoned", existing.id)
         _finish(
             existing.id,
             BackupRun.Status.INTERRUPTED,
-            reason_code="internal_error",
-            reason=str(REASONS["internal_error"]),
+            reason_code="abandoned",
+            reason=str(REASONS["abandoned"]),
         )
+        if existing.kind == BackupRun.Kind.BACKUP:
+            clean_up += [str(existing.id), *_pending_clean_up(existing.id)]
     run = BackupRun.objects.create(
         kind=kind, requested_by=requested_by, destination_kind=_kind_or_blank()
     )
-    jobs.run_backup.defer(run_id=str(run.id))
+    if clean_up:
+        jobs.run_backup.defer(run_id=str(run.id), clean_up_run_ids=clean_up)
+    else:
+        jobs.run_backup.defer(run_id=str(run.id))
     return run
+
+
+def _pending_clean_up(run_id: UUID) -> list[str]:
+    """The clean-up the jobs of an abandoned run were given and may not have done."""
+    pending: list[str] = []
+    for args in ProcrastinateJob.objects.filter(
+        task_name="run_backup", args__run_id=str(run_id)
+    ).values_list("args", flat=True):
+        ids = args.get("clean_up_run_ids") if isinstance(args, dict) else None
+        if isinstance(ids, list):
+            pending += [str(i) for i in ids]
+    return pending
 
 
 @transaction.atomic
@@ -148,6 +168,20 @@ class _Restic:
         self.secrets = [*destination.secrets(), *_location_secrets(repository)]
         self.failures = failures
 
+    def result(
+        self,
+        argv: Sequence[str],
+        *,
+        extra: dict[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> restic.ResticResult:
+        """Run without raising on an exit code; a failure's stderr tail is kept."""
+        env = restic.restic_env(self.repository, self.password, extra=extra)
+        result = restic.run(argv, env, secrets=self.secrets, timeout=timeout)
+        if result.returncode != 0:
+            self.failures.append(result.stderr[-_STDERR_TAIL:])
+        return result
+
     def __call__(
         self,
         argv: Sequence[str],
@@ -155,11 +189,8 @@ class _Restic:
         extra: dict[str, str] | None = None,
         timeout: float | None = None,
     ) -> bytes:
-        env = restic.restic_env(self.repository, self.password, extra=extra)
-        result = restic.run(argv, env, secrets=self.secrets, timeout=timeout)
-        if result.returncode != 0:
-            self.failures.append(result.stderr[-_STDERR_TAIL:])
-            restic.raise_for(result)
+        result = self.result(argv, extra=extra, timeout=timeout)
+        restic.raise_for(result)
         return result.stdout
 
     def forget_run(self, run_id: UUID) -> None:
@@ -177,7 +208,24 @@ def _database_conninfo() -> str:
     return backup_conninfo(dbname=str(connection.settings_dict["NAME"]))
 
 
-def _back_up(run: BackupRun, failures: list[str], *, resumed: bool) -> None:
+class _IncompleteBackupError(BackupError):
+    """The files snapshot was made, but restic could not read some files (exit 3)."""
+
+    def __init__(self, size_bytes: int | None) -> None:
+        super().__init__("files_incomplete")
+        self.size_bytes = size_bytes
+
+
+def _summary_or_none(stdout: bytes) -> int | None:
+    try:
+        return restic.summary_bytes(stdout)
+    except BackupError:
+        return None
+
+
+def _back_up(
+    run: BackupRun, failures: list[str], *, resumed: bool, clean_up: Sequence[UUID]
+) -> None:
     """Steps 3-10 of a run, under the back-up lock (D 4.3: database first, then files).
 
     Only `unlock` and the clean-up have a timeout: killing restic during the dump
@@ -188,6 +236,8 @@ def _back_up(run: BackupRun, failures: list[str], *, resumed: bool) -> None:
         repository = configured_repository()
         run_restic = _Restic(repository, backup_password(), failures)
         run_restic(restic.unlock_argv(), timeout=SHORT_RESTIC_TIMEOUT)
+        for abandoned_id in clean_up:
+            run_restic.forget_run(abandoned_id)
         if run.kind == BackupRun.Kind.CHECK:
             run_restic(restic.check_argv())
             _finish(run.id, BackupRun.Status.SUCCEEDED)
@@ -215,26 +265,46 @@ def _back_up(run: BackupRun, failures: list[str], *, resumed: bool) -> None:
                 MANIFEST_NAME,
                 manifest_to_json(manifest),
             )
-            files_out = run_restic(restic.backup_files_argv(run.id, file_paths()))
-            size += restic.summary_bytes(files_out)
+            files = run_restic.result(restic.backup_files_argv(run.id, file_paths()))
+            incomplete = restic.classify(files) == "files_incomplete"
+            if not incomplete:
+                restic.raise_for(files)
+                files_size: int | None = restic.summary_bytes(files.stdout)
+            else:
+                files_size = _summary_or_none(files.stdout)
         except Exception:
             # Retention groups by host and paths: a database snapshot without its
             # files would be kept as if it were a whole back-up.
             run_restic.forget_run(run.id)
             raise
+        total = None if files_size is None else size + files_size
+        if incomplete:
+            # Kept: a file that stays unreadable must not mean no back-up is ever kept.
+            if not settings.BRIEVIE_BACKUP_APPEND_ONLY:
+                try:
+                    run_restic(restic.forget_argv())
+                except BackupError as error:
+                    logger.warning("Backup run %s: retention failed: %s", run.id, error.code)
+            raise _IncompleteBackupError(total)
         if not settings.BRIEVIE_BACKUP_APPEND_ONLY:
             run_restic(restic.forget_argv())
-        _finish(run.id, BackupRun.Status.SUCCEEDED, size_bytes=size)
+        _finish(run.id, BackupRun.Status.SUCCEEDED, size_bytes=total)
 
 
-def _record_failure(run_id: UUID, code: str) -> None:
+def _record_failure(run_id: UUID, code: str, *, size_bytes: int | None = None) -> None:
     try:
-        _finish(run_id, BackupRun.Status.FAILED, reason_code=code, reason=str(REASONS[code]))
+        _finish(
+            run_id,
+            BackupRun.Status.FAILED,
+            reason_code=code,
+            reason=str(REASONS[code]),
+            size_bytes=size_bytes,
+        )
     except Exception as error:  # noqa: BLE001 - the job must end; request_run recovers the run
         logger.error("Backup run %s: recording the failure raised %s", run_id, type(error).__name__)
 
 
-def perform_run(run_id: UUID) -> None:
+def perform_run(run_id: UUID, *, clean_up: Sequence[UUID] = ()) -> None:
     """Make or check a back-up; the job's whole body. Never raises: no automatic retry.
 
     Not one transaction: it runs external programs for hours. Each status change is
@@ -248,9 +318,10 @@ def perform_run(run_id: UUID) -> None:
     failures: list[str] = []
     try:
         _mark_running(run_id)
-        _back_up(run, failures, resumed=resumed)
+        _back_up(run, failures, resumed=resumed, clean_up=clean_up)
     except BackupError as error:
-        _record_failure(run_id, error.code)
+        size = error.size_bytes if isinstance(error, _IncompleteBackupError) else None
+        _record_failure(run_id, error.code, size_bytes=size)
         logger.warning("Backup run %s failed: %s", run_id, error.code)
         for stderr in failures:
             # Never stdout: `backup --json` may carry messages there.
@@ -297,6 +368,8 @@ class BackupStatus:
     last_success: BackupRun | None
     last_check: BackupRun | None
     last_failure: BackupRun | None
+    # Abandoned, or closed by a restore; only when newer than the last success.
+    last_interrupted: BackupRun | None
     open_run: BackupRun | None
 
 
@@ -336,18 +409,23 @@ def _destination_kind_for_status() -> str:
 
 def status_summary() -> BackupStatus:
     runs = BackupRun.objects.order_by("-created_at")
+    last_success = runs.filter(
+        kind=BackupRun.Kind.BACKUP, status=BackupRun.Status.SUCCEEDED
+    ).first()
+    interrupted = runs.filter(status=BackupRun.Status.INTERRUPTED)
+    if last_success is not None:
+        interrupted = interrupted.filter(created_at__gt=last_success.created_at)
     return BackupStatus(
         brievie_version=brievie_version(),
         postgres_version=_postgres_version(),
         pg_dump_version=_tool_version(["pg_dump", "--version"], _PG_DUMP_VERSION),
         restic_version=_tool_version([settings.BRIEVIE_RESTIC_BINARY, "version"], _RESTIC_VERSION),
         destination_kind=_destination_kind_for_status(),
-        last_success=runs.filter(
-            kind=BackupRun.Kind.BACKUP, status=BackupRun.Status.SUCCEEDED
-        ).first(),
+        last_success=last_success,
         last_check=runs.filter(
             kind=BackupRun.Kind.CHECK, status=BackupRun.Status.SUCCEEDED
         ).first(),
         last_failure=runs.filter(status=BackupRun.Status.FAILED).first(),
+        last_interrupted=interrupted.first(),
         open_run=runs.filter(status__in=OPEN_STATUSES).first(),
     )

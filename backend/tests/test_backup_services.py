@@ -245,7 +245,32 @@ def test_failed_dump_records_no_files_snapshot(
 
 
 @pytest.mark.django_db(transaction=True)
-def test_failed_files_backup_never_runs_retention(
+def test_incomplete_files_backup_is_kept_and_retention_runs(
+    configured_folder: Path, fake_restic: FakeBinary, fake_pg_dump: FakeBinary
+) -> None:
+    # Exit 3: restic made the snapshot but could not read some files. One file that
+    # stays unreadable must not mean that no back-up is ever kept.
+    run = queued_run()
+    fake_restic.respond(db_prefix(run.id), stdout=summary(DB_SIZE))
+    fake_restic.respond(files_prefix(run.id), stdout=summary(FILES_SIZE), code=3)
+
+    services.perform_run(run.id)
+
+    assert fake_restic.calls == [
+        restic.unlock_argv(),
+        restic.backup_stdin_argv(run.id, services.DUMP_COMMAND),
+        restic.backup_files_argv(run.id, services.file_paths()),
+        restic.forget_argv(),
+    ]
+    run.refresh_from_db()
+    assert run.status == BackupRun.Status.FAILED
+    assert run.reason_code == "files_incomplete"
+    assert run.reason.startswith("De back-up is gemaakt, maar")
+    assert run.size_bytes == DB_SIZE + FILES_SIZE
+
+
+@pytest.mark.django_db(transaction=True)
+def test_incomplete_files_backup_without_summary_has_no_size(
     configured_folder: Path, fake_restic: FakeBinary, fake_pg_dump: FakeBinary
 ) -> None:
     run = queued_run()
@@ -254,9 +279,49 @@ def test_failed_files_backup_never_runs_retention(
 
     services.perform_run(run.id)
 
-    assert restic.forget_argv() not in fake_restic.calls
+    assert restic.forget_run_argv(run.id) not in fake_restic.calls
     run.refresh_from_db()
     assert run.reason_code == "files_incomplete"
+    assert run.size_bytes is None
+
+
+@pytest.mark.django_db(transaction=True)
+def test_incomplete_files_backup_in_append_only_mode_forgets_nothing(
+    settings: Settings,
+    configured_folder: Path,
+    fake_restic: FakeBinary,
+    fake_pg_dump: FakeBinary,
+) -> None:
+    settings.BRIEVIE_BACKUP_APPEND_ONLY = True
+    run = queued_run()
+    fake_restic.respond(db_prefix(run.id), stdout=summary(DB_SIZE))
+    fake_restic.respond(files_prefix(run.id), stdout=summary(FILES_SIZE), code=3)
+
+    services.perform_run(run.id)
+
+    assert all(call[0] != "forget" for call in fake_restic.calls)
+    run.refresh_from_db()
+    assert run.reason_code == "files_incomplete"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_failed_retention_after_an_incomplete_back_up_keeps_its_reason(
+    configured_folder: Path,
+    caplog: pytest.LogCaptureFixture,
+    fake_restic: FakeBinary,
+    fake_pg_dump: FakeBinary,
+) -> None:
+    run = queued_run()
+    fake_restic.respond(db_prefix(run.id), stdout=summary(DB_SIZE))
+    fake_restic.respond(files_prefix(run.id), stdout=summary(FILES_SIZE), code=3)
+    fake_restic.respond(tuple(restic.forget_argv()), code=11)
+
+    with caplog.at_level(logging.DEBUG):
+        services.perform_run(run.id)
+
+    run.refresh_from_db()
+    assert run.reason_code == "files_incomplete"
+    assert "repository_locked" in caplog.text
 
 
 @pytest.mark.django_db(transaction=True)
@@ -721,7 +786,10 @@ def test_open_run_whose_job_failed_is_closed_and_replaced(configured_folder: Pat
     assert _job_of(new).status == "todo"
     old.refresh_from_db()
     assert old.status == BackupRun.Status.INTERRUPTED
-    assert old.reason_code == "internal_error"
+    assert old.reason_code == "abandoned"
+    assert old.reason == "De vorige back-up is afgebroken. Er is een nieuwe gestart."
+    # The new run's job removes what the abandoned run may have left.
+    assert _job_of(new).args == {"run_id": str(new.id), "clean_up_run_ids": [str(old.id)]}
     assert old.finished_at is not None
 
 
@@ -815,7 +883,7 @@ def test_failed_files_step_removes_the_runs_database_snapshot(
 ) -> None:
     run = queued_run()
     fake_restic.respond(db_prefix(run.id), stdout=summary(DB_SIZE))
-    fake_restic.respond(files_prefix(run.id), code=3)
+    fake_restic.respond(files_prefix(run.id), stderr="Fatal: unable to save", code=1)
 
     services.perform_run(run.id)
 
@@ -826,7 +894,7 @@ def test_failed_files_step_removes_the_runs_database_snapshot(
         restic.forget_run_argv(run.id),
     ]
     run.refresh_from_db()
-    assert run.reason_code == "files_incomplete"
+    assert run.reason_code == "restic_failed"
 
 
 @pytest.mark.django_db(transaction=True)
@@ -872,7 +940,7 @@ def test_append_only_never_removes_the_orphan_snapshot(
     settings.BRIEVIE_BACKUP_APPEND_ONLY = True
     run = queued_run()
     fake_restic.respond(db_prefix(run.id), stdout=summary(DB_SIZE))
-    fake_restic.respond(files_prefix(run.id), code=3)
+    fake_restic.respond(files_prefix(run.id), code=1)
 
     services.perform_run(run.id)
 
@@ -888,14 +956,14 @@ def test_failed_clean_up_keeps_the_runs_reason(
 ) -> None:
     run = queued_run()
     fake_restic.respond(db_prefix(run.id), stdout=summary(DB_SIZE))
-    fake_restic.respond(files_prefix(run.id), code=3)
+    fake_restic.respond(files_prefix(run.id), code=1)
     fake_restic.respond(tuple(restic.forget_run_argv(run.id)), code=11)
 
     with caplog.at_level(logging.DEBUG):
         services.perform_run(run.id)
 
     run.refresh_from_db()
-    assert run.reason_code == "files_incomplete"
+    assert run.reason_code == "restic_failed"
     assert "repository_locked" in caplog.text
 
 
@@ -1013,3 +1081,136 @@ def test_unlock_timeout_fails_the_run(
     run.refresh_from_db()
     assert run.status == BackupRun.Status.FAILED
     assert run.reason_code == "restic_failed"
+
+
+# --- follow-up: abandoned runs' snapshots, interrupted runs in the status ------------------
+
+
+def test_new_job_carries_the_clean_up_of_an_earlier_abandoned_run(
+    configured_folder: Path,
+) -> None:
+    first = services.request_run("backup")
+    ProcrastinateJob.objects.filter(id=_job_of(first).id).update(status="failed")
+    second = services.request_run("backup")
+    ProcrastinateJob.objects.filter(id=_job_of(second).id).update(status="failed")
+
+    third = services.request_run("backup")
+
+    assert sorted(_job_of(third).args["clean_up_run_ids"]) == sorted(
+        [str(first.id), str(second.id)]
+    )
+
+
+def test_a_fresh_request_has_no_clean_up(configured_folder: Path) -> None:
+    run = services.request_run("backup")
+    assert _job_of(run).args == {"run_id": str(run.id)}
+
+
+def test_an_abandoned_check_needs_no_clean_up(configured_folder: Path) -> None:
+    old = services.request_run("check")
+    ProcrastinateJob.objects.filter(id=_job_of(old).id).update(status="failed")
+
+    new = services.request_run("check")
+
+    assert _job_of(new).args == {"run_id": str(new.id)}
+
+
+@pytest.mark.django_db(transaction=True)
+def test_run_removes_abandoned_snapshots_after_unlock(
+    configured_folder: Path, fake_restic: FakeBinary, fake_pg_dump: FakeBinary
+) -> None:
+    abandoned = BackupRun.objects.create(kind="backup", status=BackupRun.Status.INTERRUPTED)
+    run = queued_run()
+    answer_both_backups(fake_restic, run.id)
+
+    services.perform_run(run.id, clean_up=[abandoned.id])
+
+    assert fake_restic.calls[:3] == [
+        restic.unlock_argv(),
+        restic.forget_run_argv(abandoned.id),
+        restic.backup_stdin_argv(run.id, services.DUMP_COMMAND),
+    ]
+    run.refresh_from_db()
+    assert run.status == BackupRun.Status.SUCCEEDED
+
+
+@pytest.mark.django_db(transaction=True)
+def test_failed_abandoned_clean_up_is_logged_and_the_run_goes_on(
+    configured_folder: Path,
+    caplog: pytest.LogCaptureFixture,
+    fake_restic: FakeBinary,
+    fake_pg_dump: FakeBinary,
+) -> None:
+    abandoned_id = UUID(int=42)
+    run = queued_run()
+    answer_both_backups(fake_restic, run.id)
+    fake_restic.respond(tuple(restic.forget_run_argv(abandoned_id)), code=11)
+
+    with caplog.at_level(logging.DEBUG):
+        services.perform_run(run.id, clean_up=[abandoned_id])
+
+    run.refresh_from_db()
+    assert run.status == BackupRun.Status.SUCCEEDED
+    assert "repository_locked" in caplog.text
+
+
+@pytest.mark.django_db(transaction=True)
+def test_append_only_never_removes_abandoned_snapshots(
+    settings: Settings,
+    configured_folder: Path,
+    fake_restic: FakeBinary,
+    fake_pg_dump: FakeBinary,
+) -> None:
+    settings.BRIEVIE_BACKUP_APPEND_ONLY = True
+    run = queued_run()
+    answer_both_backups(fake_restic, run.id)
+
+    services.perform_run(run.id, clean_up=[UUID(int=42)])
+
+    assert all(call[0] != "forget" for call in fake_restic.calls)
+
+
+def test_status_shows_an_interrupted_run_newer_than_the_last_success(
+    settings: Settings,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("PATH", str(tmp_path))
+    settings.BRIEVIE_BACKUP_REPOSITORY = "rest:https://nas:8000/b"
+    BackupRun.objects.create(
+        kind="backup",
+        status=BackupRun.Status.INTERRUPTED,
+        reason_code="interrupted_by_restore",
+        reason="Afgebroken door herstel.",
+    )
+    BackupRun.objects.create(kind="backup", status=BackupRun.Status.SUCCEEDED, size_bytes=10)
+
+    assert services.status_summary().last_interrupted is None
+
+    newer = BackupRun.objects.create(
+        kind="backup",
+        status=BackupRun.Status.INTERRUPTED,
+        reason_code="abandoned",
+        reason="De vorige back-up is afgebroken. Er is een nieuwe gestart.",
+    )
+    status = services.status_summary()
+    assert status.last_interrupted is not None
+    assert status.last_interrupted.id == newer.id
+
+    call_command("backup_status")
+    out = capsys.readouterr().out
+    assert "Laatst afgebroken:" in out
+    assert "De vorige back-up is afgebroken." in out
+    assert "nas" not in out
+    assert str(tmp_path) not in out
+
+
+def test_status_shows_an_interrupted_run_when_nothing_succeeded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PATH", str(tmp_path))
+    run = BackupRun.objects.create(kind="backup", status=BackupRun.Status.INTERRUPTED)
+    status = services.status_summary()
+    assert status.last_interrupted is not None
+    assert status.last_interrupted.id == run.id

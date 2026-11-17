@@ -13,8 +13,9 @@ QUEUE = "backup"
 # lock: one back-up job at a time. No retry: a failed back-up is a visible status,
 # and the next one is requested by the schedule or the owner.
 @app.task(name="run_backup", queue=QUEUE, lock="backup")
-def run_backup(*, run_id: str) -> None:
-    services.perform_run(UUID(run_id))
+def run_backup(*, run_id: str, clean_up_run_ids: list[str] | None = None) -> None:
+    """`clean_up_run_ids`: abandoned runs whose snapshots this run removes first."""
+    services.perform_run(UUID(run_id), clean_up=[UUID(i) for i in clean_up_run_ids or ()])
 
 
 @app.periodic(cron="*/5 * * * *")
