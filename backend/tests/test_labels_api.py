@@ -98,6 +98,25 @@ def test_unknown_color_is_422(client_a: Client, ws_a: Workspace) -> None:
     assert r.json()["code"] == "validation_error"
 
 
+def test_unknown_color_on_update_is_422_and_changes_nothing(
+    client_a: Client, ws_a: Workspace
+) -> None:
+    with workspace_context(ws_a.id):
+        zorg = Label.objects.get(workspace=ws_a, system_key="zorg")
+
+    r = client_a.put(
+        f"{labels_url(ws_a.id)}/{zorg.id}",
+        {"name": "Gezondheid", "color": "pink"},
+        content_type="application/json",
+    )
+
+    assert r.status_code == 422
+    assert r.json()["code"] == "validation_error"
+    with workspace_context(ws_a.id):
+        zorg.refresh_from_db()
+    assert (zorg.name, zorg.color) == ("Zorg", "red")
+
+
 def test_blank_name_is_422(client_a: Client, ws_a: Workspace) -> None:
     r = create(client_a, ws_a.id, {"name": "   "})
 

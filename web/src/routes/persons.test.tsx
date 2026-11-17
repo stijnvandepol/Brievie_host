@@ -113,6 +113,32 @@ describe("persons", () => {
     expect(await screen.findByRole("button", { name: /Terugzetten: Papa/ })).toBeInTheDocument();
   });
 
+  it("moves focus to the page heading after a delete, as the row is gone", async () => {
+    let deleted = false;
+    server.use(
+      http.delete(`${base}/persons/${papa.id}`, () => {
+        deleted = true;
+        return new HttpResponse(null, { status: 204 });
+      }),
+      http.get(`${base}/persons`, () =>
+        HttpResponse.json(deleted ? [annaPerson] : [papa, annaPerson]),
+      ),
+      ...loggedInHandlers(),
+      ...personHandlers(),
+    );
+    const user = userEvent.setup();
+    renderApp(path);
+    await user.click(await screen.findByRole("button", { name: /Verwijderen: Papa/ }));
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: "Verwijderen" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /Verwijderen: Papa/ })).toBeNull(),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { level: 1, name: "Personen" })).toHaveFocus(),
+    );
+  });
+
   it("shows the server's sentence when a person cannot be deleted", async () => {
     server.use(
       http.delete(`${base}/persons/${papa.id}`, () =>
