@@ -758,8 +758,10 @@ makes it a private network with extra steps. So the honest table is:
 | Own domain, own port forward or VPS proxy | nobody outside (TLS ends on the server) | a domain, an open port or a small proxy | everyone: the sign-in page is on the internet |
 | Cloudflare tunnel | Cloudflare, technically | a Cloudflare account and a domain | everyone, behind Cloudflare's filter |
 
-The product recommends them in that order for a home, and says in the setup text what
-the last one means. For an organisation the third or fourth with SSO and Cloudflare
+The owner decided on 2026-11-17 that the user chooses and that both a Cloudflare
+tunnel and Tailscale are supported, side by side: neither is "the" way. The default
+without choosing anything stays: reachable at home only. The setup text gives this
+table as it is, with for each way who can read along and what it costs the user. For an organisation the third or fourth with SSO and Cloudflare
 Access (19.6) is the usual shape.
 
 ### 19.3 Two trust models, per address

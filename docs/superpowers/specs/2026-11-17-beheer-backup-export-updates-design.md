@@ -416,6 +416,26 @@ Off by default; one setting per workspace: "Leesbare kopie in een map".
   before this is promised on the site. **Not verified.** The same uid must own a
   folder given as `BRIEVIE_DOCUMENTS_DIR` (6.2); the text gives the command.
 
+### 6.3a To check on the owner's Synology
+
+The owner has a Synology (model and DSM version not known yet; open). Nothing about
+Synology below was confirmed from its documentation, so before the archive folder is
+promised on the site, this list is walked through on that NAS:
+
+1. Is the user home service on, and is each user's folder at `/volume1/homes/<naam>`?
+2. As which user does a Container Manager project run a container that asks for uid
+   10001, and can that container create a folder `Brievie` inside a home folder that
+   is bound into it?
+3. After Brievie wrote a PDF there: can the NAS user open it in File Station and over
+   SMB from a Mac and a Windows PC? Who is shown as the owner?
+4. Can another NAS user (not an administrator) see or open that folder?
+5. Does a file name with an accent, written by Brievie, look right in File Station,
+   on a Mac and on Windows?
+6. Do Hyper Backup and snapshots include the bound folder, and the folder given as
+   `BRIEVIE_DOCUMENTS_DIR`?
+7. With `BRIEVIE_BACKUP_DIR` on a USB disk: what does the container see when the disk
+   is unplugged, and does `./brievie backup` then refuse?
+
 ### 6.4 What the text must say plainly
 
 - A readable PDF in a folder is **no longer encrypted by Brievie**; its protection is
@@ -535,6 +555,9 @@ The App Store updates the app by itself; the server waits for its admin. So:
 - The limits page: "back-ups en updates regel je zelf" becomes what the product now
   does and what stays the user's (a destination, the sheet).
 - These are texts on the site: **the owner's to approve**.
+- The owner holds `brievie.com`; the site, the install command and the names of the
+  images can use it. Where its DNS runs is not known yet, and whether a first version
+  may be released publicly is still the owner's open decision.
 
 ### 7.8 The optional layer for organisations
 
