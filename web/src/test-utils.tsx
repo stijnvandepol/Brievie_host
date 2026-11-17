@@ -38,6 +38,27 @@ export function loggedInHandlers() {
   ];
 }
 
+/**
+ * Two workspaces: `/` shows the list instead of going straight to the inbox. With one
+ * workspace the "Werkruimtes" page is only a moment on the way to the inbox, so a test
+ * that waits for it races the redirect.
+ */
+export function twoWorkspaces() {
+  return http.get(`*${API}/workspaces`, () => HttpResponse.json([workspace, secondWorkspace]));
+}
+
+/**
+ * Holds a handler until the test calls `open()`, so a test can look at a pending state
+ * for as long as it needs. A fixed delay in a handler races the test on a busy machine.
+ */
+export function gate() {
+  let release = () => {};
+  const opened = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { opened, open: () => release() };
+}
+
 export function errorBody(code: string, message: string) {
   return { code, message };
 }

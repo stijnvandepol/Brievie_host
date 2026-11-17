@@ -8,6 +8,7 @@ import {
   documentDetail,
   documentHandlers,
   documentSummary,
+  gate,
   HttpResponse,
   http,
   loggedInHandlers,
@@ -53,16 +54,18 @@ describe("document", () => {
   });
 
   it("always has a level 1 heading: while loading, on an error and once loaded", async () => {
+    const answer = gate();
     server.use(
       ...loggedInHandlers(),
       http.get(`*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}`, async () => {
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await answer.opened;
         return HttpResponse.json(documentDetail);
       }),
       ...documentHandlers(),
     );
     renderApp(path);
     expect(await screen.findByRole("heading", { level: 1, name: "Brief" })).toBeInTheDocument();
+    answer.open();
     expect(
       await screen.findByRole("heading", { level: 1, name: "Belastingdienst" }),
     ).toBeInTheDocument();

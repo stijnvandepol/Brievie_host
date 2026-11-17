@@ -10,14 +10,10 @@ import {
   renderApp,
   secondWorkspace,
   server,
+  twoWorkspaces,
   user,
   workspace,
 } from "../test-utils";
-
-/** Two workspaces: `/` shows the list instead of going straight to the inbox. */
-function twoWorkspaces() {
-  return http.get(`*${API}/workspaces`, () => HttpResponse.json([workspace, secondWorkspace]));
-}
 
 describe("home", () => {
   it("lists the workspaces in a table with kind and role, and links to the devices page", async () => {
@@ -65,7 +61,7 @@ describe("home", () => {
   });
 
   it("logs out with the CSRF token and returns to the login screen", async () => {
-    server.use(...loggedInHandlers());
+    server.use(twoWorkspaces(), ...loggedInHandlers());
     document.cookie = "csrftoken=tok123; path=/";
     let csrf: string | null = null;
     server.use(

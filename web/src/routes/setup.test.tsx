@@ -9,6 +9,7 @@ import {
   loggedInHandlers,
   renderApp,
   server,
+  twoWorkspaces,
   user,
   workspace,
 } from "../test-utils";
@@ -40,7 +41,7 @@ describe("setup", () => {
         body = await request.json();
         contentType = request.headers.get("content-type");
         // After setup the server is set up and the session exists.
-        server.use(...loggedInHandlers());
+        server.use(twoWorkspaces(), ...loggedInHandlers());
         return HttpResponse.json({ user, workspace }, { status: 201 });
       }),
     );
@@ -71,7 +72,7 @@ describe("setup", () => {
     server.use(
       http.post(`*${API}/setup`, async ({ request }) => {
         body = (await request.json()) as typeof body;
-        server.use(...loggedInHandlers());
+        server.use(twoWorkspaces(), ...loggedInHandlers());
         return HttpResponse.json({ user, workspace }, { status: 201 });
       }),
     );
@@ -89,7 +90,7 @@ describe("setup", () => {
     server.use(
       http.post(`*${API}/setup`, async ({ request }) => {
         body = (await request.json()) as typeof body;
-        server.use(...loggedInHandlers());
+        server.use(twoWorkspaces(), ...loggedInHandlers());
         return HttpResponse.json({ user, workspace }, { status: 201 });
       }),
     );
@@ -113,7 +114,7 @@ describe("setup", () => {
     server.use(
       http.post(`*${API}/setup`, async ({ request }) => {
         body = (await request.json()) as typeof body;
-        server.use(...loggedInHandlers());
+        server.use(twoWorkspaces(), ...loggedInHandlers());
         return HttpResponse.json({ user, workspace }, { status: 201 });
       }),
     );
@@ -161,7 +162,7 @@ describe("setup", () => {
     server.use(
       http.post(`*${API}/setup`, async ({ request }) => {
         body = (await request.json()) as typeof body;
-        server.use(...loggedInHandlers());
+        server.use(twoWorkspaces(), ...loggedInHandlers());
         return HttpResponse.json({ user, workspace }, { status: 201 });
       }),
     );

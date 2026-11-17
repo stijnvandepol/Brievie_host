@@ -5,6 +5,7 @@ import {
   API,
   apkRule,
   bankRule,
+  gate,
   HttpResponse,
   http,
   loggedInHandlers,
@@ -148,10 +149,11 @@ describe("automations", () => {
   it("keeps focus on the pressed move button and ignores a second press while pending", async () => {
     let orders = 0;
     let order = [apkRule, bankRule];
+    const answer = gate();
     server.use(
       http.put(`${base}/rules/order`, async () => {
         orders += 1;
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await answer.opened;
         order = [bankRule, apkRule];
         return HttpResponse.json(order);
       }),
@@ -165,7 +167,10 @@ describe("automations", () => {
     await user.click(down);
     expect(down).toHaveFocus();
     expect(down).toBeEnabled();
+    // The move is on its way and stays pending until the server answers.
+    await waitFor(() => expect(orders).toBe(1));
     await user.keyboard("{Enter}");
+    answer.open();
     // The APK rule is last now: its "Omlaag" is disabled, so focus is on its "Omhoog".
     const up = await screen.findByRole("button", { name: "Omhoog: APK naar Auto" });
     await waitFor(() => expect(up).toHaveFocus());
@@ -209,9 +214,10 @@ describe("automations", () => {
   });
 
   it("disables a rule's switches while its update is pending", async () => {
+    const answer = gate();
     server.use(
       http.put(`${base}/rules/${apkRule.id}`, async () => {
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await answer.opened;
         return HttpResponse.json({ ...apkRule, mode: "auto" });
       }),
       ...loggedInHandlers(),
@@ -223,6 +229,7 @@ describe("automations", () => {
       await screen.findByRole("switch", { name: "Automatisch toepassen: APK naar Auto" }),
     );
     expect(screen.getByRole("switch", { name: "Actief: APK naar Auto" })).toBeDisabled();
+    answer.open();
     await waitFor(() =>
       expect(screen.getByRole("switch", { name: "Actief: APK naar Auto" })).toBeEnabled(),
     );
