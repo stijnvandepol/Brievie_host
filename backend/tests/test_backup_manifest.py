@@ -292,3 +292,32 @@ def test_building_a_manifest_refuses_a_host_name_with_a_line_break(
             authority_dir=tmp_path,
         )
     assert caught.value.code == "manifest_unreadable"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_build_manifest_counts_in_a_given_open_snapshot(
+    ws_a: Workspace, backup_conninfo: str, tmp_path: Path
+) -> None:
+    from apps.backup.manifest import counting_transaction, export_snapshot
+
+    with counting_transaction(backup_conninfo) as conn:
+        snapshot_id = export_snapshot(conn)
+        upload_letter(ws_a, 1)  # after the snapshot: not in it
+        manifest = build_manifest(
+            run_id=uuid.uuid4(), conn=conn, storage_root=tmp_path, authority_dir=tmp_path
+        )
+        assert not conn.closed  # the caller's connection stays open for the dump
+        # Another transaction can import the snapshot, as pg_dump --snapshot does.
+        with psycopg.connect(backup_conninfo) as other:
+            other.isolation_level = psycopg.IsolationLevel.REPEATABLE_READ
+            other.execute("SET row_security = off")
+            other.execute(f"SET TRANSACTION SNAPSHOT '{snapshot_id}'")
+            row = other.execute("SELECT count(*) FROM documents_document").fetchone()
+            assert row == (0,)
+    assert manifest.workspaces[ws_a.id].documents == 0
+    assert conn.closed
+
+
+def test_build_manifest_needs_a_connection_or_a_conninfo(tmp_path: Path) -> None:
+    with pytest.raises(TypeError):
+        build_manifest(run_id=uuid.uuid4(), storage_root=tmp_path, authority_dir=tmp_path)

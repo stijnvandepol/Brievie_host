@@ -26,7 +26,14 @@ from apps.backup.database import (
 from apps.backup.destination import backup_password, configured_repository, destination_kind
 from apps.backup.errors import REASONS, BackupError
 from apps.backup.locks import backup_lock
-from apps.backup.manifest import MANIFEST_NAME, brievie_version, build_manifest, manifest_to_json
+from apps.backup.manifest import (
+    MANIFEST_NAME,
+    brievie_version,
+    build_manifest,
+    counting_transaction,
+    export_snapshot,
+    manifest_to_json,
+)
 from apps.backup.models import OPEN_STATUSES, BackupRun
 from apps.backup.privatefile import write_private
 
@@ -249,17 +256,23 @@ def _back_up(
         if resumed:
             # An earlier attempt of this run may have left snapshots: never two dumps.
             run_restic.forget_run(run.id)
-        dump_out = run_restic(
-            restic.backup_stdin_argv(run.id, DUMP_COMMAND), extra=libpq_env(conninfo)
-        )
-        try:
-            size = restic.summary_bytes(dump_out)
+        # The manifest counts in the transaction whose snapshot pg_dump dumps: a letter
+        # written or deleted during the dump changes neither. The transaction stays
+        # open on its own connection (never Django's) until the dump has ended.
+        with counting_transaction(conninfo) as counting:
+            snapshot_id = export_snapshot(counting)
             manifest = build_manifest(
                 run_id=run.id,
-                conninfo=conninfo,
+                conn=counting,
                 storage_root=Path(settings.BRIEVIE_STORAGE_ROOT),
                 authority_dir=Path(settings.BRIEVIE_AUTHORITY_COPY_DIR),
             )
+            dump_out = run_restic(
+                restic.backup_stdin_argv(run.id, [*DUMP_COMMAND, f"--snapshot={snapshot_id}"]),
+                extra=libpq_env(conninfo),
+            )
+        try:
+            size = restic.summary_bytes(dump_out)
             write_private(
                 Path(settings.BRIEVIE_BACKUP_CONFIG_DIR),
                 MANIFEST_NAME,

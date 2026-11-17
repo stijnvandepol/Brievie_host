@@ -3,6 +3,8 @@
 import json
 import re
 import tomllib
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -12,6 +14,7 @@ import psycopg
 from django.conf import settings
 from django.db.migrations.loader import MigrationLoader
 from django.utils import timezone
+from psycopg.rows import TupleRow
 
 from apps.backup.errors import BackupError
 from apps.devices.pki import certificate_sha256
@@ -68,36 +71,67 @@ def _count_page_files(storage_root: Path, workspace_id: UUID) -> int:
     return sum(1 for path in (storage_root / str(workspace_id)).glob("*/*.page") if path.is_file())
 
 
-def build_manifest(
-    *, run_id: UUID, conninfo: str, storage_root: Path, authority_dir: Path
-) -> Manifest:
-    """Count as the back-up role with row security off.
+@contextmanager
+def counting_transaction(conninfo: str) -> Iterator[psycopg.Connection[TupleRow]]:
+    """A read-only REPEATABLE READ transaction with row security off, on its own connection.
 
-    A role that cannot bypass row-level security fails here with an error instead
-    of reading zero rows: a manifest that undercounts would make a restore pass.
+    A role that cannot bypass row-level security fails in it with an error instead of
+    reading zero rows: a manifest that undercounts would make a restore pass. Closed on
+    leaving, also on an error.
     """
     with psycopg.connect(conninfo) as conn:
-        # One snapshot, so documents and pages are counted at the same moment.
         conn.isolation_level = psycopg.IsolationLevel.REPEATABLE_READ
         conn.read_only = True
         conn.execute("SET row_security = off")
-        workspace_ids = [
-            row[0] for row in conn.execute("SELECT id FROM workspaces_workspace ORDER BY id")
-        ]
-        documents: dict[UUID, int] = dict(
-            conn.execute(
-                "SELECT workspace_id, count(*) FROM documents_document GROUP BY workspace_id"
-            ).fetchall()
-        )
-        pages: dict[UUID, int] = dict(
-            conn.execute(
-                "SELECT workspace_id, count(*) FROM documents_documentpage GROUP BY workspace_id"
-            ).fetchall()
-        )
-        migrations: dict[str, list[str]] = {}
-        for app, name in conn.execute("SELECT app, name FROM django_migrations ORDER BY app, name"):
-            migrations.setdefault(app, []).append(name)
-        version_row = conn.execute("SHOW server_version").fetchone()
+        yield conn
+
+
+def export_snapshot(conn: psycopg.Connection[TupleRow]) -> str:
+    """The id of the transaction's snapshot, for `pg_dump --snapshot` (not a secret)."""
+    row = conn.execute("SELECT pg_export_snapshot()").fetchone()
+    if row is None:
+        raise BackupError("dump_failed")
+    return str(row[0])
+
+
+def build_manifest(
+    *,
+    run_id: UUID,
+    storage_root: Path,
+    authority_dir: Path,
+    conninfo: str | None = None,
+    conn: psycopg.Connection[TupleRow] | None = None,
+) -> Manifest:
+    """Count as the back-up role, in `conn` (an open `counting_transaction`, left open)
+    or in a transaction of its own on `conninfo`.
+
+    A back-up passes the transaction whose snapshot `pg_dump --snapshot` dumps, so the
+    counts are those of the dump, whatever is written meanwhile.
+    """
+    if conn is None:
+        if conninfo is None:
+            raise TypeError("build_manifest needs conn or conninfo")
+        with counting_transaction(conninfo) as own:
+            return build_manifest(
+                run_id=run_id, storage_root=storage_root, authority_dir=authority_dir, conn=own
+            )
+    workspace_ids = [
+        row[0] for row in conn.execute("SELECT id FROM workspaces_workspace ORDER BY id")
+    ]
+    documents: dict[UUID, int] = dict(
+        conn.execute(
+            "SELECT workspace_id, count(*) FROM documents_document GROUP BY workspace_id"
+        ).fetchall()
+    )
+    pages: dict[UUID, int] = dict(
+        conn.execute(
+            "SELECT workspace_id, count(*) FROM documents_documentpage GROUP BY workspace_id"
+        ).fetchall()
+    )
+    migrations: dict[str, list[str]] = {}
+    for app, name in conn.execute("SELECT app, name FROM django_migrations ORDER BY app, name"):
+        migrations.setdefault(app, []).append(name)
+    version_row = conn.execute("SHOW server_version").fetchone()
     return _checked(
         Manifest(
             format=MANIFEST_FORMAT,

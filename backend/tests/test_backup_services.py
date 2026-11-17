@@ -4,7 +4,8 @@ import json
 import logging
 import stat
 import subprocess
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from datetime import timedelta
 from pathlib import Path
 from unittest import mock
@@ -57,6 +58,11 @@ def fake_pg_dump(fake_tool: Callable[[str], FakeBinary]) -> FakeBinary:
 
 def queued_run(kind: str = "backup") -> BackupRun:
     return BackupRun.objects.create(kind=kind, destination_kind="folder")
+
+
+def without_snapshot(calls: list[list[str]]) -> list[list[str]]:
+    """The calls with the dump's `--snapshot=<id>` left out (the id differs per run)."""
+    return [[arg for arg in call if not arg.startswith("--snapshot=")] for call in calls]
 
 
 def answer_both_backups(fake_restic: FakeBinary, run_id: UUID) -> None:
@@ -156,7 +162,7 @@ def test_run_dumps_first_then_files_then_forgets(
 
     services.perform_run(run.id)
 
-    assert fake_restic.calls == [
+    assert without_snapshot(fake_restic.calls) == [
         restic.unlock_argv(),
         restic.backup_stdin_argv(run.id, services.DUMP_COMMAND),
         restic.backup_files_argv(run.id, services.file_paths()),
@@ -261,8 +267,8 @@ def test_a_host_name_a_restore_could_not_read_fails_the_back_up(
     run.refresh_from_db()
     assert run.status == BackupRun.Status.FAILED
     assert run.reason_code == "manifest_unreadable"
-    assert restic.backup_files_argv(run.id, services.file_paths()) not in fake_restic.calls
-    assert restic.forget_run_argv(run.id) in fake_restic.calls
+    # Refused while counting, before the dump: no snapshot was made.
+    assert [call[0] for call in fake_restic.calls] == ["unlock"]
 
 
 @pytest.mark.django_db(transaction=True)
@@ -277,7 +283,7 @@ def test_incomplete_files_backup_is_kept_and_retention_runs(
 
     services.perform_run(run.id)
 
-    assert fake_restic.calls == [
+    assert without_snapshot(fake_restic.calls) == [
         restic.unlock_argv(),
         restic.backup_stdin_argv(run.id, services.DUMP_COMMAND),
         restic.backup_files_argv(run.id, services.file_paths()),
@@ -908,7 +914,7 @@ def test_failed_files_step_removes_the_runs_database_snapshot(
 
     services.perform_run(run.id)
 
-    assert fake_restic.calls == [
+    assert without_snapshot(fake_restic.calls) == [
         restic.unlock_argv(),
         restic.backup_stdin_argv(run.id, services.DUMP_COMMAND),
         restic.backup_files_argv(run.id, services.file_paths()),
@@ -925,10 +931,11 @@ def test_failure_after_the_dump_of_any_kind_removes_the_snapshot(
     fake_pg_dump: FakeBinary,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def explode(**kwargs: object) -> None:
+    def explode(*args: object, **kwargs: object) -> None:
         raise RuntimeError("manifest")
 
-    monkeypatch.setattr(services, "build_manifest", explode)
+    # Writing the manifest is the first step after the dump.
+    monkeypatch.setattr(services, "write_private", explode)
     run = queued_run()
     fake_restic.respond(db_prefix(run.id), stdout=summary(DB_SIZE))
 
@@ -999,7 +1006,7 @@ def test_resumed_run_removes_its_earlier_snapshots_before_the_new_dump(
 
     services.perform_run(run.id)
 
-    assert fake_restic.calls[:3] == [
+    assert without_snapshot(fake_restic.calls)[:3] == [
         restic.unlock_argv(),
         restic.forget_run_argv(run.id),
         restic.backup_stdin_argv(run.id, services.DUMP_COMMAND),
@@ -1042,7 +1049,7 @@ def test_only_unlock_and_clean_up_have_a_timeout(
         secrets: Sequence[str],
         timeout: float | None = None,
     ) -> restic.ResticResult:
-        seen.append((argv[0] if argv[0] != "backup" else argv[-1], timeout))
+        seen.append((argv[0] if argv[0] != "backup" else argv[-1].split("=")[0], timeout))
         return real_run(argv, env, secrets=secrets, timeout=timeout)
 
     monkeypatch.setattr(restic, "run", recording_run)
@@ -1051,7 +1058,7 @@ def test_only_unlock_and_clean_up_have_a_timeout(
 
     services.perform_run(run.id)
 
-    dump_last_arg = services.DUMP_COMMAND[-1]
+    dump_last_arg = "--snapshot"
     files_last_arg = services.file_paths()[-1]
     assert seen == [
         ("unlock", services.SHORT_RESTIC_TIMEOUT),
@@ -1146,7 +1153,7 @@ def test_run_removes_abandoned_snapshots_after_unlock(
 
     services.perform_run(run.id, clean_up=[abandoned.id])
 
-    assert fake_restic.calls[:3] == [
+    assert without_snapshot(fake_restic.calls)[:3] == [
         restic.unlock_argv(),
         restic.forget_run_argv(abandoned.id),
         restic.backup_stdin_argv(run.id, services.DUMP_COMMAND),
@@ -1235,3 +1242,151 @@ def test_status_shows_an_interrupted_run_when_nothing_succeeded(
     status = services.status_summary()
     assert status.last_interrupted is not None
     assert status.last_interrupted.id == run.id
+
+
+# --- the dump and the manifest read one snapshot ---------------------------------------
+
+
+class SnapshotSpy:
+    """The counting connection and the exported snapshot id, with the order of events."""
+
+    def __init__(self) -> None:
+        self.connections: list[psycopg.Connection[tuple[object, ...]]] = []
+        self.snapshot_ids: list[str] = []
+        self.events: list[str] = []
+
+
+@pytest.fixture
+def snapshot_spy(monkeypatch: pytest.MonkeyPatch) -> SnapshotSpy:
+    from apps.backup import manifest
+
+    spy = SnapshotSpy()
+    real_counting = manifest.counting_transaction
+    real_export = manifest.export_snapshot
+    real_build = manifest.build_manifest
+    real_run = restic.run
+
+    @contextmanager
+    def counting(conninfo: str) -> Iterator[psycopg.Connection[tuple[object, ...]]]:
+        with real_counting(conninfo) as conn:
+            spy.connections.append(conn)
+            yield conn
+
+    def export(conn: psycopg.Connection[tuple[object, ...]]) -> str:
+        snapshot_id = real_export(conn)
+        spy.snapshot_ids.append(snapshot_id)
+        spy.events.append("exported")
+        return snapshot_id
+
+    def build(**kwargs: object) -> object:
+        result = real_build(**kwargs)  # type: ignore[arg-type]
+        spy.events.append("counted")
+        return result
+
+    def run(argv: Sequence[str], env: Mapping[str, str], **kwargs: object) -> object:
+        if "--stdin-from-command" in argv:
+            open_now = bool(spy.connections) and not spy.connections[-1].closed
+            spy.events.append(f"dump (counting connection open: {open_now})")
+        return real_run(argv, env, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(services, "counting_transaction", counting)
+    monkeypatch.setattr(services, "export_snapshot", export)
+    monkeypatch.setattr(services, "build_manifest", build)
+    monkeypatch.setattr(restic, "run", run)
+    return spy
+
+
+@pytest.mark.django_db(transaction=True)
+def test_the_dump_reads_the_snapshot_the_manifest_counted(
+    configured_folder: Path,
+    fake_restic: FakeBinary,
+    fake_pg_dump: FakeBinary,
+    snapshot_spy: SnapshotSpy,
+) -> None:
+    run = queued_run()
+    answer_both_backups(fake_restic, run.id)
+
+    services.perform_run(run.id)
+
+    (snapshot_id,) = snapshot_spy.snapshot_ids
+    assert snapshot_id  # e.g. 00000003-0000001B-1
+    dump = restic.backup_stdin_argv(run.id, [*services.DUMP_COMMAND, f"--snapshot={snapshot_id}"])
+    assert dump in fake_restic.calls
+    assert snapshot_spy.events == [
+        "exported",
+        "counted",
+        "dump (counting connection open: True)",
+    ]
+    (conn,) = snapshot_spy.connections
+    assert conn.closed
+    run.refresh_from_db()
+    assert run.status == BackupRun.Status.SUCCEEDED
+
+
+@pytest.mark.django_db(transaction=True)
+def test_the_counting_connection_is_closed_when_the_dump_fails(
+    configured_folder: Path,
+    fake_restic: FakeBinary,
+    fake_pg_dump: FakeBinary,
+    snapshot_spy: SnapshotSpy,
+) -> None:
+    run = queued_run()
+    fake_restic.respond(db_prefix(run.id), stderr="pg_dump: error: snapshot", code=1)
+
+    services.perform_run(run.id)
+
+    (conn,) = snapshot_spy.connections
+    assert conn.closed
+    run.refresh_from_db()
+    assert run.status == BackupRun.Status.FAILED
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_letter_uploaded_during_the_dump_is_not_counted(
+    ws_a: Workspace,
+    configured_folder: Path,
+    fake_restic: FakeBinary,
+    fake_pg_dump: FakeBinary,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from tests.test_backup_manifest import upload_letter
+
+    real_run = restic.run
+
+    def run_and_upload(argv: Sequence[str], env: Mapping[str, str], **kwargs: object) -> object:
+        if "--stdin-from-command" in argv:
+            upload_letter(ws_a, 1)  # committed while the dump runs
+        return real_run(argv, env, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(restic, "run", run_and_upload)
+    run = queued_run()
+    answer_both_backups(fake_restic, run.id)
+
+    services.perform_run(run.id)
+
+    manifest_path = Path(django_settings.BRIEVIE_BACKUP_CONFIG_DIR) / MANIFEST_NAME
+    manifest = manifest_from_json(manifest_path.read_text(encoding="utf-8"))
+    assert manifest.workspaces[ws_a.id].documents == 0
+
+
+@pytest.mark.django_db(transaction=True)
+def test_the_counting_connection_is_not_djangos(
+    configured_folder: Path,
+    fake_restic: FakeBinary,
+    fake_pg_dump: FakeBinary,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # No Django transaction is open while restic runs the dump.
+    real_run = restic.run
+    seen: list[bool] = []
+
+    def run(argv: Sequence[str], env: Mapping[str, str], **kwargs: object) -> object:
+        if "--stdin-from-command" in argv:
+            seen.append(connection.in_atomic_block)
+        return real_run(argv, env, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(restic, "run", run)
+    run_ = queued_run()
+    answer_both_backups(fake_restic, run_.id)
+    services.perform_run(run_.id)
+    assert seen == [False]
