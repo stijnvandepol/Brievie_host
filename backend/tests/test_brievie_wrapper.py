@@ -38,8 +38,11 @@ S3_SECRET = "s3-secret-value-39"
 RUN_ID = "0b6c3f7e-1d2a-4c5b-9e8f-7a6b5c4d3e2f"
 OWNERSHIP_CALL = (
     "ps -a --filter label=com.docker.compose.project=brievie "
-    '--format {{.Label "com.docker.compose.project.working_dir"}}'
+    '--format owner={{.Label "com.docker.compose.project.working_dir"}}'
 )
+CURRENT_ID = "c0" * 16
+BACKUP_ID = "b0" * 16
+NEW_ID = "a7" * 16
 SECRETS = [
     MASTER,
     POSTGRES_PW,
@@ -61,6 +64,8 @@ class Call(TypedDict, total=False):
     env: dict[str, str]
     secret_env: list[str]
     watch_mode: str
+    image_env: str
+    backup_dir_env: str
 
 
 # The fake: logs each call as a JSON line, answers from FAKE_* variables, and writes the
@@ -73,12 +78,16 @@ from pathlib import Path
 argv = sys.argv[1:]
 joined = " ".join(argv)
 entry = {{"argv": argv}}
-if "store_env_copy" in argv or "psql" in argv:
+piped = ("store_env_copy" in argv or "psql" in argv
+         or "cat > /data/backup-config/installation-id" in joined)
+if piped:
     entry["stdin"] = sys.stdin.read()
 secret_names = ("BRIEVIE_MASTER_KEY", "BRIEVIE_BACKUP_PASSWORD", "BRIEVIE_RESTORE_MASTER_KEY",
                 "BRIEVIE_RESTORE_BACKUP_PASSWORD", "BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY")
 if argv[:1] == ["compose"]:
     entry["secret_env"] = [name for name in secret_names if os.environ.get(name)]
+    entry["image_env"] = os.environ.get("BRIEVIE_IMAGE", "")
+    entry["backup_dir_env"] = os.environ.get("BRIEVIE_BACKUP_DIR", "<unset>")
 if "restore_fetch" in argv:
     names = ("BRIEVIE_MASTER_KEY", "BRIEVIE_BACKUP_PASSWORD", "BRIEVIE_BACKUP_DIR_SET",
              "BRIEVIE_BACKUP_REPOSITORY", "BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY", "SECRET_KEY")
@@ -89,14 +98,20 @@ if watch and os.path.exists(watch):
 with open(os.environ["FAKE_DOCKER_LOG"], "a") as log:
     log.write(json.dumps(entry) + "\\n")
 
+remove_at = os.environ.get("FAKE_REMOVE_AT", "")
+if remove_at and remove_at in joined:
+    os.remove(os.environ["FAKE_REMOVE_PATH"])
 fail = os.environ.get("FAKE_DOCKER_FAIL", "")
 if fail and fail in joined:
     sys.exit(int(os.environ.get("FAKE_DOCKER_FAIL_CODE", "1")))
 
 running = os.environ.get("FAKE_DOCKER_RUNNING", "").split()
 if argv[:2] == ["ps", "-a"]:
+    template = argv[argv.index("--format") + 1]
+    label = '{{{{.Label "com.docker.compose.project.working_dir"}}}}'
     owners = [o for o in os.environ.get("FAKE_DOCKER_OWNERS", "").split("|") if o]
-    sys.stdout.write("".join(owner + "\\n" for owner in owners))
+    for owner in owners:
+        sys.stdout.write(template.replace(label, "" if owner == "<empty>" else owner) + "\\n")
     sys.exit(0)
 if argv[:1] == ["compose"] and "ps" in argv:
     if "--services" in argv:
@@ -108,6 +123,10 @@ if argv[:2] == ["volume", "inspect"]:
     sys.exit(0 if argv[2] in os.environ.get("FAKE_DOCKER_VOLUMES", "").split() else 1)
 if "derive_backup_password" in argv:
     sys.stdout.write(os.environ["FAKE_DERIVED_PASSWORD"] + "\\n")
+elif "token_hex(16)" in joined:
+    sys.stdout.write(os.environ.get("FAKE_INSTALLATION_ID", "{new_id}") + "\\n")
+elif "cat /data/backup-config/installation-id" in joined:
+    sys.stdout.write(os.environ.get("FAKE_VOLUME_ID", ""))
 elif "-c" in argv and "secrets" in joined:
     sys.stdout.write(os.environ["FAKE_SEPARATE_PASSWORD"] + "\\n")
 elif "recovery_sheet" in argv:
@@ -125,7 +144,11 @@ sys.exit(0)
 
 
 def current_env(
-    *, backup_password: bool = True, project: str | None = None, image: str | None = None
+    *,
+    backup_password: bool = True,
+    project: str | None = None,
+    image: str | None = None,
+    installation_id: str | None = CURRENT_ID,
 ) -> str:
     lines = [
         "# A server's deploy/.env",
@@ -142,6 +165,8 @@ def current_env(
     ]
     if backup_password:
         lines.append(f"BRIEVIE_BACKUP_PASSWORD={DERIVED_PW}")
+    if installation_id:
+        lines.append(f"BRIEVIE_INSTALLATION_ID={installation_id}")
     if project:
         lines.append(f"COMPOSE_PROJECT_NAME={project}")
     if image:
@@ -149,7 +174,7 @@ def current_env(
     return "\n".join(lines) + "\n"
 
 
-def restored_env(*, project: str | None = None) -> str:
+def restored_env(*, project: str | None = None, installation_id: str | None = BACKUP_ID) -> str:
     lines = [
         "SECRET_KEY=" + "k" * 60,
         "BRIEVIE_HOSTNAME=oud.local",
@@ -158,6 +183,8 @@ def restored_env(*, project: str | None = None) -> str:
         f"BRIEVIE_BACKUP_PASSWORD={DERIVED_PW}",
         "BRIEVIE_BACKUP_DIR=/Volumes/Backup/brievie",
     ]
+    if installation_id:
+        lines.append(f"BRIEVIE_INSTALLATION_ID={installation_id}")
     if project:
         lines.append(f"COMPOSE_PROJECT_NAME={project}")
     lines += [
@@ -168,6 +195,29 @@ def restored_env(*, project: str | None = None) -> str:
         f"DATABASE_OWNER_URL=postgres://brievie_owner:{NEW_OWNER_PW}@localhost:5432/brievie",
     ]
     return "\n".join(lines) + "\n"
+
+
+def without(text: str, *keys: str) -> str:
+    """`text` without the lines that set one of `keys`."""
+    return "".join(
+        line + "\n"
+        for line in text.splitlines()
+        if not line.startswith(tuple(k + "=" for k in keys))
+    )
+
+
+def setting(text: str, key: str) -> list[str]:
+    return [line for line in text.splitlines() if line.startswith(key + "=")]
+
+
+DESTINATION_KEYS = (
+    "BRIEVIE_BACKUP_DIR",
+    "BRIEVIE_BACKUP_REPOSITORY",
+    "BRIEVIE_BACKUP_S3_ACCESS_KEY_ID",
+    "BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY",
+    "BRIEVIE_BACKUP_REST_USERNAME",
+    "BRIEVIE_BACKUP_REST_PASSWORD",
+)
 
 
 class Install:
@@ -187,7 +237,7 @@ class Install:
         self.bin = self.tmp / "bin"
         self.bin.mkdir()
         docker = self.bin / "docker"
-        docker.write_text(FAKE_DOCKER.format(python=sys.executable, run_id=RUN_ID))
+        docker.write_text(FAKE_DOCKER.format(python=sys.executable, run_id=RUN_ID, new_id=NEW_ID))
         docker.chmod(0o755)
         self.log = self.tmp / "docker.log"
         self.home = self.tmp / "home"
@@ -607,7 +657,8 @@ def test_restore_refuses_a_folder_without_a_backup(install: Install) -> None:
     result = install.run("restore", **restore_inputs(install))
 
     assert result.returncode == 1
-    assert install.commands() == [OWNERSHIP_CALL]  # only the question who owns the project
+    # Only the questions who owns the project and whether its data exists.
+    assert install.commands() == [OWNERSHIP_CALL, "volume inspect brievie_pgdata"]
     assert sorted(p.name for p in install.backup_folder.iterdir()) == []
 
 
@@ -637,7 +688,7 @@ def test_restore_runs_the_steps_in_order(install: Install, shell: str) -> None:
         "--manifest /data/backup-config/manifest.json "
         "--authority-dir /caddy-data/caddy/pki/authorities/local"
     ) in install.commands()[verify]
-    assert install.dotenv.read_text() == restored_env()
+    assert install.dotenv.read_text() == without(restored_env(), *DESTINATION_KEYS)
     assert stat.S_IMODE(install.dotenv.stat().st_mode) == 0o600
     assert not (install.root / "deploy" / ".restore").exists()
     assert result.stdout.rstrip().splitlines()[-1] == "Herstel gelukt."
@@ -704,7 +755,12 @@ def test_restore_secrets_do_not_override_the_restored_env(install: Install) -> N
     assert result.returncode == 0, result.stderr
     compose_calls = [c for c in install.calls() if c["argv"][0] == "compose"]
     assert compose_calls
-    assert all(c["secret_env"] == [] for c in compose_calls)
+    for call in compose_calls:
+        if "restore_database" in call["argv"] or "restore_files" in call["argv"]:
+            # These read the back-up: they get the source's password on purpose.
+            assert call["secret_env"] == ["BRIEVIE_BACKUP_PASSWORD"]
+        else:
+            assert call["secret_env"] == [], call["argv"]
 
 
 def test_restore_with_a_new_host_name(install: Install) -> None:
@@ -746,7 +802,11 @@ def test_replace_stops_backs_up_then_drops(installed: Install) -> None:
     assert len(olds) == 1
     assert olds[0].read_text() == current_env()
     assert stat.S_IMODE(olds[0].stat().st_mode) == 0o600
-    assert installed.dotenv.read_text() == restored_env()
+    final = installed.dotenv.read_text()
+    assert setting(final, "BRIEVIE_INSTALLATION_ID") == [f"BRIEVIE_INSTALLATION_ID={CURRENT_ID}"]
+    assert setting(final, "BRIEVIE_BACKUP_DIR") == ["BRIEVIE_BACKUP_DIR=/Volumes/Backup/brievie"]
+    assert setting(final, "POSTGRES_PASSWORD") == [f"POSTGRES_PASSWORD={NEW_POSTGRES_PW}"]
+    assert setting(final, "BRIEVIE_HOSTNAME") == ["BRIEVIE_HOSTNAME=oud.local"]
     installed.assert_no_secret_in_argv()
     assert compose_projects(installed) == {"brievie"}  # the child safety back-up too
 
@@ -947,19 +1007,22 @@ def test_replace_without_confirmation_changes_nothing(installed: Install) -> Non
     assert not (installed.root / "deploy" / ".restore").exists()
 
 
-def test_replace_asks_for_the_typed_word(installed: Install) -> None:
+def test_a_piped_word_never_confirms_a_replace(installed: Install) -> None:
     result = installed.run(
         "restore",
         "--replace",
         "--skip-safety-backup",
         "--keep-hostname",
-        stdin="WISSEN\n",
+        stdin="WISSEN\nWISSEN\n",
         **restore_inputs(installed, BRIEVIE_RESTORE_CONFIRM=""),
     )
 
-    assert result.returncode == 0, result.stderr
-    assert "veiligheidsback-up" in result.stdout
-    assert "brievie" in result.stdout
+    assert result.returncode == 1
+    assert "BRIEVIE_RESTORE_CONFIRM=WISSEN" in result.stderr
+    assert "veiligheidsback-up" in result.stdout  # the warning was shown
+    assert not any(" stop " in f" {c} " or "psql" in c for c in installed.commands())
+    assert installed.dotenv.read_text() == current_env()
+    assert not (installed.root / "deploy" / ".restore").exists()
 
 
 def test_a_failed_stop_before_the_swap_leaves_the_installation(installed: Install) -> None:
@@ -1139,3 +1202,354 @@ def test_replace_drops_nothing_when_a_password_is_missing(installed: Install) ->
     assert "./brievie restore" in result.stderr
     assert not any("psql -U postgres -d postgres" in c for c in installed.commands())
     assert not any("restore_database" in c for c in installed.commands())
+
+
+# --- fix round 2: what the wrapper cannot prove is its own ---------------------------------
+
+
+def test_a_failing_role_after_the_drop_says_how_to_go_on(installed: Install) -> None:
+    result = installed.run(
+        "restore",
+        "--replace",
+        "--skip-safety-backup",
+        "--keep-hostname",
+        FAKE_DOCKER_FAIL="psql -U postgres -v ON_ERROR_STOP",
+        **restore_inputs(installed),
+    )
+
+    assert result.returncode == 1
+    assert "back-uprol" in result.stderr
+    assert f"./brievie restore {RUN_ID} --replace" in result.stderr
+    assert not any("restore_database" in c for c in installed.commands())
+
+
+@pytest.mark.parametrize("command", ["start", "backup", "status", "sweep", "recovery-sheet"])
+def test_every_command_refuses_volumes_without_settings(install: Install, command: str) -> None:
+    result = install.run(command, FAKE_DOCKER_VOLUMES="brievie_pgdata")
+
+    assert result.returncode == 1
+    assert "brievie" in result.stderr
+    assert "geen instellingen" in result.stderr
+    assert install.commands() == [OWNERSHIP_CALL, "volume inspect brievie_pgdata"]
+    assert not install.dotenv.exists()  # init-env.sh never ran
+
+
+def test_a_failing_docker_ps_refuses(installed: Install) -> None:
+    result = installed.run("status", FAKE_DOCKER_FAIL="ps -a")
+
+    assert result.returncode == 1
+    assert "Docker" in result.stderr
+    assert installed.commands() == [OWNERSHIP_CALL]
+
+
+def test_a_container_without_a_folder_label_counts_as_foreign(installed: Install) -> None:
+    result = installed.run("status", FAKE_DOCKER_OWNERS="<empty>")
+
+    assert result.returncode == 1
+    assert "COMPOSE_PROJECT_NAME" in result.stderr
+    assert installed.commands() == [OWNERSHIP_CALL]
+
+
+@pytest.mark.parametrize("name", ["Hoofdletter", "met spatie", "-streep", "a/b"])
+def test_an_invalid_project_name_is_refused_but_help_works(installed: Install, name: str) -> None:
+    refused = installed.run("status", COMPOSE_PROJECT_NAME=name)
+    helped = installed.run("help", COMPOSE_PROJECT_NAME=name)
+
+    assert refused.returncode == 1
+    assert "COMPOSE_PROJECT_NAME" in refused.stderr
+    assert helped.returncode == 0
+    assert "./brievie restore" in helped.stdout
+    assert installed.calls() == []
+
+
+def test_an_unreadable_env_is_refused(installed: Install) -> None:
+    installed.dotenv.chmod(0)
+    try:
+        result = installed.run("status")
+    finally:
+        installed.dotenv.chmod(0o600)
+
+    assert result.returncode == 1
+    assert "deploy/.env" in result.stderr
+    assert installed.calls() == []
+
+
+@pytest.mark.parametrize(
+    "line", ["export COMPOSE_PROJECT_NAME=tweede", '  "COMPOSE_PROJECT_NAME" = tweede']
+)
+def test_every_spelling_of_the_project_line_is_understood(installed: Install, line: str) -> None:
+    installed.write_env(current_env() + line + "\n")
+
+    result = installed.run("status")
+
+    assert result.returncode == 0, result.stderr
+    assert compose_projects(installed) == {"tweede"}
+
+
+def test_rewrites_catch_every_spelling_of_their_key(install: Install) -> None:
+    install.restored.write_text(
+        restored_env().replace("BRIEVIE_HOSTNAME=oud.local", "export BRIEVIE_HOSTNAME=oud.local")
+        + "  'COMPOSE_PROJECT_NAME' = ander\nexport BRIEVIE_IMAGE=oud/brievie:1\n"
+    )
+
+    result = install.run("restore", stdin="n\nnieuw.local\n", **restore_inputs(install))
+
+    assert result.returncode == 0, result.stderr
+    text = install.dotenv.read_text()
+    assert [line for line in text.splitlines() if "BRIEVIE_HOSTNAME" in line] == [
+        "BRIEVIE_HOSTNAME=nieuw.local"
+    ]
+    assert "COMPOSE_PROJECT_NAME" not in text
+    assert "BRIEVIE_IMAGE" not in text
+
+
+def test_a_stale_restore_folder_is_removed_first(install: Install) -> None:
+    stale = install.root / "deploy" / ".restore"
+    stale.mkdir()
+    (stale / "env").write_text("STALE=1\n")
+    (stale / "left-over").write_text("x")
+
+    result = install.run(
+        "restore",
+        "--keep-hostname",
+        FAKE_WATCH=str(stale / "left-over"),
+        **restore_inputs(install),
+    )
+
+    assert result.returncode == 0, result.stderr
+    fetch = next(c for c in install.calls() if "restore_fetch" in c["argv"])
+    assert "watch_mode" not in fetch
+    assert "STALE" not in install.dotenv.read_text()
+
+
+# --- the image tag of a checkout with its own name -----------------------------------------
+
+
+def test_a_named_checkout_builds_its_own_image_tag(install: Install) -> None:
+    install.write_env(current_env(project="thuis"))
+
+    result = install.run("start")
+
+    assert result.returncode == 0, result.stderr
+    images = {c["image_env"] for c in install.calls() if c["argv"][0] == "compose"}
+    assert images == {"brievie/backend:thuis"}
+
+
+def test_the_default_checkout_keeps_the_local_tag(installed: Install) -> None:
+    result = installed.run("start")
+
+    assert result.returncode == 0, result.stderr
+    images = {c["image_env"] for c in installed.calls() if c["argv"][0] == "compose"}
+    assert images == {"brievie/backend:local"}
+
+
+def test_a_named_fresh_restore_fetches_with_its_own_tag(install: Install) -> None:
+    result = install.run(
+        "restore", "--keep-hostname", COMPOSE_PROJECT_NAME="proef", **restore_inputs(install)
+    )
+
+    assert result.returncode == 0, result.stderr
+    fetch = next(c for c in install.calls() if "restore_fetch" in c["argv"])
+    assert "brievie/backend:proef" in fetch["argv"]
+    assert "image inspect brievie/backend:proef" in install.commands()
+
+
+# --- the installation id --------------------------------------------------------------------
+
+
+def id_writes(install: Install) -> list[str]:
+    return [
+        c.get("stdin", "")
+        for c in install.calls()
+        if "cat > /data/backup-config/installation-id" in " ".join(c["argv"])
+    ]
+
+
+def test_start_gives_an_old_installation_an_id(install: Install) -> None:
+    install.write_env(current_env(installation_id=None))
+
+    result = install.run("start")
+
+    assert result.returncode == 0, result.stderr
+    assert setting(install.dotenv.read_text(), "BRIEVIE_INSTALLATION_ID") == [
+        f"BRIEVIE_INSTALLATION_ID={NEW_ID}"
+    ]
+    assert id_writes(install) == [NEW_ID + "\n"]
+    assert stat.S_IMODE(install.dotenv.stat().st_mode) == 0o600
+
+
+def test_start_writes_its_id_into_an_unmarked_volume(installed: Install) -> None:
+    result = installed.run("start")
+
+    assert result.returncode == 0, result.stderr
+    assert id_writes(installed) == [CURRENT_ID + "\n"]
+
+
+def test_start_accepts_its_own_marked_volume(installed: Install) -> None:
+    result = installed.run("start", FAKE_VOLUME_ID=CURRENT_ID + "\n")
+
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize(
+    "args",
+    [("start",), ("backup", "--init"), ("sweep", "--delete"), ("restore", "--replace")],
+)
+def test_a_volume_of_another_installation_is_refused(
+    installed: Install, args: tuple[str, ...]
+) -> None:
+    result = installed.run(*args, FAKE_VOLUME_ID="ee" * 16, **restore_inputs(installed))
+
+    assert result.returncode == 1
+    assert "hoort bij een andere installatie" in result.stderr
+    assert "brievie" in result.stderr
+    for command in installed.commands():
+        assert " stop " not in f" {command} "
+        assert "up -d" not in command
+        assert "backup_init" not in command
+        assert "sweep_storage" not in command
+        assert "psql -U postgres -d postgres" not in command
+    assert id_writes(installed) == []
+    assert installed.dotenv.read_text() == current_env()
+
+
+def test_a_fresh_restore_keeps_the_backups_id(install: Install) -> None:
+    result = install.run("restore", "--keep-hostname", **restore_inputs(install))
+
+    assert result.returncode == 0, result.stderr
+    assert setting(install.dotenv.read_text(), "BRIEVIE_INSTALLATION_ID") == [
+        f"BRIEVIE_INSTALLATION_ID={BACKUP_ID}"
+    ]
+    assert id_writes(install) == [BACKUP_ID + "\n"]
+    assert install.index("cat > /data/backup-config/installation-id") > install.index(
+        "verify_restore"
+    )
+
+
+def test_a_fresh_restore_without_an_id_gets_a_new_one(install: Install) -> None:
+    install.restored.write_text(restored_env(installation_id=None))
+
+    result = install.run("restore", "--keep-hostname", **restore_inputs(install))
+
+    assert result.returncode == 0, result.stderr
+    assert id_writes(install) == [NEW_ID + "\n"]
+    assert f"BRIEVIE_INSTALLATION_ID={NEW_ID}" in install.dotenv.read_text()
+
+
+def test_a_replace_keeps_the_installations_id(installed: Install) -> None:
+    result = installed.run(
+        "restore",
+        "--replace",
+        "--keep-hostname",
+        FAKE_VOLUME_ID=CURRENT_ID,
+        **restore_inputs(installed),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert id_writes(installed)[-1] == CURRENT_ID + "\n"
+    check = installed.index("cat /data/backup-config/installation-id")
+    assert check < installed.index("stop api worker caddy")
+
+
+# --- the back-up destination after a restore ------------------------------------------------
+
+
+def test_a_fresh_restore_makes_no_backups_unless_asked(install: Install) -> None:
+    result = install.run("restore", "--keep-hostname", **restore_inputs(install))
+
+    assert result.returncode == 0, result.stderr
+    text = install.dotenv.read_text()
+    for key in DESTINATION_KEYS:
+        assert setting(text, key) == []
+    assert "./brievie backup --init" in result.stdout
+    assert result.stdout.rstrip().splitlines()[-1] == "Herstel gelukt."
+    # The restore itself still reads the back-up it came from.
+    for name in ("restore_database", "restore_files"):
+        call = next(c for c in install.calls() if name in c["argv"])
+        assert call["backup_dir_env"] == str(install.backup_folder)
+    keeper_up = next(c for c in install.calls() if c["argv"][-3:] == ["up", "-d", "--wait"])
+    assert keeper_up["backup_dir_env"] == "<unset>"
+
+
+def test_a_fresh_restore_can_keep_backing_up_to_the_folder(install: Install) -> None:
+    result = install.run(
+        "restore",
+        "--keep-hostname",
+        **restore_inputs(install, BRIEVIE_RESTORE_KEEP_DESTINATION="ja"),
+    )
+
+    assert result.returncode == 0, result.stderr
+    text = install.dotenv.read_text()
+    assert setting(text, "BRIEVIE_BACKUP_DIR") == [f"BRIEVIE_BACKUP_DIR={install.backup_folder}"]
+    assert setting(text, "BRIEVIE_BACKUP_REPOSITORY") == []
+
+
+def test_a_fresh_restore_asks_about_the_destination(install: Install) -> None:
+    result = install.run("restore", "--keep-hostname", stdin="j\n", **restore_inputs(install))
+
+    assert result.returncode == 0, result.stderr
+    assert "dezelfde plek" in result.stdout
+    assert setting(install.dotenv.read_text(), "BRIEVIE_BACKUP_DIR") == [
+        f"BRIEVIE_BACKUP_DIR={install.backup_folder}"
+    ]
+
+
+def test_a_fresh_restore_can_keep_backing_up_to_a_server(install: Install) -> None:
+    result = install.run(
+        "restore",
+        "--keep-hostname",
+        BRIEVIE_RESTORE_SOURCE="s3:https://s3.example.nl/bak/brievie",
+        BRIEVIE_RESTORE_MASTER_KEY=MASTER,
+        BRIEVIE_RESTORE_KEEP_DESTINATION="ja",
+        BRIEVIE_BACKUP_S3_ACCESS_KEY_ID="AKIAEXAMPLE",
+        BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY=S3_SECRET,
+    )
+
+    assert result.returncode == 0, result.stderr
+    text = install.dotenv.read_text()
+    assert setting(text, "BRIEVIE_BACKUP_REPOSITORY") == [
+        "BRIEVIE_BACKUP_REPOSITORY=s3:https://s3.example.nl/bak/brievie"
+    ]
+    assert setting(text, "BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY") == [
+        f"BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY={S3_SECRET}"
+    ]
+    assert setting(text, "BRIEVIE_BACKUP_DIR") == []
+    install.assert_no_secret_in_argv()
+
+
+def test_a_replace_keeps_the_installations_destination(installed: Install) -> None:
+    installed.write_env(
+        current_env().replace(
+            "BRIEVIE_BACKUP_DIR=/Volumes/Backup/brievie", "BRIEVIE_BACKUP_DIR=/Volumes/Eigen"
+        )
+    )
+
+    result = installed.run("restore", "--replace", "--keep-hostname", **restore_inputs(installed))
+
+    assert result.returncode == 0, result.stderr
+    text = installed.dotenv.read_text()
+    assert setting(text, "BRIEVIE_BACKUP_DIR") == ["BRIEVIE_BACKUP_DIR=/Volumes/Eigen"]
+    assert setting(text, "BRIEVIE_BACKUP_PASSWORD") == [f"BRIEVIE_BACKUP_PASSWORD={DERIVED_PW}"]
+    restore_database = next(c for c in installed.calls() if "restore_database" in c["argv"])
+    assert restore_database["backup_dir_env"] == str(installed.backup_folder)
+    assert "dezelfde plek" in result.stdout
+
+
+def test_a_failed_swap_puts_the_old_settings_back(installed: Install) -> None:
+    # The fake takes the prepared file away while the keeper stops, so the second move of
+    # the swap fails after the first one moved the old deploy/.env aside.
+    result = installed.run(
+        "restore",
+        "--replace",
+        "--keep-hostname",
+        FAKE_REMOVE_AT="stop keeper",
+        FAKE_REMOVE_PATH=str(installed.root / "deploy" / ".restore" / "env"),
+        **restore_inputs(installed),
+    )
+
+    assert result.returncode == 1
+    assert "./brievie start" in result.stderr
+    assert installed.dotenv.read_text() == current_env()
+    assert list((installed.root / "deploy").glob(".env.before-restore-*")) == []
+    assert not (installed.root / "deploy" / ".restore").exists()
+    assert not any("postgres" in c and "up -d" in c for c in installed.commands())

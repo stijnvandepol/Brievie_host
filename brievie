@@ -1,11 +1,12 @@
 #!/bin/sh
 # ./brievie: start, back-up, restore, status, sweep and the recovery sheet of a Brievie
 # server. Every piece of logic lives in the image's management commands; this script only
-# orders the docker compose calls, asks for input and prints plain Dutch.
+# orders the docker calls, asks for input and prints plain Dutch.
 #
-# One installation is one checkout: the compose project is worked out once (environment,
-# else deploy/.env, else "brievie") and passed with -p to every call, and a project whose
-# containers belong to another checkout is never touched.
+# One installation is one checkout. The compose project and the image are worked out
+# once and used for every call (-p, BRIEVIE_IMAGE). Before it changes anything the script
+# proves the project is its own: no container of another checkout, no data volume without
+# this checkout's deploy/.env, and the installation id in the data matches deploy/.env.
 # No secret is ever a process argument: values reach docker through the environment
 # (`-e NAME`, the value set for that one command) or on stdin, and are never printed.
 # Files are written only at fixed names under this script's own folder.
@@ -33,10 +34,16 @@ restore_env="$here/deploy/.restore/env"
 # command that needs no database.
 build_secret_key=collectstatic-only-not-a-real-key-collectstatic-only-not-a-real-key
 build_database_url=postgres://build@localhost/build
+# Where the back-up goes; a restored server only gets one when that is decided here.
+destination_keys="BRIEVIE_BACKUP_DIR BRIEVIE_BACKUP_REPOSITORY BRIEVIE_BACKUP_S3_ACCESS_KEY_ID
+BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY BRIEVIE_BACKUP_REST_USERNAME BRIEVIE_BACKUP_REST_PASSWORD
+BRIEVIE_BACKUP_APPEND_ONLY"
 
-# Until the restored settings are in place, deploy/.restore holds the master key: any
-# exit removes it. The terminal gets its echo back on every exit.
+# On every exit: the terminal gets its echo back; an old deploy/.env that was moved
+# aside comes back when the new one is not in place; deploy/.restore (it holds the
+# master key) goes until the restored settings are in place.
 saved_tty=""
+swap_stamp=""
 restore_pending=""
 restore_terminal() {
 	if [ -n "$saved_tty" ]; then
@@ -46,6 +53,9 @@ restore_terminal() {
 }
 on_exit() {
 	restore_terminal
+	if [ -n "$swap_stamp" ] && [ ! -e "${here:?}/deploy/.env" ]; then
+		mv "${here:?}/deploy/.env.before-restore-$swap_stamp" "${here:?}/deploy/.env" 2>/dev/null || true
+	fi
 	if [ -n "$restore_pending" ]; then
 		rm -rf "${here:?}/deploy/.restore"
 	fi
@@ -87,10 +97,52 @@ fail() {
 	exit "${2:-1}"
 }
 
-# The value of $1 in file $2 (default deploy/.env): the last such line, or nothing.
-# The value travels through a pipe, never as an argument.
+# --- reading and editing .env files ---------------------------------------------------------
+
+# Whether line $2 sets key $1, in any spelling: leading spaces, `export`, a quoted key,
+# spaces before `=` (or `:`). Sets `value` to what follows, leading spaces removed.
+line_sets() {
+	rest=$2
+	rest=${rest#"${rest%%[![:space:]]*}"}
+	case $rest in
+	export[[:space:]]*)
+		rest=${rest#export}
+		rest=${rest#"${rest%%[![:space:]]*}"}
+		;;
+	esac
+	case $rest in
+	\"* | \'*) rest=${rest#?} ;;
+	esac
+	case $rest in
+	"$1"*) rest=${rest#"$1"} ;;
+	*) return 1 ;;
+	esac
+	case $rest in
+	\"* | \'*) rest=${rest#?} ;;
+	esac
+	rest=${rest#"${rest%%[![:space:]]*}"}
+	case $rest in
+	=* | :*)
+		value=${rest#?}
+		value=${value#"${value%%[![:space:]]*}"}
+		return 0
+		;;
+	esac
+	return 1
+}
+
+# The value of $1 in file $2 (default deploy/.env): the last line that sets it, or
+# nothing. Shell built-ins only: the value is in no process argument.
 env_value() {
-	grep "^$1=" "${2:-$env_file}" 2>/dev/null | tail -n 1 | cut -d= -f2- || true
+	file=${2:-$env_file}
+	[ -r "$file" ] || return 0
+	found=""
+	while IFS= read -r line || [ -n "$line" ]; do
+		if line_sets "$1" "$line"; then
+			found=$value
+		fi
+	done <"$file"
+	printf '%s\n' "$found"
 }
 
 # $1 without one pair of surrounding quotes.
@@ -108,54 +160,46 @@ unquote() {
 	esac
 }
 
-# The project of this installation, worked out once.
-project=${COMPOSE_PROJECT_NAME:-}
-if [ -z "$project" ]; then
-	project=$(unquote "$(env_value COMPOSE_PROJECT_NAME)")
-fi
-project=${project:-brievie}
-case $project in
-[a-z0-9]*) ;;
-*) fail "COMPOSE_PROJECT_NAME mag alleen kleine letters, cijfers, - en _ bevatten." ;;
-esac
-case $project in
-*[!a-z0-9_-]*) fail "COMPOSE_PROJECT_NAME mag alleen kleine letters, cijfers, - en _ bevatten." ;;
-esac
-# Child scripts and the safety back-up use the same project.
-COMPOSE_PROJECT_NAME=$project
-export COMPOSE_PROJECT_NAME
-
-image=${BRIEVIE_IMAGE:-}
-if [ -z "$image" ]; then
-	image=$(unquote "$(env_value BRIEVIE_IMAGE)")
-fi
-image=${image:-brievie/backend:local}
-
-compose() {
-	docker compose -p "$project" --project-directory "$here/deploy" \
-		-f "$here/deploy/docker-compose.yml" "$@"
-}
-
-# Refuses when containers of this project were made from another checkout: they would
-# be rewritten, stopped or emptied. No containers at all is a new installation.
-check_ownership() {
-	mine=$(CDPATH='' cd -P -- "$here/deploy" && pwd -P)
-	owners=$(docker ps -a --filter "label=com.docker.compose.project=$project" \
-		--format '{{.Label "com.docker.compose.project.working_dir"}}') ||
-		fail "Docker antwoordt niet. Start Docker en probeer het opnieuw."
-	while IFS= read -r owner; do
-		[ -n "$owner" ] || continue
-		resolved=$(CDPATH='' cd -P -- "$owner" 2>/dev/null && pwd -P) || resolved=$owner
-		if [ "$resolved" != "$mine" ]; then
-			fail "Er draait al een andere Brievie-installatie met de naam $project, vanuit $owner. Dit commando doet daarom niets. Geef deze installatie een eigen naam: zet COMPOSE_PROJECT_NAME=<andere naam> in deploy/.env."
+# stdin to stdout with every line that sets $2 (any spelling) dropped; with $1 = set,
+# `$2=$3` takes the place of the first one (or is added at the end).
+rewrite_env() {
+	done_setting=""
+	while IFS= read -r line || [ -n "$line" ]; do
+		if line_sets "$2" "$line"; then
+			if [ "$1" = set ] && [ -z "$done_setting" ]; then
+				printf '%s=%s\n' "$2" "$3"
+				done_setting=yes
+			fi
+		else
+			printf '%s\n' "$line"
 		fi
-	done <<EOF
-$owners
-EOF
+	done
+	if [ "$1" = set ] && [ -z "$done_setting" ]; then
+		printf '%s=%s\n' "$2" "$3"
+	fi
 }
 
-valid_hex64() {
-	[ ${#1} -eq 64 ] || return 1
+# edit_env set|remove KEY VALUE env|restore: changes deploy/.env or the restored
+# deploy/.restore/env through a temporary file and mv (mode 0600). Returns non-zero
+# when a step fails; nothing is half-written.
+edit_env() {
+	case $4 in
+	env)
+		rewrite_env "$1" "$2" "$3" <"${here:?}/deploy/.env" >"${here:?}/deploy/.env.new" &&
+			chmod 600 "${here:?}/deploy/.env.new" &&
+			mv "${here:?}/deploy/.env.new" "${here:?}/deploy/.env"
+		;;
+	restore)
+		rewrite_env "$1" "$2" "$3" <"${here:?}/deploy/.restore/env" >"${here:?}/deploy/.restore/env.new" &&
+			chmod 600 "${here:?}/deploy/.restore/env.new" &&
+			mv "${here:?}/deploy/.restore/env.new" "${here:?}/deploy/.restore/env"
+		;;
+	*) fail "Interne fout in ./brievie: onbekend bestand." 70 ;;
+	esac
+}
+
+valid_hex() { # $1 value, $2 length
+	[ ${#1} -eq "$2" ] || return 1
 	case $1 in
 	*[!0-9a-f]*) return 1 ;;
 	esac
@@ -166,54 +210,115 @@ valid_run_id() {
 		grep -Eqx '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
 }
 
-# stdin with the line `$1=...` set to `$1=$2` (the first one; added when missing).
-# Shell built-ins only: the value is in no process argument.
-rewrite_env() {
-	found=""
-	while IFS= read -r line || [ -n "$line" ]; do
+# --- this installation ------------------------------------------------------------------------
+
+# The project and the image, worked out once; both exported so compose, child scripts
+# and the safety back-up use the same ones.
+setup_installation() {
+	if [ -e "$env_file" ] && [ ! -r "$env_file" ]; then
+		fail "deploy/.env is niet te lezen. Controleer de rechten van dat bestand; er is niets veranderd."
+	fi
+	project=${COMPOSE_PROJECT_NAME:-}
+	if [ -z "$project" ]; then
+		project=$(unquote "$(env_value COMPOSE_PROJECT_NAME)")
+	fi
+	project=${project:-brievie}
+	case $project in
+	[a-z0-9]*) ;;
+	*) fail "COMPOSE_PROJECT_NAME begint met een kleine letter of een cijfer en bevat alleen kleine letters, cijfers, - en _." ;;
+	esac
+	case $project in
+	*[!a-z0-9_-]*) fail "COMPOSE_PROJECT_NAME begint met een kleine letter of een cijfer en bevat alleen kleine letters, cijfers, - en _." ;;
+	esac
+	COMPOSE_PROJECT_NAME=$project
+	export COMPOSE_PROJECT_NAME
+
+	# A checkout with its own name never builds over the image another one runs.
+	image=${BRIEVIE_IMAGE:-}
+	if [ -z "$image" ]; then
+		image=$(unquote "$(env_value BRIEVIE_IMAGE)")
+	fi
+	if [ -z "$image" ]; then
+		if [ "$project" = brievie ]; then
+			image=brievie/backend:local
+		else
+			image=brievie/backend:$project
+		fi
+	fi
+	BRIEVIE_IMAGE=$image
+	export BRIEVIE_IMAGE
+}
+
+compose() {
+	docker compose -p "$project" --project-directory "$here/deploy" \
+		-f "$here/deploy/docker-compose.yml" "$@"
+}
+
+# Refuses when a container of this project was made from another checkout (or carries
+# no folder at all): it would be rewritten, stopped or emptied.
+check_ownership() {
+	mine=$(CDPATH='' cd -P -- "$here/deploy" && pwd -P)
+	owners=$(docker ps -a --filter "label=com.docker.compose.project=$project" \
+		--format 'owner={{.Label "com.docker.compose.project.working_dir"}}') ||
+		fail "Docker antwoordt niet. Start Docker en probeer het opnieuw; er is niets veranderd."
+	while IFS= read -r line; do
 		case $line in
-		"$1="*)
-			if [ -z "$found" ]; then
-				printf '%s=%s\n' "$1" "$2"
-				found=yes
-			fi
-			;;
-		*) printf '%s\n' "$line" ;;
+		owner=*) owner=${line#owner=} ;;
+		*) continue ;;
 		esac
-	done
-	if [ -z "$found" ]; then
-		printf '%s=%s\n' "$1" "$2"
+		resolved=""
+		if [ -n "$owner" ]; then
+			resolved=$(CDPATH='' cd -P -- "$owner" 2>/dev/null && pwd -P) || resolved=""
+		fi
+		if [ -z "$resolved" ] || [ "$resolved" != "$mine" ]; then
+			fail "Er draait al een andere Brievie-installatie met de naam $project, vanuit ${owner:-een onbekende map}. Dit commando doet daarom niets. Geef deze installatie een eigen naam: zet COMPOSE_PROJECT_NAME=<andere naam> in deploy/.env."
+		fi
+	done <<EOF
+$owners
+EOF
+}
+
+# Refuses when the project's data exists but this checkout has no settings for it.
+check_settings() {
+	if [ ! -e "$env_file" ] && docker volume inspect "${project}_pgdata" >/dev/null 2>&1; then
+		fail "Er staan al gegevens van een Brievie-installatie met de naam $project, maar deze map heeft geen instellingen (deploy/.env). Er is niets veranderd. Geef deze installatie een eigen naam (bijvoorbeeld: COMPOSE_PROJECT_NAME=thuis2 ./brievie start) of zet de instellingen terug in deploy/.env."
 	fi
 }
 
-# Sets key $1 to $2 in deploy/.env ($3 = env) or in the restored deploy/.restore/env
-# ($3 = restore), through a temporary file and mv (mode 0600).
-set_env_line() {
-	case $3 in
-	env)
-		rewrite_env "$1" "$2" <"${here:?}/deploy/.env" >"${here:?}/deploy/.env.new"
-		chmod 600 "${here:?}/deploy/.env.new"
-		mv "${here:?}/deploy/.env.new" "${here:?}/deploy/.env"
-		;;
-	restore)
-		rewrite_env "$1" "$2" <"${here:?}/deploy/.restore/env" >"${here:?}/deploy/.restore/env.new"
-		chmod 600 "${here:?}/deploy/.restore/env.new"
-		mv "${here:?}/deploy/.restore/env.new" "${here:?}/deploy/.restore/env"
-		;;
-	*) fail "Interne fout in ./brievie: onbekend bestand." 70 ;;
-	esac
+claim_installation() {
+	check_ownership
+	check_settings
 }
 
-# Removes every `$1=` line from the restored deploy/.restore/env.
-remove_restore_line() {
-	while IFS= read -r line || [ -n "$line" ]; do
-		case $line in
-		"$1="*) ;;
-		*) printf '%s\n' "$line" ;;
-		esac
-	done <"${here:?}/deploy/.restore/env" >"${here:?}/deploy/.restore/env.new"
-	chmod 600 "${here:?}/deploy/.restore/env.new"
-	mv "${here:?}/deploy/.restore/env.new" "${here:?}/deploy/.restore/env"
+# Refuses when the data volume carries the id of another installation. Sets
+# `volume_id` (empty: a volume from before the id, or a new one).
+check_installation_id() {
+	volume_id=$(compose run --rm --no-deps -T admin sh -c 'cat /data/backup-config/installation-id 2>/dev/null || true') ||
+		fail "De gegevens van Brievie '$project' konden niet worden gecontroleerd. Lees de melding hierboven; er is niets veranderd."
+	volume_id=$(printf '%s' "$volume_id" | tr -d ' \t\r\n')
+	if [ -n "$volume_id" ] && [ "$volume_id" != "$(unquote "$(env_value BRIEVIE_INSTALLATION_ID)")" ]; then
+		fail "De gegevens van Brievie '$project' horen niet bij deze map: het opslagvolume hoort bij een andere installatie. Dit commando doet daarom niets. Geef deze installatie een eigen naam: zet COMPOSE_PROJECT_NAME=<andere naam> in deploy/.env."
+	fi
+}
+
+# deploy/.env gets BRIEVIE_INSTALLATION_ID when it has none (made in the container).
+ensure_env_installation_id() {
+	if [ -n "$(env_value BRIEVIE_INSTALLATION_ID)" ]; then
+		return 0
+	fi
+	new_id=$(compose run --rm --no-deps -T admin python -c "import secrets; print(secrets.token_hex(16))") ||
+		return 1
+	if ! valid_hex "$new_id" 32; then
+		echo "Het installatienummer kwam niet goed terug." >&2
+		return 1
+	fi
+	edit_env set BRIEVIE_INSTALLATION_ID "$new_id" env
+}
+
+# The data volume gets this installation's id (on stdin, at a fixed path inside).
+write_volume_id() {
+	printf '%s\n' "$(unquote "$(env_value BRIEVIE_INSTALLATION_ID)")" |
+		compose run --rm --no-deps -T admin sh -c 'cat > /data/backup-config/installation-id'
 }
 
 running() {
@@ -237,15 +342,14 @@ psql_set() {
 	printf "\\\\set %s '%s'\n" "$1" "$escaped"
 }
 
-# The read-only back-up role with the password of deploy/.env (as ensure-backup-role.sh
-# does, but in this script's own project).
+# The read-only back-up role with the password of deploy/.env (what
+# deploy/ensure-backup-role.sh does, in this script's own project).
 ensure_backup_role() {
-	role_line=$(psql_set backup_password BRIEVIE_BACKUP_DB_PASSWORD) || exit 1
+	role_line=$(psql_set backup_password BRIEVIE_BACKUP_DB_PASSWORD) || return 1
 	{
 		printf '%s\n' "$role_line"
 		printf '%s\n' '\i /docker-entrypoint-initdb.d/backup-role.psql'
-	} | compose exec -T postgres psql -U postgres -v ON_ERROR_STOP=1 -q ||
-		fail "De database kon niet worden bijgewerkt voor de back-up. Lees de melding hierboven."
+	} | compose exec -T postgres psql -U postgres -v ON_ERROR_STOP=1 -q
 }
 
 # Brings an installation along: missing lines in deploy/.env, and the back-up role in a
@@ -258,7 +362,8 @@ bring_along() {
 	*) printf '%s\n' "$report" ;;
 	esac
 	if running postgres; then
-		ensure_backup_role
+		ensure_backup_role ||
+			fail "De database kon niet worden bijgewerkt voor de back-up. Lees de melding hierboven."
 	fi
 }
 
@@ -270,10 +375,11 @@ ensure_backup_password() {
 	fi
 	password=$(compose run --rm --no-deps -T admin python manage.py derive_backup_password) ||
 		fail "Het back-upwachtwoord kon niet worden gemaakt. Lees de melding hierboven en probeer het opnieuw."
-	if ! valid_hex64 "$password"; then
+	if ! valid_hex "$password" 64; then
 		fail "Het back-upwachtwoord kwam niet goed terug; er is niets veranderd. Probeer het opnieuw."
 	fi
-	set_env_line BRIEVIE_BACKUP_PASSWORD "$password" env
+	edit_env set BRIEVIE_BACKUP_PASSWORD "$password" env ||
+		fail "deploy/.env kon niet worden bijgewerkt. Controleer de rechten van de map deploy."
 	password=""
 	echo "Het back-upwachtwoord staat nu in deploy/.env."
 	if running keeper; then
@@ -307,12 +413,24 @@ write_recovery_sheet() {
 
 cmd_start() {
 	[ $# -eq 0 ] || usage_error "./brievie start heeft geen extra woorden."
-	check_ownership
+	claim_installation
 	bring_along
+	# With an image at hand, the data is checked before anything is (re)created.
+	if docker image inspect "$image" >/dev/null 2>&1; then
+		check_installation_id
+	fi
 	compose up -d --build --wait ||
 		fail "Brievie is niet goed gestart. Lees de melding hierboven en typ daarna opnieuw ./brievie start."
-	ensure_backup_role
+	ensure_backup_role ||
+		fail "De database kon niet worden bijgewerkt voor de back-up. Lees de melding hierboven."
 	ensure_backup_password
+	check_installation_id
+	ensure_env_installation_id ||
+		fail "Het installatienummer kon niet worden gemaakt. Lees de melding hierboven en typ opnieuw ./brievie start."
+	if [ -z "$volume_id" ]; then
+		write_volume_id ||
+			fail "Het installatienummer kon niet bij de gegevens worden gezet. Lees de melding hierboven en typ opnieuw ./brievie start."
+	fi
 	if [ ! -e "${here:?}/brievie-herstelblad.html" ]; then
 		write_recovery_sheet
 	fi
@@ -334,19 +452,23 @@ cmd_backup() {
 		usage_error "--allow-same-disk en --separate-password horen bij ./brievie backup --init."
 	fi
 
-	check_ownership
+	claim_installation
 	bring_along
 	require_keeper
+	if [ -n "$init" ]; then
+		check_installation_id
+	fi
 
 	previous=""
 	if [ -n "$separate" ]; then
 		previous=$(env_value BRIEVIE_BACKUP_PASSWORD)
 		password=$(compose run --rm --no-deps -T admin python -c "import secrets; print(secrets.token_hex(32))") ||
 			fail "Een eigen back-upwachtwoord kon niet worden gemaakt. Probeer het opnieuw."
-		if ! valid_hex64 "$password"; then
+		if ! valid_hex "$password" 64; then
 			fail "Het eigen back-upwachtwoord kwam niet goed terug; er is niets veranderd. Probeer het opnieuw."
 		fi
-		set_env_line BRIEVIE_BACKUP_PASSWORD "$password" env
+		edit_env set BRIEVIE_BACKUP_PASSWORD "$password" env ||
+			fail "deploy/.env kon niet worden bijgewerkt. Controleer de rechten van de map deploy."
 		password=""
 		echo "Er staat een eigen back-upwachtwoord in deploy/.env. Het komt op je nieuwe herstelblad."
 	fi
@@ -361,7 +483,7 @@ cmd_backup() {
 		if ! compose run --rm --no-deps -T admin python manage.py backup_init \
 			${same_disk:+"--allow-same-disk"}; then
 			if [ -n "$separate" ]; then
-				set_env_line BRIEVIE_BACKUP_PASSWORD "$previous" env
+				edit_env set BRIEVIE_BACKUP_PASSWORD "$previous" env
 				compose up -d --no-deps keeper
 			fi
 			fail "De back-up is niet ingesteld. Los de melding hierboven op en typ daarna opnieuw ./brievie backup --init."
@@ -378,7 +500,7 @@ cmd_backup() {
 
 cmd_status() {
 	[ $# -eq 0 ] || usage_error "./brievie status heeft geen extra woorden."
-	check_ownership
+	claim_installation
 	bring_along
 	require_keeper
 	compose exec -T keeper python manage.py backup_status
@@ -392,15 +514,18 @@ cmd_sweep() {
 		*) usage_error "Onbekend woord bij ./brievie sweep: $arg" ;;
 		esac
 	done
-	check_ownership
+	claim_installation
 	bring_along
+	if [ -n "$delete" ]; then
+		check_installation_id
+	fi
 	compose run --rm --no-deps -T --user 10001 admin python manage.py sweep_storage \
 		${delete:+"--delete"}
 }
 
 cmd_recovery_sheet() {
 	[ $# -eq 0 ] || usage_error "./brievie recovery-sheet heeft geen extra woorden."
-	check_ownership
+	claim_installation
 	bring_along
 	ensure_backup_password
 	write_recovery_sheet
@@ -438,30 +563,85 @@ step_failed() {
 	exit "$status"
 }
 
+# The restored env takes this installation's value of $1, or loses the line when this
+# installation has none.
+keep_current() {
+	current=$(env_value "$1")
+	if [ -n "$current" ]; then
+		edit_env set "$1" "$current" restore
+	else
+		edit_env remove "$1" "" restore
+	fi
+}
+
 # The installation's identity is this checkout, not the back-up: its project name and
-# image, and (when it had settings of its own) its host ports.
+# image and, when it had settings of its own, its host ports, id and back-up destination.
 pin_restored_identity() {
 	if [ "$project" = brievie ]; then
-		remove_restore_line COMPOSE_PROJECT_NAME
+		edit_env remove COMPOSE_PROJECT_NAME "" restore || return 1
 	else
-		set_env_line COMPOSE_PROJECT_NAME "$project" restore
+		edit_env set COMPOSE_PROJECT_NAME "$project" restore || return 1
 	fi
-	pinned=$(env_value BRIEVIE_IMAGE)
-	if [ -n "$pinned" ]; then
-		set_env_line BRIEVIE_IMAGE "$pinned" restore
-	else
-		remove_restore_line BRIEVIE_IMAGE
-	fi
+	keep_current BRIEVIE_IMAGE || return 1
 	if [ -e "$env_file" ]; then
-		for key in POSTGRES_PORT BRIEVIE_HTTP_PORT BRIEVIE_HTTPS_PORT; do
-			pinned=$(env_value "$key")
-			if [ -n "$pinned" ]; then
-				set_env_line "$key" "$pinned" restore
-			else
-				remove_restore_line "$key"
-			fi
+		for key in POSTGRES_PORT BRIEVIE_HTTP_PORT BRIEVIE_HTTPS_PORT BRIEVIE_INSTALLATION_ID \
+			$destination_keys; do
+			keep_current "$key" || return 1
 		done
+		if [ -n "$(env_value BRIEVIE_BACKUP_DIR)$(env_value BRIEVIE_BACKUP_REPOSITORY)" ]; then
+			# The destination stays, so does the password that opens it.
+			keep_current BRIEVIE_BACKUP_PASSWORD || return 1
+			destination_note="Deze server maakt back-ups naar dezelfde plek als voor het herstel."
+		fi
 	fi
+}
+
+# A server restored on a new machine only backs up to the source when that is asked
+# for: a test restore must never start pruning the real repository.
+decide_destination() {
+	answer=${BRIEVIE_RESTORE_KEEP_DESTINATION:-}
+	if [ -z "$answer" ]; then
+		ask "Moet deze server weer back-ups maken naar dezelfde plek? (j/n)"
+	fi
+	for key in $destination_keys; do
+		edit_env remove "$key" "" restore || return 1
+	done
+	case $answer in
+	j | J | ja | Ja | JA | y | yes)
+		if [ -n "$folder" ]; then
+			edit_env set BRIEVIE_BACKUP_DIR "$folder" restore || return 1
+		else
+			edit_env set BRIEVIE_BACKUP_REPOSITORY "$repository" restore || return 1
+			for pair in "BRIEVIE_BACKUP_S3_ACCESS_KEY_ID:$s3_id" \
+				"BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY:$s3_secret" \
+				"BRIEVIE_BACKUP_REST_USERNAME:$rest_user" \
+				"BRIEVIE_BACKUP_REST_PASSWORD:$rest_password"; do
+				if [ -n "${pair#*:}" ]; then
+					edit_env set "${pair%%:*}" "${pair#*:}" restore || return 1
+				fi
+			done
+		fi
+		destination_note="Deze server maakt weer back-ups naar de plek waar je van herstelde."
+		;;
+	esac
+}
+
+# compose with the restore source as the back-up destination, for the steps that read
+# the back-up; deploy/.env is not changed by it.
+from_source() {
+	(
+		BRIEVIE_BACKUP_DIR=$folder
+		BRIEVIE_BACKUP_REPOSITORY=$repository
+		BRIEVIE_BACKUP_PASSWORD=$opening_password
+		BRIEVIE_BACKUP_S3_ACCESS_KEY_ID=$s3_id
+		BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY=$s3_secret
+		BRIEVIE_BACKUP_REST_USERNAME=$rest_user
+		BRIEVIE_BACKUP_REST_PASSWORD=$rest_password
+		export BRIEVIE_BACKUP_DIR BRIEVIE_BACKUP_REPOSITORY BRIEVIE_BACKUP_PASSWORD \
+			BRIEVIE_BACKUP_S3_ACCESS_KEY_ID BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY \
+			BRIEVIE_BACKUP_REST_USERNAME BRIEVIE_BACKUP_REST_PASSWORD
+		compose "$@"
+	)
 }
 
 # An empty database brievie with the roles' passwords of the new deploy/.env, over the
@@ -483,7 +663,8 @@ reset_database() {
 	} | compose exec -T postgres psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q
 }
 
-# The typed word before anything that is here now is replaced.
+# The typed word before anything that is here now is replaced. Only a terminal or
+# BRIEVIE_RESTORE_CONFIRM counts: piped input never confirms.
 confirm_replace() {
 	echo "Let op: dit vervangt alle gegevens van Brievie '$project' (map $here) door de back-up van $created_at."
 	if [ -n "$skip_safety" ]; then
@@ -491,6 +672,9 @@ confirm_replace() {
 	fi
 	answer=${BRIEVIE_RESTORE_CONFIRM:-}
 	if [ -z "$answer" ]; then
+		if [ ! -t 0 ]; then
+			fail "Er is geen terminal om WISSEN te typen. Zet BRIEVIE_RESTORE_CONFIRM=WISSEN als je dit echt wilt. Er is niets veranderd."
+		fi
 		ask "Typ het woord WISSEN om door te gaan:"
 	fi
 	if [ "$answer" != WISSEN ]; then
@@ -518,9 +702,13 @@ cmd_restore() {
 	if [ -n "$skip_safety" ] && [ -z "$replace" ]; then
 		usage_error "--skip-safety-backup hoort bij ./brievie restore --replace."
 	fi
-	check_ownership
-	if [ -e "$env_file" ] && [ -z "$replace" ]; then
-		fail "Deze installatie heeft al gegevens. Wil je ze vervangen door de back-up? Typ dan ./brievie restore --replace (er wordt eerst een veiligheidsback-up gemaakt)."
+	claim_installation
+	data_present=""
+	if [ -e "$env_file" ]; then
+		if [ -z "$replace" ]; then
+			fail "Deze installatie heeft al gegevens. Wil je ze vervangen door de back-up? Typ dan ./brievie restore --replace (er wordt eerst een veiligheidsback-up gemaakt)."
+		fi
+		data_present=yes
 	fi
 
 	# 1. The source and the secrets.
@@ -529,14 +717,12 @@ cmd_restore() {
 		ask "Waar staat de back-up? Typ het pad van de map (bijvoorbeeld /Volumes/Backup/brievie), of een adres dat begint met rest: of s3:"
 		source=$answer
 	fi
-	folder="" repository=""
-	s3_id=${BRIEVIE_BACKUP_S3_ACCESS_KEY_ID:-}
-	s3_secret=${BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY:-}
-	rest_user=${BRIEVIE_BACKUP_REST_USERNAME:-}
-	rest_password=${BRIEVIE_BACKUP_REST_PASSWORD:-}
+	folder="" repository="" s3_id="" s3_secret="" rest_user="" rest_password=""
 	case $source in
 	rest:*)
 		repository=$source
+		rest_user=${BRIEVIE_BACKUP_REST_USERNAME:-}
+		rest_password=${BRIEVIE_BACKUP_REST_PASSWORD:-}
 		if [ -z "$rest_user" ]; then
 			ask "Gebruikersnaam voor de REST-server (laat leeg als er geen is):"
 			rest_user=$answer
@@ -548,6 +734,8 @@ cmd_restore() {
 		;;
 	s3:*)
 		repository=$source
+		s3_id=${BRIEVIE_BACKUP_S3_ACCESS_KEY_ID:-}
+		s3_secret=${BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY:-}
 		if [ -z "$s3_id" ]; then
 			ask "Access key ID van de S3-opslag:"
 			s3_id=$answer
@@ -586,12 +774,12 @@ cmd_restore() {
 		backup_password=$answer
 	fi
 
-	# From here on compose reads every secret from deploy/.env: a value in this
-	# environment, even an empty one, would win over the file.
+	# From here on compose reads every secret and the destination from deploy/.env (or
+	# from from_source): a value in this environment, even an empty one, would win.
 	unset BRIEVIE_RESTORE_MASTER_KEY BRIEVIE_RESTORE_BACKUP_PASSWORD BRIEVIE_MASTER_KEY \
-		BRIEVIE_BACKUP_PASSWORD BRIEVIE_BACKUP_REPOSITORY BRIEVIE_BACKUP_S3_ACCESS_KEY_ID \
-		BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY BRIEVIE_BACKUP_REST_USERNAME \
-		BRIEVIE_BACKUP_REST_PASSWORD
+		BRIEVIE_BACKUP_PASSWORD BRIEVIE_BACKUP_DIR BRIEVIE_BACKUP_REPOSITORY \
+		BRIEVIE_BACKUP_S3_ACCESS_KEY_ID BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY \
+		BRIEVIE_BACKUP_REST_USERNAME BRIEVIE_BACKUP_REST_PASSWORD
 
 	# 2. Open the back-up, outside compose: nothing is started and no volume is made.
 	if ! docker image inspect "$image" >/dev/null 2>&1; then
@@ -600,7 +788,9 @@ cmd_restore() {
 			fail "Brievie kon niet worden gebouwd. Lees de melding hierboven en probeer het opnieuw."
 	fi
 	restore_pending=yes
-	mkdir -p "${here:?}/deploy/.restore"
+	rm -rf "${here:?}/deploy/.restore"
+	mkdir -p "${here:?}/deploy/.restore" ||
+		fail "De map deploy/.restore kon niet worden gemaakt. Controleer de rechten van de map deploy; er is niets veranderd."
 	set -- run --rm --user 0 -v "${here:?}/deploy/.restore:/out"
 	if [ -n "$folder" ]; then
 		set -- "$@" -v "$folder:/backup:ro"
@@ -624,7 +814,7 @@ cmd_restore() {
 		BRIEVIE_BACKUP_REST_USERNAME=$rest_user BRIEVIE_BACKUP_REST_PASSWORD=$rest_password \
 		SECRET_KEY=$build_secret_key DATABASE_URL=$build_database_url \
 		docker "$@") || status=$?
-	master_key="" backup_password="" s3_secret="" rest_password=""
+	master_key="" backup_password=""
 	if [ "$status" -ne 0 ]; then
 		case $status in
 		2) fail "De hoofdsleutel of het back-upwachtwoord past niet bij deze back-up. Controleer je herstelblad en typ opnieuw ./brievie restore." 2 ;;
@@ -646,9 +836,13 @@ EOF
 	if ! valid_run_id "$run_id" || [ ! -f "$restore_env" ]; then
 		fail "De back-up gaf geen bruikbaar antwoord. Typ opnieuw ./brievie restore."
 	fi
-	pin_restored_identity
+	# The password that opened the back-up: the restore steps read it with this one.
+	opening_password=$(unquote "$(env_value BRIEVIE_BACKUP_PASSWORD "$restore_env")")
 
-	# 3. The host name.
+	# 3. The new settings, prepared in full before anything here changes.
+	destination_note=""
+	pin_restored_identity ||
+		fail "De instellingen uit de back-up konden niet worden aangepast. Controleer de rechten van de map deploy; er is niets veranderd."
 	echo "Gevonden: back-up $run_id van $created_at, servernaam $old_hostname, Brievie $version."
 	hostname_changed=""
 	if [ -z "$keep_hostname" ]; then
@@ -661,22 +855,23 @@ EOF
 				fail "Een servernaam bestaat alleen uit letters, cijfers, punten en streepjes. Typ opnieuw ./brievie restore."
 				;;
 			esac
-			set_env_line BRIEVIE_HOSTNAME "$answer" restore
+			edit_env set BRIEVIE_HOSTNAME "$answer" restore ||
+				fail "De nieuwe servernaam kon niet worden opgeslagen; er is niets veranderd."
 			hostname_changed=yes
 			echo "De servernaam wordt $answer. Je telefoons moeten daarna opnieuw koppelen."
 			;;
 		esac
 	fi
-
-	# 4. Data that is already here. Volumes of this project without a deploy/.env of
-	# this checkout belong to someone else: never replaced.
-	data_present=""
-	if [ -e "$env_file" ]; then
-		data_present=yes
-	elif docker volume inspect "${project}_pgdata" >/dev/null 2>&1; then
-		fail "Op deze computer staan al gegevens van Brievie met de naam $project, maar in deze map staat geen deploy/.env. Brievie zet daar niets overheen. Wil je hier een aparte installatie herstellen? Typ dan COMPOSE_PROJECT_NAME=<eigen naam> ./brievie restore."
+	if [ -z "$data_present" ]; then
+		decide_destination ||
+			fail "De back-upbestemming kon niet worden opgeslagen; er is niets veranderd."
 	fi
+	chmod 600 "${here:?}/deploy/.restore/env" ||
+		fail "De nieuwe instellingen konden niet worden afgeschermd; er is niets veranderd."
+
+	# 4. What is here now: proven ours, confirmed, backed up, stopped.
 	if [ -n "$data_present" ]; then
+		check_installation_id
 		confirm_replace
 		compose stop api worker caddy ||
 			fail "Brievie kon niet worden gestopt; er is niets teruggezet. Lees de melding hierboven en start Brievie weer met ./brievie start."
@@ -688,22 +883,27 @@ EOF
 		fi
 		compose stop keeper ||
 			fail "De back-updienst kon niet worden gestopt; er is niets teruggezet. Start Brievie weer met ./brievie start."
-		stamp=$(date -u +%Y%m%dT%H%M%SZ)
-		mv "${here:?}/deploy/.env" "${here:?}/deploy/.env.before-restore-$stamp" ||
-			fail "deploy/.env kon niet opzij worden gezet; er is niets teruggezet. Start Brievie weer met ./brievie start."
-		chmod 600 "${here:?}/deploy/.env.before-restore-$stamp"
-		echo "Je oude instellingen staan in deploy/.env.before-restore-$stamp."
+		chmod 600 "${here:?}/deploy/.env" ||
+			fail "deploy/.env kon niet worden afgeschermd; er is niets teruggezet. Start Brievie weer met ./brievie start."
 	fi
 
-	# 5. The restored settings, before PostgreSQL starts for the first time.
-	if ! mv "${here:?}/deploy/.restore/env" "${here:?}/deploy/.env"; then
-		if [ -n "$data_present" ]; then
-			fail "De nieuwe instellingen konden niet worden neergezet. Je oude instellingen staan in deploy/.env.before-restore-$stamp: zet dat bestand terug als deploy/.env en typ ./brievie start."
+	# 5. The swap: two moves; the exit trap puts the old file back if the second fails.
+	stamp=$(date -u +%Y%m%dT%H%M%SZ)
+	if [ -n "$data_present" ]; then
+		swap_stamp=$stamp
+		if ! mv "${here:?}/deploy/.env" "${here:?}/deploy/.env.before-restore-$stamp"; then
+			swap_stamp=""
+			fail "deploy/.env kon niet opzij worden gezet; er is niets teruggezet. Start Brievie weer met ./brievie start."
 		fi
-		fail "De nieuwe instellingen konden niet worden neergezet; er is niets teruggezet. Typ opnieuw ./brievie restore."
 	fi
+	if ! mv "${here:?}/deploy/.restore/env" "${here:?}/deploy/.env"; then
+		fail "De nieuwe instellingen konden niet worden neergezet; je oude instellingen blijven staan en er is niets teruggezet. Start Brievie weer met ./brievie start."
+	fi
+	swap_stamp=""
 	restore_pending=""
-	chmod 600 "${here:?}/deploy/.env" || step_failed $? "deploy/.env kon niet worden afgeschermd."
+	if [ -n "$data_present" ]; then
+		echo "Je oude instellingen staan in deploy/.env.before-restore-$stamp."
+	fi
 	# Nothing may write while the data comes back: stop whatever runs.
 	compose stop api worker caddy keeper || step_failed $? "Brievie kon niet worden gestopt."
 
@@ -711,43 +911,58 @@ EOF
 	compose up -d --wait postgres || step_failed $? "PostgreSQL is niet gestart."
 	if [ -n "$data_present" ]; then
 		reset_database || step_failed $? "De oude database kon niet worden leeggemaakt."
-		ensure_backup_role
+		ensure_backup_role || step_failed $? "De back-uprol kon niet worden teruggezet."
 	fi
 	echo "De database wordt teruggezet…"
-	compose run --rm --no-deps -T admin python manage.py restore_database \
+	from_source run --rm --no-deps -T admin python manage.py restore_database \
 		--run "$run_id" --dbname brievie ||
 		step_failed $? "De database is niet teruggezet."
 
 	# 7. The documents and the certificate authority, before Caddy starts.
 	echo "De documenten worden teruggezet…"
-	compose run --rm --no-deps -T admin python manage.py restore_files --run "$run_id" \
+	from_source run --rm --no-deps -T admin python manage.py restore_files --run "$run_id" \
 		${data_present:+"--replace"} ||
 		step_failed $? "De documenten zijn niet compleet teruggezet."
+	s3_secret="" rest_password="" opening_password=""
 
 	# 8. Everything else; migrate brings the schema to this version.
 	compose up -d --wait || step_failed $? "Brievie is niet goed gestart na het terugzetten."
 
-	# 9. Check the result against the back-up.
+	# 9. Check the result against the back-up, then mark the data as this installation's.
 	compose run --rm --no-deps -T admin python manage.py verify_restore --dbname brievie \
 		--storage-root /data/documents --manifest /data/backup-config/manifest.json \
 		--authority-dir /caddy-data/caddy/pki/authorities/local ||
 		step_failed $? "Brievie draait, maar de controle vond problemen (zie hierboven)."
+	ensure_env_installation_id || step_failed $? "Het installatienummer kon niet worden gemaakt."
+	write_volume_id || step_failed $? "Het installatienummer kon niet bij de gegevens worden gezet."
 	rm -rf "${here:?}/deploy/.restore"
 	if [ -n "$hostname_changed" ]; then
 		echo "De servernaam is veranderd. Maak een nieuw herstelblad met ./brievie recovery-sheet en koppel je telefoons opnieuw."
+	fi
+	if [ -n "$destination_note" ]; then
+		echo "$destination_note"
+	else
+		echo "Deze server maakt nog geen back-ups. Zet BRIEVIE_BACKUP_DIR (een map) of BRIEVIE_BACKUP_REPOSITORY in deploy/.env en typ daarna ./brievie backup --init."
 	fi
 	echo "Herstel gelukt."
 }
 
 command=${1:-help}
-[ $# -eq 0 ] || shift
 case $command in
-help | -h | --help) usage ;;
+help | -h | --help)
+	usage
+	exit 0
+	;;
+start | backup | restore | status | sweep | recovery-sheet) ;;
+*) usage_error "Onbekende opdracht: $command" ;;
+esac
+shift
+setup_installation
+case $command in
 start) cmd_start "$@" ;;
 backup) cmd_backup "$@" ;;
 restore) cmd_restore "$@" ;;
 status) cmd_status "$@" ;;
 sweep) cmd_sweep "$@" ;;
 recovery-sheet) cmd_recovery_sheet "$@" ;;
-*) usage_error "Onbekende opdracht: $command" ;;
 esac
