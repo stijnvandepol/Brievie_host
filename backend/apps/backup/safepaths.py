@@ -13,10 +13,13 @@ directory: it is a fixed list of the paths the containers use, plus, for tests o
 a path strictly inside a temporary folder that is itself proven safe.
 """
 
+import errno
 import os
 import pwd
+import stat
 import tempfile
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 from apps.backup.errors import BackupError
@@ -334,3 +337,242 @@ def require_plain_name(name: str) -> str:
     if name in {"", ".", ".."} or any(separator in name for separator in separators):
         raise _unsafe()
     return name
+
+
+# --- working through directory descriptors ---------------------------------------------
+#
+# A guard judges a path; the destructive code then opens that path component by
+# component with O_NOFOLLOW and checks that it opened what was judged. Everything
+# below works relative to directory descriptors, so a directory swapped for a link
+# after the check is never followed.
+
+_DIRECTORY = os.O_RDONLY | os.O_DIRECTORY
+_NO_LINK_ERRORS = frozenset({errno.ELOOP, errno.ENOTDIR, errno.EMLINK})
+_SPECIAL_BITS = stat.S_ISUID | stat.S_ISGID | stat.S_ISVTX
+
+
+def identity(path: Path) -> _Identity | None:
+    """`(st_dev, st_ino)` of `path`, or None when it does not exist."""
+    return _identity(path)
+
+
+def _same(info: os.stat_result, other: os.stat_result | _Identity | None) -> bool:
+    if other is None:
+        return True
+    wanted = (other.st_dev, other.st_ino) if isinstance(other, os.stat_result) else other
+    return (info.st_dev, info.st_ino) == wanted
+
+
+def _open_child_dir(parent: int, name: str, *, follow: bool = False) -> int:
+    flags = _DIRECTORY if follow else _DIRECTORY | os.O_NOFOLLOW
+    try:
+        return os.open(name, flags, dir_fd=parent)
+    except OSError as error:
+        if error.errno in _NO_LINK_ERRORS:
+            raise _unsafe() from None
+        raise
+
+
+def open_dir_nofollow(
+    path: Path, *, expect: _Identity | None = None, create: int | None = None
+) -> int:
+    """A descriptor of directory `path`, opened component by component without
+    following a link (except a system link directly below `/`).
+
+    `expect`: the identity the guard saw; a different directory is refused. `create`:
+    the mode to make missing components with (each one made relative to its parent).
+    """
+    _plain_absolute(path)
+    descriptor = os.open("/", _DIRECTORY)
+    try:
+        for index, part in enumerate(path.parts[1:]):
+            try:
+                child = _open_child_dir(descriptor, part, follow=index == 0)
+            except FileNotFoundError:
+                if create is None:
+                    raise
+                os.mkdir(part, create, dir_fd=descriptor)
+                child = _open_child_dir(descriptor, part)
+            os.close(descriptor)
+            descriptor = child
+        if not _same(os.fstat(descriptor), expect):
+            raise _unsafe()
+    except BaseException:
+        os.close(descriptor)
+        raise
+    return descriptor
+
+
+def _open_subdir(parent: int, name: str, seen: os.stat_result) -> int:
+    """Open subdirectory `name` that was seen as `seen`; never another one, never
+    one on another file system (a mount inside the tree is not ours to touch)."""
+    child = _open_child_dir(parent, name)
+    info = os.fstat(child)
+    if not _same(info, seen) or info.st_dev != os.fstat(parent).st_dev:
+        os.close(child)
+        raise _unsafe()
+    return child
+
+
+def remove_tree_at(parent: int, name: str) -> None:
+    """Remove `name` in directory `parent`: a file or link is unlinked, a directory
+    emptied through descriptors and removed. Links are never followed."""
+    info = os.stat(name, dir_fd=parent, follow_symlinks=False)
+    if not stat.S_ISDIR(info.st_mode):
+        os.unlink(name, dir_fd=parent)
+        return
+    child = _open_subdir(parent, name, info)
+    try:
+        empty_dir(child)
+    finally:
+        os.close(child)
+    os.rmdir(name, dir_fd=parent)
+
+
+def empty_dir(descriptor: int) -> None:
+    """Remove everything in the directory open as `descriptor` (it stays itself)."""
+    with os.scandir(descriptor) as entries:
+        names = [entry.name for entry in entries]
+    for name in names:
+        remove_tree_at(descriptor, name)
+
+
+@dataclass(frozen=True)
+class Cleaned:
+    removed: int  # links and special files
+    skipped: int  # files with more than one hard link: not handed over
+
+
+def _open_regular(parent: int, name: str, seen: os.stat_result) -> int | None:
+    """A read descriptor of regular file `name` seen as `seen`; None when it changed."""
+    try:
+        descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
+    except OSError as error:
+        if error.errno in _NO_LINK_ERRORS:
+            return None
+        raise
+    info = os.fstat(descriptor)
+    if not stat.S_ISREG(info.st_mode) or not _same(info, seen):
+        os.close(descriptor)
+        return None
+    return descriptor
+
+
+def _settle(descriptor: int, info: os.stat_result, owner: int | None) -> None:
+    """Clear setuid, setgid and sticky bits, and hand the inode to `owner`."""
+    if info.st_mode & _SPECIAL_BITS:
+        os.fchmod(descriptor, stat.S_IMODE(info.st_mode) & ~_SPECIAL_BITS)
+    if owner is not None:
+        os.fchown(descriptor, owner, owner)
+
+
+def clean_tree(descriptor: int, *, owner: int | None) -> Cleaned:
+    """After a restore: keep only regular files and directories in the tree open as
+    `descriptor`. Anything else (links, devices, fifos, sockets) is removed and
+    counted; setuid, setgid and sticky bits are cleared; with `owner`, every
+    directory and file is handed to that uid and gid, except a file with more than
+    one hard link (skipped and counted: its other names may lie elsewhere).
+    """
+    removed = skipped = 0
+    _settle(descriptor, os.fstat(descriptor), owner)
+    with os.scandir(descriptor) as entries:
+        names = [entry.name for entry in entries]
+    for name in names:
+        info = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
+        if stat.S_ISDIR(info.st_mode):
+            child = _open_subdir(descriptor, name, info)
+            try:
+                inner = clean_tree(child, owner=owner)
+            finally:
+                os.close(child)
+            removed += inner.removed
+            skipped += inner.skipped
+            continue
+        opened = _open_regular(descriptor, name, info) if stat.S_ISREG(info.st_mode) else None
+        if opened is None:
+            os.unlink(name, dir_fd=descriptor)
+            removed += 1
+            continue
+        try:
+            if info.st_nlink > 1:
+                _settle(opened, info, None)
+                skipped += 1
+            else:
+                _settle(opened, info, owner)
+        finally:
+            os.close(opened)
+    return Cleaned(removed=removed, skipped=skipped)
+
+
+def chown_tree(descriptor: int, uid: int) -> int:
+    """Hand the tree open as `descriptor` to `uid` through descriptors; returns how
+    many entries were skipped (links, special files, files with more than one hard
+    link). Nothing is followed, nothing is removed."""
+    skipped = 0
+    os.fchown(descriptor, uid, uid)
+    with os.scandir(descriptor) as entries:
+        names = [entry.name for entry in entries]
+    for name in names:
+        info = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
+        if stat.S_ISDIR(info.st_mode):
+            child = _open_subdir(descriptor, name, info)
+            try:
+                skipped += chown_tree(child, uid)
+            finally:
+                os.close(child)
+            continue
+        opened = _open_regular(descriptor, name, info) if stat.S_ISREG(info.st_mode) else None
+        if opened is None or info.st_nlink > 1:
+            skipped += 1
+            if opened is not None:
+                os.close(opened)
+            continue
+        try:
+            os.fchown(opened, uid, uid)
+        finally:
+            os.close(opened)
+    return skipped
+
+
+def read_regular_at(parent: int, name: str, *, limit: int) -> bytes | None:
+    """The bytes of regular file `name` in `parent`, opened without following a link;
+    None when it does not exist. A link, a non-regular file or one larger than
+    `limit` bytes is refused."""
+    require_plain_name(name)
+    try:
+        descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
+    except FileNotFoundError:
+        return None
+    except OSError as error:
+        if error.errno in _NO_LINK_ERRORS:
+            raise _unsafe() from None
+        raise
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > limit:
+            raise _unsafe()
+        data = os.read(descriptor, limit + 1)
+        if len(data) > limit:
+            raise _unsafe()
+        return data
+    finally:
+        os.close(descriptor)
+
+
+def write_new_at(parent: int, name: str, data: bytes, *, mode: int = 0o600) -> int:
+    """Create `name` in `parent` (it must not exist; no link followed), write and sync
+    `data`; returns the open descriptor (the caller closes it)."""
+    require_plain_name(name)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+    descriptor = os.open(name, flags, mode, dir_fd=parent)
+    try:
+        os.fchmod(descriptor, mode)
+        view = memoryview(data)
+        while view:
+            view = view[os.write(descriptor, view) :]
+        os.fsync(descriptor)
+    except BaseException:
+        os.close(descriptor)
+        os.unlink(name, dir_fd=parent)
+        raise
+    return descriptor
