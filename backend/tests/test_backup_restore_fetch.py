@@ -199,7 +199,10 @@ def test_fetch_writes_env_and_manifest(backup: Backup, out_dir: Path) -> None:
     assert json.loads((out_dir / "manifest.json").read_text())["run_id"] == str(backup.run_id)
     values = env_values((out_dir / "env").read_text())
     assert values["BRIEVIE_MASTER_KEY"] == MASTER
-    assert values["POSTGRES_PASSWORD"] != ""
+    copied = set(env_values(ENV_COPY).values())
+    for key in ("POSTGRES_PASSWORD", "BRIEVIE_OWNER_PASSWORD"):
+        assert re.fullmatch(r"[0-9a-f]{48}", values[key]), key
+        assert values[key] not in copied, key
     assert values["SECRET_KEY"].startswith("keep-this-secret-key")
     # The keeper has no master key: the restored .env carries the password that opened it.
     assert values["BRIEVIE_BACKUP_PASSWORD"] == DERIVED
@@ -231,13 +234,79 @@ def test_wrong_master_key_with_a_separate_password_is_caught_from_the_dump(
     assert list(out_dir.iterdir()) == []
 
 
-def test_a_master_key_that_is_not_32_bytes_is_refused(backup: Backup, out_dir: Path) -> None:
+@pytest.mark.parametrize("master", ["abc", "5a" * 31, "5a" * 33, "zz" * 32, ""])
+def test_a_malformed_master_key_is_refused_before_restic(
+    backup: Backup, out_dir: Path, master: str
+) -> None:
     backup.one_run()
     with pytest.raises(BackupError) as caught:
-        do_fetch(out_dir, master="abc")
-    assert caught.value.code == "wrong_master_key"
+        do_fetch(out_dir, master=master)
+    assert caught.value.code == "master_key_malformed"
+    assert master not in str(caught.value) or master == ""
     assert list(out_dir.iterdir()) == []
     assert backup.restic.calls == []
+
+
+def test_a_master_key_typed_with_spaces_dashes_and_capitals_is_accepted(
+    backup: Backup, out_dir: Path
+) -> None:
+    backup.one_run()
+    typed = "-".join(MASTER.upper()[i : i + 8] for i in range(0, 64, 8))
+    typed = " " + typed[:20] + " \t" + typed[20:] + "\n"
+    do_fetch(out_dir, master=typed)
+    assert env_values((out_dir / "env").read_text())["BRIEVIE_MASTER_KEY"] == MASTER
+
+
+def test_the_typed_master_key_is_redacted_from_restic_output(
+    backup: Backup, out_dir: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    backup.restic.respond(("snapshots",), stderr=f"echo {MASTER} and {MASTER.upper()}", code=1)
+    with pytest.raises(BackupError):
+        do_fetch(out_dir, master=MASTER.upper())
+    assert caplog.records
+    assert MASTER not in caplog.text
+    assert MASTER.upper() not in caplog.text
+
+
+def test_fetch_hands_a_folder_it_creates_to_the_owner(
+    backup: Backup, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    backup.one_run()
+    owned: list[tuple[str, int, int]] = []
+    monkeypatch.setattr(
+        "apps.backup.restore.os.chown",
+        lambda path, uid, gid: owned.append((Path(path).name, uid, gid)),
+    )
+    created = tmp_path / "new-out"
+    fetch(
+        run=None,
+        master_key_hex=MASTER,
+        separate_password=None,
+        backup_dir_host=None,
+        out_dir=created,
+        out_owner=(501, 20),
+    )
+    assert ("new-out", 501, 20) in owned
+    assert stat.S_IMODE(os.stat(created).st_mode) == 0o700
+
+
+def test_fetch_leaves_the_owner_of_an_existing_folder(
+    backup: Backup, out_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    backup.one_run()
+    owned: list[str] = []
+    monkeypatch.setattr(
+        "apps.backup.restore.os.chown", lambda path, _u, _g: owned.append(Path(path).name)
+    )
+    fetch(
+        run=None,
+        master_key_hex=MASTER,
+        separate_password=None,
+        backup_dir_host=None,
+        out_dir=out_dir,
+        out_owner=(501, 20),
+    )
+    assert out_dir.name not in owned
 
 
 def test_fetch_refuses_a_backup_with_unknown_migrations(backup: Backup, out_dir: Path) -> None:
@@ -564,6 +633,28 @@ def test_restored_env_uses_the_default_port_without_postgres_port() -> None:
     assert values["DATABASE_OWNER_URL"].endswith("@localhost:5432/brievie")
 
 
+@pytest.mark.parametrize(
+    "line",
+    [
+        "POSTGRES_PORT=5433 # host",
+        "POSTGRES_PORT='5433'",
+        'POSTGRES_PORT="5433"',
+        "POSTGRES_PORT =  5433  ",
+        "export POSTGRES_PORT=5433",
+    ],
+)
+def test_restored_env_reads_the_port_as_compose_does(line: str) -> None:
+    values = env_values(restore(f"BRIEVIE_HOSTNAME=x\n{line}\n"))
+    assert values["DATABASE_OWNER_URL"].endswith("@localhost:5433/brievie")
+
+
+@pytest.mark.parametrize("value", ["", "abc", "54x3", "0", "70000"])
+def test_restored_env_refuses_a_port_it_cannot_read(value: str) -> None:
+    with pytest.raises(BackupError) as caught:
+        restore(f"POSTGRES_PORT={value}\n")
+    assert caught.value.code == "restore_failed"
+
+
 def test_restored_env_keeps_hostname_and_secret_key() -> None:
     restored = restore()
     values = env_values(restored)
@@ -622,6 +713,13 @@ def test_restored_env_refuses_a_password_it_cannot_write() -> None:
         restore(backup_password="it's\nbroken")
     assert caught.value.code == "backup_password_unwritable"
     assert "broken" not in str(caught.value)
+
+
+@pytest.mark.parametrize("folder", ["/media/it's", "/media/a\nb"])
+def test_restored_env_refuses_a_folder_it_cannot_write(folder: str) -> None:
+    with pytest.raises(BackupError) as caught:
+        restore(backup_dir_host=folder)
+    assert caught.value.code == "backup_folder_unwritable"
 
 
 SPELLINGS = [
@@ -689,6 +787,8 @@ def test_restore_fetch_without_a_separate_password_derives_it(
     [
         ("wrong_password", 2, "Het wachtwoord van de back-up klopt niet."),
         ("wrong_master_key", 2, "De hoofdsleutel hoort niet bij deze back-up."),
+        ("master_key_malformed", 2, None),
+        ("unsafe_manifest", 1, "De inhoudsopgave van de back-up kon niet worden gelezen."),
         ("newer_backup", 3, "Deze back-up komt van een nieuwere versie van Brievie."),
         ("run_not_found", 1, "Deze back-up is niet gevonden."),
     ],
@@ -699,7 +799,7 @@ def test_restore_fetch_exit_codes(
     settings: Settings,
     setup: str,
     returncode: int,
-    sentence: str,
+    sentence: str | None,
 ) -> None:
     settings.BRIEVIE_MASTER_KEY = MASTER
     settings.BRIEVIE_BACKUP_PASSWORD = ""
@@ -707,6 +807,13 @@ def test_restore_fetch_exit_codes(
         backup.restic.respond(("snapshots",), stderr="wrong password", code=12)
     elif setup == "wrong_master_key":
         backup.one_run(keys=copy_block([(WORKSPACE, sealed_key(OTHER_MASTER))]))
+    elif setup == "master_key_malformed":
+        settings.BRIEVIE_MASTER_KEY = "not-a-key"
+        backup.one_run()
+    elif setup == "unsafe_manifest":
+        unsafe = json.loads(manifest_json(backup.run_id))
+        unsafe["hostname"] = "brievie.example\nrun_id=forged"
+        backup.one_run(manifest=json.dumps(unsafe).encode())
     elif setup == "newer_backup":
         backup.one_run(manifest=manifest_json(backup.run_id, migrations={"x": ["9999_future"]}))
     else:
@@ -714,7 +821,8 @@ def test_restore_fetch_exit_codes(
     with pytest.raises(CommandError) as caught:
         call_command("restore_fetch", "--out", str(out_dir))
     assert caught.value.returncode == returncode
-    assert str(caught.value) == sentence
+    if sentence is not None:
+        assert str(caught.value) == sentence
     assert MASTER not in str(caught.value)
     assert list(out_dir.iterdir()) == []
 

@@ -9,7 +9,12 @@ from apps.backup.errors import BackupError
 from apps.backup.manifest import MANIFEST_NAME, manifest_from_json
 
 # Exit codes for ./brievie: 2 = the key or password does not fit, 3 = a newer back-up.
-_EXIT_CODES = {"wrong_password": 2, "wrong_master_key": 2, "newer_backup": 3}
+_EXIT_CODES = {
+    "wrong_password": 2,
+    "wrong_master_key": 2,
+    "master_key_malformed": 2,
+    "newer_backup": 3,
+}
 
 
 def _owner(value: str | None) -> tuple[int, int] | None:

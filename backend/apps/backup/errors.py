@@ -40,6 +40,13 @@ REASONS: dict[str, Promise] = {
     "run_not_found": _("Deze back-up is niet gevonden."),
     "wrong_master_key": _("De hoofdsleutel hoort niet bij deze back-up."),
     "restore_failed": _("Het herstel is niet gelukt."),
+    "backup_folder_unwritable": _(
+        "De naam van de back-upmap bevat een aanhalingsteken of een regeleinde. "
+        "Kies een map met een gewone naam."
+    ),
+    "master_key_malformed": _(
+        "De hoofdsleutel moet 64 tekens hebben: cijfers en de letters a tot en met f."
+    ),
     "backup_password_unwritable": _(
         "Het aparte wachtwoord van de back-up bevat een aanhalingsteken of een regeleinde. "
         "Zo'n wachtwoord past niet in de instellingen."

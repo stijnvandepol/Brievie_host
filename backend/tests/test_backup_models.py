@@ -33,6 +33,8 @@ EXPECTED_CODES = {
     "restic_failed",
     "abandoned",
     "backup_password_unwritable",
+    "backup_folder_unwritable",
+    "master_key_malformed",
 }
 
 

@@ -44,6 +44,8 @@ _COPY_ESCAPE = re.compile(r"\\(.)")
 # restic failures a restore reports as such; anything else is "the restore failed".
 # Never `files_incomplete` (exit 3): its sentence says a back-up was made.
 _RESTORE_CODES = frozenset({"wrong_password", "repository_missing", "destination_unreachable"})
+_KEY_NOISE = re.compile(r"[\s-]+")
+_KEY_HEX = re.compile(rf"[0-9a-f]{{{2 * crypto.KEY_BYTES}}}")
 _CHUNK = 1 << 16
 _STDERR_TAIL = 500
 _DEFAULT_PATH = "/usr/local/bin:/usr/bin:/bin"
@@ -56,8 +58,8 @@ class RunSnapshots:
     files: restic.Snapshot
 
 
-def _secrets(repository: restic.Repository, password: str) -> list[str]:
-    return [password, *destination.secrets(), *location_secrets(repository)]
+def _secrets(repository: restic.Repository, password: str, extra: Sequence[str] = ()) -> list[str]:
+    return [password, *extra, *destination.secrets(), *location_secrets(repository)]
 
 
 def _failure(returncode: int, stderr: str) -> BackupError:
@@ -67,10 +69,15 @@ def _failure(returncode: int, stderr: str) -> BackupError:
     return BackupError(code if code in _RESTORE_CODES else "restore_failed")
 
 
-def _restic_output(repository: restic.Repository, password: str, argv: Sequence[str]) -> bytes:
+def _restic_output(
+    repository: restic.Repository,
+    password: str,
+    argv: Sequence[str],
+    extra_secrets: Sequence[str] = (),
+) -> bytes:
     env = restic.restic_env(repository, password)
     try:
-        result = restic.run(argv, env, secrets=_secrets(repository, password))
+        result = restic.run(argv, env, secrets=_secrets(repository, password, extra_secrets))
     except BackupError as error:
         raise BackupError("restore_failed") from error
     if result.returncode != 0:
@@ -96,9 +103,10 @@ def _newest_by_run(snapshots: list[restic.Snapshot]) -> dict[UUID, restic.Snapsh
 
 
 def _snapshots_of_kind(
-    repository: restic.Repository, password: str, kind: str
+    repository: restic.Repository, password: str, kind: str, extra_secrets: Sequence[str]
 ) -> dict[UUID, restic.Snapshot]:
-    stdout = _restic_output(repository, password, restic.snapshots_argv(f"kind:{kind}"))
+    argv = restic.snapshots_argv(f"kind:{kind}")
+    stdout = _restic_output(repository, password, argv, extra_secrets)
     try:
         snapshots = restic.parse_snapshots(stdout)
     except BackupError as error:
@@ -106,10 +114,17 @@ def _snapshots_of_kind(
     return _newest_by_run(snapshots)
 
 
-def find_run(repository: restic.Repository, password: str, run: str | None) -> RunSnapshots:
+def find_run(
+    repository: restic.Repository,
+    password: str,
+    run: str | None,
+    *,
+    extra_secrets: Sequence[str] = (),
+) -> RunSnapshots:
     """The snapshots of run `run` (a run id), or of the newest run that has both kinds.
 
     A run whose files step ended incomplete (restic exit 3) has both and is restorable.
+    `extra_secrets` are hidden from the log too (the typed master key).
     """
     wanted: UUID | None = None
     if run is not None:
@@ -117,8 +132,8 @@ def find_run(repository: restic.Repository, password: str, run: str | None) -> R
             wanted = UUID(run)
         except ValueError:
             raise BackupError("run_not_found") from None
-    db = _snapshots_of_kind(repository, password, "db")
-    files = _snapshots_of_kind(repository, password, "files")
+    db = _snapshots_of_kind(repository, password, "db", extra_secrets)
+    files = _snapshots_of_kind(repository, password, "files", extra_secrets)
     complete = [run_id for run_id in db if run_id in files and wanted in (None, run_id)]
     if not complete:
         raise BackupError("run_not_found")
@@ -156,6 +171,7 @@ def _dump_through(
     password: str,
     snapshot: restic.Snapshot,
     consumer: Sequence[str],
+    extra_secrets: Sequence[str] = (),
 ) -> bytes:
     """`restic dump <snapshot> brievie.pgdump | <consumer>`; the consumer's stdout.
 
@@ -164,7 +180,7 @@ def _dump_through(
     passed off by a consumer that read a truncated archive without complaint. On any
     error neither process is left running.
     """
-    secrets = _secrets(repository, password)
+    secrets = _secrets(repository, password, extra_secrets)
     processes: list[subprocess.Popen[bytes]] = []
     threads: list[threading.Thread] = []
     dump_err: list[bytes] = []
@@ -285,7 +301,9 @@ def check_master_key_against_dump(
     The password alone does not prove the key: with a separate back-up password the
     repository opens with any master key. A back-up without workspace keys passes.
     """
-    output = _dump_through(repository, password, db_snapshot, PG_RESTORE_KEYS_COMMAND)
+    output = _dump_through(
+        repository, password, db_snapshot, PG_RESTORE_KEYS_COMMAND, _key_spellings(master_key)
+    )
     row = _first_key_row(output.decode("utf-8", errors="replace"))
     if row is None:
         return
@@ -297,13 +315,17 @@ def check_master_key_against_dump(
 
 
 def _master_key(master_key_hex: str) -> bytes:
-    try:
-        key = bytes.fromhex(master_key_hex.strip())
-    except ValueError:
-        raise BackupError("wrong_master_key") from None
-    if len(key) != crypto.KEY_BYTES:
-        raise BackupError("wrong_master_key")
-    return key
+    """The key as typed from the recovery sheet: spaces, dashes and capitals allowed."""
+    cleaned = _KEY_NOISE.sub("", master_key_hex).lower()
+    if _KEY_HEX.fullmatch(cleaned) is None:
+        raise BackupError("master_key_malformed")
+    return bytes.fromhex(cleaned)
+
+
+def _key_spellings(master_key: bytes, typed: str = "") -> list[str]:
+    """The master key as it could appear in a message: hidden from every log line."""
+    text = master_key.hex()
+    return [value for value in (text, text.upper(), typed.strip()) if value]
 
 
 def _text(data: bytes, code: str) -> str:
@@ -314,7 +336,12 @@ def _text(data: bytes, code: str) -> str:
 
 
 def _write_out(out_dir: Path, files: dict[str, str], owner: tuple[int, int] | None) -> None:
-    """Write every file (0600) or none: one that fails removes those already written."""
+    """Write every file (0600) or none: one that fails removes those already written.
+
+    A folder this call creates (0700) is handed to `owner` as well, so the host user
+    can open it.
+    """
+    created = not out_dir.exists()
     written: list[Path] = []
     try:
         for name, text in files.items():
@@ -322,9 +349,14 @@ def _write_out(out_dir: Path, files: dict[str, str], owner: tuple[int, int] | No
             written.append(out_dir / name)
             if owner is not None:
                 os.chown(out_dir / name, *owner)
+        if created and owner is not None:
+            os.chown(out_dir, *owner)
     except BaseException as error:
         for path in written:
             path.unlink(missing_ok=True)
+        if created:
+            with contextlib.suppress(OSError):
+                out_dir.rmdir()
         if isinstance(error, OSError):
             raise BackupError("restore_failed") from error
         raise
@@ -346,13 +378,14 @@ def fetch(
     else the one derived from the master key.
     """
     master_key = _master_key(master_key_hex)
+    hidden = _key_spellings(master_key, master_key_hex)
     password = separate_password or crypto.derive_backup_password(master_key)
     repository = destination.configured_repository()
-    found = find_run(repository, password, run)
+    found = find_run(repository, password, run, extra_secrets=hidden)
 
     config_dir = Path(settings.BRIEVIE_BACKUP_CONFIG_DIR)
     manifest_argv = restic.dump_argv(found.files.id, str(config_dir / MANIFEST_NAME))
-    manifest_out = _restic_output(repository, password, manifest_argv)
+    manifest_out = _restic_output(repository, password, manifest_argv, hidden)
     manifest_text = _text(manifest_out, "manifest_unreadable")
     manifest = manifest_from_json(manifest_text)
     if manifest.run_id != found.run_id:
@@ -360,7 +393,7 @@ def fetch(
     if unknown_migrations(manifest):
         raise BackupError("newer_backup")
     env_argv = restic.dump_argv(found.files.id, str(config_dir / ENV_COPY_NAME))
-    env_copy = _text(_restic_output(repository, password, env_argv), "restore_failed")
+    env_copy = _text(_restic_output(repository, password, env_argv, hidden), "restore_failed")
     check_master_key_against_dump(
         repository=repository, password=password, db_snapshot=found.db, master_key=master_key
     )

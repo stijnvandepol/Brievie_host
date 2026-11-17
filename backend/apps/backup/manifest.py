@@ -1,6 +1,7 @@
 """What a back-up records about itself; a restore verifies against it."""
 
 import json
+import re
 import tomllib
 from dataclasses import dataclass
 from datetime import datetime
@@ -18,6 +19,9 @@ from apps.devices.pki import certificate_sha256
 MANIFEST_FORMAT = 1
 MANIFEST_NAME = "manifest.json"
 AUTHORITY_FILE = "root.crt"
+# What a manifest may hold in the fields a restore prints as `key=value` lines.
+_HOSTNAME = re.compile(r"[A-Za-z0-9._-]{1,253}")
+_VERSION = re.compile(r"[\x21-\x7e]{1,64}")
 
 
 @dataclass(frozen=True)
@@ -146,6 +150,13 @@ def _names(value: object) -> list[str]:
     return list(value)
 
 
+def _matching(value: object, pattern: re.Pattern[str]) -> str:
+    """A text field that lands in `key=value` output: refuse anything but plain text."""
+    if not isinstance(value, str) or pattern.fullmatch(value) is None:
+        raise ValueError("unexpected characters")
+    return value
+
+
 def manifest_from_json(text: str) -> Manifest:
     try:
         data = json.loads(text)
@@ -156,10 +167,10 @@ def manifest_from_json(text: str) -> Manifest:
             format=MANIFEST_FORMAT,
             run_id=UUID(data["run_id"]),
             created_at=_aware(datetime.fromisoformat(data["created_at"])),
-            brievie_version=str(data["brievie_version"]),
+            brievie_version=_matching(data["brievie_version"], _VERSION),
             migrations={str(app): _names(names) for app, names in data["migrations"].items()},
             postgres_version=str(data["postgres_version"]),
-            hostname=str(data["hostname"]),
+            hostname=_matching(data["hostname"], _HOSTNAME),
             authority_sha256=None if authority is None else str(authority),
             workspaces={
                 UUID(key): WorkspaceCounts(

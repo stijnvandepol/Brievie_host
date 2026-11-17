@@ -63,25 +63,38 @@ _REPLACED_LINE = _key_line((_BACKUP_PASSWORD, _BACKUP_DIR))
 _PORT_LINE = _key_line(("POSTGRES_PORT",))
 _PLAIN_VALUE = re.compile(r"[A-Za-z0-9._~+/=@:,-]*")
 _UNQUOTABLE = re.compile(r"['\x00-\x1f\x7f]")
+_INLINE_COMMENT = re.compile(r"\s+#.*$")
+_MAX_PORT = 65535
 _RESTORED_HEADER = "# Added by the restore: the master key and new database passwords."
 
 
-def _env_value(value: str) -> str:
-    """A value as docker compose and `sh` read it literally: plain, or in single quotes."""
+def _env_value(value: str, refusal: str) -> str:
+    """A value as docker compose and `sh` read it literally: plain, or in single quotes.
+
+    `refusal` is the code when neither is possible (a quote or a control character).
+    """
     if _PLAIN_VALUE.fullmatch(value):
         return value
     if _UNQUOTABLE.search(value):
-        raise BackupError("backup_password_unwritable")
+        raise BackupError(refusal)
     return f"'{value}'"
 
 
+def _port_value(raw: str) -> str:
+    """The port of a `POSTGRES_PORT` value: quotes, spaces and an inline comment removed."""
+    value = _INLINE_COMMENT.sub("", raw).strip().strip("\"'").strip()
+    if not value.isdigit() or not 1 <= int(value) <= _MAX_PORT:
+        raise BackupError("restore_failed")
+    return str(int(value))
+
+
 def _postgres_port(lines: list[str]) -> str:
+    """The last `POSTGRES_PORT`; the default only when there is none."""
     port = DEFAULT_POSTGRES_PORT
     for line in lines:
         match = _PORT_LINE.match(line)
         if match is not None and match["comment"] is None:
-            value = match["value"].strip().strip("\"'").strip()
-            port = value if value.isdigit() else DEFAULT_POSTGRES_PORT
+            port = _port_value(match["value"])
     return port
 
 
@@ -99,9 +112,9 @@ def restored_env(
     """
     lines = text.splitlines()
     owner_password = secrets.token_hex(24)
-    wanted = {_BACKUP_PASSWORD: _env_value(backup_password)}
+    wanted = {_BACKUP_PASSWORD: _env_value(backup_password, "backup_password_unwritable")}
     if backup_dir_host is not None:
-        wanted[_BACKUP_DIR] = _env_value(backup_dir_host)
+        wanted[_BACKUP_DIR] = _env_value(backup_dir_host, "backup_folder_unwritable")
     port = _postgres_port(lines)
 
     restored: list[str] = []

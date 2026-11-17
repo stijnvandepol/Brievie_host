@@ -190,6 +190,17 @@ def _manifest_data() -> dict[str, object]:
         ("migrations", ["documents"]),
         ("format", True),
         ("format", 1.0),
+        ("hostname", "brievie.local\nrun_id=forged"),
+        ("hostname", "brievie.local\r"),
+        ("hostname", "brievie\tlocal"),
+        ("hostname", "brievie local"),
+        ("hostname", ""),
+        ("hostname", "a" * 254),
+        ("brievie_version", "0.1.0\nhostname=x"),
+        ("brievie_version", "0.1.0\x1b[31m"),
+        ("brievie_version", "0.1 .0"),
+        ("brievie_version", ""),
+        ("brievie_version", "1" * 65),
     ],
 )
 def test_manifest_with_a_wrong_field_is_refused(field: str, value: object) -> None:
@@ -222,3 +233,15 @@ def test_manifest_is_read_in_one_repeatable_read_transaction(
     (conn,) = opened
     assert conn.isolation_level == psycopg.IsolationLevel.REPEATABLE_READ
     assert conn.read_only is True
+
+
+@pytest.mark.parametrize(
+    ("hostname", "version"),
+    [("brievie.local", "0.1.0"), ("192.168.1.20", "1.2.3rc1+g1a2b"), ("my_host-1", "v1")],
+)
+def test_manifest_accepts_plain_host_names_and_versions(hostname: str, version: str) -> None:
+    data = _manifest_data()
+    data["hostname"] = hostname
+    data["brievie_version"] = version
+    manifest = manifest_from_json(json.dumps(data))
+    assert (manifest.hostname, manifest.brievie_version) == (hostname, version)
