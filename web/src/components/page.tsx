@@ -234,7 +234,7 @@ function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
   );
 }
 
-const WIDE = "(min-width: 1024px)";
+const WIDE = "(min-width: 1200px)";
 const NAV_STORAGE_KEY = "brievie.nav-collapsed";
 
 function matches(query: string): boolean {

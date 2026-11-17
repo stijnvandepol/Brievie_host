@@ -434,15 +434,12 @@ function RuleForm({
         if (check()) save.mutate();
       }}
     >
-      <section className="builder-section" aria-labelledby={`${formId}-name`}>
-        <h2 id={`${formId}-name`} className="builder-title">
-          {t`Regel`}
-        </h2>
+      <div className="builder-section">
         <TextField className="field" value={name} onChange={setName} isRequired maxLength={100}>
           <Label>{t`Naam`}</Label>
           <Input />
         </TextField>
-      </section>
+      </div>
 
       <section className="builder-section" aria-labelledby={`${formId}-if`}>
         <h2 id={`${formId}-if`} className="builder-title">

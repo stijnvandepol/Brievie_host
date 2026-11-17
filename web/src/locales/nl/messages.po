@@ -1017,10 +1017,6 @@ msgstr "Probeer opnieuw"
 msgid "QR-code om de app te koppelen"
 msgstr "QR-code om de app te koppelen"
 
-#: src/routes/rule-editor.tsx
-msgid "Regel"
-msgstr "Regel"
-
 #: src/components/document-history.tsx
 msgid "Regel {ruleName}"
 msgstr "Regel {ruleName}"

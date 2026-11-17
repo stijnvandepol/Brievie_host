@@ -559,6 +559,11 @@ q {
   gap: var(--s-l);
 }
 
+/* A wide table scrolls inside its surface instead of widening the page. */
+.content-inner > * {
+  min-width: 0;
+}
+
 /* The rail: icons only, the name shows as a tooltip on hover and focus. */
 @media (min-width: 640px) {
   .app[data-nav="collapsed"] .navpane {
@@ -627,7 +632,7 @@ q {
 }
 
 /* Tablet: a rail by default; the menu button opens the full pane over the page. */
-@media (min-width: 640px) and (max-width: 1023px) {
+@media (min-width: 640px) and (max-width: 1199px) {
   .app[data-nav="expanded"] .navpane {
     position: absolute;
     top: 0;
@@ -1394,6 +1399,7 @@ input[type="checkbox"]:checked:disabled {
   align-items: center;
   gap: var(--s-sn);
   min-width: 0;
+  white-space: nowrap;
 }
 
 .persona-avatar {
@@ -1555,6 +1561,10 @@ input[type="checkbox"]:checked:disabled {
   color: var(--brand-link);
 }
 
+.table td.num {
+  white-space: nowrap;
+}
+
 .table .cell-action {
   text-align: right;
   white-space: nowrap;
@@ -1690,7 +1700,13 @@ input[type="checkbox"]:checked:disabled {
   display: flex;
   flex-direction: column;
   gap: var(--s-xxs);
-  min-width: 180px;
+  flex: 1 1 160px;
+  max-width: 240px;
+  min-width: 0;
+}
+
+.filter select {
+  width: 100%;
 }
 
 .filter label {
@@ -2484,6 +2500,7 @@ input[type="checkbox"]:checked:disabled {
 }
 
 .rule-inactive .rule-name,
+.rule-inactive .rule-name a,
 .rule-inactive .rule-sentence {
   color: var(--neutral-fg3);
 }

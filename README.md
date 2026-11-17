@@ -121,8 +121,9 @@ Give the computer a fixed address in your router, so the address in the QR code 
 valid. After changing `BRIEVIE_HOSTNAME`, run `docker compose ... up -d` again.
 
 The phone must be on the same network (Wi-Fi) as the server. Then open the web interface,
-choose "App koppelen", make a code and scan the QR code with the app. Does scanning fail?
-Use "Kopieer koppelgegevens" and paste the text in the app.
+choose "Apparaten" in the menu, make a code ("Koppelcode maken") and scan the QR code
+with the app. Does scanning fail? Use "Kopieer koppelgegevens" and paste the text in the
+app.
 
 **The private certificate.** Caddy makes its own certificate authority (CA) and signs the
 server certificate with it, because a home server has no public name that a public CA could
@@ -133,8 +134,13 @@ server without the CA's private key (which stays in the Caddy volume).
 
 ## Web interface
 
-`https://localhost` serves the web app (setup, login, workspaces, pairing the iOS app).
-It lives in `web/` and is built into the API image; there is no Node in the running
+`https://localhost` serves the web app: setup, login, workspaces, inbox, post, persons,
+labels, Automatisering and pairing the iOS app. It follows the Fluent 2 design language
+(the calm, dense look of Microsoft 365 admin and Outlook on the web) with Brievie's own
+name, mark and navy app bar: a navigation pane on the left that folds to icons (the menu
+button; below 1200 px it is icons by default, on a phone it opens as a drawer), a page
+header with a command bar, and tables for lists. Colours, type and spacing are tokens at
+the top of `web/src/styles.css`; screenshots are in `docs/ui/fluent/`. It lives in `web/` and is built into the API image; there is no Node in the running
 stack. For development you need Node 24+ and pnpm: `make web-install`, then
 `cd web && pnpm dev` (proxies `/api` to the running stack; `BRIEVIE_DEV_API` changes the
 target). `make web-test`, `make web-lint` and `make web-build` are the checks. After
