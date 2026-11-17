@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same branch makes the older run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     runs-on: ubuntu-latest
@@ -103,3 +108,36 @@ jobs:
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # The way a user installs it: fresh secrets, build the images, start everything.
+  stack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      COMPOSE: docker compose --project-directory deploy -f deploy/docker-compose.yml
+    steps:
+      - uses: actions/checkout@v5
+      - name: Create deploy/.env with fresh secrets
+        run: sh deploy/init-env.sh
+      - name: Build and start the stack
+        run: $COMPOSE up -d --build --wait --wait-timeout 600
+      - name: The API answers through Caddy
+        run: |
+          # Caddy signs with its own CA, which this runner does not trust.
+          curl --fail --silent --show-error --insecure --retry 10 --retry-delay 3 --retry-all-errors \
+            https://localhost/api/v1/health
+      - name: The web interface is served
+        run: |
+          curl --fail --silent --show-error --insecure --output "$RUNNER_TEMP/index.html" https://localhost/
+          grep -qi '<!doctype html>' "$RUNNER_TEMP/index.html"
+      - name: The worker is running
+        run: test "$($COMPOSE ps --status running --services | grep -c '^worker$')" = 1
+      - name: The installation code is printed once
+        run: test "$($COMPOSE logs api | grep -c 'Installatiecode')" = 1
+      - name: Container state on failure
+        if: failure()
+        # No logs here: the api log holds the installation code.
+        run: $COMPOSE ps --all
+      - name: Stop
+        if: always()
+        run: $COMPOSE down --volumes
