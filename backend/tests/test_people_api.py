@@ -169,7 +169,7 @@ def test_setup_creates_the_admins_person(client: Client, settings: "Settings") -
         {
             "setup_token": SETUP_TOKEN,
             "email": "beheer@example.nl",
-            "password": "een-lang-wachtwoord-123",
+            "password": "een-lang-wachtwoord-2026",
             "name": "Stijn",
             "workspace_name": "Thuis",
             "workspace_kind": "home",
