@@ -127,7 +127,13 @@ One back-up is two restic snapshots with the same run id as a tag:
      copies the authority (`pki/authorities/local`) to a volume that only the
      back-up service mounts, owned by its user, mode 0600. Without it a restored
      server has a new certificate and every phone must pair again;
-   - `deploy/.env` without the master key line;
+   - `deploy/.env` without the master key and without the passwords of the database's
+     superuser and owner role. The always-on service must not hold those (4.5), so
+     they cannot pass through it into the back-up. A restore writes new ones: they are
+     used only when the database is first created and by `migrate`, so nothing is
+     lost, and the restored server starts without anybody editing a file. The CI
+     restore job proves that: after the restore the stack is healthy, the migrations
+     ran with the new owner password, and a new back-up succeeds;
    - a **manifest**: Brievie version, schema state, counts of documents and page
      files per workspace (counted as the back-up role, so private post is counted),
      the authority's fingerprint, the host name, time.
@@ -205,14 +211,16 @@ added later on the same commands, with the superuser question solved then.
     the documents and the copied authority read-only, and the destination. It has no
     master key (until the archive folder is switched on, 6.3) and no superuser
     password. It makes back-ups, checks them, and reports.
-  - **One-off containers** for restore and restore-test, started by the wrapper,
+  - **One-off containers** (a compose service `admin` behind a profile) for the first
+    set-up of a destination, restore and restore-test, started by the wrapper,
     never listening to a queue. Only they get the superuser's password and the master
     key, for as long as they run.
 - **One at a time**: a PostgreSQL advisory lock around back-up, restore and sweep;
   the wrapper asks the running service instead of starting a second copy; the
   existing retry of stalled jobs is extended to the `backup` queue. A back-up run
   that a restore brings back as "started" is marked "afgebroken door herstel".
-- **Existing installations.** The first run of `./brievie` brings an installation
+- **Existing installations.** Every `./brievie` command (and `./brievie start`, which
+  rebuilds and starts) brings an installation
   that predates this up to date, without a reinstall: it adds the missing lines to
   `.env` (as `init-env.sh` already does for the master key) and creates the back-up
   role through the superuser on PostgreSQL's local socket
@@ -231,7 +239,9 @@ added later on the same commands, with the superuser question solved then.
     without the marker is refused. Otherwise a disk that is not plugged in would give
     an empty folder on the system disk and a "back-up" next to the data. Changing the
     folder restarts the service;
-  - SFTP, S3-compatible storage, a restic REST server:
+  - S3-compatible storage or a restic REST server (SFTP is left out of part B1: it
+    needs an ssh client and key handling in the image, and a NAS share as a folder
+    or a REST server covers the same case):
     `BRIEVIE_BACKUP_REPOSITORY` in restic's notation, **without credentials in it**
     (a value with a password in the address is refused); credentials go in their own
     variables. What the web shows and what a run records as its reason passes a
@@ -249,12 +259,15 @@ installer gets `--restore`). Compose cannot be used before there is a `.env`, an
 1. Ask for the destination and the master key (and the back-up password when it is a
    separate one). Open the repository with a plain `docker run` of the back-up image,
    outside compose. A wrong key ends here with a clear sentence; nothing is written.
-2. Read the manifest. Refuse a back-up from a newer Brievie than the one installed.
+2. Read the manifest. Refuse a back-up from a newer Brievie than the one installed:
+   one whose manifest lists migrations this code does not know (the version number
+   is fixed until part U1, so the schema is the real test).
    Ask whether the host name stays: with another name the certificate is valid for
    the new one, but the phones know only the old one and pair again.
 3. Refuse when the installation already holds data, unless `--replace` is given;
    then stop the API and the workers and first make a back-up of what is there.
-4. Write `deploy/.env` from the back-up plus the master key. This must happen before
+4. Write `deploy/.env` from the back-up plus the master key and new passwords for
+   the superuser and the owner role. This must happen before
    PostgreSQL starts for the first time, because the roles get their passwords from
    it then. With `--replace` the database is dropped and created again and the
    roles' passwords are set to the restored ones.
@@ -262,13 +275,14 @@ installer gets `--restore`). Compose cannot be used before there is a `.env`, an
    superuser**, without the services it normally waits for (`--no-deps`): otherwise
    `migrate` would first create an empty schema and the restore would collide with
    it. Only a superuser can load rows into tables with forced row-level security.
+   Straight after it, back-up runs that the dump brought back as open are closed
+   ("afgebroken door herstel"), before any service can act on them.
 6. Put the document files back (owned by the application's user) and Caddy's
    authority (as root), **before Caddy starts**; a Caddy that started earlier has
    made a new authority.
 7. Start the stack; `migrate` brings the schema to the installed version.
 8. Verify: counts against the manifest, one page per workspace opened with the master
-   key, the authority's fingerprint equal to the manifest's. Open back-up runs and
-   back-up jobs from the dump are closed.
+   key, the authority's fingerprint equal to the manifest's.
 
 A back-up is also the way across a PostgreSQL major version (section 7.6), which is
 why it is a logical dump and not a copy of the data directory.
