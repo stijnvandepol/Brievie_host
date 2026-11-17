@@ -623,8 +623,9 @@ def _place_authority(source: Path, target: Path) -> bool:
     (a public certificate). Caddy's leaf certificates are removed, so it issues new ones
     from the restored authority. Every refusal comes before anything is changed. The
     source files are read without following a link, must be regular and small; the
-    target and the leaf directory are worked on through descriptors only, and nothing
-    above `…/caddy/pki` is made (`caddy_not_ready` when Caddy's folder is missing).
+    target and the leaf directory are worked on through descriptors only. Only the chain
+    `caddy/pki/authorities/local` below Caddy's volume is ever made (`caddy_not_ready`
+    when the volume itself is missing); the leaf directory is never made.
     """
     target = safepaths.require_caddy_authority_dir(target)
     leaf = safepaths.leaf_dir(target)
@@ -643,17 +644,19 @@ def _place_authority(source: Path, target: Path) -> bool:
         os.close(source_fd)
     if AUTHORITY_FILE not in contents:
         return False
-    # Caddy's own folder (`…/caddy`) must exist: only `pki/authorities/local` below it
-    # is ever made here, never anything above it.
-    base = target.parents[2]
-    expected = safepaths.identity(base)
+    # On a fresh machine Caddy has not started yet (it must not: it would make an
+    # authority of its own), so only its volume exists. Exactly the chain
+    # caddy/pki/authorities/local is made below it (0700, each through its parent's
+    # descriptor, no link followed); a missing volume is refused.
+    volume = target.parents[3]
+    expected = safepaths.identity(volume)
     if expected is None:
         raise BackupError("caddy_not_ready")
-    base_fd = safepaths.open_dir_nofollow(base, expect=expected)
+    volume_fd = safepaths.open_dir_nofollow(volume, expect=expected)
     try:
-        target_fd = safepaths.open_subdirs(base_fd, target.parts[-3:], create=0o700)
+        target_fd = safepaths.open_subdirs(volume_fd, safepaths.CADDY_AUTHORITY_TAIL, create=0o700)
     finally:
-        os.close(base_fd)
+        os.close(volume_fd)
     try:
         os.fchown(target_fd, 0, 0)
         os.fchmod(target_fd, 0o700)

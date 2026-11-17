@@ -75,8 +75,8 @@ REASONS: dict[str, Promise] = {
         "dan worden de mappen eerst leeggemaakt."
     ),
     "caddy_not_ready": _(
-        "De gegevensmap van Caddy bestaat nog niet. Start Brievie één keer en voer deze "
-        "stap daarna opnieuw uit."
+        "De opslag van Caddy is niet gekoppeld, dus het certificaat kan niet worden "
+        "teruggezet. Voer deze stap uit via ./brievie."
     ),
     "interrupted_by_restore": _("Afgebroken door herstel."),
     "abandoned": _("De vorige back-up is afgebroken. Er is een nieuwe gestart."),

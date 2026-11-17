@@ -443,12 +443,38 @@ def test_delete_orphans_never_follows_a_root_swapped_after_the_check(
     assert victim.read_text() == "not ours"
 
 
-def test_place_authority_makes_nothing_above_caddys_own_folder(
+def test_place_authority_refuses_when_caddys_volume_is_missing(
     source: Path, recorder: Recorder, tmp_path: Path
+) -> None:
+    target = tmp_path / "unmounted" / "caddy" / "pki" / "authorities" / "local"
+
+    refused(recorder, lambda: restore._place_authority(source, target), codes=("caddy_not_ready",))
+    assert not (tmp_path / "unmounted").exists()
+
+
+@pytest.mark.parametrize("planted", ["caddy", "pki", "caddy-file", "pki-file"])
+def test_place_authority_creates_nothing_beyond_a_link_or_file_in_the_chain(
+    source: Path, tmp_path: Path, planted: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     caddy_data = tmp_path / "caddy-data"
     caddy_data.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "keep").write_text("keep")
+    name = planted.removesuffix("-file")
+    parent = caddy_data if name == "caddy" else caddy_data / "caddy"
+    parent.mkdir(exist_ok=True)
+    if planted.endswith("-file"):
+        (parent / name).write_text("not a directory")
+    else:
+        (parent / name).symlink_to(outside, target_is_directory=True)
     target = caddy_data / "caddy" / "pki" / "authorities" / "local"
+    monkeypatch.setattr(os, "fchown", lambda *_args: None)
 
-    refused(recorder, lambda: restore._place_authority(source, target), codes=("caddy_not_ready",))
-    assert list(caddy_data.iterdir()) == []
+    with pytest.raises(BackupError) as caught:
+        restore._place_authority(source, target)
+
+    assert caught.value.code == "unsafe_path"
+    assert sorted(p.name for p in outside.iterdir()) == ["keep"]
+    assert (outside / "keep").read_text() == "keep"
+    assert sorted(p.name for p in parent.iterdir()) == [name]

@@ -952,16 +952,40 @@ def test_a_restore_removes_a_restored_file_with_another_name_elsewhere(
 
 
 @pytest.mark.django_db(transaction=True)
-def test_the_authority_is_never_placed_when_caddys_folder_is_missing(
+def test_on_a_fresh_machine_the_authority_is_placed_before_caddy_first_starts(
+    configured_folder: Path, fake_restic: FakeBinary, tmp_path: Path, chowned: Chowned
+) -> None:
+    # Only the volume (the stand-in for /caddy-data) exists: Caddy never ran here.
+    one_run(fake_restic)
+    restored_authority(AUTHORITY_FILES)
+    caddy_data = tmp_path / "fresh-caddy-data"
+    caddy_data.mkdir()
+    target = caddy_data / "caddy" / "pki" / "authorities" / "local"
+
+    restored = restore_files(run=None, authority_target=target, clear_documents=False)
+
+    assert restored.authority_placed is True
+    for directory in (target, *target.parents[:3]):
+        assert directory.is_dir()
+        assert not directory.is_symlink()
+        assert stat.S_IMODE(directory.stat().st_mode) == 0o700, directory
+    assert sorted(p.name for p in target.iterdir()) == sorted(AUTHORITY_FILES)
+    for name in AUTHORITY_FILES:
+        assert stat.S_IMODE((target / name).stat().st_mode) == 0o600
+    # The leaf directory is only removed when there is one; it is never made.
+    assert sorted(p.name for p in (caddy_data / "caddy").iterdir()) == ["pki"]
+
+
+@pytest.mark.django_db(transaction=True)
+def test_the_authority_is_never_placed_when_caddys_volume_is_missing(
     configured_folder: Path, fake_restic: FakeBinary, tmp_path: Path, chowned: Chowned
 ) -> None:
     one_run(fake_restic)
     restored_authority(AUTHORITY_FILES)
-    target = tmp_path / "fresh-caddy-data" / "caddy" / "pki" / "authorities" / "local"
-    (tmp_path / "fresh-caddy-data").mkdir()
+    target = tmp_path / "unmounted-caddy-data" / "caddy" / "pki" / "authorities" / "local"
 
     with pytest.raises(BackupError) as caught:
         restore_files(run=None, authority_target=target, clear_documents=False)
 
     assert caught.value.code == "caddy_not_ready"
-    assert list((tmp_path / "fresh-caddy-data").iterdir()) == []
+    assert not (tmp_path / "unmounted-caddy-data").exists()
