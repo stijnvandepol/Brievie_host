@@ -556,8 +556,11 @@ The App Store updates the app by itself; the server waits for its admin. So:
   does and what stays the user's (a destination, the sheet).
 - These are texts on the site: **the owner's to approve**.
 - The owner holds `brievie.com`; the site, the install command and the names of the
-  images can use it. Where its DNS runs is not known yet, and whether a first version
-  may be released publicly is still the owner's open decision.
+  images can use it. Where its DNS runs is not known yet, and the owner allowed public
+  releases on 2026-11-17 ("versies mag je openbaar uitbrengen"). The release workflow
+  publishes only on a tag, with the least rights per job, and so that a pull request
+  from a fork never reaches a token that can write. It is proven without publishing
+  (a build without a push in CI) before the first tag, which the owner's side sets.
 
 ### 7.8 The optional layer for organisations
 
