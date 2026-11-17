@@ -77,7 +77,14 @@ docker compose --project-directory deploy -f deploy/docker-compose.yml exec api 
   python manage.py configure_ai --workspace <workspace-id> --mode external
 ```
 
-It asks for the API key (or reads `BRIEVIE_AI_API_KEY`) and defaults to Mistral
+It first tells you, in Dutch, what leaves your server with every letter and to which
+service and country, and asks you to type `akkoord`: you decide this for everyone whose
+post is in the workspace. Your answer is recorded (who, when, which service), and every
+member sees in the web interface that AI is on. In a script, pass `--accept-external-ai`
+instead of typing. Another model at the same address does not ask again; another
+address does. `--mode off` switches it off again and records that too.
+
+It then asks for the API key (or reads `BRIEVIE_AI_API_KEY`) and defaults to Mistral
 (`https://api.mistral.ai/v1`, model `mistral-small-latest`). Choose another supplier with
 `--supplier`:
 

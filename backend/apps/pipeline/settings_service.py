@@ -3,14 +3,17 @@
 import ipaddress
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from urllib.parse import urlsplit
 from uuid import UUID
 
 from django.db import transaction
+from django.utils.functional import Promise
+from django.utils.translation import gettext_lazy as _
 
 from apps.common import crypto
 from apps.pipeline.errors import PermanentError
-from apps.pipeline.models import AISettings
+from apps.pipeline.models import AIConsentEvent, AISettings
 from apps.pipeline.providers import AnthropicProvider, LLMProvider, OpenAICompatibleProvider
 from apps.workspaces.keys import workspace_key
 
@@ -19,20 +22,80 @@ DEFAULT_EXTERNAL_URL = "https://api.mistral.ai/v1"
 DEFAULT_EXTERNAL_MODEL = "mistral-small-latest"
 
 
+CUSTOM_SUPPLIER = "custom"
+COMMAND_LINE = "command line"
+
+
 @dataclass(frozen=True)
 class SupplierPreset:
     api: str
     base_url: str
     model: str  # "" = no default: the caller must name a model
+    name: str
+    # Where the service's company is established, as told to whoever gives consent.
+    country: Promise
 
 
 SUPPLIERS: dict[str, SupplierPreset] = {
-    "mistral": SupplierPreset(AISettings.Api.OPENAI, DEFAULT_EXTERNAL_URL, DEFAULT_EXTERNAL_MODEL),
-    "openai": SupplierPreset(AISettings.Api.OPENAI, "https://api.openai.com/v1", ""),
+    "mistral": SupplierPreset(
+        AISettings.Api.OPENAI,
+        DEFAULT_EXTERNAL_URL,
+        DEFAULT_EXTERNAL_MODEL,
+        "Mistral",
+        _("Frankrijk (Europese Unie)"),
+    ),
+    "openai": SupplierPreset(
+        AISettings.Api.OPENAI,
+        "https://api.openai.com/v1",
+        "",
+        "OpenAI",
+        _("Verenigde Staten"),
+    ),
     "claude": SupplierPreset(
-        AISettings.Api.ANTHROPIC, "https://api.anthropic.com", "claude-opus-5-5"
+        AISettings.Api.ANTHROPIC,
+        "https://api.anthropic.com",
+        "claude-opus-5-5",
+        "Claude (Anthropic)",
+        _("Verenigde Staten"),
     ),
 }
+
+
+class ConsentRequiredError(ValueError):
+    """Switching to this external service needs somebody's explicit consent first."""
+
+
+@dataclass(frozen=True)
+class Actor:
+    """Who decides about a workspace's AI: a user, or whoever runs the command."""
+
+    user_id: UUID | None = None
+    label: str = COMMAND_LINE
+
+
+@dataclass(frozen=True)
+class Target:
+    """Checked settings, before anything is stored."""
+
+    mode: str
+    api: str
+    # A key of `SUPPLIERS`, `custom` for another address, "" when not external.
+    supplier: str
+    base_url: str
+    model: str
+    host: str
+
+
+@dataclass(frozen=True)
+class AiStatus:
+    """What a member may know about the workspace's AI."""
+
+    mode: str
+    supplier: str | None = None
+    host: str | None = None
+    since: datetime | None = None
+
+
 _KEY_AAD = b"ai-api-key"
 # A DNS name is at most 253 characters, each label at most 63.
 _MAX_HOST = 253
@@ -40,6 +103,42 @@ _HOST_LABEL = re.compile(r"[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?", re.IGNORECASE
 # Integer and hex forms that `inet_aton` and most resolvers read as an IPv4 address:
 # `134744072`, `0x7f000001`, `017700000001`.
 _NUMERIC_HOST = re.compile(r"(0x[0-9a-f]*|[0-9]+)", re.IGNORECASE)
+
+
+def resolve(*, mode: str, base_url: str, model: str, supplier: str = DEFAULT_SUPPLIER) -> Target:
+    """Check the settings and fill in the supplier's preset. Raises `ValueError`.
+
+    `external`: an https service; `supplier` picks the preset (Mistral by default,
+    OpenAI, Claude), `base_url` and `model` override it. `local`: a service on the own
+    network only, so no document text leaves it. `off`: nothing.
+    """
+    if mode not in AISettings.Mode.values:
+        raise ValueError(f"Unknown mode: {mode!r}")
+    preset = SUPPLIERS.get(supplier)
+    if preset is None:
+        raise ValueError(f"Unknown supplier: {supplier!r}")
+    if mode == AISettings.Mode.OFF:
+        return Target(mode, AISettings.Api.OPENAI, "", "", "", "")
+    api: str = AISettings.Api.OPENAI
+    if mode == AISettings.Mode.EXTERNAL:
+        api = preset.api
+        base_url = base_url or preset.base_url
+        model = model or preset.model
+        if not model:
+            raise ValueError(f"Supplier {supplier} needs a model name.")
+    _check_address(base_url or DEFAULT_EXTERNAL_URL)
+    host = _host(base_url)
+    if mode == AISettings.Mode.EXTERNAL:
+        if urlsplit(base_url).scheme != "https":
+            raise ValueError("An external AI service needs an https address.")
+        # A preset's name on somebody else's server would be a false statement.
+        named = supplier if host == _host(preset.base_url) else CUSTOM_SUPPLIER
+        return Target(mode, api, named, base_url, model, host)
+    if not is_on_own_network(base_url):
+        raise ValueError("A local AI service must be on the own network.")
+    if not model:
+        raise ValueError("A local AI service needs a model name.")
+    return Target(mode, api, "", base_url, model, host)
 
 
 def configure(
@@ -50,54 +149,105 @@ def configure(
     model: str,
     api_key: str | None,
     supplier: str = DEFAULT_SUPPLIER,
+    actor: Actor | None = None,
+    consent: bool = False,
 ) -> AISettings:
-    """Set the workspace's AI mode. Needs the workspace's RLS context.
+    """Set the workspace's AI mode and record the decision. Needs the workspace's RLS context.
 
-    `external`: an https service and its key; `supplier` picks the preset (Mistral by
-    default, OpenAI, Claude), `base_url` and `model` override it. `local`: a service
-    on the own network only, so no document text leaves it. `off`: nothing.
+    See `resolve` for the settings. Switching to an external service whose address has no
+    consent in force raises `ConsentRequiredError` unless `consent` says `actor` was told
+    what leaves the server and agreed.
     """
-    if mode not in AISettings.Mode.values:
-        raise ValueError(f"Unknown mode: {mode!r}")
-    preset = SUPPLIERS.get(supplier)
-    if preset is None:
-        raise ValueError(f"Unknown supplier: {supplier!r}")
-    api: str = AISettings.Api.OPENAI
-    if mode == AISettings.Mode.EXTERNAL:
-        api = preset.api
-        base_url = base_url or preset.base_url
-        model = model or preset.model
-        if not model:
-            raise ValueError(f"Supplier {supplier} needs a model name.")
-    if mode != AISettings.Mode.OFF:
-        _check_address(base_url or DEFAULT_EXTERNAL_URL)
-    sealed: bytes | None = None
-    if mode == AISettings.Mode.OFF:
-        base_url, model = "", ""
-    elif mode == AISettings.Mode.EXTERNAL:
-        if urlsplit(base_url).scheme != "https":
-            raise ValueError("An external AI service needs an https address.")
-        if not api_key:
-            raise ValueError("An external AI service needs an API key.")
-    else:
-        if not is_on_own_network(base_url):
-            raise ValueError("A local AI service must be on the own network.")
-        if not model:
-            raise ValueError("A local AI service needs a model name.")
+    target = resolve(mode=mode, base_url=base_url, model=model, supplier=supplier)
+    if target.mode == AISettings.Mode.EXTERNAL and not api_key:
+        raise ValueError("An external AI service needs an API key.")
+    actor = actor or Actor()
     with transaction.atomic():
-        if api_key and mode != AISettings.Mode.OFF:
+        # Locked, so a decision taken at the same moment cannot slip in between the
+        # check and the write.
+        current = AISettings.objects.select_for_update().filter(workspace_id=workspace_id).first()
+        event: str | None = AIConsentEvent.Event.CHANGED
+        consented = ""
+        if target.mode == AISettings.Mode.EXTERNAL:
+            consented = target.base_url
+            if current is None or current.consented_base_url != target.base_url:
+                if not consent:
+                    raise ConsentRequiredError("An external AI service needs explicit consent.")
+                event = AIConsentEvent.Event.GRANTED
+        elif target.mode == AISettings.Mode.OFF:
+            was_on = current is not None and current.mode != AISettings.Mode.OFF
+            event = AIConsentEvent.Event.SWITCHED_OFF if was_on else None
+        sealed: bytes | None = None
+        if api_key and target.mode != AISettings.Mode.OFF:
             sealed = crypto.seal(workspace_key(workspace_id), api_key.encode(), aad=_KEY_AAD)
-        settings, _ = AISettings.objects.update_or_create(
+        settings, _created = AISettings.objects.update_or_create(
             workspace_id=workspace_id,
             defaults={
-                "mode": mode,
-                "api": api,
-                "base_url": base_url,
-                "model": model,
+                "mode": target.mode,
+                "api": target.api,
+                "base_url": target.base_url,
+                "model": target.model,
                 "api_key_sealed": sealed,
+                "consented_base_url": consented,
             },
         )
+        if event is not None:
+            AIConsentEvent.objects.create(
+                workspace_id=workspace_id,
+                event=event,
+                mode=target.mode,
+                supplier=target.supplier,
+                host=target.host,
+                model=target.model,
+                actor_id=actor.user_id,
+                actor_label=actor.label,
+            )
     return settings
+
+
+def consent_in_force(workspace_id: UUID, base_url: str) -> bool:
+    """Whether somebody agreed to send the workspace's letters to exactly `base_url`.
+
+    A consent covers one address: another host, port or path asks again (behind one
+    host a path can lead to another service). It ends when AI is switched off or moves
+    to the own network. Needs the workspace's RLS context.
+    """
+    consented = AISettings.objects.filter(workspace_id=workspace_id).values_list(
+        "consented_base_url", flat=True
+    )
+    return bool(base_url) and consented.first() == base_url
+
+
+def status(workspace_id: UUID) -> AiStatus:
+    """The mode and, for an external service, where the text goes and since when.
+
+    `since` is empty for an external service without consent in force: then no letter
+    is read. The address on the own network is nobody's business. Needs the RLS context.
+    """
+    settings = AISettings.objects.filter(workspace_id=workspace_id).first()
+    if settings is None or settings.mode == AISettings.Mode.OFF:
+        return AiStatus(mode=AISettings.Mode.OFF)
+    events = AIConsentEvent.objects.filter(workspace_id=workspace_id).order_by("-created_at")
+    if settings.mode == AISettings.Mode.LOCAL:
+        latest = events.first()
+        since = latest.created_at if latest and latest.mode == AISettings.Mode.LOCAL else None
+        return AiStatus(mode=settings.mode, since=since)
+    host = _host(settings.base_url)
+    if settings.consented_base_url != settings.base_url:
+        return AiStatus(mode=settings.mode, host=host or None)
+    granted = events.filter(event=AIConsentEvent.Event.GRANTED, host=host).first()
+    if granted is None:
+        return AiStatus(mode=settings.mode, host=host or None)
+    return AiStatus(
+        mode=settings.mode, supplier=granted.supplier, host=host, since=granted.created_at
+    )
+
+
+def _host(url: str) -> str:
+    try:
+        return urlsplit(url).hostname or ""
+    except ValueError:
+        return ""
 
 
 def ai_mode(workspace_id: UUID) -> str:
@@ -113,6 +263,12 @@ def provider_for(workspace_id: UUID) -> LLMProvider | None:
         return None
     if settings.mode == AISettings.Mode.LOCAL and not is_on_own_network(settings.base_url):
         # Checked again here: a row changed behind our back must not send text outside.
+        raise PermanentError("ai_not_configured")
+    if settings.mode == AISettings.Mode.EXTERNAL and (
+        settings.consented_base_url != settings.base_url
+    ):
+        # No letter leaves the server for a service nobody agreed to: a workspace set
+        # to external before consent was recorded, or a row changed behind our back.
         raise PermanentError("ai_not_configured")
     api_key = None
     if settings.api_key_sealed is not None:

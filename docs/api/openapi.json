@@ -21,9 +21,31 @@
       },
       "AiStatusOut": {
         "properties": {
+          "host": {
+            "title": "Host",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "mode": {
             "title": "Mode",
             "type": "string"
+          },
+          "since": {
+            "format": "date-time",
+            "title": "Since",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "supplier": {
+            "title": "Supplier",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -2225,7 +2247,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/ai": {
       "get": {
-        "description": "How the workspace's letters are read: `off`, `external` or `local`. No address, model or key.",
+        "description": "How the workspace's letters are read: `off`, `external` or `local`. For `external` also the supplier, the host the text goes to and since when (the moment of consent). No full address, model or key.",
         "operationId": "getAiStatus",
         "parameters": [
           {
