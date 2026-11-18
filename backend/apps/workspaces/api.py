@@ -10,7 +10,7 @@ from apps.audit.services import actor_from_request
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.common.throttling import CallerThrottle, ClientAddressThrottle
 from apps.pipeline.schemas import AiStatusOut
-from apps.workspaces import invitations, services
+from apps.workspaces import invitations, members, services
 from apps.workspaces.deps import workspace_member
 from apps.workspaces.invitations import IssuedInvitation
 from apps.workspaces.models import Membership
@@ -22,6 +22,7 @@ from apps.workspaces.schemas import (
     InvitationOut,
     InvitationTokenIn,
     MemberOut,
+    MemberRoleIn,
     WorkspaceOut,
 )
 
@@ -60,6 +61,31 @@ def list_workspaces(request: HttpRequest) -> list[WorkspaceOut]:
 def list_members(request: HttpRequest, workspace_id: UUID) -> list[MemberOut]:
     membership = workspace_member(request, workspace_id)
     return services.list_members(membership.workspace, viewer=current_user(request))
+
+
+@router.put(
+    "/workspaces/{workspace_id}/members/{user_id}/role",
+    response={200: MemberOut, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS, **BODY_ERRORS},
+    auth=session_auth,
+    description=WEB_SESSION_ONLY
+    + ADMINS_ONLY
+    + " Give a member another role; the member sees it at their next request. 404"
+    " member_not_found for somebody who is no member of this workspace; 409 last_admin for"
+    " demoting the only admin. A demoted admin's open invitations and reset links stop.",
+    operation_id="updateMemberRole",
+)
+def update_member_role(
+    request: HttpRequest, workspace_id: UUID, user_id: UUID, payload: MemberRoleIn
+) -> MemberOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
+    members.change_role(
+        workspace=membership.workspace,
+        user_id=user_id,
+        role=payload.role,
+        actor=actor_from_request(request),
+    )
+    viewer = current_user(request)
+    return services.list_members(membership.workspace, viewer=viewer, user_id=user_id)[0]
 
 
 def _created(issued: IssuedInvitation) -> CreatedInvitationOut:

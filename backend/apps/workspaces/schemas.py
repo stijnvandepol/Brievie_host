@@ -34,6 +34,10 @@ class MemberOut(Schema):
     can_manage_account: bool = False
 
 
+class MemberRoleIn(InputSchema):
+    role: Literal["admin", "member", "viewer"]
+
+
 class InvitationIn(InputSchema):
     role: Literal["admin", "member", "viewer"] = "member"
     # How long the link works: 1, 7 or 30 days.

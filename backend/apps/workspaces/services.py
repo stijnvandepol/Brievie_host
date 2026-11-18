@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from uuid import UUID
 
 from django.db import transaction
 from django.db.models import Count
@@ -40,19 +41,20 @@ def list_memberships(user: User) -> list[Membership]:
     )
 
 
-def list_members(workspace: Workspace, *, viewer: User) -> list[MemberOut]:
-    """The workspace's members by name, each with their linked person (needs the RLS context)
-    and whether `viewer` may act on their account: the rule of `account_authority` (a server
-    admin for anyone else; a workspace admin only for a member of this workspace alone who
-    is no server admin; nobody for their own account)."""
+def list_members(
+    workspace: Workspace, *, viewer: User, user_id: UUID | None = None
+) -> list[MemberOut]:
+    """The workspace's members by name (only `user_id` when given), each with their linked
+    person (needs the RLS context) and whether `viewer` may act on their account: the rule
+    of `account_authority` (a server admin for anyone else; a workspace admin only for a
+    member of this workspace alone who is no server admin; nobody for their own account)."""
     person_ids = dict(
         Person.objects.filter(workspace=workspace).exclude(user=None).values_list("user_id", "id")
     )
-    memberships = list(
-        Membership.objects.filter(workspace=workspace)
-        .select_related("user")
-        .order_by("user__name", "user__id")
-    )
+    rows = Membership.objects.filter(workspace=workspace)
+    if user_id is not None:
+        rows = rows.filter(user_id=user_id)
+    memberships = list(rows.select_related("user").order_by("user__name", "user__id"))
     viewer_administers = viewer.is_active and (
         Membership.objects.filter(
             user=viewer, workspace=workspace, role=Membership.Role.ADMIN
