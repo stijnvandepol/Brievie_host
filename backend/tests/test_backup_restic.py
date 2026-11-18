@@ -80,6 +80,11 @@ def test_forget_prunes_with_keep_within_and_never_groups_by_tags() -> None:
         "brievie",
         "--group-by",
         "host,paths",
+        # Every snapshot of the last two days stays: the daily rule alone keeps one per
+        # day, so a back-up made later the same day removed the earlier one (CI found a
+        # safety back-up before a restore pruning the run being restored).
+        "--keep-within",
+        "2d",
         "--keep-within-daily",
         "7d",
         "--keep-within-weekly",

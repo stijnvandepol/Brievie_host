@@ -23,7 +23,13 @@ from apps.backup.errors import BackupError
 HOST = "brievie"
 DB_FILENAME = "brievie.pgdump"
 TMP_EXCLUDE = ".tmp-*"
+# Every snapshot of the last two days (counted from the newest) stays; older ones
+# thin out to one a day for a week, one a week for a month, one a month for a year.
+# The daily rule alone keeps one snapshot per day, so a second back-up the same day
+# removed the first: the safety back-up of a restore pruned the run being restored.
 RETENTION = (
+    "--keep-within",
+    "2d",
     "--keep-within-daily",
     "7d",
     "--keep-within-weekly",

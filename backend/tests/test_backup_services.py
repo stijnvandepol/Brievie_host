@@ -9,7 +9,7 @@ from contextlib import contextmanager
 from datetime import timedelta
 from pathlib import Path
 from unittest import mock
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import psycopg
 import pytest
@@ -212,6 +212,35 @@ def test_check_runs_restic_check_only(
     run.refresh_from_db()
     assert run.status == BackupRun.Status.SUCCEEDED
     assert run.size_bytes is None
+
+
+@pytest.mark.django_db(transaction=True)
+def test_the_safety_backup_of_a_restore_never_runs_retention(
+    configured_folder: Path, fake_restic: FakeBinary, fake_pg_dump: FakeBinary
+) -> None:
+    run = services.request_run("backup", requested_by="restore")
+    answer_both_backups(fake_restic, run.id)
+
+    services.perform_run(run.id)
+
+    assert all(call[0] != "forget" for call in fake_restic.calls)
+    assert restic.backup_files_argv(run.id, services.file_paths()) in fake_restic.calls
+    run.refresh_from_db()
+    assert run.status == BackupRun.Status.SUCCEEDED
+    assert run.requested_by == "restore"
+
+
+def test_backup_command_no_prune_requests_the_safety_backup_of_a_restore(
+    configured_folder: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(services, "wait_for_run", _finished(BackupRun.Status.SUCCEEDED))
+    call_command("backup", "--no-prune")
+    assert BackupRun.objects.get().requested_by == "restore"
+    BackupRun.objects.all().delete()
+    call_command("backup")
+    assert BackupRun.objects.get().requested_by == "cli"
+    with pytest.raises(CommandError):
+        call_command("backup", "--check", "--no-prune")
 
 
 @pytest.mark.django_db(transaction=True)
@@ -1424,3 +1453,51 @@ def test_backup_command_names_its_code_for_the_wrapper(
     with pytest.raises(CommandError):
         call_command("backup")
     assert capsys.readouterr().err.strip() == "code=not_picked_up"
+
+
+# --- status --list: the runs on the destination --------------------------------------------
+
+
+def _snapshot(snapshot_id: str, when: str, run_id: UUID, kind: str) -> dict[str, object]:
+    return {
+        "id": snapshot_id,
+        "time": when,
+        "tags": [f"run:{run_id}", f"kind:{kind}"],
+        "paths": ["/x"],
+    }
+
+
+@pytest.mark.django_db(transaction=True)
+def test_status_list_shows_every_run_on_the_destination(
+    configured_folder: Path, fake_restic: FakeBinary, capsys: pytest.CaptureFixture[str]
+) -> None:
+    old, new = uuid4(), uuid4()
+    db = [
+        _snapshot("d0000001", "2026-11-10T03:00:00Z", old, "db"),
+        _snapshot("d0000002", "2026-11-17T03:00:00Z", new, "db"),
+    ]
+    files = [_snapshot("f0000001", "2026-11-10T03:05:00Z", old, "files")]
+    fake_restic.respond(
+        ("snapshots", "--no-lock", "--json", "--tag", "kind:db"), stdout=json.dumps(db).encode()
+    )
+    fake_restic.respond(
+        ("snapshots", "--no-lock", "--json", "--tag", "kind:files"),
+        stdout=json.dumps(files).encode(),
+    )
+
+    call_command("backup_status", "--list")
+
+    lines = capsys.readouterr().out.strip().splitlines()
+    assert lines[0] == f"{new}  17-11-2026 04:00  compleet: nee"
+    assert lines[1] == f"{old}  10-11-2026 04:00  compleet: ja"
+    assert len(lines) == 2
+    assert all("/" not in line.split("  ")[0] for line in lines)  # no paths
+
+
+@pytest.mark.django_db(transaction=True)
+def test_status_list_says_when_there_are_no_runs(
+    configured_folder: Path, fake_restic: FakeBinary, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fake_restic.respond(("snapshots",), stdout=b"[]")
+    call_command("backup_status", "--list")
+    assert capsys.readouterr().out.strip() == "Er staan nog geen back-ups op de bestemming."

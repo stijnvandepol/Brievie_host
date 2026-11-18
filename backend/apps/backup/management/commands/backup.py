@@ -22,6 +22,11 @@ class Command(BaseCommand):
             "--check", action="store_true", help="Check the back-up instead of making one."
         )
         parser.add_argument(
+            "--no-prune",
+            action="store_true",
+            help="The safety back-up of a restore: apply no retention (forget nothing).",
+        )
+        parser.add_argument(
             "--timeout",
             type=int,
             default=DEFAULT_TIMEOUT,
@@ -30,8 +35,12 @@ class Command(BaseCommand):
 
     def handle(self, *args: object, **options: object) -> None:
         check = bool(options["check"])
+        no_prune = bool(options["no_prune"])
+        if check and no_prune:
+            raise CommandError(_("--no-prune hoort bij een back-up, niet bij --check."))
         kind = BackupRun.Kind.CHECK if check else BackupRun.Kind.BACKUP
-        run = services.request_run(kind)
+        requested_by = services.RESTORE_SAFETY if no_prune else "cli"
+        run = services.request_run(kind, requested_by=requested_by)
         self.stdout.write(_("Controle gestart…") if check else _("Back-up gestart…"))
         try:
             run = services.wait_for_run(run.id, timeout=float(str(options["timeout"])))

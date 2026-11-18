@@ -293,15 +293,25 @@ def _back_up(
         total = None if files_size is None else size + files_size
         if incomplete:
             # Kept: a file that stays unreadable must not mean no back-up is ever kept.
-            if not settings.BRIEVIE_BACKUP_APPEND_ONLY:
+            if _prunes(run):
                 try:
                     run_restic(restic.forget_argv())
                 except BackupError as error:
                     logger.warning("Backup run %s: retention failed: %s", run.id, error.code)
             raise _IncompleteBackupError(total)
-        if not settings.BRIEVIE_BACKUP_APPEND_ONLY:
+        if _prunes(run):
             run_restic(restic.forget_argv())
         _finish(run.id, BackupRun.Status.SUCCEEDED, size_bytes=total)
+
+
+# The safety back-up that a restore makes right before it replaces anything.
+RESTORE_SAFETY = "restore"
+
+
+def _prunes(run: BackupRun) -> bool:
+    """Whether this run applies retention: never in append-only mode, and never for the
+    safety back-up of a restore (it must not remove the run the restore will use)."""
+    return not settings.BRIEVIE_BACKUP_APPEND_ONLY and run.requested_by != RESTORE_SAFETY
 
 
 def _record_failure(run_id: UUID, code: str, *, size_bytes: int | None = None) -> None:
