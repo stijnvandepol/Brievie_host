@@ -4,6 +4,13 @@ Every change takes the same lock first: the workspace's memberships, in id order
 caller's own role is then read again from the locked rows, so two admins acting on each
 other at the same moment run one after the other, and the second one acts with the role
 it has after the first. A workspace always keeps an admin.
+
+Lock order of every member change, and of everything that meets it:
+memberships (of one workspace, id order) -> invitations -> active server admins (id
+order, `FOR NO KEY UPDATE`) -> the member's own user row (`FOR NO KEY UPDATE`) -> that
+user's sessions, devices and reset links. Accepting an invitation takes invitation ->
+user; completing a reset takes user -> reset; `set_server_admin` takes server admins ->
+user. No path takes them the other way round.
 """
 
 from uuid import UUID
@@ -25,7 +32,7 @@ from apps.people.models import Person
 from apps.tasks.models import Task
 from apps.workspaces.access import on_member_removed
 from apps.workspaces.context import workspace_context
-from apps.workspaces.invitations import revoke_invitations_made_by
+from apps.workspaces.invitations import revoke_invitations_bound_to, revoke_invitations_made_by
 from apps.workspaces.models import Membership, Workspace
 
 
@@ -161,11 +168,11 @@ def remove_member(
     (`deactivate_account`): only a server admin may do that to a server admin (403
     `server_admin_only`), and never to the last active one (409 `last_admin`).
 
-    Lock order: the workspace's memberships, then the active server admins (in id
-    order), then the user's own row (`FOR NO KEY UPDATE`, so a running upload that
-    references the user does not hold it up). The row lock makes two removals of the
-    same user from two workspaces at once run one after the other, so the second sees
-    whether a membership is left.
+    Locks in the order at the top of this module. Open invitations bound to the
+    member's address stop too, so an old link cannot bring them back. The user's row
+    lock (`FOR NO KEY UPDATE`, so a running upload that references the user does not
+    hold it up) makes two removals of the same user from two workspaces at once run one
+    after the other, so the second sees whether a membership is left.
     """
     with transaction.atomic():
         locked = lock_memberships(workspace)
@@ -176,6 +183,15 @@ def remove_member(
             raise _member_not_found()
         if _is_only_admin(member, locked):
             raise _last_admin()
+        # Invitations before the server admins and the user (see the lock order above).
+        if member.role == Membership.Role.ADMIN:
+            _revoke_what_the_admin_made(workspace, user_id, actor)
+        revoke_invitations_bound_to(
+            workspace_id=workspace.id,
+            email=member.user.email,
+            actor=actor,
+            reason="member_removed",
+        )
         server_admins = lock_active_server_admins()
         user = User.objects.select_for_update(no_key=True).get(id=user_id)
         last_membership = not (
@@ -188,8 +204,6 @@ def remove_member(
                 raise last_server_admin_error()
         target = _member_target(workspace, member)
         persons = _unlink_and_unassign(workspace, user_id)
-        if member.role == Membership.Role.ADMIN:
-            _revoke_what_the_admin_made(workspace, user_id, actor)
         member.delete()
         if last_membership:
             deactivate_account(user, actor=actor, current=request)

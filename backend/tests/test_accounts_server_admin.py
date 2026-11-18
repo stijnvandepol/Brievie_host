@@ -169,7 +169,11 @@ def test_server_admins_are_locked_in_id_order() -> None:
         admins = lock_active_server_admins()
 
     sql = queries[-1]["sql"]
+    # NO KEY: an insert that references a server admin (a sign-in, an upload, a notice)
+    # takes KEY SHARE, which a plain FOR UPDATE would block; two of these locks still
+    # exclude each other, so the "last server admin" checks still run one at a time.
+    lock = "FOR NO KEY UPDATE"
     assert "ORDER BY" in sql
-    assert sql.index("ORDER BY") < sql.index("FOR UPDATE")
-    assert '"accounts_user"."id"' in sql[sql.index("ORDER BY") : sql.index("FOR UPDATE")]
+    assert sql.index("ORDER BY") < sql.index(lock)
+    assert '"accounts_user"."id"' in sql[sql.index("ORDER BY") : sql.index(lock)]
     assert [u.id for u in admins] == sorted(u.id for u in admins)

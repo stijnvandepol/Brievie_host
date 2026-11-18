@@ -472,7 +472,7 @@ export interface paths {
         put?: never;
         /**
          * Create Password Reset
-         * @description Web session only: a bearer token answers 401 not_authenticated. A one-time link (24 hours) with which the member chooses a new password; the token is in its fragment and is shown only here. An earlier unused link stops working. A server admin may do this for anyone; a workspace admin only for a member whose only workspace is theirs and who is no server admin (403 server_admin_only). 403 own_account for the caller's own account; 404 user_not_found for an unknown account or one outside the caller's workspaces; 409 account_inactive.
+         * @description Web session only: a bearer token answers 401 not_authenticated. A one-time link (24 hours) with which the member chooses a new password; the token is in its fragment and is shown only here. An earlier unused link stops working. A server admin may do this for anyone; a workspace admin only for a member whose only workspace is theirs and who is no server admin (403 server_admin_only). 403 own_account for the caller's own account; 404 user_not_found for an unknown account or one outside the caller's workspaces; 409 account_inactive; 429 after 30 links in 10 minutes by the same caller.
          */
         post: operations["createPasswordReset"];
         delete?: never;
@@ -3883,6 +3883,15 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

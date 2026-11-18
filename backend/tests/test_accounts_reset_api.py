@@ -595,3 +595,20 @@ def test_completion_locks_the_user_before_the_link(ws_a: Workspace) -> None:
         i for i, q in enumerate(sqls) if 'FROM "accounts_passwordreset"' in q and "FOR UPDATE" in q
     )
     assert user_lock < link_lock
+
+
+def test_making_links_is_rate_limited_per_caller(ws_a: Workspace) -> None:
+    admin_client = signed_in(admin_of(ws_a))
+    targets = [join(ws_a) for _ in range(2)]
+    for n in range(30):
+        r = post_json(admin_client, f"/users/{targets[n % 2].id}/password-reset")
+        assert r.status_code == 201, n
+
+    r = post_json(admin_client, f"/users/{targets[0].id}/password-reset")
+
+    assert r.status_code == 429
+    assert r.json()["code"] == "too_many_attempts"
+    assert PasswordReset.objects.filter(revoked_at=None).count() == 2
+    # Another admin is not affected.
+    other = join(ws_a, Membership.Role.ADMIN)
+    assert post_json(signed_in(other), f"/users/{targets[0].id}/password-reset").status_code == 201

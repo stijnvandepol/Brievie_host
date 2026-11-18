@@ -14,15 +14,19 @@ from pathlib import Path
 
 import pytest
 from django.conf import settings as django_settings
+from django.contrib.auth.models import AnonymousUser
+from django.contrib.sessions.middleware import SessionMiddleware
 from django.db import connection
-from django.test import Client
+from django.http import HttpResponse
+from django.test import Client, RequestFactory
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from pytest_django import Settings
 
 from apps.accounts.models import PasswordReset, User, UserSession
 from apps.accounts.services import lock_active_server_admins
 from apps.audit.codes import AuditCode
-from apps.audit.services import record
+from apps.audit.services import AuditActor, record
 from apps.common.errors import ApiError
 from apps.devices.models import Device, PairingCode
 from apps.devices.services import create_pairing_code, pair_device
@@ -582,3 +586,72 @@ def test_an_upload_running_during_the_removal_commits_whole(
     root = Path(django_settings.BRIEVIE_STORAGE_ROOT)
     assert all((root / p).is_file() for p in paths)
     assert not User.objects.get(id=member.id).is_active
+
+
+# --- Invitations bound to the removed account's address ---
+
+
+def _invite_link(client: Client, ws: Workspace, **body: object) -> str:
+    r = post_json(client, f"/workspaces/{ws.id}/invitations", body)
+    assert r.status_code == 201, r.json()
+    match = LINK.search(r.json()["link"])
+    assert match is not None
+    return match["token"]
+
+
+def test_an_open_invitation_bound_to_a_removed_member_stops(ws_a: Workspace) -> None:
+    admin_client = as_user(admin_of(ws_a))
+    m = UserFactory.create(email="m@example.nl")
+    # L1: an admin link bound to m's address, made before m joined some other way.
+    l1 = _invite_link(admin_client, ws_a, role="admin", email="m@example.nl")
+    join(ws_a, user=m)
+
+    assert remove(admin_client, ws_a, m) == (204, {})
+
+    body = {"token": l1, "account": "existing", "email": m.email, "password": TEST_PASSWORD}
+    r = post_json(Client(), "/invitations/accept", body)
+    assert (r.status_code, r.json()["code"]) == (400, "invitation_invalid")
+    m.refresh_from_db()
+    assert not m.is_active
+    assert role_of(ws_a, m) is None
+    bound = Invitation.objects.get(email="m@example.nl")
+    assert bound.revoked_at is not None
+    rows = workspace_rows(ws_a, AuditCode.INVITATION_REVOKED)
+    assert [(r.target_id, r.values) for r in rows] == [(bound.id, {"reason": "member_removed"})]
+
+
+def test_leaving_stops_invitations_bound_to_the_leaver(ws_a: Workspace, ws_b: Workspace) -> None:
+    m = UserFactory.create(email="m@example.nl")
+    _invite_link(as_user(admin_of(ws_a)), ws_a, email="m@example.nl")
+    join(ws_a, user=m)
+    join(ws_b, user=m)
+
+    assert leave(as_user(m), ws_a) == (204, {})
+
+    assert Invitation.objects.get(email="m@example.nl").revoked_at is not None
+
+
+def test_removal_takes_invitations_before_server_admins_before_the_user(ws_a: Workspace) -> None:
+    member = join(ws_a, Membership.Role.ADMIN)
+    request = RequestFactory().delete("/")
+    SessionMiddleware(lambda r: HttpResponse()).process_request(request)
+    request.user = AnonymousUser()
+
+    with CaptureQueriesContext(connection) as queries:
+        members.remove_member(
+            request=request,
+            workspace=ws_a,
+            user_id=member.id,
+            actor=AuditActor.for_user(admin_of(ws_a)),
+            left=False,
+        )
+
+    sqls = [q["sql"] for q in queries.captured_queries]
+
+    def first(*parts: str) -> int:
+        return next(i for i, sql in enumerate(sqls) if all(p in sql for p in parts))
+
+    invitations = first('FROM "workspaces_invitation"', "FOR UPDATE")
+    server_admins = first('FROM "accounts_user"', 'AND "accounts_user"."is_server_admin"', " FOR ")
+    the_user = first('FROM "accounts_user"', 'WHERE "accounts_user"."id" =', "FOR NO KEY UPDATE")
+    assert invitations < server_admins < the_user

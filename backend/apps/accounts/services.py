@@ -171,10 +171,14 @@ def lock_active_server_admins() -> list[User]:
 
     Every check of "is there another server admin?" takes this lock first, so two
     requests that each remove one of the last two admins run one after the other.
-    Must run inside a transaction.
+    `FOR NO KEY UPDATE`: two of these exclude each other, but an insert that only
+    references a server admin (a sign-in, an upload, a notice) is not held up, and
+    cannot deadlock with a removal. Must run inside a transaction.
     """
     return list(
-        User.objects.select_for_update().filter(is_server_admin=True, is_active=True).order_by("id")
+        User.objects.select_for_update(no_key=True)
+        .filter(is_server_admin=True, is_active=True)
+        .order_by("id")
     )
 
 

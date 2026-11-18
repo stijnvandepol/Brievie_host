@@ -248,6 +248,37 @@ def revoke_invitations_made_by(*, workspace_id: UUID, user_id: UUID, actor: Audi
     return len(invitations)
 
 
+def revoke_invitations_bound_to(
+    *,
+    workspace_id: UUID,
+    email: str,
+    actor: AuditActor,
+    reason: str,
+    keep_id: UUID | None = None,
+    skip_locked: bool = False,
+) -> int:
+    """Stop every open invitation to this workspace that is bound to `email`: when that
+    account is removed or leaves (`member_removed`), an old link with its address must
+    not bring it back; when it joins (`superseded`, all but `keep_id`), the others have
+    done their work. `skip_locked` leaves a link another request is accepting right now
+    (that accept then finds the account a member and answers 409). Returns how many."""
+    email = normalise_email(email)
+    if not email:
+        return 0
+    with transaction.atomic():
+        rows = (
+            Invitation.objects.select_for_update(skip_locked=skip_locked)
+            .filter(workspace_id=workspace_id, email=email, accepted_at=None, revoked_at=None)
+            .order_by("id")
+        )
+        if keep_id is not None:
+            rows = rows.exclude(id=keep_id)
+        invitations = list(rows)
+        for invitation in invitations:
+            _revoke(invitation, actor=actor, reason=reason)
+    return len(invitations)
+
+
 # --- Opening and accepting (no session needed) ---
 
 
@@ -402,6 +433,18 @@ def accept_invitation(
             raise _already_member_error()
         reactivated = not is_new and not user.is_active
         membership = _join(invitation, user, is_new=is_new)
+        accepter = AuditActor.for_user(user, client_ip=valid_client_ip(request))
+        # Other links bound to this address are done with. Skip one another request is
+        # accepting at this moment: waiting for it could deadlock (it waits for this
+        # account's row); a removal later stops it anyway.
+        revoke_invitations_bound_to(
+            workspace_id=invitation.workspace_id,
+            email=user.email,
+            actor=accepter,
+            reason="superseded",
+            keep_id=invitation.id,
+            skip_locked=True,
+        )
         with workspace_context(invitation.workspace_id):
             person = _link_person(invitation, user)
             on_member_added(
@@ -415,7 +458,7 @@ def accept_invitation(
         invitation.save(update_fields=["accepted_at", "accepted_by", "updated_at"])
         record(
             AuditCode.INVITATION_ACCEPTED,
-            actor=AuditActor.for_user(user, client_ip=valid_client_ip(request)),
+            actor=accepter,
             target=_target(invitation),
             workspace_id=invitation.workspace_id,
             values={

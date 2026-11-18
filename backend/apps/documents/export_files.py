@@ -100,8 +100,8 @@ def export_file_path(storage_path: str) -> Path:
 
 
 def _refuse_links(path: Path) -> None:
-    root = export_root()
     """Not a link, not inside a linked directory, and resolving inside the root."""
+    root = export_root()
     if path.is_symlink() or path.parent.is_symlink() or root.is_symlink():
         raise _unsafe()
     try:

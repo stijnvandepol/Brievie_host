@@ -130,8 +130,8 @@ def test_removal_takes_the_server_admin_lock() -> None:
         q["sql"]
         for q in queries.captured_queries
         if 'FROM "accounts_user"' in q["sql"]
-        and "FOR UPDATE" in q["sql"]
-        and '"is_server_admin"' in q["sql"]
+        and "FOR NO KEY UPDATE" in q["sql"]
+        and '"is_server_admin"' in q["sql"].split("WHERE", 1)[-1]
     ]
     assert len(locks) == 1
 

@@ -338,6 +338,11 @@ AUTH_MODULE = "django.contrib.auth"
 # Modules that sign people in by themselves (Django's login views and their URLs).
 SIGN_IN_MODULES = ("django.contrib.auth.views", "django.contrib.auth.urls")
 LOGIN_NAMES = frozenset({"login", "alogin"})
+# `apps.accounts.sessions` holds Django's `login` (as `django_login`) and `record_session`;
+# only `start_session` there may use them: imported elsewhere, they make a session
+# without `start_session` that the middleware would accept.
+SESSIONS_MODULE = "apps.accounts.sessions"
+SESSIONS_PRIVATE = frozenset({"django_login", "record_session"})
 
 
 def _dotted(node: ast.expr) -> str:
@@ -358,6 +363,9 @@ def ways_to_sign_in(source: str) -> list[str]:
     Flags an import of the module `django.contrib.auth` itself (however aliased), of its
     login views or URLs, of `login`/`alogin`, a `*` import from it, an attribute chain
     ending in `contrib.auth.login`, and the views or URLs named as a string (`include`).
+    Also `django_login` and `record_session` taken from `apps.accounts.sessions` (by
+    import, under any alias, by `*` or as an attribute): with them a session could be
+    recorded without `start_session`.
     """
     found: list[str] = []
     for node in ast.walk(ast.parse(source)):
@@ -376,10 +384,14 @@ def ways_to_sign_in(source: str) -> list[str]:
                 )
             elif _is_sign_in_module(node.module):
                 found.append(f"from {node.module} import ...")
-        elif (
-            isinstance(node, ast.Attribute)
-            and node.attr in LOGIN_NAMES
-            and _dotted(node.value).endswith("contrib.auth")
+            elif node.module == SESSIONS_MODULE:
+                found.extend(
+                    f"from {SESSIONS_MODULE} import {name}"
+                    for name in sorted(names & (SESSIONS_PRIVATE | {"*"}))
+                )
+        elif isinstance(node, ast.Attribute) and (
+            (node.attr in LOGIN_NAMES and _dotted(node.value).endswith("contrib.auth"))
+            or node.attr in SESSIONS_PRIVATE
         ):
             found.append(_dotted(node))
         elif (
@@ -406,6 +418,12 @@ def ways_to_sign_in(source: str) -> list[str]:
         "from django.contrib.auth import views",
         "import django.contrib.auth.views",
         "from django.urls import include\ninclude('django.contrib.auth.urls')",
+        "from apps.accounts.sessions import django_login",
+        "from apps.accounts.sessions import django_login as sign_in",
+        "from apps.accounts.sessions import record_session",
+        "from apps.accounts.sessions import *",
+        "from apps.accounts import sessions\nsessions.record_session(request, user, method='x')",
+        "import apps.accounts.sessions as s\ns.django_login(request, user)",
     ],
 )
 def test_the_scan_finds_every_way_to_sign_in(source: str) -> None:
@@ -421,6 +439,7 @@ def test_the_scan_finds_every_way_to_sign_in(source: str) -> None:
         "from django.contrib.auth.password_validation import validate_password",
         "INSTALLED_APPS = ['django.contrib.auth']",
         "BACKEND = 'django.contrib.auth.backends.ModelBackend'",
+        "from apps.accounts.sessions import start_session, end_sessions",
     ],
 )
 def test_the_scan_leaves_harmless_imports_alone(source: str) -> None:

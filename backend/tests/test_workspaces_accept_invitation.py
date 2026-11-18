@@ -636,6 +636,22 @@ def test_a_removal_between_password_check_and_join_still_ends_active(
     assert accepted.values == {"role": "member", "new_account": False, "account_reactivated": True}
 
 
+def test_joining_stops_other_invitations_bound_to_that_address(
+    ws_a: Workspace, ws_b: Workspace
+) -> None:
+    bound = invite(ws_a, role="admin", email="nieuw@example.nl")
+    elsewhere = invite(ws_b, email="nieuw@example.nl")
+    plain = invite(ws_a)
+
+    assert accept(Client(), plain)[0] == 200
+
+    assert Invitation.objects.get(token_hash=sha256(bound)).revoked_at is not None
+    assert Invitation.objects.get(token_hash=sha256(elsewhere)).revoked_at is None
+    assert lookup(Client(), bound) == (400, DEAD)
+    revoked = workspace_rows(ws_a, "invitation_revoked")
+    assert [r.values for r in revoked] == [{"reason": "superseded"}]
+
+
 def browser_request() -> HttpRequest:
     request = RequestFactory().post("/api/v1/invitations/accept", REMOTE_ADDR="192.0.2.50")
     SessionMiddleware(lambda r: HttpResponse()).process_request(request)
@@ -661,7 +677,11 @@ def test_accept_locks_the_invitation_row(ws_a: Workspace) -> None:
         for q in queries.captured_queries
         if 'FROM "workspaces_invitation"' in q["sql"] and "FOR UPDATE" in q["sql"]
     ]
-    assert len(locked) == 1
+    # One lock by the token decides the race; the other links bound to the address are
+    # revoked without waiting for a link another request is accepting.
+    by_token = [sql for sql in locked if '"token_hash"' in sql.split("WHERE", 1)[1]]
+    assert len(by_token) == 1
+    assert all("SKIP LOCKED" in sql for sql in locked if sql not in by_token)
 
 
 @pytest.mark.django_db(transaction=True)

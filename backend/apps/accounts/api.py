@@ -153,15 +153,24 @@ def mark_notices_seen(request: HttpRequest, payload: NoticesSeenIn) -> Status[No
 
 @router.post(
     "/users/{user_id}/password-reset",
-    response={201: PasswordResetOut, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS},
+    response={
+        201: PasswordResetOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        429: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+    },
     auth=session_auth,
+    # Every link writes a row, a notice and audit rows: 30 per caller per 10 minutes.
+    throttle=CallerThrottle("password_reset_create", "30/10m", per_path=False),
     description=WEB_SESSION_ONLY
     + " A one-time link (24 hours) with which the member chooses a new password;"
     " the token is in its fragment and is shown only here. An earlier unused link stops"
     " working. A server admin may do this for anyone; a workspace admin only for a member"
     " whose only workspace is theirs and who is no server admin (403 server_admin_only)."
     " 403 own_account for the caller's own account; 404 user_not_found for an unknown"
-    " account or one outside the caller's workspaces; 409 account_inactive.",
+    " account or one outside the caller's workspaces; 409 account_inactive; 429 after 30"
+    " links in 10 minutes by the same caller.",
     operation_id="createPasswordReset",
 )
 def create_password_reset(
