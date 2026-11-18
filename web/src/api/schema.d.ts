@@ -346,6 +346,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/server/audit-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Server Audit Events
+         * @description Web session only: a bearer token answers 401 not_authenticated. The server's log (accounts, sessions, devices), for server admins only (else 403 forbidden). Filters: `user_id` (rows where the user acted or was acted on), `code` (one of the log's codes, else 422), `since` and `until` (whole days in Amsterdam time, both inclusive), `before` (rows strictly older than this moment: pass the last row's `created_at` for the next page). Newest first.
+         */
+        get: operations["listServerAuditEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/server/audit-events/csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Server Audit Events
+         * @description Web session only: a bearer token answers 401 not_authenticated. The server's log as a CSV download, for server admins only. Filters: `user_id` (rows where the user acted or was acted on), `code` (one of the log's codes, else 422), `since` and `until` (whole days in Amsterdam time, both inclusive), `before` (rows strictly older than this moment: pass the last row's `created_at` for the next page). Newest first. Up to 10,000 rows with the same filters (`limit` does not apply); a cell that would start a spreadsheet formula gets a leading apostrophe.
+         */
+        get: operations["exportServerAuditEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/server/ca-certificate": {
         parameters: {
             query?: never;
@@ -534,6 +574,46 @@ export interface paths {
          * @description The external AI services with a preset, and the country each one is in.
          */
         get: operations["listAiSuppliers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/audit-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Workspace Audit Events
+         * @description Web session only: a bearer token answers 401 not_authenticated. The workspace's log, for its admins only (another role answers 403 forbidden). At most `limit` rows (1 to 500, default 100). Filters: `user_id` (rows where the user acted or was acted on), `code` (one of the log's codes, else 422), `since` and `until` (whole days in Amsterdam time, both inclusive), `before` (rows strictly older than this moment: pass the last row's `created_at` for the next page). Newest first.
+         */
+        get: operations["listWorkspaceAuditEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/audit-events/csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Workspace Audit Events
+         * @description Web session only: a bearer token answers 401 not_authenticated. The workspace's log as a CSV download, for its admins only. Filters: `user_id` (rows where the user acted or was acted on), `code` (one of the log's codes, else 422), `since` and `until` (whole days in Amsterdam time, both inclusive), `before` (rows strictly older than this moment: pass the last row's `created_at` for the next page). Newest first. Up to 10,000 rows with the same filters (`limit` does not apply); a cell that would start a spreadsheet formula gets a leading apostrophe.
+         */
+        get: operations["exportWorkspaceAuditEvents"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1342,6 +1422,55 @@ export interface components {
             key: string;
             /** Name */
             name: string;
+        };
+        /** AuditEventOut */
+        AuditEventOut: {
+            /**
+             * Actor Device Id
+             * Format: uuid
+             */
+            actor_device_id: string | null;
+            /**
+             * Actor Id
+             * Format: uuid
+             */
+            actor_id: string | null;
+            /** Actor Kind */
+            actor_kind: string;
+            /** Actor Name */
+            actor_name: string;
+            /**
+             * Client Ip
+             * @default
+             */
+            client_ip: string;
+            /** Code */
+            code: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Label */
+            label: string;
+            /**
+             * Target Id
+             * Format: uuid
+             */
+            target_id: string | null;
+            /** Target Kind */
+            target_kind: string;
+            /** Target Name */
+            target_name: string;
+            /** Values */
+            values: {
+                [key: string]: string;
+            };
         };
         /** CaCertificateOut */
         CaCertificateOut: {
@@ -3286,6 +3415,113 @@ export interface operations {
             };
         };
     };
+    listServerAuditEvents: {
+        parameters: {
+            query?: {
+                user_id?: string | null;
+                code?: string;
+                since?: string | null;
+                until?: string | null;
+                before?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEventOut"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    exportServerAuditEvents: {
+        parameters: {
+            query?: {
+                user_id?: string | null;
+                code?: string;
+                since?: string | null;
+                until?: string | null;
+                before?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The log as CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     getCaCertificate: {
         parameters: {
             query?: never;
@@ -3920,6 +4156,135 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    listWorkspaceAuditEvents: {
+        parameters: {
+            query?: {
+                user_id?: string | null;
+                code?: string;
+                since?: string | null;
+                until?: string | null;
+                before?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEventOut"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    exportWorkspaceAuditEvents: {
+        parameters: {
+            query?: {
+                user_id?: string | null;
+                code?: string;
+                since?: string | null;
+                until?: string | null;
+                before?: string | null;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The log as CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

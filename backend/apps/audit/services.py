@@ -5,12 +5,16 @@ of `ALLOWED_VALUES`; values are short plain text, numbers or flags. So no row ca
 document content, a label name, a token or a password unless a code is made for it.
 """
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
+from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
+from django.db import models
 from django.http import HttpRequest
+from django.utils import timezone
 
 from apps.audit.codes import ALLOWED_VALUES, NAMED_TARGETS, ActorKind, AuditCode, TargetKind
 from apps.audit.models import ServerAuditEvent, WorkspaceAuditEvent
@@ -20,6 +24,7 @@ from apps.workspaces.context import workspace_context
 
 if TYPE_CHECKING:
     from apps.accounts.models import User
+    from apps.workspaces.models import Workspace
 
 MAX_VALUE_LENGTH = 200
 MAX_NAME_LENGTH = 150
@@ -139,3 +144,98 @@ def _clean_values(code: AuditCode, values: Mapping[str, AuditValue]) -> dict[str
         else:
             raise ValueError(f"Audit value {key!r} must be text, a number or a flag")
     return cleaned
+
+
+# The log is read by whole days as the people in it live them.
+LOG_TIME_ZONE = ZoneInfo("Europe/Amsterdam")
+DEFAULT_LIMIT = 100
+MAX_LIMIT = 500
+# The most rows one CSV download holds.
+CSV_MAX_ROWS = 10_000
+CSV_HEADER = (
+    "Tijdstip",
+    "Wie",
+    "Gebeurtenis",
+    "Code",
+    "Om wie of wat",
+    "Adres",
+    "Details",
+)
+# A cell that starts with one of these is a formula to a spreadsheet.
+_FORMULA_STARTS = ("=", "+", "-", "@", "\t", "\r")
+
+
+@dataclass(frozen=True)
+class AuditFilter:
+    """What to read from a log. `user_id` matches the rows where the user acted or was
+    acted on; `since` and `until` are whole days in Amsterdam, both inclusive; `before`
+    pages backwards (rows strictly older than it); `code` is empty for every code."""
+
+    user_id: UUID | None = None
+    code: str = ""
+    since: date | None = None
+    until: date | None = None
+    before: datetime | None = None
+    limit: int = DEFAULT_LIMIT
+
+
+def _filtered[E: (WorkspaceAuditEvent, ServerAuditEvent)](
+    rows: "models.QuerySet[E]", f: AuditFilter
+) -> "models.QuerySet[E]":
+    if f.user_id is not None:
+        rows = rows.filter(models.Q(actor_id=f.user_id) | models.Q(target_id=f.user_id))
+    if f.code:
+        rows = rows.filter(code=f.code)
+    if f.since is not None:
+        rows = rows.filter(created_at__gte=datetime.combine(f.since, time.min, LOG_TIME_ZONE))
+    if f.until is not None:
+        end = datetime.combine(f.until + timedelta(days=1), time.min, LOG_TIME_ZONE)
+        rows = rows.filter(created_at__lt=end)
+    if f.before is not None:
+        rows = rows.filter(created_at__lt=f.before)
+    return rows.order_by("-created_at", "-id")[: f.limit]
+
+
+def list_workspace_events(workspace: "Workspace", f: AuditFilter) -> list[WorkspaceAuditEvent]:
+    """The workspace's newest rows first. Needs the workspace's RLS context, which then
+    holds the rows of no other workspace whatever the filter says."""
+    return list(_filtered(WorkspaceAuditEvent.objects.filter(workspace_id=workspace.id), f))
+
+
+def list_server_events(f: AuditFilter) -> list[ServerAuditEvent]:
+    return list(_filtered(ServerAuditEvent.objects.all(), f))
+
+
+def code_label(code: str) -> str:
+    """The Dutch label of a code; the code itself for one this version does not know."""
+    return str(AuditCode(code).label) if code in AuditCode.values else code
+
+
+def value_text(value: object) -> str:
+    return str(value).lower() if isinstance(value, bool) else str(value)
+
+
+def _guard(cell: str) -> str:
+    """Stop a spreadsheet from running a cell as a formula: a leading apostrophe."""
+    return f"'{cell}" if cell.startswith(_FORMULA_STARTS) else cell
+
+
+def csv_rows(events: Iterable[WorkspaceAuditEvent | ServerAuditEvent]) -> Iterator[list[str]]:
+    """The header, then one row per event, every cell safe to open in a spreadsheet."""
+    yield list(CSV_HEADER)
+    for e in events:
+        when = timezone.localtime(e.created_at, LOG_TIME_ZONE).strftime("%Y-%m-%d %H:%M:%S")
+        target = e.target_name or (f"{e.target_kind} {e.target_id}" if e.target_id else "")
+        details = "; ".join(f"{k}={value_text(v)}" for k, v in sorted(e.values.items()))
+        yield [
+            _guard(cell)
+            for cell in (
+                when,
+                e.actor_name,
+                code_label(e.code),
+                e.code,
+                target,
+                e.client_ip or "",
+                details,
+            )
+        ]
