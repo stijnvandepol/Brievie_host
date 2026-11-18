@@ -104,9 +104,15 @@ def backup_host() -> str:
 
 
 def file_excludes() -> list[str]:
-    """Never in a back-up: the installation id (and its temporary file)."""
+    """Never in a back-up: the installation id (and its temporary file), and the members'
+    exports (sealed, gone after 24 hours; a restore has no use for them)."""
     config = str(settings.BRIEVIE_BACKUP_CONFIG_DIR).rstrip("/")
-    return [f"{config}/{INSTALLATION_ID_NAME}", f"{config}/{INSTALLATION_ID_NAME}.tmp"]
+    storage = str(settings.BRIEVIE_STORAGE_ROOT).rstrip("/")
+    return [
+        f"{config}/{INSTALLATION_ID_NAME}",
+        f"{config}/{INSTALLATION_ID_NAME}.tmp",
+        f"{storage}/exports",
+    ]
 
 
 def file_paths() -> list[str]:

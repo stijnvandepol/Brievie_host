@@ -453,3 +453,19 @@ def test_status_fields_are_optional_in_the_contract() -> None:
         "has_api_key",
         "model",
     }
+
+
+def test_a_failing_audit_row_rolls_the_ai_setting_and_its_consent_event_back(
+    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("the audit row could not be written")
+
+    monkeypatch.setattr(settings_service, "record", broken)
+
+    with workspace_context(ws_a.id):
+        with pytest.raises(RuntimeError):
+            external(ws_a)
+        # The setting, the consent and its event are one change with the audit row.
+        assert not AISettings.objects.exists()
+        assert not AIConsentEvent.objects.exists()

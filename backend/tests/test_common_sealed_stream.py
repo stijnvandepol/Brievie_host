@@ -1,3 +1,4 @@
+import gc
 import io
 import os
 
@@ -151,5 +152,20 @@ def test_a_failed_export_is_not_closed_as_a_complete_one() -> None:
         failing_export()
 
     # No chunk was sealed as the last: the file cannot be read back as a whole.
+    with pytest.raises(crypto.DecryptionError):
+        opened(target.getvalue())
+
+
+def test_a_writer_that_is_garbage_collected_does_not_seal_a_last_chunk() -> None:
+    target = io.BytesIO()
+    writer = SealedWriter(target, KEY, aad=AAD)
+    writer.write(os.urandom(5 * MIB))
+    written = target.getvalue()
+
+    del writer
+    gc.collect()
+
+    # Nothing was added: no last chunk, so what is there does not open as a whole.
+    assert target.getvalue() == written
     with pytest.raises(crypto.DecryptionError):
         opened(target.getvalue())

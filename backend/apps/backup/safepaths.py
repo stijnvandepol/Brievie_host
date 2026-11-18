@@ -328,6 +328,16 @@ def require_emptiable(
     return directory
 
 
+def require_below_listed(path: Path, fixed: Sequence[Path] = PRODUCTION_DIRECTORIES) -> Path:
+    """`path` when it lies strictly inside one of the `fixed` production directories or
+    strictly inside the test root (tests only); judged by its text alone, nothing is
+    looked at. For a directory made inside a listed one (the exports directory)."""
+    _plain_absolute(path)
+    if _lexically_in_test_root(path) or any(directory in path.parents for directory in fixed):
+        return path
+    raise BackupError("directory_not_allowed")
+
+
 def require_inside(path: Path, root: Path) -> Path:
     """`path` when it resolves strictly inside `root`.
 

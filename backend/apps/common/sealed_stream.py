@@ -60,6 +60,14 @@ class SealedWriter(io.RawIOBase):
         self._finished = True
         self._buffer.clear()
 
+    def __del__(self) -> None:
+        # Garbage-collected without `close()`: the writer was dropped, usually by a failure.
+        # `IOBase.__del__` would close it and seal a valid last chunk, which makes a
+        # truncated file look whole.
+        if not self._finished:
+            self.abort()
+        super().__del__()
+
     def close(self) -> None:
         if not self.closed and not self._finished:
             self._finished = True

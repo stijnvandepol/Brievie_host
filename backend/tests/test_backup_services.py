@@ -1631,19 +1631,21 @@ def test_a_linked_installation_id_is_never_read(
 
 
 @pytest.mark.django_db(transaction=True)
-def test_the_installation_id_is_not_part_of_a_back_up(
+def test_the_installation_id_and_the_exports_are_not_part_of_a_back_up(
     configured_folder: Path, fake_restic: FakeBinary, fake_pg_dump: FakeBinary
 ) -> None:
     config = django_settings.BRIEVIE_BACKUP_CONFIG_DIR
     assert services.file_excludes() == [
         f"{config}/installation-id",
         f"{config}/installation-id.tmp",
+        f"{django_settings.BRIEVIE_STORAGE_ROOT}/exports",
     ]
     run = queued_run()
     answer_both_backups(fake_restic, run.id)
     services.perform_run(run.id)
     files = next(call for call in fake_restic.calls if "kind:files" in call)
     assert f"{config}/installation-id" in files
+    assert f"{django_settings.BRIEVIE_STORAGE_ROOT}/exports" in files
 
 
 @pytest.mark.django_db(transaction=True)

@@ -26,6 +26,7 @@ from apps.documents.export import export_context, write_export
 from apps.documents.export_files import (
     UnsafePathError,
     export_file_path,
+    list_export_files,
     open_export_for_read,
     open_export_for_write,
     remove_export_file,
@@ -42,6 +43,8 @@ VALIDITY = timedelta(hours=24)
 PENDING_TIMEOUT = timedelta(hours=2)
 # A failed export stays visible this long (so the member sees it), then goes.
 FAILED_KEPT = timedelta(hours=24)
+# A file without a row older than this is an orphan.
+FILE_ORPHAN_AFTER = timedelta(hours=24)
 
 
 def _not_found() -> ApiError:
@@ -287,7 +290,7 @@ def remove_expired() -> int:
     handled = 0
     for workspace_id in Workspace.objects.values_list("id", flat=True):
         handled += _sweep_workspace(workspace_id, moment)
-    return handled
+    return handled + _remove_orphans(moment)
 
 
 def _sweep_workspace(workspace_id: UUID, moment: datetime) -> int:
@@ -317,3 +320,32 @@ def _sweep_workspace(workspace_id: UUID, moment: datetime) -> int:
             else:
                 rows.delete()
     return len(found)
+
+
+def _remove_orphans(moment: datetime) -> int:
+    """Remove export files that have no row and are over a day old (a crash between a
+    row's deletion and its file's removal leaves one). Only files named exactly
+    `exports/<uuid>/<uuid>.sealed`, found two levels down and never through a link; each
+    goes through the same guard as every removal. A young file may be a build that has
+    not been recorded yet and is kept."""
+    old = [f for f in list_export_files() if f.modified <= (moment - FILE_ORPHAN_AFTER).timestamp()]
+    removed = 0
+    for workspace_id in {f.workspace_id for f in old}:
+        candidates = [f for f in old if f.workspace_id == workspace_id]
+        with export_context(workspace_id, reader_id=None):
+            known = set(
+                MemberExport.objects.filter(
+                    workspace_id=workspace_id, id__in=[f.export_id for f in candidates]
+                ).values_list("id", flat=True)
+            )
+        for file in candidates:
+            if file.export_id in known:
+                continue
+            try:
+                remove_export_file(file.path)
+                removed += 1
+            except UnsafePathError:
+                logger.error("An export file was refused by the guard; kept.")
+            except OSError as exc:
+                logger.error("An export file could not be removed: %s", type(exc).__name__)
+    return removed

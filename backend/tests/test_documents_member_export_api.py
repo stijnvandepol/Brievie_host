@@ -27,6 +27,10 @@ from apps.documents.export_files import (
     UnsafePathError,
     export_root,
     judge_export_path,
+    judge_export_root,
+    list_export_files,
+    open_export_for_read,
+    open_export_for_write,
     remove_export_file,
 )
 from apps.documents.jobs import build_member_export, remove_expired_exports
@@ -225,7 +229,7 @@ def test_the_file_on_disk_is_sealed_and_stored_under_an_unguessable_name(ws_a: W
     assert b"PK\x03\x04" not in stored
     assert first_page[:200] not in stored
     assert b"Mijn brief" not in stored
-    assert row.size == len(stored) or row.size > 0
+    assert row.size == len(stored)
     # Nothing unsealed is left next to it.
     assert sorted(p.name for p in path.parent.iterdir()) == [path.name]
 
@@ -533,41 +537,98 @@ def test_the_export_directory_is_inside_the_storage_root(settings: Settings) -> 
 
 # --- the path guard: a pure judgement, tested without touching a real path --------------
 
-ROOT = Path("/srv/brievie/documents/exports")
 WS, EX = "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"
-GOOD = ROOT / WS / f"{EX}.sealed"
+
+
+def good() -> Path:
+    return export_root() / WS / f"{EX}.sealed"
+
+
+class Recorder:
+    """Stands in for every destructive primitive: a refused path must never reach one."""
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.calls: list[object] = []
+        for target in ("os.unlink", "os.remove", "os.rmdir", "shutil.rmtree", "os.replace"):
+            monkeypatch.setattr(target, self)
+        monkeypatch.setattr(Path, "unlink", self)
+        monkeypatch.setattr(Path, "rmdir", self)
+
+    def __call__(self, *args: object, **kwargs: object) -> None:
+        self.calls.append(args)
+        pytest.fail("a refused path reached a destructive call")
 
 
 def test_the_guard_accepts_only_an_export_file() -> None:
-    assert judge_export_path(GOOD, ROOT) == GOOD
+    assert judge_export_path(good()) == good()
+    assert judge_export_root(export_root()) == export_root()
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
+def refused_paths() -> list[Path]:
+    root = export_root()
+    return [
         Path("/"),
         Path("/etc/passwd"),
         Path.home(),
         Path.home() / "Documents" / "x.sealed",
-        ROOT,
-        ROOT / WS,
-        ROOT / f"{EX}.sealed",
-        ROOT / WS / EX,
-        ROOT / WS / f"{EX}.zip",
-        ROOT / WS / ".." / ".." / "documents" / f"{EX}.sealed",
-        ROOT / WS / "sub" / f"{EX}.sealed",
-        ROOT.parent / WS / f"{EX}.sealed",
-        Path("/srv/brievie/documents/exports-evil") / WS / f"{EX}.sealed",
+        # A directory named `exports` elsewhere, a home directory's included.
+        Path.home() / "exports" / WS / f"{EX}.sealed",
+        Path("/data/other/exports") / WS / f"{EX}.sealed",
+        root,
+        root / WS,
+        root / f"{EX}.sealed",
+        root / WS / EX,
+        root / WS / f"{EX}.zip",
+        root / WS / ".." / ".." / "documents" / f"{EX}.sealed",
+        root / WS / "sub" / f"{EX}.sealed",
+        root.parent / WS / f"{EX}.sealed",
+        root.parent / "exports-evil" / WS / f"{EX}.sealed",
         Path("relative") / WS / f"{EX}.sealed",
         Path("exports") / WS / f"{EX}.sealed",
-        ROOT / "not-a-uuid" / f"{EX}.sealed",
-        ROOT / WS / "not-a-uuid.sealed",
-        ROOT / WS / f"{EX}.sealed\0",
-    ],
-)
-def test_the_guard_refuses_everything_else(path: Path) -> None:
-    with pytest.raises(UnsafePathError):
-        judge_export_path(path, ROOT)
+        root / "not-a-uuid" / f"{EX}.sealed",
+        root / WS / "not-a-uuid.sealed",
+        root / WS / f"{EX}.sealed\0",
+    ]
+
+
+def test_the_guard_refuses_everything_else_without_reaching_a_removing_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorder = Recorder(monkeypatch)
+
+    for path in refused_paths():
+        with pytest.raises(UnsafePathError):
+            judge_export_path(path)
+        with pytest.raises(UnsafePathError):
+            remove_export_file(path)
+        with pytest.raises(UnsafePathError):
+            open_export_for_write(path)
+        with pytest.raises(UnsafePathError):
+            open_export_for_read(path)
+    assert recorder.calls == []
+
+
+def test_a_directory_named_exports_elsewhere_is_never_a_root(
+    monkeypatch: pytest.MonkeyPatch, settings: Settings
+) -> None:
+    recorder = Recorder(monkeypatch)
+
+    # A storage root under a home directory, or anywhere outside the production list
+    # and the test root: the export directory is refused, and with it every path in it.
+    for outside in (Path.home() / "brievie", Path("/srv/brievie"), Path("/opt/brievie")):
+        settings.BRIEVIE_STORAGE_ROOT = str(outside)
+        victim = export_root() / WS / f"{EX}.sealed"
+        with pytest.raises(UnsafePathError):
+            judge_export_root(export_root())
+        with pytest.raises(UnsafePathError):
+            judge_export_path(victim)
+        with pytest.raises(UnsafePathError):
+            remove_export_file(victim)
+        with pytest.raises(UnsafePathError):
+            open_export_for_write(victim)
+        with pytest.raises(UnsafePathError):
+            list_export_files()
+    assert recorder.calls == []
 
 
 @pytest.mark.parametrize(
@@ -576,31 +637,11 @@ def test_the_guard_refuses_everything_else(path: Path) -> None:
 )
 def test_the_guard_refuses_a_root_that_is_not_an_export_directory(root: Path) -> None:
     with pytest.raises(UnsafePathError):
-        judge_export_path(root / WS / f"{EX}.sealed", root)
-
-
-def test_removal_asks_the_guard_before_it_touches_anything(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    touched: list[object] = []
-
-    def recorder(*args: object, **kwargs: object) -> None:
-        touched.append(args)
-        pytest.fail("a refused path reached a destructive call")
-
-    for target in ("os.unlink", "os.remove", "os.rmdir", "shutil.rmtree", "os.replace"):
-        monkeypatch.setattr(target, recorder)
-    monkeypatch.setattr(Path, "unlink", recorder)
-    root = tmp_path / "documents" / "exports"
-
-    for bad in (Path("/"), Path.home(), root, root / WS, tmp_path / f"{EX}.sealed"):
-        with pytest.raises(UnsafePathError):
-            remove_export_file(bad, root)
-    assert touched == []
+        judge_export_root(root)
 
 
 def test_removal_never_follows_a_link(tmp_path: Path) -> None:
-    root = tmp_path / "documents" / "exports"
+    root = export_root()
     (root / WS).mkdir(parents=True)
     victim = tmp_path / "keep-me"
     victim.write_text("precious")
@@ -608,14 +649,14 @@ def test_removal_never_follows_a_link(tmp_path: Path) -> None:
     link.symlink_to(victim)
 
     with pytest.raises(UnsafePathError):
-        remove_export_file(link, root)
+        remove_export_file(link)
 
     assert victim.read_text() == "precious"
     assert link.is_symlink()
 
 
 def test_removal_refuses_a_file_reached_through_a_linked_directory(tmp_path: Path) -> None:
-    root = tmp_path / "documents" / "exports"
+    root = export_root()
     root.mkdir(parents=True)
     outside = tmp_path / "outside"
     outside.mkdir()
@@ -623,19 +664,19 @@ def test_removal_refuses_a_file_reached_through_a_linked_directory(tmp_path: Pat
     (root / WS).symlink_to(outside, target_is_directory=True)
 
     with pytest.raises(UnsafePathError):
-        remove_export_file(root / WS / f"{EX}.sealed", root)
+        remove_export_file(root / WS / f"{EX}.sealed")
 
     assert (outside / f"{EX}.sealed").read_text() == "precious"
 
 
-def test_removal_removes_a_file_and_does_not_mind_a_missing_one(tmp_path: Path) -> None:
-    root = tmp_path / "documents" / "exports"
+def test_removal_removes_a_file_and_does_not_mind_a_missing_one() -> None:
+    root = export_root()
     (root / WS).mkdir(parents=True)
     path = root / WS / f"{EX}.sealed"
     path.write_bytes(b"x")
 
-    remove_export_file(path, root)
-    remove_export_file(path, root)
+    remove_export_file(path)
+    remove_export_file(path)
 
     assert not path.exists()
     assert (root / WS).is_dir()
@@ -659,7 +700,140 @@ def test_a_stored_path_that_is_not_an_export_path_is_never_removed(
     assert victim.read_text() == "precious"
 
 
-def test_no_document_content_in_the_job_module() -> None:
+def test_export_modules_never_enter_a_workspace_context_themselves() -> None:
     root = Path(member_export.__file__).parent
     for name in ("member_export.py", "jobs.py", "export_files.py"):
         assert "workspace_context(" not in (root / name).read_text(), name
+
+
+# --- the orphan sweep -----------------------------------------------------------------
+
+
+def age(path: Path, hours: int) -> None:
+    moment = (timezone.now() - timedelta(hours=hours)).timestamp()
+    os.utime(path, (moment, moment), follow_symlinks=False)
+
+
+def orphan(ws: Workspace, hours: int, *, export_id: UUID | None = None) -> Path:
+    path = export_root() / str(ws.id) / f"{export_id or uuid4()}.sealed"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"sealed")
+    age(path, hours)
+    return path
+
+
+def test_an_old_file_without_a_row_is_removed_and_a_young_one_kept(ws_a: Workspace) -> None:
+    old, young = orphan(ws_a, 25), orphan(ws_a, 1)
+
+    remove_expired_exports(timestamp=0)
+
+    assert not old.exists()
+    assert young.exists()
+
+
+def test_an_old_file_with_a_row_is_kept(ws_a: Workspace) -> None:
+    user, _mine = member_with_post(ws_a)
+    row = build(ws_a, user)
+    age(file_of(row), 30)
+
+    remove_expired_exports(timestamp=0)
+
+    assert file_of(row).exists()
+    assert export_of(ws_a, user).status == "ready"
+
+
+def test_the_sweep_leaves_foreign_names_alone(ws_a: Workspace) -> None:
+    folder = export_root() / str(ws_a.id)
+    folder.mkdir(parents=True)
+    stray = [
+        folder / "notes.txt",
+        folder / f"{uuid4()}.sealed.tmp",
+        folder / f"{str(uuid4()).upper()}.sealed",
+        export_root() / "readme.sealed",
+    ]
+    for path in stray:
+        path.write_text("mine")
+        age(path, 100)
+    nested = folder / str(uuid4())
+    nested.mkdir()
+    (nested / f"{uuid4()}.sealed").write_text("deeper")
+    age(nested / next(nested.iterdir()).name, 100)
+    foreign_dir = export_root() / "not-a-uuid"
+    foreign_dir.mkdir()
+    (foreign_dir / f"{uuid4()}.sealed").write_text("elsewhere")
+    age(foreign_dir / next(foreign_dir.iterdir()).name, 100)
+
+    remove_expired_exports(timestamp=0)
+
+    assert all(path.exists() for path in stray)
+    assert next(nested.iterdir()).exists()
+    assert next(foreign_dir.iterdir()).exists()
+
+
+def test_the_sweep_does_not_follow_a_link(ws_a: Workspace, tmp_path: Path) -> None:
+    victim_file = tmp_path / "victim.sealed"
+    victim_file.write_text("precious")
+    folder = export_root() / str(ws_a.id)
+    folder.mkdir(parents=True)
+    file_link = folder / f"{uuid4()}.sealed"
+    file_link.symlink_to(victim_file)
+    age(file_link, 100)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    inside = elsewhere / f"{uuid4()}.sealed"
+    inside.write_text("precious too")
+    age(inside, 100)
+    (export_root() / str(uuid4())).symlink_to(elsewhere, target_is_directory=True)
+
+    remove_expired_exports(timestamp=0)
+
+    assert victim_file.read_text() == "precious"
+    assert file_link.is_symlink()
+    assert inside.read_text() == "precious too"
+
+
+# --- the back-up and a restore --------------------------------------------------------
+
+
+def test_a_restored_ready_row_without_its_file_answers_404_and_is_swept(ws_a: Workspace) -> None:
+    user, _mine = member_with_post(ws_a)
+    row = build(ws_a, user)
+    # A restore brings the rows back, never the exports directory (it is not in a back-up).
+    file_of(row).unlink()
+    file_of(row).parent.rmdir()
+    export_root().rmdir()
+
+    gone = as_user(user).get(url(ws_a, "/file"))
+    assert (gone.status_code, gone.streaming) == (404, False)
+    assert gone.json()["code"] == "export_not_found"
+    with workspace_context(ws_a.id):
+        MemberExport.objects.filter(id=row.id).update(
+            expires_at=timezone.now() - timedelta(minutes=1)
+        )
+    remove_expired_exports(timestamp=0)
+
+    assert rows(ws_a) == []
+    # Asking again builds the directory afresh.
+    assert build(ws_a, user).status == "ready"
+
+
+def test_a_member_removed_while_the_export_is_built_leaves_no_file_and_no_ready_row(
+    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    user, _mine = member_with_post(ws_a)
+    post_json(as_user(user), f"/workspaces/{ws_a.id}/my-export")
+    row = export_of(ws_a, user)
+    real = export.write_export
+
+    def removed_midway(**kwargs: object) -> export.ExportCounts:
+        counts = real(**kwargs)  # type: ignore[arg-type]
+        with workspace_context(ws_a.id):
+            MemberExport.objects.filter(id=row.id).delete()
+        return counts
+
+    monkeypatch.setattr("apps.documents.member_export.write_export", removed_midway)
+
+    run_member_export(ws_a.id, row.id)
+
+    assert rows(ws_a) == []
+    assert not file_of(row).exists()
