@@ -229,6 +229,25 @@ def test_released_operations_still_exist_with_the_same_operation_id(
     assert renamed == {}, f"released operations changed their operationId (old, new): {renamed}"
 
 
+def success_codes(operation: dict[str, object]) -> set[str]:
+    responses = operation["responses"]
+    assert isinstance(responses, dict)
+    return {code for code in responses if code.startswith("2")}
+
+
+def test_released_operations_keep_their_auth_and_success_codes(
+    released_contract: Contract,
+) -> None:
+    """An app in the field calls these with the auth it was built for: narrowing one to
+    the web session only, or dropping a success status, breaks it while CI stays green."""
+    current = contract_operations(current_contract())
+    for key, operation in contract_operations(released_contract).items():
+        now = current[key]
+        operation_id = operation["operationId"]
+        assert now.get("security") == operation.get("security"), operation_id
+        assert success_codes(operation) <= success_codes(now), operation_id
+
+
 def test_released_operations_gain_no_required_parameters(released_contract: Contract) -> None:
     released = contract_operations(released_contract)
     current = contract_operations(current_contract())

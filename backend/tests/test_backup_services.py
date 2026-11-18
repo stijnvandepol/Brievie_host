@@ -26,6 +26,7 @@ from apps.backup import restic, services
 from apps.backup.locks import BACKUP_LOCK_KEY
 from apps.backup.manifest import MANIFEST_NAME, manifest_from_json
 from apps.backup.models import BackupRun
+from apps.common.privacy import mask_bsns
 from apps.workspaces.models import Workspace
 from tests.backup_support import FakeBinary
 
@@ -445,7 +446,9 @@ def test_failed_run_reason_and_log_hold_no_secret(
     run.refresh_from_db()
     assert run.status == BackupRun.Status.FAILED
     assert run.reason_code == "restic_failed"
-    assert f"Backup run {run.id} failed: restic_failed" in caplog.text
+    # The log filter masks a run of nine digits that passes the BSN check, also inside an
+    # id; compare with the id as it is logged.
+    assert mask_bsns(f"Backup run {run.id} failed: restic_failed") in caplog.text
     assert "Fatal" in caplog.text  # the redacted tail is logged
     for text in (run.reason, caplog.text):
         assert "geheim" not in text

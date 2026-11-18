@@ -4,6 +4,7 @@ import uuid
 import pytest
 
 from apps.common.errors import ApiError
+from apps.common.privacy import mask_bsns
 from apps.labels.models import Label
 from apps.people.models import Person
 from apps.rules import definition
@@ -200,7 +201,9 @@ def test_broken_definition_is_skipped_not_fatal(
             specs = active_specs(ws_a.id)
 
     assert [spec.id for spec in specs] == [good.id]
-    assert str(broken.id) in caplog.text
+    # The log filter masks a run of nine digits that passes the BSN check, also inside an
+    # id; a random uuid4 sometimes holds one, so compare with the id as it is logged.
+    assert mask_bsns(str(broken.id)) in caplog.text
     assert "Kapot" not in caplog.text
 
 
