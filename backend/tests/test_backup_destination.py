@@ -1,5 +1,6 @@
 import json
 import os
+import stat
 from pathlib import Path
 from unittest import mock
 
@@ -328,8 +329,11 @@ def test_marker_is_removed_when_its_chown_fails(
     (folder / destination.REPOSITORY_DIR).mkdir()
     marker = folder / destination.MARKER_NAME
 
+    temporary = folder / f".{destination.MARKER_NAME}.tmp"
+
     def fchown(fd: int, uid: int, gid: int) -> None:
-        if marker.exists() and os.fstat(fd).st_ino == marker.stat().st_ino:
+        # The marker is written to a temporary file first, then renamed into place.
+        if temporary.exists() and os.fstat(fd).st_ino == temporary.stat().st_ino:
             raise PermissionError
 
     with (
@@ -349,11 +353,12 @@ def test_marker_is_written_after_the_tree_is_handed_over(
     seen: list[bool] = []
 
     def fchown(fd: int, uid: int, gid: int) -> None:
-        seen.append((folder / destination.MARKER_NAME).exists())
+        seen.append(stat.S_ISREG(os.fstat(fd).st_mode))  # the marker is the one file
 
     with mock.patch.object(os, "fchown", side_effect=fchown):
         destination.initialise(allow_same_disk=False, owner_uid=10001)
     assert seen == [False, True]  # the tree first, the marker last
+    assert (folder / destination.MARKER_NAME).exists()
 
 
 def test_second_init_completes_a_half_finished_one(
@@ -385,4 +390,45 @@ def test_missing_storage_root_is_not_ready(
     with pytest.raises(BackupError) as caught:
         destination.initialise(allow_same_disk=False, owner_uid=None)
     assert caught.value.code == "destination_not_ready"
+    assert fake_restic.calls == []
+
+
+@pytest.mark.parametrize("content", ["{}", "not json", '{"format": 9, "repository": "restic"}'])
+def test_init_repairs_a_corrupt_marker_when_the_password_opens_the_repository(
+    folder: Path, fake_restic: FakeBinary, monkeypatch: pytest.MonkeyPatch, content: str
+) -> None:
+    # The loop of review I5: not ready -> --init -> already initialised -> not ready.
+    _other_disk(monkeypatch, folder)
+    _write_marker(folder, content)
+    fake_restic.respond(("init",), stderr="Fatal: config file already exists", code=1)
+
+    destination.initialise(allow_same_disk=False, owner_uid=None)
+
+    assert fake_restic.calls == [["init"], ["cat", "config"]]
+    marker = json.loads((folder / destination.MARKER_NAME).read_text())
+    assert marker["format"] == destination.MARKER_FORMAT
+    assert marker["repository"] == destination.REPOSITORY_DIR
+    assert destination.configured_repository().kind == "folder"
+
+
+def test_a_corrupt_marker_with_a_wrong_password_stays_and_says_so(
+    folder: Path, fake_restic: FakeBinary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _other_disk(monkeypatch, folder)
+    _write_marker(folder, "not json")
+    fake_restic.respond(("init",), stderr="Fatal: config file already exists", code=1)
+    fake_restic.respond(("cat", "config"), stderr="Fatal: wrong password or no key found", code=12)
+
+    with pytest.raises(BackupError) as caught:
+        destination.initialise(allow_same_disk=False, owner_uid=None)
+
+    assert caught.value.code == "wrong_password"
+    assert (folder / destination.MARKER_NAME).read_text() == "not json"
+
+
+def test_a_valid_marker_is_still_already_initialised(folder: Path, fake_restic: FakeBinary) -> None:
+    _write_marker(folder)
+    with pytest.raises(BackupError) as caught:
+        destination.initialise(allow_same_disk=True, owner_uid=None)
+    assert caught.value.code == "already_initialised"
     assert fake_restic.calls == []

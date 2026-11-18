@@ -163,8 +163,9 @@ def _verify_password(repository: restic.Repository) -> None:
 def _finish_folder(owner_uid: int | None) -> None:
     """Hand the tree over, then write the marker last: it means "ready".
 
-    The marker is created relative to a descriptor of the mount (never through a
-    link, never over an existing file); a failure removes only a marker this call made.
+    The marker is written to a temporary file relative to a descriptor of the mount
+    and renamed over the old one (never through a link); a failure removes only the
+    temporary file this call made.
     """
     mount = _mount()
     safepaths.require_inside(_marker(), mount)
@@ -177,12 +178,15 @@ def _finish_folder(owner_uid: int | None) -> None:
         mount_fd = safepaths.open_dir_nofollow(mount, expect=safepaths.identity(mount))
     except OSError as error:
         raise BackupError("destination_not_writable") from error
+    temporary = f".{MARKER_NAME}.tmp"
     created = False
     try:
         if owner_uid is not None:
             _chown_tree(mount / REPOSITORY_DIR, owner_uid)
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(temporary, dir_fd=mount_fd)
         handle = safepaths.write_new_at(
-            mount_fd, MARKER_NAME, json.dumps(content).encode(), mode=0o644
+            mount_fd, temporary, json.dumps(content).encode(), mode=0o644
         )
         created = True
         try:
@@ -190,10 +194,14 @@ def _finish_folder(owner_uid: int | None) -> None:
                 os.fchown(handle, owner_uid, owner_uid)
         finally:
             os.close(handle)
+        # Atomic, relative to the mount's descriptor: replaces a corrupt marker (or a
+        # link in its place) without following it.
+        os.replace(temporary, MARKER_NAME, src_dir_fd=mount_fd, dst_dir_fd=mount_fd)
+        created = False
     except OSError as error:
         if created:
             with contextlib.suppress(OSError):
-                os.unlink(MARKER_NAME, dir_fd=mount_fd)
+                os.unlink(temporary, dir_fd=mount_fd)
         raise BackupError("destination_not_writable") from error
     finally:
         os.close(mount_fd)
@@ -225,7 +233,10 @@ def initialise(*, allow_same_disk: bool, owner_uid: int | None) -> restic.Reposi
     mount = _mount()
     if not mount.is_dir():
         raise BackupError("destination_not_ready")
-    if _marker().exists():
+    # A valid marker: set up already. An invalid one (corrupt, foreign) is treated as a
+    # missing one: the repository below is taken over only with the configured
+    # password (wrong_password otherwise), and the marker is written anew.
+    if _marker_is_valid():
         raise BackupError("already_initialised")
     if not allow_same_disk:
         try:
