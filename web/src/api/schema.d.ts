@@ -95,6 +95,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/devices/pair-with-proof": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pair Device With Proof
+         * @description Pair from a brievie://server link without sending the code: proof = HMAC-SHA256(PBKDF2-HMAC-SHA256(code, 'brievie-pair-v1' + pairing_id, 600000), 'brievie-pair-v1' + nonce + trust binding), the binding being the pinned CA's SHA-256 or the host name connected to. 400 pairing_challenge_invalid for an unknown, expired or used nonce; 400 pairing_code_invalid for a wrong proof or a code that cannot pair (five wrong proofs burn the code).
+         */
+        post: operations["pairDeviceWithProof"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/devices/pairing-challenges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Pairing Challenge
+         * @description A one-time nonce (five minutes) for pairDeviceWithProof. Takes no input and reveals nothing about any pairing code.
+         */
+        post: operations["createPairingChallenge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/devices/pairing-codes": {
         parameters: {
             query?: never;
@@ -1419,6 +1459,35 @@ export interface components {
             token: string;
             user: components["schemas"]["UserOut"];
         };
+        /** PairProofIn */
+        PairProofIn: {
+            /**
+             * App Version
+             * @default
+             */
+            app_version: string;
+            /** Device Name */
+            device_name: string;
+            /** Nonce */
+            nonce: string;
+            /**
+             * Pairing Id
+             * Format: uuid
+             */
+            pairing_id: string;
+            /** Proof */
+            proof: string;
+        };
+        /** PairingChallengeOut */
+        PairingChallengeOut: {
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Nonce */
+            nonce: string;
+        };
         /** PairingCodeOut */
         PairingCodeOut: {
             /** Code */
@@ -2132,6 +2201,104 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    pairDeviceWithProof: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PairProofIn"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PairOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    createPairingChallenge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PairingChallengeOut"];
                 };
             };
             /** @description Too Many Requests */

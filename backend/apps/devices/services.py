@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import logging
 import re
 import secrets
 from dataclasses import dataclass
@@ -18,9 +19,20 @@ from apps.accounts.models import User, UserSession
 from apps.accounts.services import current_user
 from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, record
+from apps.common.crypto import DecryptionError
 from apps.common.errors import ApiError
 from apps.devices import pki
-from apps.devices.models import Device, PairingCode
+from apps.devices.models import Device, PairingChallenge, PairingCode
+from apps.devices.proof import (
+    derive_proof_key,
+    normalise_code,
+    open_proof_key,
+    pairing_proof,
+    seal_proof_key,
+    trust_bindings,
+)
+
+logger = logging.getLogger(__name__)
 
 CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 CODE_LENGTH = 8
@@ -30,15 +42,15 @@ LAST_SEEN_INTERVAL = timedelta(minutes=1)
 APP_VERSION_HEADER = "X-Brievie-App-Version"
 APP_VERSION_INTERVAL = timedelta(hours=24)
 _APP_VERSION = re.compile(r"[0-9A-Za-z.+()\- ]{1,50}")
+CHALLENGE_VALIDITY = timedelta(minutes=5)
+# After this many wrong proofs the code is burned, for the QR path as well.
+MAX_FAILED_PROOFS = 5
+# Compared against when there is no usable code, so that path does the same work.
+_NO_KEY = bytes(32)
 
 
 def sha256_hex(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
-
-
-def normalise_code(code: str) -> str:
-    """ "abcd-2345", "ABCD2345" and " abcd 2345 " are the same code."""
-    return "".join(ch for ch in code.upper() if ch not in "- ")
 
 
 def format_code(code: str) -> str:
@@ -59,14 +71,20 @@ def create_pairing_code(
     `paired_via` is the sign-in method of the web session that asked for it.
     """
     code = "".join(secrets.choice(CODE_ALPHABET) for _ in range(CODE_LENGTH))
+    pairing_id = uuid4()
+    # Slow on purpose (key stretching); outside the transaction.
+    sealed_key = seal_proof_key(derive_proof_key(code, pairing_id), pairing_id)
+    now = timezone.now()
     with transaction.atomic():
+        _forget_expired_proof_keys(now)
         PairingCode.objects.filter(user=user, used_at__isnull=True).delete()
         pairing_code = PairingCode.objects.create(
-            id=uuid4(),
+            id=pairing_id,
             user=user,
             code_hash=sha256_hex(code),
-            expires_at=timezone.now() + CODE_VALIDITY,
+            expires_at=now + CODE_VALIDITY,
             paired_via=paired_via,
+            proof_key_sealed=sealed_key,
         )
     return pairing_code, format_code(code)
 
@@ -168,7 +186,8 @@ def _create_device(
     device with a new bearer token; log it as `device_paired` with `via`."""
     now = timezone.now()
     pairing_code.used_at = now
-    pairing_code.save(update_fields=["used_at", "updated_at"])
+    pairing_code.proof_key_sealed = None
+    pairing_code.save(update_fields=["used_at", "proof_key_sealed", "updated_at"])
     token = secrets.token_urlsafe(32)
     version = clean_app_version(app_version)
     device = Device.objects.create(
@@ -186,6 +205,129 @@ def _create_device(
         values={"via": via},
     )
     return device, token
+
+
+def create_pairing_challenge() -> PairingChallenge:
+    """A new one-time nonce for a pairing proof, valid for five minutes. Expired
+    challenges and the keys of expired codes are cleared first."""
+    now = timezone.now()
+    with transaction.atomic():
+        _forget_expired_challenges(now)
+        _forget_expired_proof_keys(now)
+        return PairingChallenge.objects.create(
+            nonce=secrets.token_urlsafe(32), expires_at=now + CHALLENGE_VALIDITY
+        )
+
+
+def forget_expired_pairing_material() -> None:
+    """For the periodic job: what `create_pairing_challenge` clears, also when nobody asks
+    for a code or a challenge."""
+    now = timezone.now()
+    with transaction.atomic():
+        _forget_expired_challenges(now)
+        _forget_expired_proof_keys(now)
+
+
+def _forget_expired_challenges(now: datetime) -> None:
+    PairingChallenge.objects.filter(expires_at__lt=now).delete()
+
+
+def _forget_expired_proof_keys(now: datetime) -> None:
+    PairingCode.objects.filter(expires_at__lte=now, proof_key_sealed__isnull=False).update(
+        proof_key_sealed=None
+    )
+
+
+def pair_device_with_proof(
+    *,
+    pairing_id: UUID,
+    nonce: str,
+    proof: str,
+    device_name: str,
+    app_version: str = "",
+    client_ip: str | None = None,
+) -> tuple[Device, str]:
+    """Pair from a link (D 6.2): the app proves it knows the code, bound to the CA or host
+    it connected to, without sending the code.
+
+    The nonce is used up first, in a block that stays written when the answer is an
+    error. An unknown, expired, used, burned or keyless code answers exactly like a
+    wrong proof for a live one (same status and body); only a live code counts the
+    wrong proof, and its fifth burns it for the QR path too.
+    """
+    name = device_name.strip()
+    if not name:
+        raise ApiError(422, "validation_error", _("Geef het apparaat een naam."))
+    now = timezone.now()
+    with transaction.atomic():
+        challenge = PairingChallenge.objects.select_for_update().filter(nonce=nonce).first()
+        challenge_valid = (
+            challenge is not None and challenge.used_at is None and challenge.expires_at > now
+        )
+        if challenge is not None and challenge_valid:
+            challenge.used_at = now
+            challenge.save(update_fields=["used_at", "updated_at"])
+    if challenge is None or not challenge_valid:
+        raise ApiError(
+            400,
+            "pairing_challenge_invalid",
+            _("Het koppelen duurde te lang. Probeer het opnieuw."),
+        )
+    with transaction.atomic():
+        pairing_code = (
+            PairingCode.objects.select_for_update()
+            .select_related("user")
+            .filter(
+                id=pairing_id,
+                used_at__isnull=True,
+                expires_at__gt=now,
+                proof_key_sealed__isnull=False,
+                user__is_active=True,
+            )
+            .first()
+        )
+        matches = _proof_matches(pairing_code, nonce=challenge.nonce, proof=proof)
+        if pairing_code is not None and matches:
+            return _create_device(
+                pairing_code, name=name, app_version=app_version, client_ip=client_ip, via="proof"
+            )
+        if pairing_code is not None:
+            _count_failed_proof(pairing_code, now)
+    raise ApiError(
+        400,
+        "pairing_code_invalid",
+        _("Deze koppelcode klopt niet of is verlopen. Maak een nieuwe code aan."),
+    )
+
+
+def _proof_matches(pairing_code: PairingCode | None, *, nonce: str, proof: str) -> bool:
+    """Whether `proof` is this code's proof for `nonce` and one of the server's trust
+    bindings. Every candidate is compared in constant time, also after a match, and
+    without a usable code the same comparisons run against a dummy key."""
+    key = _NO_KEY
+    if pairing_code is not None and pairing_code.proof_key_sealed is not None:
+        try:
+            key = open_proof_key(bytes(pairing_code.proof_key_sealed), pairing_code.id)
+        except DecryptionError:
+            # Another master key since the code was made; the code cannot pair by proof.
+            logger.warning("A pairing code's proof key could not be opened")
+            pairing_code = None
+    given = proof.encode("utf-8")
+    matched = False
+    for binding in sorted(trust_bindings()):
+        expected = pairing_proof(key, nonce=nonce, trust_binding=binding).encode("ascii")
+        matched |= hmac.compare_digest(expected, given)
+    return matched and pairing_code is not None
+
+
+def _count_failed_proof(pairing_code: PairingCode, now: datetime) -> None:
+    pairing_code.failed_proofs += 1
+    fields = ["failed_proofs", "updated_at"]
+    if pairing_code.failed_proofs >= MAX_FAILED_PROOFS:
+        pairing_code.used_at = now
+        pairing_code.proof_key_sealed = None
+        fields += ["used_at", "proof_key_sealed"]
+    pairing_code.save(update_fields=fields)
 
 
 def device_for_token(token: str, *, app_version: str = "") -> Device | None:

@@ -8,7 +8,9 @@ from apps.common.models import BaseModel
 class PairingCode(BaseModel):
     """A one-time code that lets a phone pair with the user's account.
 
-    Only the SHA-256 of the normalised code (no dash, upper case) is stored.
+    Only the SHA-256 of the normalised code (no dash, upper case) is stored, plus, for
+    pairing from a link, the key derived from it (`apps.devices.proof`), sealed with the
+    master key; the key is cleared when the code is used, burned or expired.
     """
 
     user = models.ForeignKey(
@@ -23,9 +25,25 @@ class PairingCode(BaseModel):
         choices=UserSession.Method.choices,
         default=UserSession.Method.PASSWORD,
     )
+    # Sealed derived key for proofs; None for a code made before 1d (QR only) and once
+    # the code is used, burned or expired.
+    proof_key_sealed = models.BinaryField(null=True)
+    failed_proofs = models.PositiveSmallIntegerField(default=0)
 
     def __str__(self) -> str:
         return f"Pairing code of {self.user_id}"
+
+
+class PairingChallenge(BaseModel):
+    """A one-time nonce for a pairing proof; not secret. A server table: it is asked for
+    before anybody is known (no user, no workspace)."""
+
+    nonce = models.CharField(max_length=64, unique=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self) -> str:
+        return "Pairing challenge"
 
 
 class Device(BaseModel):

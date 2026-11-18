@@ -23,6 +23,21 @@ class PairIn(InputSchema):
     app_version: str = Field(default="", max_length=50)
 
 
+class PairingChallengeOut(Schema):
+    # Not secret; 43 characters, single use, valid until expires_at (five minutes).
+    nonce: str
+    expires_at: datetime
+
+
+class PairProofIn(InputSchema):
+    pairing_id: UUID
+    nonce: str = Field(max_length=64)
+    # HMAC-SHA256 as lower-case hex (apps.devices.proof); never the code itself.
+    proof: str = Field(pattern=r"^[0-9a-f]{64}$")
+    device_name: str = Field(min_length=1, max_length=100)
+    app_version: str = Field(default="", max_length=50)
+
+
 class PairOut(Schema):
     device_id: UUID
     token: str
