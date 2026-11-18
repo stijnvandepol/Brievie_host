@@ -812,7 +812,12 @@ def test_restore_fetch_without_a_separate_password_derives_it(
         ("master_key_malformed", 2, None),
         ("unsafe_manifest", 1, "De inhoudsopgave van de back-up kon niet worden gelezen."),
         ("newer_backup", 3, "Deze back-up komt van een nieuwere versie van Brievie."),
-        ("run_not_found", 1, "Deze back-up is niet gevonden."),
+        (
+            "run_not_found",
+            1,
+            "Deze back-up is niet gevonden. Typ ./brievie status --list om te zien welke "
+            "back-ups er zijn.",
+        ),
     ],
 )
 def test_restore_fetch_exit_codes(

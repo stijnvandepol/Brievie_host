@@ -1,11 +1,12 @@
 from datetime import datetime
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError, CommandParser
 from django.template.defaultfilters import filesizeformat
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
-from apps.backup import services
+from apps.backup import destination, restore, services
+from apps.backup.errors import BackupError
 from apps.backup.models import BackupRun
 
 
@@ -28,7 +29,17 @@ def _destination(kind: str) -> str:
 class Command(BaseCommand):
     help = "Show versions, the destination kind and the last back-up runs (no addresses or paths)."
 
+    def add_arguments(self, parser: CommandParser) -> None:
+        parser.add_argument(
+            "--list",
+            action="store_true",
+            help="List the runs on the destination: id, date, complete or not.",
+        )
+
     def handle(self, *args: object, **options: object) -> None:
+        if options["list"]:
+            self._list()
+            return
         status = services.status_summary()
         never = _("nog nooit")
         lines = [
@@ -75,6 +86,27 @@ class Command(BaseCommand):
         if status.open_run is not None:
             lines.append(_open_run_line(status.open_run))
         self.stdout.write("\n".join(lines))
+
+    def _list(self) -> None:
+        try:
+            runs = restore.list_runs(
+                destination.configured_repository(), destination.backup_password()
+            )
+        except BackupError as error:
+            raise CommandError(error.message, returncode=1) from error
+        if not runs:
+            self.stdout.write(_("Er staan nog geen back-ups op de bestemming."))
+            return
+        yes, no = _("ja"), _("nee")
+        for run in runs:
+            self.stdout.write(
+                _("%(run)s  %(when)s  compleet: %(complete)s")
+                % {
+                    "run": run.run_id,
+                    "when": _when(run.created_at),
+                    "complete": yes if run.complete else no,
+                }
+            )
 
 
 def _open_run_line(run: BackupRun) -> str:

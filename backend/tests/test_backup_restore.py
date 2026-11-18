@@ -991,3 +991,83 @@ def test_the_authority_is_never_placed_when_caddys_volume_is_missing(
 
     assert caught.value.code == "caddy_not_ready"
     assert not (tmp_path / "unmounted-caddy-data").exists()
+
+
+# --- nothing changes before the run is found ------------------------------------------------
+
+
+@pytest.mark.django_db(transaction=True)
+def test_restore_database_of_a_missing_run_touches_nothing(
+    configured_folder: Path,
+    fake_restic: FakeBinary,
+    pg_restore: FakeBinary,
+    superuser: None,
+    no_database: list[str],
+) -> None:
+    one_run(fake_restic)
+    missing = str(uuid4())
+
+    with pytest.raises(BackupError) as caught:
+        restore_database(run=missing, dbname="brievie")
+
+    assert caught.value.code == "run_not_found"
+    assert pg_restore.calls == []  # pg_restore never started
+    assert no_database == []  # neither locked nor any run closed
+    assert not any(call[:1] == ["dump"] for call in fake_restic.calls)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_restore_files_of_a_missing_run_touches_nothing(
+    configured_folder: Path, fake_restic: FakeBinary, caddy: Path, recorder: Recorder
+) -> None:
+    one_run(fake_restic)
+    documents = Path(django_settings.BRIEVIE_STORAGE_ROOT)
+    documents.mkdir(parents=True)
+    (documents / "kept.page").write_text("kept")
+
+    recorder.arm(allow=("Popen", "run"))  # the fake restic lists the runs; nothing else
+    with pytest.raises(BackupError) as caught:
+        restore_files(run=str(uuid4()), authority_target=caddy, clear_documents=True)
+    recorder.disarm()
+
+    assert caught.value.code == "run_not_found"
+    assert (documents / "kept.page").read_text() == "kept"
+    assert not any(call[:1] == ["restore"] for call in fake_restic.calls)
+
+
+# --- restore_check: does the run still have both snapshots? ---------------------------------
+
+
+@pytest.mark.django_db(transaction=True)
+def test_restore_check_says_a_complete_run_can_be_restored(
+    configured_folder: Path, fake_restic: FakeBinary, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run_id = one_run(fake_restic)
+
+    call_command("restore_check", "--run", str(run_id))
+
+    assert capsys.readouterr().out.strip() == (
+        f"De back-up {run_id} is compleet: de database en de bestanden zijn er allebei."
+    )
+    assert fake_restic.calls
+    assert all(call[:2] in (["snapshots", "--no-lock"],) for call in fake_restic.calls)
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("which", ["missing", "only-db", "malformed"])
+def test_restore_check_refuses_a_run_that_cannot_be_restored(
+    configured_folder: Path, fake_restic: FakeBinary, which: str
+) -> None:
+    run_id = one_run(fake_restic)
+    if which == "only-db":
+        fake_restic.respond(
+            ("snapshots", "--no-lock", "--json", "--tag", "kind:files"), stdout=b"[]"
+        )
+    run = {"missing": str(uuid4()), "only-db": str(run_id), "malformed": "not-a-run"}[which]
+
+    with pytest.raises(CommandError) as caught:
+        call_command("restore_check", "--run", run)
+
+    assert caught.value.returncode == 1
+    assert str(caught.value).startswith("Deze back-up is niet gevonden.")
+    assert "./brievie status --list" in str(caught.value)

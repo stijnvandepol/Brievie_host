@@ -21,6 +21,7 @@ import subprocess
 import threading
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import IO
 from uuid import UUID
@@ -165,6 +166,35 @@ def find_run(
         raise BackupError("run_not_found")
     chosen = max(complete, key=lambda run_id: db[run_id].time)
     return RunSnapshots(run_id=chosen, db=db[chosen], files=files[chosen])
+
+
+@dataclass(frozen=True)
+class ListedRun:
+    run_id: UUID
+    created_at: datetime  # of its database snapshot (or its files, when that is missing)
+    complete: bool  # both snapshots exist: it can be restored
+
+
+def list_runs(repository: restic.Repository, password: str) -> list[ListedRun]:
+    """Every run on the destination, newest first (read with --no-lock; no paths)."""
+    db = _snapshots_of_kind(repository, password, "db", ())
+    files = _snapshots_of_kind(repository, password, "files", ())
+    runs = [
+        ListedRun(
+            run_id=run_id,
+            created_at=(db.get(run_id) or files[run_id]).time,
+            complete=run_id in db and run_id in files,
+        )
+        for run_id in {*db, *files}
+    ]
+    return sorted(runs, key=lambda run: run.created_at, reverse=True)
+
+
+def check_run(run: str) -> RunSnapshots:
+    """`run` when it still has both snapshots (`run_not_found` otherwise). Changes nothing:
+    for ./brievie right before a step that replaces something."""
+    repository = destination.configured_repository()
+    return find_run(repository, destination.backup_password(), run)
 
 
 def _pump(source: IO[bytes], sink: IO[bytes]) -> None:

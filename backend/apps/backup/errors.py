@@ -37,7 +37,10 @@ REASONS: dict[str, Promise] = {
     "env_copy_has_secret": _("De kopie van de instellingen bevat een geheim."),
     "manifest_unreadable": _("De inhoudsopgave van de back-up kon niet worden gelezen."),
     "newer_backup": _("Deze back-up komt van een nieuwere versie van Brievie."),
-    "run_not_found": _("Deze back-up is niet gevonden."),
+    "run_not_found": _(
+        "Deze back-up is niet gevonden. Typ ./brievie status --list om te zien welke "
+        "back-ups er zijn."
+    ),
     "wrong_master_key": _("De hoofdsleutel hoort niet bij deze back-up."),
     "restore_failed": _("Het herstel is niet gelukt."),
     "backup_folder_unwritable": _(
