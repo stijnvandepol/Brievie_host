@@ -23,3 +23,6 @@ class MemberOut(Schema):
     role: str
     # The person linked to this member, if any.
     person_id: UUID | None
+    # Whether the caller may act on this account (reset link, sessions, devices): the
+    # rule of apps.accounts.authority.
+    can_manage_account: bool = False

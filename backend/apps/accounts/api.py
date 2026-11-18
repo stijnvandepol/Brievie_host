@@ -3,7 +3,7 @@ from uuid import UUID
 from django.http import HttpRequest, HttpResponse
 from ninja import Router, Status
 
-from apps.accounts import notices, resets, services
+from apps.accounts import notices, resets, services, user_actions
 from apps.accounts.auth import session_auth
 from apps.accounts.models import User
 from apps.accounts.notices import NoticeView
@@ -24,6 +24,9 @@ from apps.accounts.schemas import (
 from apps.accounts.services import SessionView
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.common.throttling import CallerThrottle, ClientAddressThrottle
+from apps.devices import services as device_services
+from apps.devices.models import Device
+from apps.devices.schemas import DeviceOut
 from apps.workspaces.schemas import WorkspaceOut
 
 router = Router(tags=["accounts"])
@@ -187,3 +190,50 @@ def complete_password_reset(
     user = resets.complete_password_reset(request, token=payload.token, password=payload.password)
     response["Cache-Control"] = "no-store"
     return user
+
+
+ADMIN_ACTION = (
+    " A server admin may do this for anyone else; a workspace admin only for a member whose"
+    " only workspace is theirs and who is no server admin (403 server_admin_only). 403"
+    " own_account for the caller's own account; 404 user_not_found for an unknown account or"
+    " one outside the caller's workspaces."
+)
+
+
+@router.delete(
+    "/users/{user_id}/sessions",
+    response={204: None, 404: ErrorOut, **SESSION_WRITE_ERRORS},
+    auth=session_auth,
+    description=WEB_SESSION_ONLY
+    + " Ends every web session of the account; the member gets a notice."
+    + ADMIN_ACTION,
+    operation_id="endUserSessions",
+)
+def end_user_sessions(request: HttpRequest, user_id: UUID) -> Status[None]:
+    user_actions.end_user_sessions(request, target_id=user_id)
+    return Status(204, None)
+
+
+@router.get(
+    "/users/{user_id}/devices",
+    response={200: list[DeviceOut], 404: ErrorOut, **AUTH_ERRORS, 403: ErrorOut},
+    auth=session_auth,
+    description=WEB_SESSION_ONLY + " The account's active devices." + ADMIN_ACTION,
+    operation_id="listUserDevices",
+)
+def list_user_devices(request: HttpRequest, user_id: UUID) -> list[Device]:
+    return device_services.list_user_devices(request, target_id=user_id)
+
+
+@router.delete(
+    "/users/{user_id}/devices/{device_id}",
+    response={204: None, 404: ErrorOut, **SESSION_WRITE_ERRORS},
+    auth=session_auth,
+    description=WEB_SESSION_ONLY
+    + " Revokes the device; the member gets a notice. 404 device_not_found when the"
+    " account has no such active device." + ADMIN_ACTION,
+    operation_id="revokeUserDevice",
+)
+def revoke_user_device(request: HttpRequest, user_id: UUID, device_id: UUID) -> Status[None]:
+    device_services.revoke_user_device(request, target_id=user_id, device_id=device_id)
+    return Status(204, None)

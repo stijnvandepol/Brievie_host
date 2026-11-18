@@ -29,4 +29,4 @@ def list_workspaces(request: HttpRequest) -> list[WorkspaceOut]:
 )
 def list_members(request: HttpRequest, workspace_id: UUID) -> list[MemberOut]:
     membership = workspace_member(request, workspace_id)
-    return services.list_members(membership.workspace)
+    return services.list_members(membership.workspace, viewer=current_user(request))

@@ -828,6 +828,11 @@
       },
       "MemberOut": {
         "properties": {
+          "can_manage_account": {
+            "default": false,
+            "title": "Can Manage Account",
+            "type": "boolean"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -3120,6 +3125,151 @@
         ]
       }
     },
+    "/api/v1/users/{user_id}/devices": {
+      "get": {
+        "description": "Web session only: a bearer token answers 401 not_authenticated. The account's active devices. A server admin may do this for anyone else; a workspace admin only for a member whose only workspace is theirs and who is no server admin (403 server_admin_only). 403 own_account for the caller's own account; 404 user_not_found for an unknown account or one outside the caller's workspaces.",
+        "operationId": "listUserDevices",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DeviceOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "List User Devices",
+        "tags": [
+          "accounts"
+        ]
+      }
+    },
+    "/api/v1/users/{user_id}/devices/{device_id}": {
+      "delete": {
+        "description": "Web session only: a bearer token answers 401 not_authenticated. Revokes the device; the member gets a notice. 404 device_not_found when the account has no such active device. A server admin may do this for anyone else; a workspace admin only for a member whose only workspace is theirs and who is no server admin (403 server_admin_only). 403 own_account for the caller's own account; 404 user_not_found for an unknown account or one outside the caller's workspaces.",
+        "operationId": "revokeUserDevice",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "device_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Device Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Revoke User Device",
+        "tags": [
+          "accounts"
+        ]
+      }
+    },
     "/api/v1/users/{user_id}/password-reset": {
       "post": {
         "description": "Web session only: a bearer token answers 401 not_authenticated. A one-time link (24 hours) with which the member chooses a new password; the token is in its fragment and is shown only here. An earlier unused link stops working. A server admin may do this for anyone; a workspace admin only for a member whose only workspace is theirs and who is no server admin (403 server_admin_only). 403 own_account for the caller's own account; 404 user_not_found for an unknown account or one outside the caller's workspaces; 409 account_inactive.",
@@ -3194,6 +3344,68 @@
           }
         ],
         "summary": "Create Password Reset",
+        "tags": [
+          "accounts"
+        ]
+      }
+    },
+    "/api/v1/users/{user_id}/sessions": {
+      "delete": {
+        "description": "Web session only: a bearer token answers 401 not_authenticated. Ends every web session of the account; the member gets a notice. A server admin may do this for anyone else; a workspace admin only for a member whose only workspace is theirs and who is no server admin (403 server_admin_only). 403 own_account for the caller's own account; 404 user_not_found for an unknown account or one outside the caller's workspaces.",
+        "operationId": "endUserSessions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "End User Sessions",
         "tags": [
           "accounts"
         ]

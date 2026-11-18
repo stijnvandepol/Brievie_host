@@ -149,12 +149,19 @@ export const annaPerson: Person = {
 };
 
 export const members: components["schemas"]["MemberOut"][] = [
-  { user_id: user.id, name: "Anna", role: "admin", person_id: annaPerson.id },
+  {
+    user_id: user.id,
+    name: "Anna",
+    role: "admin",
+    person_id: annaPerson.id,
+    can_manage_account: false,
+  },
   {
     user_id: "b3333333-3333-4333-8333-333333333333",
     name: "Bram",
     role: "member",
     person_id: null,
+    can_manage_account: true,
   },
 ];
 

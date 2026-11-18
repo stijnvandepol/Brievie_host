@@ -341,6 +341,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/{user_id}/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List User Devices
+         * @description Web session only: a bearer token answers 401 not_authenticated. The account's active devices. A server admin may do this for anyone else; a workspace admin only for a member whose only workspace is theirs and who is no server admin (403 server_admin_only). 403 own_account for the caller's own account; 404 user_not_found for an unknown account or one outside the caller's workspaces.
+         */
+        get: operations["listUserDevices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/devices/{device_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke User Device
+         * @description Web session only: a bearer token answers 401 not_authenticated. Revokes the device; the member gets a notice. 404 device_not_found when the account has no such active device. A server admin may do this for anyone else; a workspace admin only for a member whose only workspace is theirs and who is no server admin (403 server_admin_only). 403 own_account for the caller's own account; 404 user_not_found for an unknown account or one outside the caller's workspaces.
+         */
+        delete: operations["revokeUserDevice"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/{user_id}/password-reset": {
         parameters: {
             query?: never;
@@ -356,6 +396,26 @@ export interface paths {
          */
         post: operations["createPasswordReset"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * End User Sessions
+         * @description Web session only: a bearer token answers 401 not_authenticated. Ends every web session of the account; the member gets a notice. A server admin may do this for anyone else; a workspace admin only for a member whose only workspace is theirs and who is no server admin (403 server_admin_only). 403 own_account for the caller's own account; 404 user_not_found for an unknown account or one outside the caller's workspaces.
+         */
+        delete: operations["endUserSessions"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1377,6 +1437,11 @@ export interface components {
         };
         /** MemberOut */
         MemberOut: {
+            /**
+             * Can Manage Account
+             * @default false
+             */
+            can_manage_account: boolean;
             /** Name */
             name: string;
             /**
@@ -2848,6 +2913,103 @@ export interface operations {
             };
         };
     };
+    listUserDevices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceOut"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    revokeUserDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+                device_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     createPasswordReset: {
         parameters: {
             query?: never;
@@ -2897,6 +3059,53 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    endUserSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

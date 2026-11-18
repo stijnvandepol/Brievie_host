@@ -16,10 +16,12 @@ from django.http import HttpRequest
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
-from apps.accounts.models import User, UserSession
+from apps.accounts.authority import account_authority
+from apps.accounts.models import AccountNotice, User, UserSession
+from apps.accounts.notices import notify
 from apps.accounts.services import current_user
 from apps.audit.codes import AuditCode, TargetKind
-from apps.audit.services import AuditActor, AuditTarget, record
+from apps.audit.services import AuditActor, AuditTarget, actor_from_request, record
 from apps.common.crypto import DecryptionError
 from apps.common.errors import ApiError
 from apps.devices import pki
@@ -448,6 +450,39 @@ def revoke_device(user: User, device_id: UUID, *, actor: AuditActor) -> None:
             AuditCode.DEVICE_REVOKED,
             actor=actor,
             target=AuditTarget(kind=TargetKind.DEVICE, id=device.id, name=device.name),
+        )
+
+
+def list_user_devices(request: HttpRequest, *, target_id: UUID) -> list[Device]:
+    """The active devices of another person's account, for whoever may act on it."""
+    return list_devices(account_authority(current_user(request), target_id).target)
+
+
+def revoke_user_device(request: HttpRequest, *, target_id: UUID, device_id: UUID) -> None:
+    """Revoke a device of another person's account. `revoke_device` writes the server log
+    row; the account's only workspace gets its own row, and the member a notice. A device
+    of another account answers 404 `device_not_found` like an unknown one."""
+    actor = current_user(request)
+    with transaction.atomic():
+        authority = account_authority(actor, target_id)
+        target = authority.target
+        device = Device.objects.filter(id=device_id, user=target, revoked_at__isnull=True).first()
+        if device is None:
+            raise ApiError(404, "device_not_found", _("We kunnen dit apparaat niet vinden."))
+        audit_actor = actor_from_request(request)
+        revoke_device(target, device_id, actor=audit_actor)
+        if authority.workspace_id is not None:
+            record(
+                AuditCode.DEVICE_REVOKED,
+                actor=audit_actor,
+                target=AuditTarget(kind=TargetKind.DEVICE, id=device.id, name=device.name),
+                workspace_id=authority.workspace_id,
+            )
+        notify(
+            target,
+            AccountNotice.Code.DEVICE_REVOKED,
+            actor_name=actor.name,
+            values={"device": device.name},
         )
 
 
