@@ -42,6 +42,9 @@ EXPECTED_CODES = {
     "out_dir_not_empty",
     "restore_target_unsafe",
     "caddy_not_ready",
+    "clock_skew",
+    "env_copy_missing",
+    "not_in_container",
 }
 
 

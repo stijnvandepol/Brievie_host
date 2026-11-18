@@ -10,6 +10,13 @@ from apps.backup.restore import close_interrupted_runs
 pytestmark = pytest.mark.django_db(transaction=True)
 
 
+@pytest.fixture(autouse=True)
+def empty_queue(owner_conninfo: str) -> None:
+    """Only this test's jobs: earlier tests may have left jobs in the (unmanaged) queue."""
+    with psycopg.connect(owner_conninfo, autocommit=True) as conn:
+        conn.execute("TRUNCATE procrastinate_jobs, procrastinate_workers CASCADE")
+
+
 def defer(conn: psycopg.Connection[TupleRow], queue: str, task: str, lock: str | None) -> int:
     row = conn.execute(
         "SELECT (procrastinate_defer_jobs_v1(ARRAY[ROW(%s, %s, 0, %s, NULL, '{}'::jsonb, NULL)"

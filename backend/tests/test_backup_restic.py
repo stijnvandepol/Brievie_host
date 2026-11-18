@@ -3,6 +3,7 @@ import shutil
 import subprocess
 import uuid
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
@@ -80,6 +81,9 @@ def test_forget_prunes_with_keep_within_and_never_groups_by_tags() -> None:
         "brievie",
         "--group-by",
         "host,paths",
+        # A safety back-up of a restore outlives ordinary retention.
+        "--keep-tag",
+        "kind:safety",
         # Every snapshot of the last two days stays: the daily rule alone keeps one per
         # day, so a back-up made later the same day removed the earlier one (CI found a
         # safety back-up before a restore pruning the run being restored).
@@ -114,6 +118,8 @@ def test_other_argv_builders() -> None:
         "restore",
         "--target",
         "/t",
+        "--exclude-xattr",
+        "*",
         "--include",
         "/a",
         "--include",
@@ -196,7 +202,10 @@ def test_env_contains_only_what_restic_needs(monkeypatch: pytest.MonkeyPatch) ->
         "RESTIC_PASSWORD",
         "AWS_ACCESS_KEY_ID",
         "PGHOST",
+        "TZ",
     }
+    # --time is read in the process's time zone: always UTC, as the run's times are.
+    assert env["TZ"] == "UTC"
     assert env["RESTIC_REPOSITORY"] == "s3:https://h/b"
     assert env["RESTIC_PASSWORD"] == "pw"
 
@@ -423,6 +432,8 @@ def test_the_reading_builders_can_skip_the_lock_for_a_read_only_repository() -> 
         "--no-lock",
         "--target",
         "/",
+        "--exclude-xattr",
+        "*",
         "--include",
         "/data/documents",
         "--",
@@ -447,3 +458,81 @@ def test_the_writing_and_locking_builders_never_skip_the_lock() -> None:
         restic.cat_config_argv(),
     ):
         assert "--no-lock" not in argv, argv
+
+
+AT = datetime(2026, 11, 17, 23, 59, 58, tzinfo=UTC)
+
+
+def test_both_halves_of_a_run_carry_the_runs_own_time_and_host() -> None:
+    # One run, one time: retention can never keep one half of a run and drop the other.
+    local = AT.astimezone(timezone(timedelta(hours=1)))  # 00:59:58 the next day, locally
+    db = restic.backup_stdin_argv(RUN, ["pg_dump"], host="brievie-0123456789ab", at=local)
+    files = restic.backup_files_argv(
+        RUN, ["/data/documents"], host="brievie-0123456789ab", at=local
+    )
+    for argv in (db, files):
+        assert argv[argv.index("--host") + 1] == "brievie-0123456789ab"
+        assert argv[argv.index("--time") + 1] == "2026-11-17 23:59:58"
+        assert argv.index("--time") < argv.index("--")
+        assert "kind:safety" not in argv
+
+
+def test_a_safety_backup_tags_both_halves() -> None:
+    db = restic.backup_stdin_argv(RUN, ["pg_dump"], at=AT, safety=True)
+    files = restic.backup_files_argv(RUN, ["/data/documents"], at=AT, safety=True)
+    for argv in (db, files):
+        tagged = [argv[i + 1] for i, arg in enumerate(argv) if arg == "--tag"]
+        assert tagged == [f"run:{RUN}", f"kind:{'db' if argv is db else 'files'}", "kind:safety"]
+
+
+def test_the_files_backup_leaves_out_the_given_paths() -> None:
+    argv = restic.backup_files_argv(
+        RUN,
+        ["/data/backup-config"],
+        excludes=["/data/backup-config/installation-id", "/data/backup-config/installation-id.tmp"],
+    )
+    excluded = [argv[i + 1] for i, arg in enumerate(argv) if arg == "--exclude"]
+    assert excluded == [
+        ".tmp-*",
+        "/data/backup-config/installation-id",
+        "/data/backup-config/installation-id.tmp",
+    ]
+    assert argv[-2:] == ["--", "/data/backup-config"]
+
+
+def test_safety_snapshots_go_after_thirty_days_in_a_forget_of_their_own() -> None:
+    assert restic.forget_safety_argv("brievie-0123456789ab") == [
+        "forget",
+        "--host",
+        "brievie-0123456789ab",
+        "--tag",
+        "kind:safety",
+        "--group-by",
+        "host,paths",
+        "--keep-within",
+        "30d",
+    ]
+
+
+def test_retention_and_run_removal_stay_on_the_own_host() -> None:
+    assert restic.forget_argv("brievie-0123456789ab")[2:4] == ["--host", "brievie-0123456789ab"]
+    assert restic.forget_run_argv(RUN, "brievie-0123456789ab") == [
+        "forget",
+        "--unsafe-allow-remove-all",
+        "--host",
+        "brievie-0123456789ab",
+        "--tag",
+        f"run:{RUN}",
+    ]
+    assert restic.snapshots_host_argv("brievie-0123456789ab") == [
+        "snapshots",
+        "--json",
+        "--host",
+        "brievie-0123456789ab",
+    ]
+
+
+def test_a_restore_never_restores_extended_attributes() -> None:
+    argv = restic.restore_argv("abcdef12", "/", ["/data/documents"], no_lock=True)
+    assert argv[argv.index("--exclude-xattr") + 1] == "*"
+    assert argv.index("--exclude-xattr") < argv.index("--")

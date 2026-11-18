@@ -1,3 +1,4 @@
+import contextlib
 import os
 
 from django.core.management.base import BaseCommand, CommandError, CommandParser
@@ -22,9 +23,14 @@ class Command(BaseCommand):
             "--check", action="store_true", help="Check the back-up instead of making one."
         )
         parser.add_argument(
+            "--safety",
             "--no-prune",
+            dest="safety",
             action="store_true",
-            help="The safety back-up of a restore: apply no retention (forget nothing).",
+            help=(
+                "The safety back-up of a restore: tagged kind:safety, applies no retention, "
+                "kept 30 days. --no-prune is the older name."
+            ),
         )
         parser.add_argument(
             "--timeout",
@@ -35,15 +41,24 @@ class Command(BaseCommand):
 
     def handle(self, *args: object, **options: object) -> None:
         check = bool(options["check"])
-        no_prune = bool(options["no_prune"])
-        if check and no_prune:
-            raise CommandError(_("--no-prune hoort bij een back-up, niet bij --check."))
+        safety = bool(options["safety"])
+        if check and safety:
+            raise CommandError(_("--safety hoort bij een back-up, niet bij --check."))
         kind = BackupRun.Kind.CHECK if check else BackupRun.Kind.BACKUP
-        requested_by = services.RESTORE_SAFETY if no_prune else "cli"
+        requested_by = services.RESTORE_SAFETY if safety else "cli"
         run = services.request_run(kind, requested_by=requested_by)
+        timeout = float(str(options["timeout"]))
+        if safety and run.requested_by != services.RESTORE_SAFETY:
+            # An ordinary back-up was already open: it is no safety back-up (it prunes and
+            # carries no safety tag). Wait for it, then request one of our own.
+            with contextlib.suppress(TimeoutError):
+                services.wait_for_run(run.id, timeout=timeout)
+            run = services.request_run(kind, requested_by=requested_by)
+        if safety and os.environ.get("BRIEVIE_WRAPPER") == "1":
+            self.stdout.write(f"safety_run_id={run.id}")
         self.stdout.write(_("Controle gestart…") if check else _("Back-up gestart…"))
         try:
-            run = services.wait_for_run(run.id, timeout=float(str(options["timeout"])))
+            run = services.wait_for_run(run.id, timeout=timeout)
         except TimeoutError:
             run.refresh_from_db()
             if run.status == BackupRun.Status.QUEUED:

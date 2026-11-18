@@ -6,7 +6,7 @@ import stat
 import subprocess
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from datetime import timedelta
+from datetime import UTC, timedelta
 from pathlib import Path
 from unittest import mock
 from uuid import UUID, uuid4
@@ -68,6 +68,44 @@ def without_snapshot(calls: list[list[str]]) -> list[list[str]]:
 def answer_both_backups(fake_restic: FakeBinary, run_id: UUID) -> None:
     fake_restic.respond(db_prefix(run_id), stdout=summary(DB_SIZE))
     fake_restic.respond(files_prefix(run_id), stdout=summary(FILES_SIZE))
+    # Retention lists the installation's snapshots first (its clock, its half runs).
+    fake_restic.respond(("snapshots", "--json", "--host"), stdout=b"[]")
+
+
+def dump_call(run_id: UUID, *extra: str) -> list[str]:
+    """The dump argv of a run as it ran: the run's own start as its time."""
+    started = BackupRun.objects.get(id=run_id).started_at
+    assert started is not None
+    return restic.backup_stdin_argv(run_id, [*services.DUMP_COMMAND, *extra], at=started)
+
+
+def files_call(run_id: UUID) -> list[str]:
+    started = BackupRun.objects.get(id=run_id).started_at
+    assert started is not None
+    return restic.backup_files_argv(
+        run_id, services.file_paths(), at=started, excludes=services.file_excludes()
+    )
+
+
+def no_snapshots(fake_restic: FakeBinary) -> None:
+    fake_restic.respond(("snapshots", "--json", "--host"), stdout=b"[]")
+
+
+@pytest.fixture(autouse=True)
+def env_copy(settings: Settings) -> Path:
+    """The .env copy a back-up needs (./brievie stores it); in the test's config dir."""
+    config = Path(settings.BRIEVIE_BACKUP_CONFIG_DIR)
+    config.mkdir(parents=True, exist_ok=True)
+    (config / "env").write_text("BRIEVIE_HOSTNAME=brievie.local\n")
+    return config / "env"
+
+
+def retention(host: str = restic.HOST) -> list[list[str]]:
+    return [
+        restic.snapshots_host_argv(host),
+        restic.forget_safety_argv(host),
+        restic.forget_argv(host),
+    ]
 
 
 def _owner_conninfo() -> str:
@@ -162,13 +200,14 @@ def test_run_dumps_first_then_files_then_forgets(
 
     services.perform_run(run.id)
 
+    run.refresh_from_db()
+    assert run.started_at is not None
     assert without_snapshot(fake_restic.calls) == [
         restic.unlock_argv(),
-        restic.backup_stdin_argv(run.id, services.DUMP_COMMAND),
-        restic.backup_files_argv(run.id, services.file_paths()),
-        restic.forget_argv(),
+        dump_call(run.id),
+        files_call(run.id),
+        *retention(),
     ]
-    run.refresh_from_db()
     assert run.status == BackupRun.Status.SUCCEEDED
     assert run.size_bytes == DB_SIZE + FILES_SIZE
     assert run.started_at is not None
@@ -181,7 +220,7 @@ def test_run_dumps_first_then_files_then_forgets(
     assert ws_a.id in manifest.workspaces
     assert stat.S_IMODE(manifest_path.stat().st_mode) == 0o600
     # Written atomically: no temporary file is left next to it.
-    assert sorted(p.name for p in manifest_path.parent.iterdir()) == [MANIFEST_NAME]
+    assert sorted(p.name for p in manifest_path.parent.iterdir()) == ["env", MANIFEST_NAME]
 
 
 @pytest.mark.django_db(transaction=True)
@@ -224,7 +263,7 @@ def test_the_safety_backup_of_a_restore_never_runs_retention(
     services.perform_run(run.id)
 
     assert all(call[0] != "forget" for call in fake_restic.calls)
-    assert restic.backup_files_argv(run.id, services.file_paths()) in fake_restic.calls
+    assert files_call(run.id)[:7] == next(c for c in fake_restic.calls if "kind:files" in c)[:7]
     run.refresh_from_db()
     assert run.status == BackupRun.Status.SUCCEEDED
     assert run.requested_by == "restore"
@@ -309,16 +348,18 @@ def test_incomplete_files_backup_is_kept_and_retention_runs(
     run = queued_run()
     fake_restic.respond(db_prefix(run.id), stdout=summary(DB_SIZE))
     fake_restic.respond(files_prefix(run.id), stdout=summary(FILES_SIZE), code=3)
+    no_snapshots(fake_restic)
 
     services.perform_run(run.id)
 
+    run.refresh_from_db()
+    assert run.started_at is not None
     assert without_snapshot(fake_restic.calls) == [
         restic.unlock_argv(),
-        restic.backup_stdin_argv(run.id, services.DUMP_COMMAND),
-        restic.backup_files_argv(run.id, services.file_paths()),
-        restic.forget_argv(),
+        dump_call(run.id),
+        files_call(run.id),
+        *retention(),
     ]
-    run.refresh_from_db()
     assert run.status == BackupRun.Status.FAILED
     assert run.reason_code == "files_incomplete"
     assert run.reason.startswith("De back-up is gemaakt, maar")
@@ -370,7 +411,8 @@ def test_failed_retention_after_an_incomplete_back_up_keeps_its_reason(
     run = queued_run()
     fake_restic.respond(db_prefix(run.id), stdout=summary(DB_SIZE))
     fake_restic.respond(files_prefix(run.id), stdout=summary(FILES_SIZE), code=3)
-    fake_restic.respond(tuple(restic.forget_argv()), code=11)
+    no_snapshots(fake_restic)
+    fake_restic.respond(tuple(restic.forget_safety_argv()), code=11)
 
     with caplog.at_level(logging.DEBUG):
         services.perform_run(run.id)
@@ -437,6 +479,8 @@ def test_no_secret_is_in_any_argv_of_a_whole_run(
     settings: Settings, tmp_path: Path, fake_restic: FakeBinary, fake_pg_dump: FakeBinary
 ) -> None:
     settings.BRIEVIE_BACKUP_CONFIG_DIR = str(tmp_path / "config")
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "env").write_text("A=1\n")
     settings.BRIEVIE_BACKUP_REPOSITORY = "rest:https://nas:8000/b"
     settings.BRIEVIE_BACKUP_REST_USERNAME = "rest-user-xyz"
     settings.BRIEVIE_BACKUP_REST_PASSWORD = "rest-pass-xyz"
@@ -462,7 +506,8 @@ def test_no_secret_is_in_any_argv_of_a_whole_run(
         db_password,
     )
     calls = fake_restic.calls + fake_pg_dump.calls
-    assert len(calls) == 5  # pg_dump --version, unlock, two backups, forget
+    # pg_dump --version, unlock, two backups, the listing, two forgets
+    assert len(calls) == 7
     for argv in calls:
         joined = " ".join(argv)
         for secret in secrets:
@@ -945,8 +990,8 @@ def test_failed_files_step_removes_the_runs_database_snapshot(
 
     assert without_snapshot(fake_restic.calls) == [
         restic.unlock_argv(),
-        restic.backup_stdin_argv(run.id, services.DUMP_COMMAND),
-        restic.backup_files_argv(run.id, services.file_paths()),
+        dump_call(run.id),
+        files_call(run.id),
         restic.forget_run_argv(run.id),
     ]
     run.refresh_from_db()
@@ -1038,7 +1083,7 @@ def test_resumed_run_removes_its_earlier_snapshots_before_the_new_dump(
     assert without_snapshot(fake_restic.calls)[:3] == [
         restic.unlock_argv(),
         restic.forget_run_argv(run.id),
-        restic.backup_stdin_argv(run.id, services.DUMP_COMMAND),
+        dump_call(run.id),
     ]
 
 
@@ -1094,6 +1139,8 @@ def test_only_unlock_and_clean_up_have_a_timeout(
         ("forget", services.SHORT_RESTIC_TIMEOUT),  # the resumed run's clean-up
         (dump_last_arg, None),
         (files_last_arg, None),
+        ("snapshots", services.SHORT_RESTIC_TIMEOUT),  # retention: the clock, half runs
+        ("forget", None),  # safety snapshots older than 30 days
         ("forget", None),  # retention with --prune
     ]
     assert services.SHORT_RESTIC_TIMEOUT == 600
@@ -1185,7 +1232,7 @@ def test_run_removes_abandoned_snapshots_after_unlock(
     assert without_snapshot(fake_restic.calls)[:3] == [
         restic.unlock_argv(),
         restic.forget_run_argv(abandoned.id),
-        restic.backup_stdin_argv(run.id, services.DUMP_COMMAND),
+        dump_call(run.id),
     ]
     run.refresh_from_db()
     assert run.status == BackupRun.Status.SUCCEEDED
@@ -1339,7 +1386,7 @@ def test_the_dump_reads_the_snapshot_the_manifest_counted(
 
     (snapshot_id,) = snapshot_spy.snapshot_ids
     assert snapshot_id  # e.g. 00000003-0000001B-1
-    dump = restic.backup_stdin_argv(run.id, [*services.DUMP_COMMAND, f"--snapshot={snapshot_id}"])
+    dump = dump_call(run.id, f"--snapshot={snapshot_id}")
     assert dump in fake_restic.calls
     assert snapshot_spy.events == [
         "exported",
@@ -1523,3 +1570,194 @@ def test_backup_command_tells_the_wrapper_why_it_waited_in_vain(
         call_command("backup")
     assert caught.value.returncode == 2
     assert capsys.readouterr().err.strip() == f"code={code}"
+
+
+# --- what a back-up is: one time, one host, the safety tag, its retention -----------------
+
+
+def snapshot_json(run_id: UUID, kind: str, when: object) -> dict[str, object]:
+    return {
+        "id": uuid4().hex,
+        "time": str(when).replace(" ", "T"),
+        "tags": [f"run:{run_id}", f"kind:{kind}"],
+        "paths": ["/x"],
+    }
+
+
+@pytest.mark.django_db(transaction=True)
+def test_both_halves_of_a_run_carry_the_runs_start_and_the_installations_host(
+    configured_folder: Path, fake_restic: FakeBinary, fake_pg_dump: FakeBinary, env_copy: Path
+) -> None:
+    (env_copy.parent / "installation-id").write_text("0123456789abcdef0123456789abcdef\n")
+    host = "brievie-0123456789ab"
+    run = queued_run()
+    fake_restic.respond(
+        ("backup", "--json", "--host", host, *restic.tags(run.id, "db")), stdout=summary(DB_SIZE)
+    )
+    fake_restic.respond(
+        ("backup", "--json", "--host", host, *restic.tags(run.id, "files")),
+        stdout=summary(FILES_SIZE),
+    )
+    fake_restic.respond(("snapshots", "--json", "--host"), stdout=b"[]")
+
+    services.perform_run(run.id)
+
+    run.refresh_from_db()
+    assert run.status == BackupRun.Status.SUCCEEDED
+    backups = [call for call in fake_restic.calls if call[0] == "backup"]
+    times = {call[call.index("--time") + 1] for call in backups}
+    assert times == {run.started_at.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S")}
+    assert all(call[call.index("--host") + 1] == host for call in backups)
+    assert fake_restic.calls[-3:] == retention(host)
+
+
+@pytest.mark.parametrize("content", ["not-hex", "0123", "", "0123456789ABCDEF0123456789ABCDEF"])
+@pytest.mark.django_db(transaction=True)
+def test_an_invalid_installation_id_means_the_shared_host(
+    configured_folder: Path, env_copy: Path, content: str
+) -> None:
+    (env_copy.parent / "installation-id").write_text(content)
+    assert services.backup_host() == restic.HOST
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_linked_installation_id_is_never_read(
+    configured_folder: Path, env_copy: Path, tmp_path: Path
+) -> None:
+    elsewhere = tmp_path / "elsewhere-id"
+    elsewhere.write_text("0123456789abcdef0123456789abcdef")
+    (env_copy.parent / "installation-id").symlink_to(elsewhere)
+    assert services.backup_host() == restic.HOST
+
+
+@pytest.mark.django_db(transaction=True)
+def test_the_installation_id_is_not_part_of_a_back_up(
+    configured_folder: Path, fake_restic: FakeBinary, fake_pg_dump: FakeBinary
+) -> None:
+    config = django_settings.BRIEVIE_BACKUP_CONFIG_DIR
+    assert services.file_excludes() == [
+        f"{config}/installation-id",
+        f"{config}/installation-id.tmp",
+    ]
+    run = queued_run()
+    answer_both_backups(fake_restic, run.id)
+    services.perform_run(run.id)
+    files = next(call for call in fake_restic.calls if "kind:files" in call)
+    assert f"{config}/installation-id" in files
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_safety_backup_is_tagged_and_applies_no_retention(
+    configured_folder: Path, fake_restic: FakeBinary, fake_pg_dump: FakeBinary
+) -> None:
+    run = services.request_run("backup", requested_by="restore")
+    answer_both_backups(fake_restic, run.id)
+
+    services.perform_run(run.id)
+
+    backups = [call for call in fake_restic.calls if call[0] == "backup"]
+    assert len(backups) == 2
+    assert all(restic.SAFETY_TAG in call for call in backups)
+    assert all(call[0] not in ("forget", "snapshots") for call in fake_restic.calls)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_snapshot_from_the_future_stops_retention(
+    configured_folder: Path, fake_restic: FakeBinary, fake_pg_dump: FakeBinary
+) -> None:
+    run = queued_run()
+    answer_both_backups(fake_restic, run.id)
+    future = timezone.now() + timedelta(days=3)
+    listed = [snapshot_json(uuid4(), "db", future.astimezone(UTC).isoformat())]
+    fake_restic.respond(("snapshots", "--json", "--host"), stdout=json.dumps(listed).encode())
+
+    services.perform_run(run.id)
+
+    run.refresh_from_db()
+    assert run.status == BackupRun.Status.SUCCEEDED
+    assert run.reason_code == "clock_skew"
+    assert run.reason == (
+        "De klok van de server of van een back-up klopt niet; er wordt niets opgeruimd."
+    )
+    assert all(call[0] != "forget" for call in fake_restic.calls)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_status_shows_the_warning_of_the_last_backup(
+    configured_folder: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(services, "_tool_version", lambda *_args: "?")
+    BackupRun.objects.create(
+        kind="backup",
+        status=BackupRun.Status.SUCCEEDED,
+        finished_at=timezone.now(),
+        reason_code="clock_skew",
+        reason="De klok van de server of van een back-up klopt niet; er wordt niets opgeruimd.",
+    )
+    call_command("backup_status")
+    assert (
+        "Let op: De klok van de server of van een back-up klopt niet; er wordt niets opgeruimd."
+        in capsys.readouterr().out
+    )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_half_runs_older_than_two_days_go_before_retention(
+    configured_folder: Path, fake_restic: FakeBinary, fake_pg_dump: FakeBinary
+) -> None:
+    run = queued_run()
+    answer_both_backups(fake_restic, run.id)
+    now = timezone.now()
+    old_half, young_half, whole = uuid4(), uuid4(), uuid4()
+    listed = [
+        snapshot_json(old_half, "db", (now - timedelta(days=3)).astimezone(UTC).isoformat()),
+        snapshot_json(young_half, "db", (now - timedelta(days=1)).astimezone(UTC).isoformat()),
+        snapshot_json(whole, "db", (now - timedelta(days=5)).astimezone(UTC).isoformat()),
+        snapshot_json(whole, "files", (now - timedelta(days=5)).astimezone(UTC).isoformat()),
+    ]
+    fake_restic.respond(("snapshots", "--json", "--host"), stdout=json.dumps(listed).encode())
+
+    services.perform_run(run.id)
+
+    assert fake_restic.calls[-4:] == [
+        restic.snapshots_host_argv(restic.HOST),
+        restic.forget_run_argv(old_half),
+        restic.forget_safety_argv(),
+        restic.forget_argv(),
+    ]
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_backup_without_the_env_copy_fails_and_makes_nothing(
+    configured_folder: Path, fake_restic: FakeBinary, fake_pg_dump: FakeBinary, env_copy: Path
+) -> None:
+    env_copy.unlink()
+    run = queued_run()
+    answer_both_backups(fake_restic, run.id)
+
+    services.perform_run(run.id)
+
+    run.refresh_from_db()
+    assert run.status == BackupRun.Status.FAILED
+    assert run.reason_code == "env_copy_missing"
+    assert "./brievie start" in run.reason
+    assert all(call[0] != "backup" for call in fake_restic.calls)
+
+
+def test_backup_command_safety_says_its_run_id_to_the_wrapper(
+    configured_folder: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(services, "wait_for_run", _finished(BackupRun.Status.SUCCEEDED))
+    monkeypatch.setenv("BRIEVIE_WRAPPER", "1")
+    for option in ("--safety", "--no-prune"):
+        BackupRun.objects.all().delete()
+        call_command("backup", option)
+        run = BackupRun.objects.get()
+        assert run.requested_by == "restore"
+        assert f"safety_run_id={run.id}" in capsys.readouterr().out.splitlines()
+    monkeypatch.delenv("BRIEVIE_WRAPPER")
+    BackupRun.objects.all().delete()
+    call_command("backup", "--safety")
+    assert "safety_run_id=" not in capsys.readouterr().out

@@ -12,7 +12,7 @@ import re
 import subprocess
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import IO, Literal
 from uuid import UUID
 
@@ -21,6 +21,9 @@ from django.conf import settings
 from apps.backup.errors import BackupError
 
 HOST = "brievie"
+# The tag of a restore's safety back-up, and how long retention keeps those.
+SAFETY_TAG = "kind:safety"
+SAFETY_KEEP = "30d"
 DB_FILENAME = "brievie.pgdump"
 TMP_EXCLUDE = ".tmp-*"
 # Every snapshot of the last two days (counted from the newest) stays; older ones
@@ -87,6 +90,14 @@ def tags(run_id: UUID, kind: Literal["db", "files"]) -> list[str]:
     return ["--tag", f"run:{run_id}", "--tag", f"kind:{kind}"]
 
 
+def _run_marks(at: datetime | None, safety: bool) -> list[str]:
+    """The safety tag, and the run's own time (UTC; restic reads --time in TZ=UTC)."""
+    marks = ["--tag", SAFETY_TAG] if safety else []
+    if at is not None:
+        marks += ["--time", at.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S")]
+    return marks
+
+
 def init_argv() -> list[str]:
     return ["init"]
 
@@ -109,13 +120,21 @@ def unlock_argv() -> list[str]:
     return ["unlock"]
 
 
-def backup_stdin_argv(run_id: UUID, command: Sequence[str]) -> list[str]:
+def backup_stdin_argv(
+    run_id: UUID,
+    command: Sequence[str],
+    *,
+    host: str = HOST,
+    at: datetime | None = None,
+    safety: bool = False,
+) -> list[str]:
     return [
         "backup",
         "--json",
         "--host",
-        HOST,
+        host,
         *tags(run_id, "db"),
+        *_run_marks(at, safety),
         "--stdin-from-command",
         "--stdin-filename",
         DB_FILENAME,
@@ -124,33 +143,76 @@ def backup_stdin_argv(run_id: UUID, command: Sequence[str]) -> list[str]:
     ]
 
 
-def backup_files_argv(run_id: UUID, paths: Sequence[str]) -> list[str]:
+def backup_files_argv(
+    run_id: UUID,
+    paths: Sequence[str],
+    *,
+    host: str = HOST,
+    at: datetime | None = None,
+    safety: bool = False,
+    excludes: Sequence[str] = (),
+) -> list[str]:
     return [
         "backup",
         "--json",
         "--host",
-        HOST,
+        host,
         *tags(run_id, "files"),
+        *_run_marks(at, safety),
         "--exclude",
         TMP_EXCLUDE,
+        *(argument for path in excludes for argument in ("--exclude", path)),
         "--",
         *paths,
     ]
 
 
-def forget_argv() -> list[str]:
-    # Never group by tags: every run has its own `run:` tag, so nothing would be pruned.
-    return ["forget", "--prune", "--host", HOST, "--group-by", "host,paths", *RETENTION]
+def forget_argv(host: str = HOST) -> list[str]:
+    """Retention of this installation's own snapshots; safety snapshots are kept.
+
+    Never group by tags: every run has its own `run:` tag, so nothing would be pruned.
+    """
+    return [
+        "forget",
+        "--prune",
+        "--host",
+        host,
+        "--group-by",
+        "host,paths",
+        "--keep-tag",
+        SAFETY_TAG,
+        *RETENTION,
+    ]
 
 
-def forget_run_argv(run_id: UUID) -> list[str]:
+def forget_safety_argv(host: str = HOST) -> list[str]:
+    """Safety snapshots of restores, kept for 30 days (the next retention prunes)."""
+    return [
+        "forget",
+        "--host",
+        host,
+        "--tag",
+        SAFETY_TAG,
+        "--group-by",
+        "host,paths",
+        "--keep-within",
+        SAFETY_KEEP,
+    ]
+
+
+def snapshots_host_argv(host: str) -> list[str]:
+    """Every snapshot of one host (for retention: its clock and its half runs)."""
+    return ["snapshots", "--json", "--host", host]
+
+
+def forget_run_argv(run_id: UUID, host: str = HOST) -> list[str]:
     """Removes every snapshot of one run (no prune: the next retention run prunes).
 
     restic refuses `forget --tag` without a policy, and --unsafe-allow-remove-all
     removes all snapshots that match the filters; the host and the run's own tag are
     therefore always both present.
     """
-    return ["forget", "--unsafe-allow-remove-all", "--host", HOST, "--tag", f"run:{run_id}"]
+    return ["forget", "--unsafe-allow-remove-all", "--host", host, "--tag", f"run:{run_id}"]
 
 
 def check_argv() -> list[str]:
@@ -177,7 +239,8 @@ def restore_argv(
     snapshot_id: str, target: str, includes: Sequence[str], *, no_lock: bool = False
 ) -> list[str]:
     """`restore` of `includes` (absolute paths without glob characters) to `target`."""
-    argv = ["restore", *_lock(no_lock), "--target", target]
+    # Extended attributes and ACLs from a back-up are never restored.
+    argv = ["restore", *_lock(no_lock), "--target", target, "--exclude-xattr", "*"]
     for include in includes:
         if not include.startswith("/") or _GLOB.search(include):
             raise BackupError("unsafe_path")
@@ -194,6 +257,8 @@ def restic_env(
         "HOME": os.environ.get("HOME", "/tmp"),  # noqa: S108
         "RESTIC_REPOSITORY": repository.location,
         "RESTIC_PASSWORD": password,
+        # --time and the snapshot times are UTC, whatever the container's zone.
+        "TZ": "UTC",
         **repository.credentials,
         **(extra or {}),
     }

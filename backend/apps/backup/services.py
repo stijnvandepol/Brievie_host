@@ -1,10 +1,12 @@
 import logging
 import os
 import re
+import stat
 import subprocess
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlsplit
 from uuid import UUID
@@ -16,7 +18,7 @@ from django.db.models.functions import Coalesce
 from django.utils import timezone
 from procrastinate.contrib.django.models import ProcrastinateJob
 
-from apps.backup import destination, jobs, restic
+from apps.backup import destination, jobs, restic, safepaths
 from apps.backup.database import (
     backup_conninfo,
     libpq_env,
@@ -24,6 +26,7 @@ from apps.backup.database import (
     require_client_for,
 )
 from apps.backup.destination import backup_password, configured_repository, destination_kind
+from apps.backup.envcopy import ENV_COPY_NAME
 from apps.backup.errors import REASONS, BackupError
 from apps.backup.locks import backup_lock
 from apps.backup.manifest import (
@@ -63,6 +66,47 @@ def initialise_destination(*, allow_same_disk: bool) -> str:
     with backup_lock():
         destination.initialise(allow_same_disk=allow_same_disk, owner_uid=owner_uid)
     return destination.destination_kind()
+
+
+INSTALLATION_ID_NAME = "installation-id"
+_INSTALLATION_ID = re.compile(r"[0-9a-f]{32}")
+_INSTALLATION_ID_LIMIT = 128
+
+
+def installation_id() -> str | None:
+    """This installation's id from the config folder (./brievie writes it), when the
+    file is a regular file (never read through a link) holding 32 lowercase hex."""
+    config = safepaths.configured_path(settings.BRIEVIE_BACKUP_CONFIG_DIR)
+    safepaths.require_emptiable(config, allowed=[config], fixed=[safepaths.BACKUP_CONFIG])
+    try:
+        descriptor = safepaths.open_dir_nofollow(config)
+    except (FileNotFoundError, BackupError):
+        return None
+    try:
+        data = safepaths.read_regular_at(
+            descriptor, INSTALLATION_ID_NAME, limit=_INSTALLATION_ID_LIMIT
+        )
+    except (BackupError, OSError):
+        return None
+    finally:
+        os.close(descriptor)
+    if data is None:
+        return None
+    text = data.decode("ascii", errors="replace").strip()
+    return text if _INSTALLATION_ID.fullmatch(text) else None
+
+
+def backup_host() -> str:
+    """The restic host of this installation's back-ups and retention:
+    `brievie-<first 12 hex of the installation id>`, else the shared `brievie`."""
+    found = installation_id()
+    return f"{restic.HOST}-{found[:12]}" if found else restic.HOST
+
+
+def file_excludes() -> list[str]:
+    """Never in a back-up: the installation id (and its temporary file)."""
+    config = str(settings.BRIEVIE_BACKUP_CONFIG_DIR).rstrip("/")
+    return [f"{config}/{INSTALLATION_ID_NAME}", f"{config}/{INSTALLATION_ID_NAME}.tmp"]
 
 
 def file_paths() -> list[str]:
@@ -169,8 +213,15 @@ def location_secrets(repository: restic.Repository) -> list[str]:
 class _Restic:
     """Runs restic for one run; puts the redacted stderr tail of a failure in `failures`."""
 
-    def __init__(self, repository: restic.Repository, password: str, failures: list[str]) -> None:
+    def __init__(
+        self,
+        repository: restic.Repository,
+        password: str,
+        failures: list[str],
+        host: str = restic.HOST,
+    ) -> None:
         self.repository = repository
+        self.host = host
         self.password = password
         self.secrets = [*destination.secrets(), *location_secrets(repository)]
         self.failures = failures
@@ -205,7 +256,7 @@ class _Restic:
         if settings.BRIEVIE_BACKUP_APPEND_ONLY:
             return
         try:
-            self(restic.forget_run_argv(run_id), timeout=SHORT_RESTIC_TIMEOUT)
+            self(restic.forget_run_argv(run_id, self.host), timeout=SHORT_RESTIC_TIMEOUT)
         except BackupError as error:
             logger.warning("Backup run %s: removing its snapshots failed: %s", run_id, error.code)
 
@@ -241,7 +292,8 @@ def _back_up(
     """
     with backup_lock():
         repository = configured_repository()
-        run_restic = _Restic(repository, backup_password(), failures)
+        host = backup_host()
+        run_restic = _Restic(repository, backup_password(), failures, host)
         run_restic(restic.unlock_argv(), timeout=SHORT_RESTIC_TIMEOUT)
         for abandoned_id in clean_up:
             run_restic.forget_run(abandoned_id)
@@ -250,12 +302,18 @@ def _back_up(
             _finish(run.id, BackupRun.Status.SUCCEEDED)
             return
 
+        # A run that could not be restored is never recorded as succeeded.
+        _require_env_copy()
         conninfo = _database_conninfo()
         require_backup_role(conninfo)
         require_client_for(conninfo)
         if resumed:
             # An earlier attempt of this run may have left snapshots: never two dumps.
             run_restic.forget_run(run.id)
+        # One run, one time: both halves carry the run's start, so retention can never
+        # keep one half of a run and drop the other.
+        started = _started_at(run.id)
+        safety = run.requested_by == RESTORE_SAFETY
         # The manifest counts in the transaction whose snapshot pg_dump dumps: a letter
         # written or deleted during the dump changes neither. The transaction stays
         # open on its own connection (never Django's) until the dump has ended.
@@ -268,7 +326,13 @@ def _back_up(
                 authority_dir=Path(settings.BRIEVIE_AUTHORITY_COPY_DIR),
             )
             dump_out = run_restic(
-                restic.backup_stdin_argv(run.id, [*DUMP_COMMAND, f"--snapshot={snapshot_id}"]),
+                restic.backup_stdin_argv(
+                    run.id,
+                    [*DUMP_COMMAND, f"--snapshot={snapshot_id}"],
+                    host=host,
+                    at=started,
+                    safety=safety,
+                ),
                 extra=libpq_env(conninfo),
             )
         try:
@@ -278,7 +342,16 @@ def _back_up(
                 MANIFEST_NAME,
                 manifest_to_json(manifest),
             )
-            files = run_restic.result(restic.backup_files_argv(run.id, file_paths()))
+            files = run_restic.result(
+                restic.backup_files_argv(
+                    run.id,
+                    file_paths(),
+                    host=host,
+                    at=started,
+                    safety=safety,
+                    excludes=file_excludes(),
+                )
+            )
             incomplete = restic.classify(files) == "files_incomplete"
             if not incomplete:
                 restic.raise_for(files)
@@ -295,13 +368,90 @@ def _back_up(
             # Kept: a file that stays unreadable must not mean no back-up is ever kept.
             if _prunes(run):
                 try:
-                    run_restic(restic.forget_argv())
+                    _apply_retention(run_restic, run.id)
                 except BackupError as error:
                     logger.warning("Backup run %s: retention failed: %s", run.id, error.code)
             raise _IncompleteBackupError(total)
-        if _prunes(run):
-            run_restic(restic.forget_argv())
-        _finish(run.id, BackupRun.Status.SUCCEEDED, size_bytes=total)
+        warning = _apply_retention(run_restic, run.id) if _prunes(run) else None
+        fields: dict[str, object] = {"size_bytes": total}
+        if warning is not None:
+            fields.update(reason_code=warning, reason=str(REASONS[warning]))
+        _finish(run.id, BackupRun.Status.SUCCEEDED, **fields)
+
+
+# A snapshot dated this far ahead of now means a wrong clock somewhere: retention is
+# relative to the newest snapshot, so it would remove almost everything.
+CLOCK_TOLERANCE = timedelta(hours=24)
+# A run with only one of its halves, older than this, is a leftover (removed first).
+HALF_RUN_AGE = timedelta(hours=48)
+
+
+def _started_at(run_id: UUID) -> datetime:
+    started = BackupRun.objects.filter(id=run_id).values_list("started_at", flat=True).first()
+    return started or timezone.now()
+
+
+def _require_env_copy() -> None:
+    """Refuse (`env_copy_missing`) a back-up without the .env copy: `fetch` needs it."""
+    config = safepaths.configured_path(settings.BRIEVIE_BACKUP_CONFIG_DIR)
+    safepaths.require_emptiable(config, allowed=[config], fixed=[safepaths.BACKUP_CONFIG])
+    try:
+        descriptor = safepaths.open_dir_nofollow(config)
+    except FileNotFoundError:
+        raise BackupError("env_copy_missing") from None
+    try:
+        info = os.stat(ENV_COPY_NAME, dir_fd=descriptor, follow_symlinks=False)
+    except FileNotFoundError:
+        raise BackupError("env_copy_missing") from None
+    finally:
+        os.close(descriptor)
+    if not stat.S_ISREG(info.st_mode):
+        raise BackupError("env_copy_missing")
+
+
+def _half_runs(snapshots: list[restic.Snapshot], before: datetime) -> list[UUID]:
+    """Runs that have only one of their two snapshots, all of them older than `before`."""
+    kinds: dict[UUID, set[str]] = {}
+    newest: dict[UUID, datetime] = {}
+    for snapshot in snapshots:
+        run_tags = [tag.removeprefix("run:") for tag in snapshot.tags if tag.startswith("run:")]
+        try:
+            run_id = UUID(run_tags[0]) if run_tags else None
+        except ValueError:
+            run_id = None
+        if run_id is None:
+            continue
+        kinds.setdefault(run_id, set()).update(
+            tag for tag in snapshot.tags if tag in ("kind:db", "kind:files")
+        )
+        newest[run_id] = max(newest.get(run_id, snapshot.time), snapshot.time)
+    return sorted(
+        (run_id for run_id, found in kinds.items() if len(found) < 2 and newest[run_id] < before),
+        key=str,
+    )
+
+
+def _apply_retention(run_restic: "_Restic", current: UUID) -> str | None:
+    """Retention of this installation's snapshots; returns a warning code, or None.
+
+    First the clock: a snapshot more than a day ahead of now stops it (`clock_skew`),
+    nothing is removed. Then half runs older than two days go by their run tag, then
+    safety snapshots older than 30 days, then the ordinary retention (which keeps
+    safety snapshots and everything of the last two days).
+    """
+    listed = restic.parse_snapshots(
+        run_restic(restic.snapshots_host_argv(run_restic.host), timeout=SHORT_RESTIC_TIMEOUT)
+    )
+    now = timezone.now()
+    if listed and max(snapshot.time for snapshot in listed) > now + CLOCK_TOLERANCE:
+        logger.warning("Backup run %s: a snapshot lies in the future; no retention", current)
+        return "clock_skew"
+    for half in _half_runs(listed, now - HALF_RUN_AGE):
+        if half != current:
+            run_restic.forget_run(half)
+    run_restic(restic.forget_safety_argv(run_restic.host))
+    run_restic(restic.forget_argv(run_restic.host))
+    return None
 
 
 # The safety back-up that a restore makes right before it replaces anything.

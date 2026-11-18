@@ -60,6 +60,8 @@ class Command(BaseCommand):
                     "size": filesizeformat(success.size_bytes or 0),
                 }
             )
+            if success.reason:
+                lines.append(_("Let op: %(reason)s") % {"reason": success.reason})
         check = status.last_check
         lines.append(
             _("Laatste geslaagde controle: %(v)s")

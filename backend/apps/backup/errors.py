@@ -81,6 +81,17 @@ REASONS: dict[str, Promise] = {
         "De opslag van Caddy is niet gekoppeld, dus het certificaat kan niet worden "
         "teruggezet. Voer deze stap uit via ./brievie."
     ),
+    "clock_skew": _(
+        "De klok van de server of van een back-up klopt niet; er wordt niets opgeruimd."
+    ),
+    "env_copy_missing": _(
+        "De kopie van de instellingen ontbreekt, dus deze back-up zou niet terug te zetten "
+        "zijn. Typ ./brievie start."
+    ),
+    "not_in_container": _(
+        "Deze opdracht wist of overschrijft gegevens en werkt alleen in de container van "
+        "Brievie. Gebruik ./brievie."
+    ),
     "interrupted_by_restore": _("Afgebroken door herstel."),
     "abandoned": _("De vorige back-up is afgebroken. Er is een nieuwe gestart."),
     "internal_error": _("Er ging iets mis. Probeer het later opnieuw."),
