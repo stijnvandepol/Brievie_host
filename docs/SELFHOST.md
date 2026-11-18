@@ -117,7 +117,8 @@ is not plugged in would otherwise leave an empty folder on the system disk, and 
   own, so the master key alone no longer opens them. If `deploy/.env` already holds a
   `BRIEVIE_BACKUP_PASSWORD` that you chose, that one is used; otherwise Brievie makes
   one. Right after the set-up Brievie writes a new recovery sheet with both secrets on
-  it. Print it at once and remove the file. A password with a quote or a line break is
+  it. Print it at once and remove the file. A separate password can only be chosen at
+  this first set-up: a destination that is already set up keeps the password it has. A password with a quote or a line break is
   refused.
 - A half-finished set-up can simply be run again.
 
@@ -138,8 +139,9 @@ cause (a file with the wrong permissions, a disk error) and run it again.
 
 Old back-ups are removed automatically after each back-up: everything of the last two
 days, then one a day for a week, one a week for a month and one a month for a year. A
-safety back-up made by a restore (section 7) is kept 30 days. If the clock of the
-server or of a back-up is wrong, nothing is removed and `./brievie status` says so. On
+safety back-up made by a restore (section 7) is kept 30 days. If a back-up is dated more
+than a day in the future (the server's clock was wrong when it was made), nothing is
+removed and `./brievie status` says so. A clock that runs behind is not noticed. On
 a destination that only accepts new data nothing is removed by Brievie (section 10).
 
 If a back-up stops with "De plek voor de back-up is niet klaar", check first that the
@@ -153,8 +155,10 @@ scheduler running the command.
 
 **On a new machine**
 
-1. Install Brievie on the new machine. Starting it is fine: an installation without
-   users, workspaces or documents counts as empty.
+1. Install Brievie on the new machine and start it (`./brievie start`). A running
+   installation without users, workspaces or documents counts as empty. Brievie can
+   only see that while it is running: an installation that is stopped is treated as
+   one with data.
 2. Connect the disk (or have the address of the remote back-up, and its user name and
    password, ready).
 3. `./brievie restore`. It asks where the back-up is and for the master key from your
