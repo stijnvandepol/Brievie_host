@@ -202,7 +202,10 @@ AXES_VERBOSE = False
 SILENCED_SYSTEM_CHECKS = ["axes.W002"]  # AxesMiddleware: see above.
 
 # Addresses the app uses to reach this server, local address first; each must be
-# https://. They go into the pairing QR code.
+# https://. They go into the pairing QR code and the pairing link. A phone that reaches
+# the server through an address that is not listed here and is not covered by the
+# server's own certificate authority cannot pair from a link; five failed attempts make
+# that code useless and a new one must be made.
 BRIEVIE_PUBLIC_URLS: list[str] = [
     url.strip() for url in env.list("BRIEVIE_PUBLIC_URLS", default=[]) if url.strip()
 ]

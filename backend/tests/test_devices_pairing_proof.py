@@ -28,6 +28,7 @@ from apps.devices.proof import (
     PROOF_KDF_ITERATIONS,
     derive_proof_key,
     pairing_proof,
+    public_host_binding,
     trust_bindings,
 )
 from apps.devices.services import create_pairing_challenge, create_pairing_code
@@ -35,6 +36,8 @@ from tests.factories import UserFactory
 from tests.helpers import post_json
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from tests.helpers import Response
 
 VECTOR = Path(__file__).parent / "fixtures" / "pairing_proof_v1.json"
@@ -138,16 +141,84 @@ def test_proof_matches_the_shared_vector() -> None:
 def test_trust_bindings_are_the_pin_and_the_public_hosts(
     settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    settings.BRIEVIE_PUBLIC_URLS = ["https://Brievie.Example.NL.", "https://[2001:db8::1]:8443"]
+    settings.BRIEVIE_PUBLIC_URLS = [
+        "https://Brievie.Example.NL.",
+        "https://[2a00:1450:4001:81d::200e]:8443",
+        "https://[2001:db8::1]:8443",
+        "https://brievie.local",
+    ]
     monkeypatch.setattr(pki, "ca_certificate_sha256", lambda: "ab" * 32)
 
-    assert trust_bindings() == {"ab" * 32, "brievie.example.nl", "2001:db8::1"}
+    assert trust_bindings() == {"ab" * 32, "brievie.example.nl", "2a00:1450:4001:81d::200e"}
 
 
-def test_trust_bindings_without_a_private_ca_are_the_hosts(settings: Settings) -> None:
-    settings.BRIEVIE_PUBLIC_URLS = ["https://brievie.local:8443/", "https://bücher.example"]
+def test_trust_bindings_without_a_private_ca_are_the_public_hosts(settings: Settings) -> None:
+    settings.BRIEVIE_PUBLIC_URLS = ["https://brievie.local:8443/", "https://bücher.nl"]
 
-    assert trust_bindings() == {"brievie.local", "xn--bcher-kva.example"}
+    assert trust_bindings() == {"xn--bcher-kva.nl"}
+
+
+@pytest.mark.parametrize(
+    ("host", "binding"),
+    [
+        ("brievie.example.nl", "brievie.example.nl"),
+        ("Brievie.Example.NL.", "brievie.example.nl"),
+        ("xn--bcher-kva.nl", "xn--bcher-kva.nl"),
+        ("bücher.nl", "xn--bcher-kva.nl"),
+        ("post.familie.de", "post.familie.de"),
+        ("8.8.8.8", "8.8.8.8"),
+        ("2a00:1450:4001:81d::200e", "2a00:1450:4001:81d::200e"),
+        # Names no public certificate authority can certify.
+        ("brievie.local", None),
+        ("brievie.LOCAL.", None),
+        ("nas.lan", None),
+        ("brievie.home.arpa", None),
+        ("brievie.internal", None),
+        ("brievie.localhost", None),
+        ("localhost", None),
+        ("brievie.test", None),
+        ("brievie.invalid", None),
+        ("brievie.example", None),
+        ("brievie", None),
+        ("", None),
+        # IP literals that are not global.
+        ("192.168.1.4", None),
+        ("10.0.0.2", None),
+        ("172.16.5.5", None),
+        ("127.0.0.1", None),
+        ("169.254.1.1", None),
+        ("100.64.0.1", None),
+        ("0.0.0.0", None),  # noqa: S104 - a host to classify, nothing binds
+        ("::1", None),
+        ("::", None),
+        ("fe80::1", None),
+        ("fd12:3456:789a::1", None),
+        ("2001:db8::1", None),
+        ("::ffff:192.168.1.4", None),
+        # Not a usable name at all.
+        ("a" * 64 + ".nl", None),
+    ],
+)
+def test_public_host_binding(host: str, binding: str | None) -> None:
+    assert public_host_binding(host) == binding
+
+
+def test_a_home_server_binds_by_its_pin_only(
+    session_client: Client, settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings.BRIEVIE_PUBLIC_URLS = ["https://brievie.local"]
+    monkeypatch.setattr(pki, "ca_certificate_sha256", lambda: "ab" * 32)
+    assert trust_bindings() == {"ab" * 32}
+    code, pairing_id = issue(session_client)
+    nonce = challenge()
+
+    by_host = send(pairing_id, nonce, prove(code, pairing_id, nonce, binding="brievie.local"))
+    nonce = challenge()
+    by_pin = send(pairing_id, nonce, prove(code, pairing_id, nonce, binding="ab" * 32))
+
+    assert by_host.status_code == 400
+    assert by_host.json() == INVALID_CODE
+    assert by_pin.status_code == 201
 
 
 def test_the_nonce_has_the_length_the_protocol_assumes() -> None:
@@ -269,12 +340,10 @@ def test_a_proof_for_another_code_or_nonce_is_refused(session_client: Client) ->
 
 
 def test_proofs_are_compared_in_constant_time_against_every_binding(
-    session_client: Client, settings: Settings, monkeypatch: pytest.MonkeyPatch
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    settings.BRIEVIE_PUBLIC_URLS = [f"https://{HOST}", "https://brievie.local"]
+    settings.BRIEVIE_PUBLIC_URLS = [f"https://{HOST}", "https://post.familie.de"]
     monkeypatch.setattr(pki, "ca_certificate_sha256", lambda: "ab" * 32)
-    code, pairing_id = issue(session_client)
-    nonce = challenge()
     calls: list[tuple[object, object]] = []
     original = hmac.compare_digest
 
@@ -284,14 +353,19 @@ def test_proofs_are_compared_in_constant_time_against_every_binding(
         return result
 
     monkeypatch.setattr(hmac, "compare_digest", recording)
+    accepted = sorted(trust_bindings())
+    assert len(accepted) == 3
 
-    for binding in sorted(trust_bindings()):
+    for binding, expected in [*((b, 201) for b in accepted), ("attacker.example.nl", 400)]:
+        user_client = Client()
+        user_client.force_login(UserFactory.create())
+        code, pairing_id = issue(user_client)
+        nonce = challenge()
         calls.clear()
         r = send(pairing_id, nonce, prove(code, pairing_id, nonce, binding=binding))
         # Every candidate is compared, also after a match: no early exit.
-        assert len(calls) == 3
-        assert r.status_code in (201, 400)
-        nonce = challenge()
+        assert len(calls) == 3, binding
+        assert r.status_code == expected, binding
 
 
 def test_a_replayed_nonce_is_refused(session_client: Client) -> None:
@@ -741,3 +815,76 @@ def test_qr_and_proof_at_once_give_one_device(settings: Settings) -> None:
 
     assert sorted(statuses) == [201, 400]
     assert Device.objects.count() == 1
+
+
+def _race(*sends: "Callable[[], int]") -> list[int]:
+    barrier = threading.Barrier(len(sends))
+    statuses: list[int] = []
+
+    def run(fn: "Callable[[], int]") -> None:
+        try:
+            barrier.wait(timeout=10)
+            statuses.append(fn())
+        finally:
+            connection.close()
+
+    threads = [threading.Thread(target=run, args=(fn,)) for fn in sends]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=60)
+    return statuses
+
+
+def _sender(pairing_id: str, nonce: str, proof_hex: str, n: int) -> "Callable[[], int]":
+    def go() -> int:
+        return send(pairing_id, nonce, proof_hex, Client(REMOTE_ADDR=f"192.0.2.{n}")).status_code
+
+    return go
+
+
+@pytest.mark.django_db(transaction=True)
+def test_five_wrong_proofs_at_once_are_each_counted(settings: Settings) -> None:
+    settings.BRIEVIE_PUBLIC_URLS = [f"https://{HOST}"]
+    pairing_code, code = create_pairing_code(UserFactory.create())
+    pairing_id = str(pairing_code.id)
+    nonces = [create_pairing_challenge().nonce for _ in range(5)]
+
+    statuses = _race(*(_sender(pairing_id, nonce, WRONG, n) for n, nonce in enumerate(nonces, 1)))
+
+    assert statuses == [400] * 5
+    burned = PairingCode.objects.get(id=pairing_id)
+    assert burned.failed_proofs == 5
+    assert burned.used_at is not None
+    assert burned.proof_key_sealed is None
+    qr = post_json(fresh_client(), "/devices/pair", {"code": code, "device_name": "iPhone"})
+    assert qr.status_code == 400
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("attempt", range(3))
+def test_a_right_proof_racing_the_fifth_wrong_one_pairs_or_burns_never_both(
+    settings: Settings, attempt: int
+) -> None:
+    settings.BRIEVIE_PUBLIC_URLS = [f"https://{HOST}"]
+    pairing_code, code = create_pairing_code(UserFactory.create())
+    pairing_id = str(pairing_code.id)
+    PairingCode.objects.filter(id=pairing_id).update(failed_proofs=4)
+    wrong_nonce = create_pairing_challenge().nonce
+    right_nonce = create_pairing_challenge().nonce
+    right = prove(code, pairing_id, right_nonce)
+
+    statuses = _race(
+        _sender(pairing_id, wrong_nonce, WRONG, 10), _sender(pairing_id, right_nonce, right, 11)
+    )
+
+    row = PairingCode.objects.get(id=pairing_id)
+    assert row.used_at is not None
+    assert row.proof_key_sealed is None
+    if Device.objects.exists():
+        assert sorted(statuses) == [201, 400]
+        assert Device.objects.count() == 1
+        assert row.failed_proofs == 4
+    else:
+        assert statuses == [400, 400]
+        assert row.failed_proofs == 5

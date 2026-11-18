@@ -130,3 +130,16 @@ def test_revoking_an_unknown_device_logs_nothing(session_client: Client) -> None
 
     assert r.status_code == 404
     assert not ServerAuditEvent.objects.filter(code="device_revoked").exists()
+
+
+def test_making_pairing_codes_is_limited_per_user(session_client: Client) -> None:
+    for _ in range(10):
+        assert post_json(session_client, "/devices/pairing-codes").status_code == 201
+
+    r = post_json(session_client, "/devices/pairing-codes")
+
+    assert r.status_code == 429
+    assert r.json()["code"] == "too_many_attempts"
+    other = Client()
+    other.force_login(UserFactory.create())
+    assert post_json(other, "/devices/pairing-codes").status_code == 201

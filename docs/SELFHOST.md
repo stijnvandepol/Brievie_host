@@ -283,3 +283,11 @@ the real restic over one minute. Not yet proven on real hardware or over time:
 - `./brievie sweep --delete` with real loose files, and a back-up that is "gemaakt,
   maar niet compleet";
 - S3 with object lock, and a REST server in append-only mode in daily use.
+
+## 13. Koppelen via een link
+
+A phone that reaches the server through an address that is not in `BRIEVIE_PUBLIC_URLS`
+and is not covered by the server's own certificate authority cannot pair from a link
+("Open de Brievie-app"); five failed attempts make that code useless and a new one must
+be made. A `.local` name or a private address binds only through the server's own
+certificate authority; pairing by QR code is not affected.

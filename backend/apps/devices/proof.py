@@ -18,6 +18,7 @@ The server keeps only the derived key, sealed with the master key, for the code'
 
 import hashlib
 import hmac
+import ipaddress
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -53,25 +54,68 @@ def pairing_proof(key: bytes, *, nonce: str, trust_binding: str) -> str:
 
 def trust_bindings() -> frozenset[str]:
     """What this server accepts as the app's trust binding: the private CA's fingerprint
-    (when there is one) and the host name of every public URL (lower case, without
-    brackets, port or trailing dot; an international name in its ASCII form)."""
+    (when there is one) and the host of every public URL that a public certificate
+    authority can certify (`public_host_binding`). A home server whose addresses are all
+    `.local` names or private addresses binds by its CA pin only."""
     bindings: set[str] = set()
     pin = pki.ca_certificate_sha256()
     if pin is not None:
         bindings.add(pin)
     for url in settings.BRIEVIE_PUBLIC_URLS:
-        host = _host_of(url)
-        if host:
-            bindings.add(host)
+        binding = public_host_binding(urlsplit(url).hostname or "")
+        if binding is not None:
+            bindings.add(binding)
     return frozenset(bindings)
 
 
-def _host_of(url: str) -> str:
-    host = (urlsplit(url).hostname or "").rstrip(".")
+# Names that no public certificate authority certifies: special-use and home-network
+# suffixes (RFC 6761, RFC 6762, RFC 8375, ICANN's .internal).
+_UNCERTIFIABLE_SUFFIXES = (
+    ".local",
+    ".lan",
+    ".home.arpa",
+    ".internal",
+    ".localhost",
+    ".test",
+    ".invalid",
+    ".example",
+)
+
+
+def public_host_binding(host: str) -> str | None:
+    """The trust binding for `host` (a URL's host, as `urlsplit(url).hostname` gives
+    it), or None when no public certificate authority can certify it.
+
+    Normalised as the app must normalise the host it connected to: lower case, the
+    A-label (IDNA) form of an international name, no port, no brackets around an IPv6
+    address, no trailing dot; an IP address in its compressed form. The app applies UTS 46
+    (Foundation's IDNA); this side uses Python's IDNA 2003 codec, so a name where the two
+    differ (such as one with "ß") does not match and simply fails to pair by link.
+
+    None for: `.local`, `.lan`, `.home.arpa`, `.internal`, `.localhost`, `.test`,
+    `.invalid` and `.example` names, `localhost` and other single-label names, and IP
+    addresses that are not global (private, loopback, link-local, shared, unique-local,
+    unspecified, documentation). A global IP address is kept: public authorities do
+    certify those, and only a server with such a certificate is reached at one.
+    """
+    host = host.strip().strip("[]").rstrip(".").lower()
+    if not host:
+        return None
     try:
-        return host.encode("idna").decode("ascii") if host else ""
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        address = None
+    if address is not None:
+        return str(address) if address.is_global else None
+    try:
+        name = host.encode("idna").decode("ascii")
     except UnicodeError:
-        return ""
+        return None
+    if "." not in name or any(
+        name.endswith(suffix) or name == suffix[1:] for suffix in _UNCERTIFIABLE_SUFFIXES
+    ):
+        return None
+    return name
 
 
 def _aad(pairing_id: UUID) -> bytes:

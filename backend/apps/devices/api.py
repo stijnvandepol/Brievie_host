@@ -9,7 +9,7 @@ from apps.accounts.services import current_user
 from apps.audit.services import actor_from_request
 from apps.common.net import valid_client_ip
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
-from apps.common.throttling import ClientAddressThrottle
+from apps.common.throttling import CallerThrottle, ClientAddressThrottle
 from apps.devices import services
 from apps.devices.models import Device, PairingChallenge
 from apps.devices.schemas import (
@@ -27,8 +27,10 @@ router = Router(tags=["devices"])
 
 @router.post(
     "/devices/pairing-codes",
-    response={201: PairingCodeOut, **SESSION_WRITE_ERRORS},
+    response={201: PairingCodeOut, 429: ErrorOut, **SESSION_WRITE_ERRORS},
     auth=session_auth,
+    # Each code costs a slow key derivation (proof.py): ten per user per ten minutes.
+    throttle=CallerThrottle("pairing_code", "10/10m"),
     description=(
         "Web session only. A bearer token (even a valid one) is not accepted here and "
         "answers 401 not_authenticated; a session without a valid CSRF token answers 403. "
