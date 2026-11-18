@@ -8,15 +8,19 @@ import threading
 from datetime import timedelta
 
 import pytest
+from django.contrib.auth.models import AnonymousUser
+from django.contrib.sessions.middleware import SessionMiddleware
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import connection
-from django.test import Client
+from django.http import HttpResponse
+from django.test import Client, RequestFactory
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from pytest_django import Settings
 
 from apps.accounts.models import AccountNotice, PasswordReset, User, UserSession
-from apps.accounts.resets import revoke_resets_made_by
+from apps.accounts.resets import complete_password_reset, revoke_resets_made_by
 from apps.audit.models import ServerAuditEvent, WorkspaceAuditEvent
 from apps.devices.models import Device
 from apps.devices.services import create_pairing_code, pair_device
@@ -569,3 +573,25 @@ def test_responses_with_or_after_the_link_are_not_stored(ws_a: Workspace) -> Non
 
     assert done.status_code == 200
     assert done["Cache-Control"] == "no-store"
+
+
+def test_completion_locks_the_user_before_the_link(ws_a: Workspace) -> None:
+    # The lock order of a removal: the user's row, then that user's reset rows. Taking
+    # them the other way round here could deadlock with a removal at the same moment.
+    member = join(ws_a)
+    token = make_token(signed_in(admin_of(ws_a)), member)
+    request = RequestFactory().post("/api/v1/auth/password-reset", REMOTE_ADDR="192.0.2.9")
+    SessionMiddleware(lambda r: HttpResponse()).process_request(request)
+    request.user = AnonymousUser()
+
+    with CaptureQueriesContext(connection) as queries:
+        complete_password_reset(request, token=token, password=NEW_PASSWORD)
+
+    sqls = [q["sql"] for q in queries.captured_queries]
+    user_lock = next(
+        i for i, q in enumerate(sqls) if 'FROM "accounts_user"' in q and "FOR NO KEY UPDATE" in q
+    )
+    link_lock = next(
+        i for i, q in enumerate(sqls) if 'FROM "accounts_passwordreset"' in q and "FOR UPDATE" in q
+    )
+    assert user_lock < link_lock

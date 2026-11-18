@@ -104,18 +104,31 @@ def _maker_may_still_act(reset: PasswordReset) -> bool:
 def complete_password_reset(request: HttpRequest, *, token: str, password: str) -> User:
     """Set the new password with a reset link and sign this browser in.
 
-    The link is locked, so two attempts at once give one success. A password the rules
-    refuse answers 422 and leaves the link usable. Every other session, every paired
-    device and every other open link of the account ends; the member gets a notice that
-    this new session cannot dismiss.
+    The account, then the link, is locked, so two attempts at once give one success. A
+    password the rules refuse answers 422 and leaves the link usable. Every other
+    session, every paired device and every other open link of the account ends; the
+    member gets a notice that this new session cannot dismiss.
     """
+    digest = token_hash(token)
     with transaction.atomic():
-        reset = (
-            PasswordReset.objects.select_for_update(of=("self",))
-            .select_related("user")
-            .filter(token_hash=token_hash(token))
+        # Lock order as in a removal: the user's row, then their reset rows. So the
+        # link's user is looked up without a lock first, and everything is checked
+        # again once both rows are locked.
+        user_id = (
+            PasswordReset.objects.filter(token_hash=digest)
+            .values_list("user_id", flat=True)
             .first()
         )
+        if user_id is None:
+            raise _dead_link()
+        locked_user = User.objects.select_for_update(no_key=True).get(id=user_id)
+        reset = (
+            PasswordReset.objects.select_for_update()
+            .filter(token_hash=digest, user_id=user_id)
+            .first()
+        )
+        if reset is not None:
+            reset.user = locked_user
         now = timezone.now()
         if (
             reset is None

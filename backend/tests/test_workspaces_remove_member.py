@@ -241,9 +241,13 @@ def test_members_and_viewers_cannot_remove(ws_a: Workspace) -> None:
     for role in (Membership.Role.MEMBER, Membership.Role.VIEWER):
         caller = join(ws_a, role)
         other = join(ws_a)
+        person = person_of(ws_a, other, name=f"Persoon {role}")
         status, body = remove(as_user(caller), ws_a, other)
         assert (status, body["code"]) == (403, "forbidden")
         assert role_of(ws_a, other) == "member"
+        assert linked_user(ws_a, person) == other.id
+    assert workspace_rows(ws_a, AuditCode.MEMBER_REMOVED) == []
+    assert workspace_rows(ws_a, AuditCode.PERSON_UNLINKED) == []
 
 
 def test_unknown_member_is_404(ws_a: Workspace, ws_b: Workspace) -> None:

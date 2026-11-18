@@ -368,8 +368,10 @@ def accept_invitation(
     An existing account is found only by its address together with its password (the
     sign-in checks: lockout, counting, log), checked outside the transaction so a
     failure is kept; a deactivated account comes back this way, and only this way. The
-    rest is one transaction under a lock on the invitation: two accepts at once give one
-    member, the other gets the dead-link answer. A failure anywhere leaves nothing.
+    rest is one transaction under a lock on the invitation, then on the existing account:
+    two accepts at once give one member, the other gets the dead-link answer, and a
+    removal of the account's last membership at the same moment cannot leave a member
+    with a switched-off account. A failure anywhere leaves nothing.
     """
     if _email_mismatch(_usable(token), email):
         # Before the account checks: a foreign address answers this, never whether it
@@ -388,6 +390,12 @@ def accept_invitation(
     is_new = account == NEW_ACCOUNT
     with transaction.atomic():
         invitation = _usable(token, lock=True)
+        if not is_new:
+            # The account as it is now, locked (lock order: invitation, then the user,
+            # as a removal locks the user): a removal of its last membership that
+            # committed since the password check has switched it off, and the join
+            # must switch it on again.
+            user = User.objects.select_for_update(no_key=True).get(pk=user.pk)
         if _email_mismatch(invitation, user.email):
             raise _email_mismatch_error()
         if not is_new and _is_member(user, invitation.workspace_id):

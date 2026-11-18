@@ -16,12 +16,16 @@ from django.utils import timezone
 from pytest_django import Settings
 
 from apps.accounts.models import User, UserSession
+from apps.accounts.services import verify_password
 from apps.audit.models import ServerAuditEvent, WorkspaceAuditEvent
+from apps.audit.services import AuditActor
 from apps.common.errors import ApiError
 from apps.people.models import Person
 from apps.pipeline.settings_service import configure
+from apps.workspaces import invitations
 from apps.workspaces.context import workspace_context
 from apps.workspaces.invitations import accept_invitation
+from apps.workspaces.members import remove_member
 from apps.workspaces.models import Invitation, Membership, Workspace
 from tests.documents_support import admin_of
 from tests.factories import TEST_PASSWORD, UserFactory
@@ -592,6 +596,44 @@ def test_a_person_link_left_from_before_answers_409_and_keeps_nothing(ws_a: Work
     with workspace_context(ws_a.id):
         assert Person.objects.get(pk=papa.pk).user_id is None
     assert workspace_rows(ws_a, "invitation_accepted") == []
+
+
+def test_a_removal_between_password_check_and_join_still_ends_active(
+    ws_a: Workspace, ws_b: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The account's last membership (in ws_b) goes after its password was checked and
+    # before the join: the join must act on the account as it is then, under its lock.
+    user = UserFactory.create()
+    Membership.objects.create(user=user, workspace=ws_b, role="member")
+    token = invite(ws_a)
+    original = verify_password
+
+    def check_then_lose_the_last_membership(
+        request: HttpRequest, *, email: str, password: str
+    ) -> User:
+        checked = original(request, email=email, password=password)
+        remove_member(
+            request=browser_request(),
+            workspace=ws_b,
+            user_id=user.id,
+            actor=AuditActor.for_user(admin_of(ws_b)),
+            left=False,
+        )
+        assert not User.objects.get(pk=user.pk).is_active
+        return checked
+
+    monkeypatch.setattr(invitations, "verify_password", check_then_lose_the_last_membership)
+
+    status, _ = accept(
+        Client(), token, account="existing", email=user.email, password=TEST_PASSWORD
+    )
+
+    assert status == 200
+    user.refresh_from_db()
+    assert user.is_active
+    assert Membership.objects.filter(user=user, workspace=ws_a).exists()
+    (accepted,) = workspace_rows(ws_a, "invitation_accepted")
+    assert accepted.values == {"role": "member", "new_account": False, "account_reactivated": True}
 
 
 def browser_request() -> HttpRequest:
