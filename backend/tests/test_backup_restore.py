@@ -18,7 +18,7 @@ from django.core.management.base import CommandError
 from django.db import connection
 from pytest_django import Settings
 
-from apps.backup import restic, services
+from apps.backup import restic, restore, services
 from apps.backup.errors import BackupError
 from apps.backup.locks import BACKUP_LOCK_KEY, backup_lock, database_lock
 from apps.backup.models import BackupRun
@@ -426,7 +426,7 @@ def test_files_are_restored_and_the_authority_placed(
 
     assert restored.authority_placed is True
     assert fake_restic.calls[-1] == restic.restore_argv(
-        "f0000001", "/", services.file_paths(), no_lock=True
+        "f0000001", "/", restore.restore_includes(), no_lock=True
     )
     assert sorted(p.name for p in caddy.iterdir()) == sorted(files)
     for name in files:
@@ -872,10 +872,14 @@ def test_restic_restores_exactly_the_three_judged_directories(
     assert call[:4] == ["restore", "--no-lock", "--target", "/"]
     assert call[-2:] == ["--", "f0000001"]
     includes = [call[i + 1] for i, arg in enumerate(call) if arg == "--include"]
+    config = django_settings.BRIEVIE_BACKUP_CONFIG_DIR
+    # The config folder by its two files: never the installation id an older back-up
+    # may still hold.
     assert includes == [
         django_settings.BRIEVIE_STORAGE_ROOT,
         django_settings.BRIEVIE_AUTHORITY_COPY_DIR,
-        django_settings.BRIEVIE_BACKUP_CONFIG_DIR,
+        f"{config}/manifest.json",
+        f"{config}/env",
     ]
 
 
@@ -1076,3 +1080,71 @@ def test_restore_check_refuses_a_run_that_cannot_be_restored(
     assert caught.value.returncode == 1
     assert str(caught.value).startswith("Deze back-up is niet gevonden.")
     assert "./brievie status --list" in str(caught.value)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_replace_keeps_the_installation_id(
+    configured_folder: Path, fake_restic: FakeBinary, caddy: Path
+) -> None:
+    one_run(fake_restic)
+    config = Path(django_settings.BRIEVIE_BACKUP_CONFIG_DIR)
+    config.mkdir(parents=True)
+    (config / "installation-id").write_text("0123456789abcdef0123456789abcdef\n")
+    (config / "installation-id.tmp").write_text("half")
+    (config / "manifest.json").write_text("{}")
+
+    restore_files(run=None, authority_target=caddy, clear_documents=True)
+
+    assert sorted(p.name for p in config.iterdir()) == ["installation-id"]
+    assert (config / "installation-id").read_text() == "0123456789abcdef0123456789abcdef\n"
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("clear", [True, False])
+def test_a_failed_restic_restore_is_still_cleaned_up(
+    configured_folder: Path,
+    fake_restic: FakeBinary,
+    caddy: Path,
+    tmp_path: Path,
+    settings: Settings,
+    clear: bool,
+) -> None:
+    one_run(fake_restic)
+    documents = Path(django_settings.BRIEVIE_STORAGE_ROOT)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "keep").write_text("keep")
+    # A hostile or broken back-up: restic writes a link, then fails.
+    settings.BRIEVIE_RESTIC_BINARY = restic_that_restores(
+        tmp_path,
+        fake_restic,
+        f"mkdir -p '{documents}/ws'\nln -s '{outside}' '{documents}/ws/escape'\n"
+        "echo 'Fatal: broken pack' >&2; exit 1",
+    )
+
+    with pytest.raises(BackupError) as caught:
+        restore_files(run=None, authority_target=caddy, clear_documents=clear)
+
+    assert caught.value.code == ("documents_incomplete" if clear else "restore_failed")
+    assert not (documents / "ws" / "escape").exists()
+    assert not (documents / "ws" / "escape").is_symlink()
+    assert (outside / "keep").read_text() == "keep"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_failing_clean_up_never_hides_the_restore_error(
+    configured_folder: Path,
+    fake_restic: FakeBinary,
+    caddy: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    one_run(fake_restic)
+    fake_restic.respond(("restore",), stderr="Fatal: wrong password", code=12)
+
+    def clean_fails(directory: Path, owner: int | None) -> int:
+        raise OSError("clean-up failed")
+
+    monkeypatch.setattr(restore, "_clean_restored", clean_fails)
+    with pytest.raises(BackupError) as caught:
+        restore_files(run=None, authority_target=caddy, clear_documents=False)
+    assert caught.value.code == "wrong_password"

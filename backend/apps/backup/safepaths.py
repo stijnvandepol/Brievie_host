@@ -499,10 +499,11 @@ def remove_tree_at(parent: int, name: str) -> None:
     os.rmdir(name, dir_fd=parent)
 
 
-def empty_dir(descriptor: int) -> None:
-    """Remove everything in the directory open as `descriptor` (it stays itself)."""
+def empty_dir(descriptor: int, *, keep: frozenset[str] = frozenset()) -> None:
+    """Remove everything in the directory open as `descriptor` (it stays itself), except
+    the names in `keep` at its top level."""
     with os.scandir(descriptor) as entries:
-        names = [entry.name for entry in entries]
+        names = [entry.name for entry in entries if entry.name not in keep]
     for name in names:
         remove_tree_at(descriptor, name)
 

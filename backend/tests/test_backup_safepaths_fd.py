@@ -296,3 +296,17 @@ def test_reading_refuses_a_link_a_directory_and_a_big_file(tmp_path: Path, outsi
                 safepaths.read_regular_at(fd, name, limit=64)
     finally:
         os.close(fd)
+
+
+def test_emptying_can_keep_one_name_at_the_top(tmp_path: Path) -> None:
+    directory = tmp_path / "config"
+    (directory / "sub").mkdir(parents=True)
+    (directory / "installation-id").write_text("id")
+    (directory / "sub" / "installation-id").write_text("deeper: goes")
+    (directory / "env").write_text("x")
+    fd = safepaths.open_dir_nofollow(directory)
+    try:
+        safepaths.empty_dir(fd, keep=frozenset({"installation-id"}))
+    finally:
+        os.close(fd)
+    assert sorted(p.name for p in directory.iterdir()) == ["installation-id"]

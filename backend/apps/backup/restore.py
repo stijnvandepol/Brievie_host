@@ -42,7 +42,7 @@ from apps.backup.manifest import (
     unknown_migrations,
 )
 from apps.backup.queue import settle_restored_queue
-from apps.backup.services import location_secrets
+from apps.backup.services import INSTALLATION_ID_NAME, location_secrets
 from apps.common import crypto
 
 logger = logging.getLogger(__name__)
@@ -625,9 +625,12 @@ def _empty(directory: Path) -> None:
     expected = safepaths.identity(directory)
     if expected is None:
         return
+    # The installation id stays: it belongs to this machine, not to any back-up.
+    config = _configured_directories()[2]
+    keep = frozenset({INSTALLATION_ID_NAME}) if directory == config else frozenset()
     descriptor = safepaths.open_dir_nofollow(directory, expect=expected)
     try:
-        safepaths.empty_dir(descriptor)
+        safepaths.empty_dir(descriptor, keep=keep)
     finally:
         os.close(descriptor)
 
@@ -788,18 +791,41 @@ def restore_files(
         # hard link in a target is refused before restic writes anything.
         for directory in directories:
             _check_target(directory)
-        argv = restic.restore_argv(
-            found.files.id, "/", [str(path) for path in directories], no_lock=True
-        )
+        argv = restic.restore_argv(found.files.id, "/", restore_includes(), no_lock=True)
         try:
             _restic_output(repository, password, argv)
         except BackupError as error:
+            # Also after a failed restore, whatever it left behind is cleaned up; a
+            # failing clean-up never hides restic's own error.
+            try:
+                _clean_all(directories, owner)
+            except (OSError, BackupError) as cleaning:
+                logger.warning(
+                    "Restore: the clean-up after a failed restore failed: %s",
+                    type(cleaning).__name__,
+                )
             if clear_documents:
                 raise BackupError("documents_incomplete") from error
             raise
         try:
-            removed = sum(_clean_restored(directory, owner) for directory in directories)
+            removed = _clean_all(directories, owner)
             placed = _place_authority(authority_copy, authority_target)
         except OSError:
             raise BackupError("restore_failed") from None
     return FilesRestored(authority_placed=placed, removed=removed)
+
+
+def restore_includes() -> list[str]:
+    """What restic restores: the documents, the authority copy, and of the config folder
+    only its manifest and .env copy (never an installation id an older back-up holds)."""
+    documents, authority, config = _configured_directories()
+    return [
+        str(documents),
+        str(authority),
+        str(config / MANIFEST_NAME),
+        str(config / ENV_COPY_NAME),
+    ]
+
+
+def _clean_all(directories: list[Path], owner: int | None) -> int:
+    return sum(_clean_restored(directory, owner) for directory in directories)
