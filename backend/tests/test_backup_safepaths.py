@@ -494,7 +494,7 @@ def platform(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) ->
     real_lstat = os.lstat
 
     def fake_lstat(path: object, *args: object, **kwargs: object) -> os.stat_result:
-        text = os.fspath(path)  # type: ignore[arg-type]
+        text = os.fspath(path)  # type: ignore[call-overload]
         looked.append(text)
         info = real_lstat("/", *args, **kwargs)  # type: ignore[arg-type]
         if request.param == "link" and text.count("/") == 1 and text != "/":
