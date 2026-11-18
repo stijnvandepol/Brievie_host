@@ -342,3 +342,42 @@ def test_a_env_that_is_a_link_is_never_written_through(
     else:
         assert elsewhere.read_text() == "SOMETHING=else\n"
     assert (deploy / ".env").is_symlink()
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        f"export BRIEVIE_MASTER_KEY={MASTER}",
+        f'BRIEVIE_MASTER_KEY="{MASTER}"',
+        f"BRIEVIE_MASTER_KEY='{MASTER}'",
+        f"  export  BRIEVIE_MASTER_KEY={MASTER}",
+        f"BRIEVIE_MASTER_KEY = {MASTER}",
+        f'"BRIEVIE_MASTER_KEY"={MASTER}',
+    ],
+)
+def test_a_master_key_in_any_spelling_counts_as_present(deploy: Path, line: str) -> None:
+    # Appending a second key would make the new one win: documents unreadable.
+    (deploy / ".env").write_text(
+        f"{line}\nexport BRIEVIE_BACKUP_DB_PASSWORD='old-backup-pw'\nPOSTGRES_PORT=5433\n"
+    )
+    run_script(deploy)
+    text = (deploy / ".env").read_text()
+    assert text.count("BRIEVIE_MASTER_KEY") == 1
+    assert text.count("BRIEVIE_BACKUP_DB_PASSWORD") == 1
+    # The missing URL is built from the password as the line holds it, quotes removed.
+    assert (
+        "DATABASE_BACKUP_URL=postgres://brievie_backup:old-backup-pw@localhost:5433/brievie" in text
+    )
+
+
+def test_make_and_ensure_backup_role_read_the_project_alike() -> None:
+    expression = re.compile(r"sed -n '([^']*COMPOSE_PROJECT_NAME[^']*)'")
+    makefile = expression.findall((DEPLOY.parent / "Makefile").read_text())
+    script = expression.findall((DEPLOY / "ensure-backup-role.sh").read_text())
+    assert makefile
+    assert makefile == script
+    # make dev passes its own project on, so the script cannot read another one.
+    assert (
+        "COMPOSE_PROJECT_NAME=$(PROJECT) sh deploy/ensure-backup-role.sh"
+        in (DEPLOY.parent / "Makefile").read_text()
+    )

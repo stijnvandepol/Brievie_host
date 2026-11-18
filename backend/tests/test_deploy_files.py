@@ -270,7 +270,7 @@ def test_ensure_backup_role_passes_the_project() -> None:
     script = (ROOT / "deploy" / "ensure-backup-role.sh").read_text()
     assert 'docker compose -p "$project" --project-directory deploy' in script
     assert "${COMPOSE_PROJECT_NAME:-}" in script
-    assert 's/^COMPOSE_PROJECT_NAME=//p\' "$env_file"' in script
+    assert 'COMPOSE_PROJECT_NAME=//p\' "$env_file"' in script
     assert script.count("docker compose") == 1
     assert "$compose" not in script
 

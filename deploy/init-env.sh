@@ -56,9 +56,32 @@ replace() {
 	esac
 }
 
-# The value of $1 in the existing deploy/.env (the last such line), or nothing.
+# A line of deploy/.env that sets $1, in every spelling docker compose and sh accept:
+# leading spaces, `export`, a quoted key, spaces around `=`. Same matcher everywhere,
+# so an `export BRIEVIE_MASTER_KEY=...` line is never answered with a second key.
+key_line() {
+	printf '^[[:space:]]*(export[[:space:]]+)?["'"'"']?%s["'"'"']?[[:space:]]*=' "$1"
+}
+
+has_key() {
+	grep -Eq "$(key_line "$1")" "$target"
+}
+
+# The value of $1 in the existing deploy/.env (the last such line, surrounding quotes
+# removed), or nothing. The value leaves sed on stdout, never as an argument.
 value_of() {
-	grep "^$1=" "$target" | tail -n 1 | cut -d= -f2- || true
+	found=$(sed -n -E "s/$(key_line "$1")[[:space:]]*//p" "$target" | tail -n 1) || true
+	case $found in
+	\"*\")
+		found=${found#\"}
+		found=${found%\"}
+		;;
+	\'*\')
+		found=${found#\'}
+		found=${found%\'}
+		;;
+	esac
+	printf '%s\n' "$found"
 }
 
 master=$(random hex32)
@@ -72,10 +95,10 @@ if [ -e "$target" ]; then
 		printf '%s=%s\n' "$1" "$2" >>"$target"
 		added="$added $1"
 	}
-	grep -q '^BRIEVIE_MASTER_KEY=' "$target" || append BRIEVIE_MASTER_KEY "$master"
-	grep -q '^BRIEVIE_BACKUP_DB_PASSWORD=' "$target" ||
+	has_key BRIEVIE_MASTER_KEY || append BRIEVIE_MASTER_KEY "$master"
+	has_key BRIEVIE_BACKUP_DB_PASSWORD ||
 		append BRIEVIE_BACKUP_DB_PASSWORD "$backup_db_pw"
-	if ! grep -q '^DATABASE_BACKUP_URL=' "$target"; then
+	if ! has_key DATABASE_BACKUP_URL; then
 		port=$(value_of POSTGRES_PORT)
 		append DATABASE_BACKUP_URL \
 			"postgres://brievie_backup:$(value_of BRIEVIE_BACKUP_DB_PASSWORD)@localhost:${port:-5432}/brievie"

@@ -14,7 +14,9 @@ env_file=deploy/.env
 # else brievie; always passed with -p, so this never reaches another installation.
 project=${COMPOSE_PROJECT_NAME:-}
 if [ -z "$project" ]; then
-	project=$(sed -n 's/^COMPOSE_PROJECT_NAME=//p' "$env_file" 2>/dev/null | tail -n 1) || true
+	# The same expression as the Makefile's (a text test compares them): the plain and
+	# the `export` form, the last line wins.
+	project=$(sed -n 's/^[[:space:]]*\(export[[:space:]][[:space:]]*\)\{0,1\}COMPOSE_PROJECT_NAME=//p' "$env_file" 2>/dev/null | tail -n 1) || true
 fi
 project=${project:-brievie}
 case $project in

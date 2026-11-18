@@ -14,7 +14,7 @@ BACKEND := cd backend &&
 dev:
 	sh deploy/init-env.sh
 	$(COMPOSE) up -d --wait postgres
-	sh deploy/ensure-backup-role.sh
+	COMPOSE_PROJECT_NAME=$(PROJECT) sh deploy/ensure-backup-role.sh
 
 ## Stop the local stack (data volume is kept).
 down:
