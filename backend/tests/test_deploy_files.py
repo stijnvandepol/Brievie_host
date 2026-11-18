@@ -259,6 +259,7 @@ def make_project(tmp_path: Path, env_text: str | None) -> str:
         (None, "brievie"),
     ],
 )
+@pytest.mark.skipif(shutil.which("make") is None, reason="make is not installed")
 def test_make_reads_the_project_name_in_both_forms(
     tmp_path: Path, env_text: str | None, project: str
 ) -> None:

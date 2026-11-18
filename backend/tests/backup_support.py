@@ -253,6 +253,7 @@ _DESTRUCTIVE: tuple[tuple[object, str], ...] = (
     ),
     *((subprocess, name) for name in ("Popen", "run", "call", "check_call", "check_output")),
 )
+_PROCESS_PRIMITIVES = ("posix_spawn", "posix_spawnp", "fork", "execv", "execve", "execvp")
 _WRITE_FLAGS = os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC | os.O_APPEND
 _WRITE_MODES = frozenset("wax+")
 
@@ -278,6 +279,10 @@ class Recorder:
 
     def arm(self, *, allow: tuple[str, ...] = ()) -> None:
         tempfile.gettempdir()  # computed (and cached) before anything is replaced
+        if "Popen" in allow or "run" in allow:
+            # How subprocess starts a process differs per platform (Linux: posix_spawn,
+            # macOS: fork and exec); allowing a start allows all of its ways.
+            allow = (*allow, *_PROCESS_PRIMITIVES)
         for owner, name in _DESTRUCTIVE:
             if name not in allow:
                 self._patch.setattr(owner, name, self._refuse(name))
