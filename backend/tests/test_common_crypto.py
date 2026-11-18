@@ -160,3 +160,14 @@ def test_derive_backup_password_command_needs_a_valid_master_key(settings: Setti
     with pytest.raises(CommandError, match="BRIEVIE_MASTER_KEY"):
         call_command("derive_backup_password", stdout=out)
     assert out.getvalue() == ""
+
+
+@pytest.mark.parametrize("value", ["", "abc", "zz" * 32])
+def test_derive_backup_password_says_what_is_wrong_in_dutch(settings: Settings, value: str) -> None:
+    settings.BRIEVIE_MASTER_KEY = value
+    with pytest.raises(CommandError) as caught:
+        call_command("derive_backup_password", stdout=io.StringIO())
+    assert str(caught.value) == (
+        "BRIEVIE_MASTER_KEY in deploy/.env ontbreekt of is geen 64 tekens lang "
+        "(cijfers en a tot en met f). Zonder de juiste sleutel zijn de documenten niet te lezen."
+    )

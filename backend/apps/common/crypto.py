@@ -68,7 +68,7 @@ def derive_backup_password(master_key: bytes) -> str:
 
     HKDF-Expand only: the master key is already 32 uniformly random bytes (RFC 5869
     section 3.3). The result equals HMAC-SHA256(master_key, BACKUP_PASSWORD_INFO + 0x01),
-    which deploy/init-env.sh computes with openssl.
+    which only `manage.py derive_backup_password` (in the container) computes.
     """
     derived = HKDFExpand(algorithm=SHA256(), length=KEY_BYTES, info=BACKUP_PASSWORD_INFO)
     return derived.derive(master_key).hex()
