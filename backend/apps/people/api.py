@@ -3,6 +3,7 @@ from uuid import UUID
 from django.http import HttpRequest
 from ninja import Router, Status
 
+from apps.audit.services import actor_from_request
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.people import services
 from apps.people.models import Person
@@ -67,7 +68,9 @@ def update_person(
 )
 def delete_person(request: HttpRequest, workspace_id: UUID, person_id: UUID) -> Status[None]:
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
-    services.delete_person(workspace=membership.workspace, person_id=person_id)
+    services.delete_person(
+        workspace=membership.workspace, person_id=person_id, actor=actor_from_request(request)
+    )
     return Status(204, None)
 
 
@@ -81,5 +84,8 @@ def link_person_to_member(
 ) -> Person:
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
     return services.link_member(
-        workspace=membership.workspace, person_id=person_id, user_id=payload.user_id
+        workspace=membership.workspace,
+        person_id=person_id,
+        user_id=payload.user_id,
+        actor=actor_from_request(request),
     )

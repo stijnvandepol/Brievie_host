@@ -7,6 +7,7 @@ from ninja import Router
 
 from apps.accounts.services import current_user
 from apps.common.errors import ApiError
+from apps.common.net import valid_client_ip
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.common.throttling import CallerThrottle
 from apps.pipeline import settings_service
@@ -137,7 +138,9 @@ def update_ai_settings(
             base_url=payload.base_url,
             model=payload.model,
             api_key=payload.api_key or None,
-            actor=Actor(user_id=current_user(request).id, label=API),
+            actor=Actor(
+                user_id=current_user(request).id, label=API, client_ip=valid_client_ip(request)
+            ),
             consent_address=payload.consent_address,
         )
     except ConsentRequiredError as exc:

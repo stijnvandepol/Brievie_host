@@ -12,6 +12,9 @@ from django.utils.functional import Promise
 from django.utils.translation import gettext
 from django.utils.translation import gettext_lazy as _
 
+from apps.accounts.models import User
+from apps.audit.codes import AuditCode, TargetKind
+from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common import crypto
 from apps.pipeline.errors import PermanentError
 from apps.pipeline.models import AIConsentEvent, AISettings
@@ -80,6 +83,7 @@ class Actor:
 
     user_id: UUID | None = None
     label: str = COMMAND_LINE
+    client_ip: str | None = None
 
 
 @dataclass(frozen=True)
@@ -239,7 +243,23 @@ def configure(
                 actor_id=actor.user_id,
                 actor_label=actor.label,
             )
+            # Beside the consent event, in the same transaction; never the key or address.
+            record(
+                AuditCode.WORKSPACE_SETTING_CHANGED,
+                actor=_audit_actor(actor),
+                target=AuditTarget(TargetKind.WORKSPACE, workspace_id),
+                workspace_id=workspace_id,
+                values={"setting": "ai", "value": target.mode},
+            )
     return settings
+
+
+def _audit_actor(actor: Actor) -> AuditActor:
+    """The audit actor: the user (their name is loaded; `Actor` holds none) or the system."""
+    if actor.user_id is None:
+        return AuditActor.system()
+    user = User.objects.only("id", "name").get(id=actor.user_id)
+    return AuditActor.for_user(user, client_ip=actor.client_ip)
 
 
 def consent_in_force(workspace_id: UUID, base_url: str) -> bool:

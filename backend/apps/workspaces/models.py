@@ -17,6 +17,8 @@ class Workspace(BaseModel):
     name = models.CharField(max_length=150)
     kind = models.CharField(max_length=10, choices=Kind.choices)
     modules = models.JSONField(default=dict, blank=True)
+    # Whether a member may export their own post (D 6.3): on at home, off in Zakelijk.
+    allow_member_export = models.BooleanField(default=True)
 
     def __str__(self) -> str:
         return self.name

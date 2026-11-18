@@ -3,6 +3,7 @@ from uuid import UUID
 from django.http import HttpRequest
 from ninja import Router, Status
 
+from apps.audit.services import actor_from_request
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.rules import services
 from apps.rules.models import Rule
@@ -35,7 +36,12 @@ def list_rules(request: HttpRequest, workspace_id: UUID) -> list[Rule]:
 )
 def create_rule(request: HttpRequest, workspace_id: UUID, payload: RuleIn) -> Status[Rule]:
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
-    return Status(201, services.create_rule(workspace=membership.workspace, data=payload))
+    return Status(
+        201,
+        services.create_rule(
+            workspace=membership.workspace, data=payload, actor=actor_from_request(request)
+        ),
+    )
 
 
 # Before `_RULE`, so `order` and `test` are not read as a rule id.
@@ -74,7 +80,12 @@ def test_rule(request: HttpRequest, workspace_id: UUID, payload: RuleIn) -> Rule
 )
 def update_rule(request: HttpRequest, workspace_id: UUID, rule_id: UUID, payload: RuleIn) -> Rule:
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
-    return services.update_rule(workspace=membership.workspace, rule_id=rule_id, data=payload)
+    return services.update_rule(
+        workspace=membership.workspace,
+        rule_id=rule_id,
+        data=payload,
+        actor=actor_from_request(request),
+    )
 
 
 @router.delete(
@@ -85,7 +96,9 @@ def update_rule(request: HttpRequest, workspace_id: UUID, rule_id: UUID, payload
 )
 def delete_rule(request: HttpRequest, workspace_id: UUID, rule_id: UUID) -> Status[None]:
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
-    services.delete_rule(workspace=membership.workspace, rule_id=rule_id)
+    services.delete_rule(
+        workspace=membership.workspace, rule_id=rule_id, actor=actor_from_request(request)
+    )
     return Status(204, None)
 
 
@@ -100,5 +113,7 @@ def delete_rule(request: HttpRequest, workspace_id: UUID, rule_id: UUID) -> Stat
 )
 def run_rule(request: HttpRequest, workspace_id: UUID, rule_id: UUID) -> Status[RuleRunStartedOut]:
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
-    services.run_rule(workspace=membership.workspace, rule_id=rule_id)
+    services.run_rule(
+        workspace=membership.workspace, rule_id=rule_id, actor=actor_from_request(request)
+    )
     return Status(202, RuleRunStartedOut(queued=True))

@@ -3,6 +3,7 @@ from uuid import UUID
 from django.http import HttpRequest
 from ninja import Router, Status
 
+from apps.audit.services import actor_from_request
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.labels import presets, services
 from apps.labels.models import Label
@@ -78,5 +79,7 @@ def update_label(
 )
 def delete_label(request: HttpRequest, workspace_id: UUID, label_id: UUID) -> Status[None]:
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
-    services.delete_label(workspace=membership.workspace, label_id=label_id)
+    services.delete_label(
+        workspace=membership.workspace, label_id=label_id, actor=actor_from_request(request)
+    )
     return Status(204, None)

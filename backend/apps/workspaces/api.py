@@ -10,7 +10,7 @@ from apps.audit.services import actor_from_request
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.common.throttling import CallerThrottle, ClientAddressThrottle
 from apps.pipeline.schemas import AiStatusOut
-from apps.workspaces import invitations, members, services
+from apps.workspaces import invitations, members, services, settings_service
 from apps.workspaces.deps import workspace_member
 from apps.workspaces.invitations import IssuedInvitation
 from apps.workspaces.models import Membership
@@ -24,6 +24,8 @@ from apps.workspaces.schemas import (
     MemberOut,
     MemberRoleIn,
     WorkspaceOut,
+    WorkspaceSettingsIn,
+    WorkspaceSettingsOut,
 )
 
 router = Router(tags=["workspaces"])
@@ -51,6 +53,39 @@ DEAD_LINK = (
 def list_workspaces(request: HttpRequest) -> list[WorkspaceOut]:
     memberships = services.list_memberships(current_user(request))
     return [WorkspaceOut.from_membership(m) for m in memberships]
+
+
+@router.get(
+    "/workspaces/{workspace_id}/settings",
+    response={200: WorkspaceSettingsOut, 404: ErrorOut, **AUTH_ERRORS},
+    auth=session_auth,
+    description=WEB_SESSION_ONLY + " The workspace's settings, for every member.",
+    operation_id="getWorkspaceSettings",
+)
+def get_workspace_settings(request: HttpRequest, workspace_id: UUID) -> WorkspaceSettingsOut:
+    membership = workspace_member(request, workspace_id)
+    return WorkspaceSettingsOut(allow_member_export=membership.workspace.allow_member_export)
+
+
+@router.put(
+    "/workspaces/{workspace_id}/settings",
+    response={200: WorkspaceSettingsOut, 404: ErrorOut, **SESSION_WRITE_ERRORS, **BODY_ERRORS},
+    auth=session_auth,
+    description=WEB_SESSION_ONLY
+    + ADMINS_ONLY
+    + " Change settings; a setting left out stays as it is. A change is written to the log.",
+    operation_id="updateWorkspaceSettings",
+)
+def update_workspace_settings(
+    request: HttpRequest, workspace_id: UUID, payload: WorkspaceSettingsIn
+) -> WorkspaceSettingsOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
+    workspace = settings_service.update_settings(
+        workspace=membership.workspace,
+        actor=actor_from_request(request),
+        allow_member_export=payload.allow_member_export,
+    )
+    return WorkspaceSettingsOut(allow_member_export=workspace.allow_member_export)
 
 
 @router.get(

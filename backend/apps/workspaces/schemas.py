@@ -34,6 +34,16 @@ class MemberOut(Schema):
     can_manage_account: bool = False
 
 
+class WorkspaceSettingsOut(Schema):
+    # Whether a member may export their own post.
+    allow_member_export: bool
+
+
+class WorkspaceSettingsIn(InputSchema):
+    # A setting left out stays as it is.
+    allow_member_export: bool | None = None
+
+
 class MemberRoleIn(InputSchema):
     role: Literal["admin", "member", "viewer"]
 

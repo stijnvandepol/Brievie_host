@@ -23,7 +23,9 @@ def create_workspace(
     if kind not in Workspace.Kind.values:
         raise ValueError(f"Unknown workspace kind: {kind!r}")
     with transaction.atomic():
-        workspace = Workspace.objects.create(name=name, kind=kind)
+        workspace = Workspace.objects.create(
+            name=name, kind=kind, allow_member_export=kind == Workspace.Kind.HOME
+        )
         Membership.objects.create(user=admin, workspace=workspace, role=Membership.Role.ADMIN)
         with workspace_context(workspace.id):
             workspace_key(workspace.id)

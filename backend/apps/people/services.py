@@ -7,6 +7,8 @@ from django.utils.translation import gettext as _
 from psycopg import errors as pg_errors
 
 from apps.accounts.models import User
+from apps.audit.codes import AuditCode, TargetKind
+from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
 from apps.documents.models import DocumentSuggestion
@@ -161,7 +163,7 @@ def update_person(
         return _annotated(workspace, person.id)
 
 
-def delete_person(*, workspace: Workspace, person_id: UUID) -> None:
+def delete_person(*, workspace: Workspace, person_id: UUID, actor: AuditActor) -> None:
     with transaction.atomic():
         # Rules first, in id order: a running rule holds its rules and then needs the person.
         rules = list(Rule.objects.select_for_update().filter(workspace=workspace).order_by("id"))
@@ -181,6 +183,12 @@ def delete_person(*, workspace: Workspace, person_id: UUID) -> None:
                     % {"rule": rule.name},
                 )
         person.delete()
+        record(
+            AuditCode.PERSON_DELETED,
+            actor=actor,
+            target=AuditTarget(TargetKind.PERSON, person_id, person.display_name),
+            workspace_id=workspace.id,
+        )
 
 
 def _free_name(workspace: Workspace, name: str) -> str:
@@ -217,7 +225,9 @@ def ensure_person_for_member(*, workspace: Workspace, user: User) -> Person:
         )
 
 
-def link_member(*, workspace: Workspace, person_id: UUID, user_id: UUID | None) -> Person:
+def link_member(
+    *, workspace: Workspace, person_id: UUID, user_id: UUID | None, actor: AuditActor
+) -> Person:
     """Link the person to a member of the workspace, or unlink it (`user_id` None)."""
     with transaction.atomic():
         person = _get_for_update(workspace, person_id)
@@ -230,6 +240,14 @@ def link_member(*, workspace: Workspace, person_id: UUID, user_id: UUID | None) 
                 .exists()
             ):
                 raise _member_already_linked()
+        was_linked = person.user_id is not None
         person.user_id = user_id
         _save(person)
+        if user_id is not None or was_linked:
+            record(
+                AuditCode.PERSON_LINKED if user_id is not None else AuditCode.PERSON_UNLINKED,
+                actor=actor,
+                target=AuditTarget(TargetKind.PERSON, person.id, person.display_name),
+                workspace_id=workspace.id,
+            )
         return _annotated(workspace, person.id)
