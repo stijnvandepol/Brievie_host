@@ -101,11 +101,7 @@ def env_copy(settings: Settings) -> Path:
 
 
 def retention(host: str = restic.HOST) -> list[list[str]]:
-    return [
-        restic.snapshots_host_argv(host),
-        restic.forget_safety_argv(host),
-        restic.forget_argv(host),
-    ]
+    return [restic.snapshots_host_argv(host), restic.forget_argv(host)]
 
 
 def _owner_conninfo() -> str:
@@ -412,7 +408,7 @@ def test_failed_retention_after_an_incomplete_back_up_keeps_its_reason(
     fake_restic.respond(db_prefix(run.id), stdout=summary(DB_SIZE))
     fake_restic.respond(files_prefix(run.id), stdout=summary(FILES_SIZE), code=3)
     no_snapshots(fake_restic)
-    fake_restic.respond(tuple(restic.forget_safety_argv()), code=11)
+    fake_restic.respond(tuple(restic.forget_argv()), code=11)
 
     with caplog.at_level(logging.DEBUG):
         services.perform_run(run.id)
@@ -506,8 +502,8 @@ def test_no_secret_is_in_any_argv_of_a_whole_run(
         db_password,
     )
     calls = fake_restic.calls + fake_pg_dump.calls
-    # pg_dump --version, unlock, two backups, the listing, two forgets
-    assert len(calls) == 7
+    # pg_dump --version, unlock, two backups, the listing, the forget
+    assert len(calls) == 6
     for argv in calls:
         joined = " ".join(argv)
         for secret in secrets:
@@ -1140,7 +1136,6 @@ def test_only_unlock_and_clean_up_have_a_timeout(
         (dump_last_arg, None),
         (files_last_arg, None),
         ("snapshots", services.SHORT_RESTIC_TIMEOUT),  # retention: the clock, half runs
-        ("forget", None),  # safety snapshots older than 30 days
         ("forget", None),  # retention with --prune
     ]
     assert services.SHORT_RESTIC_TIMEOUT == 600
@@ -1613,7 +1608,7 @@ def test_both_halves_of_a_run_carry_the_runs_start_and_the_installations_host(
     assert run.started_at is not None
     assert times == {run.started_at.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S")}
     assert all(call[call.index("--host") + 1] == host for call in backups)
-    assert fake_restic.calls[-3:] == retention(host)
+    assert fake_restic.calls[-2:] == retention(host)
 
 
 @pytest.mark.parametrize("content", ["not-hex", "0123", "", "0123456789ABCDEF0123456789ABCDEF"])
@@ -1724,10 +1719,9 @@ def test_half_runs_older_than_two_days_go_before_retention(
 
     services.perform_run(run.id)
 
-    assert fake_restic.calls[-4:] == [
+    assert fake_restic.calls[-3:] == [
         restic.snapshots_host_argv(restic.HOST),
         restic.forget_run_argv(old_half),
-        restic.forget_safety_argv(),
         restic.forget_argv(),
     ]
 
@@ -1792,3 +1786,28 @@ def test_an_abandoned_run_with_both_snapshots_is_kept(
 
     assert restic.forget_run_argv(whole) not in fake_restic.calls
     assert restic.forget_run_argv(half) in fake_restic.calls
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_safety_backup_goes_after_thirty_days_counted_from_now(
+    configured_folder: Path, fake_restic: FakeBinary, fake_pg_dump: FakeBinary
+) -> None:
+    run = queued_run()
+    answer_both_backups(fake_restic, run.id)
+    now = timezone.now()
+    expired, kept = uuid4(), uuid4()
+    listed = []
+    for run_id, age in ((expired, timedelta(days=31)), (kept, timedelta(days=29))):
+        for kind in ("db", "files"):
+            entry = snapshot_json(run_id, kind, (now - age).astimezone(UTC).isoformat())
+            entry["tags"] = [*entry["tags"], restic.SAFETY_TAG]  # type: ignore[misc]
+            listed.append(entry)
+    fake_restic.respond(("snapshots", "--json", "--host"), stdout=json.dumps(listed).encode())
+
+    services.perform_run(run.id)
+
+    assert fake_restic.calls[-3:] == [
+        restic.snapshots_host_argv(restic.HOST),
+        restic.forget_run_argv(expired),
+        restic.forget_argv(),
+    ]

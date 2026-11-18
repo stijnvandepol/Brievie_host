@@ -401,6 +401,8 @@ def _back_up(
 CLOCK_TOLERANCE = timedelta(hours=24)
 # A run with only one of its halves, older than this, is a leftover (removed first).
 HALF_RUN_AGE = timedelta(hours=48)
+# How long the safety back-up of a restore is kept, counted from now.
+SAFETY_KEEP = timedelta(days=30)
 
 
 def _started_at(run_id: UUID) -> datetime:
@@ -431,11 +433,7 @@ def _half_runs(snapshots: list[restic.Snapshot], before: datetime) -> list[UUID]
     kinds: dict[UUID, set[str]] = {}
     newest: dict[UUID, datetime] = {}
     for snapshot in snapshots:
-        run_tags = [tag.removeprefix("run:") for tag in snapshot.tags if tag.startswith("run:")]
-        try:
-            run_id = UUID(run_tags[0]) if run_tags else None
-        except ValueError:
-            run_id = None
+        run_id = _run_of(snapshot)
         if run_id is None:
             continue
         kinds.setdefault(run_id, set()).update(
@@ -452,9 +450,9 @@ def _apply_retention(run_restic: "_Restic", current: UUID) -> str | None:
     """Retention of this installation's snapshots; returns a warning code, or None.
 
     First the clock: a snapshot more than a day ahead of now stops it (`clock_skew`),
-    nothing is removed. Then half runs older than two days go by their run tag, then
-    safety snapshots older than 30 days, then the ordinary retention (which keeps
-    safety snapshots and everything of the last two days).
+    nothing is removed. Then half runs older than two days and safety back-ups older
+    than 30 days go by their run tag, then the ordinary retention (which keeps safety
+    snapshots and everything of the last two days).
     """
     listed = restic.parse_snapshots(
         run_restic(restic.snapshots_host_argv(run_restic.host), timeout=SHORT_RESTIC_TIMEOUT)
@@ -466,8 +464,34 @@ def _apply_retention(run_restic: "_Restic", current: UUID) -> str | None:
     for half in _half_runs(listed, now - HALF_RUN_AGE):
         if half != current:
             run_restic.forget_run(half)
-    run_restic(restic.forget_safety_argv(run_restic.host))
+    # restic's --keep-within counts from the newest snapshot of a group, so a lone safety
+    # snapshot would never expire: its age is counted from now, here.
+    for expired in _safety_runs(listed, now - SAFETY_KEEP):
+        if expired != current:
+            run_restic.forget_run(expired)
     run_restic(restic.forget_argv(run_restic.host))
+    return None
+
+
+def _safety_runs(snapshots: list[restic.Snapshot], before: datetime) -> list[UUID]:
+    """Safety back-ups whose snapshots are all older than `before`."""
+    newest: dict[UUID, datetime] = {}
+    for snapshot in snapshots:
+        if restic.SAFETY_TAG not in snapshot.tags:
+            continue
+        run_id = _run_of(snapshot)
+        if run_id is not None:
+            newest[run_id] = max(newest.get(run_id, snapshot.time), snapshot.time)
+    return sorted((run_id for run_id, when in newest.items() if when < before), key=str)
+
+
+def _run_of(snapshot: restic.Snapshot) -> UUID | None:
+    for tag in snapshot.tags:
+        if tag.startswith("run:"):
+            try:
+                return UUID(tag.removeprefix("run:"))
+            except ValueError:
+                return None
     return None
 
 

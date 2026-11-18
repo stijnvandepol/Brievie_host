@@ -6,6 +6,7 @@ Skipped where restic is not installed; the image and CI's restore job run it.
 import os
 import shutil
 import uuid
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -88,3 +89,66 @@ def test_retention_keeps_every_run_of_the_last_two_days(tmp_path: Path, settings
         listed = _run(restic.snapshots_argv(f"run:{run_id}", no_lock=True), env)
         kinds = sorted(tag for s in restic.parse_snapshots(listed.stdout) for tag in s.tags)
         assert kinds == ["kind:db", "kind:files", f"run:{run_id}", f"run:{run_id}"], run_id
+
+
+def _repository(tmp_path: Path, settings: object) -> dict[str, str]:
+    settings.BRIEVIE_RESTIC_BINARY = shutil.which("restic")  # type: ignore[attr-defined]
+    env = restic.restic_env(Repository("folder", str(tmp_path / "repo"), {}), PASSWORD)
+    _run(restic.init_argv(), env)
+    return env
+
+
+def _back_up(
+    env: dict[str, str], data: Path, run_id: uuid.UUID, at: datetime, *, safety: bool = False
+) -> None:
+    # The files snapshot is made a moment after the dump; both carry the run's start.
+    _run(restic.backup_stdin_argv(run_id, ["sh", "-c", "printf dump"], at=at, safety=safety), env)
+    _run(restic.backup_files_argv(run_id, [str(data)], at=at, safety=safety), env)
+
+
+def _kinds_by_run(env: dict[str, str]) -> dict[str, set[str]]:
+    listed = restic.parse_snapshots(_run(["snapshots", "--json"], env).stdout)
+    runs: dict[str, set[str]] = {}
+    for snapshot in listed:
+        run = next(tag for tag in snapshot.tags if tag.startswith("run:"))
+        runs.setdefault(run, set()).update(t for t in snapshot.tags if t.startswith("kind:"))
+    return runs
+
+
+def test_retention_across_midnight_keeps_only_whole_runs(tmp_path: Path, settings: object) -> None:
+    # Runs just before and after midnight, over three weeks and a month boundary: the day,
+    # week and month rules must pick the same run in the database group and the files
+    # group, so every kept run has both halves.
+    env = _repository(tmp_path, settings)
+    data = tmp_path / "data"
+    data.mkdir()
+    start = datetime(2026, 10, 15, 23, 59, 58, tzinfo=UTC)
+    moments = []
+    for day in range(25):
+        moments.append(start + timedelta(days=day))
+        moments.append(start + timedelta(days=day, seconds=4))  # 00:00:02 the next day
+    for number, moment in enumerate(moments):
+        (data / f"{number}.page").write_bytes(b"page")
+        _back_up(env, data, uuid.uuid4(), moment)
+
+    _run(restic.forget_argv(), env)
+
+    runs = _kinds_by_run(env)
+    assert len(runs) < len(moments)  # retention did remove runs
+    assert all(kinds == {"kind:db", "kind:files"} for kinds in runs.values()), runs
+
+
+def test_ordinary_retention_never_removes_a_safety_backup(tmp_path: Path, settings: object) -> None:
+    env = _repository(tmp_path, settings)
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "a.page").write_bytes(b"page")
+    safety = uuid.uuid4()
+    first = datetime(2026, 10, 1, 10, 0, tzinfo=UTC)
+    _back_up(env, data, safety, first, safety=True)
+    for day in range(1, 20):
+        _back_up(env, data, uuid.uuid4(), first + timedelta(days=day))
+
+    _run(restic.forget_argv(), env)
+
+    assert _kinds_by_run(env)[f"run:{safety}"] == {"kind:db", "kind:files", restic.SAFETY_TAG}

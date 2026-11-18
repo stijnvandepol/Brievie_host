@@ -500,20 +500,6 @@ def test_the_files_backup_leaves_out_the_given_paths() -> None:
     assert argv[-2:] == ["--", "/data/backup-config"]
 
 
-def test_safety_snapshots_go_after_thirty_days_in_a_forget_of_their_own() -> None:
-    assert restic.forget_safety_argv("brievie-0123456789ab") == [
-        "forget",
-        "--host",
-        "brievie-0123456789ab",
-        "--tag",
-        "kind:safety",
-        "--group-by",
-        "host,paths",
-        "--keep-within",
-        "30d",
-    ]
-
-
 def test_retention_and_run_removal_stay_on_the_own_host() -> None:
     assert restic.forget_argv("brievie-0123456789ab")[2:4] == ["--host", "brievie-0123456789ab"]
     assert restic.forget_run_argv(RUN, "brievie-0123456789ab") == [

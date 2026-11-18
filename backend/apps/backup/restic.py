@@ -21,9 +21,9 @@ from django.conf import settings
 from apps.backup.errors import BackupError
 
 HOST = "brievie"
-# The tag of a restore's safety back-up, and how long retention keeps those.
+# The tag of a restore's safety back-up (kept by ordinary retention; removed after 30
+# days, counted from now, by services._apply_retention).
 SAFETY_TAG = "kind:safety"
-SAFETY_KEEP = "30d"
 DB_FILENAME = "brievie.pgdump"
 TMP_EXCLUDE = ".tmp-*"
 # Every snapshot of the last two days (counted from the newest) stays; older ones
@@ -182,21 +182,6 @@ def forget_argv(host: str = HOST) -> list[str]:
         "--keep-tag",
         SAFETY_TAG,
         *RETENTION,
-    ]
-
-
-def forget_safety_argv(host: str = HOST) -> list[str]:
-    """Safety snapshots of restores, kept for 30 days (the next retention prunes)."""
-    return [
-        "forget",
-        "--host",
-        host,
-        "--tag",
-        SAFETY_TAG,
-        "--group-by",
-        "host,paths",
-        "--keep-within",
-        SAFETY_KEEP,
     ]
 
 
