@@ -8,6 +8,7 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.db import DataError, connection, transaction
 from django.utils import timezone
+from procrastinate.contrib.django import app as procrastinate_app
 from pytest_django import Settings
 
 import brievie.settings
@@ -152,7 +153,8 @@ def test_app_role_may_execute_the_purge_functions_and_public_may_not(function: s
     assert security_definer is True
     # The suite runs as the schema owner, which also ran the migration.
     assert function_owner == owner[0]
-    assert config == ["search_path=pg_catalog, public"]
+    # pg_temp last, so a temporary object can never shadow a table or function.
+    assert config == ["search_path=pg_catalog, public, pg_temp"]
 
 
 def test_purge_job_uses_the_retention_setting(settings: Settings, ws_a: Workspace) -> None:
@@ -196,3 +198,15 @@ def test_retention_below_90_days_is_refused(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(environ.Env, "read_env", lambda *args, **kwargs: None)
     with pytest.raises(ImproperlyConfigured, match="BRIEVIE_AUDIT_RETENTION_DAYS"):
         runpy.run_path(str(Path(brievie.settings.__file__)))
+
+
+def test_purge_task_is_registered_nightly_with_a_queueing_lock() -> None:
+    task = procrastinate_app.tasks["purge_audit_events"]
+    assert task.queue == "pipeline"
+    # Every worker defers every periodic task; the lock keeps at most one waiting.
+    assert task.queueing_lock == "purge_audit_events"
+    periodic = {
+        entry.task.name: entry.cron
+        for entry in procrastinate_app.periodic_registry.periodic_tasks.values()
+    }
+    assert periodic["purge_audit_events"] == "17 3 * * *"

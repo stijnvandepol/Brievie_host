@@ -4,7 +4,7 @@ import pytest
 from django.test import RequestFactory
 from pytest_django import Settings
 
-from apps.audit.codes import ALLOWED_VALUES, AuditCode
+from apps.audit.codes import ALLOWED_VALUES, NAMED_TARGETS, AuditCode, TargetKind
 from apps.audit.models import ServerAuditEvent, WorkspaceAuditEvent
 from apps.audit.services import AuditActor, AuditTarget, actor_from_request, record
 from apps.devices.models import Device
@@ -230,3 +230,67 @@ def test_the_list_of_codes_is_the_closed_list_of_d11() -> None:
         "export_created",
         "export_downloaded",
     }
+
+
+NAMED_TARGET_KINDS = ["user", "person", "invitation", "device", "workspace"]
+ID_ONLY_TARGET_KINDS = ["label", "rule", "document", "export", "session"]
+
+
+def test_every_target_kind_is_decided() -> None:
+    assert set(NAMED_TARGET_KINDS) | set(ID_ONLY_TARGET_KINDS) == set(TargetKind.values)
+    assert frozenset(NAMED_TARGET_KINDS) == NAMED_TARGETS
+
+
+@pytest.mark.parametrize("kind", NAMED_TARGET_KINDS)
+def test_record_keeps_the_name_of_a_named_target(ws_a: Workspace, kind: str) -> None:
+    record(
+        AuditCode.PERSON_DELETED,
+        actor=AuditActor.system(),
+        target=AuditTarget(kind=kind, id=uuid.uuid4(), name="Bram"),
+        workspace_id=ws_a.id,
+    )
+    assert workspace_rows(ws_a)[0].target_name == "Bram"
+
+
+@pytest.mark.parametrize("kind", ID_ONLY_TARGET_KINDS)
+def test_record_refuses_a_name_for_a_target_that_carries_an_id_only(
+    ws_a: Workspace, kind: str
+) -> None:
+    with pytest.raises(ValueError, match=kind):
+        record(
+            AuditCode.LABEL_DELETED,
+            actor=AuditActor.system(),
+            target=AuditTarget(kind=kind, id=uuid.uuid4(), name="Zorgverzekering"),
+            workspace_id=ws_a.id,
+        )
+    assert workspace_rows(ws_a) == []
+
+
+@pytest.mark.parametrize("kind", ID_ONLY_TARGET_KINDS)
+def test_record_takes_an_id_only_target_without_a_name(ws_a: Workspace, kind: str) -> None:
+    target_id = uuid.uuid4()
+    record(
+        AuditCode.LABEL_DELETED,
+        actor=AuditActor.system(),
+        target=AuditTarget(kind=kind, id=target_id),
+        workspace_id=ws_a.id,
+    )
+    row = workspace_rows(ws_a)[0]
+    assert (row.target_kind, row.target_id, row.target_name) == (kind, target_id, "")
+
+
+@pytest.mark.parametrize("address", ["unknown", "1.2.3.4:80", "fe80::1%eth0", "", "x" * 300])
+def test_record_stores_an_unusable_client_address_as_null(address: str) -> None:
+    record(
+        AuditCode.SIGN_IN_FAILED,
+        actor=AuditActor(kind="user", user_id=None, name="", client_ip=address),
+    )
+    assert ServerAuditEvent.objects.get().client_ip is None
+
+
+def test_record_keeps_a_usable_client_address() -> None:
+    record(
+        AuditCode.SIGN_IN_FAILED,
+        actor=AuditActor(kind="user", user_id=None, name="", client_ip="2001:db8::1"),
+    )
+    assert ServerAuditEvent.objects.get().client_ip == "2001:db8::1"

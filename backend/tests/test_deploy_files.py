@@ -289,3 +289,11 @@ def test_ci_runs_the_real_restic_tests_with_the_images_restic() -> None:
     assert pinned.group(0) in backend
     assert backend.index(pinned.group(0)) < backend.index("run: uv run pytest")
     assert "restic version" in backend
+
+
+def test_the_worker_that_purges_audit_rows_gets_the_retention() -> None:
+    # purge_audit_events runs on the pipeline queue, which only the worker serves.
+    assert "--queues pipeline" in service("worker")
+    line = "BRIEVIE_AUDIT_RETENTION_DAYS: ${BRIEVIE_AUDIT_RETENTION_DAYS:-365}"
+    assert line in service("worker")
+    assert "# BRIEVIE_AUDIT_RETENTION_DAYS=365" in ENV_EXAMPLE

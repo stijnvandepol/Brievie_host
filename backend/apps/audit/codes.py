@@ -75,6 +75,20 @@ class TargetKind(models.TextChoices):
     EXPORT = "export", _("Export")
 
 
+# Targets whose row keeps a name: people and accounts (the name as it was then), a
+# phone's name, an invitation's invitee and the workspace. Every other kind (a label,
+# a rule, a document, an export, a session) is an id only: their names can hold a label
+# name or a letter's subject.
+NAMED_TARGETS: frozenset[str] = frozenset(
+    {
+        TargetKind.USER,
+        TargetKind.PERSON,
+        TargetKind.INVITATION,
+        TargetKind.DEVICE,
+        TargetKind.WORKSPACE,
+    }
+)
+
 _NONE: frozenset[str] = frozenset()
 
 # The only value keys a row of each code may carry. Values are plain text, numbers or

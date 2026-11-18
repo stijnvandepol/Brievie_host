@@ -97,6 +97,8 @@ services:
       DATABASE_URL: postgres://brievie_app:${BRIEVIE_APP_PASSWORD}@postgres:5432/brievie
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in deploy/.env}
       BRIEVIE_MASTER_KEY: ${BRIEVIE_MASTER_KEY:?set BRIEVIE_MASTER_KEY in deploy/.env (sh deploy/init-env.sh adds it)}
+      # Audit rows older than this many days are removed at night (at least 90).
+      BRIEVIE_AUDIT_RETENTION_DAYS: ${BRIEVIE_AUDIT_RETENTION_DAYS:-365}
     command:
       - sh
       - -c

@@ -12,9 +12,9 @@ from uuid import UUID
 
 from django.http import HttpRequest
 
-from apps.audit.codes import ALLOWED_VALUES, ActorKind, AuditCode, TargetKind
+from apps.audit.codes import ALLOWED_VALUES, NAMED_TARGETS, ActorKind, AuditCode, TargetKind
 from apps.audit.models import ServerAuditEvent, WorkspaceAuditEvent
-from apps.common.net import valid_client_ip
+from apps.common.net import usable_ip, valid_client_ip
 from apps.common.privacy import mask_bsns
 from apps.workspaces.context import workspace_context
 
@@ -29,7 +29,11 @@ AuditValue = str | int | bool
 
 @dataclass(frozen=True)
 class AuditActor:
-    """Who did it: a user (browser), a user's device (bearer token), the system or SSO."""
+    """Who did it: a user (browser), a user's device (bearer token), the system or SSO.
+
+    `name` is always a person's name (the user's, also for their device), "Brievie" for
+    the system, or empty: every actor kind may carry one.
+    """
 
     kind: str
     user_id: UUID | None
@@ -48,7 +52,8 @@ class AuditActor:
 
 @dataclass(frozen=True)
 class AuditTarget:
-    """What it was done to: a kind of `TargetKind`, an id and, for people, a name."""
+    """What it was done to: a kind of `TargetKind`, an id and, for `NAMED_TARGETS` only,
+    a name. A label, rule, document, export or session is an id only."""
 
     kind: str
     id: UUID | None
@@ -84,14 +89,18 @@ def record(
     """Write one audit row: a workspace row when `workspace_id` is given, else a server row.
 
     Raises `ValueError` for a code outside the closed list, an unknown actor or target
-    kind, a value key the code does not allow, or a value that is not text, a number
-    or a flag. Text is cut to 200 characters (names to 150) and BSN-masked.
+    kind, a name on a target that carries an id only (see `NAMED_TARGETS`), a value key
+    the code does not allow, or a value that is not text, a number or a flag. Text is
+    cut to 200 characters (names to 150) and BSN-masked; an address `inet` cannot hold
+    is stored as NULL.
     """
     code = AuditCode(code)
     if actor.kind not in ActorKind.values:
         raise ValueError(f"Unknown audit actor kind: {actor.kind!r}")
     if target is not None and target.kind not in TargetKind.values:
         raise ValueError(f"Unknown audit target kind: {target.kind!r}")
+    if target is not None and target.name and target.kind not in NAMED_TARGETS:
+        raise ValueError(f"An audit target of kind {target.kind!r} carries an id only, no name")
     fields = {
         "actor_kind": actor.kind,
         "actor_id": actor.user_id,
@@ -101,7 +110,9 @@ def record(
         "target_kind": target.kind if target else "",
         "target_id": target.id if target else None,
         "target_name": _name(target.name) if target else "",
-        "client_ip": actor.client_ip,
+        # A caller may pass a forged forwarded address; inet would refuse it and abort
+        # the caller's transaction.
+        "client_ip": usable_ip(actor.client_ip),
         "values": _clean_values(code, values or {}),
     }
     if workspace_id is None:

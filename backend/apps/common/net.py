@@ -28,7 +28,11 @@ def valid_client_ip(request: HttpRequest) -> str | None:
     For storing in an `inet` column: an `X-Forwarded-For` entry such as `unknown` or
     `1.2.3.4:80` would make the insert fail. The throttles keep keying on `client_ip`.
     """
-    address = client_ip(request)
+    return usable_ip(client_ip(request))
+
+
+def usable_ip(address: str | None) -> str | None:
+    """`address` normalised when PostgreSQL's `inet` can hold it, else None."""
     if not address:
         return None
     try:

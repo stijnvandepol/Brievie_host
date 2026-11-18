@@ -15,7 +15,8 @@ logger = logging.getLogger(__name__)
 
 
 @app.periodic(cron="17 3 * * *")
-@app.task(name="purge_audit_events", queue=QUEUE)
+# Every worker defers every periodic task; the queueing lock keeps at most one waiting.
+@app.task(name="purge_audit_events", queue=QUEUE, queueing_lock="purge_audit_events")
 def purge_audit_events(timestamp: int) -> None:
     """Remove audit rows older than `BRIEVIE_AUDIT_RETENTION_DAYS`, one workspace at a time.
 
