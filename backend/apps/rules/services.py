@@ -106,6 +106,11 @@ def _record(code: AuditCode, workspace: Workspace, actor: AuditActor, rule_id: U
     )
 
 
+def _content(rule: Rule) -> tuple[object, ...]:
+    """What an update can change, to see whether it changed anything."""
+    return (rule.name, rule.active, rule.mode, rule.stop, rule.definition)
+
+
 def create_rule(*, workspace: Workspace, data: RuleIn, actor: AuditActor) -> Rule:
     """Append a rule after the workspace's rules."""
     with transaction.atomic():
@@ -125,9 +130,11 @@ def create_rule(*, workspace: Workspace, data: RuleIn, actor: AuditActor) -> Rul
 def update_rule(*, workspace: Workspace, rule_id: UUID, data: RuleIn, actor: AuditActor) -> Rule:
     with transaction.atomic():
         rule = _get_for_update(workspace, rule_id)
+        before = _content(rule)
         _fill(rule, workspace, data)
-        rule.save()
-        _record(AuditCode.RULE_CHANGED, workspace, actor, rule.id)
+        if _content(rule) != before:
+            rule.save()
+            _record(AuditCode.RULE_CHANGED, workspace, actor, rule.id)
         return _rules(workspace).get(id=rule.id)
 
 

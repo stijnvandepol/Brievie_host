@@ -289,3 +289,47 @@ def test_an_inactive_server_admin_reads_nothing(path: str) -> None:
     user.save()
 
     assert client.get(path).status_code in (401, 403)
+
+
+def test_a_csv_over_the_cap_is_cut_and_says_so(
+    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("apps.audit.services.CSV_MAX_ROWS", 3)
+    for _ in range(5):
+        log(ws_a, AuditCode.RULE_CREATED)
+    admin = as_user(admin_of(ws_a))
+
+    r = admin.get(wpath(ws_a, "/csv"))
+
+    rows = parsed(r)
+    assert r["X-Brievie-Truncated"] == "true"
+    assert rows[0] == HEADER
+    assert [row[3] for row in rows[1:4]] == ["rule_created"] * 3
+    assert rows[4] == ["Let op: alleen de nieuwste 3 gebeurtenissen staan in dit bestand."]
+    assert len(rows) == 5
+
+
+def test_a_csv_at_or_under_the_cap_is_whole(
+    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("apps.audit.services.CSV_MAX_ROWS", 3)
+    admin = as_user(admin_of(ws_a))
+    for _ in range(3):
+        log(ws_a, AuditCode.RULE_CREATED)
+
+    r = admin.get(wpath(ws_a, "/csv"))
+
+    assert "X-Brievie-Truncated" not in r
+    assert len(parsed(r)) == 4
+    assert not any("Let op" in cell for row in parsed(r) for cell in row)
+
+
+def test_the_server_csv_is_cut_the_same_way(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("apps.audit.services.CSV_MAX_ROWS", 2)
+    for _ in range(3):
+        record(AuditCode.SIGN_IN_FAILED, actor=AuditActor.system())
+
+    r = as_user(server_admin()).get("/api/v1/server/audit-events/csv")
+
+    assert r["X-Brievie-Truncated"] == "true"
+    assert len(parsed(r)) == 4

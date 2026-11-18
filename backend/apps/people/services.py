@@ -240,6 +240,9 @@ def link_member(
                 .exists()
             ):
                 raise _member_already_linked()
+        if person.user_id == user_id:
+            # Nothing changes, so nothing is written to the log either.
+            return _annotated(workspace, person.id)
         was_linked = person.user_id is not None
         person.user_id = user_id
         _save(person)

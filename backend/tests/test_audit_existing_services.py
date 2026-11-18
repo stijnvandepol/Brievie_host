@@ -34,7 +34,8 @@ ACTOR = AuditActor.system()
 def rule_in(ws: Workspace) -> RuleIn:
     """A valid rule that adds one of the workspace's preset labels."""
     with workspace_context(ws.id):
-        label = Label.objects.filter(workspace=ws).order_by("id").first()
+        # A preset label: the tests that delete an own label must never pick that one.
+        label = Label.objects.filter(workspace=ws).exclude(system_key="").order_by("id").first()
     assert label is not None
     return RuleIn.model_validate(
         {
@@ -62,7 +63,12 @@ def _rows(ws: Workspace, code: str) -> list[WorkspaceAuditEvent]:
 def test_create_update_delete_rule_write_their_rows(ws_a: Workspace) -> None:
     with workspace_context(ws_a.id):
         rule = rule_services.create_rule(workspace=ws_a, data=rule_in(ws_a), actor=ACTOR)
-        rule_services.update_rule(workspace=ws_a, rule_id=rule.id, data=rule_in(ws_a), actor=ACTOR)
+        rule_services.update_rule(
+            workspace=ws_a,
+            rule_id=rule.id,
+            data=rule_in(ws_a).model_copy(update={"name": "Nieuwe naam"}),
+            actor=ACTOR,
+        )
         rule_services.delete_rule(workspace=ws_a, rule_id=rule.id, actor=ACTOR)
 
     for code in (AuditCode.RULE_CREATED, AuditCode.RULE_CHANGED, AuditCode.RULE_DELETED):
@@ -241,3 +247,36 @@ def test_a_failed_ai_change_writes_no_audit_row(client: Client, ws_a: Workspace)
 
     assert r.status_code == 409
     assert _rows(ws_a, AuditCode.WORKSPACE_SETTING_CHANGED) == []
+
+
+def test_updating_a_rule_to_what_it_already_is_writes_no_row(ws_a: Workspace) -> None:
+    rule = _rule(ws_a)
+    with workspace_context(ws_a.id):
+        rule_services.update_rule(workspace=ws_a, rule_id=rule.id, data=rule_in(ws_a), actor=ACTOR)
+        rule_services.update_rule(workspace=ws_a, rule_id=rule.id, data=rule_in(ws_a), actor=ACTOR)
+
+    assert _rows(ws_a, AuditCode.RULE_CHANGED) == []
+
+    changed = rule_in(ws_a).model_copy(update={"name": "Anders", "stop": True})
+    with workspace_context(ws_a.id):
+        rule_services.update_rule(workspace=ws_a, rule_id=rule.id, data=changed, actor=ACTOR)
+        rule_services.update_rule(workspace=ws_a, rule_id=rule.id, data=changed, actor=ACTOR)
+    assert len(_rows(ws_a, AuditCode.RULE_CHANGED)) == 1
+
+
+def test_linking_a_person_to_the_user_already_linked_writes_no_row(ws_a: Workspace) -> None:
+    person = make_person(ws_a, "Oma")
+    member = join(ws_a)
+    with workspace_context(ws_a.id):
+        people_services.link_member(
+            workspace=ws_a, person_id=person.id, user_id=member.id, actor=ACTOR
+        )
+        people_services.link_member(
+            workspace=ws_a, person_id=person.id, user_id=member.id, actor=ACTOR
+        )
+        other = make_person(ws_a, "Opa")
+        # Unlinking somebody who was never linked is no change either.
+        people_services.link_member(workspace=ws_a, person_id=other.id, user_id=None, actor=ACTOR)
+
+    assert len(_rows(ws_a, AuditCode.PERSON_LINKED)) == 1
+    assert _rows(ws_a, AuditCode.PERSON_UNLINKED) == []

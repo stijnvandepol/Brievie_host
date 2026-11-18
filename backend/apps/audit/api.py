@@ -46,7 +46,9 @@ _CSV_RESPONSE = {
 }
 _CSV_NOTE = (
     f" Up to {services.CSV_MAX_ROWS:,} rows with the same filters (`limit` does not apply);"
-    " a cell that would start a spreadsheet formula gets a leading apostrophe."
+    " when more match, the newest are given, the header `X-Brievie-Truncated: true` is set"
+    " and the last line says so. A cell that would start a spreadsheet formula gets a"
+    " leading apostrophe."
 )
 
 
@@ -89,12 +91,26 @@ def _server_admin(request: HttpRequest) -> None:
 def _csv_response(
     events: Sequence[WorkspaceAuditEvent] | Sequence[ServerAuditEvent],
 ) -> HttpResponse:
+    """The CSV of the newest `CSV_MAX_ROWS` of `events` (one more than that was read, to
+    know whether the file is cut short: then it says so, in a header and a last line)."""
+    cap = services.CSV_MAX_ROWS
+    truncated = len(events) > cap
     buffer = io.StringIO()
-    csv.writer(buffer).writerows(services.csv_rows(events))
+    writer = csv.writer(buffer)
+    writer.writerows(services.csv_rows(events[:cap]))
+    if truncated:
+        writer.writerow(
+            [
+                _("Let op: alleen de nieuwste %(count)d gebeurtenissen staan in dit bestand.")
+                % {"count": cap}
+            ]
+        )
     response = HttpResponse(buffer.getvalue(), content_type="text/csv; charset=utf-8")
     name = f"brievie-logboek-{timezone.localdate(timezone=services.LOG_TIME_ZONE).isoformat()}.csv"
     response["Content-Disposition"] = f'attachment; filename="{name}"'
     response["Cache-Control"] = "private, no-store"
+    if truncated:
+        response["X-Brievie-Truncated"] = "true"
     return response
 
 
@@ -150,8 +166,8 @@ def export_workspace_audit_events(
         since=since,
         until=until,
         before=before,
-        limit=services.CSV_MAX_ROWS,
-        limit_cap=services.CSV_MAX_ROWS,
+        limit=services.CSV_MAX_ROWS + 1,
+        limit_cap=services.CSV_MAX_ROWS + 1,
     )
     return _csv_response(services.list_workspace_events(membership.workspace, checked))
 
@@ -204,7 +220,7 @@ def export_server_audit_events(
         since=since,
         until=until,
         before=before,
-        limit=services.CSV_MAX_ROWS,
-        limit_cap=services.CSV_MAX_ROWS,
+        limit=services.CSV_MAX_ROWS + 1,
+        limit_cap=services.CSV_MAX_ROWS + 1,
     )
     return _csv_response(services.list_server_events(checked))

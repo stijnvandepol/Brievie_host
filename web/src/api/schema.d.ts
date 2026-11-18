@@ -375,7 +375,7 @@ export interface paths {
         };
         /**
          * Export Server Audit Events
-         * @description Web session only: a bearer token answers 401 not_authenticated. The server's log as a CSV download, for server admins only. Filters: `user_id` (rows where the user acted or was acted on), `code` (one of the log's codes, else 422), `since` and `until` (whole days in Amsterdam time, both inclusive), `before` (rows strictly older than this moment: pass the last row's `created_at` for the next page). Newest first. Up to 10,000 rows with the same filters (`limit` does not apply); a cell that would start a spreadsheet formula gets a leading apostrophe.
+         * @description Web session only: a bearer token answers 401 not_authenticated. The server's log as a CSV download, for server admins only. Filters: `user_id` (rows where the user acted or was acted on), `code` (one of the log's codes, else 422), `since` and `until` (whole days in Amsterdam time, both inclusive), `before` (rows strictly older than this moment: pass the last row's `created_at` for the next page). Newest first. Up to 10,000 rows with the same filters (`limit` does not apply); when more match, the newest are given, the header `X-Brievie-Truncated: true` is set and the last line says so. A cell that would start a spreadsheet formula gets a leading apostrophe.
          */
         get: operations["exportServerAuditEvents"];
         put?: never;
@@ -611,7 +611,7 @@ export interface paths {
         };
         /**
          * Export Workspace Audit Events
-         * @description Web session only: a bearer token answers 401 not_authenticated. The workspace's log as a CSV download, for its admins only. Filters: `user_id` (rows where the user acted or was acted on), `code` (one of the log's codes, else 422), `since` and `until` (whole days in Amsterdam time, both inclusive), `before` (rows strictly older than this moment: pass the last row's `created_at` for the next page). Newest first. Up to 10,000 rows with the same filters (`limit` does not apply); a cell that would start a spreadsheet formula gets a leading apostrophe.
+         * @description Web session only: a bearer token answers 401 not_authenticated. The workspace's log as a CSV download, for its admins only. Filters: `user_id` (rows where the user acted or was acted on), `code` (one of the log's codes, else 422), `since` and `until` (whole days in Amsterdam time, both inclusive), `before` (rows strictly older than this moment: pass the last row's `created_at` for the next page). Newest first. Up to 10,000 rows with the same filters (`limit` does not apply); when more match, the newest are given, the header `X-Brievie-Truncated: true` is set and the last line says so. A cell that would start a spreadsheet formula gets a leading apostrophe.
          */
         get: operations["exportWorkspaceAuditEvents"];
         put?: never;
