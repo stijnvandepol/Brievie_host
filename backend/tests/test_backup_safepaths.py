@@ -7,6 +7,8 @@ test root (installed by conftest with the test's own tmp_path) are changed throu
 environment and the hook, never on disk.
 """
 
+import os
+import stat
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
@@ -28,7 +30,11 @@ from apps.backup.safepaths import (
     require_plain_name,
 )
 
-HOME = Path.home()
+# A home directory by its place, the same on every platform (the real one differs: a
+# runner's /home/runner, a container's /tmp/home). The inode rule is tested with
+# `fake_home`, which is a real directory under the test root.
+HOME = Path("/home/tester")
+MAC_HOME = Path("/Users/Tester")
 UNSAFE = "Brievie weigert deze map te wissen of te overschrijven, omdat dat niet veilig is."
 
 
@@ -85,9 +91,11 @@ def test_an_absolute_configured_path_is_taken_as_it_is() -> None:
         "/var/root/documents",
         str(HOME),
         str(HOME.parent),
-        str(HOME).lower(),
-        str(HOME).upper(),
-        str(HOME / "Documents" / "brievie-documents"),
+        str(MAC_HOME),
+        str(MAC_HOME).lower(),
+        str(MAC_HOME).upper(),
+        str(MAC_HOME / "Documents" / "brievie-documents"),
+        str(HOME / "documents"),
         "relative/documents",
         "documents",
         "/data/documents/..",
@@ -466,3 +474,79 @@ def test_a_plain_file_name_is_accepted(name: str) -> None:
 @pytest.mark.parametrize("name", ["", ".", "..", "a/b", "../env", "/etc/passwd", "a\0b"])
 def test_a_name_with_a_path_in_it_is_refused(name: str) -> None:
     refused(lambda: require_plain_name(name))
+
+
+# --- the same outcome on every platform ------------------------------------------------------
+
+# Every top-level name of a system (Linux and macOS) or of a Brievie volume.
+SYSTEM_TOPS = [
+    "etc", "usr", "bin", "sbin", "lib", "lib64", "var", "opt", "boot", "dev", "proc", "sys",
+    "run", "root", "home", "Users", "System", "Library", "Applications", "private", "Volumes",
+    "data", "backup", "caddy-data",
+]  # fmt: skip
+
+
+@pytest.fixture(params=["directory", "link"])
+def platform(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Every top-level component looks like a real directory (Linux) or like a link
+    (macOS: /etc -> private/etc). Returns the paths that were looked at."""
+    looked: list[str] = []
+    real_lstat = os.lstat
+
+    def fake_lstat(path: object, *args: object, **kwargs: object) -> os.stat_result:
+        text = os.fspath(path)  # type: ignore[arg-type]
+        looked.append(text)
+        info = real_lstat("/", *args, **kwargs)  # type: ignore[arg-type]
+        if request.param == "link" and text.count("/") == 1 and text != "/":
+            fields = list(info)
+            fields[0] = stat.S_IFLNK | 0o755
+            return os.stat_result(fields)
+        return info
+
+    monkeypatch.setattr(os, "lstat", fake_lstat)
+    return looked
+
+
+@pytest.mark.parametrize("top", SYSTEM_TOPS)
+@pytest.mark.parametrize("form", ["/{top}", "/{top}/out", "/{top}/a/b/out", "/{upper}/out"])
+def test_an_output_folder_in_a_system_directory_is_refused_on_every_platform(
+    platform: list[str], top: str, form: str
+) -> None:
+    path = Path(form.format(top=top, upper=top.upper()))
+    assert safepaths.is_system_path(path)
+    refused(lambda: safepaths.require_out_dir(path, avoid=[]))
+    # Decided by the name alone: no component was looked at.
+    assert platform == []
+
+
+def test_only_the_staging_mount_and_the_test_root_are_output_folders(
+    platform: list[str], tmp_path: Path
+) -> None:
+    assert safepaths.out_dir_rule(Path("/out")) == Path("/out")
+    assert safepaths.out_dir_rule(tmp_path / "out") == tmp_path / "out"
+    for other in ("/out/inner", "/outside", "/srv/out", "/mnt/restore", "/tmp/out", "/out/.."):  # noqa: S108
+        refused(lambda other=other: safepaths.out_dir_rule(Path(other)))  # type: ignore[misc]
+    assert platform == []
+
+
+@pytest.mark.parametrize("directory", ["/usr/local", "/opt/homebrew/var", "/etc/brievie", "/srv/x"])
+def test_a_directory_off_the_fixed_list_is_not_allowed_on_every_platform(
+    platform: list[str], directory: str
+) -> None:
+    not_allowed(lambda: require_emptiable(Path(directory), allowed=[Path(directory)]))
+    not_allowed(
+        lambda: require_caddy_authority_dir(Path(directory) / "caddy/pki/authorities/local")
+    )
+
+
+@pytest.mark.parametrize("mount", ["/backup", "/data/backup", "/etc", "/", "", "relative"])
+def test_only_the_backup_mount_is_the_backup_mount(mount: str, platform: list[str]) -> None:
+    if mount == "/backup":
+        assert safepaths.require_backup_mount(Path(mount)) == Path(mount)
+    else:
+        refused(lambda: safepaths.require_backup_mount(Path(mount)))
+    assert platform == []
+
+
+def test_the_backup_mount_in_tests_lies_in_the_test_root(tmp_path: Path) -> None:
+    assert safepaths.require_backup_mount(tmp_path / "backup") == tmp_path / "backup"

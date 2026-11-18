@@ -193,13 +193,7 @@ def delete_orphans(orphans: Sequence[Orphan], storage_root: Path) -> int:
     whoever calls it. The root is then opened component by component without following
     a link and checked to be the directory that was judged.
     """
-    configured = safepaths.configured_path(settings.BRIEVIE_STORAGE_ROOT)
-    safepaths.require_emptiable(
-        storage_root,
-        allowed=[configured],
-        avoid=[safepaths.configured_path(settings.BRIEVIE_BACKUP_MOUNT)],
-        fixed=[safepaths.DOCUMENTS],
-    )
+    _judged_storage_root(storage_root)
     expected = safepaths.identity(storage_root)
     if expected is None:
         return 0
@@ -210,8 +204,20 @@ def delete_orphans(orphans: Sequence[Orphan], storage_root: Path) -> int:
         os.close(root)
 
 
+def _judged_storage_root(storage_root: Path) -> Path:
+    """The storage root when it is the configured one on the fixed list (or in the test
+    root) and clear of the back-up mount; judged before it is listed or touched."""
+    return safepaths.require_emptiable(
+        storage_root,
+        allowed=[safepaths.configured_path(settings.BRIEVIE_STORAGE_ROOT)],
+        avoid=[safepaths.configured_path(settings.BRIEVIE_BACKUP_MOUNT)],
+        fixed=[safepaths.DOCUMENTS],
+    )
+
+
 def sweep(*, delete: bool) -> SweepResult:
-    root = Path(settings.BRIEVIE_STORAGE_ROOT)
+    # Judged before anything is listed: only an accepted root is ever read or touched.
+    root = _judged_storage_root(safepaths.configured_path(settings.BRIEVIE_STORAGE_ROOT))
     with backup_lock():
         try:
             orphans = find_orphans(

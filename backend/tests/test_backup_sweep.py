@@ -244,35 +244,31 @@ def test_an_empty_database_still_lists_old_temp_files(
     assert found(backup_conninfo) == {relative(extra)}
 
 
-def test_a_symlinked_storage_root_is_listed_but_never_deleted_from(
+def test_a_symlinked_storage_root_is_never_listed_nor_deleted_from(
     ws_a: Workspace,
     backup_conninfo: str,
     settings: object,
     tmp_path: Path,
     recorder: Recorder,
 ) -> None:
+    # Round 4: only a root that passed the guard is ever listed (was: listed, not deleted).
     real = storage_root()
     link = tmp_path / "root-link"
     link.symlink_to(real, target_is_directory=True)
     upload_letter(ws_a)
     extra = stray(ws_a)
-    expected = relative(extra)
+    orphans = [Orphan(relative(extra), 1, datetime.now(UTC) - timedelta(days=2))]
     settings.BRIEVIE_STORAGE_ROOT = str(link)  # type: ignore[attr-defined]
 
-    listed = sweep(delete=False)
-    assert [o.path for o in listed.orphans] == [expected]
-
-    # Deleting refuses a root that is a link (the guard of delete_orphans itself),
-    # before any destructive primitive is reached.
+    for delete in (False, True):
+        recorder.arm()  # listing included: nothing is read before the refusal
+        with pytest.raises(BackupError) as caught:
+            sweep(delete=delete)
+        recorder.disarm()
+        assert caught.value.code == "unsafe_path"
     recorder.arm()
     with pytest.raises(BackupError) as caught:
-        delete_orphans(listed.orphans, link)
-    recorder.disarm()
-    assert caught.value.code == "unsafe_path"
-    # Through the command as well (listing is reading; it is allowed here).
-    recorder.arm(allow=("scandir",))
-    with pytest.raises(BackupError) as caught:
-        sweep(delete=True)
+        delete_orphans(orphans, link)
     recorder.disarm()
     assert caught.value.code == "unsafe_path"
     assert extra.exists()

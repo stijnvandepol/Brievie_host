@@ -37,6 +37,17 @@ BACKUP_MOUNT = Path("/backup")
 CADDY_DATA = Path("/caddy-data")
 # Everything a restore output folder must stay clear of.
 PRODUCTION_VOLUMES = (*PRODUCTION_DIRECTORIES, BACKUP_MOUNT, CADDY_DATA)
+# Where ./brievie bind-mounts deploy/.restore for `restore_fetch --out`.
+RESTORE_STAGING = Path("/out")
+# Top-level names of a system (Linux, macOS) or a Brievie volume, compared casefolded.
+_SYSTEM_TOPS = frozenset(
+    name.casefold()
+    for name in (
+        "etc", "usr", "bin", "sbin", "lib", "lib64", "var", "opt", "boot", "dev", "proc",
+        "sys", "run", "root", "home", "Users", "System", "Library", "Applications",
+        "private", "Volumes", "data", "backup", "caddy-data", "tmp", "srv", "mnt", "media",
+    )
+)  # fmt: skip
 _LEAF_DIR = "certificates"
 # "/" plus at least two components: /data/documents may be emptied, /data never.
 _MIN_PARTS = 3
@@ -231,22 +242,40 @@ def _plain_absolute(path: Path) -> None:
         raise _unsafe()
 
 
-def _structure(path: Path) -> Path:
-    """`path` resolved, after the rules every destroyable directory obeys."""
+def _lexical(path: Path) -> None:
+    """The rules decided by the path's text alone, before anything is looked at: absolute,
+    no `..`, no glob, `/` plus at least two components, nothing under a home tree."""
     _plain_absolute(path)
-    if _under_home_tree(path) or _through_link(path):
+    if len(path.parts) < _MIN_PARTS or _under_home_tree(path):
+        raise _unsafe()
+
+
+def _lexically_in_test_root(path: Path) -> bool:
+    return _test_root is not None and _test_root in path.parents
+
+
+def _require_listed(path: Path, fixed: Sequence[Path]) -> None:
+    """On `fixed` (compared as text), or inside the test root (tests only; there the
+    resolved form counts as well: macOS reaches it through /var)."""
+    if path in set(fixed) or _lexically_in_test_root(path):
+        return
+    if _test_root is not None and _test_root in _resolve(path).parents:
+        return
+    raise BackupError("directory_not_allowed")
+
+
+def _structure(path: Path, fixed: Sequence[Path] = ()) -> Path:
+    """`path` resolved, after the rules that look at its components (lstat, stat): not
+    a link and not reached through one, not a home directory by inode, and a fixed
+    path resolves to itself."""
+    if _through_link(path):
         raise _unsafe()
     resolved = _resolve(path)
-    if len(path.parts) < _MIN_PARTS or len(resolved.parts) < _MIN_PARTS:
+    if len(resolved.parts) < _MIN_PARTS or _touches_home(path):
         raise _unsafe()
-    if _touches_home(path):
+    if path in set(fixed) and resolved != path:
         raise _unsafe()
     return resolved
-
-
-def _require_listed(resolved: Path, fixed: Sequence[Path]) -> None:
-    if resolved not in set(fixed) and not _in_test_root(resolved):
-        raise BackupError("directory_not_allowed")
 
 
 def _avoiding(resolved: Path, avoid: Sequence[Path | str]) -> None:
@@ -276,8 +305,10 @@ def require_emptiable(
     `allowed` (what the caller was configured to empty), or that is, contains or lies
     inside one of `avoid` (the back-up mount, the other directories).
     """
-    resolved = _structure(directory)
-    _require_listed(resolved, fixed)
+    # By the text first: nothing is looked at for a path that is refused here.
+    _lexical(directory)
+    _require_listed(directory, fixed)
+    resolved = _structure(directory, fixed)
     trusted = {_resolve(Path(path)) for path in allowed if os.path.isabs(os.fspath(path))}
     if resolved not in trusted:
         raise _unsafe()
@@ -308,8 +339,10 @@ def require_caddy_authority_dir(target: Path) -> Path:
     _plain_absolute(target)
     if tuple(target.parts[-len(CADDY_AUTHORITY_TAIL) :]) != CADDY_AUTHORITY_TAIL:
         raise _unsafe()
-    resolved = _structure(target)
-    _require_listed(resolved, [CADDY_AUTHORITY])
+    if _under_home_tree(target):
+        raise _unsafe()
+    _require_listed(target, [CADDY_AUTHORITY])
+    _structure(target, [CADDY_AUTHORITY])
     return target
 
 
@@ -326,15 +359,31 @@ def leaf_dir(target: Path) -> Path:
     return leaf
 
 
+def is_system_path(path: Path) -> bool:
+    """`/`, or a path whose first component (any case) is a system or volume directory."""
+    parts = path.parts[1:]
+    return not parts or parts[0].casefold() in _SYSTEM_TOPS
+
+
+def out_dir_rule(out_dir: Path) -> Path:
+    """By the text alone: the restore staging mount `/out` (./brievie bind-mounts
+    deploy/.restore there), or a folder strictly inside the test root. Everything
+    else, a system directory above all, is refused on every platform alike."""
+    _plain_absolute(out_dir)
+    if out_dir == RESTORE_STAGING or _lexically_in_test_root(out_dir):
+        return out_dir
+    raise _unsafe()
+
+
 def require_out_dir(out_dir: Path, *, avoid: Sequence[Path | str]) -> Path:
     """`out_dir` when a restore may write its files there.
 
-    Absolute, not `/`, not a home directory or above one, not reached through a link,
-    and not one of `avoid` (the configured directories, the production list, the
-    back-up mount), inside one or above one. Whether it is new or empty is checked
-    when it is opened.
+    First by its text (`out_dir_rule`); then, for an accepted path only: not reached
+    through a link, not a home directory or above one, and not one of `avoid` (the
+    configured directories, the production list, the back-up mount), inside one or
+    above one. Whether it is new or empty is checked when it is opened.
     """
-    _plain_absolute(out_dir)
+    out_dir_rule(out_dir)
     if _through_link(out_dir) or _at_or_above_home(out_dir):
         raise _unsafe()
     resolved = _resolve(out_dir)
@@ -342,6 +391,14 @@ def require_out_dir(out_dir: Path, *, avoid: Sequence[Path | str]) -> Path:
         raise _unsafe()
     _avoiding(resolved, avoid)
     return out_dir
+
+
+def require_backup_mount(mount: Path) -> Path:
+    """The back-up mount by its text: `/backup`, or a folder inside the test root."""
+    _plain_absolute(mount)
+    if mount == BACKUP_MOUNT or _lexically_in_test_root(mount):
+        return mount
+    raise _unsafe()
 
 
 def require_plain_name(name: str) -> str:

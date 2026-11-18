@@ -558,15 +558,19 @@ def restore_database(*, run: str | None, dbname: str = "brievie") -> int:
         return close_interrupted_runs(conninfo)
 
 
-def _judged_directories() -> list[Path]:
-    """The three restored directories, each judged against the others and the mount:
-    on the fixed list (or in a safe temporary folder), no glob, no overlap."""
+def _judge(directory: Path) -> Path:
+    """`directory` when it is one of the three configured directories, on the fixed list
+    (or in the test root), with no glob and no overlap with the others or the mount."""
     directories = _configured_directories()
-    mount = _backup_mount()
-    for directory in directories:
-        others = [other for other in directories if other is not directory]
-        safepaths.require_emptiable(directory, allowed=directories, avoid=[*others, mount])
-    return directories
+    others = [other for other in directories if other != directory]
+    return safepaths.require_emptiable(
+        directory, allowed=directories, avoid=[*others, _backup_mount()]
+    )
+
+
+def _judged_directories() -> list[Path]:
+    """The three restored directories, each judged (`_judge`) before anything else."""
+    return [_judge(directory) for directory in _configured_directories()]
 
 
 def _empty(directory: Path) -> None:
@@ -576,9 +580,7 @@ def _empty(directory: Path) -> None:
     whoever calls it. The directory is opened component by component without
     following a link, checked to be the one judged, and emptied through descriptors.
     """
-    directories = _configured_directories()
-    others = [other for other in directories if other != directory]
-    safepaths.require_emptiable(directory, allowed=directories, avoid=[*others, _backup_mount()])
+    _judge(directory)
     expected = safepaths.identity(directory)
     if expected is None:
         return
@@ -592,6 +594,7 @@ def _empty(directory: Path) -> None:
 def _check_target(directory: Path) -> None:
     """Refuse (`restore_target_unsafe`) a target that holds anything but directories and
     regular files with one name; a missing target is fine (restic makes it)."""
+    _judge(directory)
     expected = safepaths.identity(directory)
     if expected is None:
         return
@@ -605,6 +608,7 @@ def _check_target(directory: Path) -> None:
 def _clean_restored(directory: Path, owner: int | None) -> int:
     """After restic: remove what is no regular file or directory, clear setuid bits and
     hand the tree to `owner`; returns how many entries were removed."""
+    _judge(directory)
     expected = safepaths.identity(directory)
     if expected is None:
         return 0
@@ -629,6 +633,12 @@ def _place_authority(source: Path, target: Path) -> bool:
     """
     target = safepaths.require_caddy_authority_dir(target)
     leaf = safepaths.leaf_dir(target)
+    # The source is read only, but it is opened: it must be the configured authority copy.
+    safepaths.require_emptiable(
+        source,
+        allowed=[_configured_directories()[1]],
+        fixed=[safepaths.AUTHORITY_COPY],
+    )
     try:
         source_fd = safepaths.open_dir_nofollow(source)
     except FileNotFoundError:

@@ -20,8 +20,10 @@ from apps.backup.errors import BackupError
 from apps.backup.privatefile import write_private
 from tests.backup_support import Recorder
 
-HOME = Path.home()
-SYSTEM_PATHS = ["/", "/Users", "/data", "/etc", str(HOME), str(HOME.parent)]
+# Judged by their text on every platform: none of these may depend on whether the
+# machine running the test has the path, or has it as a link (macOS /etc) or a
+# directory (Linux /etc). Homes by their place; the inode rule is in test_backup_safepaths.
+SYSTEM_PATHS = ["/", "/Users", "/data", "/etc", "/usr/local", "/home/tester", "/Users/Tester"]
 
 
 @pytest.fixture

@@ -45,8 +45,8 @@ def destination_kind() -> str:
 
 
 def _mount() -> Path:
-    """The back-up mount: absolute, or refused (an empty setting is never `.`)."""
-    return safepaths.configured_path(settings.BRIEVIE_BACKUP_MOUNT)
+    """The back-up mount: `/backup` (or one in the test root), or refused."""
+    return safepaths.require_backup_mount(safepaths.configured_path(settings.BRIEVIE_BACKUP_MOUNT))
 
 
 def _marker() -> Path:
