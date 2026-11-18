@@ -4,9 +4,16 @@ import { createRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Button, Dialog, DialogTrigger, Popover } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
-import { invitationsQuery, membersQuery, meQuery, personsQuery } from "../api/queries";
+import {
+  invitationsQuery,
+  membersQuery,
+  meQuery,
+  myExportQuery,
+  personsQuery,
+} from "../api/queries";
 import type { components } from "../api/schema";
 import { ConfirmAction } from "../components/confirm-dialog";
+import { ExportPanel } from "../components/export-panel";
 import { Icon } from "../components/icons";
 import {
   type CreatedInvitation,
@@ -20,6 +27,19 @@ import { Badge, EmptyState, Loading, Persona } from "../components/ui";
 import { workspaceRoute } from "./workspace";
 
 type Member = components["schemas"]["MemberOut"];
+
+/** In the leave dialog: the export, while the workspace allows it. After leaving nothing
+ * can be downloaded any more. */
+function LeaveExportOffer({ workspaceId }: { workspaceId: string }) {
+  const { data } = useQuery(myExportQuery(workspaceId));
+  if (!data?.allowed) return null;
+  return (
+    <>
+      <p>{t`Exporteer eerst je post: na het verlaten kun je niet meer downloaden.`}</p>
+      <ExportPanel workspaceId={workspaceId} />
+    </>
+  );
+}
 
 function MemberRow({
   workspaceId,
@@ -161,6 +181,7 @@ function MemberRow({
               <p>
                 {t`Je kunt daarna niet meer bij ${workspaceName}. De post blijft hier voor de andere leden.`}
               </p>
+              <LeaveExportOffer workspaceId={workspaceId} />
             </ConfirmAction>
           ) : null}
         </span>
@@ -381,6 +402,11 @@ function MembersPage() {
           </table>
         </section>
       ) : null}
+      <section className="panel panel-pad" aria-labelledby="my-export">
+        <h2 id="my-export">{t`Mijn post`}</h2>
+        <p className="muted">{t`Maak een ZIP-bestand met jouw post. Het staat 24 uur klaar om te downloaden.`}</p>
+        <ExportPanel workspaceId={workspace.id} />
+      </section>
       {isAdmin ? <OpenInvitations workspaceId={workspace.id} onRenewed={setRenewed} /> : null}
       {isAdmin ? (
         <>

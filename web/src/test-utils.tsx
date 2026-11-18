@@ -264,16 +264,40 @@ export function ruleHandlers(rules: Rule[] = [apkRule, bankRule]) {
   ];
 }
 
-/** The members and open invitations of the first workspace: what the page "Leden" asks. */
+/** The caller's export in its states: `none`, `pending`, `ready`, `failed`. */
+export function exportState(
+  status: "none" | "pending" | "ready" | "failed" = "none",
+  allowed = true,
+): components["schemas"]["MyExportOut"] {
+  return {
+    allowed,
+    status,
+    document_count: 0,
+    size: 0,
+    ...(status === "ready"
+      ? {
+          id: "ee111111-1111-4111-8111-111111111111",
+          created_at: "2026-11-18T09:00:00Z",
+          expires_at: "2099-11-19T09:00:00Z",
+          document_count: 3,
+          size: 1234,
+        }
+      : {}),
+  };
+}
+
+/** What the page "Leden" asks: members, open invitations and the caller's export. */
 export function memberHandlers(
   list: components["schemas"]["MemberOut"][] = members,
   invitations: components["schemas"]["InvitationOut"][] = [],
+  myExport: components["schemas"]["MyExportOut"] = exportState(),
 ) {
   return [
     http.get(`*${API}/workspaces/${workspace.id}/members`, () => HttpResponse.json(list)),
     http.get(`*${API}/workspaces/${workspace.id}/invitations`, () =>
       HttpResponse.json(invitations),
     ),
+    http.get(`*${API}/workspaces/${workspace.id}/my-export`, () => HttpResponse.json(myExport)),
   ];
 }
 

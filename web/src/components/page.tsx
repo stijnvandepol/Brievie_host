@@ -152,7 +152,8 @@ export function PageHeader({
 type BreadcrumbTarget =
   | "/w/$workspaceId/post"
   | "/w/$workspaceId/automatisering"
-  | "/w/$workspaceId/leden";
+  | "/w/$workspaceId/leden"
+  | "/w/$workspaceId/instellingen";
 
 const NAV_LINK = "nav-link";
 
@@ -173,6 +174,7 @@ function NavItem({
     | "/w/$workspaceId/post"
     | "/w/$workspaceId/personen"
     | "/w/$workspaceId/leden"
+    | "/w/$workspaceId/instellingen"
     | "/w/$workspaceId/labels"
     | "/w/$workspaceId/automatisering"
     | "/w/$workspaceId/ai";
@@ -237,6 +239,14 @@ function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
         />
       )}
       <NavItem to="/w/$workspaceId/ai" params={params} icon="lightbulb" label={t`AI`} />
+      {workspace.role === "admin" ? (
+        <NavItem
+          to="/w/$workspaceId/instellingen"
+          params={params}
+          icon="settings"
+          label={t`Instellingen`}
+        />
+      ) : null}
       <hr className="nav-divider" />
     </>
   );
@@ -339,6 +349,12 @@ function AccountMenu({
             <Icon name="edit" />
             {t`Wachtwoord wijzigen`}
           </Link>
+          {me?.is_server_admin ? (
+            <Link to="/server/logboek" className="menu-item">
+              <Icon name="document" />
+              {t`Serverlogboek`}
+            </Link>
+          ) : null}
           <Button className="menu-item" onPress={onLogout}>
             <Icon name="signOut" />
             {t`Uitloggen`}

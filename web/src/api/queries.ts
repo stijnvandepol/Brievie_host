@@ -236,3 +236,33 @@ export const noticesQuery = queryOptions({
     return data;
   },
 });
+
+/** The settings of a workspace that admins can switch. */
+export const workspaceSettingsQuery = (workspaceId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "settings"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/settings", {
+        params: { path: { workspace_id: workspaceId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
+/** How often the page asks again while an export is being built. */
+export const EXPORT_POLL_MS = 3000;
+
+/** The caller's own export of their post: none, being built, ready or failed. */
+export const myExportQuery = (workspaceId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "my-export"],
+    refetchInterval: (query) => (query.state.data?.status === "pending" ? EXPORT_POLL_MS : false),
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/my-export", {
+        params: { path: { workspace_id: workspaceId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
