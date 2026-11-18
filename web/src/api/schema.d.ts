@@ -1593,6 +1593,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Is Server Admin
+             * @default false
+             */
+            is_server_admin: boolean;
             /** Language */
             language: string;
             /** Name */

@@ -14,6 +14,7 @@ class UserOut(Schema):
     name: str
     language: str
     explanation_language: str
+    is_server_admin: bool = False
 
 
 class SetupStatusOut(Schema):

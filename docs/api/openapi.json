@@ -1693,6 +1693,11 @@
             "title": "Id",
             "type": "string"
           },
+          "is_server_admin": {
+            "default": false,
+            "title": "Is Server Admin",
+            "type": "boolean"
+          },
           "language": {
             "title": "Language",
             "type": "string"

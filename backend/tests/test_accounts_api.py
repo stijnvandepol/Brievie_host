@@ -199,6 +199,7 @@ def test_login_success_returns_the_user_and_a_session(client: Client) -> None:
         "name": user.name,
         "language": "nl",
         "explanation_language": "nl",
+        "is_server_admin": False,
     }
     assert client.get("/api/v1/me").status_code == 200
 

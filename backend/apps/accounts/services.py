@@ -114,7 +114,7 @@ def setup_server(
             )
         email = normalise_email(email)
         validate_email(email)
-        user = User(email=email, name=_required(name, _("Vul je naam in.")))
+        user = User(email=email, name=_required(name, _("Vul je naam in.")), is_server_admin=True)
         validate_password(password, user)
         user.set_password(password)
         user.save()
@@ -127,6 +127,23 @@ def setup_server(
         SetupToken.objects.all().delete()
         django_login(request, user, backend=MODEL_BACKEND)
     return Membership.objects.select_related("workspace").get(user=user, workspace=workspace)
+
+
+def lock_active_server_admins() -> list[User]:
+    """Lock the active server admins, always in id order so two callers cannot deadlock.
+
+    Every check of "is there another server admin?" takes this lock first, so two
+    requests that each remove one of the last two admins run one after the other.
+    Must run inside a transaction.
+    """
+    return list(
+        User.objects.select_for_update().filter(is_server_admin=True, is_active=True).order_by("id")
+    )
+
+
+def other_active_server_admin_exists(user: User) -> bool:
+    """Whether an active server admin other than `user` exists (takes the lock above)."""
+    return any(admin.id != user.id for admin in lock_active_server_admins())
 
 
 def login(request: HttpRequest, *, email: str, password: str) -> User:

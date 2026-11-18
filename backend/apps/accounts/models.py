@@ -40,6 +40,8 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel):
         max_length=2, choices=ExplanationLanguage.choices, default=ExplanationLanguage.DUTCH
     )
     is_active = models.BooleanField(default=True)
+    # Runs the server itself (members, backups, audit log), apart from any workspace role.
+    is_server_admin = models.BooleanField(default=False)
 
     objects: ClassVar[UserManager] = UserManager()
 
