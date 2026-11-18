@@ -1226,11 +1226,14 @@ def test_run_removes_abandoned_snapshots_after_unlock(
     abandoned = BackupRun.objects.create(kind="backup", status=BackupRun.Status.INTERRUPTED)
     run = queued_run()
     answer_both_backups(fake_restic, run.id)
+    # Its snapshots are listed first: only a run without both is removed.
+    fake_restic.respond(tuple(restic.snapshots_argv(f"run:{abandoned.id}")), stdout=b"[]")
 
     services.perform_run(run.id, clean_up=[abandoned.id])
 
-    assert without_snapshot(fake_restic.calls)[:3] == [
+    assert without_snapshot(fake_restic.calls)[:4] == [
         restic.unlock_argv(),
+        restic.snapshots_argv(f"run:{abandoned.id}"),
         restic.forget_run_argv(abandoned.id),
         dump_call(run.id),
     ]
@@ -1248,6 +1251,7 @@ def test_failed_abandoned_clean_up_is_logged_and_the_run_goes_on(
     abandoned_id = UUID(int=42)
     run = queued_run()
     answer_both_backups(fake_restic, run.id)
+    fake_restic.respond(tuple(restic.snapshots_argv(f"run:{abandoned_id}")), stdout=b"[]")
     fake_restic.respond(tuple(restic.forget_run_argv(abandoned_id)), code=11)
 
     with caplog.at_level(logging.DEBUG):
@@ -1762,3 +1766,29 @@ def test_backup_command_safety_says_its_run_id_to_the_wrapper(
     BackupRun.objects.all().delete()
     call_command("backup", "--safety")
     assert "safety_run_id=" not in capsys.readouterr().out
+
+
+@pytest.mark.django_db(transaction=True)
+def test_an_abandoned_run_with_both_snapshots_is_kept(
+    configured_folder: Path, fake_restic: FakeBinary, fake_pg_dump: FakeBinary
+) -> None:
+    # It died after its files snapshot but before it was recorded: it is a whole back-up.
+    whole, half = uuid4(), uuid4()
+    when = timezone.now().astimezone(UTC).isoformat()
+    fake_restic.respond(
+        ("snapshots", "--json", "--tag", f"run:{whole}"),
+        stdout=json.dumps(
+            [snapshot_json(whole, "db", when), snapshot_json(whole, "files", when)]
+        ).encode(),
+    )
+    fake_restic.respond(
+        ("snapshots", "--json", "--tag", f"run:{half}"),
+        stdout=json.dumps([snapshot_json(half, "db", when)]).encode(),
+    )
+    run = queued_run()
+    answer_both_backups(fake_restic, run.id)
+
+    services.perform_run(run.id, clean_up=[whole, half])
+
+    assert restic.forget_run_argv(whole) not in fake_restic.calls
+    assert restic.forget_run_argv(half) in fake_restic.calls

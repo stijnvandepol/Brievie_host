@@ -251,6 +251,23 @@ class _Restic:
         restic.raise_for(result)
         return result.stdout
 
+    def forget_run_unless_whole(self, run_id: UUID) -> None:
+        """Remove an abandoned run's snapshots, unless it has both: a run that died after
+        its files snapshot but before it was recorded is a whole back-up and is kept.
+        When the listing fails nothing is removed."""
+        try:
+            listed = restic.parse_snapshots(
+                self(restic.snapshots_argv(f"run:{run_id}"), timeout=SHORT_RESTIC_TIMEOUT)
+            )
+        except BackupError as error:
+            logger.warning("Backup run %s: listing its snapshots failed: %s", run_id, error.code)
+            return
+        kinds = {tag for snapshot in listed for tag in snapshot.tags if tag.startswith("kind:")}
+        if {"kind:db", "kind:files"} <= kinds:
+            logger.warning("Backup run %s was abandoned but is whole: kept", run_id)
+            return
+        self.forget_run(run_id)
+
     def forget_run(self, run_id: UUID) -> None:
         """Remove the snapshots of one run; a failure is logged (code only), never raised."""
         if settings.BRIEVIE_BACKUP_APPEND_ONLY:
@@ -296,7 +313,7 @@ def _back_up(
         run_restic = _Restic(repository, backup_password(), failures, host)
         run_restic(restic.unlock_argv(), timeout=SHORT_RESTIC_TIMEOUT)
         for abandoned_id in clean_up:
-            run_restic.forget_run(abandoned_id)
+            run_restic.forget_run_unless_whole(abandoned_id)
         if run.kind == BackupRun.Kind.CHECK:
             run_restic(restic.check_argv())
             _finish(run.id, BackupRun.Status.SUCCEEDED)

@@ -113,6 +113,13 @@ def _restic_output(
     return result.stdout
 
 
+def reads_without_lock(repository: restic.Repository) -> bool:
+    """A folder source is mounted read-only for a restore and is read with --no-lock; a
+    remote one (rest:, s3:) is read with restic's shared lock, so another server that
+    prunes it meanwhile cannot remove what the restore is reading."""
+    return repository.kind == "folder"
+
+
 def _newest_by_run(snapshots: list[restic.Snapshot]) -> dict[UUID, restic.Snapshot]:
     """The newest snapshot of each run; a resumed run can have more than one."""
     newest: dict[UUID, restic.Snapshot] = {}
@@ -133,7 +140,7 @@ def _newest_by_run(snapshots: list[restic.Snapshot]) -> dict[UUID, restic.Snapsh
 def _snapshots_of_kind(
     repository: restic.Repository, password: str, kind: str, extra_secrets: Sequence[str]
 ) -> dict[UUID, restic.Snapshot]:
-    argv = restic.snapshots_argv(f"kind:{kind}", no_lock=True)
+    argv = restic.snapshots_argv(f"kind:{kind}", no_lock=reads_without_lock(repository))
     stdout = _restic_output(repository, password, argv, extra_secrets)
     try:
         snapshots = restic.parse_snapshots(stdout)
@@ -254,7 +261,9 @@ def _dump_through(
     consumer_err: list[bytes] = []
     try:
         try:
-            dump_argv = restic.dump_argv(snapshot.id, restic.DB_FILENAME, no_lock=True)
+            dump_argv = restic.dump_argv(
+                snapshot.id, restic.DB_FILENAME, no_lock=reads_without_lock(repository)
+            )
             dump = subprocess.Popen(  # noqa: S603 - argv without secrets
                 [settings.BRIEVIE_RESTIC_BINARY, *dump_argv],
                 env=restic.restic_env(repository, password),
@@ -520,7 +529,9 @@ def fetch(
     found = find_run(repository, password, run, extra_secrets=hidden)
 
     config_dir = safepaths.configured_path(settings.BRIEVIE_BACKUP_CONFIG_DIR)
-    manifest_argv = restic.dump_argv(found.files.id, str(config_dir / MANIFEST_NAME), no_lock=True)
+    manifest_argv = restic.dump_argv(
+        found.files.id, str(config_dir / MANIFEST_NAME), no_lock=reads_without_lock(repository)
+    )
     manifest_out = _restic_output(repository, password, manifest_argv, hidden)
     manifest_text = _text(manifest_out, "manifest_unreadable")
     manifest = manifest_from_json(manifest_text)
@@ -528,7 +539,9 @@ def fetch(
         raise BackupError("manifest_unreadable")
     if unknown_migrations(manifest):
         raise BackupError("newer_backup")
-    env_argv = restic.dump_argv(found.files.id, str(config_dir / ENV_COPY_NAME), no_lock=True)
+    env_argv = restic.dump_argv(
+        found.files.id, str(config_dir / ENV_COPY_NAME), no_lock=reads_without_lock(repository)
+    )
     env_copy = _text(_restic_output(repository, password, env_argv, hidden), "restore_failed")
     check_master_key_against_dump(
         repository=repository, password=password, db_snapshot=found.db, master_key=master_key
@@ -614,6 +627,13 @@ def _judged_directories() -> list[Path]:
     return [_judge(directory) for directory in _configured_directories()]
 
 
+def _backup_disk_identities() -> set[tuple[int, int]]:
+    """The identity of the back-up mount: when BRIEVIE_BACKUP_DIR is (a folder in) a data
+    volume's host path, the same directory also appears inside that volume."""
+    found = safepaths.identity(_backup_mount())
+    return set() if found is None else {found}
+
+
 def _empty(directory: Path) -> None:
     """Remove what is in `directory` (a volume's mount point stays); links are not followed.
 
@@ -630,6 +650,7 @@ def _empty(directory: Path) -> None:
     keep = frozenset({INSTALLATION_ID_NAME}) if directory == config else frozenset()
     descriptor = safepaths.open_dir_nofollow(directory, expect=expected)
     try:
+        safepaths.require_not_holding(descriptor, _backup_disk_identities())
         safepaths.empty_dir(descriptor, keep=keep)
     finally:
         os.close(descriptor)
@@ -644,6 +665,7 @@ def _check_target(directory: Path) -> None:
         return
     descriptor = safepaths.open_dir_nofollow(directory, expect=expected)
     try:
+        safepaths.require_not_holding(descriptor, _backup_disk_identities())
         safepaths.check_tree(descriptor)
     finally:
         os.close(descriptor)
@@ -791,7 +813,9 @@ def restore_files(
         # hard link in a target is refused before restic writes anything.
         for directory in directories:
             _check_target(directory)
-        argv = restic.restore_argv(found.files.id, "/", restore_includes(), no_lock=True)
+        argv = restic.restore_argv(
+            found.files.id, "/", restore_includes(), no_lock=reads_without_lock(repository)
+        )
         try:
             _restic_output(repository, password, argv)
         except BackupError as error:

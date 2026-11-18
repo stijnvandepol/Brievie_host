@@ -18,7 +18,7 @@ from django.core.management.base import CommandError
 from django.db import connection
 from pytest_django import Settings
 
-from apps.backup import restic, restore, services
+from apps.backup import restic, restore, safepaths, services
 from apps.backup.errors import BackupError
 from apps.backup.locks import BACKUP_LOCK_KEY, backup_lock, database_lock
 from apps.backup.models import BackupRun
@@ -1148,3 +1148,52 @@ def test_a_failing_clean_up_never_hides_the_restore_error(
     with pytest.raises(BackupError) as caught:
         restore_files(run=None, authority_target=caddy, clear_documents=False)
     assert caught.value.code == "wrong_password"
+
+
+# --- triage: a remote source is read with a lock; the back-up disk is never emptied ---------
+
+
+@pytest.mark.parametrize(
+    ("kind", "location", "no_lock"),
+    [
+        ("folder", "/backup/restic", True),
+        ("rest", "rest:https://nas:8000/b", False),
+        ("s3", "s3:https://s3.example/b", False),
+    ],
+)
+def test_only_a_folder_source_is_read_without_a_lock(
+    kind: str, location: str, no_lock: bool
+) -> None:
+    # A remote repository may be pruned by another server meanwhile: there a restore
+    # takes restic's shared lock; a folder source is mounted read-only and cannot.
+    repository = restic.Repository(kind, location, {})  # type: ignore[arg-type]
+    assert restore.reads_without_lock(repository) is no_lock
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("depth", ["top", "deeper"])
+@pytest.mark.parametrize("clear", [True, False])
+def test_a_restore_refuses_a_tree_that_holds_the_backup_disk(
+    configured_folder: Path,
+    fake_restic: FakeBinary,
+    caddy: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    depth: str,
+    clear: bool,
+) -> None:
+    # BRIEVIE_BACKUP_DIR set to (a folder in) the documents volume's host path: the
+    # same directory is then mounted both at /backup and inside /data/documents. A bind
+    # mount cannot be made here, so the mount's identity is that of the folder inside.
+    one_run(fake_restic)
+    documents = Path(django_settings.BRIEVIE_STORAGE_ROOT)
+    disk = documents / "usb" if depth == "top" else documents / "ws" / "usb"
+    (disk / "restic").mkdir(parents=True)
+    (disk / "restic" / "config").write_text("the whole back-up")
+    monkeypatch.setattr(restore, "_backup_disk_identities", lambda: {safepaths.identity(disk)})
+
+    with pytest.raises(BackupError) as caught:
+        restore_files(run=None, authority_target=caddy, clear_documents=clear)
+
+    assert caught.value.code == "unsafe_path"
+    assert (disk / "restic" / "config").read_text() == "the whole back-up"
+    assert not any(call[:1] == ["restore"] for call in fake_restic.calls)

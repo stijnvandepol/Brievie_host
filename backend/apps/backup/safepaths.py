@@ -547,6 +547,30 @@ def open_subdirs(base: int, names: Sequence[str], *, create: int | None = None) 
     return descriptor
 
 
+def require_not_holding(descriptor: int, forbidden: set[_Identity]) -> None:
+    """Refuse (`unsafe_path`) when the tree open as `descriptor`, or a directory in it,
+    is one of `forbidden` (the back-up disk, mounted a second time inside a volume).
+    Read only; links are not followed."""
+    if not forbidden:
+        return
+    info = os.fstat(descriptor)
+    if (info.st_dev, info.st_ino) in forbidden:
+        raise _unsafe()
+    with os.scandir(descriptor) as entries:
+        names = [entry.name for entry in entries]
+    for name in names:
+        seen = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
+        if not stat.S_ISDIR(seen.st_mode):
+            continue
+        if (seen.st_dev, seen.st_ino) in forbidden:
+            raise _unsafe()
+        child = _open_child_dir(descriptor, name)
+        try:
+            require_not_holding(child, forbidden)
+        finally:
+            os.close(child)
+
+
 def check_tree(descriptor: int) -> None:
     """Before a restore writes into the tree open as `descriptor`: refuse
     (`restore_target_unsafe`) any entry that is not a directory or a regular file with
