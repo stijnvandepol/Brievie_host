@@ -106,7 +106,7 @@ export interface paths {
         put?: never;
         /**
          * Create Pairing Code
-         * @description Web session only. A bearer token (even a valid one) is not accepted here and answers 401 not_authenticated; a session without a valid CSRF token answers 403.
+         * @description Web session only. A bearer token (even a valid one) is not accepted here and answers 401 not_authenticated; a session without a valid CSRF token answers 403. The response carries the code once and is not stored (Cache-Control: no-store). server_link opens the app without the code: it pairs with a proof.
          */
         post: operations["createPairingCode"];
         delete?: never;
@@ -1074,6 +1074,11 @@ export interface components {
         /** DeviceOut */
         DeviceOut: {
             /**
+             * App Version
+             * @default
+             */
+            app_version: string;
+            /**
              * Created At
              * Format: date-time
              */
@@ -1393,6 +1398,11 @@ export interface components {
         };
         /** PairIn */
         PairIn: {
+            /**
+             * App Version
+             * @default
+             */
+            app_version: string;
             /** Code */
             code: string;
             /** Device Name */
@@ -1420,6 +1430,11 @@ export interface components {
             expires_at: string;
             /** Qr Payload */
             qr_payload: string;
+            /**
+             * Server Link
+             * @default
+             */
+            server_link: string;
         };
         /** PasswordChangeIn */
         PasswordChangeIn: {

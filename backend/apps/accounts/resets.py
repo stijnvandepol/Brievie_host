@@ -168,12 +168,7 @@ def _lock_out_everything_else(
         Device.objects.select_for_update().filter(user=user, revoked_at__isnull=True).order_by("id")
     )
     for device in devices:
-        revoke_device(user, device.id)
-        record(
-            AuditCode.DEVICE_REVOKED,
-            actor=actor,
-            target=AuditTarget(kind=TargetKind.DEVICE, id=device.id, name=device.name),
-        )
+        revoke_device(user, device.id, actor=actor)
     PasswordReset.objects.filter(user=user, used_at=None, revoked_at=None).update(
         revoked_at=timezone.now()
     )

@@ -1,11 +1,13 @@
 from uuid import UUID
 
-from django.http import HttpRequest
+from django.http import HttpRequest, HttpResponse
 from ninja import Router, Status
 
 from apps.accounts.auth import session_auth
 from apps.accounts.schemas import UserOut
 from apps.accounts.services import current_user
+from apps.audit.services import actor_from_request
+from apps.common.net import valid_client_ip
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.common.throttling import ClientAddressThrottle
 from apps.devices import services
@@ -21,12 +23,18 @@ router = Router(tags=["devices"])
     auth=session_auth,
     description=(
         "Web session only. A bearer token (even a valid one) is not accepted here and "
-        "answers 401 not_authenticated; a session without a valid CSRF token answers 403."
+        "answers 401 not_authenticated; a session without a valid CSRF token answers 403. "
+        "The response carries the code once and is not stored (Cache-Control: no-store). "
+        "server_link opens the app without the code: it pairs with a proof."
     ),
     operation_id="createPairingCode",
 )
-def create_pairing_code(request: HttpRequest) -> Status[services.IssuedPairingCode]:
-    return Status(201, services.issue_pairing_code(current_user(request)))
+def create_pairing_code(
+    request: HttpRequest, response: HttpResponse
+) -> Status[services.IssuedPairingCode]:
+    issued = services.issue_pairing_code(request)
+    response["Cache-Control"] = "no-store"
+    return Status(201, issued)
 
 
 @router.post(
@@ -37,7 +45,12 @@ def create_pairing_code(request: HttpRequest) -> Status[services.IssuedPairingCo
     operation_id="pairDevice",
 )
 def pair_device(request: HttpRequest, payload: PairIn) -> Status[PairOut]:
-    device, token = services.pair_device(code=payload.code, device_name=payload.device_name)
+    device, token = services.pair_device(
+        code=payload.code,
+        device_name=payload.device_name,
+        app_version=payload.app_version,
+        client_ip=valid_client_ip(request),
+    )
     user = UserOut.model_validate(device.user, from_attributes=True)
     return Status(201, PairOut(device_id=device.id, token=token, user=user))
 
@@ -57,7 +70,7 @@ def list_devices(request: HttpRequest) -> list[Device]:
     operation_id="revokeDevice",
 )
 def revoke_device(request: HttpRequest, device_id: UUID) -> Status[None]:
-    services.revoke_device(current_user(request), device_id)
+    services.revoke_device(current_user(request), device_id, actor=actor_from_request(request))
     return Status(204, None)
 
 

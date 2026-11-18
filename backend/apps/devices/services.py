@@ -1,17 +1,23 @@
 import hashlib
 import hmac
 import json
+import re
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from uuid import UUID
+from urllib.parse import urlencode
+from uuid import UUID, uuid4
 
 from django.conf import settings
 from django.db import transaction
+from django.http import HttpRequest
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
-from apps.accounts.models import User
+from apps.accounts.models import User, UserSession
+from apps.accounts.services import current_user
+from apps.audit.codes import AuditCode, TargetKind
+from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
 from apps.devices import pki
 from apps.devices.models import Device, PairingCode
@@ -20,6 +26,10 @@ CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 CODE_LENGTH = 8
 CODE_VALIDITY = timedelta(minutes=10)
 LAST_SEEN_INTERVAL = timedelta(minutes=1)
+# The app sends its version in this header (D 7.1); a 1c app sends none.
+APP_VERSION_HEADER = "X-Brievie-App-Version"
+APP_VERSION_INTERVAL = timedelta(hours=24)
+_APP_VERSION = re.compile(r"[0-9A-Za-z.+()\- ]{1,50}")
 
 
 def sha256_hex(value: str) -> str:
@@ -35,15 +45,28 @@ def format_code(code: str) -> str:
     return f"{code[:4]}-{code[4:]}"
 
 
-def create_pairing_code(user: User) -> tuple[PairingCode, str]:
-    """A new code for `user`, shown as XXXX-XXXX; their older unused codes stop working."""
+def clean_app_version(raw: str) -> str:
+    """The app version as reported, trimmed; "" when it is not a plain version string."""
+    value = raw.strip()
+    return value if _APP_VERSION.fullmatch(value) else ""
+
+
+def create_pairing_code(
+    user: User, *, paired_via: str = UserSession.Method.PASSWORD
+) -> tuple[PairingCode, str]:
+    """A new code for `user`, shown as XXXX-XXXX; their older unused codes stop working.
+
+    `paired_via` is the sign-in method of the web session that asked for it.
+    """
     code = "".join(secrets.choice(CODE_ALPHABET) for _ in range(CODE_LENGTH))
     with transaction.atomic():
         PairingCode.objects.filter(user=user, used_at__isnull=True).delete()
         pairing_code = PairingCode.objects.create(
+            id=uuid4(),
             user=user,
             code_hash=sha256_hex(code),
             expires_at=timezone.now() + CODE_VALIDITY,
+            paired_via=paired_via,
         )
     return pairing_code, format_code(code)
 
@@ -53,13 +76,24 @@ class IssuedPairingCode:
     code: str
     expires_at: datetime
     qr_payload: str
+    server_link: str
 
 
-def issue_pairing_code(user: User) -> IssuedPairingCode:
-    """A new pairing code for `user`, with the QR payload that carries it."""
-    pairing_code, code = create_pairing_code(user)
+def issue_pairing_code(request: HttpRequest) -> IssuedPairingCode:
+    """A new pairing code for the signed-in caller, with the QR payload that carries it
+    and the link (without the code) that opens the app."""
+    user = current_user(request)
+    method = (
+        UserSession.objects.filter(session_key=request.session.session_key)
+        .values_list("method", flat=True)
+        .first()
+    )
+    pairing_code, code = create_pairing_code(user, paired_via=method or UserSession.Method.PASSWORD)
     return IssuedPairingCode(
-        code=code, expires_at=pairing_code.expires_at, qr_payload=qr_payload(code)
+        code=code,
+        expires_at=pairing_code.expires_at,
+        qr_payload=qr_payload(code),
+        server_link=server_link(pairing_code.id),
     )
 
 
@@ -77,7 +111,25 @@ def qr_payload(code: str) -> str:
     return json.dumps(payload, separators=(",", ":"))
 
 
-def pair_device(*, code: str, device_name: str) -> tuple[Device, str]:
+def server_link(pairing_id: UUID) -> str:
+    """The `brievie://server#…` link that opens the app (D 6.2, D 20).
+
+    It carries no secret: the server's addresses, its CA pin (left out without a private
+    CA) and the id of the pairing code, which identifies the code for a proof but does
+    not redeem it. Values in the fragment are form-encoded.
+    """
+    fields: list[tuple[str, str]] = [("v", "1")]
+    fields += [("url", url) for url in settings.BRIEVIE_PUBLIC_URLS]
+    pin = pki.ca_certificate_sha256()
+    if pin is not None:
+        fields.append(("ca_sha256", pin))
+    fields.append(("pairing", str(pairing_id)))
+    return "brievie://server#" + urlencode(fields)
+
+
+def pair_device(
+    *, code: str, device_name: str, app_version: str = "", client_ip: str | None = None
+) -> tuple[Device, str]:
     """Exchange a valid, unused code for a device and its bearer token (shown once).
 
     The code is looked up by its hash, so the database compares hashes, never the
@@ -104,17 +156,44 @@ def pair_device(*, code: str, device_name: str) -> tuple[Device, str]:
                 "pairing_code_invalid",
                 _("Deze koppelcode klopt niet of is verlopen. Maak een nieuwe code aan."),
             )
-        pairing_code.used_at = timezone.now()
-        pairing_code.save(update_fields=["used_at", "updated_at"])
-        token = secrets.token_urlsafe(32)
-        device = Device.objects.create(
-            user=pairing_code.user, name=name, token_hash=sha256_hex(token)
+        return _create_device(
+            pairing_code, name=name, app_version=app_version, client_ip=client_ip, via="code"
         )
+
+
+def _create_device(
+    pairing_code: PairingCode, *, name: str, app_version: str, client_ip: str | None, via: str
+) -> tuple[Device, str]:
+    """Use up `pairing_code` (locked by the caller, inside its transaction) and create the
+    device with a new bearer token; log it as `device_paired` with `via`."""
+    now = timezone.now()
+    pairing_code.used_at = now
+    pairing_code.save(update_fields=["used_at", "updated_at"])
+    token = secrets.token_urlsafe(32)
+    version = clean_app_version(app_version)
+    device = Device.objects.create(
+        user=pairing_code.user,
+        name=name,
+        token_hash=sha256_hex(token),
+        app_version=version,
+        app_version_at=now if version else None,
+        paired_via=pairing_code.paired_via,
+    )
+    record(
+        AuditCode.DEVICE_PAIRED,
+        actor=AuditActor.for_user(pairing_code.user, client_ip=client_ip),
+        target=AuditTarget(kind=TargetKind.DEVICE, id=device.id, name=device.name),
+        values={"via": via},
+    )
     return device, token
 
 
-def device_for_token(token: str) -> Device | None:
-    """The active device of an active user that holds this bearer token, if any."""
+def device_for_token(token: str, *, app_version: str = "") -> Device | None:
+    """The active device of an active user that holds this bearer token, if any.
+
+    `last_seen_at` is written at most once a minute and the reported app version at most
+    once a day (D 7.1), in one update when both are due.
+    """
     device = (
         Device.objects.select_related("user")
         .filter(token_hash=sha256_hex(token), revoked_at__isnull=True, user__is_active=True)
@@ -123,10 +202,22 @@ def device_for_token(token: str) -> Device | None:
     if device is None:
         return None
     now = timezone.now()
+    changes: dict[str, datetime | str] = {}
     if device.last_seen_at is None or now - device.last_seen_at >= LAST_SEEN_INTERVAL:
+        changes["last_seen_at"] = now
+    version = clean_app_version(app_version)
+    if (
+        version
+        and version != device.app_version
+        and (device.app_version_at is None or now - device.app_version_at >= APP_VERSION_INTERVAL)
+    ):
+        changes["app_version"] = version
+        changes["app_version_at"] = now
+    if changes:
         with transaction.atomic():
-            Device.objects.filter(pk=device.pk).update(last_seen_at=now)
-        device.last_seen_at = now
+            Device.objects.filter(pk=device.pk).update(**changes)
+        for field, value in changes.items():
+            setattr(device, field, value)
     return device
 
 
@@ -134,13 +225,24 @@ def list_devices(user: User) -> list[Device]:
     return list(Device.objects.filter(user=user, revoked_at__isnull=True).order_by("created_at"))
 
 
-def revoke_device(user: User, device_id: UUID) -> None:
+def revoke_device(user: User, device_id: UUID, *, actor: AuditActor) -> None:
+    """Revoke `user`'s device and log `device_revoked` with `actor`; 404 when there is no
+    such active device."""
     with transaction.atomic():
-        revoked = Device.objects.filter(id=device_id, user=user, revoked_at__isnull=True).update(
-            revoked_at=timezone.now()
+        device = (
+            Device.objects.select_for_update()
+            .filter(id=device_id, user=user, revoked_at__isnull=True)
+            .first()
         )
-        if revoked == 0:
+        if device is None:
             raise ApiError(404, "device_not_found", _("We kunnen dit apparaat niet vinden."))
+        device.revoked_at = timezone.now()
+        device.save(update_fields=["revoked_at", "updated_at"])
+        record(
+            AuditCode.DEVICE_REVOKED,
+            actor=actor,
+            target=AuditTarget(kind=TargetKind.DEVICE, id=device.id, name=device.name),
+        )
 
 
 def ca_certificate_pem() -> str:

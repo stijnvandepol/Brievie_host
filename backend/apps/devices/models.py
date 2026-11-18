@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import models
 
+from apps.accounts.models import UserSession
 from apps.common.models import BaseModel
 
 
@@ -16,6 +17,12 @@ class PairingCode(BaseModel):
     code_hash = models.CharField(max_length=64, unique=True)
     expires_at = models.DateTimeField()
     used_at = models.DateTimeField(null=True, blank=True)
+    # How the web session that made the code signed in; copied to the device.
+    paired_via = models.CharField(
+        max_length=10,
+        choices=UserSession.Method.choices,
+        default=UserSession.Method.PASSWORD,
+    )
 
     def __str__(self) -> str:
         return f"Pairing code of {self.user_id}"
@@ -31,6 +38,15 @@ class Device(BaseModel):
     token_hash = models.CharField(max_length=64, unique=True)
     last_seen_at = models.DateTimeField(null=True, blank=True)
     revoked_at = models.DateTimeField(null=True, blank=True)
+    # What the app reports (D 7.1), refreshed at most once a day; empty for a 1c app.
+    app_version = models.CharField(max_length=50, blank=True, default="")
+    app_version_at = models.DateTimeField(null=True, blank=True)
+    # The sign-in method of the web session that made the pairing code (D 9.4).
+    paired_via = models.CharField(
+        max_length=10,
+        choices=UserSession.Method.choices,
+        default=UserSession.Method.PASSWORD,
+    )
 
     def __str__(self) -> str:
         return self.name

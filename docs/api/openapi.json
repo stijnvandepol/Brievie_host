@@ -286,6 +286,11 @@
       },
       "DeviceOut": {
         "properties": {
+          "app_version": {
+            "default": "",
+            "title": "App Version",
+            "type": "string"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -947,6 +952,12 @@
       },
       "PairIn": {
         "properties": {
+          "app_version": {
+            "default": "",
+            "maxLength": 50,
+            "title": "App Version",
+            "type": "string"
+          },
           "code": {
             "maxLength": 20,
             "title": "Code",
@@ -1002,6 +1013,11 @@
           },
           "qr_payload": {
             "title": "Qr Payload",
+            "type": "string"
+          },
+          "server_link": {
+            "default": "",
+            "title": "Server Link",
             "type": "string"
           }
         },
@@ -2269,7 +2285,7 @@
     },
     "/api/v1/devices/pairing-codes": {
       "post": {
-        "description": "Web session only. A bearer token (even a valid one) is not accepted here and answers 401 not_authenticated; a session without a valid CSRF token answers 403.",
+        "description": "Web session only. A bearer token (even a valid one) is not accepted here and answers 401 not_authenticated; a session without a valid CSRF token answers 403. The response carries the code once and is not stored (Cache-Control: no-store). server_link opens the app without the code: it pairs with a proof.",
         "operationId": "createPairingCode",
         "parameters": [],
         "responses": {
