@@ -3,6 +3,7 @@ from typing import ClassVar
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 from django.db.models.functions import Lower
+from django.utils.translation import gettext_lazy as _
 
 from apps.common.models import BaseModel
 
@@ -81,3 +82,33 @@ class SetupToken(BaseModel):
 
     def __str__(self) -> str:
         return "Setup token"
+
+
+class UserSession(BaseModel):
+    """One signed-in web session (D 7.2): Django's session row plus what the user sees.
+
+    A session without this row is signed out by `UserSessionMiddleware`. The key is
+    stored plain, as Django's own session table holds it. `created_at` is the start.
+    """
+
+    class Method(models.TextChoices):
+        PASSWORD = "password", _("Wachtwoord")
+        SSO = "sso", _("Inloggen via organisatie")
+
+    class Via(models.TextChoices):
+        PASSWORD = "password", _("Inloggen")
+        SETUP = "setup", _("Installatie")
+        INVITATION = "invitation", _("Uitnodiging")
+        RESET = "reset", _("Wachtwoord opnieuw ingesteld")
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="web_sessions")
+    session_key = models.CharField(max_length=40, unique=True)
+    method = models.CharField(max_length=10, choices=Method.choices)
+    created_via = models.CharField(max_length=20, choices=Via.choices, default=Via.PASSWORD)
+    last_used_at = models.DateTimeField()
+    client_ip = models.GenericIPAddressField(null=True, blank=True)
+    # A short description such as "Firefox op Windows", never the raw user agent.
+    browser = models.CharField(max_length=100, blank=True)
+
+    def __str__(self) -> str:
+        return f"Session of {self.user_id}"

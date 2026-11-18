@@ -39,6 +39,9 @@ def setup_server(request: HttpRequest, payload: SetupIn) -> Status[SetupOut]:
     "/auth/login",
     response={200: UserOut, 401: ErrorOut, 429: ErrorOut, **BODY_ERRORS},
     auth=None,
+    # Every failure writes an audit row: one address must not grow the table without
+    # bound. axes still locks per email and address.
+    throttle=ClientAddressThrottle("login", "30/10m"),
     operation_id="login",
 )
 def login(request: HttpRequest, payload: LoginIn) -> User:

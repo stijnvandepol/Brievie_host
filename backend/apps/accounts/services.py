@@ -6,7 +6,6 @@ from collections.abc import Sequence
 from axes.handlers.proxy import AxesProxyHandler
 from django.conf import settings
 from django.contrib.auth import authenticate
-from django.contrib.auth import login as django_login
 from django.contrib.auth import logout as django_logout
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -15,15 +14,18 @@ from django.db import connection, transaction
 from django.http import HttpRequest
 from django.utils.translation import gettext as _
 
-from apps.accounts.models import SetupToken, User, normalise_email
+from apps.accounts.models import SetupToken, User, UserSession, normalise_email
+from apps.accounts.sessions import start_session
+from apps.audit.codes import ActorKind, AuditCode, TargetKind
+from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
+from apps.common.net import valid_client_ip
 from apps.workspaces.models import Membership
 from apps.workspaces.services import create_workspace
 
 # pg_advisory_xact_lock key that serialises POST /setup and the generation of the
 # setup token ("brievie" in ASCII).
 SETUP_LOCK_KEY = 0x62726965766965
-MODEL_BACKEND = "django.contrib.auth.backends.ModelBackend"
 
 
 def sha256_hex(value: str) -> str:
@@ -125,7 +127,7 @@ def setup_server(
             extra_labels=extra_labels,
         )
         SetupToken.objects.all().delete()
-        django_login(request, user, backend=MODEL_BACKEND)
+        start_session(request, user, via=UserSession.Via.SETUP)
     return Membership.objects.select_related("workspace").get(user=user, workspace=workspace)
 
 
@@ -150,7 +152,8 @@ def login(request: HttpRequest, *, email: str, password: str) -> User:
     """Log in with email and password, with django-axes' lockout per email + address.
 
     The password check runs outside `transaction.atomic`: a failure must keep the
-    attempt that axes recorded, and the 401 response commits the request transaction.
+    attempt that axes recorded and the `sign_in_failed` row, and the 401 response
+    commits the request transaction.
     """
     credentials = {"username": email}
     if AxesProxyHandler.is_locked(request, credentials):
@@ -163,14 +166,45 @@ def login(request: HttpRequest, *, email: str, password: str) -> User:
         )
     user = authenticate(request, username=email, password=password)
     if not isinstance(user, User):
+        _record_sign_in_problem(AuditCode.SIGN_IN_FAILED, request, email)
         raise ApiError(401, "invalid_credentials", _("Het e-mailadres of wachtwoord klopt niet."))
-    with transaction.atomic():
-        django_login(request, user)
+    start_session(request, user, via=UserSession.Via.PASSWORD)
     return user
+
+
+def _record_sign_in_problem(code: AuditCode, request: HttpRequest, email: str) -> None:
+    """A failed or locked sign-in, about the account the email belongs to.
+
+    For an unknown address the row names nobody: the typed email is never stored. In its
+    own block, ended before the error answer is raised.
+    """
+    account = User.objects.filter(email=normalise_email(email)).first()
+    address = valid_client_ip(request)
+    with transaction.atomic():
+        if account is None:
+            actor = AuditActor(kind=ActorKind.USER, user_id=None, name="", client_ip=address)
+            record(code, actor=actor)
+            return
+        record(
+            code,
+            actor=AuditActor.for_user(account, client_ip=address),
+            target=AuditTarget(kind=TargetKind.USER, id=account.id, name=account.name),
+        )
+
+
+def on_user_locked_out(
+    sender: object, request: HttpRequest | None = None, username: str = "", **kwargs: object
+) -> None:
+    """axes' `user_locked_out` receiver: one `sign_in_locked_out` row per lockout (the
+    refused attempts after it are answered before axes is asked again)."""
+    if request is None:
+        return
+    _record_sign_in_problem(AuditCode.SIGN_IN_LOCKED_OUT, request, username)
 
 
 def logout(request: HttpRequest) -> None:
     with transaction.atomic():
+        UserSession.objects.filter(session_key=request.session.session_key).delete()
         django_logout(request)
 
 
