@@ -28,6 +28,9 @@ MESSAGES: dict[str, Promise] = {
     Code.PASSWORD_RESET_COMPLETED: _(
         "Je wachtwoord is op %(date)s opnieuw ingesteld door %(name)s."
     ),
+    Code.PASSWORD_RESET_BY_COMMAND: _(
+        "Je wachtwoord is op %(date)s opnieuw ingesteld op de server."
+    ),
     Code.SESSIONS_ENDED: _("%(name)s heeft op %(date)s je sessies beëindigd."),
     Code.DEVICE_REVOKED: _(
         "%(name)s heeft op %(date)s je apparaat \u2018%(device)s\u2019 ingetrokken."

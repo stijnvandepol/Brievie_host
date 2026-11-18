@@ -2060,7 +2060,7 @@
     },
     "/api/v1/auth/password-reset": {
       "post": {
-        "description": "Set a new password with the token from a reset link's fragment and sign in; every other session of the account ends. 400 reset_link_invalid for an unknown, used, expired or revoked link, or when its maker may no longer act on the account; 422 when the password rules refuse it (the link stays usable).",
+        "description": "Set a new password with the token from a reset link's fragment and sign in; every other session of the account ends. 400 reset_link_invalid for an unknown, used, expired or revoked link, or when its maker may no longer act on the account; 422 when the password rules refuse it (the link stays usable). Every paired device and every other open reset link of the account is revoked.",
         "operationId": "completePasswordReset",
         "parameters": [],
         "requestBody": {
@@ -2932,7 +2932,7 @@
     },
     "/api/v1/users/{user_id}/password-reset": {
       "post": {
-        "description": "A one-time link (24 hours) with which the member chooses a new password; the token is in its fragment and is shown only here. An earlier unused link stops working. A server admin may do this for anyone; a workspace admin only for a member whose only workspace is theirs and who is no server admin (403 server_admin_only). 403 own_account for the caller's own account; 404 user_not_found for an unknown account or one outside the caller's workspaces; 409 account_inactive.",
+        "description": "Web session only: a bearer token answers 401 not_authenticated. A one-time link (24 hours) with which the member chooses a new password; the token is in its fragment and is shown only here. An earlier unused link stops working. A server admin may do this for anyone; a workspace admin only for a member whose only workspace is theirs and who is no server admin (403 server_admin_only). 403 own_account for the caller's own account; 404 user_not_found for an unknown account or one outside the caller's workspaces; 409 account_inactive.",
         "operationId": "createPasswordReset",
         "parameters": [
           {
@@ -2999,9 +2999,6 @@
           }
         },
         "security": [
-          {
-            "DeviceTokenAuth": []
-          },
           {
             "SessionAuth": []
           }

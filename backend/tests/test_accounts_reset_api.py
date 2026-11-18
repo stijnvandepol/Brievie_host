@@ -18,6 +18,8 @@ from pytest_django import Settings
 from apps.accounts.models import AccountNotice, PasswordReset, User, UserSession
 from apps.accounts.resets import revoke_resets_made_by
 from apps.audit.models import ServerAuditEvent, WorkspaceAuditEvent
+from apps.devices.models import Device
+from apps.devices.services import create_pairing_code, pair_device
 from apps.workspaces.context import workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.factories import TEST_PASSWORD, UserFactory
@@ -252,6 +254,7 @@ def test_completion_fails_when_the_target_became_a_server_admin(ws_a: Workspace)
     User.objects.filter(pk=member.pk).update(is_server_admin=True)
 
     assert complete(Client(), token) == (400, DEAD_LINK)
+    assert fresh(member).check_password(TEST_PASSWORD)
 
 
 def test_a_server_admins_link_survives_a_second_membership(
@@ -282,7 +285,7 @@ def test_reset_writes_notices_and_audit_rows(ws_a: Workspace) -> None:
     member = join(ws_a)
     signed_in(member)
     token = make_token(signed_in(admin), member)
-    browser = Client()
+    browser = Client(REMOTE_ADDR="203.0.113.5")
 
     assert complete(browser, token)[0] == 200
 
@@ -301,10 +304,18 @@ def test_reset_writes_notices_and_audit_rows(ws_a: Workspace) -> None:
     (made,) = ServerAuditEvent.objects.filter(code="password_reset_created")
     assert (made.actor_id, made.target_kind, made.target_id) == (admin.id, "user", member.id)
     assert made.values == {}
+    # Whoever held the link did it, which nobody proved to be the member: no name, no id,
+    # the address only; the maker's id ties this row to the one above.
     (changed,) = ServerAuditEvent.objects.filter(code="password_changed")
-    assert (changed.target_id, changed.values) == (member.id, {"via": "reset"})
+    assert (changed.actor_kind, changed.actor_id, changed.actor_name) == ("user", None, "")
+    assert changed.client_ip == "203.0.113.5"
+    assert (changed.target_id, changed.values) == (
+        member.id,
+        {"via": "reset", "reset_by": str(admin.id)},
+    )
     (ended,) = ServerAuditEvent.objects.filter(code="session_ended")
-    assert (ended.target_id, ended.values) == (member.id, {"count": 1, "reason": "reset"})
+    assert (ended.actor_id, ended.target_id) == (None, member.id)
+    assert ended.values == {"count": 1, "reason": "reset"}
     signed = ServerAuditEvent.objects.filter(code="sign_in_succeeded", target_id=member.id)
     assert {"via": "reset"} in [row.values for row in signed]
     with workspace_context(ws_a.id):
@@ -403,6 +414,12 @@ def test_reset_password_command_sets_the_password(monkeypatch: pytest.MonkeyPatc
         {"via": "command"},
     )
     assert NEW_PASSWORD not in out.getvalue()
+    (notice,) = AccountNotice.objects.filter(user=admin)
+    assert notice.code == "password_reset_by_command"
+    message = signed_in(admin, NEW_PASSWORD).get("/api/v1/me/notices").json()[0]["message"]
+    assert re.fullmatch(
+        r"Je wachtwoord is op \d{1,2} \w+ opnieuw ingesteld op de server\.", message
+    )
 
 
 def test_reset_password_command_refuses_different_or_weak_passwords(
@@ -425,3 +442,130 @@ def test_reset_password_command_refuses_different_or_weak_passwords(
 def test_reset_password_command_takes_no_password_argument() -> None:
     with pytest.raises(CommandError):
         call_command("reset_password", "--email", "a@example.nl", "--password", NEW_PASSWORD)
+
+
+# --- Fix round: web session only, devices revoked, no-store. ---
+
+
+def paired(user: User, name: str = "iPhone") -> tuple[Device, str]:
+    _, code = create_pairing_code(user)
+    return pair_device(code=code, device_name=name)
+
+
+def bearer(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
+
+
+def devices_work(*tokens: str) -> list[bool]:
+    """Whether each device token still signs a call in (only flags in a failure report)."""
+    return [Client().get("/api/v1/me", headers=bearer(t)).status_code == 200 for t in tokens]
+
+
+def test_a_device_token_cannot_make_a_link(ws_a: Workspace) -> None:
+    member = join(ws_a)
+    _, admin_phone = paired(admin_of(ws_a))
+    phone = Client()
+    assert devices_work(admin_phone) == [True]
+
+    r = post_json(phone, f"/users/{member.id}/password-reset", headers=bearer(admin_phone))
+
+    assert r.status_code == 401
+    assert r.json()["code"] == "not_authenticated"
+    assert not PasswordReset.objects.exists()
+    assert not AccountNotice.objects.exists()
+    assert not ServerAuditEvent.objects.filter(code="password_reset_created").exists()
+
+
+def test_completing_a_reset_ignores_a_device_token(ws_a: Workspace) -> None:
+    # auth=None: the endpoint never acts as the phone's owner.
+    member = join(ws_a)
+    token = make_token(signed_in(admin_of(ws_a)), member)
+    _, admin_phone = paired(admin_of(ws_a))
+
+    r = post_json(
+        Client(),
+        "/auth/password-reset",
+        {"token": token, "password": NEW_PASSWORD},
+        headers=bearer(admin_phone),
+    )
+
+    assert (r.status_code, r.json()["id"]) == (200, str(member.id))
+
+
+def test_completion_revokes_the_accounts_devices_only(ws_a: Workspace) -> None:
+    admin = admin_of(ws_a)
+    member = join(ws_a)
+    first, member_phone = paired(member, "iPhone")
+    second, member_tablet = paired(member, "iPad")
+    _, admin_phone = paired(admin)
+    token = make_token(signed_in(admin), member)
+    assert devices_work(member_phone, member_tablet) == [True, True]
+
+    assert complete(Client(REMOTE_ADDR="203.0.113.5"), token)[0] == 200
+
+    assert devices_work(member_phone, member_tablet, admin_phone) == [False, False, True]
+    revoked = ServerAuditEvent.objects.filter(code="device_revoked")
+    assert {(row.target_kind, row.target_id) for row in revoked} == {
+        ("device", first.id),
+        ("device", second.id),
+    }
+    assert {(row.actor_id, row.client_ip) for row in revoked} == {(None, "203.0.113.5")}
+
+
+def test_completion_revokes_the_accounts_other_open_links(ws_a: Workspace) -> None:
+    member = join(ws_a)
+    token = make_token(signed_in(admin_of(ws_a)), member)
+    other = PasswordReset.objects.create(
+        user=member,
+        token_hash=sha256("een-andere-link"),
+        expires_at=timezone.now() + timedelta(hours=1),
+        created_by=admin_of(ws_a),
+        created_by_name="Anne",
+    )
+
+    assert complete(Client(), token)[0] == 200
+
+    other.refresh_from_db()
+    assert other.revoked_at is not None
+
+
+def test_reset_password_command_revokes_devices_and_open_links(
+    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    member = join(ws_a)
+    _, member_phone = paired(member)
+    _, admin_phone = paired(admin_of(ws_a))
+    token = make_token(signed_in(admin_of(ws_a)), member)
+    answers = iter([NEW_PASSWORD, NEW_PASSWORD])
+    monkeypatch.setattr(
+        "apps.accounts.management.commands.reset_password.getpass", lambda prompt="": next(answers)
+    )
+
+    call_command("reset_password", "--email", member.email, stdout=io.StringIO())
+
+    assert devices_work(member_phone, admin_phone) == [False, True]
+    assert complete(Client(), token) == (400, DEAD_LINK)
+    (revoked,) = ServerAuditEvent.objects.filter(code="device_revoked")
+    assert revoked.actor_kind == "system"
+
+
+def test_change_password_keeps_the_devices() -> None:
+    user = UserFactory.create()
+    _, phone = paired(user)
+    body = {"current_password": TEST_PASSWORD, "new_password": NEW_PASSWORD}
+
+    assert post_json(signed_in(user), "/me/password", body).status_code == 204
+    assert devices_work(phone) == [True]
+
+
+def test_responses_with_or_after_the_link_are_not_stored(ws_a: Workspace) -> None:
+    member = join(ws_a)
+    r = post_json(signed_in(admin_of(ws_a)), f"/users/{member.id}/password-reset")
+    assert r.status_code == 201
+    assert r["Cache-Control"] == "no-store"
+    token = LINK.match(r.json()["link"])["token"]  # type: ignore[index]
+
+    done = post_json(Client(), "/auth/password-reset", {"token": token, "password": NEW_PASSWORD})
+
+    assert done.status_code == 200
+    assert done["Cache-Control"] == "no-store"

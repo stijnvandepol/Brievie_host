@@ -20,12 +20,14 @@ from apps.accounts.models import AccountNotice, PasswordReset, User, UserSession
 from apps.accounts.notices import notify
 from apps.accounts.services import current_user
 from apps.accounts.sessions import end_sessions, start_session
-from apps.audit.codes import AuditCode, TargetKind
-from apps.audit.services import AuditActor, AuditTarget, actor_from_request, record
+from apps.audit.codes import ActorKind, AuditCode, TargetKind
+from apps.audit.services import AuditActor, AuditTarget, AuditValue, actor_from_request, record
 from apps.common.errors import ApiError
 from apps.common.links import fragment_link
 from apps.common.net import valid_client_ip
 from apps.common.tokens import new_token, token_hash
+from apps.devices.models import Device
+from apps.devices.services import revoke_device
 
 RESET_VALIDITY = timedelta(hours=24)
 RESET_PATH = "/wachtwoord-herstellen"
@@ -103,8 +105,9 @@ def complete_password_reset(request: HttpRequest, *, token: str, password: str) 
     """Set the new password with a reset link and sign this browser in.
 
     The link is locked, so two attempts at once give one success. A password the rules
-    refuse answers 422 and leaves the link usable. Every other session of the account
-    ends; the member gets a notice that this new session cannot dismiss.
+    refuse answers 422 and leaves the link usable. Every other session, every paired
+    device and every other open link of the account ends; the member gets a notice that
+    this new session cannot dismiss.
     """
     with transaction.atomic():
         reset = (
@@ -129,24 +132,51 @@ def complete_password_reset(request: HttpRequest, *, token: str, password: str) 
         user.save(update_fields=["password", "updated_at"])
         reset.used_at = now
         reset.save(update_fields=["used_at", "updated_at"])
-        ended = end_sessions(user, current=request)
-        notify(user, AccountNotice.Code.PASSWORD_RESET_COMPLETED, actor_name=reset.created_by_name)
-        actor = AuditActor.for_user(user, client_ip=valid_client_ip(request))
-        record(
-            AuditCode.PASSWORD_CHANGED,
-            actor=actor,
-            target=_user_target(user),
-            values={"via": "reset"},
+        # Whoever held the link did this; nobody proved that was the member (it may be
+        # the admin), so the rows name nobody: the address, and the maker's id.
+        actor = AuditActor(
+            kind=ActorKind.USER, user_id=None, name="", client_ip=valid_client_ip(request)
         )
-        if ended:
-            record(
-                AuditCode.SESSION_ENDED,
-                actor=actor,
-                target=_user_target(user),
-                values={"count": ended, "reason": "reset"},
-            )
+        values: dict[str, AuditValue] = {"via": "reset"}
+        if reset.created_by_id is not None:
+            values["reset_by"] = str(reset.created_by_id)
+        record(AuditCode.PASSWORD_CHANGED, actor=actor, target=_user_target(user), values=values)
+        _lock_out_everything_else(user, actor, current=request, reason="reset")
+        notify(user, AccountNotice.Code.PASSWORD_RESET_COMPLETED, actor_name=reset.created_by_name)
         start_session(request, user, via=UserSession.Via.RESET)
     return user
+
+
+def _lock_out_everything_else(
+    user: User, actor: AuditActor, *, current: HttpRequest | None, reason: str
+) -> None:
+    """After a reset (by an admin's link or on the server), which is what one does after a
+    suspected break-in: end every session, revoke every paired device and every other
+    open reset link of the account. A user's own password change keeps the devices.
+    """
+    target = _user_target(user)
+    ended = end_sessions(user, current=current)
+    if ended:
+        record(
+            AuditCode.SESSION_ENDED,
+            actor=actor,
+            target=target,
+            values={"count": ended, "reason": reason},
+        )
+    # Locked first, so a device revoked meanwhile cannot make `revoke_device` answer 404.
+    devices = list(
+        Device.objects.select_for_update().filter(user=user, revoked_at__isnull=True).order_by("id")
+    )
+    for device in devices:
+        revoke_device(user, device.id)
+        record(
+            AuditCode.DEVICE_REVOKED,
+            actor=actor,
+            target=AuditTarget(kind=TargetKind.DEVICE, id=device.id, name=device.name),
+        )
+    PasswordReset.objects.filter(user=user, used_at=None, revoked_at=None).update(
+        revoked_at=timezone.now()
+    )
 
 
 def revoke_resets_made_by(user_id: UUID) -> int:
@@ -160,7 +190,8 @@ def revoke_resets_made_by(user_id: UUID) -> int:
 
 def reset_password_by_command(*, email: str, password: str) -> User:
     """Set a password from the server's command line (a server admin who lost theirs):
-    the rules apply, every session ends, the log records the system as actor."""
+    the rules apply, every session, device and open reset link ends, the member gets a
+    notice, the log records the system as actor."""
     with transaction.atomic():
         user = User.objects.select_for_update().filter(email=normalise_email(email)).first()
         if user is None:
@@ -168,7 +199,6 @@ def reset_password_by_command(*, email: str, password: str) -> User:
         validate_password(password, user)
         user.set_password(password)
         user.save(update_fields=["password", "updated_at"])
-        ended = end_sessions(user)
         actor = AuditActor.system()
         record(
             AuditCode.PASSWORD_CHANGED,
@@ -176,11 +206,6 @@ def reset_password_by_command(*, email: str, password: str) -> User:
             target=_user_target(user),
             values={"via": "command"},
         )
-        if ended:
-            record(
-                AuditCode.SESSION_ENDED,
-                actor=actor,
-                target=_user_target(user),
-                values={"count": ended, "reason": "password_changed"},
-            )
+        _lock_out_everything_else(user, actor, current=None, reason="password_changed")
+        notify(user, AccountNotice.Code.PASSWORD_RESET_BY_COMMAND, actor_name="")
     return user

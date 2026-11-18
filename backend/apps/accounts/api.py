@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from django.http import HttpRequest
+from django.http import HttpRequest, HttpResponse
 from ninja import Router, Status
 
 from apps.accounts import notices, resets, services
@@ -151,7 +151,9 @@ def mark_notices_seen(request: HttpRequest, payload: NoticesSeenIn) -> Status[No
 @router.post(
     "/users/{user_id}/password-reset",
     response={201: PasswordResetOut, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS},
-    description="A one-time link (24 hours) with which the member chooses a new password;"
+    auth=session_auth,
+    description=WEB_SESSION_ONLY
+    + " A one-time link (24 hours) with which the member chooses a new password;"
     " the token is in its fragment and is shown only here. An earlier unused link stops"
     " working. A server admin may do this for anyone; a workspace admin only for a member"
     " whose only workspace is theirs and who is no server admin (403 server_admin_only)."
@@ -159,8 +161,12 @@ def mark_notices_seen(request: HttpRequest, payload: NoticesSeenIn) -> Status[No
     " account or one outside the caller's workspaces; 409 account_inactive.",
     operation_id="createPasswordReset",
 )
-def create_password_reset(request: HttpRequest, user_id: UUID) -> Status[IssuedReset]:
-    return Status(201, resets.create_password_reset(request, target_id=user_id))
+def create_password_reset(
+    request: HttpRequest, response: HttpResponse, user_id: UUID
+) -> Status[IssuedReset]:
+    issued = resets.create_password_reset(request, target_id=user_id)
+    response["Cache-Control"] = "no-store"
+    return Status(201, issued)
 
 
 @router.post(
@@ -171,8 +177,13 @@ def create_password_reset(request: HttpRequest, user_id: UUID) -> Status[IssuedR
     description="Set a new password with the token from a reset link's fragment and sign"
     " in; every other session of the account ends. 400 reset_link_invalid for an unknown,"
     " used, expired or revoked link, or when its maker may no longer act on the account;"
-    " 422 when the password rules refuse it (the link stays usable).",
+    " 422 when the password rules refuse it (the link stays usable). Every paired device"
+    " and every other open reset link of the account is revoked.",
     operation_id="completePasswordReset",
 )
-def complete_password_reset(request: HttpRequest, payload: PasswordResetIn) -> User:
-    return resets.complete_password_reset(request, token=payload.token, password=payload.password)
+def complete_password_reset(
+    request: HttpRequest, response: HttpResponse, payload: PasswordResetIn
+) -> User:
+    user = resets.complete_password_reset(request, token=payload.token, password=payload.password)
+    response["Cache-Control"] = "no-store"
+    return user

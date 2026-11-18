@@ -101,7 +101,8 @@ ALLOWED_VALUES: dict[AuditCode, frozenset[str]] = {
     AuditCode.SECOND_FACTOR_ADDED: _NONE,
     AuditCode.SECOND_FACTOR_REMOVED: _NONE,
     AuditCode.SECOND_FACTOR_CLEARED: _NONE,
-    AuditCode.PASSWORD_CHANGED: frozenset({"via"}),
+    # via: self, reset, command; reset_by: the id of the reset link's maker (via reset).
+    AuditCode.PASSWORD_CHANGED: frozenset({"via", "reset_by"}),
     AuditCode.PASSWORD_RESET_CREATED: _NONE,
     # reason: self, admin, password_changed, reset, deactivated.
     AuditCode.SESSION_ENDED: frozenset({"count", "reason"}),

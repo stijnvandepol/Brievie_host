@@ -120,6 +120,10 @@ class AccountNotice(BaseModel):
     class Code(models.TextChoices):
         PASSWORD_RESET_CREATED = "password_reset_created", _("Herstellink gemaakt")
         PASSWORD_RESET_COMPLETED = "password_reset_completed", _("Wachtwoord opnieuw ingesteld")
+        PASSWORD_RESET_BY_COMMAND = (
+            "password_reset_by_command",
+            _("Wachtwoord opnieuw ingesteld op de server"),
+        )
         SESSIONS_ENDED = "sessions_ended", _("Sessies beëindigd")
         DEVICE_REVOKED = "device_revoked", _("Apparaat ingetrokken")
         SECOND_FACTOR_CLEARED = "second_factor_cleared", _("Tweestapsverificatie gewist")
