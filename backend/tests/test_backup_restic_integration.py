@@ -55,3 +55,26 @@ def test_restic_round_trip(tmp_path: Path, settings: object) -> None:
 
     _run(restic.forget_argv(), env)
     _run(restic.check_argv(), env)
+
+
+def test_retention_keeps_every_run_of_the_last_two_days(tmp_path: Path, settings: object) -> None:
+    # Three back-ups within a minute (a safety back-up right before a restore is one of
+    # them): retention must keep all three, database and files, not one per day.
+    settings.BRIEVIE_RESTIC_BINARY = shutil.which("restic")  # type: ignore[attr-defined]
+    repository = Repository("folder", str(tmp_path / "repo"), {})
+    env = restic.restic_env(repository, PASSWORD)
+    _run(restic.init_argv(), env)
+    data = tmp_path / "data"
+    data.mkdir()
+    runs = [uuid.uuid4() for _ in range(3)]
+    for number, run_id in enumerate(runs):
+        (data / f"{number}.page").write_bytes(b"page")
+        _run(restic.backup_stdin_argv(run_id, ["sh", "-c", f"printf dump-{number}"]), env)
+        _run(restic.backup_files_argv(run_id, [str(data)]), env)
+
+    _run(restic.forget_argv(), env)
+
+    for run_id in runs:
+        listed = _run(restic.snapshots_argv(f"run:{run_id}", no_lock=True), env)
+        kinds = sorted(tag for s in restic.parse_snapshots(listed.stdout) for tag in s.tags)
+        assert kinds == ["kind:db", "kind:files", f"run:{run_id}", f"run:{run_id}"], run_id
