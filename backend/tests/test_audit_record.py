@@ -294,3 +294,15 @@ def test_record_keeps_a_usable_client_address() -> None:
         actor=AuditActor(kind="user", user_id=None, name="", client_ip="2001:db8::1"),
     )
     assert ServerAuditEvent.objects.get().client_ip == "2001:db8::1"
+
+
+def test_a_lockout_row_says_where_it_came_from() -> None:
+    # via: password (sign-in) or password_change (wrong current passwords).
+    assert ALLOWED_VALUES[AuditCode.SIGN_IN_LOCKED_OUT] == frozenset({"via"})
+    record(
+        AuditCode.SIGN_IN_LOCKED_OUT,
+        actor=AuditActor.system(),
+        values={"via": "password_change"},
+    )
+    with pytest.raises(ValueError, match="does not take"):
+        record(AuditCode.SIGN_IN_LOCKED_OUT, actor=AuditActor.system(), values={"email": "x"})

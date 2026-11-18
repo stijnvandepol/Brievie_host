@@ -96,7 +96,8 @@ _NONE: frozenset[str] = frozenset()
 ALLOWED_VALUES: dict[AuditCode, frozenset[str]] = {
     AuditCode.SIGN_IN_SUCCEEDED: frozenset({"via"}),
     AuditCode.SIGN_IN_FAILED: _NONE,
-    AuditCode.SIGN_IN_LOCKED_OUT: _NONE,
+    # via: password (signing in), password_change (wrong current passwords).
+    AuditCode.SIGN_IN_LOCKED_OUT: frozenset({"via"}),
     AuditCode.SECOND_FACTOR_ADDED: _NONE,
     AuditCode.SECOND_FACTOR_REMOVED: _NONE,
     AuditCode.SECOND_FACTOR_CLEARED: _NONE,

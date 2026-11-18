@@ -68,7 +68,8 @@ MIDDLEWARE = [
     "apps.common.errors.ApiContentLengthMiddleware",
     "apps.common.errors.ApiJsonBodyMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
+    # Django's SessionMiddleware; a session ended during an /api/ request answers 401 JSON.
+    "apps.common.errors.ApiSessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",

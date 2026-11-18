@@ -1,6 +1,7 @@
 import ast
 import logging
 import runpy
+import weakref
 from datetime import timedelta
 from pathlib import Path
 
@@ -8,6 +9,7 @@ import environ
 import pytest
 from django.apps import apps as global_apps
 from django.contrib.auth import BACKEND_SESSION_KEY, SESSION_KEY
+from django.contrib.auth.signals import user_logged_in
 from django.contrib.sessions.backends.db import SessionStore
 from django.contrib.sessions.models import Session
 from django.core.exceptions import ImproperlyConfigured
@@ -53,7 +55,7 @@ CHROME_IPHONE = (
     "(KHTML, like Gecko) CriOS/131.0.6778.73 Mobile/15E148 Safari/604.1"
 )
 
-APPS_DIR = Path(__file__).resolve().parent.parent / "apps"
+BACKEND_DIR = Path(__file__).resolve().parent.parent
 
 
 def login(client: Client, email: str, password: str = TEST_PASSWORD) -> int:
@@ -265,6 +267,26 @@ def test_signing_in_as_another_user_replaces_the_row(client: Client) -> None:
     assert client.get("/api/v1/me").json()["id"] == str(bram.id)
 
 
+@pytest.mark.urls("tests.session_views")
+def test_a_session_ended_during_an_api_request_answers_401_json(client: Client) -> None:
+    client.force_login(UserFactory.create())
+
+    r = client.get("/api/v1/test/interrupt")
+
+    assert r.status_code == 401
+    assert r.json()["code"] == "not_authenticated"
+    assert client.cookies["sessionid"].value == ""
+
+
+@pytest.mark.urls("tests.session_views")
+def test_a_session_ended_during_a_page_request_keeps_djangos_answer(client: Client) -> None:
+    client.force_login(UserFactory.create())
+
+    r = client.get("/test/interrupt")
+
+    assert r.status_code == 400
+
+
 def test_start_session_uses_the_model_backend(rf: RequestFactory) -> None:
     user = User.objects.get(pk=UserFactory.create().pk)  # fresh: no `.backend` attribute
     request = rf.post("/api/v1/auth/login")
@@ -312,25 +334,145 @@ def test_ending_the_current_session_flushes_instead_of_deleting(client: Client) 
     assert other.get("/api/v1/me").status_code == 401
 
 
-def test_start_session_is_the_only_caller_of_django_login() -> None:
-    callers: set[str] = set()
-    for path in APPS_DIR.rglob("*.py"):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            imports_login = isinstance(node, ast.ImportFrom) and (
-                node.module == "django.contrib.auth"
-                and any(alias.name in {"login", "alogin"} for alias in node.names)
-            )
-            calls_through_module = (
-                isinstance(node, ast.Attribute)
-                and node.attr in {"login", "alogin"}
-                and isinstance(node.value, ast.Name)
-                and node.value.id == "auth"
-            )
-            if imports_login or calls_through_module:
-                callers.add(str(path.relative_to(APPS_DIR)))
+AUTH_MODULE = "django.contrib.auth"
+# Modules that sign people in by themselves (Django's login views and their URLs).
+SIGN_IN_MODULES = ("django.contrib.auth.views", "django.contrib.auth.urls")
+LOGIN_NAMES = frozenset({"login", "alogin"})
 
-    assert callers == {"accounts/sessions.py"}
+
+def _dotted(node: ast.expr) -> str:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return f"{_dotted(node.value)}.{node.attr}"
+    return ""
+
+
+def _is_sign_in_module(name: str) -> bool:
+    return any(name == m or name.startswith(f"{m}.") for m in SIGN_IN_MODULES)
+
+
+def ways_to_sign_in(source: str) -> list[str]:
+    """Every way `source` could reach Django's `login` without `start_session`.
+
+    Flags an import of the module `django.contrib.auth` itself (however aliased), of its
+    login views or URLs, of `login`/`alogin`, a `*` import from it, an attribute chain
+    ending in `contrib.auth.login`, and the views or URLs named as a string (`include`).
+    """
+    found: list[str] = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == AUTH_MODULE or _is_sign_in_module(alias.name):
+                    found.append(f"import {alias.name}")
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            names = {alias.name for alias in node.names}
+            if node.module == "django.contrib" and "auth" in names:
+                found.append("from django.contrib import auth")
+            elif node.module == AUTH_MODULE:
+                found.extend(
+                    f"from {AUTH_MODULE} import {name}"
+                    for name in sorted(names & (LOGIN_NAMES | {"*", "views", "urls"}))
+                )
+            elif _is_sign_in_module(node.module):
+                found.append(f"from {node.module} import ...")
+        elif (
+            isinstance(node, ast.Attribute)
+            and node.attr in LOGIN_NAMES
+            and _dotted(node.value).endswith("contrib.auth")
+        ):
+            found.append(_dotted(node))
+        elif (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and _is_sign_in_module(node.value)
+        ):
+            found.append(f"string {node.value}")
+    return found
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "from django.contrib.auth import login",
+        "from django.contrib.auth import alogin as sign_in",
+        "from django.contrib.auth import *",
+        "from django.contrib import auth\nauth.login(request, user)",
+        "from django.contrib import auth as a\na.login(request, user)",
+        "import django.contrib.auth",
+        "import django.contrib.auth as dj\ndj.login(request, user)",
+        "import django\ndjango.contrib.auth.login(request, user)",
+        "from django.contrib.auth.views import LoginView",
+        "from django.contrib.auth import views",
+        "import django.contrib.auth.views",
+        "from django.urls import include\ninclude('django.contrib.auth.urls')",
+    ],
+)
+def test_the_scan_finds_every_way_to_sign_in(source: str) -> None:
+    assert ways_to_sign_in(source)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "from django.contrib.auth import authenticate, update_session_auth_hash",
+        "from django.contrib.auth import SESSION_KEY",
+        "from django.contrib.auth.models import AnonymousUser",
+        "from django.contrib.auth.password_validation import validate_password",
+        "INSTALLED_APPS = ['django.contrib.auth']",
+        "BACKEND = 'django.contrib.auth.backends.ModelBackend'",
+    ],
+)
+def test_the_scan_leaves_harmless_imports_alone(source: str) -> None:
+    assert ways_to_sign_in(source) == []
+
+
+def test_start_session_is_the_only_caller_of_django_login() -> None:
+    found: dict[str, list[str]] = {}
+    for root in (BACKEND_DIR / "apps", BACKEND_DIR / "brievie"):
+        for path in root.rglob("*.py"):
+            ways = ways_to_sign_in(path.read_text(encoding="utf-8"))
+            if ways:
+                found[str(path.relative_to(BACKEND_DIR))] = ways
+
+    assert found == {"apps/accounts/sessions.py": ["from django.contrib.auth import login"]}
+
+
+def test_the_app_connects_no_receiver_that_records_a_session(
+    without_test_session_receiver: None,
+) -> None:
+    global_apps.get_app_config("accounts").ready()  # connecting again changes nothing
+
+    receivers = [
+        ref() if isinstance(ref, weakref.ReferenceType) else ref
+        for _, ref, *_ in user_logged_in.receivers
+    ]
+    modules = {getattr(r, "__module__", "") for r in receivers}
+    assert not any(m.startswith(("apps.", "brievie")) for m in modules), modules
+
+
+def test_a_direct_django_login_is_signed_out(
+    client: Client, without_test_session_receiver: None
+) -> None:
+    # force_login calls django.contrib.auth.login directly, around start_session.
+    client.force_login(UserFactory.create())
+    key = client.session.session_key
+    assert not UserSession.objects.exists()
+
+    assert client.get("/api/v1/me").status_code == 401
+    assert not Session.objects.filter(session_key=key).exists()
+
+
+def test_start_session_records_without_the_test_receiver(
+    without_test_session_receiver: None,
+) -> None:
+    user = UserFactory.create(email="jan@example.nl")
+    client = Client()
+
+    assert login(client, "jan@example.nl") == 200
+
+    assert current_row(client).user == user
+    assert client.get("/api/v1/me").status_code == 200
 
 
 # --- Audit -------------------------------------------------------------------------------
@@ -372,10 +514,11 @@ def test_lockout_is_logged_once(client: Client) -> None:
     assert statuses == [401] * 5 + [429]
     (event,) = server_events("sign_in_locked_out")
     assert (event.target_kind, event.target_id) == ("user", user.id)
+    assert event.values == {"via": "password"}
     assert len(server_events("sign_in_failed")) == 5
 
 
-def test_login_is_throttled_per_address(client: Client, settings: Settings) -> None:
+def test_failed_sign_ins_are_throttled_per_address(client: Client, settings: Settings) -> None:
     settings.PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 
     statuses = [login(client, f"niemand{n}@example.nl", "fout") for n in range(31)]
@@ -384,6 +527,19 @@ def test_login_is_throttled_per_address(client: Client, settings: Settings) -> N
     assert statuses[30] == 429
     # Another address is not held back.
     assert login(Client(REMOTE_ADDR="192.0.2.8"), "niemand@example.nl", "fout") == 401
+
+
+def test_successful_sign_ins_are_not_throttled(settings: Settings) -> None:
+    # An office behind one address: many people sign in within ten minutes.
+    settings.PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
+    users = [UserFactory.create() for _ in range(40)]
+
+    statuses = [login(Client(), user.email) for user in users]
+
+    assert statuses == [200] * 40
+    # Failures still count: 30 of them close the address.
+    failures = [login(Client(), f"niemand{n}@example.nl", "fout") for n in range(31)]
+    assert failures[-1] == 429
 
 
 def test_successful_sign_in_is_logged_with_via(client: Client) -> None:

@@ -1,7 +1,9 @@
 import hashlib
 import hmac
 import secrets
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
@@ -24,12 +26,30 @@ from apps.audit.codes import ActorKind, AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, actor_from_request, record
 from apps.common.errors import ApiError
 from apps.common.net import valid_client_ip
+from apps.common.throttling import FailedAttemptThrottle
 from apps.workspaces.models import Membership
 from apps.workspaces.services import create_workspace
 
 # pg_advisory_xact_lock key that serialises POST /setup and the generation of the
 # setup token ("brievie" in ASCII).
 SETUP_LOCK_KEY = 0x62726965766965
+
+# Failed sign-ins per client address (every failure writes an audit row, so one address
+# must not grow the table without bound). Successful ones are not counted: many people
+# may sign in behind one office address. axes still locks per email and address.
+LOGIN_FAILURES = FailedAttemptThrottle("login", "30/10m")
+
+# Which password check an axes lockout comes from, for its audit row.
+_password_check: ContextVar[str] = ContextVar("password_check", default="password")
+
+
+@contextmanager
+def _checking_password_for(via: str) -> Iterator[None]:
+    token = _password_check.set(via)
+    try:
+        yield
+    finally:
+        _password_check.reset(token)
 
 
 def sha256_hex(value: str) -> str:
@@ -162,6 +182,7 @@ def login(request: HttpRequest, *, email: str, password: str) -> User:
     _refuse_when_locked(request, email)
     user = authenticate(request, username=email, password=password)
     if not isinstance(user, User):
+        LOGIN_FAILURES.record_failure(request)
         _record_sign_in_problem(AuditCode.SIGN_IN_FAILED, request, email)
         raise ApiError(401, "invalid_credentials", _("Het e-mailadres of wachtwoord klopt niet."))
     start_session(request, user, via=UserSession.Via.PASSWORD)
@@ -180,7 +201,12 @@ def _refuse_when_locked(request: HttpRequest, email: str) -> None:
         )
 
 
-def _record_sign_in_problem(code: AuditCode, request: HttpRequest, email: str) -> None:
+def _record_sign_in_problem(
+    code: AuditCode,
+    request: HttpRequest,
+    email: str,
+    values: dict[str, str] | None = None,
+) -> None:
     """A failed or locked sign-in, about the account the email belongs to.
 
     For an unknown address the row names nobody: the typed email is never stored. In its
@@ -191,12 +217,13 @@ def _record_sign_in_problem(code: AuditCode, request: HttpRequest, email: str) -
     with transaction.atomic():
         if account is None:
             actor = AuditActor(kind=ActorKind.USER, user_id=None, name="", client_ip=address)
-            record(code, actor=actor)
+            record(code, actor=actor, values=values)
             return
         record(
             code,
             actor=AuditActor.for_user(account, client_ip=address),
             target=AuditTarget(kind=TargetKind.USER, id=account.id, name=account.name),
+            values=values,
         )
 
 
@@ -204,10 +231,12 @@ def on_user_locked_out(
     sender: object, request: HttpRequest | None = None, username: str = "", **kwargs: object
 ) -> None:
     """axes' `user_locked_out` receiver: one `sign_in_locked_out` row per lockout (the
-    refused attempts after it are answered before axes is asked again)."""
+    refused attempts after it are answered before axes is asked again), saying whether
+    signing in or changing the password caused it."""
     if request is None:
         return
-    _record_sign_in_problem(AuditCode.SIGN_IN_LOCKED_OUT, request, username)
+    values = {"via": _password_check.get()}
+    _record_sign_in_problem(AuditCode.SIGN_IN_LOCKED_OUT, request, username, values)
 
 
 def logout(request: HttpRequest) -> None:
@@ -285,7 +314,8 @@ def change_password(request: HttpRequest, *, current_password: str, new_password
     """
     user = current_user(request)
     _refuse_when_locked(request, user.email)
-    checked = authenticate(request, username=user.email, password=current_password)
+    with _checking_password_for("password_change"):
+        checked = authenticate(request, username=user.email, password=current_password)
     if not isinstance(checked, User) or checked.pk != user.pk:
         raise ApiError(400, "wrong_password", _("Je huidige wachtwoord klopt niet."))
     with transaction.atomic():

@@ -3,6 +3,8 @@ import re
 from collections.abc import Callable
 
 from django.conf import settings
+from django.contrib.sessions.exceptions import SessionInterrupted
+from django.contrib.sessions.middleware import SessionMiddleware
 from django.core.exceptions import (
     BadRequest,
     PermissionDenied,
@@ -104,6 +106,10 @@ def install_error_handlers(api: NinjaAPI) -> None:
         logger.warning("Rejected %s %s: request body too big", request.method, request.path)
         return http_error_response(413)
 
+    def handle_session_interrupted(request: HttpRequest, exc: object) -> JsonResponse:
+        # The session was ended (another tab, "end this session") while this request ran.
+        return http_error_response(401)
+
     def handle_permission_denied(request: HttpRequest, exc: object) -> JsonResponse:
         return http_error_response(403)
 
@@ -150,6 +156,8 @@ def install_error_handlers(api: NinjaAPI) -> None:
     api.add_exception_handler(Http404, handle_not_found)
     api.add_exception_handler(SuspiciousOperation, handle_suspicious_operation)
     api.add_exception_handler(BadRequest, handle_suspicious_operation)
+    # A BadRequest subclass; Ninja picks the most specific handler.
+    api.add_exception_handler(SessionInterrupted, handle_session_interrupted)
     # A SuspiciousOperation subclass; Ninja picks the most specific handler.
     api.add_exception_handler(RequestDataTooBig, handle_request_data_too_big)
     api.add_exception_handler(PermissionDenied, handle_permission_denied)
@@ -161,6 +169,27 @@ def install_error_handlers(api: NinjaAPI) -> None:
 def api_path_not_found(request: HttpRequest) -> JsonResponse:
     """Fallback for /api/ paths that no endpoint matches."""
     return http_error_response(404)
+
+
+class ApiSessionMiddleware(SessionMiddleware):
+    """Django's `SessionMiddleware`, except that an /api/ request whose session was ended
+    while it ran answers 401 `not_authenticated` in the error shape instead of Django's
+    HTML 400 (`SessionInterrupted`), and drops the cookie. Other paths keep Django's answer.
+    """
+
+    def process_response(self, request: HttpRequest, response: HttpResponse) -> HttpResponse:
+        try:
+            return super().process_response(request, response)
+        except SessionInterrupted:
+            if not request.path.startswith("/api/"):
+                raise
+            answer = http_error_response(401)
+            answer.delete_cookie(
+                settings.SESSION_COOKIE_NAME,
+                path=settings.SESSION_COOKIE_PATH,
+                domain=settings.SESSION_COOKIE_DOMAIN,
+            )
+            return answer
 
 
 class ApiMethodNotAllowedMiddleware:

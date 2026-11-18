@@ -1,3 +1,5 @@
+import time
+
 from django.http import HttpRequest
 from ninja.throttling import SimpleRateThrottle
 
@@ -30,3 +32,25 @@ class ClientAddressThrottle(SimpleRateThrottle):
 
     def get_cache_key(self, request: HttpRequest) -> str:
         return self.cache_format % {"scope": self.scope, "ident": client_ip(request) or "unknown"}
+
+
+class FailedAttemptThrottle(ClientAddressThrottle):
+    """Counts only the attempts the service reports as failed, per client address.
+
+    As a Ninja throttle it refuses an address that has `rate` failures in the window;
+    a request that is let through is not counted. The service calls `record_failure`
+    when the attempt fails, so successful sign-ins of many people behind one address
+    never use up the limit.
+    """
+
+    def throttle_success(self) -> bool:
+        return True
+
+    def record_failure(self, request: HttpRequest) -> None:
+        key = self.get_cache_key(request)
+        now = time.time()
+        history: list[float] = [
+            moment for moment in self.cache.get(key, []) if moment > now - (self.duration or 0)
+        ]
+        history.insert(0, now)
+        self.cache.set(key, history, self.duration)

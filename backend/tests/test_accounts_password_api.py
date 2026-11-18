@@ -110,6 +110,8 @@ def test_wrong_current_passwords_lock_like_sign_in() -> None:
     assert r.status_code == 429
     assert r.json()["code"] == "too_many_attempts"
     assert fresh(user).check_password(TEST_PASSWORD)
+    (locked,) = ServerAuditEvent.objects.filter(code="sign_in_locked_out")
+    assert (locked.target_id, locked.values) == (user.id, {"via": "password_change"})
     # The same lock as signing in: email and address.
     login = {"email": user.email, "password": TEST_PASSWORD}
     assert post_json(Client(), "/auth/login", login).status_code == 429

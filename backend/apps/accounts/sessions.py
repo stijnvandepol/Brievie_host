@@ -58,7 +58,7 @@ def record_session(
 
     `login()` flushes the session when another user was signed in, which leaves no key
     until the session is saved; so save it first. A second call for the same key (the
-    receiver, then `start_session`) updates the same row.
+    test run's `user_logged_in` receiver, then `start_session`) updates the same row.
     """
     if request.session.session_key is None:
         request.session.save()
@@ -116,11 +116,6 @@ def rekey_session(request: HttpRequest, old_key: str) -> None:
         UserSession.objects.filter(session_key=old_key).update(
             session_key=request.session.session_key
         )
-
-
-def on_user_logged_in(sender: object, request: HttpRequest, user: User, **kwargs: object) -> None:
-    """`user_logged_in` receiver: also `Client.force_login` in tests records a session."""
-    record_session(request, user, method=UserSession.Method.PASSWORD)
 
 
 def end_sessions(

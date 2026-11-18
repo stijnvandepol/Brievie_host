@@ -3,16 +3,45 @@ from pathlib import Path
 
 import pytest
 from django.conf import settings
+from django.contrib.auth.signals import user_logged_in
 from django.db import connection
+from django.http import HttpRequest
 from psycopg.conninfo import make_conninfo
 from pytest_django import DjangoDbBlocker, Settings
 
+from apps.accounts.models import User, UserSession
+from apps.accounts.sessions import record_session
 from apps.backup import safepaths
 from apps.workspaces.models import Workspace
 from apps.workspaces.services import create_workspace
 from tests.factories import UserFactory
 
 _CONNECTION_KEYS = ("NAME", "USER", "PASSWORD", "HOST", "PORT")
+_TEST_SESSION_RECEIVER = "tests_record_session"
+
+
+def record_test_session(sender: object, request: HttpRequest, user: User, **kwargs: object) -> None:
+    """Records the session of `Client.force_login`, which calls Django's `login` directly.
+
+    Only the test run connects this. In production nothing records a session but
+    `start_session`, so a direct `login()` is signed out by the middleware.
+    """
+    record_session(request, user, method=UserSession.Method.PASSWORD)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _record_force_login_sessions() -> Iterator[None]:
+    user_logged_in.connect(record_test_session, dispatch_uid=_TEST_SESSION_RECEIVER)
+    yield
+    user_logged_in.disconnect(dispatch_uid=_TEST_SESSION_RECEIVER)
+
+
+@pytest.fixture
+def without_test_session_receiver() -> Iterator[None]:
+    """For this test, sessions are recorded as in production: by `start_session` only."""
+    user_logged_in.disconnect(dispatch_uid=_TEST_SESSION_RECEIVER)
+    yield
+    user_logged_in.connect(record_test_session, dispatch_uid=_TEST_SESSION_RECEIVER)
 
 
 @pytest.fixture(scope="session")
