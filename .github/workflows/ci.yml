@@ -36,6 +36,8 @@ jobs:
       BRIEVIE_APP_PASSWORD: ci-app
       DATABASE_URL: postgres://brievie_app:ci-app@localhost:5432/brievie
       DATABASE_OWNER_URL: postgres://brievie_owner:ci-owner@localhost:5432/brievie
+      BRIEVIE_BACKUP_DB_PASSWORD: ci-backup
+      DATABASE_BACKUP_URL: postgres://brievie_backup:ci-backup@localhost:5432/brievie
       # At least 50 characters: the settings refuse shorter keys.
       SECRET_KEY: ci-only-not-secret-ci-only-not-secret-ci-only-not-secret
     defaults:
@@ -49,6 +51,19 @@ jobs:
       - name: Create database roles
         run: bash ../deploy/postgres-init/01-roles.sh
       - run: uv sync --frozen
+      # tests/test_brievie_wrapper.py runs ShellCheck on ./brievie and fails in CI without it.
+      - name: ShellCheck is available
+        run: command -v shellcheck || { sudo apt-get update && sudo apt-get install -y shellcheck; }
+      # The real-restic tests run here and fail without restic (like ShellCheck): the
+      # image's own binary, from the official image pinned by version and digest, exactly
+      # as deploy/Dockerfile copies it (a text test compares the two).
+      - name: restic from the image's pinned official image
+        run: |
+          id=$(docker create restic/restic:0.18.1@sha256:39d9072fb5651c80d75c7a811612eb60b4c06b32ffe87c2e9f3c7222e1797e76)
+          docker cp "$id:/usr/bin/restic" "$RUNNER_TEMP/restic"
+          docker rm "$id"
+          sudo install -m 0755 "$RUNNER_TEMP/restic" /usr/local/bin/restic
+          restic version
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy .
@@ -132,6 +147,8 @@ jobs:
           grep -qi '<!doctype html>' "$RUNNER_TEMP/index.html"
       - name: The worker is running
         run: test "$($COMPOSE ps --status running --services | grep -c '^worker$')" = 1
+      - name: The keeper is running
+        run: test "$($COMPOSE ps --status running --services | grep -c '^keeper$')" = 1
       - name: The installation code is printed once
         run: test "$($COMPOSE logs api | grep -c 'Installatiecode')" = 1
       - name: Container state on failure
@@ -141,3 +158,115 @@ jobs:
       - name: Stop
         if: always()
         run: $COMPOSE down --volumes
+
+  # A back-up is only worth something when it restores onto an empty machine. This job
+  # makes a server, seeds it, backs it up, destroys everything (containers, volumes,
+  # deploy/.env) and restores from the back-up folder and the master key alone, twice:
+  # onto the empty machine, then over the running server with --replace.
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      # What ./brievie uses on a default checkout (project "brievie").
+      COMPOSE: docker compose -p brievie --project-directory deploy -f deploy/docker-compose.yml
+    steps:
+      # This job ends with `down --volumes` of the fixed project brievie: only on a fresh
+      # GitHub-hosted machine, never on a self-hosted runner that may run Brievie itself.
+      - name: Only on a GitHub-hosted runner
+        run: test "$RUNNER_ENVIRONMENT" = github-hosted
+      - uses: actions/checkout@v5
+      - name: Create deploy/.env and a back-up folder outside the stack
+        run: |
+          set -euo pipefail
+          sh deploy/init-env.sh
+          # A folder on the runner, not a named volume: `down --volumes` removes those,
+          # and the back-up has to survive the machine. The keeper runs as uid 10001.
+          mkdir "$RUNNER_TEMP/backup"
+          sudo chown 10001:10001 "$RUNNER_TEMP/backup"
+          printf 'BRIEVIE_BACKUP_DIR=%s\n' "$RUNNER_TEMP/backup" >> deploy/.env
+      - name: Build and start Brievie
+        run: ./brievie start
+      - name: The API answers through Caddy, and its authority is saved
+        run: |
+          set -euo pipefail
+          # Caddy signs with its own authority, which this runner does not trust (yet).
+          curl --fail --silent --show-error --insecure --retry 10 --retry-delay 3 --retry-all-errors \
+            https://localhost/api/v1/health
+          curl --fail --silent --show-error --insecure --retry 10 --retry-delay 3 --retry-all-errors \
+            https://localhost/api/v1/server/ca-certificate | jq -j .pem > "$RUNNER_TEMP/old-root.pem"
+          grep -q 'BEGIN CERTIFICATE' "$RUNNER_TEMP/old-root.pem"
+      - name: Seed two workspaces, a letter in each and a paired device
+        run: |
+          set -euo pipefail
+          umask 077
+          # The script prints one JSON line (with the device token): into a file, never the log.
+          $COMPOSE exec -T api python manage.py shell -c "$(cat .github/scripts/restore-seed.py)" |
+            grep '^{"token"' > "$RUNNER_TEMP/seed.json"
+          echo "::add-mask::$(jq -r .token "$RUNNER_TEMP/seed.json")"
+          test "$(jq '.workspaces | length' "$RUNNER_TEMP/seed.json")" = 2
+      - name: Set up the back-up and make one
+        run: |
+          set -euo pipefail
+          # The runner's folder shares the disk with Docker's volumes: this proves the guard.
+          ./brievie backup --init --allow-same-disk
+          ./brievie backup
+          ./brievie status
+      - name: Keep the master key, as a person keeps the recovery sheet
+        run: |
+          set -euo pipefail
+          umask 077
+          key=$(grep '^BRIEVIE_MASTER_KEY=' deploy/.env | tail -n 1 | cut -d= -f2-)
+          echo "::add-mask::$key"
+          printf '%s\n' "$key" > "$RUNNER_TEMP/master-key"
+      - name: Destroy the machine
+        run: |
+          set -euo pipefail
+          # While deploy/.env is still there: compose refuses to run without its secrets.
+          $COMPOSE down --volumes
+          rm deploy/.env
+          if docker volume ls -q | grep -q '^brievie_'; then
+            echo "A volume of the project is left after down --volumes." >&2
+            exit 1
+          fi
+          # Only the back-up folder is left.
+          test -f "$RUNNER_TEMP/backup/brievie-backup.json"
+      - name: Restore onto the empty machine
+        run: |
+          set -euo pipefail
+          # The key comes on stdin (no terminal); the source is the folder, as a person
+          # would type it. The old settings do not exist any more: the back-up has them.
+          BRIEVIE_RESTORE_SOURCE="$RUNNER_TEMP/backup" BRIEVIE_RESTORE_KEEP_DESTINATION=ja \
+            ./brievie restore --keep-hostname < "$RUNNER_TEMP/master-key" |
+            tee "$RUNNER_TEMP/restore.log"
+          grep -qx 'Herstel gelukt\.' "$RUNNER_TEMP/restore.log"
+      - name: The restored server has the same pages, devices and authority
+        run: .github/scripts/restore-check.sh "$RUNNER_TEMP/seed.json" "$RUNNER_TEMP/old-root.pem"
+      - name: The restored server backs up again without handwork
+        run: |
+          set -euo pipefail
+          ./brievie backup
+          ./brievie status | tee "$RUNNER_TEMP/status.log"
+          grep -q '^Bestemming: map' "$RUNNER_TEMP/status.log"
+          if grep -q '^Laatste fout' "$RUNNER_TEMP/status.log"; then
+            echo "The status shows a failed back-up." >&2
+            exit 1
+          fi
+      - name: Restore over the running server (--replace)
+        run: |
+          set -euo pipefail
+          BRIEVIE_RESTORE_SOURCE="$RUNNER_TEMP/backup" BRIEVIE_RESTORE_CONFIRM=WISSEN \
+            ./brievie restore --replace --keep-hostname < "$RUNNER_TEMP/master-key" |
+            tee "$RUNNER_TEMP/replace.log"
+          grep -qx 'Herstel gelukt\.' "$RUNNER_TEMP/replace.log"
+      - name: The replaced server has the same pages, devices and authority
+        run: .github/scripts/restore-check.sh "$RUNNER_TEMP/seed.json" "$RUNNER_TEMP/old-root.pem"
+      - name: Container state on failure
+        if: failure()
+        # No logs here: the api log holds the installation code.
+        run: $COMPOSE ps --all || true
+      - name: Stop
+        if: always()
+        run: $COMPOSE down --volumes || true

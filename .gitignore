@@ -12,6 +12,21 @@ backend/staticfiles/
 # Local secrets
 deploy/.env
 .env
+deploy/.env.new
+deploy/.env.before-restore-*
+deploy/.restore/
+# ./brievie: the technical output of the last command
+deploy/.brievie-last.log
+deploy/.brievie-step.log
+# ./brievie: one run at a time, a restore in progress, unique temporary files
+deploy/.brievie-lock/
+deploy/.restore-in-progress
+deploy/.restore-in-progress.new.*
+deploy/.env.new.*
+brievie-herstelblad.html.tmp.*
+# ./brievie recovery-sheet: holds the master key
+brievie-herstelblad.html
+brievie-herstelblad.html.tmp
 
 # OS / editors
 .DS_Store

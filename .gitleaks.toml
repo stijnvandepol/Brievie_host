@@ -11,4 +11,7 @@ regexes = [
   '''^een-lang-wachtwoord-123$''',
   '''^uit-de-omgeving-123$''',
   '''^sk-geheime-sleutel-123$''',
+  # Made-up back-up passwords in the tests of back-up and restore (B1).
+  '''^Geheim-Wachtwoord-123$''',
+  '''^S3CR3T-0123456789$''',
 ]

@@ -1,0 +1,13 @@
+-- The database and the grants of the application role. Run by 01-roles.sh once, as
+-- the PostgreSQL superuser, after the roles exist. The entrypoint ignores *.psql.
+CREATE DATABASE brievie OWNER brievie_owner;
+REVOKE ALL ON DATABASE brievie FROM PUBLIC;
+GRANT CONNECT ON DATABASE brievie TO brievie_app;
+
+\connect brievie
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+GRANT USAGE ON SCHEMA public TO brievie_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE brievie_owner IN SCHEMA public
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO brievie_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE brievie_owner IN SCHEMA public
+    GRANT USAGE, SELECT ON SEQUENCES TO brievie_app;

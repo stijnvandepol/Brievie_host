@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     "apps.rules",
     "apps.pipeline",
     "apps.devices",
+    "apps.backup",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
@@ -98,6 +99,16 @@ TEMPLATES = [
 _use_owner_role = env.str("BRIEVIE_DB_ROLE", default="app") == "owner"
 DATABASE_OWNER: dict[str, object] | None = (
     env.db("DATABASE_OWNER_URL") if env.str("DATABASE_OWNER_URL", default="") else None
+)
+# The read-only back-up role (BYPASSRLS, member of pg_read_all_data). On the host only
+# the test run uses it (tests/conftest.py); in the container only the keeper.
+DATABASE_BACKUP: dict[str, object] | None = (
+    env.db("DATABASE_BACKUP_URL") if env.str("DATABASE_BACKUP_URL", default="") else None
+)
+# A superuser, only for the one-off container that restores a back-up (it creates roles
+# and extensions). Never set on the host or in the serving containers, nor in the tests.
+DATABASE_SUPERUSER: dict[str, object] | None = (
+    env.db("DATABASE_SUPERUSER_URL") if env.str("DATABASE_SUPERUSER_URL", default="") else None
 )
 if _use_owner_role and DATABASE_OWNER is None:
     raise ImproperlyConfigured("BRIEVIE_DB_ROLE=owner needs DATABASE_OWNER_URL.")
@@ -219,8 +230,32 @@ PROCRASTINATE_AUTODISCOVER_MODULE_NAME = "jobs"
 # Wraps every workspace's data key. Read lazily (apps.common.crypto.master_key), so
 # migrate and export_openapi run without it; the api and worker check it at start.
 BRIEVIE_MASTER_KEY: str = env.str("BRIEVIE_MASTER_KEY", default="")
+# The restic binary for back-ups (apps.backup.restic).
+BRIEVIE_RESTIC_BINARY: str = env.str("BRIEVIE_RESTIC_BINARY", default="restic")
+
 # Encrypted document files. A volume in Compose; never a path elsewhere in the code.
 BRIEVIE_STORAGE_ROOT: str = env.str("BRIEVIE_STORAGE_ROOT", default="/data/documents")
+
+# Back-up destination (apps.backup.destination reads these lazily). The password is
+# derived in the container (`manage.py derive_backup_password`) and may be absent on
+# a first run. A folder (compose mounts it at BRIEVIE_BACKUP_MOUNT) or a remote
+# repository is set, never both.
+BRIEVIE_BACKUP_PASSWORD: str = env.str("BRIEVIE_BACKUP_PASSWORD", default="")
+BRIEVIE_BACKUP_REPOSITORY: str = env.str("BRIEVIE_BACKUP_REPOSITORY", default="")
+BRIEVIE_BACKUP_DIR_SET: bool = env.bool("BRIEVIE_BACKUP_DIR_SET", default=False)
+BRIEVIE_BACKUP_MOUNT: str = env.str("BRIEVIE_BACKUP_MOUNT", default="/backup")
+# The back-up folder as the host knows it (for the recovery sheet only).
+BRIEVIE_BACKUP_DIR_HOST: str = env.str("BRIEVIE_BACKUP_DIR_HOST", default="")
+BRIEVIE_BACKUP_APPEND_ONLY: bool = env.bool("BRIEVIE_BACKUP_APPEND_ONLY", default=False)
+BRIEVIE_BACKUP_S3_ACCESS_KEY_ID: str = env.str("BRIEVIE_BACKUP_S3_ACCESS_KEY_ID", default="")
+BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY: str = env.str(
+    "BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY", default=""
+)
+BRIEVIE_BACKUP_REST_USERNAME: str = env.str("BRIEVIE_BACKUP_REST_USERNAME", default="")
+BRIEVIE_BACKUP_REST_PASSWORD: str = env.str("BRIEVIE_BACKUP_REST_PASSWORD", default="")
+BRIEVIE_BACKUP_CONFIG_DIR: str = env.str("BRIEVIE_BACKUP_CONFIG_DIR", default="/data/backup-config")
+BRIEVIE_AUTHORITY_COPY_DIR: str = env.str("BRIEVIE_AUTHORITY_COPY_DIR", default="/data/authority")
+BRIEVIE_HOSTNAME: str = env.str("BRIEVIE_HOSTNAME", default="")
 
 # Every handler masks BSNs: no log line may carry one, whatever code wrote it.
 LOGGING = {
@@ -235,5 +270,6 @@ LOGGING = {
             "filters": ["mask_bsn"],
         },
     },
-    "root": {"handlers": ["console"], "level": "INFO"},
+    # ./brievie sets WARNING for the commands it runs; the services keep INFO.
+    "root": {"handlers": ["console"], "level": env.str("BRIEVIE_LOG_LEVEL", default="INFO")},
 }

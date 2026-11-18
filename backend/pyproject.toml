@@ -60,7 +60,7 @@ django_settings_module = "brievie.settings"
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "brievie.settings"
 testpaths = ["tests"]
-addopts = "--strict-markers"
+addopts = "--strict-markers -p tests.backup_support"
 pythonpath = ["."]
 filterwarnings = [
     "error",

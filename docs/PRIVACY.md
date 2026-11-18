@@ -12,6 +12,7 @@ updated with every phase.
 | Recognised text (OCR), proposals, summaries, tasks, persons (names and name variants), labels, rules, the history of changes | Database | **Not encrypted**: needed for review and (later) search. Protected by row-level security per workspace and by masking BSNs before anything is stored. Put the database volume on an encrypted disk |
 | The decisions about AI (see "Consent for AI") | Database | Not encrypted; row-level security per workspace. No API key, no full address, no document text |
 | Passwords, pairing codes, device tokens | Database | Only as hashes |
+| Back-ups | Only the destination you chose (a disk, a NAS share, a REST server or S3-compatible storage) | Encrypted by restic with the back-up password. The database dump is streamed into the back-up and never stored unencrypted outside the database. The master key is not in a back-up. See `docs/SELFHOST.md` |
 
 A BSN (citizen service number) is replaced by `[BSN]` before text is stored, logged or
 sent to an AI service. The page image itself still shows it; that file is encrypted.

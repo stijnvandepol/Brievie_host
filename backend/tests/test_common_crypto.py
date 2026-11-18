@@ -1,3 +1,5 @@
+import io
+import logging
 import os
 
 import pytest
@@ -123,3 +125,49 @@ def test_random_bytes_are_used_for_keys(ws_a: Workspace, monkeypatch: pytest.Mon
         WorkspaceKey.objects.all().delete()
         monkeypatch.setattr(os, "urandom", lambda n: b"\x07" * n)
         assert workspace_key(ws_a.id) == b"\x07" * 32
+
+
+def test_backup_password_has_a_fixed_vector() -> None:
+    # Never change this: existing back-ups are encrypted with the derived password.
+    assert crypto.derive_backup_password(bytes.fromhex("5a" * 32)) == (
+        "cc224115e04b5ef8d0fabc864ae85ef455c6ee2a24d4fef9182f6c0884257571"
+    )
+
+
+def test_backup_password_differs_per_master_key() -> None:
+    other = crypto.derive_backup_password(bytes(32))
+
+    assert other.startswith("43f6f658")
+    assert other != crypto.derive_backup_password(bytes.fromhex("5a" * 32))
+
+
+def test_derive_backup_password_command(
+    settings: Settings, caplog: pytest.LogCaptureFixture
+) -> None:
+    out = io.StringIO()
+    caplog.set_level(logging.DEBUG)
+
+    call_command("derive_backup_password", stdout=out)
+
+    assert out.getvalue() == crypto.derive_backup_password(bytes.fromhex("5a" * 32)) + "\n"
+    assert not caplog.records
+
+
+def test_derive_backup_password_command_needs_a_valid_master_key(settings: Settings) -> None:
+    settings.BRIEVIE_MASTER_KEY = "abc"
+    out = io.StringIO()
+
+    with pytest.raises(CommandError, match="BRIEVIE_MASTER_KEY"):
+        call_command("derive_backup_password", stdout=out)
+    assert out.getvalue() == ""
+
+
+@pytest.mark.parametrize("value", ["", "abc", "zz" * 32])
+def test_derive_backup_password_says_what_is_wrong_in_dutch(settings: Settings, value: str) -> None:
+    settings.BRIEVIE_MASTER_KEY = value
+    with pytest.raises(CommandError) as caught:
+        call_command("derive_backup_password", stdout=io.StringIO())
+    assert str(caught.value) == (
+        "BRIEVIE_MASTER_KEY in deploy/.env ontbreekt of is geen 64 tekens lang "
+        "(cijfers en a tot en met f). Zonder de juiste sleutel zijn de documenten niet te lezen."
+    )

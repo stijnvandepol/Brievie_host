@@ -1,9 +1,11 @@
 """deploy/init-env.sh creates a working .env; the shipped example never is one."""
 
+import re
 import runpy
 import shutil
 import stat
 import subprocess
+import sys
 from pathlib import Path
 
 import environ
@@ -13,6 +15,8 @@ from django.core.exceptions import ImproperlyConfigured
 import brievie.settings
 
 DEPLOY = Path(__file__).resolve().parents[2] / "deploy"
+MASTER = "5a" * 32
+BACKUP_KEYS = ["BRIEVIE_BACKUP_DB_PASSWORD", "DATABASE_BACKUP_URL"]
 
 
 def read_env(path: Path) -> dict[str, str]:
@@ -24,12 +28,13 @@ def read_env(path: Path) -> dict[str, str]:
     return values
 
 
-def run_script(deploy: Path, **env: str) -> subprocess.CompletedProcess[str]:
+def run_script(deploy: Path, *, check: bool = True, **env: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603
         ["/bin/sh", str(deploy / "init-env.sh")],
         capture_output=True,
         text=True,
-        check=True,
+        check=check,
+        stdin=subprocess.DEVNULL,
         env={"PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin", **env},
     )
 
@@ -93,25 +98,162 @@ def test_fresh_env_has_a_32_byte_master_key(deploy: Path) -> None:
     assert key not in result.stdout + result.stderr
 
 
-def test_existing_env_without_a_master_key_gets_exactly_that_line(deploy: Path) -> None:
+def test_existing_env_without_a_master_key_gets_it_and_the_backup_lines(deploy: Path) -> None:
     (deploy / ".env").write_text("SECRET_KEY=mine\nDEBUG=false")
 
     result = run_script(deploy)
 
     lines = (deploy / ".env").read_text().splitlines()
     assert lines[:2] == ["SECRET_KEY=mine", "DEBUG=false"]
-    assert len(lines) == 3
-    key = lines[2].removeprefix("BRIEVIE_MASTER_KEY=")
+    assert [line.split("=", 1)[0] for line in lines[2:]] == [
+        "BRIEVIE_MASTER_KEY",
+        *BACKUP_KEYS,
+    ]
+    key = read_env(deploy / ".env")["BRIEVIE_MASTER_KEY"]
     assert len(bytes.fromhex(key)) == 32
     assert key not in result.stdout + result.stderr
 
 
-def test_existing_env_with_a_master_key_is_never_modified(deploy: Path) -> None:
-    (deploy / ".env").write_text("SECRET_KEY=mine\nBRIEVIE_MASTER_KEY=abc\n")
+def test_existing_env_gets_exactly_the_missing_backup_lines(deploy: Path) -> None:
+    old = f"SECRET_KEY=mine\nPOSTGRES_PORT=5433\nBRIEVIE_MASTER_KEY={MASTER}\n# a comment\n"
+    (deploy / ".env").write_text(old)
 
     run_script(deploy)
 
-    assert (deploy / ".env").read_text() == "SECRET_KEY=mine\nBRIEVIE_MASTER_KEY=abc\n"
+    text = (deploy / ".env").read_text()
+    assert text.startswith(old)
+    added = text.removeprefix(old).splitlines()
+    assert [line.split("=", 1)[0] for line in added] == BACKUP_KEYS
+    values = read_env(deploy / ".env")
+    db_password = values["BRIEVIE_BACKUP_DB_PASSWORD"]
+    assert len(bytes.fromhex(db_password)) == 24
+    assert values["DATABASE_BACKUP_URL"] == (
+        f"postgres://brievie_backup:{db_password}@localhost:5433/brievie"
+    )
+
+
+def test_existing_backup_db_password_is_reused_in_a_missing_url(deploy: Path) -> None:
+    (deploy / ".env").write_text(f"BRIEVIE_MASTER_KEY={MASTER}\nBRIEVIE_BACKUP_DB_PASSWORD=mine\n")
+
+    run_script(deploy)
+
+    values = read_env(deploy / ".env")
+    assert values["BRIEVIE_BACKUP_DB_PASSWORD"] == "mine"
+    assert values["DATABASE_BACKUP_URL"] == "postgres://brievie_backup:mine@localhost:5432/brievie"
+
+
+def test_existing_env_with_all_lines_is_never_modified(deploy: Path) -> None:
+    text = (
+        "SECRET_KEY=mine\nBRIEVIE_MASTER_KEY=abc\nBRIEVIE_BACKUP_DB_PASSWORD=x\n"
+        "DATABASE_BACKUP_URL=postgres://brievie_backup:x@localhost:5432/brievie\n"
+    )
+    (deploy / ".env").write_text(text)
+
+    run_script(deploy)
+
+    assert (deploy / ".env").read_text() == text
+
+
+def test_fresh_env_has_backup_lines(deploy: Path) -> None:
+    run_script(deploy, POSTGRES_PORT="5433")
+
+    values = read_env(deploy / ".env")
+    db_password = values["BRIEVIE_BACKUP_DB_PASSWORD"]
+    assert len(bytes.fromhex(db_password)) == 24
+    assert values["DATABASE_BACKUP_URL"] == (
+        f"postgres://brievie_backup:{db_password}@localhost:5433/brievie"
+    )
+    assert db_password not in {values["BRIEVIE_OWNER_PASSWORD"], values["BRIEVIE_APP_PASSWORD"]}
+
+
+def test_host_never_derives_the_backup_password(deploy: Path) -> None:
+    # Derived inside the container (manage.py derive_backup_password), never on the host.
+    run_script(deploy)
+
+    assert "BRIEVIE_BACKUP_PASSWORD" not in read_env(deploy / ".env")
+    assert "# BRIEVIE_BACKUP_PASSWORD=" in (deploy / ".env").read_text()
+
+
+@pytest.mark.parametrize("random_source", ["openssl", "python3"])
+def test_no_secret_is_ever_a_process_argument(
+    deploy: Path, tmp_path: Path, random_source: str
+) -> None:
+    # Every tool the script may start is a wrapper that logs its argv and its stdin, then
+    # runs the real tool. Without openssl, init-env.sh takes python3 for randomness.
+    argv_log = tmp_path / "argv.log"
+    stdin_log = tmp_path / "stdin.log"
+    tee = shutil.which("tee")
+    assert tee is not None
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    tools = [
+        "cat",
+        "chmod",
+        "cut",
+        "dirname",
+        "grep",
+        "ln",
+        "mv",
+        "rm",
+        "sed",
+        "tail",
+        "tr",
+        "python3",
+    ]
+    if random_source == "openssl":
+        tools.append("openssl")
+    for tool in tools:
+        real = sys.executable if tool == "python3" else shutil.which(tool)
+        if real is None:
+            pytest.skip(f"{tool} is not installed")
+        wrapper = bin_dir / tool
+        wrapper.write_text(
+            f'#!/bin/sh\nprintf "%s\\n" "{tool} $*" >>"{argv_log}"\n'
+            f'"{tee}" -a "{stdin_log}" | "{real}" "$@"\n'
+        )
+        wrapper.chmod(0o755)
+
+    run_script(deploy, PATH=str(bin_dir))
+    fresh = read_env(deploy / ".env")
+    (deploy / ".env").write_text(f"BRIEVIE_MASTER_KEY={MASTER}\n")
+    run_script(deploy, PATH=str(bin_dir))
+    existing = read_env(deploy / ".env")
+
+    argv = argv_log.read_text()
+    assert f"{random_source} " in argv  # the wrappers ran
+    secrets = {
+        key: fresh[key]
+        for key in (
+            "SECRET_KEY",
+            "POSTGRES_PASSWORD",
+            "BRIEVIE_OWNER_PASSWORD",
+            "BRIEVIE_APP_PASSWORD",
+            "BRIEVIE_BACKUP_DB_PASSWORD",
+            "BRIEVIE_MASTER_KEY",
+        )
+    }
+    secrets["existing BRIEVIE_MASTER_KEY"] = MASTER
+    secrets["existing BRIEVIE_BACKUP_DB_PASSWORD"] = existing["BRIEVIE_BACKUP_DB_PASSWORD"]
+    # Names only in the assertion, so a failure prints no secret.
+    assert [name for name, value in secrets.items() if value in argv] == []
+    # A secret may pass through a pipe (randomness into tr), but the master key never
+    # goes into any tool at all.
+    piped = stdin_log.read_text() if stdin_log.exists() else ""
+    master_keys = (fresh["BRIEVIE_MASTER_KEY"], MASTER)
+    assert [key for key in master_keys if key in piped] == []
+
+
+def test_init_env_never_prints_a_secret(deploy: Path) -> None:
+    fresh = run_script(deploy)
+    values = read_env(deploy / ".env")
+    (deploy / ".env").write_text(f"BRIEVIE_MASTER_KEY={MASTER}\n")
+    existing = run_script(deploy)
+    values_existing = read_env(deploy / ".env")
+
+    for result, secrets in ((fresh, values), (existing, values_existing)):
+        printed = result.stdout + result.stderr
+        for key in ("BRIEVIE_MASTER_KEY", "BRIEVIE_BACKUP_DB_PASSWORD"):
+            assert secrets[key] not in printed
 
 
 def test_postgres_port_can_be_chosen(deploy: Path) -> None:
@@ -134,3 +276,108 @@ def test_generated_env_is_accepted_by_the_settings(
     values = runpy.run_path(str(Path(brievie.settings.__file__)))
 
     assert values["DEBUG"] is False
+
+
+def test_every_path_it_removes_moves_or_writes_is_a_fixed_name_in_its_own_folder() -> None:
+    # Rule after the incident of 17-11: no rm, mv or redirect on a path built from a
+    # variable that was not proved non-empty and inside the script's own folder.
+    script = (DEPLOY / "init-env.sh").read_text()
+    assert "case ${dir:?} in\n/?*) ;;" in script
+    assert 'target="$dir/.env"' in script
+    assert 'tmp="${dir:?}/.env.tmp.$$"' in script
+    assert "trap 'rm -f \"$tmp\"' EXIT" in script
+    for line in script.splitlines():
+        code = line.split("#", 1)[0]
+        if "rm " in code or "mv " in code:
+            assert set(re.findall(r'"\$(\w+)"', code)) <= {"tmp", "target"}, line
+        for written in re.findall(r'>>?"\$(\w+)"', code):
+            assert written in {"tmp", "target"}, line
+
+
+def test_a_fresh_env_is_linked_into_place_never_moved_over_one() -> None:
+    script = (DEPLOY / "init-env.sh").read_text()
+    assert 'if ! ln "$tmp" "$target"' in script
+    assert 'mv "$tmp"' not in script
+    assert '[ -L "$target" ]' in script
+
+
+def test_a_env_made_meanwhile_is_never_replaced(deploy: Path, tmp_path: Path) -> None:
+    # Another run creates deploy/.env between this run's check and its write: a fake
+    # chmod (called right before the link) plays that other run.
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    chmod = bin_dir / "chmod"
+    chmod.write_text(
+        "#!/bin/sh\n"
+        f"printf 'BRIEVIE_MASTER_KEY=from-the-other-run\\n' > '{deploy}/.env'\n"
+        'exec /bin/chmod "$@"\n'
+    )
+    chmod.chmod(0o755)
+
+    result = run_script(
+        deploy, check=False, PATH=f"{bin_dir}:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin"
+    )
+
+    assert result.returncode == 1
+    assert "left unchanged" in result.stderr
+    assert (deploy / ".env").read_text() == "BRIEVIE_MASTER_KEY=from-the-other-run\n"
+    assert sorted(p.name for p in deploy.iterdir()) == [".env", ".env.example", "init-env.sh"]
+
+
+@pytest.mark.parametrize("dangling", [True, False])
+def test_a_env_that_is_a_link_is_never_written_through(
+    deploy: Path, tmp_path: Path, dangling: bool
+) -> None:
+    elsewhere = tmp_path / "elsewhere.env"
+    if not dangling:
+        elsewhere.write_text("SOMETHING=else\n")
+    (deploy / ".env").symlink_to(elsewhere)
+
+    result = run_script(deploy, check=False)
+
+    assert result.returncode == 1
+    assert "symbolic link" in result.stderr
+    if dangling:
+        assert not elsewhere.exists()
+    else:
+        assert elsewhere.read_text() == "SOMETHING=else\n"
+    assert (deploy / ".env").is_symlink()
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        f"export BRIEVIE_MASTER_KEY={MASTER}",
+        f'BRIEVIE_MASTER_KEY="{MASTER}"',
+        f"BRIEVIE_MASTER_KEY='{MASTER}'",
+        f"  export  BRIEVIE_MASTER_KEY={MASTER}",
+        f"BRIEVIE_MASTER_KEY = {MASTER}",
+        f'"BRIEVIE_MASTER_KEY"={MASTER}',
+    ],
+)
+def test_a_master_key_in_any_spelling_counts_as_present(deploy: Path, line: str) -> None:
+    # Appending a second key would make the new one win: documents unreadable.
+    (deploy / ".env").write_text(
+        f"{line}\nexport BRIEVIE_BACKUP_DB_PASSWORD='old-backup-pw'\nPOSTGRES_PORT=5433\n"
+    )
+    run_script(deploy)
+    text = (deploy / ".env").read_text()
+    assert text.count("BRIEVIE_MASTER_KEY") == 1
+    assert text.count("BRIEVIE_BACKUP_DB_PASSWORD") == 1
+    # The missing URL is built from the password as the line holds it, quotes removed.
+    assert (
+        "DATABASE_BACKUP_URL=postgres://brievie_backup:old-backup-pw@localhost:5433/brievie" in text
+    )
+
+
+def test_make_and_ensure_backup_role_read_the_project_alike() -> None:
+    expression = re.compile(r"sed -n '([^']*COMPOSE_PROJECT_NAME[^']*)'")
+    makefile = expression.findall((DEPLOY.parent / "Makefile").read_text())
+    script = expression.findall((DEPLOY / "ensure-backup-role.sh").read_text())
+    assert makefile
+    assert makefile == script
+    # make dev passes its own project on, so the script cannot read another one.
+    assert (
+        "COMPOSE_PROJECT_NAME=$(PROJECT) sh deploy/ensure-backup-role.sh"
+        in (DEPLOY.parent / "Makefile").read_text()
+    )
