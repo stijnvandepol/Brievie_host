@@ -192,3 +192,12 @@ def test_the_seed_page_is_a_valid_jpeg_of_its_own() -> None:
     assert data.startswith(b"\xff\xd8\xff")  # what the intake checks
     assert data.endswith(b"\xff\xd9") or data.endswith(b"?\x10")  # the 1x1 file, whole
     assert len(data) == 134
+
+
+def test_the_job_runs_only_on_a_github_hosted_runner() -> None:
+    # Its `down --volumes` targets the fixed project brievie: never on a self-hosted
+    # runner that may run Brievie itself.
+    first = JOB.split("    steps:\n", 1)[1].split("\n      - ", 2)
+    assert "RUNNER_ENVIRONMENT" in first[0] + first[1]
+    assert re.search(r'test "\$RUNNER_ENVIRONMENT" = github-hosted', code(JOB))
+    assert code(JOB).index("RUNNER_ENVIRONMENT") < code(JOB).index("down --volumes")

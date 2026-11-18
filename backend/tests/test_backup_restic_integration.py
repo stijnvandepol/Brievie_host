@@ -3,6 +3,7 @@
 Skipped where restic is not installed; the image and CI's restore job run it.
 """
 
+import os
 import shutil
 import uuid
 from pathlib import Path
@@ -12,7 +13,16 @@ import pytest
 from apps.backup import restic
 from apps.backup.restic import Repository
 
-pytestmark = pytest.mark.skipif(shutil.which("restic") is None, reason="restic is not installed")
+
+@pytest.fixture(autouse=True)
+def _restic_installed() -> None:
+    """In CI restic must be there (the backend job installs the image's binary): a
+    missing one fails instead of skipping, as the ShellCheck test does."""
+    if shutil.which("restic") is None:
+        if os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "true":
+            pytest.fail("restic must be installed in CI")
+        pytest.skip("restic is not installed")
+
 
 PASSWORD = "integration-test-password"
 

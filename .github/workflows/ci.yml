@@ -54,6 +54,16 @@ jobs:
       # tests/test_brievie_wrapper.py runs ShellCheck on ./brievie and fails in CI without it.
       - name: ShellCheck is available
         run: command -v shellcheck || { sudo apt-get update && sudo apt-get install -y shellcheck; }
+      # The real-restic tests run here and fail without restic (like ShellCheck): the
+      # image's own binary, from the official image pinned by version and digest, exactly
+      # as deploy/Dockerfile copies it (a text test compares the two).
+      - name: restic from the image's pinned official image
+        run: |
+          id=$(docker create restic/restic:0.18.1@sha256:39d9072fb5651c80d75c7a811612eb60b4c06b32ffe87c2e9f3c7222e1797e76)
+          docker cp "$id:/usr/bin/restic" "$RUNNER_TEMP/restic"
+          docker rm "$id"
+          sudo install -m 0755 "$RUNNER_TEMP/restic" /usr/local/bin/restic
+          restic version
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy .
@@ -163,6 +173,10 @@ jobs:
       # What ./brievie uses on a default checkout (project "brievie").
       COMPOSE: docker compose -p brievie --project-directory deploy -f deploy/docker-compose.yml
     steps:
+      # This job ends with `down --volumes` of the fixed project brievie: only on a fresh
+      # GitHub-hosted machine, never on a self-hosted runner that may run Brievie itself.
+      - name: Only on a GitHub-hosted runner
+        run: test "$RUNNER_ENVIRONMENT" = github-hosted
       - uses: actions/checkout@v5
       - name: Create deploy/.env and a back-up folder outside the stack
         run: |

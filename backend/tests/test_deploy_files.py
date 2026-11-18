@@ -280,3 +280,12 @@ def test_the_image_marks_itself_as_the_container() -> None:
     # /data/documents would otherwise pass the fixed allow-list).
     runtime = DOCKERFILE.split("AS builder", 1)[1].split("FROM ", 1)[1]
     assert re.search(r"^\s*BRIEVIE_IN_CONTAINER=1\b", runtime, re.MULTILINE), runtime
+
+
+def test_ci_runs_the_real_restic_tests_with_the_images_restic() -> None:
+    pinned = re.search(r"restic/restic:[0-9.]+@sha256:[0-9a-f]{64}", DOCKERFILE)
+    assert pinned
+    backend = CI.split("\n  backend:\n", 1)[1].split("\n  web:\n", 1)[0]
+    assert pinned.group(0) in backend
+    assert backend.index(pinned.group(0)) < backend.index("run: uv run pytest")
+    assert "restic version" in backend
