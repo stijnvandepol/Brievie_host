@@ -6,6 +6,7 @@ no test runs the wrapper from the repository.
 """
 
 import json
+import os
 import re
 import shutil
 import stat
@@ -67,6 +68,7 @@ class Call(TypedDict, total=False):
     image_env: str
     backup_dir_env: str
     mount_mode_env: str
+    source_env: list[str]
     wrapper_env: dict[str, str]
 
 
@@ -101,6 +103,10 @@ if argv[:1] == ["compose"]:
     entry["image_env"] = os.environ.get("BRIEVIE_IMAGE", "")
     entry["backup_dir_env"] = os.environ.get("BRIEVIE_BACKUP_DIR", "<unset>")
     entry["mount_mode_env"] = os.environ.get("BRIEVIE_BACKUP_MOUNT_MODE", "<unset>")
+    source_names = ("BRIEVIE_BACKUP_S3_ACCESS_KEY_ID", "BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY",
+                    "BRIEVIE_BACKUP_REST_USERNAME", "BRIEVIE_BACKUP_REST_PASSWORD",
+                    "BRIEVIE_BACKUP_REPOSITORY")
+    entry["source_env"] = [name for name in source_names if os.environ.get(name)]
 if "restore_fetch" in argv:
     names = ("BRIEVIE_MASTER_KEY", "BRIEVIE_BACKUP_PASSWORD", "BRIEVIE_BACKUP_DIR_SET",
              "BRIEVIE_BACKUP_REPOSITORY", "BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY", "SECRET_KEY")
@@ -805,7 +811,7 @@ def test_restore_secrets_do_not_override_the_restored_env(install: Install) -> N
     compose_calls = [c for c in install.calls() if c["argv"][0] == "compose"]
     assert compose_calls
     for call in compose_calls:
-        if "restore_database" in call["argv"] or "restore_files" in call["argv"]:
+        if any(n in call["argv"] for n in ("restore_check", "restore_database", "restore_files")):
             # These read the back-up: they get the source's password on purpose.
             assert call["secret_env"] == ["BRIEVIE_BACKUP_PASSWORD"]
         else:
@@ -1227,6 +1233,8 @@ def test_script_writes_and_removes_only_at_its_own_names() -> None:
 def test_shellcheck_when_available() -> None:
     shellcheck = shutil.which("shellcheck")
     if shellcheck is None:
+        if os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "true":
+            pytest.fail("shellcheck must be installed in CI")
         pytest.skip("shellcheck is not installed")
     result = subprocess.run(  # noqa: S603
         [shellcheck, "-s", "sh", str(SCRIPT)], capture_output=True, text=True, check=False
@@ -1901,7 +1909,7 @@ def test_make_passes_the_project(
 # --- fix round 4: the back-up is read read-only while restoring ----------------------------
 
 
-READ_ONLY_STEPS = ("restore_database", "restore_files", "verify_restore")
+READ_ONLY_STEPS = ("restore_check", "restore_database", "restore_files", "verify_restore")
 
 
 @pytest.mark.parametrize("flags", [(), ("--replace",)])
@@ -1924,7 +1932,7 @@ def test_only_the_restore_steps_mount_the_source_read_only(
     for call in compose_calls:
         read_only = any(step in call["argv"] for step in READ_ONLY_STEPS)
         assert call["mount_mode_env"] == ("ro" if read_only else "<unset>"), call["argv"]
-    assert sum(any(s in c["argv"] for s in READ_ONLY_STEPS) for c in compose_calls) == 3
+    assert sum(any(s in c["argv"] for s in READ_ONLY_STEPS) for c in compose_calls) == 4
 
 
 def test_backup_init_keeps_the_default_mount(installed: Install) -> None:
@@ -2110,6 +2118,7 @@ def test_management_commands_run_quietly_and_services_do_not(installed: Install)
 
 def test_start_ends_with_address_backup_and_sheet(installed: Install) -> None:
     installed.write_env(current_env() + "BRIEVIE_HTTPS_PORT=8443\n")
+    (installed.root / "brievie-herstelblad.html").write_text("old")
 
     result = installed.run("start")
 
@@ -2132,3 +2141,220 @@ def test_start_without_a_destination_names_the_one_command(installed: Install) -
     assert lines[-3] == "Brievie draait op https://brievie.local."
     assert lines[-2].startswith("Back-up: nog niet ingesteld")
     assert "./brievie backup --init" in lines[-2]
+
+
+# --- fix round 6: a restore checks its back-up again before it drops anything -----------
+
+RUN_NOT_FOUND = (
+    "Deze back-up is niet gevonden. Typ ./brievie status --list om te zien welke back-ups er zijn."
+)
+
+
+def test_the_safety_backup_never_prunes(installed: Install) -> None:
+    result = installed.run("restore", "--replace", "--keep-hostname", **restore_inputs(installed))
+
+    assert result.returncode == 0, result.stderr
+    safety = next(c for c in installed.calls() if "--no-prune" in c["argv"])
+    assert safety["argv"][-3:] == ["manage.py", "backup", "--no-prune"]
+    assert not any(c["argv"][-1] == "backup" for c in installed.calls() if "exec" in c["argv"])
+
+
+def test_replace_checks_the_backup_after_the_safety_backup_and_before_the_drop(
+    installed: Install,
+) -> None:
+    prepared = installed.root / "deploy" / ".restore" / "env"
+    result = installed.run(
+        "restore",
+        "--replace",
+        "--keep-hostname",
+        FAKE_WATCH=str(prepared),
+        **restore_inputs(installed),
+    )
+
+    assert result.returncode == 0, result.stderr
+    safety = installed.index("--no-prune")
+    check = installed.index("restore_check")
+    drop = installed.index("psql -U postgres -d postgres")
+    database = installed.index("restore_database")
+    assert safety < check < drop < database
+    call = installed.calls()[check]
+    assert call["argv"][-2:] == ["--run", RUN_ID]
+    # Before the swap: the prepared settings were still waiting in deploy/.restore.
+    assert "watch_mode" in call
+    assert call["mount_mode_env"] == "ro"
+    assert call["backup_dir_env"] == str(installed.backup_folder)
+    assert call["secret_env"] == ["BRIEVIE_BACKUP_PASSWORD"]
+
+
+def test_a_vanished_backup_stops_the_replace_before_anything_is_destroyed(
+    installed: Install,
+) -> None:
+    result = installed.run(
+        "restore",
+        "--replace",
+        "--keep-hostname",
+        FAKE_DOCKER_FAIL="restore_check",
+        FAKE_DOCKER_FAIL_STDERR=f"CommandError: {RUN_NOT_FOUND}\n",
+        **restore_inputs(installed),
+    )
+
+    assert result.returncode == 1
+    assert RUN_NOT_FOUND in result.stderr
+    assert "Er is niets vervangen" in result.stderr
+    assert "CommandError:" not in result.stderr
+    commands = installed.commands()
+    assert not any("psql -U postgres -d postgres" in c for c in commands)
+    assert not any("restore_database" in c or "restore_files" in c for c in commands)
+    assert installed.dotenv.read_text() == current_env()
+    assert list((installed.root / "deploy").glob(".env.before-restore-*")) == []
+    assert not (installed.root / "deploy" / ".restore").exists()
+    # The services that were stopped run again.
+    check = installed.index("restore_check")
+    assert any(c.endswith("up -d") for c in commands[check:])
+
+
+def test_a_vanished_backup_stops_a_fresh_restore_before_postgres(install: Install) -> None:
+    result = install.run(
+        "restore",
+        "--keep-hostname",
+        FAKE_DOCKER_FAIL="restore_check",
+        FAKE_DOCKER_FAIL_STDERR=f"CommandError: {RUN_NOT_FOUND}\n",
+        **restore_inputs(install),
+    )
+
+    assert result.returncode == 1
+    assert "./brievie restore" in result.stderr
+    assert not install.dotenv.exists()
+    assert not any("postgres" in c and "up -d" in c for c in install.commands())
+    assert not (install.root / "deploy" / ".restore").exists()
+
+
+def test_a_backup_gone_after_the_drop_says_so_honestly(installed: Install) -> None:
+    result = installed.run(
+        "restore",
+        "--replace",
+        "--keep-hostname",
+        FAKE_DOCKER_FAIL="restore_database",
+        FAKE_DOCKER_FAIL_STDERR=f"CommandError: {RUN_NOT_FOUND}\n",
+        **restore_inputs(installed),
+    )
+
+    assert result.returncode == 1
+    stderr = result.stderr
+    assert "./brievie status --list" in stderr
+    assert "./brievie restore <ander nummer> --replace --skip-safety-backup" in stderr
+    assert "de oude database is al leeggemaakt" in stderr
+    assert "veiligheidsback-up" in stderr
+
+
+def test_a_backup_gone_on_a_new_machine_says_nothing_was_lost(install: Install) -> None:
+    result = install.run(
+        "restore",
+        "--keep-hostname",
+        FAKE_DOCKER_FAIL="restore_database",
+        FAKE_DOCKER_FAIL_STDERR=f"CommandError: {RUN_NOT_FOUND}\n",
+        **restore_inputs(install),
+    )
+
+    assert result.returncode == 1
+    assert "./brievie status --list" in result.stderr
+    assert "leeggemaakt" not in result.stderr
+    assert "hier stonden nog geen gegevens" in result.stderr.lower()
+
+
+def test_status_list_shows_the_runs_without_the_keeper(installed: Install) -> None:
+    result = installed.run("status", "--list", FAKE_DOCKER_RUNNING="postgres")
+
+    assert result.returncode == 0, result.stderr
+    call = next(c for c in installed.calls() if "backup_status" in c["argv"])
+    assert call["argv"][-2:] == ["backup_status", "--list"]
+    assert "admin" in call["argv"]
+    assert call["mount_mode_env"] == "ro"
+
+
+def test_help_mentions_status_list(installed: Install) -> None:
+    result = installed.run("help")
+
+    lines = [line for line in result.stdout.splitlines() if "./brievie status --list" in line]
+    assert len(lines) == 1
+
+
+def test_status_takes_no_other_word(installed: Install) -> None:
+    result = installed.run("status", "--alles")
+
+    assert result.returncode == 2
+    assert installed.calls() == []
+
+
+def test_s3_credentials_reach_the_fetch_and_every_restore_step(install: Install) -> None:
+    result = install.run(
+        "restore",
+        "--keep-hostname",
+        BRIEVIE_RESTORE_SOURCE="s3:https://s3.example.nl/bak/brievie",
+        BRIEVIE_RESTORE_MASTER_KEY=MASTER,
+        BRIEVIE_BACKUP_S3_ACCESS_KEY_ID="AKIAEXAMPLE",
+        BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY=S3_SECRET,
+    )
+
+    assert result.returncode == 0, result.stderr
+    fetch = next(c for c in install.calls() if "restore_fetch" in c["argv"])
+    assert fetch["env"]["BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY"] == S3_SECRET
+    for name in ("restore_check", "restore_database", "restore_files"):
+        call = next(c for c in install.calls() if name in c["argv"])
+        assert call["source_env"] == [
+            "BRIEVIE_BACKUP_S3_ACCESS_KEY_ID",
+            "BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY",
+            "BRIEVIE_BACKUP_REPOSITORY",
+        ], name
+    # And no other compose call sees them.
+    for call in install.calls():
+        if call["argv"][0] == "compose" and not any(
+            n in call["argv"] for n in ("restore_check", "restore_database", "restore_files")
+        ):
+            assert call["source_env"] == [], call["argv"]
+    install.assert_no_secret_in_argv()
+
+
+def test_typed_rest_credentials_reach_the_restore_steps(install: Install) -> None:
+    result = install.run(
+        "restore",
+        "--keep-hostname",
+        stdin="gebruiker\nrest-wachtwoord-77\n",
+        BRIEVIE_RESTORE_SOURCE="rest:https://rest.example.nl/brievie",
+        BRIEVIE_RESTORE_MASTER_KEY=MASTER,
+    )
+
+    assert result.returncode == 0, result.stderr
+    call = next(c for c in install.calls() if "restore_database" in c["argv"])
+    assert call["source_env"] == [
+        "BRIEVIE_BACKUP_REST_USERNAME",
+        "BRIEVIE_BACKUP_REST_PASSWORD",
+        "BRIEVIE_BACKUP_REPOSITORY",
+    ]
+    assert not any("rest-wachtwoord-77" in " ".join(c["argv"]) for c in install.calls())
+
+
+def test_a_known_installation_gets_no_new_sheet_on_start(installed: Install) -> None:
+    result = installed.run("start")
+
+    assert result.returncode == 0, result.stderr
+    assert not (installed.root / "brievie-herstelblad.html").exists()
+    assert not any("recovery_sheet" in c for c in installed.commands())
+    assert "./brievie recovery-sheet" in result.stdout.rstrip().splitlines()[-1]
+
+
+def test_the_first_start_of_an_old_installation_writes_the_sheet(install: Install) -> None:
+    install.write_env(current_env(installation_id=None))
+
+    result = install.run("start")
+
+    assert result.returncode == 0, result.stderr
+    assert (install.root / "brievie-herstelblad.html").exists()
+
+
+def test_ci_has_shellcheck_for_the_backend_tests() -> None:
+    ci = (REPO / ".github" / "workflows" / "ci.yml").read_text()
+    backend = ci.split("\n  backend:\n", 1)[1].split("\n  web:\n", 1)[0]
+    assert "shellcheck" in backend
+    assert backend.index("shellcheck") < backend.index("run: uv run pytest")
+    assert "working-directory: backend" in backend
