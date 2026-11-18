@@ -297,3 +297,28 @@ def test_the_worker_that_purges_audit_rows_gets_the_retention() -> None:
     line = "BRIEVIE_AUDIT_RETENTION_DAYS: ${BRIEVIE_AUDIT_RETENTION_DAYS:-365}"
     assert line in service("worker")
     assert "# BRIEVIE_AUDIT_RETENTION_DAYS=365" in ENV_EXAMPLE
+
+
+def test_the_session_limits_reach_every_service_that_reads_them() -> None:
+    # The api enforces them (UserSessionMiddleware) and the worker's nightly clean-up
+    # (remove_stale_sessions) applies the same limits; with only one of them set, the
+    # worker would delete sessions by the defaults.
+    for name in ("api", "worker"):
+        assert "BRIEVIE_SESSION_IDLE_DAYS: ${BRIEVIE_SESSION_IDLE_DAYS:-14}" in service(name), name
+        assert "BRIEVIE_SESSION_MAX_DAYS: ${BRIEVIE_SESSION_MAX_DAYS:-90}" in service(name), name
+    assert "# BRIEVIE_SESSION_IDLE_DAYS=14" in ENV_EXAMPLE
+    assert "# BRIEVIE_SESSION_MAX_DAYS=90" in ENV_EXAMPLE
+
+
+def test_the_audit_retention_default_is_the_one_the_settings_use() -> None:
+    from django.conf import settings
+
+    assert "BRIEVIE_AUDIT_RETENTION_DAYS:-365}" in service("worker")
+    assert settings.BRIEVIE_AUDIT_RETENTION_DAYS == 365
+
+
+def test_the_worker_that_builds_member_exports_mounts_the_documents() -> None:
+    # build_member_export (queue pipeline, so the worker) opens the sealed page files and
+    # writes the sealed export under the storage root, which the api reads for the
+    # download. Without the volume the worker would use its own container's disk.
+    assert re.search(r"^\s+- documents:/data/documents$", service("worker"), re.MULTILINE)
