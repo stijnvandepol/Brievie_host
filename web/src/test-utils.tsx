@@ -263,9 +263,17 @@ export function ruleHandlers(rules: Rule[] = [apkRule, bankRule]) {
   ];
 }
 
-/** The member list of the first workspace, and what the page "Leden" asks besides. */
-export function memberHandlers(list: components["schemas"]["MemberOut"][] = members) {
-  return [http.get(`*${API}/workspaces/${workspace.id}/members`, () => HttpResponse.json(list))];
+/** The members and open invitations of the first workspace: what the page "Leden" asks. */
+export function memberHandlers(
+  list: components["schemas"]["MemberOut"][] = members,
+  invitations: components["schemas"]["InvitationOut"][] = [],
+) {
+  return [
+    http.get(`*${API}/workspaces/${workspace.id}/members`, () => HttpResponse.json(list)),
+    http.get(`*${API}/workspaces/${workspace.id}/invitations`, () =>
+      HttpResponse.json(invitations),
+    ),
+  ];
 }
 
 /** The first workspace with the caller in another role. */

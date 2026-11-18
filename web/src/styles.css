@@ -2802,3 +2802,73 @@ section[tabindex="-1"]:focus-visible {
   height: 18px;
   margin: 2px 0 0;
 }
+
+/* Disclosure: "Meer opties" */
+
+.disclosure-heading {
+  margin: 0;
+  font-size: inherit;
+}
+
+.disclosure-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-xs);
+  min-height: var(--control-height);
+  padding: 0 var(--s-s);
+  margin-left: calc(var(--s-s) * -1);
+  border: 0;
+  border-radius: var(--radius-medium);
+  background: transparent;
+  color: var(--brand-fg1);
+  font: inherit;
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.disclosure-trigger[data-hovered] {
+  background: var(--subtle-bg-hover);
+}
+
+.disclosure-trigger[data-focus-visible] {
+  outline: 2px solid var(--focus-stroke);
+  outline-offset: 2px;
+}
+
+.disclosure-chevron {
+  transition: transform var(--duration-fast) var(--ease);
+}
+
+.disclosure[data-expanded] .disclosure-chevron {
+  transform: rotate(90deg);
+}
+
+.disclosure-panel {
+  padding-top: var(--s-s);
+}
+
+/* A link that is shown once, and its QR code */
+
+.one-time-link {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-s);
+}
+
+.one-time-link input {
+  font-family: var(--font-mono);
+  font-size: var(--caption-size);
+}
+
+.invite-qr {
+  display: flex;
+  justify-content: center;
+}
+
+.invite-qr svg {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--neutral-stroke2);
+  border-radius: var(--radius-medium);
+  background: #ffffff;
+}

@@ -189,3 +189,17 @@ export const rulesQuery = (workspaceId: string) =>
       return data;
     },
   });
+
+/** The invitations of a workspace that are still open or just ran out (admins only). The
+ * link itself is never part of it: it is shown once, when it is made. */
+export const invitationsQuery = (workspaceId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "invitations"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/invitations", {
+        params: { path: { workspace_id: workspaceId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });

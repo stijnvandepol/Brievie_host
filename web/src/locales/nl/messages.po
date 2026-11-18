@@ -142,6 +142,18 @@ msgstr "{who} zette een taak weer open"
 msgid "{who} zette het label {label} erop"
 msgstr "{who} zette het label {label} erop"
 
+#: src/components/invite-dialog.tsx
+msgid "1 dag"
+msgstr "1 dag"
+
+#: src/components/invite-dialog.tsx
+msgid "30 dagen"
+msgstr "30 dagen"
+
+#: src/components/invite-dialog.tsx
+msgid "7 dagen"
+msgstr "7 dagen"
+
 #: src/components/document-table.tsx
 msgid "Aanmaning"
 msgstr "Aanmaning"
@@ -258,6 +270,10 @@ msgstr "Alle labels"
 msgid "Alleen de beheerder van deze werkruimte kan dit veranderen."
 msgstr "Alleen de beheerder van deze werkruimte kan dit veranderen."
 
+#: src/components/invite-dialog.tsx
+msgid "Alleen dit adres kan de uitnodiging gebruiken."
+msgstr "Alleen dit adres kan de uitnodiging gebruiken."
+
 #: src/routes/automations.tsx
 #: src/routes/rule-editor.tsx
 msgid "Alleen een beheerder kan regels wijzigen."
@@ -278,6 +294,7 @@ msgstr "Als"
 
 #: src/components/confirm-dialog.tsx
 #: src/components/device-table.tsx
+#: src/components/invite-dialog.tsx
 #: src/components/role-dialog.tsx
 #: src/routes/ai.tsx
 #: src/routes/automations.tsx
@@ -455,6 +472,10 @@ msgstr "De bron"
 msgid "de bron {source} is"
 msgstr "de bron {source} is"
 
+#: src/routes/members.tsx
+msgid "De link werkt daarna niet meer. Wie hem al heeft, kan er niet meer mee binnenkomen."
+msgstr "De link werkt daarna niet meer. Wie hem al heeft, kan er niet meer mee binnenkomen."
+
 #. placeholder {0}: workspace.name
 #: src/routes/members.tsx
 msgid "De mensen die bij {0} horen en bij de post kunnen."
@@ -488,6 +509,10 @@ msgstr "De tekst"
 msgid "De tekst van elke brief gaat naar een bedrijf dat de AI levert. Je krijgt eerst te zien wat er precies weggaat."
 msgstr "De tekst van elke brief gaat naar een bedrijf dat de AI levert. Je krijgt eerst te zien wat er precies weggaat."
 
+#: src/components/invite-dialog.tsx
+msgid "De uitnodiging is klaar"
+msgstr "De uitnodiging is klaar"
+
 #: src/routes/document.tsx
 msgid "Deadline"
 msgstr "Deadline"
@@ -500,6 +525,10 @@ msgstr "Deze brief wordt nog gelezen."
 #: src/routes/pair-app.tsx
 msgid "Deze code is verlopen."
 msgstr "Deze code is verlopen."
+
+#: src/components/invite-dialog.tsx
+msgid "Deze link werkt alleen op je thuisnetwerk."
+msgstr "Deze link werkt alleen op je thuisnetwerk."
 
 #: src/routes/root.tsx
 msgid "Deze pagina bestaat niet."
@@ -518,6 +547,7 @@ msgstr "deze voorwaarden kloppen"
 msgid "Deze werkruimte gebruikt nu een eigen adres ({0}). Vul dat adres opnieuw in onder Geavanceerd als je het wilt houden."
 msgstr "Deze werkruimte gebruikt nu een eigen adres ({0}). Vul dat adres opnieuw in onder Geavanceerd als je het wilt houden."
 
+#: src/components/invite-dialog.tsx
 #: src/routes/login.tsx
 #: src/routes/setup.tsx
 msgid "E-mailadres"
@@ -635,6 +665,7 @@ msgstr "Geen eigen CA"
 msgid "Gegevens"
 msgstr "Gegevens"
 
+#: src/components/one-time-link.tsx
 #: src/routes/pair-app.tsx
 msgid "Gekopieerd"
 msgstr "Gekopieerd"
@@ -647,9 +678,18 @@ msgstr "Gekoppeld op"
 msgid "Gekoppelde apparaten"
 msgstr "Gekoppelde apparaten"
 
+#: src/components/invite-dialog.tsx
+#: src/routes/members.tsx
+msgid "Geldig"
+msgstr "Geldig"
+
 #: src/routes/pair-app.tsx
 msgid "Geldig tot"
 msgstr "Geldig tot"
+
+#: src/components/invite-dialog.tsx
+msgid "Geldig tot {expires}."
+msgstr "Geldig tot {expires}."
 
 #: src/routes/document.tsx
 msgid "Gemaakt door AI. Controleer of het klopt."
@@ -719,6 +759,14 @@ msgstr "Iedereen"
 msgid "Iemand"
 msgstr "Iemand"
 
+#: src/components/invite-dialog.tsx
+msgid "Iemand nieuw"
+msgstr "Iemand nieuw"
+
+#: src/components/invite-dialog.tsx
+msgid "Iemand uitnodigen"
+msgstr "Iemand uitnodigen"
+
 #: src/routes/ai.tsx
 msgid "Ik heb dit gelezen en ga akkoord, ook voor iedereen van wie post in deze werkruimte staat."
 msgstr "Ik heb dit gelezen en ga akkoord, ook voor iedereen van wie post in deze werkruimte staat."
@@ -749,6 +797,7 @@ msgid "Instellingen"
 msgstr "Instellingen"
 
 #: src/components/device-table.tsx
+#: src/routes/members.tsx
 msgid "Intrekken"
 msgstr "Intrekken"
 
@@ -756,6 +805,10 @@ msgstr "Intrekken"
 #: src/components/device-table.tsx
 msgid "Intrekken: {0}"
 msgstr "Intrekken: {0}"
+
+#: src/routes/members.tsx
+msgid "Intrekken: {name}"
+msgstr "Intrekken: {name}"
 
 #: src/components/rule-sentence.ts
 msgid "is"
@@ -796,6 +849,10 @@ msgstr "Je hebt {total} brieven"
 #: src/routes/automations.tsx
 msgid "Je hebt nog geen regels."
 msgstr "Je hebt nog geen regels."
+
+#: src/components/invite-dialog.tsx
+msgid "Je krijgt een link en een QR-code. Wie die opent, maakt een account of logt in en hoort daarna bij deze werkruimte."
+msgstr "Je krijgt een link en een QR-code. Wie die opent, maakt een account of logt in en hoort daarna bij deze werkruimte."
 
 #: src/routes/members.tsx
 msgid "Je kunt daarna niet meer bij {workspaceName}. De post blijft hier voor de andere leden."
@@ -870,6 +927,7 @@ msgid "Kies minstens 12 tekens."
 msgstr "Kies minstens 12 tekens."
 
 #: src/components/document-table.tsx
+#: src/components/invite-dialog.tsx
 msgid "Klaar"
 msgstr "Klaar"
 
@@ -884,6 +942,14 @@ msgstr "Komt er een brief binnen die je moet controleren of op een naam moet zet
 #: src/routes/pair-app.tsx
 msgid "Kopieer koppelgegevens"
 msgstr "Kopieer koppelgegevens"
+
+#: src/components/one-time-link.tsx
+msgid "Kopieer link"
+msgstr "Kopieer link"
+
+#: src/components/one-time-link.tsx
+msgid "Kopiëren lukt niet. Kopieer de link hierboven zelf."
+msgstr "Kopiëren lukt niet. Kopieer de link hierboven zelf."
 
 #: src/routes/pair-app.tsx
 msgid "Kopiëren lukt niet. Kopieer de tekst hieronder zelf."
@@ -965,6 +1031,14 @@ msgstr "Leeg laten kiest {0}."
 msgid "Lid"
 msgstr "Lid"
 
+#: src/components/one-time-link.tsx
+msgid "Link"
+msgstr "Link"
+
+#: src/components/invite-dialog.tsx
+msgid "Link maken"
+msgstr "Link maken"
+
 #: src/components/document-table.tsx
 msgid "Loonstrook"
 msgstr "Loonstrook"
@@ -985,6 +1059,10 @@ msgstr "Mail"
 #: src/routes/home.tsx
 msgid "Meekijker"
 msgstr "Meekijker"
+
+#: src/components/invite-dialog.tsx
+msgid "Meer opties"
+msgstr "Meer opties"
 
 #: src/routes/labels.tsx
 msgid "Meerdere tegelijk toevoegen"
@@ -1058,10 +1136,22 @@ msgstr "Nieuw"
 msgid "Nieuwe code"
 msgstr "Nieuwe code"
 
+#: src/routes/members.tsx
+msgid "Nieuwe link"
+msgstr "Nieuwe link"
+
+#: src/routes/members.tsx
+msgid "Nieuwe link: {name}"
+msgstr "Nieuwe link: {name}"
+
 #: src/routes/automations.tsx
 #: src/routes/rule-editor.tsx
 msgid "Nieuwe regel"
 msgstr "Nieuwe regel"
+
+#: src/components/invite-dialog.tsx
+msgid "Notitie voor jezelf"
+msgstr "Notitie voor jezelf"
 
 #: src/components/rule-sentence.ts
 msgid "of"
@@ -1120,6 +1210,10 @@ msgstr "Op niemands naam"
 #: src/routes/pair-app.tsx
 msgid "Open de app op je telefoon en scan de code. De telefoon moet op hetzelfde netwerk zitten als deze server."
 msgstr "Open de app op je telefoon en scan de code. De telefoon moet op hetzelfde netwerk zitten als deze server."
+
+#: src/routes/members.tsx
+msgid "Open uitnodigingen"
+msgstr "Open uitnodigingen"
 
 #: src/components/ai-status-line.tsx
 msgid "OpenAI in de Verenigde Staten ({host})"
@@ -1199,6 +1293,10 @@ msgstr "Post die op jou wacht: brieven om te controleren of op een naam te zette
 msgid "Probeer opnieuw"
 msgstr "Probeer opnieuw"
 
+#: src/components/invite-dialog.tsx
+msgid "QR-code met de uitnodiging"
+msgstr "QR-code met de uitnodiging"
+
 #: src/routes/pair-app.tsx
 msgid "QR-code om de app te koppelen"
 msgstr "QR-code om de app te koppelen"
@@ -1227,6 +1325,7 @@ msgstr "Regels"
 msgid "Rekening"
 msgstr "Rekening"
 
+#: src/components/invite-dialog.tsx
 #: src/components/role-dialog.tsx
 #: src/routes/home.tsx
 #: src/routes/members.tsx
@@ -1313,6 +1412,10 @@ msgstr "Stel je eigen Brievie-server in. Dit doe je maar één keer."
 #: src/routes/rule-editor.tsx
 msgid "Stop daarna met de volgende regels"
 msgstr "Stop daarna met de volgende regels"
+
+#: src/components/invite-dialog.tsx
+msgid "Stuur deze link, of laat de QR-code scannen. Je ziet de link maar één keer: sluit je dit venster, dan maak je een nieuwe."
+msgstr "Stuur deze link, of laat de QR-code scannen. Je ziet de link maar één keer: sluit je dit venster, dan maak je een nieuwe."
 
 #: src/routes/document.tsx
 msgid "Taak"
@@ -1407,6 +1510,22 @@ msgstr "Uitkomst van de test"
 msgid "Uitloggen"
 msgstr "Uitloggen"
 
+#: src/routes/members.tsx
+msgid "Uitnodigen"
+msgstr "Uitnodigen"
+
+#: src/components/invite-dialog.tsx
+msgid "Uitnodiging"
+msgstr "Uitnodiging"
+
+#: src/routes/members.tsx
+msgid "Uitnodiging intrekken?"
+msgstr "Uitnodiging intrekken?"
+
+#: src/routes/members.tsx
+msgid "Uitnodiging zonder naam"
+msgstr "Uitnodiging zonder naam"
+
 #: src/components/rule-sentence.ts
 msgid "Upload"
 msgstr "Upload"
@@ -1422,6 +1541,15 @@ msgstr "Vergelijking"
 #: src/routes/members.tsx
 msgid "Verlaten"
 msgstr "Verlaten"
+
+#. placeholder {0}: dateTime.format(new Date(invitation.expires_at))
+#: src/routes/members.tsx
+msgid "Verloopt op {0}"
+msgstr "Verloopt op {0}"
+
+#: src/routes/members.tsx
+msgid "Verlopen"
+msgstr "Verlopen"
 
 #: src/routes/document.tsx
 msgid "Vervaldatum"
@@ -1454,6 +1582,10 @@ msgstr "Verwijderen: {name}"
 #: src/routes/rule-editor.tsx
 msgid "Voeg eerst een persoon toe."
 msgstr "Voeg eerst een persoon toe."
+
+#: src/routes/members.tsx
+msgid "Voor"
+msgstr "Voor"
 
 #: src/routes/setup.tsx
 msgid "Voor de post van je bedrijf."
@@ -1544,6 +1676,10 @@ msgstr "Werkruimte verlaten?"
 #: src/routes/home.tsx
 msgid "Werkruimtes"
 msgstr "Werkruimtes"
+
+#: src/components/invite-dialog.tsx
+msgid "Wie is het?"
+msgstr "Wie is het?"
 
 #: src/routes/ai.tsx
 msgid "Wie leest je brieven?"
