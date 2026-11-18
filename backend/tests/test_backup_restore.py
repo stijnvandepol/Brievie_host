@@ -379,6 +379,11 @@ class Chowned:
     def __eq__(self, other: object) -> bool:
         return self.calls == other
 
+    def to_root(self) -> list[int]:
+        """The inodes handed to root: only placing Caddy's authority does that (the
+        restored trees go to uid 10001 when the restore runs as root)."""
+        return [inode for inode, uid, gid in self.calls if (uid, gid) == (0, 0)]
+
     def owners(self, *paths: Path) -> list[tuple[int, int] | None]:
         """For each path: the (uid, gid) it was handed to, or None."""
         found = {inode: (uid, gid) for inode, uid, gid in self.calls}
@@ -451,7 +456,7 @@ def test_a_backup_without_an_authority_leaves_caddy_alone(
     assert placed.authority_placed is False
     assert (caddy / "root.crt").read_text() == "current"
     assert leaf.exists()
-    assert chowned == []
+    assert chowned.to_root() == []  # no authority placed (whatever uid runs this)
 
 
 @pytest.mark.django_db(transaction=True)
@@ -478,7 +483,7 @@ def test_replace_never_places_the_authority_of_the_replaced_installation(
     assert list(config.iterdir()) == []
     assert Path(django_settings.BRIEVIE_AUTHORITY_COPY_DIR).is_dir()  # the mount point stays
     assert (caddy / "root.crt").read_text() == "current"
-    assert chowned == []
+    assert chowned.to_root() == []  # no authority placed (whatever uid runs this)
 
 
 @pytest.mark.django_db(transaction=True)
