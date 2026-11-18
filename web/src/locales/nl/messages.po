@@ -13,6 +13,7 @@ msgid "(gearchiveerd)"
 msgstr "(gearchiveerd)"
 
 #. placeholder {0}: formatTimeLeft(secondsLeft)
+#: src/routes/invitation.tsx
 #: src/routes/pair-app.tsx
 msgid "(nog {0})"
 msgstr "(nog {0})"
@@ -54,6 +55,12 @@ msgstr "{0} kan daarna niet meer bij Brievie. Je kunt het apparaat opnieuw koppe
 msgid "{0} kan daarna niet meer bij deze werkruimte. De post blijft hier. Taken van {1} hebben daarna niemand."
 msgstr "{0} kan daarna niet meer bij deze werkruimte. De post blijft hier. Taken van {1} hebben daarna niemand."
 
+#. placeholder {0}: info.invited_by
+#. placeholder {1}: info.workspace_name
+#: src/routes/invitation.tsx
+msgid "{0} nodigt je uit voor {1}"
+msgstr "{0} nodigt je uit voor {1}"
+
 #. placeholder {0}: member.name
 #: src/routes/members.tsx
 msgid "{0} verwijderen?"
@@ -72,11 +79,11 @@ msgstr "{applied} keer toegepast, {proposed} keer voorgesteld"
 msgid "{matched, plural, one {# van de nieuwste {checked} brieven past} other {# van de nieuwste {checked} brieven passen}}"
 msgstr "{matched, plural, one {# van de nieuwste {checked} brieven past} other {# van de nieuwste {checked} brieven passen}}"
 
-#: src/routes/pair-app.tsx
+#: src/components/countdown.ts
 msgid "{minutes, plural, one {# minuut} other {# minuten}}"
 msgstr "{minutes, plural, one {# minuut} other {# minuten}}"
 
-#: src/routes/pair-app.tsx
+#: src/components/countdown.ts
 msgid "{minutesText} en {secondsText}"
 msgstr "{minutesText} en {secondsText}"
 
@@ -92,7 +99,7 @@ msgstr "{name} wordt verwijderd en van 1 brief gehaald. Dit kun je niet ongedaan
 msgid "{name} wordt verwijderd. Wat de regel al heeft gedaan, blijft staan."
 msgstr "{name} wordt verwijderd. Wat de regel al heeft gedaan, blijft staan."
 
-#: src/routes/pair-app.tsx
+#: src/components/countdown.ts
 msgid "{seconds, plural, one {# seconde} other {# seconden}}"
 msgstr "{seconds, plural, one {# seconde} other {# seconden}}"
 
@@ -171,6 +178,10 @@ msgstr "Aantal brieven"
 #: src/routes/persons.tsx
 msgid "Account"
 msgstr "Account"
+
+#: src/routes/invitation.tsx
+msgid "Account maken en meedoen"
+msgstr "Account maken en meedoen"
 
 #: src/components/device-table.tsx
 #: src/routes/rule-editor.tsx
@@ -522,6 +533,7 @@ msgstr "Deadline"
 msgid "Deze brief wordt nog gelezen."
 msgstr "Deze brief wordt nog gelezen."
 
+#: src/routes/invitation.tsx
 #: src/routes/pair-app.tsx
 msgid "Deze code is verlopen."
 msgstr "Deze code is verlopen."
@@ -538,6 +550,19 @@ msgstr "Deze pagina bestaat niet."
 msgid "Deze regel bestaat niet (meer)."
 msgstr "Deze regel bestaat niet (meer)."
 
+#. placeholder {0}: info.person_name
+#: src/routes/invitation.tsx
+msgid "Deze uitnodiging is voor {0}."
+msgstr "Deze uitnodiging is voor {0}."
+
+#: src/routes/invitation.tsx
+msgid "Deze uitnodiging is voor één e-mailadres. Vul dat adres in."
+msgstr "Deze uitnodiging is voor één e-mailadres. Vul dat adres in."
+
+#: src/routes/invitation.tsx
+msgid "Deze uitnodiging werkt niet meer. Vraag een nieuwe."
+msgstr "Deze uitnodiging werkt niet meer. Vraag een nieuwe."
+
 #: src/routes/rule-editor.tsx
 msgid "deze voorwaarden kloppen"
 msgstr "deze voorwaarden kloppen"
@@ -548,6 +573,7 @@ msgid "Deze werkruimte gebruikt nu een eigen adres ({0}). Vul dat adres opnieuw 
 msgstr "Deze werkruimte gebruikt nu een eigen adres ({0}). Vul dat adres opnieuw in onder Geavanceerd als je het wilt houden."
 
 #: src/components/invite-dialog.tsx
+#: src/routes/invitation.tsx
 #: src/routes/login.tsx
 #: src/routes/setup.tsx
 msgid "E-mailadres"
@@ -711,6 +737,10 @@ msgstr "Groen"
 msgid "Groenblauw"
 msgstr "Groenblauw"
 
+#: src/routes/invitation.tsx
+msgid "Heb je al een account?"
+msgstr "Heb je al een account?"
+
 #: src/components/rule-sentence.ts
 msgid "heeft"
 msgstr "heeft"
@@ -767,6 +797,10 @@ msgstr "Iemand nieuw"
 msgid "Iemand uitnodigen"
 msgstr "Iemand uitnodigen"
 
+#: src/routes/invitation.tsx
+msgid "Ik heb al een account"
+msgstr "Ik heb al een account"
+
 #: src/routes/ai.tsx
 msgid "Ik heb dit gelezen en ga akkoord, ook voor iedereen van wie post in deze werkruimte staat."
 msgstr "Ik heb dit gelezen en ga akkoord, ook voor iedereen van wie post in deze werkruimte staat."
@@ -787,6 +821,10 @@ msgstr "Informatie"
 #: src/routes/login.tsx
 msgid "Inloggen"
 msgstr "Inloggen"
+
+#: src/routes/invitation.tsx
+msgid "Inloggen en meedoen"
+msgstr "Inloggen en meedoen"
 
 #: src/routes/setup.tsx
 msgid "Installatiecode"
@@ -838,6 +876,10 @@ msgstr "Je bent hier nog alleen."
 msgid "Je bent hier nog alleen. Nodig iemand uit om samen de post te doen."
 msgstr "Je bent hier nog alleen. Nodig iemand uit om samen de post te doen."
 
+#: src/routes/invitation.tsx
+msgid "Je bent nu lid. Koppel ook de Brievie-app op je telefoon, dan scan je brieven met de app."
+msgstr "Je bent nu lid. Koppel ook de Brievie-app op je telefoon, dan scan je brieven met de app."
+
 #: src/components/external-ai-notice.tsx
 msgid "Je gebruikt een externe AI-dienst. De namen op deze pagina gaan mee met elke brief die de AI leest."
 msgstr "Je gebruikt een externe AI-dienst. De namen op deze pagina gaan mee met elke brief die de AI leest."
@@ -858,9 +900,17 @@ msgstr "Je krijgt een link en een QR-code. Wie die opent, maakt een account of l
 msgid "Je kunt daarna niet meer bij {workspaceName}. De post blijft hier voor de andere leden."
 msgstr "Je kunt daarna niet meer bij {workspaceName}. De post blijft hier voor de andere leden."
 
+#: src/routes/invitation.tsx
+msgid "Je logt in met je account van deze server."
+msgstr "Je logt in met je account van deze server."
+
 #: src/routes/ai.tsx
 msgid "Je maakt de sleutel aan in je account bij de dienst. Brievie bewaart hem versleuteld en laat hem nooit meer zien."
 msgstr "Je maakt de sleutel aan in je account bij de dienst. Brievie bewaart hem versleuteld en laat hem nooit meer zien."
+
+#: src/routes/invitation.tsx
+msgid "Je maakt een account op deze server."
+msgstr "Je maakt een account op deze server."
 
 #: src/routes/setup.tsx
 msgid "Je naam"
@@ -881,6 +931,18 @@ msgstr "Je vindt de installatiecode in het logboek van de Brievie-container."
 #: src/routes/ai.tsx
 msgid "Je vult zelf in wat er in een brief staat. Er gaat niets naar een AI."
 msgstr "Je vult zelf in wat er in een brief staat. Er gaat niets naar een AI."
+
+#: src/routes/invitation.tsx
+msgid "Je wordt beheerder: je kunt leden uitnodigen en alles instellen."
+msgstr "Je wordt beheerder: je kunt leden uitnodigen en alles instellen."
+
+#: src/routes/invitation.tsx
+msgid "Je wordt lid: je kunt post scannen, controleren en ordenen."
+msgstr "Je wordt lid: je kunt post scannen, controleren en ordenen."
+
+#: src/routes/invitation.tsx
+msgid "Je wordt meekijker: je kunt alles lezen, maar niets wijzigen."
+msgstr "Je wordt meekijker: je kunt alles lezen, maar niets wijzigen."
 
 #: src/components/document-history.tsx
 msgid "Jij"
@@ -922,6 +984,7 @@ msgstr "Kies de werkruimte die je wilt openen."
 msgid "Kies een account"
 msgstr "Kies een account"
 
+#: src/routes/invitation.tsx
 #: src/routes/setup.tsx
 msgid "Kies minstens 12 tekens."
 msgstr "Kies minstens 12 tekens."
@@ -1043,6 +1106,10 @@ msgstr "Link maken"
 msgid "Loonstrook"
 msgstr "Loonstrook"
 
+#: src/routes/invitation.tsx
+msgid "Lukt dat niet? Typ deze code in de app."
+msgstr "Lukt dat niet? Typ deze code in de app."
+
 #: src/routes/rule-editor.tsx
 msgid "Maak eerst een label of voeg een persoon toe."
 msgstr "Maak eerst een label of voeg een persoon toe."
@@ -1093,6 +1160,7 @@ msgid "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
 msgstr "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
 
 #: src/routes/home.tsx
+#: src/routes/invitation.tsx
 #: src/routes/labels.tsx
 #: src/routes/members.tsx
 #: src/routes/persons.tsx
@@ -1107,6 +1175,10 @@ msgstr "Naam van de werkruimte"
 #: src/routes/persons.tsx
 msgid "Naamvarianten"
 msgstr "Naamvarianten"
+
+#: src/routes/invitation.tsx
+msgid "Naar Brievie"
+msgstr "Naar Brievie"
 
 #: src/routes/root.tsx
 msgid "Naar de startpagina"
@@ -1132,6 +1204,11 @@ msgstr "Niemand"
 msgid "Nieuw"
 msgstr "Nieuw"
 
+#: src/routes/invitation.tsx
+msgid "Nieuw account"
+msgstr "Nieuw account"
+
+#: src/routes/invitation.tsx
 #: src/routes/pair-app.tsx
 msgid "Nieuwe code"
 msgstr "Nieuwe code"
@@ -1210,6 +1287,10 @@ msgstr "Op niemands naam"
 #: src/routes/pair-app.tsx
 msgid "Open de app op je telefoon en scan de code. De telefoon moet op hetzelfde netwerk zitten als deze server."
 msgstr "Open de app op je telefoon en scan de code. De telefoon moet op hetzelfde netwerk zitten als deze server."
+
+#: src/routes/invitation.tsx
+msgid "Open de Brievie-app"
+msgstr "Open de Brievie-app"
 
 #: src/routes/members.tsx
 msgid "Open uitnodigingen"
@@ -1297,6 +1378,7 @@ msgstr "Probeer opnieuw"
 msgid "QR-code met de uitnodiging"
 msgstr "QR-code met de uitnodiging"
 
+#: src/routes/invitation.tsx
 #: src/routes/pair-app.tsx
 msgid "QR-code om de app te koppelen"
 msgstr "QR-code om de app te koppelen"
@@ -1357,6 +1439,10 @@ msgstr "Samenvatting"
 #: src/components/rule-sentence.ts
 msgid "Scan"
 msgstr "Scan"
+
+#: src/routes/invitation.tsx
+msgid "Scan deze code met de Brievie-app"
+msgstr "Scan deze code met de Brievie-app"
 
 #: src/routes/post.tsx
 msgid "Scan een brief met de Brievie-app op je telefoon. Daarna staat hij hier."
@@ -1515,6 +1601,7 @@ msgid "Uitnodigen"
 msgstr "Uitnodigen"
 
 #: src/components/invite-dialog.tsx
+#: src/routes/invitation.tsx
 msgid "Uitnodiging"
 msgstr "Uitnodiging"
 
@@ -1639,6 +1726,7 @@ msgstr "Waar gebruik je Brievie voor?"
 msgid "Waarde"
 msgstr "Waarde"
 
+#: src/routes/invitation.tsx
 #: src/routes/login.tsx
 #: src/routes/setup.tsx
 msgid "Wachtwoord"
@@ -1659,6 +1747,10 @@ msgstr "We kunnen de server niet bereiken. Controleer je verbinding en probeer h
 #: src/routes/ai.tsx
 msgid "Welke dienst?"
 msgstr "Welke dienst?"
+
+#: src/routes/invitation.tsx
+msgid "Welkom bij {workspaceName}"
+msgstr "Welkom bij {workspaceName}"
 
 #: src/routes/setup.tsx
 msgid "Welkom bij Brievie"

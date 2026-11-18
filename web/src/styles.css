@@ -2872,3 +2872,26 @@ section[tabindex="-1"]:focus-visible {
   border-radius: var(--radius-medium);
   background: #ffffff;
 }
+
+/* After accepting an invitation: continue in the app */
+
+.invite-app {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-s);
+}
+
+.invite-app .code {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--subtitle-size);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.08em;
+}
+
+.invite-continue {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-s);
+}

@@ -5,6 +5,7 @@ import { automationsRoute } from "./routes/automations";
 import { documentRoute } from "./routes/document";
 import { homeRoute } from "./routes/home";
 import { inboxRoute } from "./routes/inbox";
+import { invitationRoute } from "./routes/invitation";
 import { labelsRoute } from "./routes/labels";
 import { loginRoute } from "./routes/login";
 import { membersRoute } from "./routes/members";
@@ -21,6 +22,7 @@ const routeTree = rootRoute.addChildren([
   setupRoute,
   loginRoute,
   pairAppRoute,
+  invitationRoute,
   workspaceRoute.addChildren([
     inboxRoute,
     postRoute,

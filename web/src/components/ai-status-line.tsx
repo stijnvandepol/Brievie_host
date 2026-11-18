@@ -1,7 +1,10 @@
 import { t } from "@lingui/core/macro";
 import { useQuery } from "@tanstack/react-query";
 import { aiStatusQuery } from "../api/queries";
+import type { components } from "../api/schema";
 import { Icon } from "./icons";
+
+type AiStatus = components["schemas"]["AiStatusOut"];
 
 const day = new Intl.DateTimeFormat("nl-NL", { dateStyle: "long" });
 
@@ -19,13 +22,9 @@ function serviceName(supplier: string | null | undefined, host: string): string 
   }
 }
 
-/**
- * One line that tells every member whether an AI reads the workspace's letters, where
- * their text goes and since when. Nothing while the answer is not known.
- */
-export function AiStatusLine({ workspaceId }: { workspaceId: string }) {
-  const { data } = useQuery(aiStatusQuery(workspaceId));
-  if (!data) return null;
+/** The line itself, for a status that is already known (also one an invitee gets before
+ * joining): whether an AI reads the letters, where their text goes and since when. */
+export function AiStatusSentence({ status: data }: { status: AiStatus }) {
   let sentence: string;
   let warning = false;
   if (data.mode === "external" && data.host && data.since) {
@@ -46,4 +45,10 @@ export function AiStatusLine({ workspaceId }: { workspaceId: string }) {
       <span>{sentence}</span>
     </p>
   );
+}
+
+/** The same line for a workspace of the caller. Nothing while the answer is not known. */
+export function AiStatusLine({ workspaceId }: { workspaceId: string }) {
+  const { data } = useQuery(aiStatusQuery(workspaceId));
+  return data ? <AiStatusSentence status={data} /> : null;
 }
