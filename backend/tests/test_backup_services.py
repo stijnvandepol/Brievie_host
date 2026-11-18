@@ -1606,6 +1606,7 @@ def test_both_halves_of_a_run_carry_the_runs_start_and_the_installations_host(
     assert run.status == BackupRun.Status.SUCCEEDED
     backups = [call for call in fake_restic.calls if call[0] == "backup"]
     times = {call[call.index("--time") + 1] for call in backups}
+    assert run.started_at is not None
     assert times == {run.started_at.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S")}
     assert all(call[call.index("--host") + 1] == host for call in backups)
     assert fake_restic.calls[-3:] == retention(host)
