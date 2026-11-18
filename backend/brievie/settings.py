@@ -270,5 +270,6 @@ LOGGING = {
             "filters": ["mask_bsn"],
         },
     },
-    "root": {"handlers": ["console"], "level": "INFO"},
+    # ./brievie sets WARNING for the commands it runs; the services keep INFO.
+    "root": {"handlers": ["console"], "level": env.str("BRIEVIE_LOG_LEVEL", default="INFO")},
 }

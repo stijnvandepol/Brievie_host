@@ -67,6 +67,7 @@ class Call(TypedDict, total=False):
     image_env: str
     backup_dir_env: str
     mount_mode_env: str
+    wrapper_env: dict[str, str]
 
 
 # The fake: logs each call as a JSON line, answers from FAKE_* variables, and writes the
@@ -77,8 +78,18 @@ import json, os, sys
 from pathlib import Path
 
 argv = sys.argv[1:]
+# The quieting pairs the wrapper adds are recorded apart, so argv stays comparable.
+wrapper_env = {{}}
+for name in ("BRIEVIE_WRAPPER", "BRIEVIE_LOG_LEVEL"):
+    for i in range(len(argv) - 1):
+        if argv[i] == "-e" and argv[i + 1].startswith(name + "="):
+            wrapper_env[name] = argv[i + 1].split("=", 1)[1]
+            del argv[i:i + 2]
+            break
 joined = " ".join(argv)
 entry = {{"argv": argv}}
+if wrapper_env:
+    entry["wrapper_env"] = wrapper_env
 piped = ("store_env_copy" in argv or "psql" in argv
          or "installation-id.tmp" in joined)
 if piped:
@@ -104,6 +115,17 @@ remove_at = os.environ.get("FAKE_REMOVE_AT", "")
 if remove_at and remove_at in joined:
     os.remove(os.environ["FAKE_REMOVE_PATH"])
 fail = os.environ.get("FAKE_DOCKER_FAIL", "")
+noisy = os.environ.get("FAKE_NOISE") == "1" and argv[0] in ("compose", "run", "build")
+if noisy:
+    # What a real run printed between the Dutch sentences.
+    sys.stderr.write(" Container brievie-admin-run-1  Creating\\n")
+    sys.stderr.write(" Network brievie_default  Created\\n")
+    sys.stderr.write('time="2026-11-17T22:20:33Z" level=warning msg="volume x_backup-unset'
+                     ' already exists but was not created by Docker Compose"\\n')
+    sys.stderr.write('time="2026-11-17T22:20:34Z" level=info msg="noise of: '
+                     + joined[-120:] + '"\\n')
+    if wrapper_env.get("BRIEVIE_LOG_LEVEL") != "WARNING":
+        sys.stderr.write("2026-11-17 22:20:33,614 INFO procrastinate.jobs Deferred 1 job\\n")
 if fail and fail in joined:
     sys.stderr.write(os.environ.get("FAKE_DOCKER_FAIL_STDERR", ""))
     sys.exit(int(os.environ.get("FAKE_DOCKER_FAIL_CODE", "1")))
@@ -148,6 +170,15 @@ elif "-c" in argv and "secrets" in joined:
     sys.stdout.write(os.environ["FAKE_SEPARATE_PASSWORD"] + "\\n")
 elif "recovery_sheet" in argv:
     sys.stdout.write("<html>herstelblad</html>\\n")
+elif "restore_database" in argv:
+    sys.stdout.write("interrupted_runs=1\\n")
+elif "verify_restore" in argv:
+    sys.stdout.write("workspaces=2\\npages_opened=2\\n")
+    sys.stdout.write("Het herstel is gecontroleerd. Alles klopt.\\n")
+elif "backup_status" in argv:
+    sys.stdout.write("Brievie: 1.4.0\\nBestemming: map (schijf)\\n")
+elif "manage.py" in argv and argv[-1] in ("backup", "--check"):
+    sys.stdout.write("Back-up gestart…\\nDe back-up is gelukt (1,4 MB).\\n")
 elif "restore_fetch" in argv:
     out = next(argv[i + 1].rsplit(":/out", 1)[0] for i, a in enumerate(argv)
                if a == "-v" and argv[i + 1].endswith(":/out"))
@@ -1187,7 +1218,7 @@ def test_script_writes_and_removes_only_at_its_own_names() -> None:
         if command.startswith("rm -r"):
             assert command == 'rm -rf "${here:?}/deploy/.restore"', command
     # A redirect to a file names a fixed path under the script's folder.
-    for match in re.finditer(r'(?<![<>&\d])>"?(\S+)', code):
+    for match in re.finditer(r'(?<![<>&\d])>>?"?(\S+)', code):
         target = match.group(1)
         assert target.startswith(("${here:?}/", "&2", "/dev/null")), target
     assert 'rm -rf "$' not in code.replace('rm -rf "${here:?}/deploy/.restore"', "")
@@ -1931,3 +1962,173 @@ def test_the_images_own_sentence_comes_before_the_next_command(install: Install)
     assert sentence in stderr
     assert stderr.index(sentence) < stderr.index(f"./brievie restore {RUN_ID} --replace")
     assert "niet compleet" not in stderr
+
+
+# --- fix round 5: what the user sees ------------------------------------------------------
+
+
+NOISE = (" Container ", "level=warning", " INFO ", "CommandError:", "noise of:", "Network ")
+MACHINE_LINE = re.compile(r"^\s*[a-z_]+=\S", re.MULTILINE)
+
+
+def assert_clean(text: str) -> None:
+    for noise in NOISE:
+        assert noise not in text, noise
+    assert not MACHINE_LINE.search(text), MACHINE_LINE.search(text)
+
+
+def test_start_shows_only_sentences(installed: Install) -> None:
+    result = installed.run("start", FAKE_NOISE="1")
+
+    assert result.returncode == 0, result.stderr
+    assert_clean(result.stdout + result.stderr)
+    assert "Brievie wordt gestart" in result.stdout
+
+
+def test_backup_and_status_show_only_sentences(installed: Install) -> None:
+    backup = installed.run("backup", FAKE_NOISE="1")
+    status = installed.run("status", FAKE_NOISE="1")
+
+    assert backup.returncode == 0, backup.stderr
+    assert status.returncode == 0, status.stderr
+    assert_clean(backup.stdout + backup.stderr)
+    assert_clean(status.stdout + status.stderr)
+    assert "De back-up is gelukt (1,4 MB)." in backup.stdout
+    assert "Bestemming: map (schijf)" in status.stdout
+
+
+def test_a_fresh_restore_shows_only_sentences(install: Install) -> None:
+    result = install.run("restore", "--keep-hostname", FAKE_NOISE="1", **restore_inputs(install))
+
+    assert result.returncode == 0, result.stderr
+    assert_clean(result.stdout + result.stderr)
+    assert "Het herstel is gecontroleerd: 2 werkruimtes, van elk is een pagina geopend." in (
+        result.stdout
+    )
+    assert "Alles klopt" not in result.stdout
+    assert result.stdout.rstrip().splitlines()[-1] == "Herstel gelukt."
+
+
+@pytest.mark.parametrize(
+    ("code", "sentence", "exit_code", "next_step"),
+    [
+        (
+            "destination_not_ready",
+            "De bestemming voor de back-up is nog niet klaar voor gebruik.",
+            "1",
+            "Typ ./brievie backup --init om de back-up de eerste keer in te stellen.",
+        ),
+        (
+            "not_configured",
+            "Er is nog geen back-up ingesteld.",
+            "1",
+            "Zet eerst in deploy/.env waar de back-up heen moet (zie docs/SELFHOST.md) "
+            "en typ daarna ./brievie backup --init.",
+        ),
+        (
+            "not_picked_up",
+            "De back-up is niet opgepakt. Draait de back-updienst (keeper)?",
+            "2",
+            "./brievie start",
+        ),
+    ],
+)
+def test_a_failing_backup_says_what_to_type(
+    installed: Install, code: str, sentence: str, exit_code: str, next_step: str
+) -> None:
+    result = installed.run(
+        "backup",
+        FAKE_NOISE="1",
+        FAKE_DOCKER_FAIL="manage.py backup",
+        FAKE_DOCKER_FAIL_CODE=exit_code,
+        FAKE_DOCKER_FAIL_STDERR=f"code={code}\nCommandError: {sentence}\n",
+    )
+
+    assert result.returncode == int(exit_code)
+    out = result.stdout + result.stderr
+    assert sentence in result.stderr
+    assert next_step in result.stderr
+    assert result.stderr.index(sentence) < result.stderr.index(next_step)
+    assert "De laatste regels van de techniek:" in result.stderr
+    assert "deploy/.brievie-last.log" in result.stderr
+    assert "CommandError:" not in out
+    assert "code=" not in out
+    assert "Dat is niet gelukt" not in out
+
+
+def test_a_failing_init_says_what_to_type(installed: Install) -> None:
+    result = installed.run(
+        "backup",
+        "--init",
+        FAKE_DOCKER_FAIL="backup_init",
+        FAKE_DOCKER_FAIL_STDERR=(
+            "code=not_configured\nCommandError: Er is nog geen back-up ingesteld.\n"
+        ),
+    )
+
+    assert result.returncode == 1
+    assert "Er is nog geen back-up ingesteld." in result.stderr
+    assert "docs/SELFHOST.md" in result.stderr
+    assert "CommandError:" not in result.stderr
+
+
+def test_verbose_shows_everything(installed: Install) -> None:
+    result = installed.run("status", FAKE_NOISE="1", BRIEVIE_VERBOSE="1")
+
+    assert result.returncode == 0, result.stderr
+    assert " Container " in result.stderr
+    assert "level=warning" in result.stderr
+
+
+def test_the_log_is_private_and_holds_the_last_command_only(installed: Install) -> None:
+    log = installed.root / "deploy" / ".brievie-last.log"
+    installed.run("status", FAKE_NOISE="1")
+    installed.run("sweep", FAKE_NOISE="1")
+
+    assert stat.S_IMODE(log.stat().st_mode) == 0o600
+    text = log.read_text()
+    assert "sweep_storage" in text
+    assert "backup_status" not in text
+    assert " Container " in text
+    assert not (installed.root / "deploy" / ".brievie-step.log").exists()
+
+
+def test_management_commands_run_quietly_and_services_do_not(installed: Install) -> None:
+    result = installed.run("start", FAKE_NOISE="1")
+
+    assert result.returncode == 0, result.stderr
+    for call in installed.calls():
+        argv = call["argv"]
+        if "manage.py" in argv:
+            assert call.get("wrapper_env") == {
+                "BRIEVIE_WRAPPER": "1",
+                "BRIEVIE_LOG_LEVEL": "WARNING",
+            }, argv
+        if "up" in argv:
+            assert "wrapper_env" not in call
+
+
+def test_start_ends_with_address_backup_and_sheet(installed: Install) -> None:
+    installed.write_env(current_env() + "BRIEVIE_HTTPS_PORT=8443\n")
+
+    result = installed.run("start")
+
+    assert result.returncode == 0, result.stderr
+    last = result.stdout.rstrip().splitlines()[-3:]
+    assert last[0] == "Brievie draait op https://brievie.local:8443."
+    assert last[1].startswith("Back-up: ingesteld")
+    assert last[2].startswith("Herstelblad: brievie-herstelblad.html")
+    assert "druk het af" in last[2].lower()
+    assert "verwijder" in last[2].lower()
+
+
+def test_start_without_a_destination_names_the_one_command(installed: Install) -> None:
+    installed.write_env(current_env().replace("BRIEVIE_BACKUP_DIR=/Volumes/Backup/brievie\n", ""))
+
+    result = installed.run("start")
+
+    assert result.returncode == 0, result.stderr
+    lines = result.stdout.rstrip().splitlines()
+    assert lines[-3] == "Brievie draait op https://brievie.local."
+    assert lines[-2].startswith("Back-up: nog niet ingesteld")
+    assert "./brievie backup --init" in lines[-2]

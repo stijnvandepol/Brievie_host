@@ -1390,3 +1390,37 @@ def test_the_counting_connection_is_not_djangos(
     answer_both_backups(fake_restic, run_.id)
     services.perform_run(run_.id)
     assert seen == [False]
+
+
+def test_backup_command_names_its_code_for_the_wrapper(
+    configured_folder: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        services,
+        "wait_for_run",
+        _finished(
+            BackupRun.Status.FAILED,
+            reason_code="destination_not_ready",
+            reason="De bestemming voor de back-up is nog niet klaar voor gebruik.",
+        ),
+    )
+    with pytest.raises(CommandError):
+        call_command("backup")
+    assert "code=" not in capsys.readouterr().err  # only for ./brievie
+
+    monkeypatch.setenv("BRIEVIE_WRAPPER", "1")
+    BackupRun.objects.update(status=BackupRun.Status.FAILED)
+    with pytest.raises(CommandError):
+        call_command("backup")
+    assert capsys.readouterr().err.strip() == "code=destination_not_ready"
+
+    def time_out(run_id: UUID, **kwargs: object) -> BackupRun:
+        raise TimeoutError
+
+    monkeypatch.setattr(services, "wait_for_run", time_out)
+    BackupRun.objects.update(status=BackupRun.Status.FAILED)
+    with pytest.raises(CommandError):
+        call_command("backup")
+    assert capsys.readouterr().err.strip() == "code=not_picked_up"

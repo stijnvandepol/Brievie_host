@@ -118,3 +118,16 @@ def test_tracebacks_are_masked() -> None:
 
     assert "111222333" not in formatted
     assert "[BSN]" in formatted
+
+
+def test_the_log_level_follows_brievie_log_level(monkeypatch: pytest.MonkeyPatch) -> None:
+    import runpy
+    from pathlib import Path
+
+    import brievie.settings
+
+    root = cast(dict[str, object], settings.LOGGING["root"])
+    assert root["level"] == "INFO"  # the services keep their INFO lines
+    monkeypatch.setenv("BRIEVIE_LOG_LEVEL", "WARNING")
+    loaded = runpy.run_path(str(Path(brievie.settings.__file__)))
+    assert loaded["LOGGING"]["root"]["level"] == "WARNING"

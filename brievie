@@ -10,6 +10,8 @@
 # No secret is ever a process argument: values reach docker through the environment
 # (`-e NAME`, the value set for that one command) or on stdin, and are never printed.
 # Files are written only at fixed names under this script's own folder.
+# The terminal shows Dutch sentences only; docker's progress, warnings and log lines go to
+# deploy/.brievie-last.log (BRIEVIE_VERBOSE=1 shows everything).
 # POSIX sh: runs under macOS /bin/sh, dash and busybox sh.
 set -eu
 umask 077
@@ -35,6 +37,15 @@ restore_env="$here/deploy/.restore/env"
 build_secret_key=collectstatic-only-not-a-real-key-collectstatic-only-not-a-real-key
 build_database_url=postgres://build@localhost/build
 # Where the back-up goes; a restored server only gets one when that is decided here.
+verbose=""
+case ${BRIEVIE_VERBOSE:-} in
+1 | ja | yes | true) verbose=yes ;;
+esac
+# The level the management commands run with (the services keep their own).
+log_level=WARNING
+if [ -n "$verbose" ]; then
+	log_level=INFO
+fi
 destination_keys="BRIEVIE_BACKUP_DIR BRIEVIE_BACKUP_REPOSITORY BRIEVIE_BACKUP_S3_ACCESS_KEY_ID
 BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY BRIEVIE_BACKUP_REST_USERNAME BRIEVIE_BACKUP_REST_PASSWORD
 BRIEVIE_BACKUP_APPEND_ONLY"
@@ -94,7 +105,90 @@ usage_error() {
 
 fail() {
 	printf '%s\n' "$1" >&2
+	show_tail
 	exit "${2:-1}"
+}
+
+# --- what the user sees -------------------------------------------------------------------
+
+# The log of this command, from scratch (a safety back-up run inside a restore adds to it).
+start_log() {
+	if [ -z "${BRIEVIE_LOG_STARTED:-}" ]; then
+		: >"${here:?}/deploy/.brievie-last.log"
+		chmod 600 "${here:?}/deploy/.brievie-last.log"
+		rm -f "${here:?}/deploy/.brievie-step.log"
+		BRIEVIE_LOG_STARTED=1
+		export BRIEVIE_LOG_STARTED
+	fi
+}
+
+# The lines of the last step that are meant for the user: the image's own sentences
+# (without Python's "CommandError: "), never docker's progress, warnings or log lines.
+show_step() {
+	while IFS= read -r line || [ -n "$line" ]; do
+		case $line in
+		"CommandError: "*) printf '%s\n' "${line#CommandError: }" >&2 ;;
+		code=* | '' | time=* | *' level='* | WARN\[* | \[+\]* | '#'[0-9]* | 'Step '[0-9]* | ' ---> '*) ;;
+		' Container '* | 'Container '* | ' Network '* | 'Network '* | ' Volume '* | 'Volume '*) ;;
+		' Image '* | 'Image '* | *' Pulling'* | *' Pulled'* | *' Waiting'* | *' Healthy'*) ;;
+		[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' '[0-9]*) ;;
+		*) printf '%s\n' "$line" >&2 ;;
+		esac
+	done <"${here:?}/deploy/.brievie-step.log"
+}
+
+begin_step() {
+	: >"${here:?}/deploy/.brievie-step.log"
+}
+
+# Adds the step to the log and shows what is meant for the user; a failed step stays
+# for show_tail.
+end_step() {
+	cat "${here:?}/deploy/.brievie-step.log" >>"${here:?}/deploy/.brievie-last.log"
+	if [ -n "$verbose" ]; then
+		cat "${here:?}/deploy/.brievie-step.log" >&2
+	else
+		show_step
+	fi
+	if [ "$1" -eq 0 ]; then
+		rm -f "${here:?}/deploy/.brievie-step.log"
+	fi
+}
+
+# Runs a docker command with its stderr kept aside ($1 = all: its stdout too).
+quietly() {
+	if [ -n "$verbose" ]; then
+		[ "$1" != all ] || shift
+		"$@"
+		return
+	fi
+	begin_step
+	step_rc=0
+	if [ "$1" = all ]; then
+		shift
+		"$@" >>"${here:?}/deploy/.brievie-step.log" 2>&1 || step_rc=$?
+	else
+		"$@" 2>>"${here:?}/deploy/.brievie-step.log" || step_rc=$?
+	fi
+	end_step "$step_rc"
+	return "$step_rc"
+}
+
+# After a failed step: its last technical lines and where the rest is.
+show_tail() {
+	[ -f "${here:?}/deploy/.brievie-step.log" ] || return 0
+	tail_lines=$(grep -v -e '^CommandError: ' -e '^code=' "${here:?}/deploy/.brievie-step.log" | tail -n 15) || true
+	if [ -n "$tail_lines" ]; then
+		printf 'De laatste regels van de techniek:\n' >&2
+		printf '%s\n' "$tail_lines" | sed 's/^/    /' >&2
+	fi
+	printf 'Alles staat in deploy/.brievie-last.log.\n' >&2
+	rm -f "${here:?}/deploy/.brievie-step.log"
+}
+
+# The code a management command gave for its failure (BRIEVIE_WRAPPER=1), or nothing.
+step_code() {
+	sed -n 's/^code=//p' "${here:?}/deploy/.brievie-step.log" 2>/dev/null | tail -n 1
 }
 
 # --- reading and editing .env files ---------------------------------------------------------
@@ -277,16 +371,20 @@ setup_installation() {
 	unset BRIEVIE_BACKUP_MOUNT_MODE
 }
 
-compose() {
+compose_raw() {
 	docker compose -p "$project" --project-directory "$here/deploy" \
 		-f "$here/deploy/docker-compose.yml" "$@"
+}
+
+compose() {
+	quietly compose_raw "$@"
 }
 
 # Refuses when a container of this project was made from another checkout (or carries
 # no folder at all): it would be rewritten, stopped or emptied.
 check_ownership() {
 	mine=$(CDPATH='' cd -P -- "$here/deploy" && pwd -P)
-	owners=$(docker ps -a --filter "label=com.docker.compose.project=$project" \
+	owners=$(quietly docker ps -a --filter "label=com.docker.compose.project=$project" \
 		--format 'owner={{.Label "com.docker.compose.project.working_dir"}}') ||
 		fail "Docker antwoordt niet. Start Docker en probeer het opnieuw; er is niets veranderd."
 	while IFS= read -r line; do
@@ -384,7 +482,7 @@ write_volume_id() {
 }
 
 running() {
-	compose ps --status running --services 2>/dev/null | grep -qx "$1"
+	compose_raw ps --status running --services 2>/dev/null | grep -qx "$1"
 }
 
 require_keeper() {
@@ -421,6 +519,9 @@ bring_along() {
 		fail "deploy/.env kon niet worden bijgewerkt. Lees de melding hierboven en probeer het opnieuw."
 	case $report in
 	"deploy/.env exists; left unchanged.") ;;
+	Created*) echo "De instellingen met nieuwe geheimen staan in deploy/.env." ;;
+	*BRIEVIE_MASTER_KEY*) echo "deploy/.env heeft nu een hoofdsleutel. Zet die op papier met ./brievie recovery-sheet: zonder sleutel zijn je documenten niet te lezen." ;;
+	*added*) echo "deploy/.env is aangevuld met wat deze versie van Brievie nodig heeft." ;;
 	*) printf '%s\n' "$report" ;;
 	esac
 	if running postgres; then
@@ -435,7 +536,7 @@ ensure_backup_password() {
 	if [ -n "$(env_value BRIEVIE_BACKUP_PASSWORD)" ]; then
 		return 0
 	fi
-	password=$(compose run --rm --no-deps -T admin python manage.py derive_backup_password) ||
+	password=$(compose run --rm --no-deps -T -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" admin python manage.py derive_backup_password) ||
 		fail "Het back-upwachtwoord kon niet worden gemaakt. Lees de melding hierboven en probeer het opnieuw."
 	if ! valid_hex "$password" 64; then
 		fail "Het back-upwachtwoord kwam niet goed terug; er is niets veranderd. Probeer het opnieuw."
@@ -460,15 +561,13 @@ env_copy() {
 }
 
 write_recovery_sheet() {
-	if ! compose run --rm --no-deps -T admin python manage.py recovery_sheet \
+	if ! compose run --rm --no-deps -T -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" admin python manage.py recovery_sheet \
 		>"${here:?}/brievie-herstelblad.html.tmp"; then
 		rm -f "${here:?}/brievie-herstelblad.html.tmp"
 		fail "Het herstelblad kon niet worden gemaakt. Lees de melding hierboven en typ daarna opnieuw ./brievie recovery-sheet."
 	fi
 	chmod 600 "${here:?}/brievie-herstelblad.html.tmp"
 	mv "${here:?}/brievie-herstelblad.html.tmp" "${here:?}/brievie-herstelblad.html"
-	echo "Het herstelblad staat in brievie-herstelblad.html. Open het in je browser."
-	echo "Druk het af of bewaar het buiten deze computer. Verwijder het daarna hier: je hoofdsleutel staat erop."
 }
 
 # --- the commands -------------------------------------------------------------------------
@@ -479,15 +578,17 @@ cmd_start() {
 	bring_along
 	# The data is checked before anything is (re)created: build the image first if need be.
 	if ! docker image inspect "$image" >/dev/null 2>&1; then
-		compose build ||
-			fail "Brievie kon niet worden gebouwd. Lees de melding hierboven en typ daarna opnieuw ./brievie start."
+		echo "Brievie wordt gebouwd. Dat duurt een paar minuten…"
+		quietly all compose_raw build ||
+			fail "Brievie kon niet worden gebouwd. Typ daarna opnieuw ./brievie start."
 	fi
 	check_installation_id
 	if [ -z "$volume_id" ] && [ -n "$data_existed" ]; then
 		confirm_adopt
 	fi
-	compose up -d --build --wait ||
-		fail "Brievie is niet goed gestart. Lees de melding hierboven en typ daarna opnieuw ./brievie start."
+	echo "Brievie wordt gestart (en zo nodig bijgewerkt). Dat kan een paar minuten duren…"
+	quietly all compose_raw up -d --build --wait ||
+		fail "Brievie is niet goed gestart. Typ daarna opnieuw ./brievie start."
 	ensure_backup_role ||
 		fail "De database kon niet worden bijgewerkt voor de back-up. Lees de melding hierboven."
 	ensure_backup_password
@@ -500,7 +601,39 @@ cmd_start() {
 	if [ ! -e "${here:?}/brievie-herstelblad.html" ]; then
 		write_recovery_sheet
 	fi
-	echo "Brievie draait."
+	host=$(unquote "$(env_value BRIEVIE_HOSTNAME)")
+	https_port=$(unquote "$(env_value BRIEVIE_HTTPS_PORT)")
+	address="https://${host:-localhost}"
+	case ${https_port:-443} in
+	443) ;;
+	*) address="$address:$https_port" ;;
+	esac
+	echo "Brievie draait op $address."
+	if [ -n "$(env_value BRIEVIE_BACKUP_DIR)$(env_value BRIEVIE_BACKUP_REPOSITORY)" ]; then
+		echo "Back-up: ingesteld in deploy/.env. Typ ./brievie status om te zien hoe het gaat."
+	else
+		echo "Back-up: nog niet ingesteld. Zet BRIEVIE_BACKUP_DIR in deploy/.env en typ ./brievie backup --init."
+	fi
+	echo "Herstelblad: brievie-herstelblad.html. Druk het af, bewaar het buiten deze computer en verwijder het daarna hier."
+}
+
+# What to type after a failed back-up command, from the code it gave.
+next_step_for() {
+	case $1 in
+	destination_not_ready) echo "Typ ./brievie backup --init om de back-up de eerste keer in te stellen." ;;
+	not_configured) echo "Zet eerst in deploy/.env waar de back-up heen moet (zie docs/SELFHOST.md) en typ daarna ./brievie backup --init." ;;
+	not_picked_up) echo "De back-updienst pakt de back-up niet op. Typ ./brievie start en probeer het daarna opnieuw." ;;
+	still_running) echo "Kijk later met ./brievie status of hij gelukt is." ;;
+	already_initialised) echo "Deze bestemming is al ingesteld. Typ ./brievie backup om een back-up te maken." ;;
+	same_disk) echo "Kies een andere schijf, of typ ./brievie backup --init --allow-same-disk als je dit bewust wilt." ;;
+	*)
+		if [ "$2" = init ]; then
+			echo "Los dit op en typ daarna opnieuw ./brievie backup --init."
+		else
+			echo "Typ ./brievie status om de laatste fout te zien."
+		fi
+		;;
+	esac
 }
 
 cmd_backup() {
@@ -540,24 +673,26 @@ cmd_backup() {
 	# Recreates the back-updienst when deploy/.env changed (a new folder or password).
 	compose up -d --no-deps keeper
 	[ -r "${here:?}/deploy/.env" ] || fail "deploy/.env is niet te lezen. Controleer de rechten van dat bestand."
-	env_copy | compose exec -T keeper python manage.py store_env_copy ||
+	env_copy | compose exec -T -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" keeper python manage.py store_env_copy ||
 		fail "De kopie van je instellingen kon niet worden bewaard. Lees de melding hierboven."
 
 	if [ -n "$init" ]; then
-		if ! compose run --rm --no-deps -T admin python manage.py backup_init \
+		if ! compose run --rm --no-deps -T -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" admin python manage.py backup_init \
 			${same_disk:+"--allow-same-disk"}; then
+			printf '%s\n' "$(next_step_for "$(step_code)" init)" >&2
+			show_tail
 			if [ -n "$separate" ]; then
 				edit_env set BRIEVIE_BACKUP_PASSWORD "$previous" env
 				compose up -d --no-deps keeper
 			fi
-			fail "De back-up is niet ingesteld. Los de melding hierboven op en typ daarna opnieuw ./brievie backup --init."
+			exit 1
 		fi
 	fi
 
 	status=0
-	compose exec -T keeper python manage.py backup ${check:+"--check"} || status=$?
+	compose exec -T -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" keeper python manage.py backup ${check:+"--check"} || status=$?
 	if [ "$status" -ne 0 ]; then
-		echo "Dat is niet gelukt. Lees de melding hierboven; ./brievie status laat de laatste fout zien." >&2
+		fail "$(next_step_for "$(step_code)" backup)" "$status"
 	fi
 	exit "$status"
 }
@@ -567,7 +702,7 @@ cmd_status() {
 	claim_installation
 	bring_along
 	require_keeper
-	compose exec -T keeper python manage.py backup_status
+	compose exec -T -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" keeper python manage.py backup_status
 }
 
 cmd_sweep() {
@@ -583,7 +718,7 @@ cmd_sweep() {
 	if [ -n "$delete" ]; then
 		check_installation_id
 	fi
-	compose run --rm --no-deps -T --user 10001 admin python manage.py sweep_storage \
+	compose run --rm --no-deps -T --user 10001 -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" admin python manage.py sweep_storage \
 		${delete:+"--delete"}
 }
 
@@ -594,6 +729,8 @@ cmd_recovery_sheet() {
 	check_installation_id
 	ensure_backup_password
 	write_recovery_sheet
+	echo "Het herstelblad staat in brievie-herstelblad.html. Open het in je browser."
+	echo "Druk het af of bewaar het buiten deze computer. Verwijder het daarna hier: je hoofdsleutel staat erop."
 }
 
 # --- restore ------------------------------------------------------------------------------
@@ -620,6 +757,22 @@ ask_secret() {
 }
 
 # A step after the restored deploy/.env is in place failed: say so and what to type.
+# The value of machine line `$1=` in the output $2 (meant for this script, never shown).
+machine_value() {
+	printf '%s\n' "$2" | sed -n "s/^$1=//p" | tail -n 1
+}
+
+# The lines of output $1 that are sentences for the user: not `name=value`, and not the
+# image's own summary of a check the script words itself.
+human_lines() {
+	printf '%s\n' "$1" | while IFS= read -r line; do
+		case $line in
+		'' | [a-z]*=* | "Het herstel is gecontroleerd. Alles klopt.") ;;
+		*) printf '%s\n' "$line" ;;
+		esac
+	done
+}
+
 # The safety back-up is only skippable when nothing of value would be lost by it.
 step_failed() {
 	status=$1
@@ -633,6 +786,7 @@ step_failed() {
 		printf 'Lukt de veiligheidsback-up dan niet? De veiligheidsback-up van je oude gegevens is bij deze poging al gemaakt (of je koos ervoor zonder), dus dan mag ook: %s\n' \
 			"$again --skip-safety-backup" >&2
 	fi
+	show_tail
 	exit "$status"
 }
 
@@ -943,8 +1097,8 @@ cmd_restore() {
 	# 2. Open the back-up, outside compose: nothing is started and no volume is made.
 	if ! docker image inspect "$image" >/dev/null 2>&1; then
 		echo "Brievie wordt eerst gebouwd. Dat duurt een paar minuten."
-		docker build -f "$here/deploy/Dockerfile" -t "$image" "$here" ||
-			fail "Brievie kon niet worden gebouwd. Lees de melding hierboven en probeer het opnieuw."
+		quietly all docker build -f "$here/deploy/Dockerfile" -t "$image" "$here" ||
+			fail "Brievie kon niet worden gebouwd. Typ daarna opnieuw ./brievie restore."
 	fi
 	restore_pending=yes
 	rm -rf "${here:?}/deploy/.restore"
@@ -959,7 +1113,7 @@ cmd_restore() {
 	set -- "$@" -e BRIEVIE_MASTER_KEY -e BRIEVIE_BACKUP_PASSWORD -e BRIEVIE_BACKUP_DIR_SET \
 		-e BRIEVIE_BACKUP_REPOSITORY -e BRIEVIE_BACKUP_S3_ACCESS_KEY_ID \
 		-e BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY -e BRIEVIE_BACKUP_REST_USERNAME \
-		-e BRIEVIE_BACKUP_REST_PASSWORD -e SECRET_KEY -e DATABASE_URL \
+		-e BRIEVIE_BACKUP_REST_PASSWORD -e SECRET_KEY -e DATABASE_URL -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" \
 		"$image" python manage.py restore_fetch --out /out --out-owner "$(id -u):$(id -g)"
 	if [ -n "$run" ]; then
 		set -- "$@" --run "$run"
@@ -969,12 +1123,14 @@ cmd_restore() {
 	fi
 	echo "De back-up wordt geopend…"
 	status=0
+	begin_step
 	fetched=$(BRIEVIE_MASTER_KEY=$master_key BRIEVIE_BACKUP_PASSWORD=$backup_password \
 		BRIEVIE_BACKUP_DIR_SET=${source_dir:+true} BRIEVIE_BACKUP_REPOSITORY=$repository \
 		BRIEVIE_BACKUP_S3_ACCESS_KEY_ID=$s3_id BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY=$s3_secret \
 		BRIEVIE_BACKUP_REST_USERNAME=$rest_user BRIEVIE_BACKUP_REST_PASSWORD=$rest_password \
 		SECRET_KEY=$build_secret_key DATABASE_URL=$build_database_url \
-		docker "$@") || status=$?
+		docker "$@" 2>>"${here:?}/deploy/.brievie-step.log") || status=$?
+	end_step "$status"
 	master_key="" backup_password=""
 	if [ "$status" -ne 0 ]; then
 		case $status in
@@ -1078,31 +1234,53 @@ EOF
 	if [ -z "$data_present" ] && docker volume inspect "${project}_pgdata" >/dev/null 2>&1; then
 		check_installation_id
 	fi
+	echo "De database wordt gestart…"
 	compose up -d --wait postgres || step_failed $? "PostgreSQL is niet gestart."
 	if [ -n "$data_present" ]; then
 		reset_database || step_failed $? "De oude database kon niet worden leeggemaakt."
 		ensure_backup_role || step_failed $? "De back-uprol kon niet worden teruggezet."
 	fi
 	echo "De database wordt teruggezet…"
-	from_source run --rm --no-deps -T admin python manage.py restore_database \
-		--run "$run_id" --dbname brievie ||
+	restored=$(from_source run --rm --no-deps -T -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" admin python manage.py restore_database \
+		--run "$run_id" --dbname brievie) ||
 		step_failed $? "De database is niet teruggezet."
+	interrupted=$(machine_value interrupted_runs "$restored")
+	human_lines "$restored"
+	case ${interrupted:-0} in
+	0) ;;
+	1) echo "Eén back-up was nog bezig toen deze back-up werd gemaakt; die staat nu als afgebroken." ;;
+	*) echo "$interrupted back-ups waren nog bezig toen deze back-up werd gemaakt; die staan nu als afgebroken." ;;
+	esac
 
 	# 7. The documents and the certificate authority, before Caddy starts.
 	echo "De documenten worden teruggezet…"
-	from_source run --rm --no-deps -T admin python manage.py restore_files --run "$run_id" \
+	from_source run --rm --no-deps -T -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" admin python manage.py restore_files --run "$run_id" \
 		${data_present:+"--replace"} ||
 		step_failed $? "Het terugzetten van de documenten stopte; de melding hierboven zegt waarom."
 	s3_secret="" rest_password="" opening_password=""
 
 	# 8. Everything else; migrate brings the schema to this version.
+	echo "Brievie wordt gestart…"
 	compose up -d --wait || step_failed $? "Brievie is niet goed gestart na het terugzetten."
 
 	# 9. Check the result against the back-up, then mark the data as this installation's.
-	read_only run --rm --no-deps -T admin python manage.py verify_restore --dbname brievie \
-		--storage-root /data/documents --manifest /data/backup-config/manifest.json \
-		--authority-dir /caddy-data/caddy/pki/authorities/local ||
-		step_failed $? "Brievie draait, maar de controle vond problemen (zie hierboven)."
+	echo "Het herstel wordt gecontroleerd…"
+	verify_rc=0
+	verified=$(read_only run --rm --no-deps -T -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" admin python manage.py verify_restore \
+		--dbname brievie --storage-root /data/documents \
+		--manifest /data/backup-config/manifest.json \
+		--authority-dir /caddy-data/caddy/pki/authorities/local) || verify_rc=$?
+	if [ "$verify_rc" -ne 0 ]; then
+		human_lines "$verified"
+		step_failed "$verify_rc" "Brievie draait, maar de controle vond problemen (zie hierboven)."
+	fi
+	workspaces=$(machine_value workspaces "$verified")
+	pages=$(machine_value pages_opened "$verified")
+	if [ "${workspaces:-0}" = "${pages:-}" ]; then
+		echo "Het herstel is gecontroleerd: ${workspaces:-0} werkruimtes, van elk is een pagina geopend."
+	else
+		echo "Het herstel is gecontroleerd: ${workspaces:-0} werkruimtes, ${pages:-0} pagina's geopend."
+	fi
 	ensure_env_installation_id || step_failed $? "Het installatienummer kon niet worden gemaakt."
 	write_volume_id || step_failed $? "Het installatienummer kon niet bij de gegevens worden gezet."
 	rm -rf "${here:?}/deploy/.restore"
@@ -1128,6 +1306,7 @@ start | backup | restore | status | sweep | recovery-sheet) ;;
 esac
 shift
 setup_installation
+start_log
 case $command in
 start) cmd_start "$@" ;;
 backup) cmd_backup "$@" ;;

@@ -1,3 +1,5 @@
+import os
+
 from django.core.management.base import BaseCommand, CommandError, CommandParser
 from django.template.defaultfilters import filesizeformat
 from django.utils.translation import gettext as _
@@ -36,16 +38,24 @@ class Command(BaseCommand):
         except TimeoutError:
             run.refresh_from_db()
             if run.status == BackupRun.Status.QUEUED:
+                self._code("not_picked_up")
                 message = _("De back-up is niet opgepakt. Draait de back-updienst (keeper)?")
             else:
+                self._code("still_running")
                 message = _(
                     "De back-up is nog bezig. Kijk later met backup_status of hij gelukt is."
                 )
             raise CommandError(message, returncode=2) from None
         if run.status != BackupRun.Status.SUCCEEDED:
+            self._code(run.reason_code or "backup_failed")
             raise CommandError(run.reason or _("De back-up is niet gelukt."), returncode=1)
         if check:
             self.stdout.write(_("De controle is gelukt."))
         else:
             size = filesizeformat(run.size_bytes or 0)
             self.stdout.write(_("De back-up is gelukt (%(size)s).") % {"size": size})
+
+    def _code(self, code: str) -> None:
+        """For ./brievie (BRIEVIE_WRAPPER=1): the failure's code, on stderr, before the sentence."""
+        if os.environ.get("BRIEVIE_WRAPPER") == "1":
+            self.stderr.write(f"code={code}")

@@ -182,3 +182,12 @@ def test_date_is_dutch_even_when_another_language_is_active() -> None:
     with translation.override("en"):
         html = sheet.render_sheet(data)
     assert "5 maart 2026" in html
+
+
+def test_the_last_step_quotes_the_final_line() -> None:
+    plain = sheet.render_sheet(sheet.sheet_data())
+    assert "Wacht tot je „Herstel gelukt.” ziet." in plain or (
+        "Wacht tot je &bdquo;Herstel gelukt.&rdquo; ziet." in plain
+    )
+    assert "Open Brievie daarna zoals je gewend bent." in plain
+    assert "je Herstel gelukt. ziet" not in plain

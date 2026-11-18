@@ -1,3 +1,5 @@
+import os
+
 from django.core.management.base import BaseCommand, CommandError, CommandParser
 from django.utils.translation import gettext as _
 
@@ -19,5 +21,8 @@ class Command(BaseCommand):
         try:
             services.initialise_destination(allow_same_disk=bool(options["allow_same_disk"]))
         except BackupError as error:
+            # For ./brievie: the code on stderr, before the sentence.
+            if os.environ.get("BRIEVIE_WRAPPER") == "1":
+                self.stderr.write(f"code={error.code}")
             raise CommandError(error.message) from error
         self.stdout.write(_("De back-up is ingesteld."))

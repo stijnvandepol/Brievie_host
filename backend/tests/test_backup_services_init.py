@@ -62,3 +62,17 @@ def test_command_reports_an_unwritable_destination_in_one_sentence(
     ):
         call_command("backup_init")
     assert "SELFHOST.md" in str(caught.value)
+
+
+def test_command_names_its_code_for_the_wrapper(
+    settings: object, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(CommandError):
+        call_command("backup_init")
+    assert "code=" not in capsys.readouterr().err
+
+    monkeypatch.setenv("BRIEVIE_WRAPPER", "1")
+    with pytest.raises(CommandError) as caught:
+        call_command("backup_init")
+    assert capsys.readouterr().err.strip() == "code=not_configured"
+    assert str(caught.value) == "Er is nog geen back-up ingesteld."

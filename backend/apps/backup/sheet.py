@@ -54,7 +54,7 @@ def _restore_steps(*, separate_password: bool) -> list[str]:
             "Zorg dan dat je het adres van die back-up bij de hand hebt."
         ),
         ask,
-        _("Wacht tot je Herstel gelukt. ziet. Open Brievie daarna zoals je gewend bent."),
+        _("Wacht tot je „Herstel gelukt.” ziet. Open Brievie daarna zoals je gewend bent."),
     ]
 
 

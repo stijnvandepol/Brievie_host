@@ -15,6 +15,9 @@ deploy/.env
 deploy/.env.new
 deploy/.env.before-restore-*
 deploy/.restore/
+# ./brievie: the technical output of the last command
+deploy/.brievie-last.log
+deploy/.brievie-step.log
 # ./brievie recovery-sheet: holds the master key
 brievie-herstelblad.html
 brievie-herstelblad.html.tmp
