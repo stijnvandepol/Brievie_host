@@ -42,6 +42,14 @@ class SetupOut(Schema):
     workspace: WorkspaceOut
 
 
+class AcceptedInvitationOut(Schema):
+    """After accepting an invitation: the signed-in account and the workspace it joined.
+    (Here, not in workspaces.schemas, which this module imports.)"""
+
+    user: UserOut
+    workspace: WorkspaceOut
+
+
 class LoginIn(InputSchema):
     email: str = Field(max_length=254)
     password: str = Field(max_length=128)

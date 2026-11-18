@@ -4,18 +4,23 @@ from django.http import HttpRequest, HttpResponse
 from ninja import Router, Status
 
 from apps.accounts.auth import session_auth
+from apps.accounts.schemas import AcceptedInvitationOut, UserOut
 from apps.accounts.services import current_user
 from apps.audit.services import actor_from_request
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
-from apps.common.throttling import CallerThrottle
+from apps.common.throttling import CallerThrottle, ClientAddressThrottle
+from apps.pipeline.schemas import AiStatusOut
 from apps.workspaces import invitations, services
 from apps.workspaces.deps import workspace_member
 from apps.workspaces.invitations import IssuedInvitation
 from apps.workspaces.models import Membership
 from apps.workspaces.schemas import (
+    AcceptInvitationIn,
     CreatedInvitationOut,
     InvitationIn,
+    InvitationInfoOut,
     InvitationOut,
+    InvitationTokenIn,
     MemberOut,
     WorkspaceOut,
 )
@@ -29,6 +34,12 @@ ADMINS_ONLY = (
 )
 # Every new link counts, made or renewed, per admin: the table cannot be flooded.
 INVITATION_LINKS = CallerThrottle("invitation_link", "30/10m", per_path=False)
+# Opening and accepting share one count per client address.
+INVITATION_TRIES = ClientAddressThrottle("invitation", "20/10m")
+DEAD_LINK = (
+    " 400 invitation_invalid for an unknown, used, expired or revoked link, or one whose"
+    " maker is no admin of the workspace any more (one sentence for all)."
+)
 
 
 @router.get(
@@ -161,3 +172,57 @@ def renew_invitation(
     )
     response["Cache-Control"] = "no-store"
     return Status(201, _created(issued))
+
+
+@router.post(
+    "/invitations/lookup",
+    response={200: InvitationInfoOut, 429: ErrorOut, **BODY_ERRORS},
+    auth=None,
+    throttle=INVITATION_TRIES,
+    description="What an invitation link offers, before accepting: the workspace's name,"
+    " who invited, the role, whether only one email address can accept, the person and the"
+    " workspace's AI line. The token from the link's fragment goes in the body." + DEAD_LINK,
+    operation_id="getInvitation",
+)
+def get_invitation(request: HttpRequest, payload: InvitationTokenIn) -> InvitationInfoOut:
+    info = invitations.lookup_invitation(token=payload.token)
+    return InvitationInfoOut(
+        workspace_name=info.workspace_name,
+        invited_by=info.invited_by,
+        role=info.role,
+        email_fixed=info.email_fixed,
+        person_name=info.person_name,
+        ai=AiStatusOut.from_status(info.ai, with_model=False),
+    )
+
+
+@router.post(
+    "/invitations/accept",
+    response={
+        200: AcceptedInvitationOut,
+        401: ErrorOut,
+        403: ErrorOut,
+        409: ErrorOut,
+        429: ErrorOut,
+        **BODY_ERRORS,
+    },
+    auth=None,
+    throttle=INVITATION_TRIES,
+    description="Join with the invitation's role and sign in. account `new`: name, email"
+    " address and password (the rules of every account; 409 account_exists when the"
+    " address has an account, which says that it has one, as registering does). account"
+    " `existing`: the account's email address and password, with the sign-in lockout (401"
+    " invalid_credentials, 429 too_many_attempts); a deactivated account is reactivated."
+    " 403 invitation_email_mismatch when the invitation is for another address; 409"
+    " already_member, invitation_person_taken; 422 for another account kind." + DEAD_LINK,
+    operation_id="acceptInvitation",
+)
+def accept_invitation(
+    request: HttpRequest, response: HttpResponse, payload: AcceptInvitationIn
+) -> AcceptedInvitationOut:
+    membership = invitations.accept_invitation(request, **payload.model_dump())
+    response["Cache-Control"] = "no-store"
+    return AcceptedInvitationOut(
+        user=UserOut.model_validate(membership.user, from_attributes=True),
+        workspace=WorkspaceOut.from_membership(membership),
+    )

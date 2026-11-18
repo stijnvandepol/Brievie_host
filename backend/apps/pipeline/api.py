@@ -20,7 +20,6 @@ from apps.pipeline.schemas import (
 from apps.pipeline.settings_service import (
     Actor,
     AiSettingsError,
-    AiStatus,
     ConsentRequiredError,
 )
 from apps.workspaces.deps import workspace_member
@@ -48,7 +47,7 @@ def get_ai_status(request: HttpRequest, workspace_id: UUID) -> AiStatusOut:
     membership = workspace_member(request, workspace_id)
     status = settings_service.status(workspace_id)
     # The model is for the form of an administrator only.
-    return _status_out(status, with_model=membership.has_role(Membership.Role.ADMIN))
+    return AiStatusOut.from_status(status, with_model=membership.has_role(Membership.Role.ADMIN))
 
 
 @router.get(
@@ -149,18 +148,7 @@ def update_ai_settings(
         ) from exc
     except AiSettingsError as exc:
         raise _invalid(exc) from exc
-    return _status_out(settings_service.status(workspace_id), with_model=True)
-
-
-def _status_out(status: AiStatus, *, with_model: bool) -> AiStatusOut:
-    return AiStatusOut(
-        mode=status.mode,
-        supplier=status.supplier,
-        host=status.host,
-        since=status.since,
-        has_api_key=status.has_api_key,
-        model=status.model if with_model else None,
-    )
+    return AiStatusOut.from_status(settings_service.status(workspace_id), with_model=True)
 
 
 def _invalid(error: AiSettingsError) -> ApiError:

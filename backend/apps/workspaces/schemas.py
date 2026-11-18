@@ -7,6 +7,7 @@ from ninja import Schema
 from pydantic import Field
 
 from apps.common.schemas import InputSchema
+from apps.pipeline.schemas import AiStatusOut
 from apps.workspaces.models import Invitation, Membership
 
 
@@ -85,3 +86,34 @@ class CreatedInvitationOut(Schema):
     # True when every address of the server is a home-network one: the link then works
     # only at home.
     home_network_only: bool
+
+
+class InvitationTokenIn(InputSchema):
+    # The fragment of the invitation link.
+    token: str = Field(max_length=100)
+
+
+class InvitationInfoOut(Schema):
+    """What the invitee sees before accepting; nothing else about the workspace."""
+
+    workspace_name: str
+    # The name of who made the invitation, as it was then.
+    invited_by: str
+    # `admin`, `member` or `viewer`: fixed by the invitation.
+    role: str
+    # Whether only one email address can accept (the address itself is not shown).
+    email_fixed: bool
+    # The person the new member becomes ("Papa"), if the invitation names one.
+    person_name: str = ""
+    # The workspace's AI line, as every member sees it: where the text of letters goes.
+    ai: AiStatusOut
+
+
+class AcceptInvitationIn(InputSchema):
+    token: str = Field(max_length=100)
+    # `new` (create an account) or `existing` (sign in to one with its password).
+    account: str = Field(max_length=10)
+    # For a new account.
+    name: str = Field(default="", max_length=150)
+    email: str = Field(max_length=254)
+    password: str = Field(max_length=128)

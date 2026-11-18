@@ -13,6 +13,7 @@ from django.conf import settings
 from django.contrib.auth import authenticate, update_session_auth_hash
 from django.contrib.auth import logout as django_logout
 from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth.signals import user_login_failed
 from django.contrib.sessions.models import Session
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
@@ -110,6 +111,20 @@ def _required(value: str, message: str) -> str:
     return value
 
 
+def build_user(*, email: str, name: str, password: str, is_server_admin: bool = False) -> User:
+    """A new, unsaved account checked by the rules of every new account: a valid address
+    (stored in lower case), a name, and a password the validators accept (422 otherwise).
+    Whether the address is free is the caller's check (and the unique index's)."""
+    email = normalise_email(email)
+    validate_email(email)
+    user = User(
+        email=email, name=_required(name, _("Vul je naam in.")), is_server_admin=is_server_admin
+    )
+    validate_password(password, user)
+    user.set_password(password)
+    return user
+
+
 def setup_server(
     request: HttpRequest,
     *,
@@ -138,11 +153,7 @@ def setup_server(
                 "setup_token_invalid",
                 _("De installatiecode klopt niet. Je vindt hem in het log van de server."),
             )
-        email = normalise_email(email)
-        validate_email(email)
-        user = User(email=email, name=_required(name, _("Vul je naam in.")), is_server_admin=True)
-        validate_password(password, user)
-        user.set_password(password)
+        user = build_user(email=email, name=name, password=password, is_server_admin=True)
         user.save()
         workspace = create_workspace(
             name=_required(workspace_name, _("Geef de werkruimte een naam.")),
@@ -187,6 +198,31 @@ def login(request: HttpRequest, *, email: str, password: str) -> User:
         raise ApiError(401, "invalid_credentials", _("Het e-mailadres of wachtwoord klopt niet."))
     start_session(request, user, via=UserSession.Via.PASSWORD)
     return user
+
+
+def verify_password(request: HttpRequest, *, email: str, password: str) -> User:
+    """The account with this address and password, active or not, without signing in.
+
+    For accepting an invitation with an existing account (D 6.2): the same lockout per
+    email and address as signing in (429), a wrong password or an unknown address counts
+    for axes, the address and the log exactly as at sign-in (401). A deactivated account
+    passes here, so it comes back only with its own password; plain `login` keeps
+    refusing it. Runs outside a transaction: the recorded failure must survive the 401.
+    """
+    _refuse_when_locked(request, email)
+    account = User.objects.filter(email=normalise_email(email)).first()
+    if account is None:
+        # Hash anyway, so an unknown address takes as long as a wrong password.
+        User().set_password(password)
+    if account is None or not account.check_password(password):
+        with _checking_password_for("invitation"):
+            user_login_failed.send(
+                sender=__name__, credentials={"username": email}, request=request
+            )
+        LOGIN_FAILURES.record_failure(request)
+        _record_sign_in_problem(AuditCode.SIGN_IN_FAILED, request, email)
+        raise ApiError(401, "invalid_credentials", _("Het e-mailadres of wachtwoord klopt niet."))
+    return account
 
 
 def _refuse_when_locked(request: HttpRequest, email: str) -> None:
