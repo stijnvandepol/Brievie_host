@@ -143,9 +143,17 @@ msgstr "{who} haalde {person} weg"
 msgid "{who} haalde het label {label} eraf"
 msgstr "{who} haalde het label {label} eraf"
 
+#: src/routes/member-devices.tsx
+msgid "{who} is overal uitgelogd."
+msgstr "{who} is overal uitgelogd."
+
 #: src/components/document-history.tsx
 msgid "{who} rondde een taak af"
 msgstr "{who} rondde een taak af"
+
+#: src/routes/member-devices.tsx
+msgid "{who} wordt overal uitgelogd en krijgt daar een melding van. Gekoppelde telefoons blijven werken."
+msgstr "{who} wordt overal uitgelogd en krijgt daar een melding van. Gekoppelde telefoons blijven werken."
 
 #: src/components/document-history.tsx
 msgid "{who} zette deze brief op naam van {person}"
@@ -185,6 +193,7 @@ msgid "Aantal brieven"
 msgstr "Aantal brieven"
 
 #: src/components/page.tsx
+#: src/routes/members.tsx
 #: src/routes/persons.tsx
 msgid "Account"
 msgstr "Account"
@@ -192,6 +201,11 @@ msgstr "Account"
 #: src/routes/invitation.tsx
 msgid "Account maken en meedoen"
 msgstr "Account maken en meedoen"
+
+#. placeholder {0}: member.name
+#: src/routes/members.tsx
+msgid "Account van {0}"
+msgstr "Account van {0}"
 
 #: src/components/device-table.tsx
 #: src/routes/rule-editor.tsx
@@ -305,6 +319,14 @@ msgstr "alle"
 msgid "Alle labels"
 msgstr "Alle labels"
 
+#: src/routes/member-devices.tsx
+msgid "Alle sessies beëindigen"
+msgstr "Alle sessies beëindigen"
+
+#: src/routes/member-devices.tsx
+msgid "Alle sessies beëindigen?"
+msgstr "Alle sessies beëindigen?"
+
 #: src/routes/ai.tsx
 msgid "Alleen de beheerder van deze werkruimte kan dit veranderen."
 msgstr "Alleen de beheerder van deze werkruimte kan dit veranderen."
@@ -358,6 +380,15 @@ msgstr "Apparaat intrekken?"
 msgid "Apparaten"
 msgstr "Apparaten"
 
+#: src/routes/member-devices.tsx
+#: src/routes/members.tsx
+msgid "Apparaten en sessies"
+msgstr "Apparaten en sessies"
+
+#: src/routes/member-devices.tsx
+msgid "Apparaten en sessies van {name}"
+msgstr "Apparaten en sessies van {name}"
+
 #: src/routes/persons.tsx
 msgid "Archiveren"
 msgstr "Archiveren"
@@ -389,6 +420,10 @@ msgstr "Automatisering"
 #: src/routes/document.tsx
 msgid "Bedrag incl. btw"
 msgstr "Bedrag incl. btw"
+
+#: src/routes/member-devices.tsx
+msgid "Beëindigen"
+msgstr "Beëindigen"
 
 #: src/routes/automations.tsx
 msgid "Begin met de startset, of maak zelf een regel."
@@ -450,6 +485,10 @@ msgstr "Brievie instellen"
 #: src/routes/sessions.tsx
 msgid "Browser"
 msgstr "Browser"
+
+#: src/routes/member-devices.tsx
+msgid "Browsers"
+msgstr "Browsers"
 
 #: src/routes/pair-app.tsx
 msgid "Certificaat"
@@ -555,6 +594,10 @@ msgstr "De tekst"
 msgid "De tekst van elke brief gaat naar een bedrijf dat de AI levert. Je krijgt eerst te zien wat er precies weggaat."
 msgstr "De tekst van elke brief gaat naar een bedrijf dat de AI levert. Je krijgt eerst te zien wat er precies weggaat."
 
+#: src/routes/member-devices.tsx
+msgid "De telefoons en browsers waarmee {who} bij Brievie kan."
+msgstr "De telefoons en browsers waarmee {who} bij Brievie kan."
+
 #: src/routes/password.tsx
 msgid "De twee nieuwe wachtwoorden zijn niet hetzelfde."
 msgstr "De twee nieuwe wachtwoorden zijn niet hetzelfde."
@@ -622,6 +665,10 @@ msgstr "deze voorwaarden kloppen"
 #: src/routes/ai.tsx
 msgid "Deze werkruimte gebruikt nu een eigen adres ({0}). Vul dat adres opnieuw in onder Geavanceerd als je het wilt houden."
 msgstr "Deze werkruimte gebruikt nu een eigen adres ({0}). Vul dat adres opnieuw in onder Geavanceerd als je het wilt houden."
+
+#: src/routes/member-devices.tsx
+msgid "Dit lid"
+msgstr "Dit lid"
 
 #: src/components/invite-dialog.tsx
 #: src/routes/invitation.tsx
@@ -714,6 +761,10 @@ msgstr "Geavanceerd"
 msgid "Gebruik het account van deze server."
 msgstr "Gebruik het account van deze server."
 
+#: src/components/reset-link-dialog.tsx
+msgid "Geef deze link aan {name}. Hij werkt 24 uur en één keer."
+msgstr "Geef deze link aan {name}. Hij werkt 24 uur en één keer."
+
 #: src/components/label-chip.tsx
 msgid "Geel"
 msgstr "Geel"
@@ -780,6 +831,10 @@ msgstr "Geschiedenis"
 msgid "Gestart"
 msgstr "Gestart"
 
+#: src/components/notice-bar.tsx
+msgid "Gezien"
+msgstr "Gezien"
+
 #: src/components/label-chip.tsx
 msgid "Grijs"
 msgstr "Grijs"
@@ -816,6 +871,18 @@ msgstr "Herinnering"
 #: src/components/suggestion-list.tsx
 msgid "Herkend in de brief"
 msgstr "Herkend in de brief"
+
+#: src/routes/members.tsx
+msgid "Herstellink maken"
+msgstr "Herstellink maken"
+
+#: src/components/reset-link-dialog.tsx
+msgid "Herstellink maken voor {name}?"
+msgstr "Herstellink maken voor {name}?"
+
+#: src/components/reset-link-dialog.tsx
+msgid "Herstellink voor {name}"
+msgstr "Herstellink voor {name}"
 
 #: src/components/rule-sentence.ts
 msgid "Het soort post"
@@ -1020,6 +1087,10 @@ msgstr "Je wordt lid: je kunt post scannen, controleren en ordenen."
 msgid "Je wordt meekijker: je kunt alles lezen, maar niets wijzigen."
 msgstr "Je wordt meekijker: je kunt alles lezen, maar niets wijzigen."
 
+#: src/components/reset-link-dialog.tsx
+msgid "Je ziet de link maar één keer. Geldig tot {expires}."
+msgstr "Je ziet de link maar één keer. Geldig tot {expires}."
+
 #: src/components/document-history.tsx
 msgid "Jij"
 msgstr "Jij"
@@ -1069,6 +1140,7 @@ msgstr "Kies minstens 12 tekens."
 
 #: src/components/document-table.tsx
 #: src/components/invite-dialog.tsx
+#: src/components/reset-link-dialog.tsx
 msgid "Klaar"
 msgstr "Klaar"
 
@@ -1162,6 +1234,7 @@ msgid "Labels"
 msgstr "Labels"
 
 #: src/components/page.tsx
+#: src/routes/member-devices.tsx
 #: src/routes/members.tsx
 msgid "Leden"
 msgstr "Leden"
@@ -1181,6 +1254,7 @@ msgid "Link"
 msgstr "Link"
 
 #: src/components/invite-dialog.tsx
+#: src/components/reset-link-dialog.tsx
 msgid "Link maken"
 msgstr "Link maken"
 
@@ -1209,6 +1283,11 @@ msgstr "Mail"
 msgid "Meekijker"
 msgstr "Meekijker"
 
+#. placeholder {0}: member.name
+#: src/routes/members.tsx
+msgid "Meer acties: {0}"
+msgstr "Meer acties: {0}"
+
 #: src/components/invite-dialog.tsx
 msgid "Meer opties"
 msgstr "Meer opties"
@@ -1217,9 +1296,17 @@ msgstr "Meer opties"
 msgid "Meerdere tegelijk toevoegen"
 msgstr "Meerdere tegelijk toevoegen"
 
+#: src/routes/member-devices.tsx
+msgid "Meld {who} overal af als een account misbruikt kan zijn. Gekoppelde telefoons blijven werken."
+msgstr "Meld {who} overal af als een account misbruikt kan zijn. Gekoppelde telefoons blijven werken."
+
 #: src/components/page.tsx
 msgid "Menu"
 msgstr "Menu"
+
+#: src/components/reset-link-dialog.tsx
+msgid "Met de link kiest {name} een nieuw wachtwoord. Daarna moet {name} opnieuw inloggen en de telefoon opnieuw koppelen. Een eerdere herstellink van {name} werkt daarna niet meer."
+msgstr "Met de link kiest {name} een nieuw wachtwoord. Daarna moet {name} opnieuw inloggen en de telefoon opnieuw koppelen. Een eerdere herstellink van {name} werkt daarna niet meer."
 
 #: src/routes/labels.tsx
 msgid "Met labels zet je orde in je post, bijvoorbeeld Belasting of Zorg."

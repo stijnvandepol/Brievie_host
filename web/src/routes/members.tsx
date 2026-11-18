@@ -1,8 +1,8 @@
 import { t } from "@lingui/core/macro";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createRoute, useNavigate } from "@tanstack/react-router";
+import { createRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { Button } from "react-aria-components";
+import { Button, Dialog, DialogTrigger, Popover } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import { invitationsQuery, membersQuery, meQuery, personsQuery } from "../api/queries";
 import type { components } from "../api/schema";
@@ -14,6 +14,7 @@ import {
   InviteDialog,
 } from "../components/invite-dialog";
 import { ErrorAlert, focusPageHeading, PageHeader, Shell, usePageTitle } from "../components/page";
+import { ResetLinkDialog } from "../components/reset-link-dialog";
 import { RoleDialog, roleLabel } from "../components/role-dialog";
 import { Badge, EmptyState, Loading, Persona } from "../components/ui";
 import { workspaceRoute } from "./workspace";
@@ -36,6 +37,7 @@ function MemberRow({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [roleOpen, setRoleOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
 
   async function remove() {
     const { error, response } = await api.DELETE(
@@ -104,6 +106,49 @@ function MemberRow({
                 {t`${member.name} kan daarna niet meer bij deze werkruimte. De post blijft hier. Taken van ${member.name} hebben daarna niemand.`}
               </p>
             </ConfirmAction>
+          ) : null}
+          {isAdmin && member.can_manage_account && !isOwn ? (
+            <>
+              <DialogTrigger>
+                <Button className="button-text" aria-label={t`Meer acties: ${member.name}`}>
+                  {t`Account`}
+                  <Icon name="chevronDown" />
+                </Button>
+                <Popover className="popover account-popover" placement="bottom end" offset={4}>
+                  <Dialog className="account-dialog" aria-label={t`Account van ${member.name}`}>
+                    {({ close }) => (
+                      <>
+                        <Link
+                          to="/w/$workspaceId/leden/$userId"
+                          params={{ workspaceId, userId: member.user_id }}
+                          className="menu-item"
+                          onClick={close}
+                        >
+                          <Icon name="phone" />
+                          {t`Apparaten en sessies`}
+                        </Link>
+                        <Button
+                          className="menu-item"
+                          onPress={() => {
+                            close();
+                            setResetOpen(true);
+                          }}
+                        >
+                          <Icon name="link" />
+                          {t`Herstellink maken`}
+                        </Button>
+                      </>
+                    )}
+                  </Dialog>
+                </Popover>
+              </DialogTrigger>
+              <ResetLinkDialog
+                userId={member.user_id}
+                name={member.name}
+                isOpen={resetOpen}
+                onOpenChange={setResetOpen}
+              />
+            </>
           ) : null}
           {isOwn ? (
             <ConfirmAction

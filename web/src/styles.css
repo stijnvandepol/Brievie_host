@@ -2907,3 +2907,19 @@ a.menu-item:hover {
 .form-narrow {
   max-width: 420px;
 }
+
+/* Notices from the server, above every page */
+
+.notice-bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-s);
+}
+
+.notice-bar .message-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-s);
+}

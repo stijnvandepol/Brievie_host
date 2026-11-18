@@ -226,3 +226,13 @@ export const userDevicesQuery = (userId: string) =>
       return data;
     },
   });
+
+/** What the server has to tell the logged-in user, not seen yet (a reset by an admin, a revoked device). */
+export const noticesQuery = queryOptions({
+  queryKey: ["me", "notices"],
+  queryFn: async () => {
+    const { data, error } = await api.GET("/api/v1/me/notices");
+    if (error !== undefined || !data) throw new ApiFailure(error);
+    return data;
+  },
+});

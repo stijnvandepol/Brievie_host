@@ -33,6 +33,7 @@ export function loggedInHandlers() {
     http.get(`*${API}/me`, () => HttpResponse.json(user)),
     http.get(`*${API}/workspaces`, () => HttpResponse.json([workspace])),
     http.get(`*${API}/devices`, () => HttpResponse.json([])),
+    http.get(`*${API}/me/notices`, () => HttpResponse.json([])),
     http.get(`*${API}/workspaces/${workspace.id}/inbox/counts`, () =>
       HttpResponse.json({ new: 0, review: 0, unassigned: 0 }),
     ),

@@ -247,3 +247,114 @@ describe("members", () => {
     expect(await screen.findByText(/Je bent hier nog alleen/)).toBeInTheDocument();
   });
 });
+
+describe("members: managing an account", () => {
+  const reset = {
+    link: "https://brievie.example.nl/wachtwoord-herstellen#reset-secret-123456",
+    expires_at: "2099-11-19T10:00:00Z",
+  };
+
+  it("offers account actions only where the server allows them", async () => {
+    server.use(...loggedInHandlers(), ...memberHandlers());
+    renderApp(path);
+    await screen.findByRole("row", { name: /Bram/ });
+    expect(screen.getByRole("button", { name: "Meer acties: Bram" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Meer acties: Anna" })).not.toBeInTheDocument();
+  });
+
+  it("a member never gets them, even when the flag says so", async () => {
+    server.use(asRole("member"), ...loggedInHandlers(), ...memberHandlers());
+    renderApp(path);
+    await screen.findByRole("row", { name: /Bram/ });
+    expect(screen.queryByRole("button", { name: /Meer acties/ })).not.toBeInTheDocument();
+  });
+
+  it("opens the devices and sessions of a member", async () => {
+    server.use(
+      ...loggedInHandlers(),
+      ...memberHandlers(),
+      http.get(`*${API}/users/${bram.user_id}/devices`, () => HttpResponse.json([])),
+    );
+    const u = userEvent.setup();
+    renderApp(path);
+    await u.click(await screen.findByRole("button", { name: "Meer acties: Bram" }));
+    await u.click(await screen.findByRole("link", { name: "Apparaten en sessies" }));
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Apparaten en sessies van Bram" }),
+    ).toBeInTheDocument();
+  });
+
+  it("makes a reset link after asking, shows it once and says whom to give it to", async () => {
+    let calls = 0;
+    server.use(
+      http.post(`*${API}/users/${bram.user_id}/password-reset`, () => {
+        calls += 1;
+        return HttpResponse.json(reset, { status: 201 });
+      }),
+      ...loggedInHandlers(),
+      ...memberHandlers(),
+    );
+    const u = userEvent.setup();
+    const { queryClient } = renderApp(path);
+    await u.click(await screen.findByRole("button", { name: "Meer acties: Bram" }));
+    await u.click(await screen.findByRole("button", { name: "Herstellink maken" }));
+    const ask = await screen.findByRole("alertdialog", { name: "Herstellink maken voor Bram?" });
+    expect(ask).toHaveTextContent("Een eerdere herstellink van Bram werkt daarna niet meer.");
+    expect(calls).toBe(0);
+    await u.click(within(ask).getByRole("button", { name: "Link maken" }));
+    const dialog = await screen.findByRole("dialog", { name: "Herstellink voor Bram" });
+    expect(
+      within(dialog).getByText("Geef deze link aan Bram. Hij werkt 24 uur en één keer."),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole("textbox", { name: "Link" })).toHaveValue(reset.link);
+    await u.click(within(dialog).getByRole("button", { name: "Klaar" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    const secret = "reset-secret-123456";
+    expect(
+      JSON.stringify(
+        queryClient
+          .getMutationCache()
+          .getAll()
+          .map((m) => m.state.data),
+      ),
+    ).not.toContain(secret);
+    expect(
+      JSON.stringify(
+        queryClient
+          .getQueryCache()
+          .getAll()
+          .map((q) => q.state.data),
+      ),
+    ).not.toContain(secret);
+    expect(screen.queryByDisplayValue(reset.link)).not.toBeInTheDocument();
+    // Opening again asks again; there is no link to be seen.
+    await u.click(screen.getByRole("button", { name: "Meer acties: Bram" }));
+    await u.click(await screen.findByRole("button", { name: "Herstellink maken" }));
+    expect(
+      await screen.findByRole("alertdialog", { name: "Herstellink maken voor Bram?" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Link" })).not.toBeInTheDocument();
+  });
+
+  it("a reset for a server admin shows the server's sentence", async () => {
+    server.use(
+      http.post(`*${API}/users/${bram.user_id}/password-reset`, () =>
+        HttpResponse.json(
+          errorBody("server_admin_only", "Alleen een serverbeheerder mag dit bij dit account."),
+          { status: 403 },
+        ),
+      ),
+      ...loggedInHandlers(),
+      ...memberHandlers(),
+    );
+    const u = userEvent.setup();
+    renderApp(path);
+    await u.click(await screen.findByRole("button", { name: "Meer acties: Bram" }));
+    await u.click(await screen.findByRole("button", { name: "Herstellink maken" }));
+    const ask = await screen.findByRole("alertdialog");
+    await u.click(within(ask).getByRole("button", { name: "Link maken" }));
+    expect(await within(ask).findByRole("alert")).toHaveTextContent(
+      "Alleen een serverbeheerder mag dit bij dit account.",
+    );
+  });
+});

@@ -16,6 +16,7 @@ import {
 import { ApiFailure, api, errorMessage } from "../api/client";
 import { inboxCountsQuery, meQuery } from "../api/queries";
 import { Icon, type IconName } from "./icons";
+import { NoticeBar } from "./notice-bar";
 import { initials, MessageBar } from "./ui";
 
 /** Every page gets its own title (WCAG 2.4.2). */
@@ -148,7 +149,10 @@ export function PageHeader({
   );
 }
 
-type BreadcrumbTarget = "/w/$workspaceId/post" | "/w/$workspaceId/automatisering";
+type BreadcrumbTarget =
+  | "/w/$workspaceId/post"
+  | "/w/$workspaceId/automatisering"
+  | "/w/$workspaceId/leden";
 
 const NAV_LINK = "nav-link";
 
@@ -418,6 +422,7 @@ export function Shell({ children, workspace }: { children: ReactNode; workspace?
         <main className="content">
           <div className="content-inner">
             <ErrorAlert error={logout.error} />
+            <NoticeBar />
             {children}
           </div>
         </main>

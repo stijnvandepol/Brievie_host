@@ -17,6 +17,7 @@ export function ConfirmDialog({
   children,
   confirmLabel,
   onConfirm,
+  closeOnSuccess = true,
 }: {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
@@ -24,10 +25,14 @@ export function ConfirmDialog({
   children: ReactNode;
   confirmLabel: string;
   onConfirm: () => Promise<unknown>;
+  /** False when the caller closes the question itself (to show what it led to). */
+  closeOnSuccess?: boolean;
 }) {
   const run = useMutation({
     mutationFn: onConfirm,
-    onSuccess: () => onOpenChange(false),
+    onSuccess: () => {
+      if (closeOnSuccess) onOpenChange(false);
+    },
   });
   const { reset } = run;
   useEffect(() => {
