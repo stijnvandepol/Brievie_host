@@ -390,12 +390,12 @@ def test_failed_run_reason_and_log_hold_no_secret(
     settings.BRIEVIE_BACKUP_REPOSITORY = "rest:https://nas:8000/b"
     settings.BRIEVIE_BACKUP_REST_USERNAME = "brievie-user"
     settings.BRIEVIE_BACKUP_REST_PASSWORD = "geheim"
-    settings.BRIEVIE_BACKUP_PASSWORD = "S3CR3T-0123456789"
+    settings.BRIEVIE_BACKUP_PASSWORD = "een-lang-wachtwoord-2026"
     fake_restic.respond(
         ("unlock",),
         stderr=(
             "Fatal: unable to open repository at rest:https://nas:8000/b: "
-            "Get https://brievie-user:geheim@nas:8000/b/config: password S3CR3T-0123456789"
+            "Get https://brievie-user:geheim@nas:8000/b/config: password een-lang-wachtwoord-2026"
         ),
         code=1,
     )
@@ -411,7 +411,7 @@ def test_failed_run_reason_and_log_hold_no_secret(
     assert "Fatal" in caplog.text  # the redacted tail is logged
     for text in (run.reason, caplog.text):
         assert "geheim" not in text
-        assert "S3CR3T" not in text
+        assert "een-lang-wachtwoord-2026" not in text
         assert "nas:8000" not in text
         assert "brievie-user" not in text
 

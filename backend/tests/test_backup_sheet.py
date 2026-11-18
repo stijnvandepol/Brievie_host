@@ -129,10 +129,10 @@ def test_hex_separate_password_is_grouped_and_wraps(settings: object) -> None:
 
 
 def test_non_hex_separate_password_is_shown_as_is(settings: object) -> None:
-    settings.BRIEVIE_BACKUP_PASSWORD = "Geheim-Wachtwoord-123"  # type: ignore[attr-defined]
+    settings.BRIEVIE_BACKUP_PASSWORD = "een-lang-wachtwoord-2026"  # type: ignore[attr-defined]
     html = sheet.render_sheet(sheet.sheet_data())
     assert 'class="key password"' in html
-    assert "Geheim-Wachtwoord-123" in html
+    assert "een-lang-wachtwoord-2026" in html
 
 
 def test_repr_hides_key_and_password(settings: object) -> None:
