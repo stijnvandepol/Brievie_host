@@ -1501,3 +1501,25 @@ def test_status_list_says_when_there_are_no_runs(
     fake_restic.respond(("snapshots",), stdout=b"[]")
     call_command("backup_status", "--list")
     assert capsys.readouterr().out.strip() == "Er staan nog geen back-ups op de bestemming."
+
+
+@pytest.mark.parametrize(
+    ("status", "code"), [("queued", "not_picked_up"), ("running", "still_running")]
+)
+def test_backup_command_tells_the_wrapper_why_it_waited_in_vain(
+    configured_folder: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    status: str,
+    code: str,
+) -> None:
+    def time_out(run_id: UUID, **kwargs: object) -> BackupRun:
+        BackupRun.objects.filter(id=run_id).update(status=status)
+        raise TimeoutError
+
+    monkeypatch.setattr(services, "wait_for_run", time_out)
+    monkeypatch.setenv("BRIEVIE_WRAPPER", "1")
+    with pytest.raises(CommandError) as caught:
+        call_command("backup")
+    assert caught.value.returncode == 2
+    assert capsys.readouterr().err.strip() == f"code={code}"

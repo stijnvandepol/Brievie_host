@@ -41,6 +41,7 @@ from apps.backup.manifest import (
     manifest_from_json,
     unknown_migrations,
 )
+from apps.backup.queue import settle_restored_queue
 from apps.backup.services import location_secrets
 from apps.common import crypto
 
@@ -546,11 +547,13 @@ def fetch(
 
 
 def close_interrupted_runs(conninfo: str) -> int:
-    """Close the runs the dump brought back as open; returns how many.
+    """Close the runs the dump brought back as open, and settle its queue; returns how
+    many runs were closed.
 
-    Done straight after pg_restore, before any service starts: the keeper would
-    otherwise resume a restored `running` run. Their jobs are left alone:
-    `perform_run` does nothing for a closed run.
+    Done straight after pg_restore, before any service starts, in one transaction: the
+    keeper would otherwise resume a restored `running` run, and the dump's own
+    `run_backup` job (`doing`, holding the lock `backup`) would keep every new back-up
+    job from being fetched until the stalled-job retry (`apps.backup.queue`).
     """
     try:
         with psycopg.connect(conninfo) as conn:
@@ -561,7 +564,15 @@ def close_interrupted_runs(conninfo: str) -> int:
                 " WHERE status IN ('queued', 'running')",
                 [str(REASONS["interrupted_by_restore"]), timezone.now(), timezone.now()],
             )
-            return cursor.rowcount
+            closed = cursor.rowcount
+            settled = settle_restored_queue(conn)
+            logger.info(
+                "Restore: %s runs closed; queue: %s back-up jobs failed, %s jobs requeued",
+                closed,
+                settled.failed,
+                settled.requeued,
+            )
+            return closed
     except psycopg.Error:
         raise BackupError("restore_failed") from None
 
