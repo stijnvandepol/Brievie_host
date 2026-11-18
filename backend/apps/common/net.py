@@ -1,3 +1,5 @@
+import ipaddress
+
 from django.conf import settings
 from django.http import HttpRequest
 
@@ -18,3 +20,22 @@ def client_ip(request: HttpRequest) -> str | None:
     if len(hops) < proxies:
         return str(remote_addr) if remote_addr else None
     return hops[-proxies]
+
+
+def valid_client_ip(request: HttpRequest) -> str | None:
+    """`client_ip(request)` when it is an IP address, else None.
+
+    For storing in an `inet` column: an `X-Forwarded-For` entry such as `unknown` or
+    `1.2.3.4:80` would make the insert fail. The throttles keep keying on `client_ip`.
+    """
+    address = client_ip(request)
+    if not address:
+        return None
+    try:
+        parsed = ipaddress.ip_address(address)
+    except ValueError:
+        return None
+    # A zone (`fe80::1%eth0`) is valid for Python, not for PostgreSQL.
+    if isinstance(parsed, ipaddress.IPv6Address) and parsed.scope_id:
+        return None
+    return str(parsed)

@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "apps.pipeline",
     "apps.devices",
     "apps.backup",
+    "apps.audit",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
