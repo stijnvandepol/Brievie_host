@@ -112,3 +112,34 @@ class UserSession(BaseModel):
 
     def __str__(self) -> str:
         return f"Session of {self.user_id}"
+
+
+class AccountNotice(BaseModel):
+    """Something another person did to this account, shown once in the web app (D 6.3)."""
+
+    class Code(models.TextChoices):
+        PASSWORD_RESET_CREATED = "password_reset_created", _("Herstellink gemaakt")
+        PASSWORD_RESET_COMPLETED = "password_reset_completed", _("Wachtwoord opnieuw ingesteld")
+        SESSIONS_ENDED = "sessions_ended", _("Sessies beëindigd")
+        DEVICE_REVOKED = "device_revoked", _("Apparaat ingetrokken")
+        SECOND_FACTOR_CLEARED = "second_factor_cleared", _("Tweestapsverificatie gewist")
+        # Part B sends these four; nothing in part A does.
+        EMERGENCY_ACCESS_SWITCHED_ON = "emergency_access_switched_on", _("Noodtoegang aangezet")
+        EMERGENCY_ACCESS_SWITCHED_OFF = "emergency_access_switched_off", _("Noodtoegang uitgezet")
+        EMERGENCY_ACCESS_USED = "emergency_access_used", _("Noodtoegang gebruikt")
+        PRIVATE_WITHOUT_READERS = "private_without_readers", _("Privépost zonder lezers")
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notices")
+    code = models.CharField(max_length=40, choices=Code.choices)
+    # The name of who did it, as it was then.
+    actor_name = models.CharField(max_length=150, blank=True)
+    values = models.JSONField(default=dict, blank=True)
+    seen_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(fields=["user", "seen_at"], name="accounts_notice_unseen"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.code} for {self.user_id}"

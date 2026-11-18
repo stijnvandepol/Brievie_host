@@ -2,12 +2,16 @@ import hashlib
 import hmac
 import secrets
 from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import datetime
+from uuid import UUID
 
 from axes.handlers.proxy import AxesProxyHandler
 from django.conf import settings
-from django.contrib.auth import authenticate
+from django.contrib.auth import authenticate, update_session_auth_hash
 from django.contrib.auth import logout as django_logout
 from django.contrib.auth.password_validation import validate_password
+from django.contrib.sessions.models import Session
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import connection, transaction
@@ -15,9 +19,9 @@ from django.http import HttpRequest
 from django.utils.translation import gettext as _
 
 from apps.accounts.models import SetupToken, User, UserSession, normalise_email
-from apps.accounts.sessions import start_session
+from apps.accounts.sessions import end_current_session, end_sessions, rekey_session, start_session
 from apps.audit.codes import ActorKind, AuditCode, TargetKind
-from apps.audit.services import AuditActor, AuditTarget, record
+from apps.audit.services import AuditActor, AuditTarget, actor_from_request, record
 from apps.common.errors import ApiError
 from apps.common.net import valid_client_ip
 from apps.workspaces.models import Membership
@@ -155,8 +159,18 @@ def login(request: HttpRequest, *, email: str, password: str) -> User:
     attempt that axes recorded and the `sign_in_failed` row, and the 401 response
     commits the request transaction.
     """
-    credentials = {"username": email}
-    if AxesProxyHandler.is_locked(request, credentials):
+    _refuse_when_locked(request, email)
+    user = authenticate(request, username=email, password=password)
+    if not isinstance(user, User):
+        _record_sign_in_problem(AuditCode.SIGN_IN_FAILED, request, email)
+        raise ApiError(401, "invalid_credentials", _("Het e-mailadres of wachtwoord klopt niet."))
+    start_session(request, user, via=UserSession.Via.PASSWORD)
+    return user
+
+
+def _refuse_when_locked(request: HttpRequest, email: str) -> None:
+    """429 while axes holds this email and address locked (after 5 wrong passwords)."""
+    if AxesProxyHandler.is_locked(request, {"username": email}):
         cooloff = int(settings.AXES_COOLOFF_TIME.total_seconds())
         raise ApiError(
             429,
@@ -164,12 +178,6 @@ def login(request: HttpRequest, *, email: str, password: str) -> User:
             _("Te veel pogingen. Probeer het later opnieuw."),
             headers={"Retry-After": str(cooloff)},
         )
-    user = authenticate(request, username=email, password=password)
-    if not isinstance(user, User):
-        _record_sign_in_problem(AuditCode.SIGN_IN_FAILED, request, email)
-        raise ApiError(401, "invalid_credentials", _("Het e-mailadres of wachtwoord klopt niet."))
-    start_session(request, user, via=UserSession.Via.PASSWORD)
-    return user
 
 
 def _record_sign_in_problem(code: AuditCode, request: HttpRequest, email: str) -> None:
@@ -212,3 +220,91 @@ def axes_username(request: HttpRequest, credentials: dict[str, object] | None) -
     """Key axes' records on the normalised email, so case variants share one lockout."""
     username = credentials.get("username") if credentials else None
     return normalise_email(username) if isinstance(username, str) else ""
+
+
+@dataclass(frozen=True)
+class SessionView:
+    id: UUID
+    method: str
+    started_at: datetime
+    last_used_at: datetime
+    client_ip: str
+    browser: str
+    current: bool
+
+
+def list_my_sessions(request: HttpRequest) -> list[SessionView]:
+    """The caller's web sessions, the most recently used first."""
+    user = current_user(request)
+    key = request.session.session_key
+    rows = UserSession.objects.filter(user=user).order_by("-last_used_at", "id")
+    return [
+        SessionView(
+            id=row.id,
+            method=row.method,
+            started_at=row.created_at,
+            last_used_at=row.last_used_at,
+            client_ip=row.client_ip or "",
+            browser=row.browser,
+            current=row.session_key == key,
+        )
+        for row in rows
+    ]
+
+
+def end_my_session(request: HttpRequest, *, session_id: UUID) -> None:
+    """End one of the caller's own web sessions; the next request of that browser is 401.
+
+    The current one is ended through `end_current_session` (a flush, so the response
+    is a clean 204). Somebody else's session answers 404, as an unknown one does.
+    """
+    user = current_user(request)
+    with transaction.atomic():
+        row = UserSession.objects.select_for_update().filter(user=user, id=session_id).first()
+        if row is None:
+            raise ApiError(404, "session_not_found", _("Deze sessie bestaat niet meer."))
+        record(
+            AuditCode.SESSION_ENDED,
+            actor=actor_from_request(request),
+            target=AuditTarget(kind=TargetKind.SESSION, id=row.id),
+            values={"count": 1, "reason": "self"},
+        )
+        if row.session_key == request.session.session_key:
+            end_current_session(request)
+            return
+        Session.objects.filter(session_key=row.session_key).delete()
+        row.delete()
+
+
+def change_password(request: HttpRequest, *, current_password: str, new_password: str) -> None:
+    """Change the caller's password; every other web session ends, this one stays.
+
+    The current password is checked through `authenticate`, so django-axes counts and
+    locks wrong ones per email and address exactly as at sign-in. That check runs outside
+    the transaction below: the failure axes recorded survives the 400.
+    """
+    user = current_user(request)
+    _refuse_when_locked(request, user.email)
+    checked = authenticate(request, username=user.email, password=current_password)
+    if not isinstance(checked, User) or checked.pk != user.pk:
+        raise ApiError(400, "wrong_password", _("Je huidige wachtwoord klopt niet."))
+    with transaction.atomic():
+        validate_password(new_password, user)
+        user.set_password(new_password)
+        user.save(update_fields=["password", "updated_at"])
+        old_key = request.session.session_key
+        # Cycles the session key and keeps this session signed in.
+        update_session_auth_hash(request, user)
+        if old_key is not None:
+            rekey_session(request, old_key)
+        ended = end_sessions(user, except_key=request.session.session_key)
+        actor = actor_from_request(request)
+        target = AuditTarget(kind=TargetKind.USER, id=user.id, name=user.name)
+        record(AuditCode.PASSWORD_CHANGED, actor=actor, target=target, values={"via": "self"})
+        if ended:
+            record(
+                AuditCode.SESSION_ENDED,
+                actor=actor,
+                target=target,
+                values={"count": ended, "reason": "password_changed"},
+            )
