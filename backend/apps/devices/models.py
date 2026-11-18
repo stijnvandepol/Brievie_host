@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from django.conf import settings
 from django.db import models
 
@@ -68,3 +70,28 @@ class Device(BaseModel):
 
     def __str__(self) -> str:
         return self.name
+
+
+class TokenExpiryStart(BaseModel):
+    """The moment the update that expires idle device tokens was installed (D 14).
+
+    One row, written by the migration. A device counts from the later of its last use and
+    this moment, so no phone stops working on the day of the update.
+    """
+
+    started_at = models.DateTimeField()
+    # Always True; the unique constraint keeps the table at one row.
+    singleton = models.BooleanField(default=True, editable=False)
+
+    class Meta:
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["singleton"], name="devices_tokenexpirystart_singleton"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(singleton=True), name="devices_tokenexpirystart_singleton_true"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return "Token expiry start"

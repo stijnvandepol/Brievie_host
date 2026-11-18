@@ -10,7 +10,8 @@ from urllib.parse import urlencode
 from uuid import UUID, uuid4
 
 from django.conf import settings
-from django.db import transaction
+from django.db import DatabaseError, transaction
+from django.db.models import QuerySet, Subquery
 from django.http import HttpRequest
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -22,7 +23,7 @@ from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.crypto import DecryptionError
 from apps.common.errors import ApiError
 from apps.devices import pki
-from apps.devices.models import Device, PairingChallenge, PairingCode
+from apps.devices.models import Device, PairingChallenge, PairingCode, TokenExpiryStart
 from apps.devices.proof import (
     derive_proof_key,
     normalise_code,
@@ -38,6 +39,8 @@ CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 CODE_LENGTH = 8
 CODE_VALIDITY = timedelta(minutes=10)
 LAST_SEEN_INTERVAL = timedelta(minutes=1)
+# A token stops this long after the device's last use (D 7.1).
+TOKEN_IDLE_LIMIT = timedelta(days=180)
 # The app sends its version in this header (D 7.1); a 1c app sends none.
 APP_VERSION_HEADER = "X-Brievie-App-Version"
 APP_VERSION_INTERVAL = timedelta(hours=24)
@@ -330,20 +333,74 @@ def _count_failed_proof(pairing_code: PairingCode, now: datetime) -> None:
     pairing_code.save(update_fields=fields)
 
 
+def token_expired(device: Device, *, baseline: datetime | None, now: datetime) -> bool:
+    """Whether the device has been idle for `TOKEN_IDLE_LIMIT`.
+
+    Idle time counts from the later of the device's last use (its pairing when it was
+    never used) and `baseline`, the moment the update that introduced expiry was
+    installed, so no phone stops working on the day of the update.
+    """
+    reference = device.last_seen_at or device.created_at
+    if baseline is not None and baseline > reference:
+        reference = baseline
+    return now - reference >= TOKEN_IDLE_LIMIT
+
+
+def _devices_with_baseline() -> QuerySet[Device]:
+    start = TokenExpiryStart.objects.order_by("started_at").values("started_at")[:1]
+    return Device.objects.annotate(expiry_baseline=Subquery(start))
+
+
+def _baseline_of(device: Device) -> datetime | None:
+    baseline: datetime | None = getattr(device, "expiry_baseline", None)
+    return baseline
+
+
+def expire_device(device: Device, *, now: datetime) -> bool:
+    """Revoke `device` because it was idle too long; True when this call did it.
+
+    The update is conditional on the device still being active, so two requests that
+    find the same expiry at once write one `revoked_at` and one `device_expired` row;
+    the second waits for the first and updates nothing. A database error here is logged
+    (no token, no hash) and leaves the device as it was: the caller answers 401 anyway
+    and the next request tries again.
+    """
+    try:
+        with transaction.atomic():
+            revoked = Device.objects.filter(pk=device.pk, revoked_at__isnull=True).update(
+                revoked_at=now
+            )
+            if revoked == 1:
+                record(
+                    AuditCode.DEVICE_EXPIRED,
+                    actor=AuditActor.system(),
+                    target=AuditTarget(kind=TargetKind.DEVICE, id=device.id, name=device.name),
+                )
+            return revoked == 1
+    except DatabaseError:
+        logger.warning("Could not record the expiry of device %s", device.id)
+        return False
+
+
 def device_for_token(token: str, *, app_version: str = "") -> Device | None:
     """The active device of an active user that holds this bearer token, if any.
 
-    `last_seen_at` is written at most once a minute and the reported app version at most
-    once a day (D 7.1), in one update when both are due.
+    A device idle for `TOKEN_IDLE_LIMIT` is revoked here and answers like a revoked one
+    (None). `last_seen_at` is written at most once a minute and the reported app version
+    at most once a day (D 7.1), in one update when both are due.
     """
     device = (
-        Device.objects.select_related("user")
+        _devices_with_baseline()
+        .select_related("user")
         .filter(token_hash=sha256_hex(token), revoked_at__isnull=True, user__is_active=True)
         .first()
     )
     if device is None:
         return None
     now = timezone.now()
+    if token_expired(device, baseline=_baseline_of(device), now=now):
+        expire_device(device, now=now)
+        return None
     changes: dict[str, datetime | str] = {}
     if device.last_seen_at is None or now - device.last_seen_at >= LAST_SEEN_INTERVAL:
         changes["last_seen_at"] = now
@@ -364,7 +421,14 @@ def device_for_token(token: str, *, app_version: str = "") -> Device | None:
 
 
 def list_devices(user: User) -> list[Device]:
-    return list(Device.objects.filter(user=user, revoked_at__isnull=True).order_by("created_at"))
+    """The user's active devices, oldest first; a device idle for too long is left out."""
+    now = timezone.now()
+    devices = _devices_with_baseline().filter(user=user, revoked_at__isnull=True)
+    return [
+        device
+        for device in devices.order_by("created_at")
+        if not token_expired(device, baseline=_baseline_of(device), now=now)
+    ]
 
 
 def revoke_device(user: User, device_id: UUID, *, actor: AuditActor) -> None:
