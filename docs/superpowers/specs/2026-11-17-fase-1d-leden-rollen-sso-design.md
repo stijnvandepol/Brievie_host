@@ -174,7 +174,7 @@ to it.
 
 | Role | Scope | May |
 |---|---|---|
-| Server admin | the server | server settings (SSO, second factor, sessions, addresses), create a workspace, see the server audit log, account actions (6.3). Inside a workspace a server admin has exactly the role of their membership there, nothing more |
+| Server admin | the server | server settings (SSO, second factor, sessions, addresses), create a workspace (not in part A: there only setup creates one), see the server audit log, account actions (6.3). Inside a workspace a server admin has exactly the role of their membership there, nothing more |
 | Admin (`admin`) | one workspace | invite, change roles, remove members, revoke members' devices, manage rules, see the workspace audit log, workspace settings |
 | Member (`member`) | one workspace | scan, review, organise, manage persons and labels |
 | Viewer (`viewer`) | one workspace | read; no changes (as in 1c) |
@@ -184,7 +184,10 @@ gives it to the admin of the oldest workspace on existing servers. A server admi
 not automatically a member of every workspace: they do not see post of a workspace
 they are not in. There is always at least one server admin and every workspace always
 has at least one admin: the last one cannot be removed or demoted (409
-`last_admin`).
+`last_admin`). Another server admin is appointed, or the flag taken away, with the
+management command `set_server_admin --email <address> [--remove]` on the server
+until part C adds a page for it. Creating a workspace stays as it is today: only the
+setup at `/setup` creates one; part A adds no other way.
 
 At home this table never shows. The first person is admin; whoever they invite becomes
 a member; "Rol" is a choice with three plain sentences that only appears on the
@@ -210,8 +213,10 @@ member's own row.
   fragment, which a browser never sends to a server, so it cannot land in a proxy or
   server log; the page reads it and posts it in a request body. The QR code holds the
   same link.
-- **Opening it** shows the workspace's name, who invited and the role. The invitee
-  then either creates an account (name, email address, password with the existing
+- **Opening it** shows the workspace's name, who invited and the role, and, when AI
+  is on for the workspace, the same AI line every member sees ("AI aan: tekst van
+  brieven gaat naar …"), so the invitee reads where the text of letters goes before
+  joining. The invitee then either creates an account (name, email address, password with the existing
   rules), or signs in to an account they already have on this server (they then join
   a second workspace), or, with SSO on, continues with the identity provider.
   A deactivated account (a member who was removed earlier) comes back the same way:
@@ -231,11 +236,29 @@ member's own row.
   through the same code as signing in, so the second step or the required set-up of
   section 10 applies there too.
 - **Straight into the app.** After accepting on a phone the page offers "Open de
-  Brievie-app": a `brievie://server#<addresses and CA fingerprint>` link and, on the
-  page, the eight-character pairing code to type into the app. The link carries no
-  secret: another app on the phone that claims the URL scheme learns only the server's
-  address. The app shows the server's name and asks for the code. On a computer the
-  page shows the pairing QR code instead.
+  Brievie-app": a `brievie://server#<addresses, CA fingerprint, pairing id>` link and,
+  on the page, the eight-character pairing code to type into the app. The link carries
+  no secret: another app on the phone that claims the URL scheme learns only the
+  server's address and the id of the code. The app shows the server's address and
+  waits for the user's tap before contacting anything.
+- **The typed code never leaves the phone.** A hostile link can name another server;
+  if the app sent the typed code there, that server could redeem it at the real one
+  within its ten minutes. So the app sends a proof instead. It checks the server as
+  for a QR code (CA fingerprint, health), fetches a one-time nonce
+  (`createPairingChallenge`, no session, rate limited, five minutes, single use), and
+  sends `HMAC-SHA256(key, "brievie-pair-v1" ‖ nonce ‖ trust binding)`, where the key
+  is `PBKDF2-HMAC-SHA256(code, "brievie-pair-v1" ‖ pairing id, 600,000 iterations)`
+  and the trust binding is the fingerprint of the CA the app pinned for this
+  connection or, for a server with a publicly trusted certificate, the host name it
+  connected to (`pairDeviceWithProof`). The server keeps the derived key of each code,
+  sealed with the master key, for the code's ten minutes (the code itself is still
+  stored only as a hash), recomputes the proof for its own CA fingerprint and host
+  names, compares in constant time, and burns the code after five wrong proofs. A relay
+  with another CA or host cannot produce a valid proof and never learns the code; the
+  key stretching makes guessing the eight characters from a captured proof cost years
+  instead of minutes. The QR path is unchanged: the QR code comes from the server's
+  own page and carries the code to `pairDevice` as in 1c. On a computer the page shows
+  the pairing QR code instead of the link.
 
 ### 6.3 Changing and removing
 
@@ -249,13 +272,20 @@ member's own row.
   writes as the system (8.3), because the admin cannot see the member's private rows
   and would otherwise skip them silently. A user who is still a member elsewhere
   keeps their account and devices; their phone simply no longer lists this workspace.
+  Deactivating is an account action: a workspace admin who removes a server admin's
+  last membership gets 403 `server_admin_only` and nothing changes.
+- **What an admin made stops with the role**: when an admin is demoted or removed,
+  their open invitations in that workspace and their unused reset links are revoked,
+  so an admin-role link cannot bring them back.
 - **Leaving** (the member themselves): the same, started by the member.
 - **Private post of a removed member stays locked**: nobody reads it, unless emergency
   access is on (section 8.5). Inviting the person again with "this is <person>" makes
   them the reader again.
 - **Own export before leaving**: "Mijn post exporteren" builds, in a background job
   that runs as that user (so it contains only what they may read), a ZIP with the
-  page images and a JSON file of every document on the member's name; the file is
+  page images and a JSON file of every document on the member's name (in part A: the
+  letters with an addressee linked to the member; part B adds the private letters the
+  member reads, read as the member); the file is
   sealed on disk, downloadable by that member for 24 hours, then removed. It must be
   made and downloaded before leaving: the leave screen offers it, and after leaving
   there is no account to download with. In a Zakelijk workspace it is off unless the
@@ -269,17 +299,23 @@ member's own row.
   A reset link has the mechanics of an invitation (one use, 24 hours, token in the
   fragment). Each of these actions is an audit event and a notice the member sees at
   their next sign-in ("Je wachtwoord is op 3 mei opnieuw ingesteld door Anne."), so
-  an admin cannot take over an account unseen. A server admin who lost their own
-  password uses the management command `reset_password` on the server.
+  an admin cannot take over an account unseen. The session that completing a reset
+  creates cannot mark that notice as seen; only a later sign-in can. A reset link's
+  authority is checked again when it is used: if the member joined a second workspace
+  or the admin lost the role in the meantime, the link no longer works. A server admin
+  who lost their own password uses the management command `reset_password` on the
+  server.
 
 ### 6.4 API (additive)
 
 `listMembers` exists since 1c. New, under `/workspaces/{workspace_id}`:
 `createInvitation`, `listInvitations`, `revokeInvitation`, `updateMemberRole`,
 `removeMember`, `leaveWorkspace`. Account actions under `/users/{user_id}`:
-`createPasswordReset`, `clearSecondFactor`, `endUserSessions`, `listUserDevices`. Without a session:
-`getInvitation` and `acceptInvitation` (token in the body), `completePasswordReset`.
-For the signed-in user: `changePassword`, `createMyExport`, `getMyExport`.
+`createPasswordReset`, `endUserSessions`, `listUserDevices`, `revokeUserDevice`, and in
+part C `clearSecondFactor`. Without a session: `getInvitation` and `acceptInvitation`
+(token in the body), `completePasswordReset`, `createPairingChallenge` and
+`pairDeviceWithProof`. For the signed-in user: `changePassword`, `createMyExport`,
+`getMyExport`.
 
 ## 7. Devices and sessions
 
@@ -319,7 +355,8 @@ password or switching on the second factor ends all others; an admin can end all
 sessions of a member (it happens anyway on removal).
 
 Session lifetime is a server setting with a home default: 14 days of inactivity, at
-most 90 days. An organisation shortens it.
+most 90 days. An organisation shortens it. Until part C adds the server settings page
+it is an environment setting (`BRIEVIE_SESSION_IDLE_DAYS`, `BRIEVIE_SESSION_MAX_DAYS`).
 
 ## 8. Private post, departments and how the database enforces it
 
@@ -341,6 +378,18 @@ most 90 days. An organisation shortens it.
   person, or a member of the department). When no addressee has an account, any
   reader. So the son cannot open his mother's letter to everyone once she has an
   account. It is an audit event and a line in the document's history.
+- **A private letter always has a reader.** When an automatic action (a pipeline rule,
+  a manual rule run, a Zorg label added by a rule outside a request) would make a
+  letter private and no current member would be a reader (no addressee with an
+  account, no department member, the scanner gone or no longer a member), the letter
+  stays visible to the workspace. No suggestion "privé maken" is invented. The history
+  gets a line saying why, and the workspace admins get one notice per letter: "Er is
+  post die privé had moeten worden, maar niemand zou hem kunnen lezen", with the
+  document id. By hand or at confirm this cannot happen: whoever acts becomes a reader.
+- **Taking away one's own access by accident is refused.** Removing, while organising
+  or confirming, the addressee through which one reads a private letter answers 409
+  `would_lose_access`. Unlinking oneself from a person, leaving a department and
+  removing one's own share are deliberate and allowed.
 - **Nobody gives themselves access.** A link between a person and an account, and a
   department membership, are access grants. They are made by an admin, never for the
   admin's own account when that person or department has private post (409
@@ -384,9 +433,10 @@ default and restores the previous one on exit, as it does with the workspace; it
 used in requests and commands too, so "job" does not imply "system". A job that works
 for a user (the export) runs as that user. Inside a request, `system_actor()` is a
 narrow context manager for the few services that must write rows the user cannot see;
-it is used only in `documents.visibility`, in removing a member, in the deletes
-named below (always after the authorisation check), and in the archive-folder job of
-the back-up design. A test lists its callers. The policies read the setting
+it is used only in `documents.visibility`, in removing a member and part A's other
+seams for part B (`workspaces.access`), in the deletes and the archiving of a person
+named below (always after the authorisation check), in the server-wide export and in
+the archive-folder job of the back-up design. A test lists its callers. The policies read the setting
 through two helper functions (`brievie_actor_id()`, null for `system` or empty, and
 `brievie_is_system()`), because a cast of the text `system` to a uuid fails and
 PostgreSQL does not promise the order in which it evaluates an OR.
@@ -398,18 +448,32 @@ reader of a restricted document; `reason` is `addressee`, `department`, `share` 
 Policies:
 
 - **Document**: the existing policy (the workspace matches, for reading and writing)
-  stays as it is. Visibility is a second, **restrictive policy for reading only**:
-  the document is `workspace`-visible, or the actor is `system`, or a `DocumentReader`
-  row exists for this document and this actor that has not expired. Writing is checked
-  against the workspace only. This matters: with one policy for both, making a letter
-  private as somebody who is not yet a reader would fail on the new row, and every
-  later write in that request with it.
+  stays as it is. Visibility is a second condition: the document is
+  `workspace`-visible, or the actor is `system`, or a `DocumentReader` row exists for
+  this document and this actor that has not expired. It is applied by three
+  **restrictive policies, for reading, updating and deleting**, each with that
+  condition and none with a separate check for new rows. Inserting is checked against
+  the workspace only.
+  Why updating and deleting too (changed after the plans' check): PostgreSQL applies
+  the reading policy to an `UPDATE` or `DELETE` only when its WHERE reads a column. An
+  update without a filter, a fast delete of a whole table, or a `SET` that reads no
+  column would otherwise reach rows the actor cannot read. The restrictive update and
+  delete policies filter every such statement.
+  Why no separate check for new rows: PostgreSQL then checks the new row of an update
+  with the same condition. Making a letter private still works, because the actor's
+  own reader row is written first (see the order below): the new row is readable. As
+  somebody who is not a reader it fails, which is the rule "whoever makes it private
+  stays a reader". The earlier choice ("writing is checked against the workspace
+  only") was made so that this order could work; the order is kept, so the stricter
+  policies cost nothing there.
 - **Every table with a foreign key to a document** (pages, extractions, suggestions,
   history events, addressee and label links, shares, rule runs, tasks; for a task
-  "has no document, or"): the same restrictive reading policy, written as a correlated
-  `EXISTS (select 1 from document d where d.id = child.document_id)`, which the
-  document's own policies filter. A test fails when a table with such a foreign key
-  has no policy, as the existing coverage test does for workspaces.
+  "has no document, or"): the same three restrictive policies (read, update, delete),
+  written as a correlated `EXISTS (select 1 from document d where d.id =
+  child.document_id)`, which the document's own policies filter. A test fails when a
+  table with such a foreign key lacks one of them, as the existing coverage test does
+  for workspaces. The back-up's restore check fails too when they or the helper
+  functions are missing after a restore.
 - **DocumentReader**: the workspace matches and the row is the actor's own, or the
   actor is `system`. A user cannot see who else reads a letter through this table;
   the names shown with the lock come from the API, for a letter they can read.
@@ -439,6 +503,15 @@ account link, department membership, removing a member. A nightly job recomputes
 restricted document as the system and logs how many rows differed (a number, no ids of
 people); a non-zero number is a defect to investigate. Tests cover every input.
 
+**One lock order.** Every service takes row locks in one order: first memberships (a
+request that will lock a letter or write readers takes the actor's own membership
+for sharing; removing a member or changing a role takes all memberships of the
+workspace), then the letter or a person (locked without the key lock, so the
+foreign-key checks of reader rows never wait for it), then reader rows. Recomputing
+readers takes no lock of its own. So confirming a letter and removing a member at the
+same moment wait for each other in one direction and never deadlock; a test runs the
+two at once.
+
 **What follows from enforcing it in the database**, without separate code: lists,
 counts, the inbox, filters, a rule's "test on existing post", the history and the
 task list only ever contain what the user may read. Rules that run inside a request
@@ -454,6 +527,14 @@ What the database does not solve, and the design states:
   master key and the disk reads everything; that was already true.
 - **The audit log** names a private document by its id only.
 - **Back-ups** contain private post.
+- **Some answers show that private post exists** (not what it is). Deleting a person
+  whose visible letters are none can answer "in use" (409 `person_in_use`); linking
+  oneself or joining a department can answer 409 `cannot_grant_self`; an invitation
+  for a person can require an email address (422 `email_required`); an account action
+  on a member who reads private post answers 403 `server_admin_only` (8.5). These are
+  accepted for workspace admins only. Every one of these operations is admin-only:
+  deleting a person, which was open to members in 1c, becomes admin-only for this
+  reason (a member keeps archiving). `docs/PRIVACY.md` says so.
 
 ### 8.4 Contract
 
@@ -470,14 +551,39 @@ only a server admin changes it, and changing it is an audit event that every mem
 sees as a notice at their next visit.
 
 With it on, an admin can open the private post **of one person or department**:
-"Noodtoegang tot de privé-post van <naam>", with a reason of at least ten characters.
-That writes `emergency` reader rows for the admin on that person's restricted
-documents, valid for one hour, as the system. Every use is an audit event and a line
-in the history of each opened letter, which its readers see ("<beheerder> opende deze
-brief met noodtoegang: <reden>"). With it off there is no such button and no code path.
+"Noodtoegang tot de privé-post van <naam>", with a reason of ten to two hundred
+characters (the audit log keeps it whole). That writes `emergency` reader rows for
+the admin on that person's restricted documents, valid for one hour, as the system.
+Every use is an audit event, a line in the history of each opened letter, which its
+readers see ("<beheerder> opende deze brief met noodtoegang: <reden>"), and a notice
+to the person concerned (the account linked to the person, or the department's
+members). Emergency access is read-only: no organising, sharing, publishing,
+confirming, completing tasks, or sending a failed letter to the AI again. With it off
+there is no such button and no code path.
 
 Access is per person, not per letter, because an admin cannot see a private letter
 exist at all; that is the point of 8.3.
+
+**Account actions and private post (provisional; the owner has been asked, and this
+is the default until they answer).** A reset link, ending sessions, or seeing and
+revoking devices lets whoever does it act as the member. So, for a member who reads
+any private letter (other than through emergency access):
+
+1. only a server admin may do these account actions, never a workspace admin, even
+   when the member's single membership is that workspace (403 `server_admin_only`);
+   a reset link made earlier stops working when the member has become such a reader;
+2. the member always gets the notice, and the session that a reset creates cannot
+   dismiss it (6.3);
+3. an invitation that names a person with private post needs an email address, and
+   only an account with that address can accept it (6.2);
+4. `docs/PRIVACY.md` says plainly what "privé" protects against: other members of
+   the workspace, and reading unnoticed (every access by an admin, a grant, an
+   emergency opening, a reset or an ended session leaves a trace the member or the
+   readers see). It also says what it does not protect against: whoever administers
+   the server machine (database, master key, back-ups), and the AI service the
+   workspace chose. The server does not verify an invitation's email address; an
+   admin who controls that address could accept it, and the grant then shows in the
+   history of every private letter of that person.
 
 ## 9. Single sign-on (OpenID Connect), opt-in
 
@@ -585,18 +691,23 @@ Who did what, when, from where, without document content.
   or SSO), a code from a closed list, the target's kind and id, the actor's and the
   target person's name as they were then, the client address, and a few plain values
   per code (the new role, the reason for emergency access). Never a letter's sender,
-  summary, text or label names.
+  summary, text or label names; rows about labels and rules carry the id only, because
+  a rule's name can hold a label name.
 - **What is logged**: sign-in succeeded, failed, locked out; second factor added,
-  removed, cleared; password changed, reset link made; session ended; invitation
+  removed, cleared; password changed, reset link made; session ended; server admin
+  appointed or removed; invitation
   made, revoked, accepted; member's role changed; member removed or left; device
   paired, revoked, expired; workspace setting changed; SSO settings changed; rule
-  made, changed, deleted, run by hand; label or person deleted; visibility changed; a person linked to or
+  made, changed, deleted, run by hand; label or person deleted; visibility changed
+  (also a share added or removed, as values of that event); a person linked to or
   unlinked from an account; a department member added or removed; emergency access switched on or off and every use; export made and downloaded.
 - **Append-only for the application**: the app's database role may insert and read
   these two tables, not change or delete (revoked in the migration). A test checks
   the privileges of the app role itself, because the test suite runs as the owner and
   would not notice a forgotten revoke. The rows have no foreign keys (actor and target
   are an id and a name), since a cascade would need the rights that were revoked.
+  The same migration makes 1c's AI consent history (`pipeline_aiconsentevent`)
+  insert-only for the app role, which its decision left open.
   Old rows are removed by a function owned by the schema owner that takes a workspace,
   enters its context itself (the owner cannot bypass row-level security either) and
   refuses a cut-off younger than 90 days; a job calls it after the retention period:
@@ -635,8 +746,8 @@ Each part is delivered and usable on its own, with its own implementation plan.
 A fourth part, **D. Toegang van buiten**, is described in section 19 with its own
 steps; it can follow A.
 
-App work per part: A is small (the server link with the typed pairing code, the app version
-header); B is the lock, "Privé" in the review and on a
+App work per part: A is small (the server link with the typed pairing code and the
+pairing proof, the app version header); B is the lock, "Privé" in the review and on a
 letter, and sharing; C needs nothing.
 
 ## 14. Compatibility
@@ -660,6 +771,10 @@ letter, and sharing; C needs nothing.
   email address that already has an account; for a person who is already linked.
 - The last admin removing themselves; the last server admin being deactivated.
 - A member removed while their phone uploads; while they are confirming a letter.
+  (Part A accepts the race of a request that passed the membership check just before
+  the removal; it tests that every later request is refused. See 21.)
+- A hostile pairing link that names another server: the typed code never leaves the
+  phone; a proof for another CA or host, a replayed nonce and a sixth try are refused.
 - A user who is a member of two workspaces, removed from one.
 - A private letter in: the post list, the inbox counts, a person filter, a rule test,
   a manual rule run, the history of a linked task, a suggestion, the task list, the
@@ -669,8 +784,20 @@ letter, and sharing; C needs nothing.
   visibility switched twice.
 - A job that forgets to say it runs as the system: it sees no private letter and the
   test notices.
+- An update or delete without a filter, run as a user: it leaves letters and rows the
+  user cannot read alone.
+- Every operation that takes a document id answers somebody else's private letter
+  exactly as an unknown id (the list comes from the API schema).
+- Confirming a letter that becomes private while the scanner is being removed: no
+  deadlock, no reader row for somebody who is no longer a member.
+- An automatic action that would make a letter private with nobody to read it: it
+  stays visible to the workspace, the history says why, the admins get one notice.
+- A workspace admin making a reset link for, or ending the sessions of, a member who
+  reads private post: refused.
+- A restore without the helper functions or the visibility policies: the restore
+  check fails.
 - Emergency access: off (no path), on (reason required, one hour, visible to the
-  readers), expiring while the letter is open.
+  readers), expiring while the letter is open, read-only (also no retry).
 - SSO: an unknown identity with a matching but unverified email address; the provider
   down (server admin signs in with a password; others see a clear sentence); the
   provider returning another subject for the same email address; "alleen via SSO" with
@@ -875,7 +1002,7 @@ it turns out wrong:
 
 | Ruling | Why | Cost if wrong |
 |---|---|---|
-| Visibility is a restrictive policy for reading only; writes are checked against the workspace (8.3) | one policy for both makes "make private" fail and poisons the rest of the request | a write to a row one cannot read is possible inside the workspace; services already authorise before writing |
+| Visibility is a restrictive policy for reading only; writes are checked against the workspace (8.3). Changed in 21: updating and deleting are restricted too | one policy for both makes "make private" fail and poisons the rest of the request | a write to a row one cannot read is possible inside the workspace; services already authorise before writing |
 | Readers are written, and some deletes are done, as the system inside a request (8.3) | as the user the inserts fail and the deletes silently do nothing | `system_actor()` is powerful; it is limited to named services and a test lists its callers |
 | Nobody gives themselves access; grants are logged and shown to the readers (8.1) | linking a person to oneself was a way round "private means private" | an admin at home who really is that person must be linked by the invitation flow |
 | Automatic actions do not add addressees to private letters (8.1) | a rule could make its author a reader | a private letter may wait for a suggestion to be accepted |
@@ -884,6 +1011,7 @@ it turns out wrong:
 | An invitation never finds an existing account by the provider's address; linking on address is off by default (9.3) | an address claim is not proof | a first SSO sign-in needs one password sign-in to link |
 | The second factor sits where a session is made (10) | invitation and reset would otherwise skip it | none known |
 | The pairing link carries no secret; the code is typed (6.2) | another app can claim the URL scheme | eight characters to type on the phone |
+| From a link the app sends a proof, never the code: PBKDF2 of the code and the pairing id, HMAC over a one-time nonce and the CA fingerprint or host it connected to; five wrong proofs burn the code (6.2; ruling after the plans' independent check) | a hostile link names an attacker's server, which would harvest the typed code and redeem it at the real server within ten minutes | two extra requests and about half a second of key stretching per code on phone and server; a sealed derived key per code for ten minutes; whoever learns a pairing id can burn that code with five wrong proofs (the user makes a new one); a 1d app cannot pair from a link with a server that lacks the proof path (no 1c server makes links) |
 | Token expiry is computed from `last_seen_at`; expired answers as revoked (7.1) | no extra write, and a 1c app already handles it | no separate text for "expired" |
 | "Privé maken" is a new action type, automatic rules only (8.1) | a version bump would skip all rules; there is no suggestion kind for it | a proposing rule cannot make private |
 | The audit purge enters the workspace context itself; no foreign keys in audit rows (11) | under forced row-level security the owner sees nothing either | none known |
@@ -891,3 +1019,41 @@ it turns out wrong:
 Still to verify when the plans are written: what the 1c app does with calendar events
 of tasks that disappear from the list (a letter that became private), and whether it
 matches on the 401 code.
+
+## 21. What the plans changed (2026-11-17)
+
+Writing the part-A plans, and their independent check (`plan-1d-a-controle.md` in the
+session notes), found the points below. Each is written into its section; this list
+is the index.
+
+| Change | Section |
+|---|---|
+| `clearSecondFactor` belongs to part C; part A has the other account actions | 6.4 |
+| The own export in part A holds the letters with an addressee linked to the member; part B adds the private letters the member reads | 6.3 |
+| Session lifetime is an environment setting until part C adds the server settings page | 7.2 |
+| A second server admin is appointed with the command `set_server_admin --email … [--remove]`; workspace creation stays at setup | 6.1 |
+| Audit rows about labels and rules carry ids only; appointing and removing a server admin is logged | 11 |
+| A workspace admin never deactivates a server admin by removing their last membership (403 `server_admin_only`) | 6.3 |
+| Open invitations and reset links an admin made are revoked when that admin is demoted or removed | 6.3 |
+| A reset link's authority is checked again when it is used | 6.3 |
+| The session that completing a reset creates cannot dismiss the "your password was reset" notice | 6.3 |
+| The AI consent history of 1c becomes insert-only for the app role, in the same migration as the audit tables | 11 |
+| The invitation page shows the workspace's AI line before accepting, which is the per-member "read" step the AI consent decision left for 1d | 6.2 |
+| From a link the app pairs by proof and never sends the typed code | 6.2, 20 |
+| A member removed while their phone uploads or confirms is an accepted race: a request that passed the membership check a moment earlier commits, with the same effect as finishing a moment earlier (the letter stays in the workspace); every later request is refused | 15 |
+
+The part-B plan and its independent check (`plan-1d-b-controle.md` in the session
+notes) changed the following.
+
+| Change | Why | Section |
+|---|---|---|
+| Visibility restricts updating and deleting as well as reading, with three restrictive policies and no separate check for new rows | an update or delete whose WHERE reads no column skips the reading policy and would reach hidden rows; the update policy's condition on the new row is exactly "whoever makes it private stays a reader" | 8.3, 20 |
+| One lock order: memberships, then the letter or person (without the key lock), then readers | confirming and removing a member at once could deadlock | 8.3 |
+| 409 `would_lose_access` only when organising or confirming; unlinking oneself and leaving a department are allowed | the first plan refused deliberate actions and contradicted 8.1 | 8.1 |
+| An automatic action never makes a letter private when nobody could read it; the history says why and the admins get a notice | a private letter without readers would be lost, and at home emergency access is off | 8.1 |
+| Account actions on a member who reads private post belong to the server admin; PRIVACY.md says what "privé" does and does not protect against (provisional, the owner has been asked) | a reset link lets a workspace admin sign in as the member and read their private post | 8.5 |
+| Answers that show private post exists are given to admins only; deleting a person becomes admin-only | `person_in_use` and similar answers reveal private post | 8.3 |
+| Emergency access notifies the person concerned, takes a reason of 10–200 characters, and refuses a retry | the person concerned must see it; the audit log keeps 200 characters; a retry would send the letter to the AI | 8.5 |
+| A share added or removed is logged as "visibility changed" with values, not as separate codes | the closed list of 11 already has the event | 11 |
+| The own export in part B adds the private letters the member reads, not every public letter | it is the member's own post | 6.3 |
+| The back-up's restore check fails without the helper functions or the visibility policies | counts alone would pass a restore without them | 8.3 |
