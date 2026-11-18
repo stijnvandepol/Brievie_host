@@ -35,6 +35,10 @@ MESSAGES: dict[str, Promise] = {
     Code.DEVICE_REVOKED: _(
         "%(name)s heeft op %(date)s je apparaat \u2018%(device)s\u2019 ingetrokken."
     ),
+    Code.SERVER_ADMIN_GRANTED: _("Je bent op %(date)s serverbeheerder gemaakt op de server."),
+    Code.SERVER_ADMIN_REVOKED: _(
+        "Je bent op %(date)s geen serverbeheerder meer. Dat is op de server geregeld."
+    ),
     Code.SECOND_FACTOR_CLEARED: _("%(name)s heeft op %(date)s je tweestapsverificatie gewist."),
     Code.EMERGENCY_ACCESS_SWITCHED_ON: _(
         "%(name)s heeft op %(date)s noodtoegang voor de beheerder aangezet in %(workspace)s."

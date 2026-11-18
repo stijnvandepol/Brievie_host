@@ -127,6 +127,8 @@ class AccountNotice(BaseModel):
         SESSIONS_ENDED = "sessions_ended", _("Sessies beëindigd")
         DEVICE_REVOKED = "device_revoked", _("Apparaat ingetrokken")
         SECOND_FACTOR_CLEARED = "second_factor_cleared", _("Tweestapsverificatie gewist")
+        SERVER_ADMIN_GRANTED = "server_admin_granted", _("Serverbeheerder gemaakt")
+        SERVER_ADMIN_REVOKED = "server_admin_revoked", _("Geen serverbeheerder meer")
         # Part B sends these four; nothing in part A does.
         EMERGENCY_ACCESS_SWITCHED_ON = "emergency_access_switched_on", _("Noodtoegang aangezet")
         EMERGENCY_ACCESS_SWITCHED_OFF = "emergency_access_switched_off", _("Noodtoegang uitgezet")
