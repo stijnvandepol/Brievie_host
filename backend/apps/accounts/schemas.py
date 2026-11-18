@@ -78,3 +78,15 @@ class NoticeOut(Schema):
 
 class NoticesSeenIn(InputSchema):
     notice_ids: list[UUID] = Field(max_length=50)
+
+
+class PasswordResetOut(Schema):
+    # The reset link, with its one-time token in the fragment. Shown once.
+    link: str
+    expires_at: datetime
+
+
+class PasswordResetIn(InputSchema):
+    # The fragment of the reset link.
+    token: str = Field(max_length=100)
+    password: str = Field(max_length=128)

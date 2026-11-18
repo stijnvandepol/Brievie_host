@@ -3,15 +3,18 @@ from uuid import UUID
 from django.http import HttpRequest
 from ninja import Router, Status
 
-from apps.accounts import notices, services
+from apps.accounts import notices, resets, services
 from apps.accounts.auth import session_auth
 from apps.accounts.models import User
 from apps.accounts.notices import NoticeView
+from apps.accounts.resets import IssuedReset
 from apps.accounts.schemas import (
     LoginIn,
     NoticeOut,
     NoticesSeenIn,
     PasswordChangeIn,
+    PasswordResetIn,
+    PasswordResetOut,
     SessionOut,
     SetupIn,
     SetupOut,
@@ -144,3 +147,33 @@ def list_my_notices(request: HttpRequest) -> list[NoticeView]:
 def mark_notices_seen(request: HttpRequest, payload: NoticesSeenIn) -> Status[None]:
     notices.mark_seen(request, payload.notice_ids)
     return Status(204, None)
+
+
+@router.post(
+    "/users/{user_id}/password-reset",
+    response={201: PasswordResetOut, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS},
+    description="A one-time link (24 hours) with which the member chooses a new password;"
+    " the token is in its fragment and is shown only here. An earlier unused link stops"
+    " working. A server admin may do this for anyone; a workspace admin only for a member"
+    " whose only workspace is theirs and who is no server admin (403 server_admin_only)."
+    " 403 own_account for the caller's own account; 404 user_not_found for an unknown"
+    " account or one outside the caller's workspaces; 409 account_inactive.",
+    operation_id="createPasswordReset",
+)
+def create_password_reset(request: HttpRequest, user_id: UUID) -> Status[IssuedReset]:
+    return Status(201, resets.create_password_reset(request, target_id=user_id))
+
+
+@router.post(
+    "/auth/password-reset",
+    response={200: UserOut, 429: ErrorOut, **BODY_ERRORS},
+    auth=None,
+    throttle=ClientAddressThrottle("password_reset", "10/10m"),
+    description="Set a new password with the token from a reset link's fragment and sign"
+    " in; every other session of the account ends. 400 reset_link_invalid for an unknown,"
+    " used, expired or revoked link, or when its maker may no longer act on the account;"
+    " 422 when the password rules refuse it (the link stays usable).",
+    operation_id="completePasswordReset",
+)
+def complete_password_reset(request: HttpRequest, payload: PasswordResetIn) -> User:
+    return resets.complete_password_reset(request, token=payload.token, password=payload.password)

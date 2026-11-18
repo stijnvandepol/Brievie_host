@@ -143,3 +143,25 @@ class AccountNotice(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.code} for {self.user_id}"
+
+
+class PasswordReset(BaseModel):
+    """A one-time link with which a member chooses a new password (D 6.3).
+
+    Made by an admin who may act on the account (`apps.accounts.authority`); valid 24
+    hours. Only the SHA-256 of the token is stored: the token is in the link's fragment.
+    """
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="password_resets")
+    token_hash = models.CharField(max_length=64, unique=True)
+    expires_at = models.DateTimeField()
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    # The name of who made it, as it was then (for the notice after the reset).
+    created_by_name = models.CharField(max_length=150)
+    used_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self) -> str:
+        return f"Password reset for {self.user_id}"
