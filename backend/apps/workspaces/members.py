@@ -9,13 +9,20 @@ it has after the first. A workspace always keeps an admin.
 from uuid import UUID
 
 from django.db import transaction
+from django.http import HttpRequest
+from django.utils import timezone
 from django.utils.translation import gettext as _
 
+from apps.accounts.account_state import deactivate_account, last_server_admin_error
+from apps.accounts.models import User
 from apps.accounts.resets import revoke_resets_made_by
+from apps.accounts.services import lock_active_server_admins
 from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
 from apps.people.models import Person
+from apps.tasks.models import Task
+from apps.workspaces.access import on_member_removed
 from apps.workspaces.context import workspace_context
 from apps.workspaces.invitations import revoke_invitations_made_by
 from apps.workspaces.models import Membership, Workspace
@@ -110,3 +117,90 @@ def change_role(*, workspace: Workspace, user_id: UUID, role: str, actor: AuditA
             values={"from": previous, "to": role},
         )
     return member
+
+
+def _server_admin_only() -> ApiError:
+    return ApiError(
+        403,
+        "server_admin_only",
+        _(
+            "Dit account is serverbeheerder. Alleen een serverbeheerder kan het uit zijn "
+            "laatste werkruimte halen."
+        ),
+    )
+
+
+def _unlink_and_unassign(workspace: Workspace, user_id: UUID) -> list[Person]:
+    """Inside the workspace's context: the member's person stays without its account
+    link, their tasks here lose their assignee, and part B's seam runs. Returns the
+    unlinked persons. A queryset `update()`, before the membership goes, because
+    `Person.save` refuses a user who is no member."""
+    now = timezone.now()
+    with workspace_context(workspace.id):
+        persons = list(Person.objects.filter(workspace=workspace, user_id=user_id).order_by("id"))
+        Person.objects.filter(id__in=[p.id for p in persons]).update(user=None, updated_at=now)
+        Task.objects.filter(workspace=workspace, assigned_to_id=user_id).update(
+            assigned_to=None, updated_at=now
+        )
+        on_member_removed(workspace.id, user_id)
+    return persons
+
+
+def remove_member(
+    *, request: HttpRequest, workspace: Workspace, user_id: UUID, actor: AuditActor, left: bool
+) -> None:
+    """Remove a member from `workspace` (an admin's act), or let the caller leave it
+    (`left`): one transaction, so a failure anywhere leaves everything as it was.
+
+    403 `forbidden` when a removing actor is no admin by the locked rows; 404
+    `member_not_found`; 409 `last_admin` for the only admin (also leaving or removing
+    themselves). When this is the user's last membership the account is switched off
+    (`deactivate_account`): only a server admin may do that to a server admin (403
+    `server_admin_only`), and never to the last active one (409 `last_admin`).
+
+    Lock order: the workspace's memberships, then the active server admins (in id
+    order), then the user's own row (`FOR NO KEY UPDATE`, so a running upload that
+    references the user does not hold it up). The row lock makes two removals of the
+    same user from two workspaces at once run one after the other, so the second sees
+    whether a membership is left.
+    """
+    with transaction.atomic():
+        locked = lock_memberships(workspace)
+        if not left:
+            _require_admin(locked, actor)
+        member = next((m for m in locked if m.user_id == user_id), None)
+        if member is None:
+            raise _member_not_found()
+        if _is_only_admin(member, locked):
+            raise _last_admin()
+        server_admins = lock_active_server_admins()
+        user = User.objects.select_for_update(no_key=True).get(id=user_id)
+        last_membership = not (
+            Membership.objects.filter(user_id=user_id).exclude(workspace=workspace).exists()
+        )
+        if last_membership and user.is_server_admin:
+            if all(admin.id != actor.user_id for admin in server_admins):
+                raise _server_admin_only()
+            if not any(admin.id != user.id for admin in server_admins):
+                raise last_server_admin_error()
+        target = _member_target(workspace, member)
+        persons = _unlink_and_unassign(workspace, user_id)
+        if member.role == Membership.Role.ADMIN:
+            _revoke_what_the_admin_made(workspace, user_id, actor)
+        member.delete()
+        if last_membership:
+            deactivate_account(user, actor=actor, current=request)
+        for person in persons:
+            record(
+                AuditCode.PERSON_UNLINKED,
+                actor=actor,
+                target=AuditTarget(kind=TargetKind.PERSON, id=person.id, name=person.display_name),
+                workspace_id=workspace.id,
+            )
+        record(
+            AuditCode.MEMBER_LEFT if left else AuditCode.MEMBER_REMOVED,
+            actor=actor,
+            target=target,
+            workspace_id=workspace.id,
+            values={"account_deactivated": last_membership},
+        )

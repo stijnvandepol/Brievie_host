@@ -88,6 +88,54 @@ def update_member_role(
     return services.list_members(membership.workspace, viewer=viewer, user_id=user_id)[0]
 
 
+@router.delete(
+    "/workspaces/{workspace_id}/members/{user_id}",
+    response={204: None, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS},
+    auth=session_auth,
+    description=WEB_SESSION_ONLY
+    + ADMINS_ONLY
+    + " The member leaves the workspace; their person stays without the account link and"
+    " their tasks here lose their assignee. With their last membership the account is"
+    " switched off: its sessions end and its devices stop. 403 server_admin_only when that"
+    " would switch off a server admin and the caller is none; 404 member_not_found; 409"
+    " last_admin for the only admin of the workspace, or the last server admin.",
+    operation_id="removeMember",
+)
+def remove_member(request: HttpRequest, workspace_id: UUID, user_id: UUID) -> Status[None]:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
+    members.remove_member(
+        request=request,
+        workspace=membership.workspace,
+        user_id=user_id,
+        actor=actor_from_request(request),
+        left=False,
+    )
+    return Status(204, None)
+
+
+@router.post(
+    "/workspaces/{workspace_id}/leave",
+    response={204: None, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS},
+    auth=session_auth,
+    description=WEB_SESSION_ONLY
+    + " The caller leaves the workspace (any role). With their last membership their"
+    " account is switched off and this session has ended when the answer comes. 404"
+    " workspace_not_found; 409 last_admin for the only admin of the workspace, or the last"
+    " server admin.",
+    operation_id="leaveWorkspace",
+)
+def leave_workspace(request: HttpRequest, workspace_id: UUID) -> Status[None]:
+    membership = workspace_member(request, workspace_id)
+    members.remove_member(
+        request=request,
+        workspace=membership.workspace,
+        user_id=membership.user_id,
+        actor=actor_from_request(request),
+        left=True,
+    )
+    return Status(204, None)
+
+
 def _created(issued: IssuedInvitation) -> CreatedInvitationOut:
     return CreatedInvitationOut(
         invitation=InvitationOut.from_invitation(issued.invitation),

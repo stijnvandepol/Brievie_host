@@ -141,18 +141,19 @@ def complete_password_reset(request: HttpRequest, *, token: str, password: str) 
         if reset.created_by_id is not None:
             values["reset_by"] = str(reset.created_by_id)
         record(AuditCode.PASSWORD_CHANGED, actor=actor, target=_user_target(user), values=values)
-        _lock_out_everything_else(user, actor, current=request, reason="reset")
+        lock_out_account(user, actor, current=request, reason="reset")
         notify(user, AccountNotice.Code.PASSWORD_RESET_COMPLETED, actor_name=reset.created_by_name)
         start_session(request, user, via=UserSession.Via.RESET)
     return user
 
 
-def _lock_out_everything_else(
+def lock_out_account(
     user: User, actor: AuditActor, *, current: HttpRequest | None, reason: str
 ) -> None:
     """After a reset (by an admin's link or on the server), which is what one does after a
-    suspected break-in: end every session, revoke every paired device and every other
-    open reset link of the account. A user's own password change keeps the devices.
+    suspected break-in, and when an account is deactivated: end every session, revoke
+    every paired device and every other open reset link of the account. A user's own
+    password change keeps the devices.
     """
     target = _user_target(user)
     ended = end_sessions(user, current=current)
@@ -201,6 +202,6 @@ def reset_password_by_command(*, email: str, password: str) -> User:
             target=_user_target(user),
             values={"via": "command"},
         )
-        _lock_out_everything_else(user, actor, current=None, reason="password_changed")
+        lock_out_account(user, actor, current=None, reason="password_changed")
         notify(user, AccountNotice.Code.PASSWORD_RESET_BY_COMMAND, actor_name="")
     return user
