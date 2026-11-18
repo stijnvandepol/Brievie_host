@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import {
   API,
@@ -11,6 +11,7 @@ import {
   server,
   workspace,
 } from "../test-utils";
+import { AiStatusSentence } from "./ai-status-line";
 
 const base = `*${API}/workspaces/${workspace.id}`;
 
@@ -75,5 +76,38 @@ describe("AI status line", () => {
     expect(
       await screen.findByText("AI uit: de tekst van brieven gaat naar geen enkele AI-dienst."),
     ).toBeInTheDocument();
+  });
+});
+
+describe("AiStatusSentence", () => {
+  it("says where the text goes for a status it is given", () => {
+    render(
+      <AiStatusSentence
+        status={{
+          mode: "external",
+          supplier: "openai",
+          host: "api.openai.com",
+          since: "2026-11-17T14:39:59.238Z",
+          has_api_key: false,
+        }}
+      />,
+    );
+    expect(
+      screen.getByText(
+        "AI aan: tekst van brieven gaat naar OpenAI in de Verenigde Staten (api.openai.com), ingesteld op 17 november 2026.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("warns when nobody agreed", () => {
+    render(
+      <AiStatusSentence status={{ mode: "external", host: "x.example", has_api_key: false }} />,
+    );
+    expect(screen.getByText(/niemand heeft daar akkoord voor gegeven/)).toBeInTheDocument();
+  });
+
+  it("says that the AI is off", () => {
+    render(<AiStatusSentence status={{ mode: "off", has_api_key: false }} />);
+    expect(screen.getByText(/AI uit/)).toBeInTheDocument();
   });
 });

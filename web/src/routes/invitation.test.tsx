@@ -124,10 +124,23 @@ describe("accept an invitation", () => {
     expect(screen.queryByText(/Thuis/)).not.toBeInTheDocument();
   });
 
-  it("without a token in the address it says the same sentence and asks nothing", async () => {
+  it("without a token in the address it says so truthfully and asks nothing", async () => {
     // No handler: a request would fail the test.
     renderApp("/uitnodiging");
-    expect(await screen.findByRole("alert")).toHaveTextContent(DEAD);
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Open de link uit je bericht opnieuw.");
+    expect(alert).not.toHaveTextContent(DEAD);
+  });
+
+  it("keeps the token out of the mutation cache", async () => {
+    server.use(lookup());
+    const { queryClient } = renderApp(`/uitnodiging#${TOKEN}`);
+    await screen.findByRole("heading", { level: 1 });
+    const state = queryClient
+      .getMutationCache()
+      .getAll()
+      .map((mutation) => JSON.stringify({ v: mutation.state.variables, d: mutation.state.data }));
+    expect(state.join()).not.toContain(TOKEN);
   });
 
   it("shows the AI line before the choice when AI is on", async () => {
@@ -218,6 +231,7 @@ describe("accept an invitation", () => {
     await u.click(screen.getByRole("button", { name: "Account maken en meedoen" }));
     const qr = await screen.findByRole("img", { name: "QR-code om de app te koppelen" });
     expect(qr.getAttribute("data-value")).toContain("ABCD-2345");
+    expect(screen.getByText("ABCD-2345")).toBeInTheDocument();
     expect(screen.getByText("Scan deze code met de Brievie-app")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Open de Brievie-app" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Naar Brievie" })).toBeInTheDocument();

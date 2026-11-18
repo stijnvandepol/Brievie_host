@@ -75,7 +75,6 @@ export function ResetLinkDialog({
       <ModalOverlay
         isOpen={isOpen && created !== null}
         onOpenChange={onOpenChange}
-        isDismissable
         className="overlay"
       >
         <Modal className="modal">

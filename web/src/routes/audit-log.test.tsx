@@ -143,6 +143,22 @@ describe("the log", () => {
     });
   });
 
+  it("offers only workspace-level events in the filter", async () => {
+    server.use(
+      ...loggedInHandlers(),
+      ...memberHandlers(),
+      http.get(`${base}/audit-events`, () => HttpResponse.json([event(0)])),
+    );
+    renderApp(path);
+    const select = await screen.findByRole("combobox", { name: "Gebeurtenis" });
+    const options = within(select)
+      .getAllByRole("option")
+      .map((option) => option.textContent);
+    expect(options).toContain("Rol gewijzigd");
+    expect(options).not.toContain("Inloggen mislukt");
+    expect(options).not.toContain("Serverbeheerder gemaakt");
+  });
+
   it("says what to do when nothing matches", async () => {
     server.use(
       ...loggedInHandlers(),

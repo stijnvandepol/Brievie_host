@@ -212,6 +212,11 @@ msgstr "Account maken en meedoen"
 msgid "Account van {0}"
 msgstr "Account van {0}"
 
+#. placeholder {0}: member.name
+#: src/routes/members.tsx
+msgid "Account: {0}"
+msgstr "Account: {0}"
+
 #: src/components/device-table.tsx
 #: src/routes/rule-editor.tsx
 msgid "Actie"
@@ -264,19 +269,6 @@ msgstr "Afdelingen"
 #: src/components/task-list.tsx
 msgid "Afgerond op {0}"
 msgstr "Afgerond op {0}"
-
-#: src/routes/sessions.tsx
-msgid "Afmelden"
-msgstr "Afmelden"
-
-#. placeholder {0}: session.browser || t`Onbekende browser`
-#: src/routes/sessions.tsx
-msgid "Afmelden: {0}"
-msgstr "Afmelden: {0}"
-
-#: src/routes/sessions.tsx
-msgid "Afmelden?"
-msgstr "Afmelden?"
 
 #: src/components/document-table.tsx
 #: src/routes/document.tsx
@@ -655,10 +647,6 @@ msgstr "Deze browser"
 msgid "Deze code is verlopen."
 msgstr "Deze code is verlopen."
 
-#: src/routes/password-reset.tsx
-msgid "Deze herstellink werkt niet meer. Vraag een nieuwe."
-msgstr "Deze herstellink werkt niet meer. Vraag een nieuwe."
-
 #: src/components/invite-dialog.tsx
 msgid "Deze link werkt alleen op je thuisnetwerk."
 msgstr "Deze link werkt alleen op je thuisnetwerk."
@@ -679,10 +667,6 @@ msgstr "Deze uitnodiging is voor {0}."
 #: src/routes/invitation.tsx
 msgid "Deze uitnodiging is voor één e-mailadres. Vul dat adres in."
 msgstr "Deze uitnodiging is voor één e-mailadres. Vul dat adres in."
-
-#: src/routes/invitation.tsx
-msgid "Deze uitnodiging werkt niet meer. Vraag een nieuwe."
-msgstr "Deze uitnodiging werkt niet meer. Vraag een nieuwe."
 
 #: src/routes/rule-editor.tsx
 msgid "deze voorwaarden kloppen"
@@ -804,6 +788,10 @@ msgstr "Exporteer eerst je post: na het verlaten kun je niet meer downloaden."
 #: src/components/export-panel.tsx
 msgid "Exporteren staat uit voor deze werkruimte."
 msgstr "Exporteren staat uit voor deze werkruimte."
+
+#: src/components/export-panel.tsx
+msgid "Exporteren staat uit voor deze werkruimte. Vraag een beheerder om dit aan te zetten."
+msgstr "Exporteren staat uit voor deze werkruimte. Vraag een beheerder om dit aan te zetten."
 
 #: src/components/document-table.tsx
 msgid "Factuur"
@@ -1020,6 +1008,14 @@ msgstr "Ik heb al een account"
 #: src/routes/ai.tsx
 msgid "Ik heb dit gelezen en ga akkoord, ook voor iedereen van wie post in deze werkruimte staat."
 msgstr "Ik heb dit gelezen en ga akkoord, ook voor iedereen van wie post in deze werkruimte staat."
+
+#: src/routes/password-reset.tsx
+msgid "In deze link zit geen herstelcode. Open de link uit je bericht opnieuw."
+msgstr "In deze link zit geen herstelcode. Open de link uit je bericht opnieuw."
+
+#: src/routes/invitation.tsx
+msgid "In deze link zit geen uitnodiging. Open de link uit je bericht opnieuw."
+msgstr "In deze link zit geen uitnodiging. Open de link uit je bericht opnieuw."
 
 #: src/components/page.tsx
 #: src/routes/inbox.tsx
@@ -1432,11 +1428,6 @@ msgstr "Mail"
 msgid "Meekijker"
 msgstr "Meekijker"
 
-#. placeholder {0}: member.name
-#: src/routes/members.tsx
-msgid "Meer acties: {0}"
-msgstr "Meer acties: {0}"
-
 #: src/components/audit-table.tsx
 msgid "Meer laden"
 msgstr "Meer laden"
@@ -1490,8 +1481,8 @@ msgid "Model"
 msgstr "Model"
 
 #: src/routes/password.tsx
-msgid "Na het wijzigen word je op je andere apparaten en in je andere browsers uitgelogd. Je gekoppelde telefoon blijft werken."
-msgstr "Na het wijzigen word je op je andere apparaten en in je andere browsers uitgelogd. Je gekoppelde telefoon blijft werken."
+msgid "Na het wijzigen word je in je andere browsers uitgelogd. Je gekoppelde telefoon blijft werken."
+msgstr "Na het wijzigen word je in je andere browsers uitgelogd. Je gekoppelde telefoon blijft werken."
 
 #: src/routes/login.tsx
 msgid "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
@@ -1592,6 +1583,10 @@ msgstr "Notitie voor jezelf"
 #: src/components/rule-sentence.ts
 msgid "of"
 msgstr "of"
+
+#: src/routes/invitation.tsx
+msgid "Of typ deze code in de app."
+msgstr "Of typ deze code in de app."
 
 #: src/components/audit-table.tsx
 msgid "Om wie of wat"
@@ -2059,8 +2054,18 @@ msgid "Uitkomst van de test"
 msgstr "Uitkomst van de test"
 
 #: src/components/page.tsx
+#: src/routes/sessions.tsx
 msgid "Uitloggen"
 msgstr "Uitloggen"
+
+#. placeholder {0}: session.browser || t`Onbekende browser`
+#: src/routes/sessions.tsx
+msgid "Uitloggen: {0}"
+msgstr "Uitloggen: {0}"
+
+#: src/routes/sessions.tsx
+msgid "Uitloggen?"
+msgstr "Uitloggen?"
 
 #: src/routes/members.tsx
 msgid "Uitnodigen"
@@ -2328,13 +2333,17 @@ msgstr "Wordt verwerkt"
 msgid "Zakelijk"
 msgstr "Zakelijk"
 
+#: src/components/export-panel.tsx
+msgid "Zet het aan bij Instellingen."
+msgstr "Zet het aan bij Instellingen."
+
 #: src/components/audit-codes.ts
 msgid "Zichtbaarheid gewijzigd"
 msgstr "Zichtbaarheid gewijzigd"
 
 #: src/routes/sessions.tsx
-msgid "Zie je hier een browser die je niet kent? Meld die af en wijzig je wachtwoord."
-msgstr "Zie je hier een browser die je niet kent? Meld die af en wijzig je wachtwoord."
+msgid "Zie je hier een browser die je niet kent? Log die uit en wijzig je wachtwoord."
+msgstr "Zie je hier een browser die je niet kent? Log die uit en wijzig je wachtwoord."
 
 #: src/routes/persons.tsx
 msgid "Zo staat de naam op brieven, bijvoorbeeld J. de Vries. Zet elke variant op een eigen regel."

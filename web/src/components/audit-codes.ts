@@ -5,7 +5,8 @@ import { t } from "@lingui/core/macro";
  * label each. A code the web does not know yet (a newer server) shows the label the server
  * sent with the row.
  */
-export const AUDIT_CODES = [
+/** What the server log holds: accounts, sessions, devices and server settings. */
+export const SERVER_CODES = [
   "sign_in_succeeded",
   "sign_in_failed",
   "sign_in_locked_out",
@@ -21,6 +22,10 @@ export const AUDIT_CODES = [
   "server_admin_granted",
   "server_admin_revoked",
   "sso_settings_changed",
+] as const;
+
+/** What a workspace log holds: members, settings, rules, labels, people and exports. */
+export const WORKSPACE_CODES = [
   "invitation_created",
   "invitation_revoked",
   "invitation_accepted",
@@ -45,6 +50,8 @@ export const AUDIT_CODES = [
   "export_created",
   "export_downloaded",
 ] as const;
+
+export const AUDIT_CODES = [...SERVER_CODES, ...WORKSPACE_CODES] as const;
 
 export type AuditCodeName = (typeof AUDIT_CODES)[number];
 

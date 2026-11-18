@@ -337,10 +337,6 @@ function AccountMenu({
               </div>
             </div>
           ) : null}
-          <Link to="/koppel-app" className="menu-item">
-            <Icon name="phone" />
-            {t`Apparaten`}
-          </Link>
           <Link to="/account/sessies" className="menu-item">
             <Icon name="grid" />
             {t`Waar je bent ingelogd`}

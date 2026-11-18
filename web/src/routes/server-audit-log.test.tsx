@@ -68,6 +68,22 @@ describe("the server log", () => {
     expect(screen.queryByRole("combobox", { name: "Persoon" })).not.toBeInTheDocument();
   });
 
+  it("offers only server-level events in the filter", async () => {
+    server.use(
+      http.get(`*${API}/me`, () => HttpResponse.json(serverAdmin)),
+      ...loggedInHandlers(),
+      http.get(`*${API}/server/audit-events`, () => HttpResponse.json(log)),
+    );
+    renderApp("/server/logboek");
+    const select = await screen.findByRole("combobox", { name: "Gebeurtenis" });
+    const options = within(select)
+      .getAllByRole("option")
+      .map((option) => option.textContent);
+    expect(options).toContain("Inloggen mislukt");
+    expect(options).not.toContain("Rol gewijzigd");
+    expect(options).not.toContain("Export gemaakt");
+  });
+
   it("sends anybody else away", async () => {
     server.use(...loggedInHandlers());
     renderApp("/server/logboek");

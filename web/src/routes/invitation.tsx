@@ -2,7 +2,7 @@ import { t } from "@lingui/core/macro";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createRoute, Link } from "@tanstack/react-router";
 import { QRCodeSVG } from "qrcode.react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 import {
   Button,
   Form,
@@ -32,11 +32,6 @@ function roleSentence(role: string): string {
   if (role === "admin") return t`Je wordt beheerder: je kunt leden uitnodigen en alles instellen.`;
   if (role === "viewer") return t`Je wordt meekijker: je kunt alles lezen, maar niets wijzigen.`;
   return t`Je wordt lid: je kunt post scannen, controleren en ordenen.`;
-}
-
-/** The one sentence for a link that does not work; the server sends the same one. */
-function deadLink(): string {
-  return t`Deze uitnodiging werkt niet meer. Vraag een nieuwe.`;
 }
 
 /** After joining: the app, as a link on a phone and as a QR code on a computer. */
@@ -90,6 +85,8 @@ function ContinueInApp({
                 />
               </div>
               <p>{t`Scan deze code met de Brievie-app`}</p>
+              <p className="muted">{t`Of typ deze code in de app.`}</p>
+              <p className="num code">{pairing.code}</p>
               <p className="muted small" role="timer">
                 {t`(nog ${formatTimeLeft(secondsLeft)})`}
               </p>
@@ -250,11 +247,14 @@ function AcceptForm({ token, info }: { token: string; info: Info }) {
 function InvitationPage() {
   usePageTitle(t`Uitnodiging`);
   const [token, setToken] = useState<string | null>(null);
+  // The token is read from here when the request is made, so it is not among the
+  // mutation's variables (which the query cache would keep).
+  const tokenRef = useRef("");
   const lookup = useMutation({
     gcTime: 0,
-    mutationFn: async (value: string) => {
+    mutationFn: async () => {
       const { data, error } = await api.POST("/api/v1/invitations/lookup", {
-        body: { token: value },
+        body: { token: tokenRef.current },
       });
       if (error !== undefined || !data) throw new ApiFailure(error);
       return data;
@@ -263,15 +263,16 @@ function InvitationPage() {
   const { mutate } = lookup;
 
   useFragmentToken((value) => {
+    tokenRef.current = value;
     setToken(value);
-    if (value !== "") mutate(value);
+    if (value !== "") mutate();
   });
 
   return (
     <Split>
       {token === "" ? (
         <MessageBar intent="error" role="alert">
-          {deadLink()}
+          {t`In deze link zit geen uitnodiging. Open de link uit je bericht opnieuw.`}
         </MessageBar>
       ) : null}
       {token === null || lookup.isPending ? <Loading /> : null}

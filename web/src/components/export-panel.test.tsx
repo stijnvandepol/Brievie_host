@@ -1,6 +1,6 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   API,
   asRole,
@@ -18,6 +18,8 @@ import {
 
 const path = `/w/${workspace.id}/leden`;
 const base = `*${API}/workspaces/${workspace.id}`;
+
+afterEach(() => vi.useRealTimers());
 
 describe("my export", () => {
   it("a member exports, waits and downloads", async () => {
@@ -38,11 +40,15 @@ describe("my export", () => {
       http.get(`${base}/members`, () => HttpResponse.json(members)),
       http.get(`${base}/invitations`, () => HttpResponse.json([])),
     );
+    // Only the poll is faked: the interval of the query, not the timers of the test tools.
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
     const u = userEvent.setup();
     renderApp(path);
     await u.click(await screen.findByRole("button", { name: "Mijn post exporteren" }));
     expect(await screen.findByText("Wordt gemaakt…")).toBeInTheDocument();
     expect(asked).toBe(1);
+    expect(reads).toBe(1);
+    await vi.advanceTimersByTimeAsync(3000);
     const link = await screen.findByRole("link", { name: /Download \(3 brieven, geldig tot/ });
     expect(link).toHaveAttribute("href", `/api/v1/workspaces/${workspace.id}/my-export/file`);
     expect(screen.queryByText("Wordt gemaakt…")).not.toBeInTheDocument();
@@ -66,9 +72,20 @@ describe("my export", () => {
     );
     renderApp(path);
     expect(
-      await screen.findByText("Exporteren staat uit voor deze werkruimte."),
+      await screen.findByText(
+        "Exporteren staat uit voor deze werkruimte. Vraag een beheerder om dit aan te zetten.",
+      ),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Mijn post exporteren" })).not.toBeInTheDocument();
+  });
+
+  it("points an admin to Instellingen when export is off", async () => {
+    server.use(...loggedInHandlers(), ...memberHandlers(members, [], exportState("none", false)));
+    renderApp(path);
+    const link = await screen.findByRole("link", { name: "Zet het aan bij Instellingen." });
+    expect(link).toHaveAttribute("href", `/w/${workspace.id}/instellingen`);
+    expect(screen.getByText(/Exporteren staat uit voor deze werkruimte\./)).toBeInTheDocument();
+    expect(screen.queryByText(/Vraag een beheerder/)).not.toBeInTheDocument();
   });
 
   it("says when the export did not work and offers it again", async () => {

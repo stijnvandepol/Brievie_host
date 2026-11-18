@@ -271,6 +271,32 @@ describe("inviting", () => {
     expect(screen.queryByRole("textbox", { name: "Link" })).not.toBeInTheDocument();
   });
 
+  it("shows no role in a home workspace", async () => {
+    server.use(...handlers([open]));
+    renderApp(path);
+    const row = await screen.findByRole("row", { name: /Oma/ });
+    expect(within(row).queryByText("Lid")).not.toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Rol" })).not.toBeInTheDocument();
+  });
+
+  it("does not close the link dialog by a click outside, but Escape and Klaar do", async () => {
+    server.use(
+      http.post(`${base}/invitations`, () => HttpResponse.json(created(), { status: 201 })),
+      ...handlers(),
+    );
+    const u = userEvent.setup();
+    renderApp(path);
+    await u.click(await screen.findByRole("button", { name: "Uitnodigen" }));
+    await u.click(await screen.findByRole("button", { name: "Link maken" }));
+    const field = await screen.findByRole("textbox", { name: "Link" });
+    const overlay = field.closest(".overlay") as HTMLElement;
+    await u.click(overlay);
+    expect(screen.getByRole("textbox", { name: "Link" })).toBeInTheDocument();
+    screen.getByRole("textbox", { name: "Link" }).focus();
+    await u.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
   it("a member does not see Uitnodigen or the open invitations", async () => {
     server.use(asRole("member"), ...handlers([open]));
     renderApp(path);
@@ -281,8 +307,8 @@ describe("inviting", () => {
 });
 
 describe("open invitations", () => {
-  it("lists them with role and expiry, and marks an expired one", async () => {
-    server.use(...handlers([open, expired]));
+  it("lists them with role and expiry in a business workspace, and marks an expired one", async () => {
+    server.use(asRole("admin", "business"), ...handlers([open, expired]));
     renderApp(path);
     const first = await screen.findByRole("row", { name: /Oma/ });
     expect(within(first).getByText("Lid")).toBeInTheDocument();

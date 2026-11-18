@@ -1,5 +1,6 @@
 import { t } from "@lingui/core/macro";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
 import { useId, useState } from "react";
 import {
   Button,
@@ -13,7 +14,7 @@ import {
   RadioGroup,
 } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
-import { membersQuery } from "../api/queries";
+import { membersQuery, meQuery, workspacesQuery } from "../api/queries";
 import { ErrorAlert } from "./page";
 
 export const ROLES = ["admin", "member", "viewer"] as const;
@@ -90,6 +91,8 @@ function RoleForm({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const { data: me } = useQuery(meQuery);
   const [role, setRole] = useState<Role>(isRole(member.role) ? member.role : "member");
   const save = useMutation({
     mutationFn: async () => {
@@ -101,6 +104,12 @@ function RoleForm({
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: membersQuery(workspaceId).queryKey });
+      if (member.user_id === me?.id) {
+        // My own role changed: the pages know it from the route, so ask the server again
+        // and let every admin control and menu entry go at once.
+        await queryClient.invalidateQueries({ queryKey: workspacesQuery.queryKey });
+        await router.invalidate();
+      }
       onClose();
     },
   });

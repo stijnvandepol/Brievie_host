@@ -10,6 +10,7 @@ import {
   meQuery,
   myExportQuery,
   personsQuery,
+  workspacesQuery,
 } from "../api/queries";
 import type { components } from "../api/schema";
 import { ConfirmAction } from "../components/confirm-dialog";
@@ -30,13 +31,13 @@ type Member = components["schemas"]["MemberOut"];
 
 /** In the leave dialog: the export, while the workspace allows it. After leaving nothing
  * can be downloaded any more. */
-function LeaveExportOffer({ workspaceId }: { workspaceId: string }) {
+function LeaveExportOffer({ workspaceId, isAdmin }: { workspaceId: string; isAdmin: boolean }) {
   const { data } = useQuery(myExportQuery(workspaceId));
   if (!data?.allowed) return null;
   return (
     <>
       <p>{t`Exporteer eerst je post: na het verlaten kun je niet meer downloaden.`}</p>
-      <ExportPanel workspaceId={workspaceId} />
+      <ExportPanel workspaceId={workspaceId} isAdmin={isAdmin} />
     </>
   );
 }
@@ -47,12 +48,15 @@ function MemberRow({
   member,
   isOwn,
   isAdmin,
+  showRole,
 }: {
   workspaceId: string;
   workspaceName: string;
   member: Member;
   isOwn: boolean;
   isAdmin: boolean;
+  /** Not in a home workspace: there roles are an option, not something to look at. */
+  showRole: boolean;
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -78,11 +82,14 @@ function MemberRow({
       params: { path: { workspace_id: workspaceId } },
     });
     if (!response.ok) throw new ApiFailure(error);
-    // Forget everything of this workspace first, then ask the server who I am now: with
-    // another workspace left the list opens, with none the account is off and the guard
-    // sends me to the sign-in page.
-    queryClient.removeQueries({ queryKey: ["workspaces"] });
+    // The list of workspaces has no observer here: drop it so the next page asks again.
+    queryClient.removeQueries({ queryKey: workspacesQuery.queryKey, exact: true });
+    // Leave the page first, so nothing on it asks the server again: with another workspace
+    // left the list opens, with none the account is off and the guard sends me to sign-in.
     await navigate({ to: "/" });
+    // Only now forget what belonged to this workspace.
+    await queryClient.cancelQueries({ queryKey: ["workspaces", workspaceId] });
+    queryClient.removeQueries({ queryKey: ["workspaces", workspaceId] });
   }
 
   return (
@@ -90,9 +97,11 @@ function MemberRow({
       <th scope="row" className="cell-strong">
         <Persona name={member.name} />
       </th>
-      <td>
-        <Badge>{roleLabel(member.role)}</Badge>
-      </td>
+      {showRole ? (
+        <td>
+          <Badge>{roleLabel(member.role)}</Badge>
+        </td>
+      ) : null}
       <td className="cell-action">
         <span className="row-actions">
           {isAdmin ? (
@@ -130,7 +139,7 @@ function MemberRow({
           {isAdmin && member.can_manage_account && !isOwn ? (
             <>
               <DialogTrigger>
-                <Button className="button-text" aria-label={t`Meer acties: ${member.name}`}>
+                <Button className="button-text" aria-label={t`Account: ${member.name}`}>
                   {t`Account`}
                   <Icon name="chevronDown" />
                 </Button>
@@ -181,7 +190,7 @@ function MemberRow({
               <p>
                 {t`Je kunt daarna niet meer bij ${workspaceName}. De post blijft hier voor de andere leden.`}
               </p>
-              <LeaveExportOffer workspaceId={workspaceId} />
+              <LeaveExportOffer workspaceId={workspaceId} isAdmin={isAdmin} />
             </ConfirmAction>
           ) : null}
         </span>
@@ -204,10 +213,12 @@ function invitationName(invitation: Invitation): string {
 function InvitationRow({
   workspaceId,
   invitation,
+  showRole,
   onRenewed,
 }: {
   workspaceId: string;
   invitation: Invitation;
+  showRole: boolean;
   onRenewed: (created: CreatedInvitation) => void;
 }) {
   const queryClient = useQueryClient();
@@ -251,9 +262,11 @@ function InvitationRow({
             <span className="cell-hint">{invitation.email}</span>
           ) : null}
         </th>
-        <td>
-          <Badge>{roleLabel(invitation.role)}</Badge>
-        </td>
+        {showRole ? (
+          <td>
+            <Badge>{roleLabel(invitation.role)}</Badge>
+          </td>
+        ) : null}
         <td>
           {invitation.status === "expired" ? (
             <Badge intent="warning">{t`Verlopen`}</Badge>
@@ -287,7 +300,7 @@ function InvitationRow({
       </tr>
       {renew.isError ? (
         <tr>
-          <td colSpan={4}>
+          <td colSpan={showRole ? 4 : 3}>
             <ErrorAlert error={renew.error} />
           </td>
         </tr>
@@ -300,9 +313,11 @@ function InvitationRow({
  * link" makes another one. */
 function OpenInvitations({
   workspaceId,
+  showRole,
   onRenewed,
 }: {
   workspaceId: string;
+  showRole: boolean;
   onRenewed: (created: CreatedInvitation) => void;
 }) {
   const invitations = useQuery(invitationsQuery(workspaceId));
@@ -319,7 +334,7 @@ function OpenInvitations({
           <thead>
             <tr>
               <th scope="col">{t`Voor`}</th>
-              <th scope="col">{t`Rol`}</th>
+              {showRole ? <th scope="col">{t`Rol`}</th> : null}
               <th scope="col">{t`Geldig`}</th>
               <th scope="col">
                 <span className="visually-hidden">{t`Acties`}</span>
@@ -332,6 +347,7 @@ function OpenInvitations({
                 key={invitation.id}
                 workspaceId={workspaceId}
                 invitation={invitation}
+                showRole={showRole}
                 onRenewed={onRenewed}
               />
             ))}
@@ -348,6 +364,8 @@ function MembersPage() {
   const members = useQuery(membersQuery(workspace.id));
   const { data: me } = useQuery(meQuery);
   const isAdmin = workspace.role === "admin";
+  // At home nothing about roles shows unless somebody opens "Rol wijzigen".
+  const showRole = workspace.kind !== "home";
   const [inviting, setInviting] = useState(false);
   const [renewed, setRenewed] = useState<CreatedInvitation | null>(null);
 
@@ -381,7 +399,7 @@ function MembersPage() {
             <thead>
               <tr>
                 <th scope="col">{t`Naam`}</th>
-                <th scope="col">{t`Rol`}</th>
+                {showRole ? <th scope="col">{t`Rol`}</th> : null}
                 <th scope="col">
                   <span className="visually-hidden">{t`Acties`}</span>
                 </th>
@@ -396,6 +414,7 @@ function MembersPage() {
                   member={member}
                   isOwn={member.user_id === me?.id}
                   isAdmin={isAdmin}
+                  showRole={showRole}
                 />
               ))}
             </tbody>
@@ -405,9 +424,11 @@ function MembersPage() {
       <section className="panel panel-pad" aria-labelledby="my-export">
         <h2 id="my-export">{t`Mijn post`}</h2>
         <p className="muted">{t`Maak een ZIP-bestand met jouw post. Het staat 24 uur klaar om te downloaden.`}</p>
-        <ExportPanel workspaceId={workspace.id} />
+        <ExportPanel workspaceId={workspace.id} isAdmin={isAdmin} />
       </section>
-      {isAdmin ? <OpenInvitations workspaceId={workspace.id} onRenewed={setRenewed} /> : null}
+      {isAdmin ? (
+        <OpenInvitations workspaceId={workspace.id} showRole={showRole} onRenewed={setRenewed} />
+      ) : null}
       {isAdmin ? (
         <>
           <InviteDialog workspaceId={workspace.id} isOpen={inviting} onOpenChange={setInviting} />

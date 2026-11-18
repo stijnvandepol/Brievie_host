@@ -302,6 +302,22 @@ export function memberHandlers(
 }
 
 /** The first workspace with the caller in another role. */
-export function asRole(role: "admin" | "member" | "viewer") {
-  return http.get(`*${API}/workspaces`, () => HttpResponse.json([{ ...workspace, role }]));
+export function asRole(role: "admin" | "member" | "viewer", kind: "home" | "business" = "home") {
+  return http.get(`*${API}/workspaces`, () => HttpResponse.json([{ ...workspace, role, kind }]));
+}
+
+/**
+ * Remembers whether an element with role "alert" was ever in the page: a flash of an error
+ * that is gone again when the test looks. Call `stop()` at the end.
+ */
+export function watchAlerts() {
+  let seen = document.querySelector('[role="alert"]') !== null;
+  const observer = new MutationObserver(() => {
+    if (document.querySelector('[role="alert"]') !== null) seen = true;
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+  return {
+    seen: () => seen,
+    stop: () => observer.disconnect(),
+  };
 }

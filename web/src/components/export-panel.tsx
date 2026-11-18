@@ -1,5 +1,6 @@
 import { plural, t } from "@lingui/core/macro";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Button } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import { myExportQuery } from "../api/queries";
@@ -14,7 +15,7 @@ const dateTime = new Intl.DateTimeFormat("nl-NL", { dateStyle: "medium", timeSty
  * download it (it stays 24 hours). Hidden behind a sentence when the workspace does not
  * allow it. The download is a plain link: the browser sends the session cookie.
  */
-export function ExportPanel({ workspaceId }: { workspaceId: string }) {
+export function ExportPanel({ workspaceId, isAdmin }: { workspaceId: string; isAdmin: boolean }) {
   const queryClient = useQueryClient();
   const state = useQuery(myExportQuery(workspaceId));
   const start = useMutation({
@@ -33,7 +34,18 @@ export function ExportPanel({ workspaceId }: { workspaceId: string }) {
   const current = state.data;
   if (!current) return null;
   if (!current.allowed) {
-    return <p className="muted">{t`Exporteren staat uit voor deze werkruimte.`}</p>;
+    return isAdmin ? (
+      <p className="muted">
+        {t`Exporteren staat uit voor deze werkruimte.`}{" "}
+        <Link to="/w/$workspaceId/instellingen" params={{ workspaceId }}>
+          {t`Zet het aan bij Instellingen.`}
+        </Link>
+      </p>
+    ) : (
+      <p className="muted">
+        {t`Exporteren staat uit voor deze werkruimte. Vraag een beheerder om dit aan te zetten.`}
+      </p>
+    );
   }
   const letters = plural(current.document_count ?? 0, { one: "# brief", other: "# brieven" });
   return (
@@ -57,7 +69,7 @@ export function ExportPanel({ workspaceId }: { workspaceId: string }) {
       {current.status === "pending" ? null : (
         <div>
           <Button
-            className={current.status === "ready" ? "button secondary" : "button"}
+            className="button secondary"
             isPending={start.isPending}
             onPress={() => start.mutate()}
           >

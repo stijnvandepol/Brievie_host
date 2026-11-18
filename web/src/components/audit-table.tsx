@@ -3,7 +3,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { Button } from "react-aria-components";
 import type { components } from "../api/schema";
-import { AUDIT_CODES, actorKindLabel, auditLabel, targetKindLabel } from "./audit-codes";
+import { actorKindLabel, auditLabel, targetKindLabel } from "./audit-codes";
 import { Icon } from "./icons";
 import { ErrorAlert } from "./page";
 import { EmptyState, Loading } from "./ui";
@@ -53,11 +53,14 @@ export function AuditLog({
   scopeKey,
   fetchPage,
   csvPath,
+  codes,
   people,
 }: {
   scopeKey: readonly string[];
   fetchPage: (filters: AuditFilters, before: string | undefined) => Promise<AuditEvent[]>;
   csvPath: string;
+  /** The event codes this log can hold: its own scope, not the whole list. */
+  codes: readonly string[];
   /** The accounts one can filter on; none where the server has no such list. */
   people?: { user_id: string; name: string }[];
 }) {
@@ -109,7 +112,7 @@ export function AuditLog({
             onChange={(event) => set({ code: event.target.value })}
           >
             <option value="">{t`Alle gebeurtenissen`}</option>
-            {AUDIT_CODES.map((code) => (
+            {codes.map((code) => (
               <option key={code} value={code}>
                 {auditLabel(code, code)}
               </option>

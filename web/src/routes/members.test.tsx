@@ -5,6 +5,7 @@ import {
   API,
   asRole,
   errorBody,
+  exportState,
   HttpResponse,
   http,
   loggedInHandlers,
@@ -13,6 +14,7 @@ import {
   renderApp,
   server,
   user,
+  watchAlerts,
   workspace,
 } from "../test-utils";
 
@@ -22,12 +24,25 @@ const bram = members[1] as (typeof members)[number];
 const anna = members[0] as (typeof members)[number];
 
 describe("members", () => {
-  it("lists members with their role", async () => {
-    server.use(...loggedInHandlers(), ...memberHandlers());
+  it("lists members with their role in a business workspace", async () => {
+    server.use(asRole("admin", "business"), ...loggedInHandlers(), ...memberHandlers());
     renderApp(path);
     expect(await screen.findByRole("row", { name: /Anna.*Beheerder/ })).toBeInTheDocument();
     expect(screen.getByRole("row", { name: /Bram.*Lid/ })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1, name: "Leden" })).toBeInTheDocument();
+  });
+
+  it("shows no role in a home workspace, but the role is in Rol wijzigen", async () => {
+    server.use(...loggedInHandlers(), ...memberHandlers());
+    const u = userEvent.setup();
+    renderApp(path);
+    await screen.findByRole("row", { name: /Bram/ });
+    expect(screen.queryByRole("columnheader", { name: "Rol" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Beheerder")).not.toBeInTheDocument();
+    expect(screen.queryByText("Lid")).not.toBeInTheDocument();
+    await u.click(screen.getByRole("button", { name: "Rol wijzigen: Bram" }));
+    const dialog = await screen.findByRole("dialog", { name: /Rol van Bram/ });
+    expect(within(dialog).getByRole("radio", { name: "Lid" })).toBeChecked();
   });
 
   it("an admin changes a role with three plain choices", async () => {
@@ -172,8 +187,22 @@ describe("members", () => {
           ? HttpResponse.json(user)
           : HttpResponse.json(errorBody("not_authenticated", "Log eerst in."), { status: 401 }),
       ),
+      http.get(`${base}/members`, () =>
+        signedIn
+          ? HttpResponse.json(members)
+          : HttpResponse.json(errorBody("forbidden", "Geen toegang."), { status: 403 }),
+      ),
+      http.get(`${base}/invitations`, () =>
+        signedIn
+          ? HttpResponse.json([])
+          : HttpResponse.json(errorBody("forbidden", "Geen toegang."), { status: 403 }),
+      ),
+      http.get(`${base}/my-export`, () =>
+        signedIn
+          ? HttpResponse.json(exportState())
+          : HttpResponse.json(errorBody("forbidden", "Geen toegang."), { status: 403 }),
+      ),
       ...loggedInHandlers(),
-      ...memberHandlers(),
       http.post(`${base}/leave`, () => {
         signedIn = false;
         return new HttpResponse(null, { status: 204 });
@@ -183,8 +212,12 @@ describe("members", () => {
     renderApp(path);
     await u.click(await screen.findByRole("button", { name: "Werkruimte verlaten" }));
     const dialog = await screen.findByRole("alertdialog");
+    const alerts = watchAlerts();
     await u.click(within(dialog).getByRole("button", { name: "Verlaten" }));
     expect(await screen.findByRole("heading", { level: 1, name: "Inloggen" })).toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    alerts.stop();
+    expect(alerts.seen()).toBe(false);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
@@ -241,6 +274,58 @@ describe("members", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Leden" })).toBeInTheDocument();
   });
 
+  it("demoting oneself hides the admin controls at once", async () => {
+    let role = "admin";
+    server.use(
+      http.get(`*${API}/workspaces`, () => HttpResponse.json([{ ...workspace, role }])),
+      http.put(`${base}/members/${anna.user_id}/role`, () => {
+        role = "member";
+        return HttpResponse.json({ ...anna, role: "member" });
+      }),
+      ...loggedInHandlers(),
+      ...memberHandlers(),
+    );
+    const u = userEvent.setup();
+    renderApp(path);
+    await u.click(await screen.findByRole("button", { name: "Rol wijzigen: Anna" }));
+    const dialog = await screen.findByRole("dialog", { name: /Rol van Anna/ });
+    await u.click(within(dialog).getByRole("radio", { name: "Lid" }));
+    await u.click(within(dialog).getByRole("button", { name: "Opslaan" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /Rol wijzigen/ })).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByRole("button", { name: "Uitnodigen" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Verwijderen/ })).not.toBeInTheDocument();
+    const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
+    expect(within(nav).queryByRole("link", { name: "Instellingen" })).not.toBeInTheDocument();
+  });
+
+  it("changing somebody else's role keeps the admin controls", async () => {
+    server.use(
+      ...loggedInHandlers(),
+      ...memberHandlers(),
+      http.put(`${base}/members/${bram.user_id}/role`, () =>
+        HttpResponse.json({ ...bram, role: "viewer" }),
+      ),
+    );
+    const u = userEvent.setup();
+    renderApp(path);
+    await u.click(await screen.findByRole("button", { name: "Rol wijzigen: Bram" }));
+    const dialog = await screen.findByRole("dialog", { name: /Rol van Bram/ });
+    await u.click(within(dialog).getByRole("radio", { name: "Meekijker" }));
+    await u.click(within(dialog).getByRole("button", { name: "Opslaan" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Uitnodigen" })).toBeInTheDocument();
+  });
+
+  it("makes the export a secondary action: one primary button on the page", async () => {
+    server.use(...loggedInHandlers(), ...memberHandlers());
+    renderApp(path);
+    expect(await screen.findByRole("button", { name: "Mijn post exporteren" })).toHaveClass(
+      "secondary",
+    );
+  });
+
   it("a person alone says what to do next", async () => {
     server.use(...loggedInHandlers(), ...memberHandlers([anna]));
     renderApp(path);
@@ -258,15 +343,15 @@ describe("members: managing an account", () => {
     server.use(...loggedInHandlers(), ...memberHandlers());
     renderApp(path);
     await screen.findByRole("row", { name: /Bram/ });
-    expect(screen.getByRole("button", { name: "Meer acties: Bram" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Meer acties: Anna" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Account: Bram" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Account: Anna" })).not.toBeInTheDocument();
   });
 
   it("a member never gets them, even when the flag says so", async () => {
     server.use(asRole("member"), ...loggedInHandlers(), ...memberHandlers());
     renderApp(path);
     await screen.findByRole("row", { name: /Bram/ });
-    expect(screen.queryByRole("button", { name: /Meer acties/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Account:/ })).not.toBeInTheDocument();
   });
 
   it("opens the devices and sessions of a member", async () => {
@@ -277,7 +362,7 @@ describe("members: managing an account", () => {
     );
     const u = userEvent.setup();
     renderApp(path);
-    await u.click(await screen.findByRole("button", { name: "Meer acties: Bram" }));
+    await u.click(await screen.findByRole("button", { name: "Account: Bram" }));
     await u.click(await screen.findByRole("link", { name: "Apparaten en sessies" }));
     expect(
       await screen.findByRole("heading", { level: 1, name: "Apparaten en sessies van Bram" }),
@@ -296,7 +381,7 @@ describe("members: managing an account", () => {
     );
     const u = userEvent.setup();
     const { queryClient } = renderApp(path);
-    await u.click(await screen.findByRole("button", { name: "Meer acties: Bram" }));
+    await u.click(await screen.findByRole("button", { name: "Account: Bram" }));
     await u.click(await screen.findByRole("button", { name: "Herstellink maken" }));
     const ask = await screen.findByRole("alertdialog", { name: "Herstellink maken voor Bram?" });
     expect(ask).toHaveTextContent("Een eerdere herstellink van Bram werkt daarna niet meer.");
@@ -307,6 +392,9 @@ describe("members: managing an account", () => {
       within(dialog).getByText("Geef deze link aan Bram. Hij werkt 24 uur en één keer."),
     ).toBeInTheDocument();
     expect(within(dialog).getByRole("textbox", { name: "Link" })).toHaveValue(reset.link);
+    // A click beside the dialog does not throw the link away; Klaar does.
+    await u.click(dialog.closest(".overlay") as HTMLElement);
+    expect(screen.getByRole("textbox", { name: "Link" })).toBeInTheDocument();
     await u.click(within(dialog).getByRole("button", { name: "Klaar" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     const secret = "reset-secret-123456";
@@ -328,7 +416,7 @@ describe("members: managing an account", () => {
     ).not.toContain(secret);
     expect(screen.queryByDisplayValue(reset.link)).not.toBeInTheDocument();
     // Opening again asks again; there is no link to be seen.
-    await u.click(screen.getByRole("button", { name: "Meer acties: Bram" }));
+    await u.click(screen.getByRole("button", { name: "Account: Bram" }));
     await u.click(await screen.findByRole("button", { name: "Herstellink maken" }));
     expect(
       await screen.findByRole("alertdialog", { name: "Herstellink maken voor Bram?" }),
@@ -349,7 +437,7 @@ describe("members: managing an account", () => {
     );
     const u = userEvent.setup();
     renderApp(path);
-    await u.click(await screen.findByRole("button", { name: "Meer acties: Bram" }));
+    await u.click(await screen.findByRole("button", { name: "Account: Bram" }));
     await u.click(await screen.findByRole("button", { name: "Herstellink maken" }));
     const ask = await screen.findByRole("alertdialog");
     await u.click(within(ask).getByRole("button", { name: "Link maken" }));

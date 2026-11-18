@@ -30,9 +30,11 @@ function SessionRow({ session }: { session: Session }) {
     });
     if (!response.ok) throw new ApiFailure(error);
     if (session.current) {
-      // This browser is signed out: forget everything and go to the sign-in page.
-      queryClient.clear();
+      // This browser is signed out. Go to the sign-in page first, so nothing on this page
+      // asks the server again; only then forget everything.
       await navigate({ to: "/login" });
+      await queryClient.cancelQueries();
+      queryClient.clear();
       return;
     }
     await queryClient.invalidateQueries({ queryKey: mySessionsQuery.queryKey });
@@ -59,11 +61,11 @@ function SessionRow({ session }: { session: Session }) {
       </td>
       <td className="cell-action">
         <ConfirmAction
-          label={t`Afmelden`}
-          ariaLabel={t`Afmelden: ${session.browser || t`Onbekende browser`}`}
+          label={t`Uitloggen`}
+          ariaLabel={t`Uitloggen: ${session.browser || t`Onbekende browser`}`}
           icon="signOut"
-          title={t`Afmelden?`}
-          confirmLabel={t`Afmelden`}
+          title={t`Uitloggen?`}
+          confirmLabel={t`Uitloggen`}
           onConfirm={end}
         >
           <p>
@@ -84,7 +86,7 @@ function SessionsPage() {
     <Shell>
       <PageHeader
         title={t`Waar je bent ingelogd`}
-        description={t`Zie je hier een browser die je niet kent? Meld die af en wijzig je wachtwoord.`}
+        description={t`Zie je hier een browser die je niet kent? Log die uit en wijzig je wachtwoord.`}
       />
       {sessions.isPending ? <Loading /> : null}
       <ErrorAlert error={sessions.error} />

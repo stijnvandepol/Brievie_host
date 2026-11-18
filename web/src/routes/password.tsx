@@ -45,7 +45,7 @@ function PasswordPage() {
     <Shell>
       <PageHeader
         title={t`Wachtwoord wijzigen`}
-        description={t`Na het wijzigen word je op je andere apparaten en in je andere browsers uitgelogd. Je gekoppelde telefoon blijft werken.`}
+        description={t`Na het wijzigen word je in je andere browsers uitgelogd. Je gekoppelde telefoon blijft werken.`}
       />
       <Form onSubmit={submit} className="form form-narrow">
         <TextField

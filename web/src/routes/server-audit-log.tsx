@@ -1,6 +1,7 @@
 import { t } from "@lingui/core/macro";
 import { createRoute, redirect } from "@tanstack/react-router";
 import { ApiFailure, api } from "../api/client";
+import { SERVER_CODES } from "../components/audit-codes";
 import { type AuditFilters, AuditLog } from "../components/audit-table";
 import { PageHeader, Shell, usePageTitle } from "../components/page";
 import { requireUser } from "../guards";
@@ -34,6 +35,7 @@ function ServerAuditLogPage() {
         scopeKey={["server"]}
         fetchPage={fetchPage}
         csvPath="/api/v1/server/audit-events/csv"
+        codes={SERVER_CODES}
       />
     </Shell>
   );

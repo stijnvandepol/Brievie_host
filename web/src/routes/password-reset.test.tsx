@@ -82,9 +82,28 @@ describe("the reset page", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(DEAD);
   });
 
-  it("without a token in the address it shows the dead-link sentence and no form", async () => {
+  it("keeps the token out of the mutation cache", async () => {
+    server.use(
+      http.post(`*${API}/auth/password-reset`, () =>
+        HttpResponse.json(errorBody("reset_link_invalid", DEAD), { status: 400 }),
+      ),
+    );
+    const u = userEvent.setup();
+    const { queryClient } = renderApp(`/wachtwoord-herstellen#${TOKEN}`);
+    await choose(u);
+    await screen.findByRole("alert");
+    const state = queryClient
+      .getMutationCache()
+      .getAll()
+      .map((mutation) => JSON.stringify({ v: mutation.state.variables, d: mutation.state.data }));
+    expect(state.join()).not.toContain(TOKEN);
+  });
+
+  it("without a token in the address it says so truthfully and shows no form", async () => {
     renderApp("/wachtwoord-herstellen");
-    expect(await screen.findByRole("alert")).toHaveTextContent(DEAD);
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Open de link uit je bericht opnieuw.");
+    expect(alert).not.toHaveTextContent(DEAD);
     expect(screen.queryByLabelText("Nieuw wachtwoord")).not.toBeInTheDocument();
   });
 });

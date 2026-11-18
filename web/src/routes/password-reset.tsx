@@ -52,7 +52,7 @@ function PasswordResetPage() {
     <Split>
       {token === "" ? (
         <MessageBar intent="error" role="alert">
-          {t`Deze herstellink werkt niet meer. Vraag een nieuwe.`}
+          {t`In deze link zit geen herstelcode. Open de link uit je bericht opnieuw.`}
         </MessageBar>
       ) : null}
       {token ? (

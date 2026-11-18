@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createRoute, redirect } from "@tanstack/react-router";
 import { ApiFailure, api } from "../api/client";
 import { membersQuery } from "../api/queries";
+import { WORKSPACE_CODES } from "../components/audit-codes";
 import { type AuditFilters, AuditLog } from "../components/audit-table";
 import { PageHeader, Shell, usePageTitle } from "../components/page";
 import { workspaceRoute } from "./workspace";
@@ -44,6 +45,7 @@ function AuditLogPage() {
         scopeKey={["workspaces", workspace.id]}
         fetchPage={fetchPage}
         csvPath={`/api/v1/workspaces/${workspace.id}/audit-events/csv`}
+        codes={WORKSPACE_CODES}
         people={members.data ?? []}
       />
     </Shell>

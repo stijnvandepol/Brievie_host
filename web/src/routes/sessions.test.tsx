@@ -10,6 +10,7 @@ import {
   renderApp,
   server,
   user,
+  watchAlerts,
 } from "../test-utils";
 
 const here = {
@@ -68,11 +69,11 @@ describe("my sessions", () => {
     );
     const u = userEvent.setup();
     renderApp("/account/sessies");
-    await u.click(await screen.findByRole("button", { name: "Afmelden: Safari op iPad" }));
-    const dialog = await screen.findByRole("alertdialog", { name: "Afmelden?" });
+    await u.click(await screen.findByRole("button", { name: "Uitloggen: Safari op iPad" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Uitloggen?" });
     expect(dialog).toHaveTextContent("Safari op iPad is daarna uitgelogd.");
     expect(ended).toBe("");
-    await u.click(within(dialog).getByRole("button", { name: "Afmelden" }));
+    await u.click(within(dialog).getByRole("button", { name: "Uitloggen" }));
     await waitFor(() =>
       expect(screen.queryByRole("rowheader", { name: /Safari/ })).not.toBeInTheDocument(),
     );
@@ -89,7 +90,11 @@ describe("my sessions", () => {
           : HttpResponse.json(errorBody("not_authenticated", "Log eerst in."), { status: 401 }),
       ),
       ...loggedInHandlers(),
-      http.get(`*${API}/me/sessions`, () => HttpResponse.json(signedIn ? [here, other] : [])),
+      http.get(`*${API}/me/sessions`, () =>
+        signedIn
+          ? HttpResponse.json([here, other])
+          : HttpResponse.json(errorBody("not_authenticated", "Log eerst in."), { status: 401 }),
+      ),
       http.delete(`*${API}/me/sessions/:id`, () => {
         signedIn = false;
         return new HttpResponse(null, { status: 204 });
@@ -97,11 +102,15 @@ describe("my sessions", () => {
     );
     const u = userEvent.setup();
     renderApp("/account/sessies");
-    await u.click(await screen.findByRole("button", { name: "Afmelden: Firefox op macOS" }));
+    await u.click(await screen.findByRole("button", { name: "Uitloggen: Firefox op macOS" }));
     const dialog = await screen.findByRole("alertdialog");
     expect(dialog).toHaveTextContent("Je wordt hier uitgelogd");
-    await u.click(within(dialog).getByRole("button", { name: "Afmelden" }));
+    const alerts = watchAlerts();
+    await u.click(within(dialog).getByRole("button", { name: "Uitloggen" }));
     expect(await screen.findByRole("heading", { level: 1, name: "Inloggen" })).toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    alerts.stop();
+    expect(alerts.seen()).toBe(false);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
@@ -117,9 +126,9 @@ describe("my sessions", () => {
     );
     const u = userEvent.setup();
     renderApp("/account/sessies");
-    await u.click(await screen.findByRole("button", { name: "Afmelden: Safari op iPad" }));
+    await u.click(await screen.findByRole("button", { name: "Uitloggen: Safari op iPad" }));
     const dialog = await screen.findByRole("alertdialog");
-    await u.click(within(dialog).getByRole("button", { name: "Afmelden" }));
+    await u.click(within(dialog).getByRole("button", { name: "Uitloggen" }));
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(
       "Deze sessie bestaat niet meer.",
     );
@@ -134,10 +143,8 @@ describe("my sessions", () => {
     renderApp("/koppel-app");
     await u.click(await screen.findByRole("button", { name: "Account" }));
     const menu = await screen.findByRole("dialog", { name: "Account" });
-    expect(within(menu).getByRole("link", { name: "Apparaten" })).toHaveAttribute(
-      "href",
-      "/koppel-app",
-    );
+    // Devices live in the navigation only.
+    expect(within(menu).queryByRole("link", { name: "Apparaten" })).not.toBeInTheDocument();
     expect(within(menu).getByRole("link", { name: "Wachtwoord wijzigen" })).toHaveAttribute(
       "href",
       "/account/wachtwoord",

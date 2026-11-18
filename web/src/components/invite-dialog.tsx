@@ -97,7 +97,6 @@ export function InvitationLinkDialog({
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
-      isDismissable
       className="overlay"
     >
       <Modal className="modal">
@@ -255,7 +254,13 @@ export function InviteDialog({
   }, [isOpen]);
   const close = () => onOpenChange(false);
   return (
-    <ModalOverlay isOpen={isOpen} onOpenChange={onOpenChange} isDismissable className="overlay">
+    <ModalOverlay
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+      // The link is shown once: a stray click beside the dialog must not throw it away.
+      isDismissable={created === null}
+      className="overlay"
+    >
       <Modal className="modal">
         <Dialog className="dialog" aria-label={created ? t`Uitnodiging` : t`Iemand uitnodigen`}>
           {created ? (
