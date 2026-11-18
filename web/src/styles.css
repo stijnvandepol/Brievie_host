@@ -2895,3 +2895,15 @@ section[tabindex="-1"]:focus-visible {
   flex-wrap: wrap;
   gap: var(--s-s);
 }
+
+a.menu-item {
+  text-decoration: none;
+}
+
+a.menu-item:hover {
+  background: var(--neutral-bg1-hover);
+}
+
+.form-narrow {
+  max-width: 420px;
+}

@@ -203,3 +203,26 @@ export const invitationsQuery = (workspaceId: string) =>
       return data;
     },
   });
+
+/** The web sessions of the logged-in user ("Waar je bent ingelogd"). */
+export const mySessionsQuery = queryOptions({
+  queryKey: ["me", "sessions"],
+  queryFn: async () => {
+    const { data, error } = await api.GET("/api/v1/me/sessions");
+    if (error !== undefined || !data) throw new ApiFailure(error);
+    return data;
+  },
+});
+
+/** The devices of another account, for an admin who may manage it. */
+export const userDevicesQuery = (userId: string) =>
+  queryOptions({
+    queryKey: ["users", userId, "devices"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/users/{user_id}/devices", {
+        params: { path: { user_id: userId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });

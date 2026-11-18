@@ -50,7 +50,7 @@ function onlyReachableOnTheServer(qrPayload: string): boolean {
 type CopyState = "idle" | "copied" | "failed";
 
 function PairAppPage() {
-  usePageTitle(t`App koppelen`);
+  usePageTitle(t`Apparaten`);
   const navigate = useNavigate();
   const result = useRef<HTMLElement>(null);
   const newCode = useRef<HTMLButtonElement>(null);
@@ -102,8 +102,7 @@ function PairAppPage() {
   return (
     <Shell>
       <PageHeader
-        eyebrow={t`Apparaten`}
-        title={t`App koppelen`}
+        title={t`Apparaten`}
         description={t`Koppel de Brievie-app op je telefoon aan deze server. Daarna scan je brieven met de app.`}
         commands={
           pairing === undefined || expired ? (

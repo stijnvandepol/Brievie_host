@@ -49,7 +49,7 @@ describe("router screens", () => {
 
     await u.click(screen.getByRole("link", { name: "Apparaten" }));
 
-    const heading = await screen.findByRole("heading", { level: 1, name: /app koppelen/i });
+    const heading = await screen.findByRole("heading", { level: 1, name: "Apparaten" });
     await waitFor(() => expect(heading).toHaveFocus());
     expect(heading).toHaveAttribute("tabindex", "-1");
   });

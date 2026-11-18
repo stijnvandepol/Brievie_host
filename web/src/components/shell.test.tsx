@@ -33,7 +33,7 @@ describe("navigation pane", () => {
     expect(within(nav).getByRole("link", { name: "Apparaten" })).toBeInTheDocument();
 
     await u.click(within(nav).getByRole("link", { name: "Apparaten" }));
-    await screen.findByRole("heading", { level: 1, name: /app koppelen/i });
+    await screen.findByRole("heading", { level: 1, name: "Apparaten" });
     expect(screen.getByRole("button", { name: "Menu" })).toHaveAttribute("aria-expanded", "false");
   });
 

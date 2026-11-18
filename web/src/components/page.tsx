@@ -298,7 +298,7 @@ function AccountMenu({
   me,
   onLogout,
 }: {
-  me: { name: string; email: string } | null | undefined;
+  me: { name: string; email: string; is_server_admin?: boolean } | null | undefined;
   onLogout: () => void;
 }) {
   return (
@@ -323,6 +323,18 @@ function AccountMenu({
               </div>
             </div>
           ) : null}
+          <Link to="/koppel-app" className="menu-item">
+            <Icon name="phone" />
+            {t`Apparaten`}
+          </Link>
+          <Link to="/account/sessies" className="menu-item">
+            <Icon name="grid" />
+            {t`Waar je bent ingelogd`}
+          </Link>
+          <Link to="/account/wachtwoord" className="menu-item">
+            <Icon name="edit" />
+            {t`Wachtwoord wijzigen`}
+          </Link>
           <Button className="menu-item" onPress={onLogout}>
             <Icon name="signOut" />
             {t`Uitloggen`}
