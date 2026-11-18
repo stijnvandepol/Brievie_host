@@ -48,6 +48,8 @@ function MemberRow({
   member,
   isOwn,
   isAdmin,
+  isOnlyAdmin,
+  isAlone,
   showRole,
 }: {
   workspaceId: string;
@@ -55,9 +57,16 @@ function MemberRow({
   member: Member;
   isOwn: boolean;
   isAdmin: boolean;
+  /** This member is the workspace's only admin: they cannot leave or step down. */
+  isOnlyAdmin: boolean;
+  /** This member is the workspace's only member. */
+  isAlone: boolean;
   /** Not in a home workspace: there roles are an option, not something to look at. */
   showRole: boolean;
 }) {
+  // The only admin's own row: leaving or stepping down would always be refused, so
+  // neither is offered.
+  const ownAndLast = isOwn && isOnlyAdmin;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [roleOpen, setRoleOpen] = useState(false);
@@ -104,7 +113,7 @@ function MemberRow({
       ) : null}
       <td className="cell-action">
         <span className="row-actions">
-          {isAdmin ? (
+          {isAdmin && !ownAndLast ? (
             <>
               <Button
                 className="button-text"
@@ -179,7 +188,12 @@ function MemberRow({
               />
             </>
           ) : null}
-          {isOwn ? (
+          {ownAndLast && !isAlone ? (
+            <span className="muted">
+              {t`Je bent de enige beheerder. Maak eerst iemand anders beheerder als je wilt stoppen.`}
+            </span>
+          ) : null}
+          {isOwn && !ownAndLast ? (
             <ConfirmAction
               label={t`Werkruimte verlaten`}
               icon="signOut"
@@ -362,6 +376,7 @@ function MembersPage() {
   usePageTitle(t`Leden`);
   const { workspace } = membersRoute.useRouteContext();
   const members = useQuery(membersQuery(workspace.id));
+  const adminCount = members.data?.filter((member) => member.role === "admin").length ?? 0;
   const { data: me } = useQuery(meQuery);
   const isAdmin = workspace.role === "admin";
   // At home nothing about roles shows unless somebody opens "Rol wijzigen".
@@ -414,6 +429,8 @@ function MembersPage() {
                   member={member}
                   isOwn={member.user_id === me?.id}
                   isAdmin={isAdmin}
+                  isOnlyAdmin={member.role === "admin" && adminCount === 1}
+                  isAlone={members.data.length === 1}
                   showRole={showRole}
                 />
               ))}

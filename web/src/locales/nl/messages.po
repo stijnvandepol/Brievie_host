@@ -1113,6 +1113,10 @@ msgid "Jaaropgave"
 msgstr "Jaaropgave"
 
 #: src/routes/members.tsx
+msgid "Je bent de enige beheerder. Maak eerst iemand anders beheerder als je wilt stoppen."
+msgstr "Je bent de enige beheerder. Maak eerst iemand anders beheerder als je wilt stoppen."
+
+#: src/routes/members.tsx
 msgid "Je bent hier nog alleen."
 msgstr "Je bent hier nog alleen."
 

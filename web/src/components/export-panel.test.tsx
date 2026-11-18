@@ -21,6 +21,9 @@ const base = `*${API}/workspaces/${workspace.id}`;
 
 afterEach(() => vi.useRealTimers());
 
+/** Everybody an admin: the only admin cannot leave, so the leave dialog needs a second. */
+const twoAdmins = members.map((member) => ({ ...member, role: "admin" }));
+
 describe("my export", () => {
   it("a member exports, waits and downloads", async () => {
     let reads = 0;
@@ -68,7 +71,7 @@ describe("my export", () => {
     server.use(
       asRole("member"),
       ...loggedInHandlers(),
-      ...memberHandlers(members, [], exportState("none", false)),
+      ...memberHandlers(twoAdmins, [], exportState("none", false)),
     );
     renderApp(path);
     expect(
@@ -80,7 +83,7 @@ describe("my export", () => {
   });
 
   it("points an admin to Instellingen when export is off", async () => {
-    server.use(...loggedInHandlers(), ...memberHandlers(members, [], exportState("none", false)));
+    server.use(...loggedInHandlers(), ...memberHandlers(twoAdmins, [], exportState("none", false)));
     renderApp(path);
     const link = await screen.findByRole("link", { name: "Zet het aan bij Instellingen." });
     expect(link).toHaveAttribute("href", `/w/${workspace.id}/instellingen`);
@@ -118,7 +121,7 @@ describe("my export", () => {
   });
 
   it("the leave dialog offers the export first", async () => {
-    server.use(...loggedInHandlers(), ...memberHandlers());
+    server.use(...loggedInHandlers(), ...memberHandlers(twoAdmins));
     const u = userEvent.setup();
     renderApp(path);
     await u.click(await screen.findByRole("button", { name: "Werkruimte verlaten" }));
@@ -134,7 +137,7 @@ describe("my export", () => {
   });
 
   it("the leave dialog says nothing about export when it is not allowed", async () => {
-    server.use(...loggedInHandlers(), ...memberHandlers(members, [], exportState("none", false)));
+    server.use(...loggedInHandlers(), ...memberHandlers(twoAdmins, [], exportState("none", false)));
     const u = userEvent.setup();
     renderApp(path);
     await u.click(await screen.findByRole("button", { name: "Werkruimte verlaten" }));

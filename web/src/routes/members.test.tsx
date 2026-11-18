@@ -22,6 +22,8 @@ const path = `/w/${workspace.id}/leden`;
 const base = `*${API}/workspaces/${workspace.id}`;
 const bram = members[1] as (typeof members)[number];
 const anna = members[0] as (typeof members)[number];
+/** Anna (the caller) and Bram are both admins. */
+const twoAdmins = [anna, { ...bram, role: "admin" }];
 
 describe("members", () => {
   it("lists members with their role in a business workspace", async () => {
@@ -79,7 +81,11 @@ describe("members", () => {
   });
 
   it("a member sees no admin actions", async () => {
-    server.use(asRole("member"), ...loggedInHandlers(), ...memberHandlers());
+    const asMember = [
+      { ...anna, role: "member" },
+      { ...bram, role: "admin" },
+    ];
+    server.use(asRole("member"), ...loggedInHandlers(), ...memberHandlers(asMember));
     renderApp(path);
     await screen.findByRole("row", { name: /Bram/ });
     expect(screen.queryByRole("button", { name: /Rol wijzigen/ })).not.toBeInTheDocument();
@@ -133,15 +139,48 @@ describe("members", () => {
     expect(screen.getByRole("row", { name: /Bram/ })).toBeInTheDocument();
   });
 
-  it("the last admin sees why they cannot leave", async () => {
+  it("the only admin cannot leave or step down, and reads why", async () => {
+    server.use(...loggedInHandlers(), ...memberHandlers());
+    renderApp(path);
+    const own = await screen.findByRole("row", { name: /Anna/ });
+    expect(
+      within(own).getByText(
+        "Je bent de enige beheerder. Maak eerst iemand anders beheerder als je wilt stoppen.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(own).queryByRole("button")).not.toBeInTheDocument();
+    const other = screen.getByRole("row", { name: /Bram/ });
+    expect(within(other).getByRole("button", { name: "Rol wijzigen: Bram" })).toBeInTheDocument();
+    expect(within(other).getByRole("button", { name: "Verwijderen: Bram" })).toBeInTheDocument();
+  });
+
+  it("the only member sees nothing to do on their own row", async () => {
+    server.use(...loggedInHandlers(), ...memberHandlers([anna]));
+    renderApp(path);
+    const own = await screen.findByRole("row", { name: /Anna/ });
+    expect(within(own).queryByRole("button")).not.toBeInTheDocument();
+    expect(within(own).queryByText(/enige beheerder/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Uitnodigen" })).toBeInTheDocument();
+  });
+
+  it("with a second admin, an admin may leave and change their own role", async () => {
+    server.use(...loggedInHandlers(), ...memberHandlers(twoAdmins));
+    renderApp(path);
+    const own = await screen.findByRole("row", { name: /Anna/ });
+    expect(within(own).getByRole("button", { name: "Werkruimte verlaten" })).toBeInTheDocument();
+    expect(within(own).getByRole("button", { name: "Rol wijzigen: Anna" })).toBeInTheDocument();
+    expect(within(own).queryByText(/enige beheerder/)).not.toBeInTheDocument();
+  });
+
+  it("a refused leave shows the server's sentence", async () => {
     server.use(
       ...loggedInHandlers(),
-      ...memberHandlers(),
+      ...memberHandlers(twoAdmins),
       http.post(`${base}/leave`, () =>
         HttpResponse.json(
           errorBody(
             "last_admin",
-            "Je bent de enige beheerder. Maak eerst iemand anders beheerder.",
+            "Een werkruimte heeft altijd minstens één beheerder. Maak eerst iemand anders beheerder.",
           ),
           { status: 409 },
         ),
@@ -153,7 +192,7 @@ describe("members", () => {
     const dialog = await screen.findByRole("alertdialog", { name: "Werkruimte verlaten?" });
     await u.click(within(dialog).getByRole("button", { name: "Verlaten" }));
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(
-      "Je bent de enige beheerder. Maak eerst iemand anders beheerder.",
+      "Een werkruimte heeft altijd minstens één beheerder.",
     );
     expect(dialog).toBeInTheDocument();
   });
@@ -189,7 +228,7 @@ describe("members", () => {
       ),
       http.get(`${base}/members`, () =>
         signedIn
-          ? HttpResponse.json(members)
+          ? HttpResponse.json(twoAdmins)
           : HttpResponse.json(errorBody("forbidden", "Geen toegang."), { status: 403 }),
       ),
       http.get(`${base}/invitations`, () =>
@@ -245,7 +284,7 @@ describe("members", () => {
         ),
       ),
       ...loggedInHandlers(),
-      ...memberHandlers(),
+      ...memberHandlers(twoAdmins),
       http.post(`${base}/leave`, () => {
         left = true;
         return new HttpResponse(null, { status: 204 });
@@ -283,7 +322,7 @@ describe("members", () => {
         return HttpResponse.json({ ...anna, role: "member" });
       }),
       ...loggedInHandlers(),
-      ...memberHandlers(),
+      ...memberHandlers(twoAdmins),
     );
     const u = userEvent.setup();
     renderApp(path);
