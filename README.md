@@ -174,10 +174,10 @@ prints a new one (the old one stops working). After setup the code is deleted.
 
 Brievie can back up the database, the document files and the server's certificate
 authority to an external disk, a NAS share, a restic REST server or S3-compatible
-storage, encrypted. The master key is never in a back-up: keep the recovery sheet
-(`./brievie recovery-sheet`). Set-up, restore and advice for organisations are in
-[docs/SELFHOST.md](docs/SELFHOST.md). A nightly schedule comes in a later version; for
-now run `./brievie backup` yourself.
+storage, encrypted. The master key is never in a back-up: keep the recovery sheet that
+the first `./brievie start` writes (a new one: `./brievie recovery-sheet`). Set-up,
+restore and advice for organisations are in [docs/SELFHOST.md](docs/SELFHOST.md). A
+nightly schedule comes in a later version; for now run `./brievie backup` yourself.
 
 ## Licence
 
