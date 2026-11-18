@@ -390,3 +390,36 @@ class DocumentSuggestion(WorkspaceModel):
 
     def __str__(self) -> str:
         return f"{self.document_id} {self.action} {self.state}"
+
+
+class MemberExport(WorkspaceModel):
+    """A member's own export of their post: a sealed ZIP that lives for 24 hours.
+
+    One row per member and workspace: a new request replaces the older export. The file
+    is `storage_path` under the storage root, in the `exports/` directory that the sweep
+    of page files does not look at.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending"
+        READY = "ready"
+        FAILED = "failed"
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    # `exports/<workspace id>/<export id>.sealed`, set when the export is asked for, so a
+    # cleanup knows the file of a job that died.
+    storage_path = models.CharField(max_length=300)
+    document_count = models.PositiveIntegerField(default=0)
+    size = models.BigIntegerField(default=0)
+    expires_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["workspace", "user"], name="documents_memberexport_user_unique"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user_id} export in {self.workspace_id}: {self.status}"

@@ -191,3 +191,18 @@ class DocumentEventOut(Schema):
             and bool(getattr(obj, "still_linked", False))
             and not getattr(obj, "superseded", True)
         )
+
+
+class MyExportOut(Schema):
+    """The member's own export of their post."""
+
+    # Whether the workspace lets members export (an admin can switch it off).
+    allowed: bool
+    # `none`, `pending` (being built), `ready` (until `expires_at`) or `failed`.
+    status: str
+    id: UUID | None = None
+    created_at: datetime | None = None
+    expires_at: datetime | None = None
+    document_count: int = 0
+    # Bytes of the sealed file.
+    size: int = 0

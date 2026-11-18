@@ -20,6 +20,7 @@ from apps.accounts.services import lock_active_server_admins
 from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
+from apps.documents.member_export import remove_member_exports
 from apps.people.models import Person
 from apps.tasks.models import Task
 from apps.workspaces.access import on_member_removed
@@ -143,6 +144,8 @@ def _unlink_and_unassign(workspace: Workspace, user_id: UUID) -> list[Person]:
             assigned_to=None, updated_at=now
         )
         on_member_removed(workspace.id, user_id)
+        # Their own export goes with them (its files once this transaction commits).
+        remove_member_exports(workspace.id, user_id)
     return persons
 
 

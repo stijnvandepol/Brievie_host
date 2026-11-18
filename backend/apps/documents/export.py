@@ -21,6 +21,7 @@ from collections.abc import Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import date
+from io import RawIOBase
 from typing import BinaryIO
 from uuid import UUID
 
@@ -77,7 +78,7 @@ def write_export(
     workspace_id: UUID,
     reader_id: UUID | None,
     document_ids: Sequence[UUID],
-    target: BinaryIO,
+    target: BinaryIO | RawIOBase,
     title: str,
 ) -> ExportCounts:
     """Write a ZIP of these documents to `target` (streamed: no seek, no temporary file).

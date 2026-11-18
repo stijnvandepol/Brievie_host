@@ -1,16 +1,20 @@
 from uuid import UUID
 
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, StreamingHttpResponse
+from django.utils import timezone
 from django.utils.translation import gettext as _
 from ninja import File, Form, Router, Status
 from ninja.files import UploadedFile
 from pydantic import ValidationError
 
+from apps.accounts.auth import session_auth
 from apps.accounts.services import current_user
+from apps.audit.services import actor_from_request
 from apps.common.errors import ApiError
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
-from apps.documents import intake, review, services
-from apps.documents.models import DocumentEvent, Folder
+from apps.common.throttling import CallerThrottle
+from apps.documents import intake, member_export, review, services
+from apps.documents.models import DocumentEvent, Folder, MemberExport
 from apps.documents.schemas import (
     AddresseesIn,
     ConfirmIn,
@@ -21,12 +25,16 @@ from apps.documents.schemas import (
     FolderOut,
     InboxCountsOut,
     LabelsIn,
+    MyExportOut,
     UploadMetadataIn,
 )
 from apps.workspaces.deps import workspace_member
 from apps.workspaces.models import Membership
 
 router = Router(tags=["documents"])
+
+_MY_EXPORT = "/workspaces/{workspace_id}/my-export"
+WEB_SESSION_ONLY = "Web session only: a bearer token answers 401 not_authenticated."
 
 
 @router.get(
@@ -325,3 +333,92 @@ def undo_document_event(
         event_id=event_id,
     )
     return services.document_out(document)
+
+
+def _my_export_out(membership: Membership, export: MemberExport | None) -> MyExportOut:
+    allowed = membership.workspace.allow_member_export
+    if export is None:
+        return MyExportOut(allowed=allowed, status="none")
+    return MyExportOut(
+        allowed=allowed,
+        status=export.status,
+        id=export.id,
+        created_at=export.created_at,
+        expires_at=export.expires_at,
+        document_count=export.document_count,
+        size=export.size,
+    )
+
+
+@router.post(
+    _MY_EXPORT,
+    response={
+        202: MyExportOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        429: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+    },
+    auth=session_auth,
+    throttle=CallerThrottle("member_export", "5/h"),
+    operation_id="createMyExport",
+    description=WEB_SESSION_ONLY
+    + " Any member asks for an export of their own post: the letters on their name, as a"
+    " ZIP of the page images and their data. A job builds it; poll `getMyExport`. The file"
+    " can be downloaded for 24 hours, by the member who asked for it only. A newer request"
+    " replaces an older export. 403 `export_not_allowed` when an admin switched exports off"
+    " in this workspace, 409 `export_running` while the last one is being built, 429 after"
+    " five requests in an hour. Written to the log (`export_created`).",
+)
+def create_my_export(request: HttpRequest, workspace_id: UUID) -> Status[MyExportOut]:
+    membership = workspace_member(request, workspace_id)
+    export = member_export.create_my_export(
+        membership=membership, actor=actor_from_request(request)
+    )
+    return Status(202, _my_export_out(membership, export))
+
+
+@router.get(
+    _MY_EXPORT,
+    response={200: MyExportOut, 404: ErrorOut, **AUTH_ERRORS},
+    auth=session_auth,
+    operation_id="getMyExport",
+    description=WEB_SESSION_ONLY
+    + " The caller's own export: `none`, `pending`, `ready` or `failed`, and whether the"
+    " workspace allows exporting. Never another member's.",
+)
+def get_my_export(request: HttpRequest, workspace_id: UUID) -> MyExportOut:
+    membership = workspace_member(request, workspace_id)
+    return _my_export_out(membership, member_export.my_export(membership))
+
+
+@router.get(
+    f"{_MY_EXPORT}/file",
+    response={403: ErrorOut, 404: ErrorOut, 429: ErrorOut, **AUTH_ERRORS},
+    auth=session_auth,
+    throttle=CallerThrottle("member_export_file", "20/h"),
+    operation_id="downloadMyExport",
+    openapi_extra={
+        "responses": {
+            200: {
+                "description": "The export as a ZIP file, streamed",
+                "content": {"application/zip": {"schema": {"type": "string", "format": "binary"}}},
+            }
+        }
+    },
+    description=WEB_SESSION_ONLY
+    + " The caller's own finished export as a download (`Cache-Control: private, no-store`,"
+    " `Content-Disposition: attachment`). 404 `export_not_found` for none, an expired or"
+    " unfinished one, and for anybody else's: an admin cannot download a member's export."
+    " 403 `export_not_allowed` when exports were switched off since. Written to the log"
+    " (`export_downloaded`).",
+)
+def download_my_export(request: HttpRequest, workspace_id: UUID) -> StreamingHttpResponse:
+    membership = workspace_member(request, workspace_id)
+    # Everything that needs the request happens in here; the stream needs nothing.
+    chunks = member_export.open_my_export(membership=membership, actor=actor_from_request(request))
+    response = StreamingHttpResponse(chunks, content_type="application/zip")
+    name = f"brievie-mijn-post-{timezone.localdate().isoformat()}.zip"
+    response["Content-Disposition"] = f'attachment; filename="{name}"'
+    response["Cache-Control"] = "private, no-store"
+    return response
