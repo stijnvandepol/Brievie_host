@@ -7,6 +7,7 @@ import { homeRoute } from "./routes/home";
 import { inboxRoute } from "./routes/inbox";
 import { labelsRoute } from "./routes/labels";
 import { loginRoute } from "./routes/login";
+import { membersRoute } from "./routes/members";
 import { pairAppRoute } from "./routes/pair-app";
 import { personsRoute } from "./routes/persons";
 import { postRoute } from "./routes/post";
@@ -25,6 +26,7 @@ const routeTree = rootRoute.addChildren([
     postRoute,
     documentRoute,
     personsRoute,
+    membersRoute,
     labelsRoute,
     automationsRoute,
     aiRoute,

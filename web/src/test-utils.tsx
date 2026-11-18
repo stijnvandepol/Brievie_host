@@ -262,3 +262,13 @@ export function ruleHandlers(rules: Rule[] = [apkRule, bankRule]) {
     http.get(`*${API}/workspaces/${workspace.id}/rules`, () => HttpResponse.json(rules)),
   ];
 }
+
+/** The member list of the first workspace, and what the page "Leden" asks besides. */
+export function memberHandlers(list: components["schemas"]["MemberOut"][] = members) {
+  return [http.get(`*${API}/workspaces/${workspace.id}/members`, () => HttpResponse.json(list))];
+}
+
+/** The first workspace with the caller in another role. */
+export function asRole(role: "admin" | "member" | "viewer") {
+  return http.get(`*${API}/workspaces`, () => HttpResponse.json([{ ...workspace, role }]));
+}

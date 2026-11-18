@@ -48,6 +48,17 @@ msgstr "{0, plural, one {Serveradres} other {Serveradressen}}"
 msgid "{0} kan daarna niet meer bij Brievie. Je kunt het apparaat opnieuw koppelen."
 msgstr "{0} kan daarna niet meer bij Brievie. Je kunt het apparaat opnieuw koppelen."
 
+#. placeholder {0}: member.name
+#. placeholder {1}: member.name
+#: src/routes/members.tsx
+msgid "{0} kan daarna niet meer bij deze werkruimte. De post blijft hier. Taken van {1} hebben daarna niemand."
+msgstr "{0} kan daarna niet meer bij deze werkruimte. De post blijft hier. Taken van {1} hebben daarna niemand."
+
+#. placeholder {0}: member.name
+#: src/routes/members.tsx
+msgid "{0} verwijderen?"
+msgstr "{0} verwijderen?"
+
 #. placeholder {0}: person.display_name
 #: src/routes/persons.tsx
 msgid "{0} wordt verwijderd. Dit kun je niet ongedaan maken."
@@ -177,6 +188,7 @@ msgid "Actief: {name}"
 msgstr "Actief: {name}"
 
 #: src/routes/labels.tsx
+#: src/routes/members.tsx
 #: src/routes/persons.tsx
 #: src/routes/rule-editor.tsx
 msgid "Acties"
@@ -264,7 +276,9 @@ msgstr "Alleen voor een andere dienst die werkt zoals OpenAI. Begint met https:/
 msgid "Als"
 msgstr "Als"
 
+#: src/components/confirm-dialog.tsx
 #: src/components/device-table.tsx
+#: src/components/role-dialog.tsx
 #: src/routes/ai.tsx
 #: src/routes/automations.tsx
 #: src/routes/labels.tsx
@@ -325,6 +339,7 @@ msgstr "Bedrag incl. btw"
 msgid "Begin met de startset, of maak zelf een regel."
 msgstr "Begin met de startset, of maak zelf een regel."
 
+#: src/components/role-dialog.tsx
 #: src/routes/home.tsx
 msgid "Beheerder"
 msgstr "Beheerder"
@@ -439,6 +454,11 @@ msgstr "De bron"
 #: src/components/rule-sentence.ts
 msgid "de bron {source} is"
 msgstr "de bron {source} is"
+
+#. placeholder {0}: workspace.name
+#: src/routes/members.tsx
+msgid "De mensen die bij {0} horen en bij de post kunnen."
+msgstr "De mensen die bij {0} horen en bij de post kunnen."
 
 #: src/routes/persons.tsx
 msgid "De mensen op wiens naam post binnenkomt. Brievie herkent ze aan hun naam en naamvarianten."
@@ -757,6 +777,14 @@ msgstr "is precies"
 msgid "Jaaropgave"
 msgstr "Jaaropgave"
 
+#: src/routes/members.tsx
+msgid "Je bent hier nog alleen."
+msgstr "Je bent hier nog alleen."
+
+#: src/routes/members.tsx
+msgid "Je bent hier nog alleen. Nodig iemand uit om samen de post te doen."
+msgstr "Je bent hier nog alleen. Nodig iemand uit om samen de post te doen."
+
 #: src/components/external-ai-notice.tsx
 msgid "Je gebruikt een externe AI-dienst. De namen op deze pagina gaan mee met elke brief die de AI leest."
 msgstr "Je gebruikt een externe AI-dienst. De namen op deze pagina gaan mee met elke brief die de AI leest."
@@ -768,6 +796,10 @@ msgstr "Je hebt {total} brieven"
 #: src/routes/automations.tsx
 msgid "Je hebt nog geen regels."
 msgstr "Je hebt nog geen regels."
+
+#: src/routes/members.tsx
+msgid "Je kunt daarna niet meer bij {workspaceName}. De post blijft hier voor de andere leden."
+msgstr "Je kunt daarna niet meer bij {workspaceName}. De post blijft hier voor de andere leden."
 
 #: src/routes/ai.tsx
 msgid "Je maakt de sleutel aan in je account bij de dienst. Brievie bewaart hem versleuteld en laat hem nooit meer zien."
@@ -800,6 +832,18 @@ msgstr "Jij"
 #: src/routes/setup.tsx
 msgid "Jouw account"
 msgstr "Jouw account"
+
+#: src/components/role-dialog.tsx
+msgid "Kan alles lezen, maar niets wijzigen."
+msgstr "Kan alles lezen, maar niets wijzigen."
+
+#: src/components/role-dialog.tsx
+msgid "Kan leden uitnodigen en alles instellen."
+msgstr "Kan leden uitnodigen en alles instellen."
+
+#: src/components/role-dialog.tsx
+msgid "Kan post scannen, controleren en ordenen."
+msgstr "Kan post scannen, controleren en ordenen."
 
 #: src/components/document-table.tsx
 msgid "Keuring"
@@ -906,11 +950,17 @@ msgstr "Label wijzigen"
 msgid "Labels"
 msgstr "Labels"
 
+#: src/components/page.tsx
+#: src/routes/members.tsx
+msgid "Leden"
+msgstr "Leden"
+
 #. placeholder {0}: chosen?.default_model ?? ""
 #: src/routes/ai.tsx
 msgid "Leeg laten kiest {0}."
 msgstr "Leeg laten kiest {0}."
 
+#: src/components/role-dialog.tsx
 #: src/routes/home.tsx
 msgid "Lid"
 msgstr "Lid"
@@ -931,6 +981,7 @@ msgstr "Maak eerst een label."
 msgid "Mail"
 msgstr "Mail"
 
+#: src/components/role-dialog.tsx
 #: src/routes/home.tsx
 msgid "Meekijker"
 msgstr "Meekijker"
@@ -965,6 +1016,7 @@ msgstr "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
 
 #: src/routes/home.tsx
 #: src/routes/labels.tsx
+#: src/routes/members.tsx
 #: src/routes/persons.tsx
 #: src/routes/rule-editor.tsx
 msgid "Naam"
@@ -1077,6 +1129,7 @@ msgstr "OpenAI in de Verenigde Staten ({host})"
 msgid "Opgeslagen."
 msgstr "Opgeslagen."
 
+#: src/components/role-dialog.tsx
 #: src/routes/ai.tsx
 #: src/routes/labels.tsx
 #: src/routes/persons.tsx
@@ -1174,9 +1227,25 @@ msgstr "Regels"
 msgid "Rekening"
 msgstr "Rekening"
 
+#: src/components/role-dialog.tsx
 #: src/routes/home.tsx
+#: src/routes/members.tsx
 msgid "Rol"
 msgstr "Rol"
+
+#. placeholder {0}: member.name
+#: src/components/role-dialog.tsx
+msgid "Rol van {0}"
+msgstr "Rol van {0}"
+
+#: src/routes/members.tsx
+msgid "Rol wijzigen"
+msgstr "Rol wijzigen"
+
+#. placeholder {0}: member.name
+#: src/routes/members.tsx
+msgid "Rol wijzigen: {0}"
+msgstr "Rol wijzigen: {0}"
 
 #: src/components/label-chip.tsx
 msgid "Rood"
@@ -1350,6 +1419,10 @@ msgstr "Veld"
 msgid "Vergelijking"
 msgstr "Vergelijking"
 
+#: src/routes/members.tsx
+msgid "Verlaten"
+msgstr "Verlaten"
+
 #: src/routes/document.tsx
 msgid "Vervaldatum"
 msgstr "Vervaldatum"
@@ -1360,12 +1433,15 @@ msgstr "Verwerken mislukt"
 
 #: src/routes/automations.tsx
 #: src/routes/labels.tsx
+#: src/routes/members.tsx
 #: src/routes/persons.tsx
 #: src/routes/rule-editor.tsx
 msgid "Verwijderen"
 msgstr "Verwijderen"
 
+#. placeholder {0}: member.name
 #. placeholder {0}: person.display_name
+#: src/routes/members.tsx
 #: src/routes/persons.tsx
 msgid "Verwijderen: {0}"
 msgstr "Verwijderen: {0}"
@@ -1455,6 +1531,14 @@ msgstr "Welke dienst?"
 #: src/routes/setup.tsx
 msgid "Welkom bij Brievie"
 msgstr "Welkom bij Brievie"
+
+#: src/routes/members.tsx
+msgid "Werkruimte verlaten"
+msgstr "Werkruimte verlaten"
+
+#: src/routes/members.tsx
+msgid "Werkruimte verlaten?"
+msgstr "Werkruimte verlaten?"
 
 #: src/components/page.tsx
 #: src/routes/home.tsx

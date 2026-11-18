@@ -1086,6 +1086,11 @@ input[type="checkbox"]:checked:disabled {
   gap: var(--s-m);
 }
 
+.cards-stack {
+  grid-template-columns: 1fr;
+  gap: var(--s-s);
+}
+
 .card {
   display: flex;
   flex-direction: column;

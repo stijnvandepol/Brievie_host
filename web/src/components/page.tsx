@@ -168,6 +168,7 @@ function NavItem({
     | "/w/$workspaceId/inbox"
     | "/w/$workspaceId/post"
     | "/w/$workspaceId/personen"
+    | "/w/$workspaceId/leden"
     | "/w/$workspaceId/labels"
     | "/w/$workspaceId/automatisering"
     | "/w/$workspaceId/ai";
@@ -221,6 +222,7 @@ function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
       />
       <NavItem to="/w/$workspaceId/post" params={params} icon="mail" label={t`Post`} />
       <NavItem to="/w/$workspaceId/personen" params={params} icon="people" label={t`Personen`} />
+      <NavItem to="/w/$workspaceId/leden" params={params} icon="personAdd" label={t`Leden`} />
       <NavItem to="/w/$workspaceId/labels" params={params} icon="tag" label={t`Labels`} />
       {workspace.role === "viewer" ? null : (
         <NavItem
