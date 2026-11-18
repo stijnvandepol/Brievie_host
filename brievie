@@ -56,6 +56,9 @@ BRIEVIE_BACKUP_APPEND_ONLY"
 saved_tty=""
 swap_stamp=""
 restore_pending=""
+lock_taken=""
+restore_marked=""
+halfway_reported=""
 restore_terminal() {
 	if [ -n "$saved_tty" ]; then
 		stty "$saved_tty" 2>/dev/null || true
@@ -63,6 +66,7 @@ restore_terminal() {
 	fi
 }
 on_exit() {
+	exit_rc=$?
 	restore_terminal
 	if [ -n "$swap_stamp" ] && [ ! -e "${here:?}/deploy/.env" ]; then
 		mv "${here:?}/deploy/.env.before-restore-$swap_stamp" "${here:?}/deploy/.env" 2>/dev/null || true
@@ -70,7 +74,20 @@ on_exit() {
 	if [ -n "$restore_pending" ]; then
 		rm -rf "${here:?}/deploy/.restore"
 	fi
+	rm -f "${here:?}/deploy/.env.new.$$" "${here:?}/deploy/.restore/env.new.$$" \
+		"${here:?}/brievie-herstelblad.html.tmp.$$" "${here:?}/deploy/.restore-in-progress.new.$$"
+	# Stopped after the restore began to replace things (an error or Ctrl-C): say where.
+	if [ "$exit_rc" -ne 0 ] && [ -n "$restore_marked" ] && [ -z "$halfway_reported" ]; then
+		report_halfway
+	fi
+	if [ -n "$lock_taken" ]; then
+		rm -f "${here:?}/deploy/.brievie-lock/started"
+		rmdir "${here:?}/deploy/.brievie-lock" 2>/dev/null || true
+	fi
 }
+# fd 9 is the terminal's stderr: a trap that fires while a step's stderr goes to its log
+# still reaches the user.
+exec 9>&2
 trap on_exit EXIT
 trap 'exit 130' INT TERM HUP
 
@@ -108,6 +125,86 @@ fail() {
 	printf '%s\n' "$1" >&2
 	show_tail
 	exit "${2:-1}"
+}
+
+# --- one ./brievie at a time, and a restore that stopped halfway -----------------------------
+
+# Only one ./brievie per installation at a time (a restore's own safety back-up shares it).
+take_lock() {
+	if [ -n "${BRIEVIE_LOCK_HELD:-}" ]; then
+		return 0
+	fi
+	if ! mkdir "${here:?}/deploy/.brievie-lock" 2>/dev/null; then
+		started=$(cat "${here:?}/deploy/.brievie-lock/started" 2>/dev/null) || started=""
+		now=$(date +%s)
+		case $started in
+		'' | *[!0-9]*) started=$now ;;
+		esac
+		if [ $((now - started)) -lt 43200 ]; then
+			fail "Er is al een ./brievie bezig voor deze installatie. Wacht tot die klaar is en probeer het daarna opnieuw."
+		fi
+		echo "Er staat nog een slot van een ./brievie van meer dan 12 uur geleden (deploy/.brievie-lock)." >&2
+		if [ ! -t 0 ]; then
+			fail "Draait er echt geen ./brievie meer? Start ./brievie dan in een terminal en typ JA om het slot weg te halen."
+		fi
+		ask "Draait er echt geen ./brievie meer? Typ JA om het slot weg te halen:"
+		[ "$answer" = JA ] || fail "Je typte geen JA. Er is niets veranderd."
+		rm -f "${here:?}/deploy/.brievie-lock/started"
+		rmdir "${here:?}/deploy/.brievie-lock" 2>/dev/null || true
+		mkdir "${here:?}/deploy/.brievie-lock" 2>/dev/null ||
+			fail "Er is al een ./brievie bezig voor deze installatie. Probeer het straks opnieuw."
+	fi
+	lock_taken=yes
+	date +%s >"${here:?}/deploy/.brievie-lock/started"
+	BRIEVIE_LOCK_HELD=1
+	export BRIEVIE_LOCK_HELD
+}
+
+# The value of $1 in the restore-in-progress marker.
+marker_value() {
+	env_value "$1" "${here:?}/deploy/.restore-in-progress"
+}
+
+# The marker of a restore that is replacing things: run, safety back-up, step, time.
+write_marker() {
+	{
+		printf 'run=%s\n' "$run_id"
+		printf 'safety=%s\n' "$safety_run_id"
+		printf 'step=%s\n' "$1"
+		if [ -z "$data_present" ] || [ -n "$empty_install" ]; then
+			printf 'fresh=yes\n'
+		fi
+		printf 'time=%s\n' "$(date '+%d-%m-%Y %H:%M')"
+	} >"${here:?}/deploy/.restore-in-progress.new.$$" &&
+		chmod 600 "${here:?}/deploy/.restore-in-progress.new.$$" &&
+		mv "${here:?}/deploy/.restore-in-progress.new.$$" "${here:?}/deploy/.restore-in-progress"
+	restore_marked=yes
+}
+
+# What happened and the ways forward, from the marker.
+report_halfway() {
+	halfway_reported=yes
+	[ -f "${here:?}/deploy/.restore-in-progress" ] || return 0
+	h_run=$(marker_value run)
+	h_safety=$(marker_value safety)
+	{
+		echo "Een herstel is op $(marker_value time) halverwege gestopt bij stap: $(marker_value step)."
+		echo "Maak het af: typ ./brievie restore $h_run --replace --skip-safety-backup"
+		if [ -n "$h_safety" ]; then
+			echo "Of zet je oude gegevens terug: typ ./brievie restore $h_safety --replace --skip-safety-backup"
+			echo "De veiligheidsback-up $h_safety van je oude gegevens wordt 30 dagen bewaard."
+		elif [ "$(marker_value fresh)" = yes ]; then
+			echo "Hier stonden nog geen gegevens, dus er is niets verloren gegaan."
+		fi
+	} >&9
+}
+
+# start, backup, sweep and status do not run while a restore stopped halfway.
+refuse_while_halfway() {
+	if [ -f "${here:?}/deploy/.restore-in-progress" ]; then
+		report_halfway
+		exit 1
+	fi
 }
 
 # --- what the user sees -------------------------------------------------------------------
@@ -151,6 +248,7 @@ end_step() {
 	else
 		show_step
 	fi
+	last_code=$(step_code)
 	if [ "$1" -eq 0 ]; then
 		rm -f "${here:?}/deploy/.brievie-step.log"
 	fi
@@ -303,14 +401,14 @@ rewrite_env() {
 edit_env() {
 	case $4 in
 	env)
-		rewrite_env "$1" "$2" "$3" <"${here:?}/deploy/.env" >"${here:?}/deploy/.env.new" &&
-			chmod 600 "${here:?}/deploy/.env.new" &&
-			mv "${here:?}/deploy/.env.new" "${here:?}/deploy/.env"
+		rewrite_env "$1" "$2" "$3" <"${here:?}/deploy/.env" >"${here:?}/deploy/.env.new.$$" &&
+			chmod 600 "${here:?}/deploy/.env.new.$$" &&
+			mv "${here:?}/deploy/.env.new.$$" "${here:?}/deploy/.env"
 		;;
 	restore)
-		rewrite_env "$1" "$2" "$3" <"${here:?}/deploy/.restore/env" >"${here:?}/deploy/.restore/env.new" &&
-			chmod 600 "${here:?}/deploy/.restore/env.new" &&
-			mv "${here:?}/deploy/.restore/env.new" "${here:?}/deploy/.restore/env"
+		rewrite_env "$1" "$2" "$3" <"${here:?}/deploy/.restore/env" >"${here:?}/deploy/.restore/env.new.$$" &&
+			chmod 600 "${here:?}/deploy/.restore/env.new.$$" &&
+			mv "${here:?}/deploy/.restore/env.new.$$" "${here:?}/deploy/.restore/env"
 		;;
 	*) fail "Interne fout in ./brievie: onbekend bestand." 70 ;;
 	esac
@@ -571,12 +669,20 @@ env_copy() {
 
 write_recovery_sheet() {
 	if ! compose run --rm --no-deps -T -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" admin python manage.py recovery_sheet \
-		>"${here:?}/brievie-herstelblad.html.tmp"; then
-		rm -f "${here:?}/brievie-herstelblad.html.tmp"
+		>"${here:?}/brievie-herstelblad.html.tmp.$$"; then
+		rm -f "${here:?}/brievie-herstelblad.html.tmp.$$"
 		fail "Het herstelblad kon niet worden gemaakt. Lees de melding hierboven en typ daarna opnieuw ./brievie recovery-sheet."
 	fi
-	chmod 600 "${here:?}/brievie-herstelblad.html.tmp"
-	mv "${here:?}/brievie-herstelblad.html.tmp" "${here:?}/brievie-herstelblad.html"
+	chmod 600 "${here:?}/brievie-herstelblad.html.tmp.$$"
+	mv "${here:?}/brievie-herstelblad.html.tmp.$$" "${here:?}/brievie-herstelblad.html"
+}
+
+# The copy of deploy/.env (without the master key and the superuser and owner passwords)
+# that every back-up must carry, given to the back-updienst.
+store_env_copy() {
+	[ -r "${here:?}/deploy/.env" ] || fail "deploy/.env is niet te lezen. Controleer de rechten van dat bestand."
+	env_copy | compose exec -T -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" keeper python manage.py store_env_copy ||
+		fail "De kopie van je instellingen kon niet worden bewaard. Lees de melding hierboven."
 }
 
 # --- the commands -------------------------------------------------------------------------
@@ -601,6 +707,7 @@ cmd_start() {
 	ensure_backup_role ||
 		fail "De database kon niet worden bijgewerkt voor de back-up. Lees de melding hierboven."
 	ensure_backup_password
+	store_env_copy
 	# The first start of an installation is the one that gives it its id.
 	first_start=""
 	if [ -z "$(env_value BRIEVIE_INSTALLATION_ID)" ]; then
@@ -637,13 +744,37 @@ cmd_start() {
 	fi
 }
 
+# Whether $1 is a back-up password the user set: not empty, no placeholder, and not the
+# one derived from the master key (asked in the container; no value in any argument).
+users_own_password() {
+	case $1 in
+	'' | *change-me*) return 1 ;;
+	esac
+	derived=$(compose run --rm --no-deps -T -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" admin python manage.py derive_backup_password) ||
+		fail "Het afgeleide back-upwachtwoord kon niet worden bepaald. Probeer het opnieuw."
+	own=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+	if [ "$own" = "$derived" ]; then
+		own="" derived=""
+		return 1
+	fi
+	own="" derived=""
+	return 0
+}
+
 # What to type after a failed back-up command, from the code it gave.
 next_step_for() {
 	case $1 in
-	destination_not_ready) echo "Typ ./brievie backup --init om de back-up de eerste keer in te stellen." ;;
+	destination_not_ready) echo "De plek voor de back-up is niet klaar. Is de schijf aangesloten? Is dit de eerste keer: typ ./brievie backup --init." ;;
 	not_configured) echo "Zet eerst in deploy/.env waar de back-up heen moet (zie docs/SELFHOST.md) en typ daarna ./brievie backup --init." ;;
-	not_picked_up) echo "De back-updienst pakt de back-up niet op. Typ ./brievie start en probeer het daarna opnieuw." ;;
-	still_running) echo "Kijk later met ./brievie status of hij gelukt is." ;;
+	not_picked_up)
+		if running keeper; then
+			echo "De back-updienst draait, maar heeft de back-up niet opgepakt. Kijk met ./brievie status en in deploy/.brievie-last.log wat er aan de hand is."
+		else
+			echo "De back-updienst draait niet. Typ ./brievie start en probeer het daarna opnieuw."
+		fi
+		;;
+	still_running) echo "Er loopt al een back-up. Wacht tot die klaar is: ./brievie status." ;;
+	env_copy_missing) echo "Typ ./brievie start en probeer het daarna opnieuw." ;;
 	already_initialised) echo "Deze bestemming is al ingesteld. Typ ./brievie backup om een back-up te maken." ;;
 	same_disk) echo "Kies een andere schijf, of typ ./brievie backup --init --allow-same-disk als je dit bewust wilt." ;;
 	*)
@@ -657,23 +788,23 @@ next_step_for() {
 }
 
 cmd_backup() {
-	init="" same_disk="" separate="" check="" no_prune=""
+	init="" same_disk="" separate="" check="" safety=""
 	for arg in "$@"; do
 		case $arg in
 		--init) init=yes ;;
 		--allow-same-disk) same_disk=yes ;;
 		--separate-password) separate=yes ;;
 		--check) check=yes ;;
-		# The safety back-up of a restore: no retention, so no run is removed by it.
-		--no-prune) no_prune=yes ;;
+		# The safety back-up of a restore: kept 30 days, never removed by retention.
+		--safety) safety=yes ;;
 		*) usage_error "Onbekend woord bij ./brievie backup: $arg" ;;
 		esac
 	done
 	if [ -z "$init" ] && [ -n "$same_disk$separate" ]; then
 		usage_error "--allow-same-disk en --separate-password horen bij ./brievie backup --init."
 	fi
-	if [ -n "$no_prune" ] && [ -n "$init$check" ]; then
-		usage_error "--no-prune hoort bij een gewone back-up."
+	if [ -n "$safety" ] && [ -n "$init$check" ]; then
+		usage_error "--safety hoort bij een gewone back-up."
 	fi
 
 	claim_installation
@@ -681,44 +812,65 @@ cmd_backup() {
 	require_keeper
 	check_installation_id
 
-	previous=""
+	previous="" generated=""
 	if [ -n "$separate" ]; then
 		previous=$(env_value BRIEVIE_BACKUP_PASSWORD)
-		password=$(compose run --rm --no-deps -T admin python -c "import secrets; print(secrets.token_hex(32))") ||
-			fail "Een eigen back-upwachtwoord kon niet worden gemaakt. Probeer het opnieuw."
-		if ! valid_hex "$password" 64; then
-			fail "Het eigen back-upwachtwoord kwam niet goed terug; er is niets veranderd. Probeer het opnieuw."
+		if users_own_password "$(unquote "$previous")"; then
+			echo "Je eigen back-upwachtwoord uit deploy/.env wordt gebruikt."
+		else
+			password=$(compose run --rm --no-deps -T admin python -c "import secrets; print(secrets.token_hex(32))") ||
+				fail "Een apart back-upwachtwoord kon niet worden gemaakt. Probeer het opnieuw."
+			if ! valid_hex "$password" 64; then
+				fail "Het aparte back-upwachtwoord kwam niet goed terug; er is niets veranderd. Probeer het opnieuw."
+			fi
+			edit_env set BRIEVIE_BACKUP_PASSWORD "$password" env ||
+				fail "deploy/.env kon niet worden bijgewerkt. Controleer de rechten van de map deploy."
+			password=""
+			generated=yes
+			echo "Er staat nu een apart back-upwachtwoord in deploy/.env."
 		fi
-		edit_env set BRIEVIE_BACKUP_PASSWORD "$password" env ||
-			fail "deploy/.env kon niet worden bijgewerkt. Controleer de rechten van de map deploy."
-		password=""
-		echo "Er staat een eigen back-upwachtwoord in deploy/.env. Het komt op je nieuwe herstelblad."
 	fi
 	ensure_backup_password
 	# Recreates the back-updienst when deploy/.env changed (a new folder or password).
 	compose up -d --no-deps keeper
-	[ -r "${here:?}/deploy/.env" ] || fail "deploy/.env is niet te lezen. Controleer de rechten van dat bestand."
-	env_copy | compose exec -T -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" keeper python manage.py store_env_copy ||
-		fail "De kopie van je instellingen kon niet worden bewaard. Lees de melding hierboven."
+	store_env_copy
 
 	if [ -n "$init" ]; then
 		if ! compose run --rm --no-deps -T -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" admin python manage.py backup_init \
 			${same_disk:+"--allow-same-disk"}; then
 			printf '%s\n' "$(next_step_for "$(step_code)" init)" >&2
 			show_tail
-			if [ -n "$separate" ]; then
+			if [ -n "$generated" ]; then
 				edit_env set BRIEVIE_BACKUP_PASSWORD "$previous" env
 				compose up -d --no-deps keeper
 			fi
 			exit 1
 		fi
+		if [ -n "$separate" ]; then
+			# The second secret is on no sheet yet: write one now.
+			write_recovery_sheet
+			echo "Er is een nieuw herstelblad gemaakt: brievie-herstelblad.html. Druk het nu af, want alleen daarop staat ook het aparte back-upwachtwoord."
+			echo "Bewaar het buiten deze computer en verwijder het bestand daarna hier."
+		fi
 	fi
 
 	status=0
-	compose exec -T -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" keeper python manage.py backup \
-		${check:+"--check"} ${no_prune:+"--no-prune"} || status=$?
+	if [ -n "$safety" ]; then
+		# The run id of the safety back-up, for the restore that asked for it.
+		made=$(compose exec -T -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" keeper python manage.py backup --safety) || status=$?
+		human_lines "$made"
+		safety_id=$(machine_value safety_run_id "$made")
+		if [ -n "$safety_id" ]; then
+			echo "Veiligheidsback-up: $safety_id (wordt 30 dagen bewaard)."
+		fi
+	else
+		compose exec -T -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" keeper python manage.py backup ${check:+"--check"} || status=$?
+	fi
 	if [ "$status" -ne 0 ]; then
 		fail "$(next_step_for "$(step_code)" backup)" "$status"
+	fi
+	if [ "${last_code:-}" = clock_skew ]; then
+		echo "Let op: de klok van de server of van een back-up klopt niet, dus er is niets opgeruimd. Kijk met ./brievie status."
 	fi
 	exit "$status"
 }
@@ -731,6 +883,9 @@ cmd_status() {
 		*) usage_error "Onbekend woord bij ./brievie status: $arg" ;;
 		esac
 	done
+	if [ -z "$list" ]; then
+		refuse_while_halfway
+	fi
 	claim_installation
 	bring_along
 	if [ -n "$list" ]; then
@@ -794,24 +949,24 @@ ask_secret() {
 	fi
 }
 
-# A step after the restored deploy/.env is in place failed: say so and what to type.
 # restore_database failed. When the chosen back-up has gone, say what that means here.
 database_failed() {
-	if ! grep -q 'Deze back-up is niet gevonden' "${here:?}/deploy/.brievie-step.log" 2>/dev/null; then
-		step_failed "$1" "De database is niet teruggezet."
+	if grep -q 'Deze back-up is niet gevonden' "${here:?}/deploy/.brievie-step.log" 2>/dev/null; then
+		{
+			echo "De gekozen back-up is er niet meer. Typ ./brievie status --list om te zien welke back-ups er zijn, en daarna ./brievie restore <ander nummer> --replace --skip-safety-backup."
+			if [ -z "$data_present" ] || [ -n "$empty_install" ]; then
+				echo "Hier stonden nog geen gegevens, dus er is niets verloren gegaan."
+			elif [ -n "$safety_run_id" ]; then
+				echo "Let op: de oude database is al leeggemaakt. Je oude gegevens staan in de veiligheidsback-up $safety_run_id; die wordt 30 dagen bewaard."
+			else
+				echo "Let op: de oude database is al leeggemaakt, en er is geen veiligheidsback-up gemaakt."
+			fi
+		} >&2
+		halfway_reported=yes
+		show_tail
+		exit "$1"
 	fi
-	{
-		echo "De gekozen back-up is er niet meer. Typ ./brievie status --list om te zien welke back-ups er zijn, en daarna ./brievie restore <ander nummer> --replace --skip-safety-backup."
-		if [ -z "$data_present" ]; then
-			echo "Hier stonden nog geen gegevens, dus er is niets verloren gegaan."
-		elif [ -n "$safety_done" ]; then
-			echo "Let op: de oude database is al leeggemaakt. Je oude gegevens staan in de veiligheidsback-up die zojuist is gemaakt."
-		else
-			echo "Let op: de oude database is al leeggemaakt, en er is geen veiligheidsback-up gemaakt."
-		fi
-	} >&2
-	show_tail
-	exit "$1"
+	step_failed "$1" "De database is niet teruggezet."
 }
 
 # The value of machine line `$1=` in the output $2 (meant for this script, never shown).
@@ -830,19 +985,11 @@ human_lines() {
 	done
 }
 
-# The safety back-up is only skippable when nothing of value would be lost by it.
+# A step after the first destructive one failed: what happened and the ways forward.
 step_failed() {
 	status=$1
-	again="./brievie restore $run_id --replace${separate:+ --separate-password}"
 	printf '%s\n' "$2" >&2
-	printf 'Het herstel bleef halverwege steken. Los de melding hierboven op en typ daarna: %s\n' "$again" >&2
-	if [ -z "$data_present" ]; then
-		printf 'Hier stonden nog geen gegevens, dus een veiligheidsback-up is niet nodig: typ %s\n' \
-			"$again --skip-safety-backup" >&2
-	elif [ -n "$safety_done" ] || [ -n "$skip_safety" ]; then
-		printf 'Lukt de veiligheidsback-up dan niet? De veiligheidsback-up van je oude gegevens is bij deze poging al gemaakt (of je koos ervoor zonder), dus dan mag ook: %s\n' \
-			"$again --skip-safety-backup" >&2
-	fi
+	report_halfway
 	show_tail
 	exit "$status"
 }
@@ -904,7 +1051,9 @@ pin_restored_identity() {
 			destination_note="Deze server maakt back-ups naar dezelfde plek als voor het herstel."
 		fi
 	else
-		# A new machine: the host ports this restore runs with, when given.
+		# A new machine is a new installation: it gets its own id after the files are back.
+		edit_env remove BRIEVIE_INSTALLATION_ID "" restore || return 1
+		# The host ports this restore runs with, when given.
 		for pair in "POSTGRES_PORT:${POSTGRES_PORT:-}" "BRIEVIE_HTTP_PORT:${BRIEVIE_HTTP_PORT:-}" \
 			"BRIEVIE_HTTPS_PORT:${BRIEVIE_HTTPS_PORT:-}"; do
 			case ${pair#*:} in
@@ -950,6 +1099,7 @@ decide_destination() {
 			done
 		fi
 		destination_note="Deze server maakt weer back-ups naar de plek waar je van herstelde."
+		echo "Let op: laat de oorspronkelijke server daarna geen back-ups meer naar deze plek maken. Twee servers op één back-upplek halen elkaars back-ups weg."
 		;;
 	esac
 }
@@ -1032,6 +1182,48 @@ reset_database() {
 	} | compose exec -T postgres psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q
 }
 
+# Whether this installation has never held user data: its own postgres runs and has no
+# users, workspaces or documents (or no tables yet). Read-only, over the socket.
+installation_is_empty() {
+	running postgres || return 1
+	rows=$({
+		printf '%s\n' "SELECT count(*) = 3 AS have_tables FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('accounts_user', 'workspaces_workspace', 'documents_document') \\gset"
+		printf '%s\n' '\if :have_tables'
+		printf '%s\n' 'SELECT (SELECT count(*) FROM accounts_user) + (SELECT count(*) FROM workspaces_workspace) + (SELECT count(*) FROM documents_document);'
+		printf '%s\n' '\else' 'SELECT 0;' '\endif'
+	} | compose exec -T postgres psql -U postgres -d brievie -v ON_ERROR_STOP=1 -q -t -A) || return 1
+	[ "$rows" = 0 ]
+}
+
+# A yes before an empty installation is replaced (a terminal, or BRIEVIE_RESTORE_EMPTY_OK).
+confirm_empty() {
+	echo "Deze installatie is nog leeg (geen gebruikers, werkruimtes of documenten): de lege installatie wordt vervangen door de back-up."
+	answer=${BRIEVIE_RESTORE_EMPTY_OK:-}
+	if [ -z "$answer" ]; then
+		if [ ! -t 0 ]; then
+			fail "Er is geen terminal om ja te typen. Zet BRIEVIE_RESTORE_EMPTY_OK=ja als je dit wilt. Er is niets veranderd."
+		fi
+		ask "Doorgaan? (j/n)"
+	fi
+	case $answer in
+	j | J | ja | Ja | JA | y | yes) ;;
+	*) fail "Er is niets veranderd." ;;
+	esac
+}
+
+# restore_fetch with the typed secrets in its environment only; sets `fetched`, `status`.
+fetch_backup() {
+	status=0
+	begin_step
+	fetched=$(BRIEVIE_MASTER_KEY=$master_key BRIEVIE_BACKUP_PASSWORD=$backup_password \
+		BRIEVIE_BACKUP_DIR_SET=${source_dir:+true} BRIEVIE_BACKUP_REPOSITORY=$repository \
+		BRIEVIE_BACKUP_S3_ACCESS_KEY_ID=$s3_id BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY=$s3_secret \
+		BRIEVIE_BACKUP_REST_USERNAME=$rest_user BRIEVIE_BACKUP_REST_PASSWORD=$rest_password \
+		SECRET_KEY=$build_secret_key DATABASE_URL=$build_database_url \
+		docker "$@" 2>>"${here:?}/deploy/.brievie-step.log") || status=$?
+	end_step "$status"
+}
+
 # The typed word before anything that is here now is replaced. Only a terminal or
 # BRIEVIE_RESTORE_CONFIRM counts: piped input never confirms.
 confirm_replace() {
@@ -1052,7 +1244,8 @@ confirm_replace() {
 }
 
 cmd_restore() {
-	run="" replace="" skip_safety="" separate="" keep_hostname="" safety_done=""
+	run="" replace="" skip_safety="" separate="" keep_hostname=""
+	safety_run_id="" empty_install="" resuming=""
 	for arg in "$@"; do
 		case $arg in
 		--replace) replace=yes ;;
@@ -1071,13 +1264,29 @@ cmd_restore() {
 	if [ -n "$skip_safety" ] && [ -z "$replace" ]; then
 		usage_error "--skip-safety-backup hoort bij ./brievie restore --replace."
 	fi
+	# A restore that stopped halfway goes on only with its own run or its safety back-up.
+	if [ -f "${here:?}/deploy/.restore-in-progress" ]; then
+		if [ -n "$run" ] && { [ "$run" = "$(marker_value run)" ] || [ "$run" = "$(marker_value safety)" ]; }; then
+			resuming=yes
+			replace=yes
+			skip_safety=yes
+			safety_run_id=$(marker_value safety)
+		else
+			report_halfway
+			exit 1
+		fi
+	fi
 	claim_installation
 	data_present=""
 	if [ -e "$env_file" ]; then
-		if [ -z "$replace" ]; then
+		data_present=yes
+		if [ -z "$resuming" ] && installation_is_empty; then
+			# Never held user data: replaced like any installation, without a safety back-up.
+			empty_install=yes
+			skip_safety=yes
+		elif [ -z "$replace" ]; then
 			fail "Deze installatie heeft al gegevens. Wil je ze vervangen door de back-up? Typ dan ./brievie restore --replace (er wordt eerst een veiligheidsback-up gemaakt)."
 		fi
-		data_present=yes
 	fi
 
 	# 1. The source and the secrets.
@@ -1185,19 +1394,24 @@ cmd_restore() {
 		set -- "$@" --backup-dir-host "$folder"
 	fi
 	echo "De back-up wordt geopend…"
-	status=0
-	begin_step
-	fetched=$(BRIEVIE_MASTER_KEY=$master_key BRIEVIE_BACKUP_PASSWORD=$backup_password \
-		BRIEVIE_BACKUP_DIR_SET=${source_dir:+true} BRIEVIE_BACKUP_REPOSITORY=$repository \
-		BRIEVIE_BACKUP_S3_ACCESS_KEY_ID=$s3_id BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY=$s3_secret \
-		BRIEVIE_BACKUP_REST_USERNAME=$rest_user BRIEVIE_BACKUP_REST_PASSWORD=$rest_password \
-		SECRET_KEY=$build_secret_key DATABASE_URL=$build_database_url \
-		docker "$@" 2>>"${here:?}/deploy/.brievie-step.log") || status=$?
-	end_step "$status"
+	fetch_backup "$@"
+	# The key alone did not open it: the back-up has a separate password. Asked once.
+	if [ "$status" -eq 2 ] && [ -z "$backup_password" ] &&
+		grep -q 'Het wachtwoord van de back-up klopt niet' "${here:?}/deploy/.brievie-step.log" 2>/dev/null; then
+		ask_secret "Deze back-up heeft een apart wachtwoord. Typ het wachtwoord van je herstelblad (je ziet niet wat je typt):"
+		backup_password=$answer
+		answer=""
+		if [ -n "$backup_password" ]; then
+			rm -rf "${here:?}/deploy/.restore"
+			mkdir -p "${here:?}/deploy/.restore" ||
+				fail "De map deploy/.restore kon niet worden gemaakt. Controleer de rechten van de map deploy; er is niets veranderd."
+			fetch_backup "$@"
+		fi
+	fi
 	master_key="" backup_password=""
 	if [ "$status" -ne 0 ]; then
 		case $status in
-		2) fail "De hoofdsleutel of het back-upwachtwoord past niet bij deze back-up. Controleer je herstelblad en typ opnieuw ./brievie restore." 2 ;;
+		2) fail "De hoofdsleutel past niet bij deze back-up, of het aparte back-upwachtwoord klopt niet. Controleer je herstelblad en typ opnieuw ./brievie restore." 2 ;;
 		3) fail "Deze back-up komt van een nieuwere Brievie. Werk Brievie eerst bij en typ daarna opnieuw ./brievie restore." 3 ;;
 		*) fail "De back-up kon niet worden geopend. Lees de melding hierboven en typ daarna opnieuw ./brievie restore." "$status" ;;
 		esac
@@ -1242,7 +1456,7 @@ EOF
 			;;
 		esac
 	fi
-	if [ -z "$data_present" ]; then
+	if [ -z "$data_present" ] || { [ -n "$empty_install" ] && [ -z "$destination_note" ]; }; then
 		decide_destination ||
 			fail "De back-upbestemming kon niet worden opgeslagen; er is niets veranderd."
 	fi
@@ -1255,15 +1469,25 @@ EOF
 		if [ -z "$volume_id" ]; then
 			confirm_adopt
 		fi
-		confirm_replace
+		if [ -n "$empty_install" ]; then
+			confirm_empty
+		else
+			confirm_replace
+		fi
 		compose stop api worker caddy ||
 			fail "Brievie kon niet worden gestopt; er is niets teruggezet. Lees de melding hierboven en start Brievie weer met ./brievie start."
 		if [ -z "$skip_safety" ]; then
 			echo "Eerst een veiligheidsback-up van de gegevens die er nu zijn…"
-			if ! sh "${here:?}/brievie" backup --no-prune; then
+			safety_rc=0
+			safety_out=$(sh "${here:?}/brievie" backup --safety) || safety_rc=$?
+			printf '%s\n' "$safety_out" | sed '/^[[:space:]]*$/d'
+			if [ "$safety_rc" -ne 0 ]; then
 				fail "De veiligheidsback-up is niet gelukt; er is niets teruggezet. Start Brievie weer met ./brievie start en los eerst de melding hierboven op."
 			fi
-			safety_done=yes
+			safety_run_id=$(printf '%s\n' "$safety_out" | sed -n 's/^Veiligheidsback-up: \([0-9a-f-]*\) .*/\1/p' | tail -n 1)
+			if ! valid_run_id "$safety_run_id"; then
+				fail "Het nummer van de veiligheidsback-up kwam niet terug; er is niets teruggezet. Start Brievie weer met ./brievie start."
+			fi
 		fi
 		compose stop keeper ||
 			fail "De back-updienst kon niet worden gestopt; er is niets teruggezet. Start Brievie weer met ./brievie start."
@@ -1287,6 +1511,10 @@ EOF
 		fi
 		fail "Er is niets teruggezet. Typ ./brievie restore zonder nummer om de nieuwste back-up te nemen, of geef een ander nummer."
 	fi
+
+	# From here on things are replaced: the marker says how far it got.
+	write_marker "de instellingen" ||
+		fail "De voortgang van het herstel kon niet worden vastgelegd; er is niets teruggezet. Controleer de rechten van de map deploy."
 
 	# 6. The swap: two moves; the exit trap puts the old file back if the second fails.
 	stamp=$(date -u +%Y%m%dT%H%M%SZ)
@@ -1314,6 +1542,7 @@ EOF
 	if [ -z "$data_present" ] && docker volume inspect "${project}_pgdata" >/dev/null 2>&1; then
 		check_installation_id
 	fi
+	write_marker "de database" || true
 	echo "De database wordt gestart…"
 	compose up -d --wait postgres || step_failed $? "PostgreSQL is niet gestart."
 	if [ -n "$data_present" ]; then
@@ -1333,17 +1562,24 @@ EOF
 	esac
 
 	# 7. The documents and the certificate authority, before Caddy starts.
+	write_marker "de documenten" || true
 	echo "De documenten worden teruggezet…"
 	from_source run --rm --no-deps -T -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" admin python manage.py restore_files --run "$run_id" \
 		${data_present:+"--replace"} ||
 		step_failed $? "Het terugzetten van de documenten stopte; de melding hierboven zegt waarom."
 	s3_secret="" rest_password="" opening_password=""
+	# The data is this installation's: its own id (a new one on a new machine), before
+	# anything starts on it.
+	ensure_env_installation_id || step_failed $? "Het installatienummer kon niet worden gemaakt."
+	write_volume_id || step_failed $? "Het installatienummer kon niet bij de gegevens worden gezet."
 
 	# 8. Everything else; migrate brings the schema to this version.
+	write_marker "het starten" || true
 	echo "Brievie wordt gestart…"
 	compose up -d --wait || step_failed $? "Brievie is niet goed gestart na het terugzetten."
 
-	# 9. Check the result against the back-up, then mark the data as this installation's.
+	# 9. Check the result against the back-up.
+	write_marker "de controle" || true
 	echo "Het herstel wordt gecontroleerd…"
 	verify_rc=0
 	verified=$(read_only run --rm --no-deps -T -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" admin python manage.py verify_restore \
@@ -1361,11 +1597,14 @@ EOF
 	else
 		echo "Het herstel is gecontroleerd: ${workspaces:-0} werkruimtes, ${pages:-0} pagina's geopend."
 	fi
-	ensure_env_installation_id || step_failed $? "Het installatienummer kon niet worden gemaakt."
-	write_volume_id || step_failed $? "Het installatienummer kon niet bij de gegevens worden gezet."
+	rm -f "${here:?}/deploy/.restore-in-progress"
+	restore_marked=""
 	rm -rf "${here:?}/deploy/.restore"
 	if [ -n "$hostname_changed" ]; then
 		echo "De servernaam is veranderd. Maak een nieuw herstelblad met ./brievie recovery-sheet en koppel je telefoons opnieuw."
+	fi
+	if [ -n "$safety_run_id" ]; then
+		echo "De veiligheidsback-up $safety_run_id van je oude gegevens wordt 30 dagen bewaard."
 	fi
 	if [ -n "$destination_note" ]; then
 		echo "$destination_note"
@@ -1386,7 +1625,11 @@ start | backup | restore | status | sweep | recovery-sheet) ;;
 esac
 shift
 setup_installation
+take_lock
 start_log
+case $command in
+start | backup | sweep) refuse_while_halfway ;;
+esac
 case $command in
 start) cmd_start "$@" ;;
 backup) cmd_backup "$@" ;;

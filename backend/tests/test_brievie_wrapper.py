@@ -41,6 +41,7 @@ OWNERSHIP_CALL = (
     "ps -a --filter label=com.docker.compose.project=brievie "
     '--format owner={{.Label "com.docker.compose.project.working_dir"}}'
 )
+SAFETY_ID = "5afe0000-1d2a-4c5b-9e8f-7a6b5c4d3e2f"
 CURRENT_ID = "c0" * 16
 BACKUP_ID = "b0" * 16
 NEW_ID = "a7" * 16
@@ -76,7 +77,7 @@ class Call(TypedDict, total=False):
 # restored files of `restore_fetch` into the folder mounted at /out. It reads stdin only
 # for the calls that pipe something in (store_env_copy, psql), never the user's answers.
 FAKE_DOCKER = """#!{python}
-import json, os, sys
+import json, os, signal, sys
 from pathlib import Path
 
 argv = sys.argv[1:]
@@ -117,6 +118,21 @@ if watch and os.path.exists(watch):
 with open(os.environ["FAKE_DOCKER_LOG"], "a") as log:
     log.write(json.dumps(entry) + "\\n")
 
+gone_marker = os.environ.get("FAKE_DOCKER_LOG", "") + ".keeper-gone"
+gone_after = os.environ.get("FAKE_KEEPER_GONE_AFTER", "")
+if gone_after and gone_after in joined:
+    Path(gone_marker).write_text("gone")
+kill_at = os.environ.get("FAKE_KILL_AT", "")
+if kill_at and kill_at in joined:
+    # Ctrl-C (TERM) to the wrapper while this step runs.
+    os.kill(os.getppid(), signal.SIGTERM)
+stderr_at = os.environ.get("FAKE_STDERR_AT", "")
+if stderr_at and stderr_at in joined:
+    sys.stderr.write(os.environ.get("FAKE_STDERR_TEXT", ""))
+wanted = os.environ.get("FAKE_FETCH_PASSWORD", "")
+if "restore_fetch" in argv and wanted and os.environ.get("BRIEVIE_BACKUP_PASSWORD", "") != wanted:
+    sys.stderr.write("CommandError: Het wachtwoord van de back-up klopt niet.\\n")
+    sys.exit(2)
 remove_at = os.environ.get("FAKE_REMOVE_AT", "")
 if remove_at and remove_at in joined:
     os.remove(os.environ["FAKE_REMOVE_PATH"])
@@ -144,6 +160,8 @@ if argv[:2] == ["ps", "-a"]:
     for owner in owners:
         sys.stdout.write(template.replace(label, "" if owner == "<empty>" else owner) + "\\n")
     sys.exit(0)
+if os.path.exists(gone_marker):
+    running = [name for name in running if name != "keeper"]
 if argv[:1] == ["compose"] and "ps" in argv:
     if "--services" in argv:
         sys.stdout.write("".join(name + "\\n" for name in running))
@@ -183,8 +201,13 @@ elif "verify_restore" in argv:
     sys.stdout.write("Het herstel is gecontroleerd. Alles klopt.\\n")
 elif "backup_status" in argv:
     sys.stdout.write("Brievie: 1.4.0\\nBestemming: map (schijf)\\n")
+elif "manage.py" in argv and argv[-1] == "--safety":
+    sys.stdout.write("safety_run_id={safety_id}\\n")
+    sys.stdout.write("Back-up gestart…\\nDe back-up is gelukt (1 MB).\\n")
 elif "manage.py" in argv and argv[-1] in ("backup", "--check"):
     sys.stdout.write("Back-up gestart…\\nDe back-up is gelukt (1,4 MB).\\n")
+elif "psql" in argv and "accounts_user" in entry.get("stdin", ""):
+    sys.stdout.write(os.environ.get("FAKE_DATA_ROWS", "5") + "\\n")
 elif "restore_fetch" in argv:
     out = next(argv[i + 1].rsplit(":/out", 1)[0] for i, a in enumerate(argv)
                if a == "-v" and argv[i + 1].endswith(":/out"))
@@ -291,7 +314,11 @@ class Install:
         self.bin = self.tmp / "bin"
         self.bin.mkdir()
         docker = self.bin / "docker"
-        docker.write_text(FAKE_DOCKER.format(python=sys.executable, run_id=RUN_ID, new_id=NEW_ID))
+        docker.write_text(
+            FAKE_DOCKER.format(
+                python=sys.executable, run_id=RUN_ID, new_id=NEW_ID, safety_id=SAFETY_ID
+            )
+        )
         docker.chmod(0o755)
         self.log = self.tmp / "docker.log"
         self.home = self.tmp / "home"
@@ -743,7 +770,11 @@ def test_restore_runs_the_steps_in_order(install: Install, shell: str) -> None:
         "--manifest /data/backup-config/manifest.json "
         "--authority-dir /caddy-data/caddy/pki/authorities/local"
     ) in install.commands()[verify]
-    assert install.dotenv.read_text() == without(restored_env(), *DESTINATION_KEYS)
+    # A new machine is a new installation: the back-up's id is dropped, a new one added.
+    assert install.dotenv.read_text() == (
+        without(restored_env(), *DESTINATION_KEYS, "BRIEVIE_INSTALLATION_ID")
+        + f"BRIEVIE_INSTALLATION_ID={NEW_ID}\n"
+    )
     assert stat.S_IMODE(install.dotenv.stat().st_mode) == 0o600
     assert not (install.root / "deploy" / ".restore").exists()
     assert result.stdout.rstrip().splitlines()[-1] == "Herstel gelukt."
@@ -1058,7 +1089,10 @@ def test_replace_without_confirmation_changes_nothing(installed: Install) -> Non
 
     assert result.returncode == 1
     assert "WISSEN" in result.stdout + result.stderr
-    assert not any(" stop " in f" {c} " or "psql -U postgres -d" in c for c in installed.commands())
+    # (The read-only count of an installation's data runs as `psql … -d brievie`.)
+    assert not any(
+        " stop " in f" {c} " or "psql -U postgres -d postgres" in c for c in installed.commands()
+    )
     assert installed.dotenv.read_text() == current_env()
     assert not (installed.root / "deploy" / ".restore").exists()
 
@@ -1076,7 +1110,9 @@ def test_a_piped_word_never_confirms_a_replace(installed: Install) -> None:
     assert result.returncode == 1
     assert "BRIEVIE_RESTORE_CONFIRM=WISSEN" in result.stderr
     assert "veiligheidsback-up" in result.stdout  # the warning was shown
-    assert not any(" stop " in f" {c} " or "psql" in c for c in installed.commands())
+    assert not any(
+        " stop " in f" {c} " or "psql -U postgres -d postgres" in c for c in installed.commands()
+    )
     assert installed.dotenv.read_text() == current_env()
     assert not (installed.root / "deploy" / ".restore").exists()
 
@@ -1226,7 +1262,8 @@ def test_script_writes_and_removes_only_at_its_own_names() -> None:
     # A redirect to a file names a fixed path under the script's folder.
     for match in re.finditer(r'(?<![<>&\d])>>?"?(\S+)', code):
         target = match.group(1)
-        assert target.startswith(("${here:?}/", "&2", "/dev/null")), target
+        # &9 is the terminal's stderr, saved at the start (exec 9>&2).
+        assert target.startswith(("${here:?}/", "&2", "&9", "/dev/null")), target
     assert 'rm -rf "$' not in code.replace('rm -rf "${here:?}/deploy/.restore"', "")
 
 
@@ -1471,17 +1508,6 @@ def test_a_volume_of_another_installation_is_refused(
         assert "psql -U postgres -d postgres" not in command
     assert id_writes(installed) == []
     assert installed.dotenv.read_text() == current_env()
-
-
-def test_a_fresh_restore_keeps_the_backups_id(install: Install) -> None:
-    result = install.run("restore", "--keep-hostname", **restore_inputs(install))
-
-    assert result.returncode == 0, result.stderr
-    assert setting(install.dotenv.read_text(), "BRIEVIE_INSTALLATION_ID") == [
-        f"BRIEVIE_INSTALLATION_ID={BACKUP_ID}"
-    ]
-    assert id_writes(install) == [BACKUP_ID + "\n"]
-    assert install.index("installation-id.tmp") > install.index("verify_restore")
 
 
 def test_a_fresh_restore_without_an_id_gets_a_new_one(install: Install) -> None:
@@ -1838,10 +1864,8 @@ def test_halfway_after_a_safety_backup_names_both_commands(installed: Install) -
     )
 
     assert result.returncode == 1
-    assert f"./brievie restore {RUN_ID} --replace\n" in result.stderr + "\n" or (
-        f"./brievie restore {RUN_ID} --replace." in result.stderr
-    )
     assert f"./brievie restore {RUN_ID} --replace --skip-safety-backup" in result.stderr
+    assert f"./brievie restore {SAFETY_ID} --replace --skip-safety-backup" in result.stderr
     assert "veiligheidsback-up" in result.stderr
 
 
@@ -2024,7 +2048,8 @@ def test_a_fresh_restore_shows_only_sentences(install: Install) -> None:
             "destination_not_ready",
             "De bestemming voor de back-up is nog niet klaar voor gebruik.",
             "1",
-            "Typ ./brievie backup --init om de back-up de eerste keer in te stellen.",
+            "De plek voor de back-up is niet klaar. Is de schijf aangesloten? "
+            "Is dit de eerste keer: typ ./brievie backup --init.",
         ),
         (
             "not_configured",
@@ -2037,7 +2062,7 @@ def test_a_fresh_restore_shows_only_sentences(install: Install) -> None:
             "not_picked_up",
             "De back-up is niet opgepakt. Draait de back-updienst (keeper)?",
             "2",
-            "./brievie start",
+            "./brievie status",
         ),
     ],
 )
@@ -2150,15 +2175,6 @@ RUN_NOT_FOUND = (
 )
 
 
-def test_the_safety_backup_never_prunes(installed: Install) -> None:
-    result = installed.run("restore", "--replace", "--keep-hostname", **restore_inputs(installed))
-
-    assert result.returncode == 0, result.stderr
-    safety = next(c for c in installed.calls() if "--no-prune" in c["argv"])
-    assert safety["argv"][-3:] == ["manage.py", "backup", "--no-prune"]
-    assert not any(c["argv"][-1] == "backup" for c in installed.calls() if "exec" in c["argv"])
-
-
 def test_replace_checks_the_backup_after_the_safety_backup_and_before_the_drop(
     installed: Install,
 ) -> None:
@@ -2172,7 +2188,7 @@ def test_replace_checks_the_backup_after_the_safety_backup_and_before_the_drop(
     )
 
     assert result.returncode == 0, result.stderr
-    safety = installed.index("--no-prune")
+    safety = installed.index("--safety")
     check = installed.index("restore_check")
     drop = installed.index("psql -U postgres -d postgres")
     database = installed.index("restore_database")
@@ -2358,3 +2374,339 @@ def test_ci_has_shellcheck_for_the_backend_tests() -> None:
     assert "shellcheck" in backend
     assert backend.index("shellcheck") < backend.index("run: uv run pytest")
     assert "working-directory: backend" in backend
+
+
+# --- fix round 7: final reviews --------------------------------------------------------------
+
+OWN_PW = "mijn eigen wachtwoord 42"
+MARKER = "deploy/.restore-in-progress"
+
+
+def sheet_path(install: Install) -> Path:
+    return install.root / "brievie-herstelblad.html"
+
+
+def test_separate_password_keeps_the_users_own(installed: Install) -> None:
+    installed.write_env(current_env().replace(DERIVED_PW, f"'{OWN_PW}'"))
+
+    result = installed.run("backup", "--init", "--separate-password")
+
+    assert result.returncode == 0, result.stderr
+    assert f"BRIEVIE_BACKUP_PASSWORD='{OWN_PW}'" in installed.dotenv.read_text()
+    assert not any("token_hex(32)" in c for c in installed.commands())
+    assert sheet_path(installed).exists()
+    assert installed.index("backup_init") < installed.index("recovery_sheet")
+    assert "Druk het nu af" in result.stdout
+    assert not any(OWN_PW in " ".join(c["argv"]) for c in installed.calls())
+
+
+def test_separate_password_is_made_when_only_the_derived_one_is_set(installed: Install) -> None:
+    result = installed.run("backup", "--init", "--separate-password")
+
+    assert result.returncode == 0, result.stderr
+    assert f"BRIEVIE_BACKUP_PASSWORD={SEPARATE_PW}" in installed.dotenv.read_text()
+    assert installed.index("token_hex(32)") < installed.index("backup_init")
+    assert installed.index("backup_init") < installed.index("recovery_sheet")
+    assert sheet_path(installed).exists()
+    assert "Druk het nu af" in result.stdout
+    installed.assert_no_secret_in_argv()
+
+
+def test_init_without_a_separate_password_writes_no_sheet(installed: Install) -> None:
+    result = installed.run("backup", "--init")
+
+    assert result.returncode == 0, result.stderr
+    assert not sheet_path(installed).exists()
+
+
+def test_restore_asks_for_the_separate_password_when_the_key_alone_does_not_open(
+    install: Install,
+) -> None:
+    result = install.run(
+        "restore",
+        "--keep-hostname",
+        stdin=TYPED_SEPARATE_PW + "\n",
+        FAKE_FETCH_PASSWORD=TYPED_SEPARATE_PW,
+        **restore_inputs(install),
+    )
+
+    assert result.returncode == 0, result.stderr
+    fetches = [c for c in install.calls() if "restore_fetch" in c["argv"]]
+    assert [f["env"]["BRIEVIE_BACKUP_PASSWORD"] for f in fetches] == ["", TYPED_SEPARATE_PW]
+    assert "Deze back-up heeft een apart wachtwoord" in result.stdout
+    install.assert_no_secret_in_argv()
+
+
+def test_a_wrong_key_names_the_separate_password(install: Install) -> None:
+    result = install.run(
+        "restore",
+        FAKE_DOCKER_FAIL="restore_fetch",
+        FAKE_DOCKER_FAIL_CODE="2",
+        **restore_inputs(install),
+    )
+
+    assert result.returncode == 2
+    assert "aparte" in result.stderr
+
+
+def test_an_empty_installation_is_replaced_without_replace(installed: Install) -> None:
+    result = installed.run(
+        "restore",
+        "--keep-hostname",
+        FAKE_DATA_ROWS="0",
+        **restore_inputs(installed, BRIEVIE_RESTORE_CONFIRM="", BRIEVIE_RESTORE_EMPTY_OK="ja"),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "lege installatie" in result.stdout
+    commands = installed.commands()
+    assert not any("--safety" in c for c in commands)
+    drop = installed.index("psql -U postgres -d postgres")
+    assert drop < installed.index("restore_database")
+    assert installed.commands()[installed.index("restore_files")].endswith("--replace")
+    assert result.stdout.rstrip().splitlines()[-1] == "Herstel gelukt."
+
+
+def test_an_empty_installation_needs_a_yes(installed: Install) -> None:
+    result = installed.run(
+        "restore",
+        "--keep-hostname",
+        stdin="ja\n",
+        FAKE_DATA_ROWS="0",
+        **restore_inputs(installed, BRIEVIE_RESTORE_CONFIRM=""),
+    )
+
+    assert result.returncode == 1
+    assert "BRIEVIE_RESTORE_EMPTY_OK=ja" in result.stderr
+    assert not any(" stop " in f" {c} " for c in installed.commands())
+    assert installed.dotenv.read_text() == current_env()
+
+
+def test_an_installation_with_data_still_needs_replace(installed: Install) -> None:
+    result = installed.run("restore", "--keep-hostname", **restore_inputs(installed))
+
+    assert result.returncode == 1
+    assert "./brievie restore --replace" in result.stderr
+    assert "heeft al gegevens" in result.stderr
+    assert not any("restore_fetch" in c for c in installed.commands())
+
+
+def test_the_safety_backup_is_asked_with_safety_and_its_id_is_named(installed: Install) -> None:
+    result = installed.run(
+        "restore",
+        "--replace",
+        "--keep-hostname",
+        FAKE_DOCKER_FAIL="restore_files",
+        **restore_inputs(installed),
+    )
+
+    assert result.returncode == 1
+    safety = next(c for c in installed.calls() if "--safety" in c["argv"])
+    assert safety["argv"][-3:] == ["manage.py", "backup", "--safety"]
+    assert not any("--no-prune" in c for c in installed.commands())
+    assert SAFETY_ID in result.stderr
+    assert "30 dagen" in result.stderr
+
+
+def test_the_marker_records_the_restore_and_goes_on_success(installed: Install) -> None:
+    marker = installed.root / MARKER
+    result = installed.run(
+        "restore",
+        "--replace",
+        "--keep-hostname",
+        FAKE_WATCH=str(marker),
+        **restore_inputs(installed),
+    )
+
+    assert result.returncode == 0, result.stderr
+    database = next(c for c in installed.calls() if "restore_database" in c["argv"])
+    assert database.get("watch_mode") == "0o600"
+    check = next(c for c in installed.calls() if "restore_check" in c["argv"])
+    assert "watch_mode" not in check  # written after the last check, before the swap
+    assert not marker.exists()
+
+
+@pytest.mark.parametrize("command", [("start",), ("backup",), ("status",), ("sweep",)])
+def test_a_halfway_restore_blocks_the_other_commands(
+    installed: Install, command: tuple[str, ...]
+) -> None:
+    failed = installed.run(
+        "restore",
+        "--replace",
+        "--keep-hostname",
+        FAKE_DOCKER_FAIL="restore_files",
+        **restore_inputs(installed),
+    )
+    assert failed.returncode == 1
+    assert (installed.root / MARKER).exists()
+    before = len(installed.calls())
+
+    result = installed.run(*command)
+
+    assert result.returncode == 1
+    assert "halverwege gestopt" in result.stderr
+    assert f"./brievie restore {RUN_ID} --replace --skip-safety-backup" in result.stderr
+    assert f"./brievie restore {SAFETY_ID} --replace --skip-safety-backup" in result.stderr
+    assert installed.calls()[before:] == []
+
+
+def test_a_halfway_restore_resumes_with_the_same_run(installed: Install) -> None:
+    installed.run(
+        "restore",
+        "--replace",
+        "--keep-hostname",
+        FAKE_DOCKER_FAIL="restore_files",
+        **restore_inputs(installed),
+    )
+    before = len(installed.calls())
+
+    result = installed.run(
+        "restore", RUN_ID, "--replace", "--keep-hostname", **restore_inputs(installed)
+    )
+
+    assert result.returncode == 0, result.stderr
+    later = [" ".join(c["argv"]) for c in installed.calls()[before:]]
+    assert not any("--safety" in c for c in later)
+    assert any("restore_files" in c for c in later)
+    assert not (installed.root / MARKER).exists()
+
+
+def test_a_halfway_restore_refuses_another_run(installed: Install) -> None:
+    installed.run(
+        "restore",
+        "--replace",
+        "--keep-hostname",
+        FAKE_DOCKER_FAIL="restore_files",
+        **restore_inputs(installed),
+    )
+    other = "1b6c3f7e-1d2a-4c5b-9e8f-7a6b5c4d3e2f"
+
+    result = installed.run(
+        "restore", other, "--replace", "--keep-hostname", **restore_inputs(installed)
+    )
+
+    assert result.returncode == 1
+    assert "halverwege gestopt" in result.stderr
+
+
+def test_an_interrupt_after_the_drop_says_where_it_stopped(installed: Install) -> None:
+    result = installed.run(
+        "restore",
+        "--replace",
+        "--keep-hostname",
+        FAKE_KILL_AT="restore_files",
+        **restore_inputs(installed),
+    )
+
+    assert result.returncode != 0
+    assert "halverwege gestopt" in result.stderr
+    assert SAFETY_ID in result.stderr
+    assert (installed.root / MARKER).exists()
+    assert not (installed.root / "deploy" / ".brievie-lock").exists()
+
+
+def test_the_lock_refuses_a_second_run(installed: Install) -> None:
+    lock = installed.root / "deploy" / ".brievie-lock"
+    lock.mkdir()
+    (lock / "started").write_text(f"{int(__import__('time').time())}\n")
+
+    result = installed.run("status")
+
+    assert result.returncode == 1
+    assert "bezig" in result.stderr
+    assert installed.calls() == []
+    assert lock.exists()
+
+
+def test_a_stale_lock_needs_a_typed_yes(installed: Install) -> None:
+    lock = installed.root / "deploy" / ".brievie-lock"
+    lock.mkdir()
+    (lock / "started").write_text("1000\n")
+
+    refused = installed.run("status", stdin="JA\n")
+
+    assert refused.returncode == 1
+    assert "12 uur" in refused.stderr
+    assert lock.exists()
+
+
+def test_the_lock_is_gone_after_a_run(installed: Install) -> None:
+    result = installed.run("status")
+
+    assert result.returncode == 0, result.stderr
+    assert not (installed.root / "deploy" / ".brievie-lock").exists()
+    leftovers = [p.name for p in (installed.root / "deploy").iterdir() if ".new" in p.name]
+    assert leftovers == []
+
+
+def test_a_fresh_restore_gets_a_new_id_before_the_first_up(install: Install) -> None:
+    result = install.run("restore", "--keep-hostname", **restore_inputs(install))
+
+    assert result.returncode == 0, result.stderr
+    assert setting(install.dotenv.read_text(), "BRIEVIE_INSTALLATION_ID") == [
+        f"BRIEVIE_INSTALLATION_ID={NEW_ID}"
+    ]
+    write = install.index("installation-id.tmp")
+    assert install.index("restore_files") < write
+    full_up = next(i for i, c in enumerate(install.commands()) if c.endswith("up -d --wait"))
+    assert write < full_up
+    assert BACKUP_ID not in " ".join(c.get("stdin", "") for c in install.calls())
+
+
+def test_start_stores_the_settings_copy(installed: Install) -> None:
+    result = installed.run("start")
+
+    assert result.returncode == 0, result.stderr
+    assert installed.index("up -d --build --wait") < installed.index("store_env_copy")
+
+
+@pytest.mark.parametrize(
+    ("code", "running", "expected"),
+    [
+        ("not_picked_up", "postgres keeper", "draait, maar"),
+        ("not_picked_up", "postgres", "Typ ./brievie start"),
+        ("still_running", "postgres keeper", "Er loopt al een back-up"),
+        ("env_copy_missing", "postgres keeper", "Typ ./brievie start en probeer het daarna"),
+        ("destination_not_ready", "postgres keeper", "Is de schijf aangesloten?"),
+    ],
+)
+def test_backup_failures_name_the_honest_next_step(
+    installed: Install, code: str, running: str, expected: str
+) -> None:
+    def keeper_answers(fake_running: str) -> dict[str, str]:
+        return {"FAKE_DOCKER_RUNNING": fake_running}
+
+    # The keeper must run for the back-up to be asked at all; the second ps answers.
+    result = installed.run(
+        "backup",
+        FAKE_DOCKER_FAIL="manage.py backup",
+        FAKE_DOCKER_FAIL_CODE="2" if code in ("not_picked_up", "still_running") else "1",
+        FAKE_DOCKER_FAIL_STDERR=f"code={code}\nCommandError: zin\n",
+        FAKE_KEEPER_GONE_AFTER="manage.py backup" if "keeper" not in running else "",
+        **keeper_answers("postgres keeper"),
+    )
+
+    assert expected in result.stderr
+
+
+def test_a_clock_warning_is_shown_after_a_good_backup(installed: Install) -> None:
+    result = installed.run(
+        "backup",
+        FAKE_STDERR_AT="manage.py backup",
+        FAKE_STDERR_TEXT="code=clock_skew\n",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "klok" in result.stdout + result.stderr
+    assert "code=" not in result.stdout + result.stderr
+
+
+def test_keeping_the_destination_warns_about_the_original_server(install: Install) -> None:
+    result = install.run(
+        "restore",
+        "--keep-hostname",
+        **restore_inputs(install, BRIEVIE_RESTORE_KEEP_DESTINATION="ja"),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "oorspronkelijke server" in result.stdout
