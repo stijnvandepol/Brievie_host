@@ -1,8 +1,10 @@
 # "Beheer": back-up and restore, export and archive folder, updates and releases: design
 
-Date: 2026-11-17. Covers `Brievie_host` (and what changes in `Brievie_site` and
-`Brievie_ios` because of it). Design only. Nothing here creates tags, releases or
-packages on GitHub; that is the owner's step.
+Date: 2026-11-17; updated 2026-11-18 to say what part B1 (back-up and restore) built
+on the branch `feat/b1-backup`: sections 4, 7.3, 7.7, 8 to 13 are corrected in place
+and section 14 lists what the build changed. Covers `Brievie_host` (and what changes in
+`Brievie_site` and `Brievie_ios` because of it). Design only. Nothing here creates tags,
+releases or packages on GitHub; that is the owner's step.
 
 The owner asked for this in three sentences: "Denk ook na over hoe updates op de host
 gaan plaatsvinden", "Denk ook na over backups", and, for a NAS, "de mogelijkheid om die
@@ -38,7 +40,8 @@ pinned version.
 
 - G1. One command makes a complete, encrypted, verified back-up; one command restores
   it on an empty machine, and the phones stay paired.
-- G2. The restore is tested: by CI on every change, and by the admin with one button.
+- G2. The restore is tested: by CI on every change (part B1), and by the admin with
+  one command (part B2).
 - G3. The admin sees when the last good back-up was, and is warned when it is old.
 - G4. Everything can be taken out in an open form (files plus readable data).
 - G5. Optionally, a readable copy of each letter in a folder per person on the NAS.
@@ -101,46 +104,81 @@ pinned version.
 
 Cost if restic is wrong: it sits behind one module and one container; the dump and
 the file list are plain inputs, so another tool can take its place without touching
-the rest. Not confirmed from the pages read: an arm64 build of the official image
-(needed for a Pi; first task of the plan), and restic with S3 object lock.
+the rest. Confirmed during the build: restic 0.18.1 is published for amd64 and arm64
+(a Pi or a NAS on ARM works); the back-end image copies its binary from the official
+image, pinned by version and digest. Not confirmed: restic with S3 object lock.
 
 ### 4.2 What a back-up contains
 
-One back-up is two restic snapshots with the same run id as a tag:
+One back-up is a **run**, and a run is two restic snapshots of the installation. Both
+carry the run id as a tag (`run:<uuid>`), their kind (`kind:db` or `kind:files`) and
+**one shared time**: the moment the run started (restic's `--time`, in UTC). Retention
+groups snapshots by host and paths, so two halves with different times could be thinned
+apart at the edge of a day, a week or a month, and an older restore point would silently
+lose its database or its files (found in the final review). The restic host is
+`brievie-<first 12 characters of the installation id>`, so two installations on one
+repository never prune each other's snapshots.
 
 1. **The database**, a `pg_dump` in custom format, streamed straight into restic
-   (`backup --stdin-from-command`, which makes no snapshot when the dump fails). It
-   never lies on disk. It is taken by a new role `brievie_backup` (`LOGIN`,
-   `BYPASSRLS`, `CONNECT` on the database, member of `pg_read_all_data`: it reads
-   everything and can write nothing), because under forced row-level security a dump
-   by the owner fails or, with `--enable-row-security`, silently contains only what
-   that role may see. That flag is never used. A test dumps as this role and finds
-   rows of two workspaces. `docs/DECISIONS.md` records that a role which bypasses
-   row-level security now exists, read-only and used by the back-up service alone;
-   the application's roles still cannot bypass it. The PostgreSQL client in the image
-   is version 18 from PostgreSQL's own package repository, pinned to the server
-   image's major version, with a test that compares the two.
-2. **The files**:
+   (`backup --stdin-from-command`, file name `brievie.pgdump`, which makes no snapshot
+   when the dump fails). It never lies on disk. It is taken by the role
+   `brievie_backup` (`LOGIN`, `BYPASSRLS`, `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`,
+   `CONNECT` on the database, member of `pg_read_all_data`: it reads everything and can
+   write nothing), because under forced row-level security a dump by the owner fails or,
+   with `--enable-row-security`, silently contains only what that role may see. That
+   flag is never used. The dump is taken inside a read-only `REPEATABLE READ`
+   transaction that exports its snapshot (`pg_dump --snapshot=<id>`), so the manifest's
+   counts (below) describe exactly what the dump holds.
+   `docs/DECISIONS.md` records that a role which bypasses row-level security now
+   exists, read-only and used by the back-up service and the sweep alone; the
+   application's roles still cannot bypass it. The PostgreSQL client in the image is
+   version 18 from PostgreSQL's own package repository, with a test that compares its
+   major version with the server image's.
+   **Proof, honestly:** the unit tests read as this role with `row_security = off` and
+   prove that a role bound by row-level security fails instead of reading fewer rows.
+   The real `pg_dump` against the real database has run only in a container stack and
+   in the CI job `restore` (4.7), not in a unit test. Cost: a regression in the dump's
+   command line shows in CI, not in the fast tests.
+2. **The files** (one restic snapshot of three directories):
    - the document files (`documents` volume), without the temporary `.tmp-*` files;
-   - Caddy's private authority. Caddy's volume is readable by root only, so the
-     existing script in the Caddy container that publishes the root certificate also
-     copies the authority (`pki/authorities/local`) to a volume that only the
-     back-up service mounts, owned by its user, mode 0600. Without it a restored
-     server has a new certificate and every phone must pair again;
-   - `deploy/.env` without the master key and without the passwords of the database's
-     superuser and owner role. The always-on service must not hold those (4.5), so
-     they cannot pass through it into the back-up. A restore writes new ones: they are
-     used only when the database is first created and by `migrate`, so nothing is
-     lost, and the restored server starts without anybody editing a file. The CI
-     restore job proves that: after the restore the stack is healthy, the migrations
-     ran with the new owner password, and a new back-up succeeds;
-   - a **manifest**: Brievie version, schema state, counts of documents and page
-     files per workspace (counted as the back-up role, so private post is counted),
-     the authority's fingerprint, the host name, time.
+   - Caddy's private authority. Caddy's volume is readable by root only, so the script
+     in the Caddy container that publishes the root certificate also copies the
+     authority (`pki/authorities/local`) to the volume `caddy-authority`, which only the
+     keeper and the one-off `admin` container mount (the keeper read-only), files mode
+     0600 owned by uid 10001. Without it a restored server has a new certificate and
+     every phone must pair again. The copy is made file by file, so a back-up during
+     Caddy's renewal of the intermediate can hold a mismatched pair (low odds; a
+     directory swap would fix it; not built);
+   - the config folder `backup-config`: the **manifest** and a **copy of
+     `deploy/.env`**. The installation id that also lives in that folder is excluded.
+3. **The manifest**: format number, run id, time, Brievie version, the list of
+   applied migrations, PostgreSQL version, host name, the authority's fingerprint, and
+   per workspace the counts of documents, pages and page files. The counts are read as
+   the back-up role in the same transaction snapshot that `pg_dump` dumps, so a letter
+   scanned during the dump cannot make the restore report a false difference. That
+   transaction stays open on its own connection while the dump runs: a deliberate
+   exception to "no transaction during an external call" in `CLAUDE.md`. Cost: a long
+   dump holds a snapshot open and delays vacuum meanwhile.
 
-Roles and passwords are not in the dump: a restore makes them from the restored
-`.env`. **Not in a back-up: the master key.** It is the one secret the user keeps
-apart (4.4).
+**What is not inside a back-up.** The master key (`BRIEVIE_MASTER_KEY`). The passwords
+of the database superuser and of the owner role and the owner's URL
+(`POSTGRES_PASSWORD`, `BRIEVIE_OWNER_PASSWORD`, `DATABASE_OWNER_URL`): the always-on
+service must not hold them, so they cannot pass through it. A guard refuses to store
+the `.env` copy when any of those keys is present in any spelling (a quoted key,
+`export`, a space, a commented-out key that still has a value). The installation id
+(4.6). **What is inside, and is not "without secrets":** the `.env` copy still holds
+`SECRET_KEY`, the application role's and the back-up role's database passwords, the
+back-up password and the credentials of a remote destination. That is acceptable because
+the whole repository is encrypted with the back-up password, but it means whoever holds
+the back-up password can read them. The sheet and `docs/SELFHOST.md` say so. A back-up
+without the `.env` copy fails (`env_copy_missing`, "Typ ./brievie start"): a restore
+needs that copy, and a back-up that cannot be restored must never be recorded as
+succeeded. Cost: a NAS scheduler that runs `manage.py backup` without `./brievie` fails
+until `./brievie start` has stored the copy once.
+
+Roles and passwords are not in the dump. A restore makes new passwords for the
+superuser and the owner role, and takes the application role's and the back-up role's
+passwords from the restored `.env` copy (4.6).
 
 ### 4.3 Consistency while the server runs
 
@@ -149,179 +187,451 @@ a consistent snapshot without blocking anybody), then the files. Files are writt
 once and never changed, so every file the dump refers to exists by the time the files
 are read; a file that arrived after the dump is an orphan in the back-up, which is
 harmless. The reverse order could restore a database that points at missing files.
-(Immich documents the same order for the same reason.) The reader confirmed the argument against the code: intake writes a file before its
-row is committed and deletes one only when the row was never committed.
+(Immich documents the same order for the same reason.) The reader confirmed the
+argument against the code: intake writes a file before its row is committed and
+deletes one only when the row was never committed.
 
-With the back-up comes the **storage sweep** that `DECISIONS.md` promised: a command
-that lists page files no document refers to and that are older than a day, and
-removes them only when asked, never by itself. It reads the list of known pages as
-the back-up role: with the private post of phase 1d the application's role does not
-see every page, and a sweep through that role would take a private letter's files
-for orphans and destroy them. A test has a private letter of another member.
+With the back-up comes the **storage sweep** that `DECISIONS.md` promised:
+`./brievie sweep` lists the page files that no document refers to, and
+`./brievie sweep --delete` removes them. Nothing removes them by itself. It runs as
+uid 10001 in the one-off container and reads the list of known pages as the back-up
+role with `row_security = off`: with the private post of phase 1d the application's
+role does not see every page, and a sweep through that role would take a private
+letter's files for orphans and destroy them. (A test with a private letter of another
+member belongs to the first 1d part that adds private post; B1 has proven that a role
+bound by row-level security fails instead of listing a partial set.) The rules, all
+in code:
+
+- files on disk are listed first and the known pages read after, so a page written
+  in between is known; only files of the layout `<uuid>/<uuid>/<n>.page` and `.tmp-*`
+  next to them are candidates; a file younger than 24 hours is never touched (checked
+  again just before it is removed); no link is followed; directories are never removed;
+  deletion goes through directory descriptors (4.10); the output is counts and a total
+  size, never a path;
+- it holds the back-up lock, so it never runs beside a back-up or a restore;
+- **it refuses, and deletes nothing, when:** the known pages cannot be read as the
+  back-up role; a stored path has a form it does not know; the database knows no page
+  at all while page files exist (an empty or wrong database must never empty the
+  store; there is no override flag in B1, cost: a server whose only content is orphans
+  cannot sweep them and must delete them by hand); the storage folder is not
+  `/data/documents` (for `--delete`); the installation id does not match (for
+  `--delete`); a restore is in progress; it is not run inside Brievie's container.
+- after a restore, pages uploaded between the dump and the files snapshot have no row
+  and are removed by the first `sweep --delete`.
 
 ### 4.4 The key, and the recovery sheet
 
 - **One secret.** `BRIEVIE_BACKUP_PASSWORD` in `.env` is the restic password. By
-  default the installer derives it from the master key (HKDF from the `cryptography`
-  package that is already used, its own label), so a home user keeps exactly one
-  thing: the master key. A restore derives it again from the key on the sheet. The
-  back-up service gets this password and not the master key.
-- **Two secrets, for who wants them**: an organisation sets its own random back-up
-  password. It replaces the derived one (the derived key is removed from the
-  repository), so the master key alone no longer opens a back-up; the sheet then has
-  a second line and the restore asks for both.
+  default it is derived from the master key (HKDF-Expand with SHA-256, the label
+  `brievie/backup-password/v1`, which never changes: existing back-ups depend on it),
+  so a home user keeps exactly one thing: the master key. **The derivation happens only
+  inside the container**, by `manage.py derive_backup_password`, and `./brievie` appends
+  the result to `deploy/.env` (the installer and `init-env.sh` do not derive it: on the
+  host the only tools are `openssl`, which takes a key only as an argument that any
+  local user can read from the process list, and `python3`, which a NAS may not have).
+  A restore derives it again from the key on the sheet. The keeper gets this password
+  and not the master key.
+- **Two secrets, for who wants them**: `./brievie backup --init --separate-password`.
+  If `deploy/.env` already holds a back-up password that the user set (not a
+  placeholder, not the derived one) it is kept and used; otherwise a random one is
+  made and written there. It is chosen **only at the first set-up** of a destination:
+  an existing repository keeps the password it was made with, and changing it is not
+  built (cost: moving to a separate password means a new repository). The master key
+  alone then no longer opens the back-ups. Right after a successful set-up the wrapper
+  writes a **new recovery sheet that holds both secrets** and tells the user to print
+  it at once; when the set-up fails, the old value in `.env` is put back. A password
+  with a quote or a line break is refused. A restore asks for the second secret as soon
+  as the key alone does not open the back-up (and up front with
+  `./brievie restore --separate-password`).
 - **The recovery sheet** ("herstelblad"), after the examples of 1Password's Emergency
   Kit and Proton's recovery file: the server's name, the date, the master key as text
   in groups of four, the fingerprint of the server's authority, where the back-up
-  goes, and the four steps of a restore. `install.sh` writes it as one self-contained
-  HTML file next to the installation and says: print it or save it somewhere that is
-  not this machine. `./brievie recovery-sheet` makes it again. There is no QR code on it: the back end has no QR
-  generator and none is added for this.
+  goes (a folder's path or a repository's address, never credentials), the separate
+  back-up password when there is one, and the four steps of a restore. It is one
+  self-contained HTML file `brievie-herstelblad.html` next to the installation, mode
+  0600. **The first `./brievie start` writes it, once**; later starts do not (a sheet
+  that was printed and removed, as told, never comes back with the key on it), and
+  `./brievie recovery-sheet` makes a new one. `install.sh` does not write it (it is in
+  another repository and unchanged in B1; 7.7). The sheet tells the user to print it or
+  save it somewhere that is not this machine, and that the file must then be removed.
+  The credentials of a remote destination are on no sheet; `docs/SELFHOST.md` tells the
+  user to keep them off the machine as well. There is no QR code on it: the back end
+  has no QR generator and none is added for this.
 - **The web interface never shows the master key.** A stolen admin session must not
   yield it. The web only asks the server admin to tick "Ik heb het herstelblad
-  bewaard" and warns until that is done.
+  bewaard" and warns until that is done (part B3).
 - **For an organisation**: the key in the company's secret store, known to two
-  people; `BRIEVIE_MASTER_KEY_FILE` (a Docker secret) instead of a line in `.env`; a
-  separate back-up password.
+  people; a separate back-up password. `BRIEVIE_MASTER_KEY_FILE` (a Docker secret)
+  instead of a line in `.env` is not built in B1.
 
 ### 4.5 Commands, schedule, destinations
 
-**Where the logic lives.** Everything is a management command in the back-end image;
-`./brievie` in the repository root is a thin POSIX-shell wrapper around
-`docker compose` so that nobody types a compose line. The same code is therefore
-reachable from the web (a job), from the wrapper, and from a NAS's task scheduler.
+**Where the logic lives.** The logic is in management commands in the back-end image;
+`./brievie` in the repository root is a POSIX-shell wrapper around `docker compose`
+so that nobody types a compose line. As built, more sits in the shell than the design
+wanted: settling which installation this is, preparing the restored `.env`, asking for
+the destination and the typed confirmations all happen before there is an image, a
+compose project or a `.env` to run a command in. Cost: shell is harder to test (the
+wrapper's tests run it against a fake `docker`), and U1 moves out what it can.
+The terminal shows Dutch sentences only; docker's progress and the commands' log lines
+go to `deploy/.brievie-last.log` (`BRIEVIE_VERBOSE=1` shows everything), and a failed
+step shows its last lines and the next thing to type.
 
-| Command | Does | Needs a shell |
+| Command | Does | In B1 |
 |---|---|---|
-| `./brievie backup` | asks the running service for a back-up and waits: dump, files, `forget --prune` with the retention, record the result | no: also nightly by itself and with a button in the web |
-| `./brievie backup --check` | `restic check` with a sample of the data read back | no: weekly by itself |
-| `./brievie restore [run]` | section 4.6 | yes |
-| `./brievie restore-test` | section 4.7 | yes |
-| `./brievie recovery-sheet`, `./brievie status`, `./brievie sweep` | the sheet; versions, last back-up, last restore test; the storage sweep | yes |
+| `./brievie start` | proves the installation is this checkout's, brings an older installation along (4.5 below), builds and starts everything, makes sure the back-up role, the back-up password and the `.env` copy exist and the installation has its id; the first start writes the recovery sheet | shell |
+| `./brievie backup` | asks the running keeper for a back-up and waits: the dump, the files, retention, the result recorded | shell |
+| `./brievie backup --init [--allow-same-disk] [--separate-password]` | the first set-up of a destination (below) | shell |
+| `./brievie backup --check` | `restic check` with a 5% sample of the data read back | shell |
+| `./brievie backup --safety` | the safety back-up of a restore (and of an update, section 7): tagged `kind:safety`, no retention in its own run, kept 30 days; prints its run id; not in the help text | internal |
+| `./brievie restore [number] [--replace] [--separate-password] [--keep-hostname] [--skip-safety-backup]` | section 4.6 | shell |
+| `./brievie status [--list]` | versions, destination (kind only), last good back-up and its size, last check, last error, a run that was interrupted, a clock warning; `--list` shows the runs on the destination with number, date and whether each is complete, read from the destination itself, so it works while the keeper is stopped | shell |
+| `./brievie sweep [--delete]` | the storage sweep (4.3) | shell |
+| `./brievie recovery-sheet`, `./brievie help` | a new sheet; the help text | shell |
 
-So on a Synology without SSH the back-up runs and is visible; restoring, the restore
-test and updating need a terminal (or the NAS's task scheduler running the wrapper).
-That is less than `docs/SPEC.md` 16 asks ("terugzetten werkt vanuit de
-webinterface") and is listed as a deviation. Cost if wrong: a web restore can be
+`restore-test` is part B2 and `update` part U1. **In B1 every command needs a shell**:
+the nightly schedule is B2 and the button in the web is B3, so until then a back-up is
+made when somebody (or a NAS's task scheduler running the wrapper) runs
+`./brievie backup`. That is less than `docs/SPEC.md` 16 asks ("terugzetten werkt vanuit
+de webinterface") and is listed as a deviation. Cost if wrong: a web restore can be
 added later on the same commands, with the superuser question solved then.
 
 - **Two kinds of container, split by what they may do.**
-  - A service `keeper` that is always on: a Procrastinate worker on the queues
-    `backup` and `files`. It has the back-up role's password, the back-up password,
-    the documents and the copied authority read-only, and the destination. It has no
-    master key (until the archive folder is switched on, 6.3) and no superuser
-    password. It makes back-ups, checks them, and reports.
-  - **One-off containers** (a compose service `admin` behind a profile) for the first
-    set-up of a destination, restore and restore-test, started by the wrapper,
-    never listening to a queue. Only they get the superuser's password and the master
-    key, for as long as they run.
-- **One at a time**: a PostgreSQL advisory lock around back-up, restore and sweep;
-  the wrapper asks the running service instead of starting a second copy; the
-  existing retry of stalled jobs is extended to the `backup` queue. A back-up run
-  that a restore brings back as "started" is marked "afgebroken door herstel".
-- **Existing installations.** Every `./brievie` command (and `./brievie start`, which
-  rebuilds and starts) brings an installation
-  that predates this up to date, without a reinstall: it adds the missing lines to
-  `.env` (as `init-env.sh` already does for the master key) and creates the back-up
-  role through the superuser on PostgreSQL's local socket
-  (`docker compose exec postgres psql`), idempotently, because roles are otherwise
-  made only when the database volume is first created and the owner role may not
-  create roles. The role is also added to the init script, so a new installation and
-  CI have it.
-- **Schedule and retention** (defaults; settings in `.env`): every night; keep what
-  is younger than 7 days, weekly for a month, monthly for a year, expressed with
-  restic's `--keep-within-*` options, which a forged snapshot cannot trick; a check
-  every week. On an append-only destination the service does not prune.
+  - A service `keeper` that is always on: a Procrastinate worker on the queue `backup`
+    **only** (the queue `files` of the archive folder, 6.3, is not served by anything
+    in B1). It has the application role (the queue and the table `BackupRun`), the
+    back-up role's password, the back-up password, the destination's credentials, the
+    documents and the copied authority read-only, the writable `backup-config` volume
+    and the destination. It has no master key and no superuser or owner password. It
+    makes back-ups and checks and reports. A running step gets a minute to finish when
+    the keeper is stopped; every five minutes a periodic task gives jobs of a keeper
+    that died back to the queue (one waiting at most, so nothing piles up when no keeper
+    runs).
+  - **One-off containers**: the compose service `admin` behind the profile `admin`,
+    always `run --rm --no-deps` with an explicit command (its default command only
+    prints help, never the application), started by the wrapper and never listening to
+    a queue. It runs as root, because a restore writes every volume, except where a
+    command needs no root and runs as uid 10001 (the sweep, reading and writing the
+    installation id). Only it gets the superuser's password and the master key, for as
+    long as it runs, and it mounts the back-up destination read-only for every restore
+    step that only reads (`BRIEVIE_BACKUP_MOUNT_MODE`).
+- **One at a time.** (a) A PostgreSQL advisory lock around back-up, restore and
+  sweep. An advisory lock belongs to one database, so a restore, which replaces the
+  database the service is connected to, takes the lock of the database it restores into
+  (`database_lock`). (b) A request for a back-up returns the run that is already open;
+  an open run whose job has gone is closed as "afgebroken" and its leftover snapshots
+  are removed, unless it has both halves (a run that died after its files snapshot is a
+  whole back-up). (c) The wrapper itself: a directory `deploy/.brievie-lock` allows one
+  `./brievie` per installation at a time; a lock older than 12 hours is removed only
+  after a typed JA. (d) A back-up run that a restore brings back as open is closed with
+  "afgebroken door herstel".
+- **Existing installations.** Every `./brievie` command brings an installation that
+  predates this up to date, without a reinstall: `init-env.sh` adds the missing lines
+  to `.env` (it recognises its keys in every spelling), and the back-up role is made or
+  corrected through the superuser on PostgreSQL's local socket
+  (`docker compose exec postgres psql`, the password on stdin, never as an argument),
+  idempotently, because roles are otherwise made only when the database volume is
+  first created. `make dev` does the same through `deploy/ensure-backup-role.sh`. The
+  role is also in the init script, so a new installation and CI have it. A secret is
+  never an argument of a started process: not the master key, not a password.
+- **Retention** (a fixed setting in B1; as `.env` settings in B2). After each
+  successful run the keeper applies, per installation and in this order:
+  1. list the installation's own snapshots; **stop, remove nothing, and record the
+     warning `clock_skew` when one is dated more than 24 hours in the future**
+     (retention is relative to the newest snapshot, so one wrong clock would otherwise
+     remove almost everything; the run itself still counts as succeeded; a clock that
+     runs *behind* is not detected);
+  2. remove runs that have only one of their two snapshots and are older than 48
+     hours, by their run tag;
+  3. remove safety back-ups older than 30 days, counted from now, by their run tag
+     (restic's `--keep-within` counts from the newest snapshot of a group, so a lone
+     safety snapshot would never expire that way);
+  4. `forget --prune --host <host> --group-by host,paths --keep-tag kind:safety
+     --keep-within 2d --keep-within-daily 7d --keep-within-weekly 1m
+     --keep-within-monthly 1y`: **every snapshot of the last two days stays**
+     (counted from the newest), then one a day for a week, one a week for a month, one
+     a month for a year.
+  Why the two-day window: the daily rule alone keeps one snapshot a day, so a second
+  back-up on the same day removed the first. The CI job found the safety back-up of a
+  `--replace` pruning the very run the user had chosen, after the database was
+  already dropped. The safety back-up's own run applies no retention at all. On an
+  append-only destination (`BRIEVIE_BACKUP_APPEND_ONLY=true`) the service never prunes
+  or removes anything. Cost: busy days keep more snapshots. A check runs when asked
+  (`backup --check`); the weekly one is B2.
 - **Destinations**:
   - a folder (an external disk or a mounted NAS share): `BRIEVIE_BACKUP_DIR` is a
-    path on the host that compose mounts into the service. The first back-up is set
-    up explicitly (`./brievie backup --init`), which leaves a marker file; a folder
-    without the marker is refused. Otherwise a disk that is not plugged in would give
-    an empty folder on the system disk and a "back-up" next to the data. Changing the
-    folder restarts the service;
-  - S3-compatible storage or a restic REST server (SFTP is left out of part B1: it
-    needs an ssh client and key handling in the image, and a NAS share as a folder
-    or a REST server covers the same case):
-    `BRIEVIE_BACKUP_REPOSITORY` in restic's notation, **without credentials in it**
+    path on the host that compose mounts at `/backup` in the keeper (a named volume
+    while it is unset). The repository lies in the subfolder `restic`. The first
+    back-up is set up explicitly (`./brievie backup --init`), which hands the tree to
+    uid 10001 and writes the marker `brievie-backup.json` **last**; a folder without
+    the marker is refused (`destination_not_ready`), and no other command ever creates
+    anything there. Otherwise a disk that is not plugged in would give an empty
+    folder on the system disk and a "back-up" next to the data. `--init` also refuses a
+    folder on the same disk as the documents (`same_disk`) unless `--allow-same-disk`
+    is given; that comparison of device ids is best effort and can miss Docker
+    Desktop, btrfs subvolumes and a separate `/var/lib/docker`. A corrupt or foreign
+    marker is repaired by running `--init` again, but only when the configured password
+    opens the repository. Changing the folder restarts the keeper (the wrapper does it);
+  - S3-compatible storage or a restic REST server: `BRIEVIE_BACKUP_REPOSITORY` in
+    restic's notation (`rest:https://…`, `s3:https://…`), **without credentials in it**
     (a value with a password in the address is refused); credentials go in their own
-    variables. What the web shows and what a run records as its reason passes a
-    filter with a test, because restic's messages name the repository.
-  Nothing is set by default: a fresh server warns "Er is nog geen back-up ingesteld".
+    variables (`BRIEVIE_BACKUP_REST_USERNAME`, `BRIEVIE_BACKUP_REST_PASSWORD`,
+    `BRIEVIE_BACKUP_S3_ACCESS_KEY_ID`, `BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY`). What the
+    wrapper prints and what a run records as its reason passes a filter with a test,
+    because restic's messages name the repository. Setting a folder and a repository
+    together is refused. **SFTP is not built** (it needs an ssh client and key handling
+    in the image; a NAS share as a folder or a REST server covers the same case).
+  Nothing is set by default: a fresh server says "Er is nog geen back-up ingesteld".
+  A restored server writes to the old destination only when its admin says so (4.6).
 - **The advice in the text** is the 3-2-1 rule in plain words: one copy outside the
   machine, one outside the house.
 
 ### 4.6 Restore
 
-`./brievie restore`, on a machine with Docker and the deploy files (the site's
-installer gets `--restore`). Compose cannot be used before there is a `.env`, and the
-`.env` is inside the back-up, so the order is fixed:
+`./brievie restore`, on a machine with Docker and the deploy files. (`install.sh
+--restore` is not built; 7.7 and 12.) Compose cannot be used before there is a `.env`,
+and the `.env` is inside the back-up, so the order is fixed. The wrapper's own rules
+come first, and they bind every destructive command, `update` included (4.10): the
+compose project and the image are worked out **once** and passed with `-p` to every
+call; the installation is proven to be this checkout's (no container of another
+checkout under the same project name; no data volume without this checkout's
+`deploy/.env`; the installation id in the data volume equals the one in `.env`);
+nothing else runs meanwhile (the lock of 4.5).
 
-1. Ask for the destination and the master key (and the back-up password when it is a
-   separate one). Open the repository with a plain `docker run` of the back-up image,
-   outside compose. A wrong key ends here with a clear sentence; nothing is written.
-2. Read the manifest. Refuse a back-up from a newer Brievie than the one installed:
-   one whose manifest lists migrations this code does not know (the version number
-   is fixed until part U1, so the schema is the real test).
-   Ask whether the host name stays: with another name the certificate is valid for
-   the new one, but the phones know only the old one and pair again.
-3. Refuse when the installation already holds data, unless `--replace` is given;
-   then stop the API and the workers and first make a back-up of what is there.
-4. Write `deploy/.env` from the back-up plus the master key and new passwords for
-   the superuser and the owner role. This must happen before
-   PostgreSQL starts for the first time, because the roles get their passwords from
-   it then. With `--replace` the database is dropped and created again and the
-   roles' passwords are set to the restored ones.
-5. Start PostgreSQL only. Restore the dump in a one-off container **as the
-   superuser**, without the services it normally waits for (`--no-deps`): otherwise
-   `migrate` would first create an empty schema and the restore would collide with
-   it. Only a superuser can load rows into tables with forced row-level security.
-   Straight after it, back-up runs that the dump brought back as open are closed
-   ("afgebroken door herstel"), before any service can act on them.
-6. Put the document files back (owned by the application's user) and Caddy's
-   authority (as root), **before Caddy starts**; a Caddy that started earlier has
-   made a new authority.
-7. Start the stack; `migrate` brings the schema to the installed version.
-8. Verify: counts against the manifest, one page per workspace opened with the master
-   key, the authority's fingerprint equal to the manifest's.
+**Fresh or replace.**
+- **Fresh**: there is no `deploy/.env` (a new machine). Refused when a data volume of
+  the project exists without a `.env`, or when another checkout's containers carry the
+  project name.
+- **An empty installation counts as fresh.** An installation that has a `.env` but whose
+  own PostgreSQL runs and holds no user, no workspace and no document (or no tables)
+  has never held data. It is replaced after one yes (`j` in a terminal, or
+  `BRIEVIE_RESTORE_EMPTY_OK=ja`), without a safety back-up and without the typed word.
+  Cost: an installation that was installed but never started is not recognised as
+  empty (PostgreSQL must run to be asked); it needs `--replace`, which then wants a
+  safety back-up that cannot be made without a destination.
+- **Anything else needs `--replace`**: without it the restore refuses an installation
+  that holds data and says so.
+
+**The order:**
+
+1. **Open the back-up, outside compose.** Ask for the source (a folder path, a Docker
+   volume of this project as `volume:<name>`, or a `rest:` or `s3:` address with its
+   credentials) and the master key (typed without echo; spaces, dashes and capitals
+   are accepted). A plain `docker run` of the back-up image reads the repository
+   read-only. The newest run that has both snapshots is taken (it can be one made with
+   unreadable files, "gemaakt, maar niet compleet"), or the run number given; the
+   number comes from `./brievie status --list`. A wrong key or password ends here with a
+   clear sentence and nothing is written; the key is checked against the dump's first
+   workspace key (which streams the whole dump once; it is streamed again at step 6).
+   Refuse a back-up from a newer Brievie than the one installed: one whose manifest
+   lists migrations this code does not know. The manifest's run must be the run chosen.
+2. **Prepare the new `.env` in full** in `deploy/.restore/env` (mode 0600; it holds the
+   master key; the folder goes when the restore ends or is given up before step 5)
+   before anything here changes: the copy from
+   the back-up, plus the master key, a new password for the superuser and for the
+   owner role (they are used only when the database is first created and by `migrate`),
+   and the back-up password that opened the repository. **Settings that are not taken
+   from a back-up**, because they belong to the machine and not to the data: the folder
+   and repository of the destination and their credentials, `BRIEVIE_IMAGE`,
+   `COMPOSE_PROJECT_NAME`, the host ports (`POSTGRES_PORT`, `BRIEVIE_HTTP_PORT`,
+   `BRIEVIE_HTTPS_PORT`), every `COMPOSE_*` and `DOCKER_*` key and the installation id.
+   An installation that already has a `.env` keeps its own values; a new machine gets
+   the project and ports it runs with. Ask whether the host name stays (`j/n`, or
+   `--keep-hostname`): with another name the certificate is valid for the new one, but
+   the phones know only the old one and pair again. On a new or empty installation
+   ask whether this server should keep making back-ups to the same place; the answer
+   defaults to no, because two servers on one destination must never both prune it.
+3. **What is here now is proven ours, confirmed and backed up** (only when there is
+   data): check the installation id (a volume that has none, from before the id
+   existed, needs a typed JA to adopt it); for `--replace` the typed word **WISSEN**
+   (a terminal, or `BRIEVIE_RESTORE_CONFIRM=WISSEN`; piped input never counts); stop
+   the API, the worker and Caddy; make the **safety back-up** with `backup --safety`
+   (its run id is printed, and again at the end); stop the keeper.
+4. **`restore_check` before anything is destroyed.** One read-only call proves the
+   chosen run still has both of its snapshots. If not (retention may have removed it
+   meanwhile), nothing is replaced, Brievie starts again, and the message points at
+   `./brievie status --list`.
+5. **From here things are replaced, and a marker says how far it got**:
+   `deploy/.restore-in-progress` (run, safety back-up, step, time). The old
+   `deploy/.env` moves to `deploy/.env.before-restore-<time>` (it holds the master
+   key: the user is told to remove it when the restore is fine) and the prepared one
+   takes its place; if the second move fails the first is undone. Everything is stopped.
+6. **The database.** Start PostgreSQL only, and no other service that would make an
+   empty schema first (`--no-deps`). With `--replace` the database is dropped
+   (`DROP DATABASE … WITH (FORCE)`) and made again, and the passwords of the roles
+   (the back-up role included) are set from the new `.env`. Then, in a one-off container **as the superuser** (only a
+   superuser can load rows into tables with forced row-level security), `restic dump |
+   pg_restore` under the lock of the target database: **the dump is never staged on
+   disk.** In the same transaction in which the runs that the dump brought back as open
+   are closed ("afgebroken door herstel"), **the restored queue is settled**: every
+   dump holds the job of the back-up that made it, in the status `doing` and holding the
+   task lock `backup`, which would stop every new back-up until the stalled-job retry;
+   so back-up jobs that wait or run become `failed`, running jobs of other queues go
+   back to `todo`, and the old server's workers are unregistered. All of this happens
+   before any service starts.
+7. **The files.** With `--replace` the three directories (documents, the authority
+   copy, the config folder, which keeps its installation id) are emptied first. restic
+   restores exactly four things: the documents, the authority copy, the manifest and
+   the `.env` copy (never extended attributes or ACLs, never an installation id an
+   older back-up holds). **The post-restore clean-up** then walks the trees: links,
+   devices, sockets and fifos are removed (and counted), setuid, setgid and sticky
+   bits are cleared, and everything goes to uid 10001; it also runs when restic failed.
+   Caddy's authority is put in place, root-owned, **before Caddy first starts** (a
+   Caddy that started earlier makes an authority of its own and every phone pairs
+   again); only the chain `caddy/pki/authorities/local` below Caddy's volume is made,
+   and Caddy's leaf certificates are removed so it issues new ones from the restored
+   authority.
+   **The installation id rules:** the id lives in the data volume and in `.env`, never
+   in a back-up. A new machine gets a new id right after its files are back, so a
+   source and its copy are never mistaken for each other; an existing installation
+   keeps its own, also through `--replace`.
+8. **Start and verify.** Start everything (`migrate` brings the schema to the
+   installed version), then check against the manifest: the counts of documents and
+   pages per workspace, one page per workspace opened with the master key, the
+   authority's fingerprint equal to the manifest's. A difference is a failure, not a
+   warning. Then the marker and `deploy/.restore` go, and the last line is "Herstel
+   gelukt."
+
+**When a restore stops halfway** (an error, Ctrl-C, a power cut): the exit trap prints
+at which step it stopped and the two ways forward, and `start`, `backup`, `sweep` and
+`status` refuse until the restore is finished. The ways forward are the same run or
+the safety back-up, restored again with `--replace --skip-safety-backup` (the one
+use of that flag). A fresh restore that stopped changes nothing that mattered.
+
+**What this costs.** `--replace` empties first and restores after: an unreadable
+files snapshot only shows once the old files are gone, and the old data then exists
+only in the safety back-up. That is why the safety back-up is made first, why
+`restore_check` runs before the drop, and why the safety back-up is kept 30 days.
 
 A back-up is also the way across a PostgreSQL major version (section 7.6), which is
 why it is a logical dump and not a copy of the data directory.
 
 ### 4.7 A restore that is tested
 
-- **CI** (a new job next to `stack`): start the stack, load two workspaces with a
-  letter each, pair a device, make a back-up, destroy every volume, restore, and
-  check: the sealed page opens, both workspaces are complete, the device token still
-  signs in and the authority's fingerprint is unchanged.
-  A second case restores a back-up whose authority is older than a week (Caddy's
-  intermediate certificate has then expired) and still signs the phone in.
-- **The admin**: `./brievie restore-test` restores the newest back-up into a
+- **CI**, the job `restore` next to `stack`, on GitHub-hosted runners only (it ends with
+  `down --volumes` of the fixed project `brievie`, which a self-hosted runner may be
+  running itself): `./brievie start`; seed one user, two workspaces with a one-page
+  letter and a recorded AI decision each, and a paired device, through the
+  application's own services; back up to a folder outside the stack; destroy
+  everything (containers, every volume, `deploy/.env`); restore from the folder and
+  the master key alone, then restore again over the running server with `--replace`.
+  After each restore one request per seeded page must return the seeded bytes over a
+  connection that trusts only the **old** authority (`--cacert`, never `--insecure`):
+  that single hash proves the sealed page opens, the workspace is complete, the device
+  token still signs in and the certificate chains to the old authority. A new back-up
+  afterwards must succeed without handwork. **Status:** it passed on a GitHub Linux
+  runner for the fresh restore and for `--replace` at an earlier commit; at a later
+  commit it failed at the last step (the dump's own back-up job still held the task
+  lock; settled since, proven in a container but not on a runner). **To be re-run on
+  the final commit of B1 before it merges.** The second case of the original design,
+  restoring a back-up whose authority is older than a week (Caddy's intermediate has
+  then expired), moves to B2: it needs a forged expired intermediate.
+- **Proven by hand, for real**, on throw-away Docker projects on a Mac with Docker
+  Desktop (the owner's own project checked unchanged before and after every step): a
+  fresh restore; a restore onto an empty installation; a `--replace` restore (refused
+  without the typed word; with it the safety back-up first, then the database dropped
+  and restored; counts, health and the authority's hash equal to the source; a new
+  back-up afterwards).
+- **The admin**: `./brievie restore-test` (part B2) restores the newest back-up into a
   temporary database and directory beside the real ones, runs the checks of step 8
   against them (the checks take a database and a storage path as arguments), removes
   both, and records "Hersteltest geslaagd op …". It runs in a one-off container with
-  the superuser, so it is not a job of the always-on service; the web warns when the
-  last test is older than 90 days, and a NAS's task scheduler can run it. It needs
-  free space for a second copy and says so when there is not enough.
+  the superuser, so it is not a job of the always-on service and the server never
+  schedules it; the web warns when the last test is older than 90 days, and a NAS's
+  task scheduler can run it. It needs free space for a second copy and says so when
+  there is not enough.
+- **Never ran for real in B1** (from the final reviews and the build ledger; none of
+  this is a reason to doubt the code, all of it is a reason not to promise it yet):
+  a REST or S3 destination, for back-up and for restore (and a restore's lock on a
+  remote source); a folder on a real disk (exFAT, NTFS, Synology, btrfs), including
+  `chown` and `--init`; a large archive or a restore that takes hours; a restore
+  interrupted by Ctrl-C or a power cut after the database was dropped; a real
+  `pg_restore` failure after the drop; a failed restic restore after the directories
+  were emptied; a hostile snapshot with real restic (links, devices, setuid, extended
+  attributes); retention over days and weeks and a wrong clock; two installations on one
+  repository; `--replace` with another installation's back-up; `sweep --delete` with
+  real orphans; a back-up that ends "not complete" (restic's exit code 3); two
+  installations on one machine without project names; a Linux host other than the CI
+  runner's; a rebuilt image's `BRIEVIE_IN_CONTAINER` guard and the CI step that installs
+  the pinned restic for the real-restic tests, on a runner.
 
 ### 4.8 In the web interface (server admins)
+
+Part B3, after phase 1d part A. B1 delivers the data it needs and the same information
+on the command line. The table `BackupRun` (server-level) holds the runs: kind (`backup`
+or `check`), status (queued, running, succeeded, failed, interrupted), when, a reason
+code and a fixed Dutch sentence for it, the size, the destination's kind; never a path
+or an address. `./brievie status` shows them.
 
 A card "Back-up" under settings: destination (without credentials), last successful
 back-up and its size, last check, last restore test, and the warnings: never made,
 older than three days, last run failed, recovery sheet not confirmed, restore never
 tested or long ago. The local fallback of an update (7.3) does not count as a
 back-up here. The card is for server admins, a role phase 1d part A brings; it is
-delivered after that part. A server-level table `BackupRun` holds the runs (kind, started, finished,
-result, a short reason; no paths with names of people). API: `listBackupRuns`,
-`getBackupStatus`. Starting a back-up from the web is a job on the `backup` queue.
+delivered after that part. API: `listBackupRuns`, `getBackupStatus`. Starting a
+back-up from the web is a job on the `backup` queue.
 
 ### 4.9 The optional layer for organisations
 
 - **Back-ups that cannot be overwritten**: a restic REST server in append-only mode
   on another machine, or object storage with object lock; the server that makes the
-  back-ups then cannot remove them, and pruning is done from elsewhere. Described in
-  `SELFHOST.md`; the server only has to cope with a repository it may not prune.
-- **Retention** as settings; **a restore drill** as the scheduled restore test with
-  its result in the audit log; **the key with a second person** (4.4).
+  back-ups then cannot remove them, and pruning is done from elsewhere. In B1 the
+  setting `BRIEVIE_BACKUP_APPEND_ONLY=true` makes the service never prune or remove
+  anything; the REST and S3 sides are described in `SELFHOST.md` and have never run
+  for real (4.7).
+- **Retention** as settings (B2); **a restore drill** as the restore test run from a
+  NAS's task scheduler, with its result in the audit log once there is one; **the key
+  with a second person** (4.4).
+
+### 4.10 Safety of everything that deletes
+
+During the build a test called an unguarded "empty this directory" on the developer's
+machine, and it stopped at its first entry only because the top-level entries of `/`
+were root-owned. Nothing was lost. The rules that came out of it are **binding for
+every later part**: the restore test, the update, the workspace export, the archive
+folder and everything else that removes, empties, overwrites or hands over files.
+
+1. **A destructive function carries its own refusal.** Whoever calls it, it judges its
+   own path first (`apps.backup.safepaths`), before anything is listed, opened or
+   created, and refuses with `unsafe_path` or `directory_not_allowed`.
+2. **A fixed allow-list of directories in code, independent of settings.** What may be
+   emptied, restored into or swept is `/data/documents`, `/data/authority` and
+   `/data/backup-config` (the sweep only the documents; Caddy's authority only its
+   fixed path below `/caddy-data`; `/backup` never), whatever a setting says. A setting
+   outside the list is refused, not followed: a custom storage folder bound at
+   `/data/documents` works, one bound elsewhere does not. Only the test suite can add
+   a root, one folder strictly inside its own temporary directory. A new part adds its
+   directories to the list in code, with a test, in the same commit as the code that
+   deletes in them.
+3. **Never follow a link; work through directory descriptors.** A directory is opened
+   component by component without following a link, checked to be the one that was
+   judged, and then worked on relative to that descriptor; nothing crosses into
+   another file system; a file with more than one hard link is refused or not handed
+   over.
+4. **Destructive commands run only inside the container.** The image sets
+   `BRIEVIE_IN_CONTAINER=1`; `restore_database`, `restore_files`,
+   `sweep_storage --delete` and `backup_init` refuse without it (`not_in_container`).
+5. **Guards are pure functions, tested without touching the disk.** They judge the
+   path's text first (absolute, depth, a home directory, the fixed list), so the
+   outcome is the same on Linux and macOS, as root and as uid 10001; only then do they
+   look at the components.
+6. **Tests replace every destructive primitive by a recorder** (`os.scandir`,
+   `os.unlink`, `shutil.rmtree`, `os.replace`, `os.chown`, a process start, …) that
+   fails when called; every directory setting and the restic binary point into the
+   test's temporary directory by default; destructive code is never tested against a
+   real path outside it.
+7. **Real proofs only in containers with throw-away volumes**, in a Docker project of
+   their own with its own image and ports, never against the owner's own project;
+   that project is compared (containers, image, volumes) before and after every step.
+8. **The wrapper fixes its project once and proves ownership.** The project and the
+   image are worked out once and passed with `-p`; before it changes anything the
+   wrapper proves the installation is its own (container labels, and the installation
+   id marker in the data volume against `.env`) and refuses otherwise; a typed word
+   confirms a replacement; it writes and removes only fixed names under its own folder
+   (`${here:?}`), with unique temporary names; no confirmation can come from piped
+   input.
+
+A part that cannot meet one of these says so in its plan, and the owner decides.
 
 ## 5. Export in an open form
 
@@ -400,11 +710,15 @@ Off by default; one setting per workspace: "Leesbare kopie in een map".
   removed if they still are what Brievie wrote; a copy the user changed is left and
   the admin gets a notice that it is still there. Removing a member does not remove
   copies: a home folder is the NAS's territory, and the text says so.
-- **Where the job runs**: on the `files` queue of the `keeper` service (4.5), which
-  has the documents; with the archive folder on it also gets the master key and the
-  archive folder to write in. It runs as the system (it must read private letters);
-  phase 1d's short list of code that may do so gains this job, the sweep and the
-  manifest counts.
+- **Where the job runs**: on a queue `files`, which nothing serves in B1: the `keeper`
+  (4.5) serves only the queue `backup` and holds no master key, and it must stay
+  without one. The archive job needs the documents, the master key and the archive
+  folder to write in, so part E gives it a worker of its own that holds the master key
+  only when the archive folder is switched on (E's plan confirms the shape). It runs as
+  the system (it must read private letters); phase 1d's short list of code that may do
+  so gains this job, the sweep and the manifest counts. It deletes only under the rules
+  of 4.10: the archive folder joins the fixed list in code, nothing is followed through
+  a link, and a copy is removed only when it is still the file Brievie wrote.
 - **File names** are made safe for SMB and Windows: the forbidden characters and
   reserved names replaced, no trailing dot or space, composed Unicode (NFC), a length
   limit, a number added on a clash, never relying on upper and lower case.
@@ -484,21 +798,42 @@ sentence that says what happened and what to type:
    the server is still built locally, the release's file once images are published).
    A refused jump names the version to go to first.
 2. **Fetch** the images (or the tag). Nothing running has changed yet.
-3. **Stop** the API, the worker and the keeper. The worker gets a stop period of a
-   minute; a job that was cut off is picked up again by the existing retry.
-4. **Back up** (section 4), with the server stopped, so that nothing arrives between
-   the back-up and the update and a way back loses nothing. Without a configured
-   destination: into a local repository in the installation folder, so there is
-   always a way back (it lies next to the key and is not counted as a back-up).
+3. **Stop** the API, the worker and Caddy, as a restore does. The worker gets a stop
+   period of a minute; a job that was cut off is picked up again by the existing retry.
+   The keeper stays up until step 4 is done, because the back-up is made through it.
+4. **Back up**, with the server stopped, so that nothing arrives between the back-up
+   and the update and a way back loses nothing. **The emergency back-up is a safety
+   back-up in the sense of 4.5**: `./brievie backup --safety` (tagged `kind:safety`,
+   no retention in its own run, kept 30 days, its run number printed). Then stop the
+   keeper. B1 can make a safety back-up only to a configured destination (without one
+   it stops with "Er is nog geen back-up ingesteld"). The local repository in the
+   installation folder for a server without a destination, so that there is always a
+   way back (it lies next to the key and is not counted as a back-up), is **U1's to
+   add** to B1's destination rules, and it must obey 4.10: it may not lie inside a
+   data volume, and the keeper must not be able to prune it.
 5. **Migrate**, **start**, **check health**.
 6. **Record** the version and the time.
 
 The server is away for as long as the back-up takes; restic sends only what is new,
 so after the first one that is short.
 
-**The way back** is restoring the back-up of step 2 with the previous version:
-`./brievie restore pre-update-<version>` (the back-up of step 4), which the failure message prints.
+**The way back** is restoring the back-up of step 4 with the previous version:
+`./brievie restore <number> --replace`, where the number is the safety back-up's run
+number, which the update prints and the failure message repeats (B1's restore takes a
+run number, not a name; a name such as `pre-update-<version>` for it is U1's to add).
 Migrations are not reversed. An update is not started automatically, by anything.
+
+**The wrapper's rules apply to `./brievie update` as they do to `restore`** (4.6 and
+4.10): the compose project and the image are fixed once and the installation is proven
+to be this checkout's before anything changes; nothing starts while a restore is
+unfinished (`deploy/.restore-in-progress`), and a restore does not start while an
+update is unfinished; only one `./brievie` runs at a time (the lock of 4.5), which a
+hand-over to the new checkout's wrapper must carry; the point of no return (stopping
+the server, switching the checkout) is preceded by a typed confirmation, which piped
+input never gives; the emergency back-up goes through `backup --safety` and the
+update stops, restarting the old version, when it fails; the wrapper writes and
+removes only fixed names under its own folder. An update that interrupted halfway says
+at which step and what to type, as a restore does.
 
 ### 7.4 Knowing that an update exists
 
@@ -547,8 +882,11 @@ The App Store updates the app by itself; the server waits for its admin. So:
 ### 7.7 What changes on the site and in `install.sh`
 
 - `install.sh` installs the newest release (the deploy files of that tag and the
-  pinned images) instead of cloning the default branch, writes the recovery sheet,
-  and has `--restore`.
+  pinned images) instead of cloning the default branch, ends by running
+  `./brievie start` (which writes the recovery sheet at the first start; the installer
+  writes none itself), and gets `--restore`. Neither the installer's change nor
+  `--restore` exists after B1: `install.sh` is unchanged, and a restore on a new
+  machine starts from an installed Brievie and `./brievie restore` (12).
 - The installation page: updating becomes `./brievie update`; the back-up section
   becomes `./brievie backup`, the destinations, the restore and the sheet; the volume
   tarball command goes.
@@ -575,8 +913,8 @@ Each part is delivered on its own, with its own plan.
 
 | Part | Content | Needs from the owner |
 |---|---|---|
-| **B1. Back-up en herstel** | the back-up role, the `keeper` service, `./brievie` with `backup`, `restore`, `status`, `sweep`, bringing an existing installation along, the manifest, the recovery sheet, the CI restore job, `SELFHOST.md` | nothing |
-| **B2. Schema en hersteltest** | the nightly schedule, retention, the weekly check, `restore-test` | nothing |
+| **B1. Back-up en herstel** (built 2026-11-18 on `feat/b1-backup`; section 14) | the back-up role, the `keeper` service (queue `backup`) and the one-off `admin` container, `./brievie` with `start`, `backup` (`--init`, `--check`), `restore`, `status`, `sweep`, `recovery-sheet`, bringing an existing installation along, the manifest, the recovery sheet, the safety rules of 4.10, the CI restore job, `SELFHOST.md` | nothing |
+| **B2. Schema en hersteltest** | the nightly schedule, retention as settings (B1 has it fixed), the weekly check, `restore-test`, the CI case with an old authority | nothing |
 | **U1. Versies en bijwerken** | version source, change log, `release.json`, `server_version` and a real health check, `./brievie update` (still building locally) | nothing |
 | *(phase 1d part A, then:)* **B3. Zichtbaar** | the web card, warnings, "Nu back-up maken" | nothing |
 | *(phase 1d part B, then:)* **E. Export en archiefmap** | `documents.export`, the workspace export, `BRIEVIE_DOCUMENTS_DIR`, the archive folder | a NAS to try the ownership on |
@@ -596,6 +934,9 @@ closes the largest risk that exists today.
 - No free space for the dump; the destination unreachable; a wrong master key at
   restore (a clear sentence, nothing written).
 - A restore over an installation that holds data; a back-up from a newer version.
+- A restore that is interrupted after the database was dropped (B1 has never run it
+  for real); a back-up whose run was pruned between the choice and the drop; a
+  restore from another installation's back-up; two installations on one repository.
 - A restore on another machine with another host name: the phones need the old name
   or pair again; the text says so.
 - An update interrupted after the migration; an update across two releases; a
@@ -620,21 +961,37 @@ closes the largest risk that exists today.
   not built.
 - Spec 16 puts export and back-ups in step 1d; they are parts of their own here, and
   back-up comes before the members of 1d.
+- Added with the build of B1 (2026-11-18): spec 16's restore from the web interface
+  is not built, and neither is a restore from the installer (`install.sh --restore`);
+  in B1 a back-up runs only when `./brievie backup` is run (the schedule is B2, the
+  button B3); SFTP is not a destination; retention is fixed, not a setting;
+  `BRIEVIE_MASTER_KEY_FILE` is not built.
+- The 1d design (`2026-11-17-fase-1d-leden-rollen-sso-design.md`) said the database
+  has no role that bypasses row-level security. `brievie_backup` is one, read-only,
+  used by the back-up service and the sweep only; `docs/DECISIONS.md` (B1, item 1)
+  records it. The application's roles still cannot bypass it.
 
 ## 11. Left to the builder
 
 The Dutch sentences, the layout of the card and the sheet, names of private helpers,
 the exact shell of `./brievie`. Not left to the builder: what a back-up contains, the
 order of 4.3, 4.6 and 7.3, that the master key is never in a back-up or on the web,
-and the checks of the restore test.
+the checks of the restore test, and the safety rules of 4.10.
 
 ## 12. Open points for the plans
 
-- The official restic image on arm64; restic with object lock.
+- Restic with object lock. (The official restic image on arm64 is confirmed: 4.1.)
 - ReportLab and JPEG pages.
 - Ownership of archive files on a Synology and a QNAP home folder.
 - The releases list without a token.
-- How `install.sh --restore` gets the deploy files before anything is installed.
+- How `install.sh --restore` gets the deploy files before anything is installed:
+  not built in B1; a restore on a new machine needs an installed Brievie first.
+- What B1 never ran for real, each item a reason not to promise it on the site yet:
+  the list at the end of 4.7 (REST and S3, a real disk, an interrupted restore,
+  retention over time, two installations on one repository, and more).
+- Installing but not starting, then restoring: not recognised as an empty
+  installation (4.6). Decide in U1 or B2 whether `./brievie restore` should start
+  PostgreSQL to find out.
 
 ## 13. What the independent reader changed (2026-11-17)
 
@@ -654,3 +1011,53 @@ findings; all taken). The rulings that changed the design, each with its cost:
 | The web card after 1d part A, export and archive folder after 1d part B | they need the server admin and the actor of row-level security | they come later than back-up itself |
 | The archive folder reacts to visibility; the sweep and the counts read as the back-up role | copies of a letter that became private would stay in the shared folder; a sweep through the application's role would delete private letters' files | none known |
 | One contract fixture per released minor, added in the release commit | a workflow on a tag cannot add to the tag | more fixtures to keep |
+
+Added 2026-11-18, from the final reviews of part B1 (`b1-eindreview.md`,
+`b1-eindreview-wispaden.md`, `b1-veiligheidsreview.md` and `-2.md` in the session
+notes). History above stays as it was; these rulings came on top, each with its cost:
+
+| Ruling | Why | Cost if wrong |
+|---|---|---|
+| `--separate-password` keeps a password the user set, writes a new sheet at once, and a restore asks for the second secret itself | the first build overwrote the user's own password and wrote no sheet: back-ups nobody could open | the separate password can only be chosen at the first set-up |
+| Both snapshots of a run carry the run's start as their time | retention groups by host and paths, and could keep one half of a run | restic's `--time` must be given in UTC |
+| Retention keeps everything of the last two days | a daily rule alone pruned the run the user had just chosen to restore | more snapshots on busy days |
+| The safety back-up is tagged, never prunes in its own run, and is removed by its run tag after 30 days from now | restic's `--keep-within` counts from the newest snapshot, so ordinary retention removed it after two to seven days or never | 30 days of extra storage; the user must keep the printed number |
+| `./brievie` has a lock, a restore-in-progress marker and a typed WISSEN | a Ctrl-C after the drop left no hint, and a second terminal could start the stack mid-restore | scripts need two environment variables; a stale lock needs a typed JA |
+| The installation id is never in a back-up; the restic host follows it | a failed `--replace` with another installation's back-up locked the user out, and two installations on one repository pruned each other | snapshots from before this ruling keep the host `brievie` and are no longer pruned automatically |
+| A retention run that sees a snapshot more than 24 hours ahead removes nothing | one wrong clock would remove almost everything | a clock that runs behind is not detected |
+| A restore settles the restored queue and checks the chosen run before it drops anything | CI found the dump's own back-up job blocking every new back-up, and the safety back-up pruning the chosen run | one more read of the repository |
+| An installation that never held data counts as fresh | "install, then restore" otherwise needed `--replace` and a safety back-up that cannot be made | it must be running to be asked |
+| Destructive paths follow 4.10 | the incident of 2026-11-17 | a custom storage folder outside the fixed list is refused |
+
+## 14. What building part B1 changed (2026-11-18)
+
+Built on `feat/b1-backup` from the plan `2026-11-17-host-b1-backup-herstel.md`. Where the
+build and this design disagreed, the design was corrected in place (sections 4, 6.3,
+7.3, 7.7, 8 to 12) and the difference is recorded here. The final review listed
+fourteen disagreements between design, plan, `SELFHOST.md`, `DECISIONS.md` and code;
+by item, they are rows 1, 2, 3, 6, 4, 5 (items 1 to 6), 9 and 11 (item 7), 7 (8), 8 (9),
+10 (10), 12 (11), 14 (12) and 15 (13). Item 14 (wrong sentences in `SELFHOST.md`) was
+corrected on the branch; `DECISIONS.md` (B1, item 3) still lists SFTP among restic's
+destinations, which is restic's capability and not Brievie's (row 16).
+
+| # | Change | Why | Cost if wrong |
+|---|---|---|---|
+| 1 | The back-up password is derived only inside the container (`manage.py derive_backup_password`) and `./brievie` appends it to `deploy/.env`; the installer and `init-env.sh` do not derive it | the host has only `openssl` (a key as an argument is readable in the process list) or `python3` (a NAS may lack it) | `.env` has no back-up password until `./brievie` has run; a back-up needs the image built first |
+| 2 | The first `./brievie start` writes the recovery sheet, once; `install.sh` writes nothing and has no `--restore` | the sheet needs the image and the master key's container; `install.sh` lives in the site repository | the site's installer text must say "run `./brievie start`, then print the sheet"; a restore on a new machine needs an installed Brievie |
+| 3 | A separate back-up password is chosen at the first set-up only; the wrapper keeps the user's own or makes one, and writes a new sheet at once | the first build overwrote the user's password (final review, critical) | an existing repository cannot move to a separate password without a new repository |
+| 4 | The keeper serves only the queue `backup`; the archive job (queue `files`) is part E's, with a worker that holds the master key | the keeper must never hold the master key | E adds a worker; its shape is E's decision |
+| 5 | Retention is fixed in code, applied now, in the order of 4.5; B2 makes the keep values settings and adds the schedule | a retention plan "not in B1" left every back-up forever, and the rules of the final reviews needed a place | B2 must keep the two-day window, the keep tag and the host when it makes values settings |
+| 6 | The unit tests read as the back-up role with `row_security = off`; the real `pg_dump` is proven in a container stack and in CI | plan decision 8 | a regression in the dump's command line shows only in CI |
+| 7 | The manifest's counts come from the dump's own exported snapshot, in a transaction that stays open during the dump | an upload during the back-up made verify report a false difference | a long dump holds a snapshot open |
+| 8 | One advisory lock per database; a restore locks the database it restores into; plus a wrapper lock | advisory locks do not span databases | none known |
+| 9 | "Holds data" means a `deploy/.env` that exists, unless the installation is running and empty | the wrapper must decide before compose or an image exists | an installed but never started installation is not recognised as empty |
+| 10 | A back-up without the `.env` copy fails; the copy is made by `./brievie start` | `fetch` needs it, and the plan's "the restore makes up what is missing" never existed | a scheduler that runs the manage command without `./brievie` fails until the first start |
+| 11 | A typed WISSEN, an adoption JA for data that predates the installation id, the safety back-up and its number, `restore_check` before the drop, the restore-in-progress marker, `--skip-safety-backup` only to resume, the keep-destination question (default no), host keys and `COMPOSE_*`/`DOCKER_*` never taken from a back-up, `deploy/.env.before-restore-*`, `BRIEVIE_RESTORE_*` variables for scripts | the reviews of the destructive paths | the old `.env` holds the master key and piles up until the user removes it |
+| 12 | Data presence is judged by `deploy/.env`, the project's data volume and container labels; the image is `brievie/backend:<project>` for any project but `brievie` (`:local` only there) | two checkouts on one machine otherwise build over each other's image and share volumes | U1's image tag from a version must reconcile with this |
+| 13 | The wrapper keeps terminal output to Dutch sentences; docker's output goes to `deploy/.brievie-last.log` | the first build printed machine lines and docker noise | `BRIEVIE_VERBOSE=1` for everything |
+| 14 | The CI case with an authority older than a week moves to B2 | Caddy's pre-made authority cannot be aged without forging an intermediate | untested until B2 |
+| 15 | New commands and codes not in the design: `status --list`, `backup --safety`, `restore_check`, `backup_status --list`, the interrupted-run status with its sentences, `BRIEVIE_BACKUP_MOUNT_MODE`, `BRIEVIE_IN_CONTAINER`, `BRIEVIE_ADOPT_INSTALLATION`, `BRIEVIE_RESTORE_CONFIRM`, `BRIEVIE_RESTORE_KEEP_DESTINATION`, `BRIEVIE_RESTORE_EMPTY_OK` | each came from a review finding | more surface to document; `docs/SELFHOST.md` does |
+| 16 | Part B1 has no SFTP, no `BRIEVIE_MASTER_KEY_FILE`, no schedule, no web card and no installer change | smaller first part | the site must not promise them |
+| 17 | The safety rules of 4.10 (a fixed allow-list in code, descriptors, container-only destructive commands, recorders in tests, a fixed project and a proof of ownership) | the incident of 2026-11-17 | a custom storage folder outside the fixed list is refused, and a destructive command run outside the container does nothing |
+
+What the build proved and did not prove is in 4.7. What later parts must follow is 4.10.
