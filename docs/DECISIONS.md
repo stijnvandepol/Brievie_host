@@ -991,3 +991,27 @@ DELETE" that "AI settings in the web interface" left open is done for the consen
     test guards what an app built against 1c expects. Fields added in this part have
     defaults. `AcceptInvitationIn.account` is a validated `str`, so part C adds `"sso"`
     without changing a released enum.
+18. **Invitations bound to an address end with that account's membership.** When a
+    member is removed or leaves, the workspace's open invitations bound to their address
+    are revoked (`reason: member_removed`); when somebody joins, the workspace's other
+    open invitations bound to their address are revoked (`reason: superseded`). Without
+    this, an admin link made for someone before they joined another way could bring them
+    back after a removal. Unbound links cannot be attributed; the Leden page lists them.
+    Removal revokes invitations before it locks the server admins and the user, so the
+    lock order is the same everywhere (written at the top of `workspaces/members.py`).
+19. **`mask_bsns` also masks a run of nine digits inside an id in a log line** (a uuid4
+    holds one now and then, and the elfproef passes about one in eleven). Accepted: a log
+    line then shows `[BSN]` inside the id; finding the row takes the other half of the id
+    or the time. Tests compare with `mask_bsns(id)`. Skipping candidates inside a
+    canonical UUID would change what the privacy filter lets through and is not done.
+20. **A restore brings back sessions, devices and links as they were at the back-up.**
+    A phone revoked after the back-up works again. Not changed in code in this part; the
+    restore guide (SELFHOST section 8) says to check the devices and sessions afterwards.
+21. **The export files stay on the documents volume for now.** The security reading asked
+    for a read-only documents mount in the worker with a separate `exports` volume. A
+    volume mounted inside a read-only mount needs its mount point to exist in the parent
+    volume before the container starts; Docker can only create it through a writable
+    mount (the api), so the worker's start would depend on the api having started first,
+    on existing installs and after every restore. Kept read-write until that is solved
+    and checked in a real stack (for example: the one-shot migrate step makes the
+    directory, the image creates it for new volumes).

@@ -235,6 +235,21 @@ moments can have a file in the back-up without a letter in the database. Those a
 harmless loose files. `./brievie sweep` lists them; `./brievie sweep --delete` removes
 them (section 9).
 
+A restore also brings back **who was signed in and which phones worked** at the moment
+of the back-up. A phone revoked after that back-up works again, and so does a web session
+that was ended, a reset link or an invitation that was used or revoked since (as long as
+it has not expired). So after a restore:
+
+- Open **Apparaten** and, as an admin, **Leden → Account → Apparaten en sessies** for
+  each member, and revoke again every phone that should not work (a lost or stolen one).
+- When in doubt, end the sessions: a member does that on **Waar je bent ingelogd**, an
+  admin with **Leden → Account → Apparaten en sessies → Alle sessies beëindigen**.
+- For an account you do not trust any more, run
+  `docker compose ... exec api python manage.py reset_password --email <address>`: it
+  sets a new password, ends every session and revokes every phone and open reset link
+  of that account.
+- Check the open invitations on **Leden** and revoke the ones nobody needs.
+
 ## 9. Cleaning up loose files
 
 - `./brievie sweep` only lists: a count and a total size.
