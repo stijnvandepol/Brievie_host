@@ -258,6 +258,12 @@ BRIEVIE_BACKUP_CONFIG_DIR: str = env.str("BRIEVIE_BACKUP_CONFIG_DIR", default="/
 BRIEVIE_AUTHORITY_COPY_DIR: str = env.str("BRIEVIE_AUTHORITY_COPY_DIR", default="/data/authority")
 BRIEVIE_HOSTNAME: str = env.str("BRIEVIE_HOSTNAME", default="")
 
+# Audit rows older than this are removed every night (apps.audit.jobs). The database
+# refuses to remove rows younger than 90 days, so a lower value is a mistake.
+BRIEVIE_AUDIT_RETENTION_DAYS: int = env.int("BRIEVIE_AUDIT_RETENTION_DAYS", default=365)
+if BRIEVIE_AUDIT_RETENTION_DAYS < 90:
+    raise ImproperlyConfigured("BRIEVIE_AUDIT_RETENTION_DAYS must be at least 90.")
+
 # Every handler masks BSNs: no log line may carry one, whatever code wrote it.
 LOGGING = {
     "version": 1,
