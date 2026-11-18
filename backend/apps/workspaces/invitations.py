@@ -43,6 +43,7 @@ NOTE_MAX = 100
 NEW_ACCOUNT = "new"
 EXISTING_ACCOUNT = "existing"
 _MEMBERSHIP_UNIQUE = "workspaces_membership_user_workspace_unique"
+_PERSON_USER_UNIQUE = "people_person_user_unique"
 
 
 @dataclass(frozen=True)
@@ -345,6 +346,16 @@ def _account_exists_error() -> ApiError:
     )
 
 
+def _email_mismatch(invitation: Invitation, email: str) -> bool:
+    return bool(invitation.email) and invitation.email != normalise_email(email)
+
+
+def _email_mismatch_error() -> ApiError:
+    return ApiError(
+        403, "invitation_email_mismatch", _("Deze uitnodiging is voor een ander e-mailadres.")
+    )
+
+
 def _already_member_error() -> ApiError:
     return ApiError(409, "already_member", _("Je bent al lid van deze werkruimte."))
 
@@ -360,7 +371,10 @@ def accept_invitation(
     rest is one transaction under a lock on the invitation: two accepts at once give one
     member, the other gets the dead-link answer. A failure anywhere leaves nothing.
     """
-    _usable(token)
+    if _email_mismatch(_usable(token), email):
+        # Before the account checks: a foreign address answers this, never whether it
+        # has an account.
+        raise _email_mismatch_error()
     if account not in (NEW_ACCOUNT, EXISTING_ACCOUNT):
         raise ApiError(
             422, "validation_error", _("Kies een nieuw account of een bestaand account.")
@@ -374,12 +388,8 @@ def accept_invitation(
     is_new = account == NEW_ACCOUNT
     with transaction.atomic():
         invitation = _usable(token, lock=True)
-        if invitation.email and invitation.email != user.email:
-            raise ApiError(
-                403,
-                "invitation_email_mismatch",
-                _("Deze uitnodiging is voor een ander e-mailadres."),
-            )
+        if _email_mismatch(invitation, user.email):
+            raise _email_mismatch_error()
         if not is_new and _is_member(user, invitation.workspace_id):
             raise _already_member_error()
         reactivated = not is_new and not user.is_active
@@ -433,6 +443,14 @@ def _join(invitation: Invitation, user: User, *, is_new: bool) -> Membership:
         raise
 
 
+def _person_taken_error() -> ApiError:
+    return ApiError(
+        409,
+        "invitation_person_taken",
+        _("Deze persoon is intussen aan iemand anders gekoppeld. Vraag een nieuwe uitnodiging."),
+    )
+
+
 def _link_person(invitation: Invitation, user: User) -> Person:
     """The invitation's person, now linked to `user` (and logged), or the member's own
     person as for every member. Needs the workspace's context."""
@@ -440,20 +458,25 @@ def _link_person(invitation: Invitation, user: User) -> Person:
         return ensure_person_for_member(workspace=invitation.workspace, user=user)
     person = (
         Person.objects.select_for_update()
-        .filter(workspace_id=invitation.workspace_id, id=invitation.person_id)
+        .filter(
+            workspace_id=invitation.workspace_id,
+            id=invitation.person_id,
+            archived_at__isnull=True,
+        )
         .first()
     )
     if person is None or person.user_id is not None:
-        raise ApiError(
-            409,
-            "invitation_person_taken",
-            _(
-                "Deze persoon is intussen aan iemand anders gekoppeld. "
-                "Vraag een nieuwe uitnodiging."
-            ),
-        )
+        raise _person_taken_error()
     person.user = user
-    person.save(update_fields=["user", "updated_at"])
+    try:
+        with transaction.atomic():
+            person.save(update_fields=["user", "updated_at"])
+    except IntegrityError as exc:
+        # The account is still linked to another person here (from an earlier
+        # membership): one person per account, so this one cannot be theirs.
+        if _unique_constraint(exc) == _PERSON_USER_UNIQUE:
+            raise _person_taken_error() from exc
+        raise
     record(
         AuditCode.PERSON_LINKED,
         actor=AuditActor.for_user(user),

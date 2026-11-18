@@ -545,6 +545,55 @@ def test_person_linked_meanwhile_is_409(ws_a: Workspace) -> None:
     assert not User.objects.filter(email="nieuw@example.nl").exists()
 
 
+def test_person_archived_meanwhile_is_409(ws_a: Workspace) -> None:
+    papa = person(ws_a, "Papa")
+    token = invite(ws_a, person_id=str(papa.id))
+    with workspace_context(ws_a.id):
+        Person.objects.filter(pk=papa.pk).update(archived_at=timezone.now())
+
+    status, body = accept(Client(), token)
+
+    assert (status, body["code"]) == (409, "invitation_person_taken")
+    assert unused(token)
+    assert not User.objects.filter(email="nieuw@example.nl").exists()
+    with workspace_context(ws_a.id):
+        assert Person.objects.get(pk=papa.pk).user_id is None
+
+
+def test_email_bound_invitation_answers_the_mismatch_before_account_exists(
+    ws_a: Workspace,
+) -> None:
+    UserFactory.create(email="ander@example.nl")
+    token = invite(ws_a, email="bedoeld@example.nl")
+
+    status, body = accept(Client(), token, account="new", email="Ander@example.nl")
+
+    assert (status, body["code"]) == (403, "invitation_email_mismatch")
+    assert unused(token)
+
+
+def test_a_person_link_left_from_before_answers_409_and_keeps_nothing(ws_a: Workspace) -> None:
+    # An account that is no member but still linked to a person here: a state the
+    # unique index refuses to repeat for a second person (built directly in the table).
+    former = UserFactory.create()
+    old = person(ws_a, "Oud")
+    papa = person(ws_a, "Papa")
+    with workspace_context(ws_a.id):
+        Person.objects.filter(pk=old.pk).update(user=former)
+    token = invite(ws_a, person_id=str(papa.id))
+
+    status, body = accept(
+        Client(), token, account="existing", email=former.email, password=TEST_PASSWORD
+    )
+
+    assert (status, body["code"]) == (409, "invitation_person_taken")
+    assert unused(token)
+    assert not Membership.objects.filter(user=former).exists()
+    with workspace_context(ws_a.id):
+        assert Person.objects.get(pk=papa.pk).user_id is None
+    assert workspace_rows(ws_a, "invitation_accepted") == []
+
+
 def browser_request() -> HttpRequest:
     request = RequestFactory().post("/api/v1/invitations/accept", REMOTE_ADDR="192.0.2.50")
     SessionMiddleware(lambda r: HttpResponse()).process_request(request)
