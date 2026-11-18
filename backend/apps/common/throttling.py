@@ -8,14 +8,19 @@ from apps.common.net import client_ip
 
 class CallerThrottle(SimpleRateThrottle):
     """Limits attempts per authenticated caller and path, e.g. per administrator and
-    workspace. Somebody else, at the same address or not, cannot use up the attempts."""
+    workspace. Somebody else, at the same address or not, cannot use up the attempts.
 
-    def __init__(self, scope: str, rate: str) -> None:
+    With `per_path=False` one count per caller covers every path of the operations that
+    share this instance (making invitations: a renewal has a new id in its path each time).
+    """
+
+    def __init__(self, scope: str, rate: str, *, per_path: bool = True) -> None:
         self.scope = scope
+        self.per_path = per_path
         super().__init__(rate)
 
     def get_cache_key(self, request: HttpRequest) -> str:
-        ident = f"{request.user.pk}:{request.path}"
+        ident = f"{request.user.pk}:{request.path}" if self.per_path else f"{request.user.pk}"
         return self.cache_format % {"scope": self.scope, "ident": ident}
 
 

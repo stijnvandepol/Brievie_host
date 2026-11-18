@@ -65,3 +65,43 @@ class WorkspaceKey(WorkspaceModel):
 
     def __str__(self) -> str:
         return f"key of {self.workspace_id}"
+
+
+class Invitation(BaseModel):
+    """A one-time link with which somebody joins a workspace (D 6.2).
+
+    A server table like `PairingCode`, not a workspace table: it is looked up by its
+    token hash before anybody is signed in, so it cannot be under row-level security. It
+    holds no workspace content; the person it names is read inside the workspace's
+    context only. Only the SHA-256 of the token is stored: the token is in the link's
+    fragment and is shown once.
+    """
+
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="invitations")
+    # Fixed when the invitation is made; the invitee cannot choose another.
+    role = models.CharField(
+        max_length=10, choices=Membership.Role.choices, default=Membership.Role.MEMBER
+    )
+    # "This is Papa": the person the new member is linked to (one without an account link).
+    person = models.ForeignKey(
+        "people.Person", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    # When set (lower case), only an account with this address can accept.
+    email = models.EmailField(max_length=254, blank=True)
+    token_hash = models.CharField(max_length=64, unique=True)
+    expires_at = models.DateTimeField()
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    # The name of who made it, as it was then (shown to the invitee).
+    created_by_name = models.CharField(max_length=150)
+    accepted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    # The admin's own name for it ("Anne"), BSN-masked; never shown to the invitee.
+    note = models.CharField(max_length=100, blank=True)
+
+    def __str__(self) -> str:
+        return f"Invitation to {self.workspace_id}"
