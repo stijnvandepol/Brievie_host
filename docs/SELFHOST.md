@@ -1,8 +1,10 @@
-# Self-hosting: back-up and restore
+# Self-hosting: back-up, restore and people
 
 For a home user with Brievie on a NAS or a Mac, and for the admin of a small company.
 Simple things come first, advanced things last. Run every command in the folder where
-you installed Brievie.
+you installed Brievie. Sections 1 to 12 are about back-ups, 13 about pairing a phone from
+a link, 14 to 19 about people: inviting, roles, removing, sessions, the log and the
+export.
 
 ## 1. In one minute
 
@@ -286,8 +288,144 @@ the real restic over one minute. Not yet proven on real hardware or over time:
 
 ## 13. Koppelen via een link
 
+The page in the web interface where you pair the app gives a pairing code and a QR code,
+and a link that opens the app (`brievie://server#…`). The link holds the
+server's addresses and the fingerprint of its certificate authority, never the code.
+
+What the app does with a link:
+
+1. It asks first. Nothing is contacted until you tap "Server zoeken".
+2. It then shows the address it found and asks for the eight-character code, which you
+   type from the web page.
+3. It proves it knows the code without sending it. The proof is bound to the
+   certificate authority in the link or, when the link has no fingerprint, to the host
+   name of a certificate that a public authority vouches for.
+
+Without a fingerprint in the link the app keeps only the one address it just proved, not
+the others in the link. Pairing by QR code works as before and is not affected by any of
+this.
+
 A phone that reaches the server through an address that is not in `BRIEVIE_PUBLIC_URLS`
 and is not covered by the server's own certificate authority cannot pair from a link
 ("Open de Brievie-app"); five failed attempts make that code useless and a new one must
-be made. A `.local` name or a private address binds only through the server's own
-certificate authority; pairing by QR code is not affected.
+be made. A `.local` name, a `.lan` name or a private address binds only through the
+server's own certificate authority: no public authority can vouch for those names.
+
+## 14. Inviting someone
+
+An admin opens **Leden** in the web interface and chooses **Iemand uitnodigen**. Nothing
+needs configuring: no mail server, no settings. Brievie makes a link and a QR code. Send
+the link yourself (a message, a mail you write) or show the QR code. The person opens it,
+chooses a name, an e-mail address and a password, and is in. Someone who already has an
+account on this server signs in with it instead.
+
+- The link works once, for 7 days by default (1 or 30 days can be chosen), and only
+  while the admin who made it is still an admin. **Open uitnodigingen** lists them; an
+  admin can withdraw or renew one. Every link that does not work gives the same sentence
+  ("Deze uitnodiging werkt niet meer. Vraag een nieuwe."): it never tells why.
+- Brievie only stores a fingerprint of the link, so it cannot show it again: renewing
+  makes a new link and the old one stops.
+- An admin can fill in an e-mail address on an invitation. Then the link only works for
+  that address. Brievie sends no mail and does not check that the person owns that
+  mailbox: it only checks that the address typed equals the one on the invitation. Treat
+  it as a typing check, not as proof of who somebody is.
+- The page the person opens also says where their letters go, in one line: whether AI is
+  off, on this network or on an outside service (and which, in which country). It also
+  says whether an API key is stored there, never the key.
+
+## 15. Roles, in three sentences
+
+An **admin** (beheerder) does everything: invites and removes people, changes roles, sets
+AI and exports, writes the rules and reads the log. A **member** (lid) scans, checks and
+orders post and manages labels and persons. A **viewer** (meekijker) can only read. A
+workspace always keeps at least one admin.
+
+Until private post arrives (a later version), every member and viewer sees all post of
+the workspace.
+
+## 16. Removing someone, and what happens to their account and phone
+
+An admin removes a member on **Leden**, or the member leaves a workspace (**Werkruimte
+verlaten**). The post stays in the workspace for the others; their person is no longer
+linked to an account. The member can export their own post first (section 19); after
+leaving they can no longer.
+
+If it was their last workspace, the account is switched off: their web sessions end,
+their phones stop working, open pairing codes and reset links are removed, and the account
+is no longer a server admin. Somebody who is invited again and
+chooses "Ik heb al een account" with the account's own password gets it back, with the
+role of the new invitation. A server admin must be appointed again (section 17).
+When an account lives in more than one workspace, a removal only affects that workspace;
+the phone keeps working for the others.
+
+An admin who loses the admin role also loses what they made: their open invitations and
+reset links stop.
+
+**Reset link for a member.** On **Leden**, **Apparaten en sessies** an admin can make a
+reset link for a member who forgot the password. The link works once, for 24 hours. It
+ends every session of that account and unpairs their phones: they pair again. The member
+sees a notice about it. Nobody makes a reset link for their own account. An admin can do
+this only for an account that exists in no other workspace and is no server admin; for
+those, a server admin does it.
+
+## 17. The server admin
+
+The server admin may read the server's log, and act on accounts that live in more than
+one workspace. The person who sets up the server is the first one. The server always
+keeps at least one active server admin: removing the last one is refused.
+
+Appoint or remove one on the server (the account must exist and be active):
+
+```sh
+docker compose --project-directory deploy -f deploy/docker-compose.yml exec api \
+  python manage.py set_server_admin --email naam@voorbeeld.nl
+docker compose --project-directory deploy -f deploy/docker-compose.yml exec api \
+  python manage.py set_server_admin --email naam@voorbeeld.nl --remove
+```
+
+If a server admin forgot their password and nobody else can reset it, choose a new one on
+the server. It asks twice and never takes the password as an argument:
+
+```sh
+docker compose --project-directory deploy -f deploy/docker-compose.yml exec api \
+  python manage.py reset_password --email naam@voorbeeld.nl
+```
+
+This ends every session and unpairs every phone of that account, and leaves a notice.
+Both commands write the log (the actor is "Brievie").
+
+## 18. Sessions, devices and how long they last
+
+- A web session ends after **14 days without use**, and after **90 days** whatever
+  happens. Change that in `deploy/.env` with `BRIEVIE_SESSION_IDLE_DAYS` and
+  `BRIEVIE_SESSION_MAX_DAYS` (whole days, at least 1; the first may not be larger than
+  the second), then run `docker compose ... up -d` again. The new limits apply to a session
+  from its next use.
+- A paired phone stops working **180 days after it was last used** and answers like a
+  revoked one: the app asks to pair again. Nobody loses a phone on the day of the update:
+  the 180 days start then.
+- **Waar je bent ingelogd** shows a member their sessions (browser, address, last use)
+  and phones (with the app version) and lets them end any. An admin sees the phones of a
+  member (to revoke one) and can end all their sessions, not read them.
+- Changing your own password ends your other sessions and keeps your phone paired.
+
+## 19. The log and the member export
+
+**The log (Logboek).** Brievie records who did what: sign-ins and failures, password
+changes, devices paired, revoked and expired, invitations, roles, removals, settings,
+exports. It holds names of people and devices and the address a request came from, never
+the content of a letter, a label or rule name, a token or a password. Admins read their
+workspace's log under **Logboek** (with filters and a CSV file); server admins read the
+server's. The rows cannot be changed or deleted by Brievie itself. They are removed
+at night once older than `BRIEVIE_AUDIT_RETENTION_DAYS` (default 365, at least 90; a lower
+number stops Brievie from starting). A back-up holds the log like the rest of the database.
+The CSV file has the newest 10,000 rows at most and says so when it is cut short.
+
+**The export (Mijn post exporteren).** A member can download a ZIP with their own post:
+a photo of every page, a data file and a short readme. It is made on request, kept for 24
+hours, one per member and workspace. It is sealed on the server and not in the back-up;
+once downloaded it is an ordinary unencrypted file, and the BSN is visible on the page
+photos. An admin can switch exporting off for the whole workspace (**Instellingen**; off
+by default in a business workspace). The export needs the document volume at
+`/data/documents`, which is the default; an install with another storage folder cannot
+export.

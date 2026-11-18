@@ -54,3 +54,20 @@ the translation. Add a line before introducing a new domain term.
 | hoofdsleutel | master key |
 | back-updienst | keeper |
 | bestemming | destination |
+| serverbeheerder | server admin (`User.is_server_admin`) |
+| uitnodiging | invitation (`Invitation`) |
+| herstellink | password reset link (`PasswordReset`) |
+| sessie, "Waar je bent ingelogd" | session (`UserSession`) |
+| logboek | audit log (`WorkspaceAuditEvent`, `ServerAuditEvent`) |
+| melding (aan een account) | notice (`AccountNotice`) |
+| intrekken (apparaat) | revoke |
+| verlopen (koppeling, apparaat) | expired |
+| werkruimte verlaten | leave |
+| lid verwijderen | remove member |
+| mijn post exporteren | member export (`MemberExport`) |
+| koppellink | server link (`brievie://server#…`) |
+| koppelbewijs | pairing proof |
+| koppelcode | pairing code (`PairingCode`) |
+| app-versie | app version |
+| apparaat | device |
+| uitgelogd, beëindigen (sessie) | end (a session) |
