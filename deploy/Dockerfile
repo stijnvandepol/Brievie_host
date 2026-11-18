@@ -26,8 +26,11 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 FROM python:3.13-slim
 
+# BRIEVIE_IN_CONTAINER: the destructive commands (restore, sweep --delete, back-up
+# init) refuse to run anywhere else (safepaths.require_container).
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    BRIEVIE_IN_CONTAINER=1 \
     PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app

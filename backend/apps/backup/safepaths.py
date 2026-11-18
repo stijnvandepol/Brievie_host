@@ -219,6 +219,18 @@ def installed_test_root() -> Path | None:
     return _test_root
 
 
+def require_container() -> None:
+    """Refuse (`not_in_container`) a destructive command outside Brievie's container.
+
+    The image sets BRIEVIE_IN_CONTAINER=1. On a host the fixed list alone would not stop
+    root on a machine that happens to have a real /data/documents. The test suite is
+    let through by the test root it installs, not by the variable.
+    """
+    if os.environ.get("BRIEVIE_IN_CONTAINER") == "1" or _test_root is not None:
+        return
+    raise BackupError("not_in_container")
+
+
 def _in_test_root(resolved: Path) -> bool:
     return _test_root is not None and _test_root in resolved.parents
 

@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand, CommandError, CommandParser
 from django.template.defaultfilters import filesizeformat
 from django.utils.translation import gettext as _
 
-from apps.backup import sweep
+from apps.backup import safepaths, sweep
 from apps.backup.errors import BackupError
 
 
@@ -16,6 +16,11 @@ class Command(BaseCommand):
         parser.add_argument("--delete", action="store_true", help="Delete the files found.")
 
     def handle(self, *args: object, **options: object) -> None:
+        if options["delete"]:
+            try:
+                safepaths.require_container()
+            except BackupError as error:
+                raise CommandError(error.message, returncode=1) from error
         try:
             result = sweep.sweep(delete=bool(options["delete"]))
         except BackupError as error:

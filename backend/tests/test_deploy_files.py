@@ -273,3 +273,10 @@ def test_ensure_backup_role_passes_the_project() -> None:
     assert 's/^COMPOSE_PROJECT_NAME=//p\' "$env_file"' in script
     assert script.count("docker compose") == 1
     assert "$compose" not in script
+
+
+def test_the_image_marks_itself_as_the_container() -> None:
+    # The destructive commands refuse to run without it (a Linux host with a real
+    # /data/documents would otherwise pass the fixed allow-list).
+    runtime = DOCKERFILE.split("AS builder", 1)[1].split("FROM ", 1)[1]
+    assert re.search(r"^\s*BRIEVIE_IN_CONTAINER=1\b", runtime, re.MULTILINE), runtime

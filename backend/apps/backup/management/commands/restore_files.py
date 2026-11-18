@@ -3,7 +3,7 @@ from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError, CommandParser
 from django.utils.translation import gettext as _
 
-from apps.backup import restore
+from apps.backup import restore, safepaths
 from apps.backup.errors import BackupError
 
 # Caddy's internal authority in its data volume, as the admin container mounts it.
@@ -23,6 +23,10 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args: object, **options: object) -> None:
+        try:
+            safepaths.require_container()
+        except BackupError as error:
+            raise CommandError(error.message, returncode=1) from error
         run = options["run"]
         try:
             restored = restore.restore_files(

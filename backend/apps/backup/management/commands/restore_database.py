@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand, CommandError, CommandParser
 
-from apps.backup import restore
+from apps.backup import restore, safepaths
 from apps.backup.errors import BackupError
 
 
@@ -16,6 +16,10 @@ class Command(BaseCommand):
         parser.add_argument("--dbname", default="brievie", help="The empty database to load.")
 
     def handle(self, *args: object, **options: object) -> None:
+        try:
+            safepaths.require_container()
+        except BackupError as error:
+            raise CommandError(error.message, returncode=1) from error
         run = options["run"]
         try:
             closed = restore.restore_database(

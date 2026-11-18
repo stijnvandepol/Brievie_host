@@ -13,6 +13,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from django.core.management import call_command
+from django.core.management.base import CommandError
 from pytest_django import Settings
 
 from apps.backup import destination, restore, safepaths, sweep
@@ -480,3 +482,32 @@ def test_place_authority_creates_nothing_beyond_a_link_or_file_in_the_chain(
     assert sorted(p.name for p in outside.iterdir()) == ["keep"]
     assert (outside / "keep").read_text() == "keep"
     assert sorted(p.name for p in parent.iterdir()) == [name]
+
+
+# --- the destructive commands, outside the container -----------------------------------------
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ["restore_database"],
+        ["restore_files", "--replace"],
+        ["restore_files"],
+        ["sweep_storage", "--delete"],
+        ["backup_init"],
+    ],
+)
+def test_destructive_commands_refuse_outside_the_container(
+    configured: Path, recorder: Recorder, monkeypatch: pytest.MonkeyPatch, command: list[str]
+) -> None:
+    monkeypatch.delenv("BRIEVIE_IN_CONTAINER", raising=False)
+    monkeypatch.setattr(safepaths, "_test_root", None)  # as on a host: no test root
+    recorder.arm()
+    try:
+        with pytest.raises(CommandError) as caught:
+            call_command(*command)
+    finally:
+        recorder.disarm()
+    assert caught.value.returncode == 1
+    assert "werkt alleen in de container van Brievie" in str(caught.value)
+    assert recorder.called == []

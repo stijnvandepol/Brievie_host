@@ -550,3 +550,31 @@ def test_only_the_backup_mount_is_the_backup_mount(mount: str, platform: list[st
 
 def test_the_backup_mount_in_tests_lies_in_the_test_root(tmp_path: Path) -> None:
     assert safepaths.require_backup_mount(tmp_path / "backup") == tmp_path / "backup"
+
+
+# --- only in the container -------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("value", [None, "", "0", "true", "yes", " 1"])
+def test_outside_the_container_destructive_commands_refuse(
+    monkeypatch: pytest.MonkeyPatch, no_test_root: None, value: str | None
+) -> None:
+    if value is None:
+        monkeypatch.delenv("BRIEVIE_IN_CONTAINER", raising=False)
+    else:
+        monkeypatch.setenv("BRIEVIE_IN_CONTAINER", value)
+    refused(safepaths.require_container, "not_in_container")
+
+
+def test_the_image_marks_the_container(monkeypatch: pytest.MonkeyPatch, no_test_root: None) -> None:
+    monkeypatch.setenv("BRIEVIE_IN_CONTAINER", "1")
+    safepaths.require_container()
+
+
+def test_the_test_suite_enables_the_commands_through_its_test_root(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # conftest installed this test's tmp_path; no environment variable is involved.
+    monkeypatch.delenv("BRIEVIE_IN_CONTAINER", raising=False)
+    assert safepaths.installed_test_root() is not None
+    safepaths.require_container()
