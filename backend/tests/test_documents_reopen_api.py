@@ -121,7 +121,7 @@ def test_a_person_confirmed_document_is_not_reopenable(client_a: Client, ws_a: W
     }
 
 
-@pytest.mark.parametrize("status", ["processing", "needs_review"])
+@pytest.mark.parametrize("status", ["processing", "needs_review", "failed"])
 def test_a_document_that_is_not_done_is_not_reopenable(
     client_a: Client, ws_a: Workspace, status: str
 ) -> None:
@@ -154,7 +154,7 @@ def test_a_stranger_is_refused_and_the_anonymous_is_not_signed_in(
     document = ai_confirmed(ws_a)
     assert reopen(client, ws_a.id, document.id).status_code == 401
     client.force_login(UserFactory.create())
-    assert reopen(client, ws_a.id, document.id).status_code in (403, 404)
+    assert reopen(client, ws_a.id, document.id).status_code == 404
 
 
 def test_after_a_reopen_the_normal_confirm_works(client_a: Client, ws_a: Workspace) -> None:

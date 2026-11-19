@@ -79,10 +79,17 @@ def run_pipeline(
         store_proposals(document, values, provider)
         _organise_guarded(document, text, persons, choices)
         in_force = autopilot_in_force(workspace_id) if provider is not None else None
+        organise_failed = False
         if in_force is not None and in_force.organise:
-            _autopilot_guarded(document)
+            organise_failed = not _autopilot_guarded(document)
         confirmed = False
-        if in_force is not None and in_force.confirm and payload is not None:
+        # When the organise step failed, nothing says the persons are right: a person looks.
+        if (
+            in_force is not None
+            and in_force.confirm
+            and payload is not None
+            and not organise_failed
+        ):
             confirmed = _confirm_guarded(
                 document, payload, values, text, day, organised=in_force.organise
             )
@@ -270,9 +277,9 @@ def _organise_guarded(
         )
 
 
-def _autopilot_guarded(document: Document) -> None:
-    """`apply_open_proposals` in a savepoint: when it fails, its writes are rolled back
-    and the document still moves on to review with its proposals open."""
+def _autopilot_guarded(document: Document) -> bool:
+    """`apply_open_proposals` in a savepoint; whether it ran. When it fails, its writes
+    are rolled back and the document still moves on to review with its proposals open."""
     try:
         with transaction.atomic():
             apply_open_proposals(document)
@@ -283,6 +290,8 @@ def _autopilot_guarded(document: Document) -> None:
             type(exc).__name__,
             document.id,
         )
+        return False
+    return True
 
 
 def _confirm_guarded(
@@ -297,15 +306,15 @@ def _confirm_guarded(
     """Confirm the document when every guard rail holds; whether it was confirmed.
 
     A proposal still open after the organise step also stops it when `organised`: the
-    person is then not unambiguous. The confirmation runs in a savepoint: when it fails
-    (validation included), its writes are rolled back and the document is reloaded, so
-    the caller moves it on to review with its proposals.
+    person is then not unambiguous. The decision and the confirmation run in a savepoint:
+    when either fails (validation of the built review included), its writes are rolled back
+    and the document is reloaded, so the caller moves it on to review with its proposals.
     """
-    data = decide_confirmation(payload=payload, values=values, text=text, today=today)
-    if data is None or (organised and _open_suggestion_count(document) > 0):
-        return False
     try:
         with transaction.atomic():
+            data = decide_confirmation(payload=payload, values=values, text=text, today=today)
+            if data is None or (organised and _open_suggestion_count(document) > 0):
+                return False
             review.confirm_automatically(document, data)
     except Exception as exc:  # noqa: BLE001 - the document must not stay processing
         # The type only: an exception message may quote the document.

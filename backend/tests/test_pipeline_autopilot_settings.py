@@ -262,8 +262,9 @@ def test_a_partial_switch_off_works_when_the_mode_is_off(ws_a: Workspace) -> Non
 
 def test_the_notice_names_the_mark_and_the_switch_and_claims_no_correctness() -> None:
     notice = settings_service.autopilot_notice()
-    assert "kenmerk" in notice
-    assert "label" not in notice.lower()
+    assert "personen en labels" in notice
+    assert "kenmerken" not in notice
+    assert "het kenmerk Automatisch door AI" in notice
     assert "Brieven zelf bevestigen" in notice
     assert "tweede" not in notice
     assert "staat meteen goed" not in notice

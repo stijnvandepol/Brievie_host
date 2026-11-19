@@ -260,6 +260,29 @@ def test_zero_actions_pass_even_when_the_letter_names_a_term() -> None:
         "de termijn is verstreken",
         "DEADLINE",
         "ten laatste op vrijdag",
+        "binnen één week",
+        "binnen eén week",
+        "binnen 1 week",
+        "binnen 14 kalenderdagen",
+        "binnen een jaar",
+        "binnen veertig dagen",
+        "binnen zes weken na dagtekening",
+        "binnen tweeëndertig dagen",
+        "niet later dan 1 december 2026",
+        "tot en met 1 december",
+        "t/m 1 december",
+        "vóór: 01-12-2026",
+        "Betalen vóór: 01-12-2026",
+        "voor vrijdag 1 december",
+        "voor: maandag 01-12-2026",
+        "uiterste betaaldatum",
+        "betaaldatum 01-12-2026",
+        "30 dagen netto",
+        "Betalingsconditie: 30 dagen netto",
+        "veertien dagen na factuurdatum",
+        "uiterlijk op 1 december",
+        "vo\u0301o\u0301r 1 december",  # decomposed "vóór"
+        "termijnbedrag",
     ],
 )
 def test_mentions_term_finds_a_term(phrase: str) -> None:
@@ -275,8 +298,116 @@ def test_mentions_term_finds_a_term(phrase: str) -> None:
         "binnen de gemeente",
         "voor 5 personen",
         "binnen 14 uur",
+        "tot ziens",
+        "voor 2026 geldt",
+        "voor vrijdag",
+        "30 dagen geleden",
         "",
     ],
 )
 def test_mentions_term_ignores_ordinary_words(phrase: str) -> None:
     assert mentions_term(phrase) is False
+
+
+NO_TERM_TEXT = (
+    "Belastingdienst\nDatum 3 november 2026\nWij sturen u deze aanslag. Bedrag 01-12-2026 euro."
+)
+
+
+def without_deadline(raw: dict[str, object]) -> None:
+    action(raw)["deadline"] = dict(NO_DEADLINE)
+
+
+def with_invoice_due(raw: dict[str, object]) -> None:
+    raw["factuur"] = {
+        "nummer": None,
+        "vervaldatum": "2026-12-01",
+        "bedrag_incl": None,
+        "bron": "Bedrag 01-12-2026 euro",
+        "zekerheid": 0.95,
+    }
+
+
+def test_a_pay_action_without_a_deadline_confirms_when_the_letter_has_no_due_date() -> None:
+    assert build(without_deadline, text=NO_TERM_TEXT) is not None
+
+
+def test_a_pay_action_without_a_deadline_stays_a_proposal_when_an_invoice_due_date_exists() -> None:
+    def change(raw: dict[str, object]) -> None:
+        without_deadline(raw)
+        with_invoice_due(raw)
+
+    assert build(change, text=NO_TERM_TEXT) is None
+
+
+def test_an_invoice_due_date_does_not_block_an_action_that_is_not_a_payment() -> None:
+    def change(raw: dict[str, object]) -> None:
+        without_deadline(raw)
+        with_invoice_due(raw)
+        action(raw).update(type="reageren")
+
+    assert build(change, text=NO_TERM_TEXT) is not None
+
+
+def test_an_invoice_due_date_does_not_block_a_pay_action_that_has_a_deadline() -> None:
+    def change(raw: dict[str, object]) -> None:
+        with_invoice_due(raw)
+
+    assert build(change) is not None
+
+
+def test_an_invoice_due_date_of_zero_confidence_still_blocks() -> None:
+    def change(raw: dict[str, object]) -> None:
+        without_deadline(raw)
+        with_invoice_due(raw)
+        raw["factuur"]["bron"] = "staat er niet"  # type: ignore[index]
+
+    assert build(change, text=NO_TERM_TEXT) is None
+
+
+def test_a_letter_dated_tomorrow_stays_a_proposal() -> None:
+    text = TEXT.replace("Datum 3 november 2026", "Datum 15 november 2026")
+
+    def change(raw: dict[str, object]) -> None:
+        raw["dagtekening"] = {
+            "waarde": "2026-11-15",
+            "bron": "Datum 15 november 2026",
+            "zekerheid": 0.95,
+        }
+
+    assert build(change, text=text) is None
+
+
+def test_a_letter_dated_today_is_fine() -> None:
+    text = TEXT.replace("Datum 3 november 2026", "Datum 14 november 2026")
+
+    def change(raw: dict[str, object]) -> None:
+        raw["dagtekening"] = {
+            "waarde": "2026-11-14",
+            "bron": "Datum 14 november 2026",
+            "zekerheid": 0.95,
+        }
+
+    assert build(change, text=text) is not None
+
+
+def test_a_sender_over_the_limit_stays_a_proposal() -> None:
+    name = "B" * 201
+    sender = {"naam": name, "bron": name, "zekerheid": 0.95}
+    assert build(set_("afzender", sender), text=TEXT + "\n" + name) is None
+
+
+def test_a_sender_at_the_limit_is_fine() -> None:
+    name = "B" * 200
+    sender = {"naam": name, "bron": name, "zekerheid": 0.95}
+    assert build(set_("afzender", sender), text=TEXT + "\n" + name) is not None
+
+
+def test_a_summary_over_the_limit_stays_a_proposal() -> None:
+    assert build(set_("samenvatting_b1", "s" * 5001)) is None
+    assert build(set_("samenvatting_b1", "s" * 5000)) is not None
+
+
+def test_a_description_over_the_limit_stays_a_proposal() -> None:
+    assert build(lambda raw: action(raw).update(omschrijving="d" * 501)) is None
+    assert build(lambda raw: action(raw).update(omschrijving="d" * 500)) is not None

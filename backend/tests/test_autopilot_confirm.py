@@ -11,9 +11,9 @@ from django.test import override_settings
 
 from apps.documents import review
 from apps.documents.models import Document, DocumentEvent, DocumentLabel, DocumentSuggestion
-from apps.documents.schemas import ConfirmIn
+from apps.documents.schemas import ConfirmIn, TaskIn
 from apps.labels.models import Label
-from apps.pipeline import settings_service
+from apps.pipeline import settings_service, steps
 from apps.pipeline.choices import ExtractionRequest
 from apps.pipeline.steps import run_pipeline
 from apps.tasks.models import Task
@@ -358,3 +358,144 @@ def test_confirm_automatically_validates_a_deadline_quote_against_the_letter(
     )
     with workspace_context(ws_a.id), pytest.raises(ApiError):
         review.confirm_automatically(document, data)
+
+
+def test_a_failure_in_the_decision_leaves_the_letter_for_review_not_processing(
+    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    switch_on(ws_a)
+    document = new_document(ws_a)
+
+    def broken(**kwargs: object) -> None:
+        raise ValueError("Belastingdienst Jan de Vries")
+
+    monkeypatch.setattr(steps, "decide_confirmation", broken)
+    with caplog.at_level(logging.INFO):
+        run(ws_a, document, Answering())
+
+    assert stored(ws_a, document).status == Document.Status.NEEDS_REVIEW
+    with workspace_context(ws_a.id):
+        assert document.extractions.count() > 0
+        assert not Task.objects.filter(document=document).exists()
+    line = next(r.getMessage() for r in caplog.records if "while confirming" in r.getMessage())
+    assert line == f"Unexpected ValueError while confirming document {document.id}"
+    assert "Jan de Vries" not in caplog.text
+
+
+def test_when_applying_the_picks_failed_the_letter_is_not_confirmed(
+    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # No label or person to pick: without the step nothing is open, so the "nothing
+    # open" rail alone would pass vacuously.
+    switch_on(ws_a, organise=True)
+    document = new_document(ws_a)
+
+    def broken(document: Document) -> int:
+        raise RuntimeError("stuk")
+
+    monkeypatch.setattr(steps, "apply_open_proposals", broken)
+    run(ws_a, document, Answering())
+
+    assert stored(ws_a, document).status == Document.Status.NEEDS_REVIEW
+
+
+def test_a_failed_organise_step_does_not_stop_a_confirm_when_organise_is_off(
+    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    switch_on(ws_a, organise=False)
+    document = new_document(ws_a)
+
+    def broken(document: Document) -> int:
+        raise RuntimeError("stuk")
+
+    monkeypatch.setattr(steps, "apply_open_proposals", broken)
+    run(ws_a, document, Answering())
+
+    assert stored(ws_a, document).status == Document.Status.DONE
+
+
+def test_the_rules_of_trigger_confirmed_run_exactly_once(
+    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from apps.rules import triggers
+
+    calls: list[object] = []
+    original = triggers.on_confirmed
+
+    def counting(document: Document) -> None:
+        calls.append(document.id)
+        original(document)
+
+    monkeypatch.setattr(triggers, "on_confirmed", counting)
+    switch_on(ws_a)
+    document = new_document(ws_a)
+
+    run(ws_a, document, Answering())
+
+    assert stored(ws_a, document).status == Document.Status.DONE
+    assert calls == [document.id]
+
+
+def test_confirm_automatically_never_sets_the_organisation(ws_a: Workspace) -> None:
+    document = new_document(ws_a)
+    with workspace_context(ws_a.id):
+        label = Label.objects.create(workspace=ws_a, name="Belasting")
+        review.confirm_automatically(
+            document,
+            ConfirmIn(
+                sender="Belastingdienst",
+                document_type="assessment",
+                letter_date=date(2026, 11, 3),
+                summary="",
+                summary_by_ai=True,
+                tasks=[],
+                sets_organisation=True,
+                label_ids=[label.id],
+            ),
+        )
+        assert not DocumentLabel.objects.filter(document=document).exists()
+
+
+def test_a_task_the_person_ticked_off_is_not_created_again_after_a_reopen(
+    ws_a: Workspace,
+) -> None:
+    from apps.documents import services
+
+    switch_on(ws_a)
+    document = new_document(ws_a)
+    run(ws_a, document, Answering())
+    admin = admin_of(ws_a)
+    with workspace_context(ws_a.id):
+        Task.objects.filter(document=document).update(status=Task.Status.DONE)
+        services.reopen_document(workspace=ws_a, user=admin, document_id=document.id)
+        review.confirm_document(
+            workspace=ws_a,
+            user=admin,
+            document_id=document.id,
+            data=ConfirmIn(
+                sender="Belastingdienst",
+                document_type="assessment",
+                letter_date=date(2026, 11, 3),
+                summary="",
+                summary_by_ai=False,
+                tasks=[
+                    TaskIn(
+                        type="pay",
+                        description="Betaal de aanslag",
+                        deadline=date(2026, 12, 1),
+                        deadline_source="in_document",
+                        deadline_quote="vóór 1 december 2026",
+                    ),
+                    TaskIn(
+                        type="respond",
+                        description="Bel de Belastingdienst",
+                        deadline_source="manual",
+                    ),
+                ],
+            ),
+        )
+        tasks = list(Task.objects.filter(document=document).order_by("description"))
+    assert [(t.description, t.status, t.created_by_ai) for t in tasks] == [
+        ("Bel de Belastingdienst", "open", False),
+        ("Betaal de aanslag", "done", True),
+    ]

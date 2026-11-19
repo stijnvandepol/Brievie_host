@@ -107,7 +107,12 @@ def _store_confirmation(
         actor=user,
         origin=DocumentEvent.Origin.AI if by_ai else DocumentEvent.Origin.USER,
     )
+    # A task already on the document stays as it is (after a reopen a ticked-off task is
+    # still there): the same one is not made twice.
+    present = {_key_of(task) for task in document.tasks.all()}
     for task in _stored_tasks(data, document):
+        if (task.type, task.description, task.deadline, task.deadline_source) in present:
+            continue
         Task.objects.create(
             workspace_id=document.workspace_id,
             document=document,
@@ -120,6 +125,10 @@ def _store_confirmation(
         )
     # After the confirmed choices, now with the confirmed sender and type.
     _rules_guarded(document)
+
+
+def _key_of(task: Task) -> tuple[str, str, date | None, str]:
+    return (task.type, task.description, task.deadline, task.deadline_source)
 
 
 def _rules_guarded(document: Document) -> None:

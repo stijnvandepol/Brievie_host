@@ -335,7 +335,7 @@ def autopilot_notice() -> str:
     return gettext(
         "Je zet de AI-autopilot aan. Lees dit eerst.\n"
         "\n"
-        '- Brievie zet brieven zelf bij personen en kenmerken. Zet je ook "Brieven zelf '
+        '- Brievie zet brieven zelf bij personen en labels. Zet je ook "Brieven zelf '
         'bevestigen" aan, dan bevestigt Brievie de brieven ook zelf.\n'
         '- Niemand kijkt eerst. Brievie zet de brief meteen in je lijst. Met "Brieven zelf '
         'bevestigen" is de brief ook meteen bevestigd.\n'
