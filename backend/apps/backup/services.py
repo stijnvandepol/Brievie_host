@@ -25,7 +25,12 @@ from apps.backup.database import (
     require_backup_role,
     require_client_for,
 )
-from apps.backup.destination import backup_password, configured_repository, destination_kind
+from apps.backup.destination import (
+    UPDATE_FALLBACK_KIND,
+    backup_password,
+    backup_repository,
+    destination_kind,
+)
 from apps.backup.envcopy import ENV_COPY_NAME
 from apps.backup.errors import REASONS, BackupError
 from apps.backup.locks import backup_lock
@@ -60,11 +65,14 @@ _PG_DUMP_VERSION = re.compile(r"\(PostgreSQL\)\s+(\S+)")
 _RESTIC_VERSION = re.compile(r"^restic\s+(\S+)")
 
 
-def initialise_destination(*, allow_same_disk: bool) -> str:
-    """Prepare the configured destination for the first time; returns its kind."""
+def initialise_destination(*, allow_same_disk: bool, fallback: bool = False) -> str:
+    """Prepare the configured destination (or an update's fallback) for the first time;
+    returns its kind."""
     owner_uid = KEEPER_UID if os.geteuid() == 0 else None
     with backup_lock():
-        destination.initialise(allow_same_disk=allow_same_disk, owner_uid=owner_uid)
+        destination.initialise(
+            allow_same_disk=allow_same_disk, owner_uid=owner_uid, fallback=fallback
+        )
     return destination.destination_kind()
 
 
@@ -139,14 +147,17 @@ def _has_live_job(run_id: UUID) -> bool:
 
 
 @transaction.atomic
-def request_run(kind: str, *, requested_by: str = "cli") -> BackupRun:
+def request_run(kind: str, *, requested_by: str = "cli", label: str = "") -> BackupRun:
     """The open run of this kind, or a new queued one with its job deferred.
 
     An open run without a waiting or running job was abandoned (its job was
     cancelled, or recording its end failed): it is closed, so it never blocks, and
     the new run's job removes the snapshots it may have left (its id travels in the
     job's arguments, together with those its own job still had to remove).
+    `label` names an update's safety back-up (`pre-update-X.Y.Z`) on both snapshots.
     """
+    if label:
+        restic.check_label(label)
     with connection.cursor() as cursor:
         cursor.execute("SELECT pg_advisory_xact_lock(%s)", [_REQUEST_LOCK_KEY])
     clean_up: list[str] = []
@@ -163,7 +174,7 @@ def request_run(kind: str, *, requested_by: str = "cli") -> BackupRun:
         if existing.kind == BackupRun.Kind.BACKUP:
             clean_up += [str(existing.id), *_pending_clean_up(existing.id)]
     run = BackupRun.objects.create(
-        kind=kind, requested_by=requested_by, destination_kind=_kind_or_blank()
+        kind=kind, requested_by=requested_by, destination_kind=_kind_or_blank(), label=label
     )
     if clean_up:
         jobs.run_backup.defer(run_id=str(run.id), clean_up_run_ids=clean_up)
@@ -314,7 +325,8 @@ def _back_up(
     large archive can take hours.
     """
     with backup_lock():
-        repository = configured_repository()
+        fallback = run.destination_kind == UPDATE_FALLBACK_KIND
+        repository = backup_repository(fallback=fallback)
         host = backup_host()
         run_restic = _Restic(repository, backup_password(), failures, host)
         run_restic(restic.unlock_argv(), timeout=SHORT_RESTIC_TIMEOUT)
@@ -336,7 +348,7 @@ def _back_up(
         # One run, one time: both halves carry the run's start, so retention can never
         # keep one half of a run and drop the other.
         started = _started_at(run.id)
-        safety = run.requested_by == RESTORE_SAFETY
+        safety = run.requested_by in SAFETY_REQUESTERS
         # The manifest counts in the transaction whose snapshot pg_dump dumps: a letter
         # written or deleted during the dump changes neither. The transaction stays
         # open on its own connection (never Django's) until the dump has ended.
@@ -355,6 +367,7 @@ def _back_up(
                     host=host,
                     at=started,
                     safety=safety,
+                    label=run.label,
                 ),
                 extra=libpq_env(conninfo),
             )
@@ -373,6 +386,7 @@ def _back_up(
                     at=started,
                     safety=safety,
                     excludes=file_excludes(),
+                    label=run.label,
                 )
             )
             incomplete = restic.classify(files) == "files_incomplete"
@@ -395,7 +409,11 @@ def _back_up(
                 except BackupError as error:
                     logger.warning("Backup run %s: retention failed: %s", run.id, error.code)
             raise _IncompleteBackupError(total)
-        warning = _apply_retention(run_restic, run.id) if _prunes(run) else None
+        if fallback:
+            # Only this run prunes the fallback, and only down to its newest run.
+            warning = _apply_fallback_retention(run_restic, run.id)
+        else:
+            warning = _apply_retention(run_restic, run.id) if _prunes(run) else None
         fields: dict[str, object] = {"size_bytes": total}
         if warning is not None:
             fields.update(reason_code=warning, reason=str(REASONS[warning]))
@@ -509,12 +527,24 @@ def _run_of(snapshot: restic.Snapshot) -> UUID | None:
 
 # The safety back-up that a restore makes right before it replaces anything.
 RESTORE_SAFETY = "restore"
+# The safety back-up an update makes after it stopped the server (`label` names it).
+UPDATE_SAFETY = "update"
+SAFETY_REQUESTERS = (RESTORE_SAFETY, UPDATE_SAFETY)
 
 
 def _prunes(run: BackupRun) -> bool:
-    """Whether this run applies retention: never in append-only mode, and never for the
-    safety back-up of a restore (it must not remove the run the restore will use)."""
-    return not settings.BRIEVIE_BACKUP_APPEND_ONLY and run.requested_by != RESTORE_SAFETY
+    """Whether this run applies retention: never in append-only mode, and never for a
+    safety back-up (it must not remove the run a restore or the way back will use)."""
+    return not settings.BRIEVIE_BACKUP_APPEND_ONLY and run.requested_by not in SAFETY_REQUESTERS
+
+
+def _apply_fallback_retention(run_restic: "_Restic", current: UUID) -> str | None:
+    """The fallback keeps its newest run only; a failure is a warning, never a failed run."""
+    pruned = run_restic.result(restic.fallback_forget_argv(run_restic.host))
+    if pruned.returncode != 0:
+        logger.warning("Backup run %s: the fallback could not remove older runs", current)
+        return "retention_incomplete"
+    return None
 
 
 def _record_failure(run_id: UUID, code: str, *, size_bytes: int | None = None) -> None:
@@ -528,6 +558,24 @@ def _record_failure(run_id: UUID, code: str, *, size_bytes: int | None = None) -
         )
     except Exception as error:  # noqa: BLE001 - the job must end; request_run recovers the run
         logger.error("Backup run %s: recording the failure raised %s", run_id, type(error).__name__)
+
+
+def run_update_fallback(*, label: str) -> BackupRun:
+    """An update's emergency back-up on a server without a destination, made now, in this
+    process (the one-off admin container; no job, no queue), into the fallback folder
+    that ./brievie mounted at /backup. Returns the finished run; never raises but for a
+    bad label. The run never counts as a back-up (`status_summary`).
+    """
+    restic.check_label(label)
+    run = BackupRun.objects.create(
+        kind=BackupRun.Kind.BACKUP,
+        requested_by=UPDATE_SAFETY,
+        label=label,
+        destination_kind=UPDATE_FALLBACK_KIND,
+    )
+    perform_run(run.id)
+    run.refresh_from_db()
+    return run
 
 
 def perform_run(run_id: UUID, *, clean_up: Sequence[UUID] = ()) -> None:
@@ -634,7 +682,8 @@ def _destination_kind_for_status() -> str:
 
 
 def status_summary() -> BackupStatus:
-    runs = BackupRun.objects.order_by("-created_at")
+    # An update's fallback is no back-up: it never counts, fails or is interrupted here.
+    runs = BackupRun.objects.exclude(destination_kind=UPDATE_FALLBACK_KIND).order_by("-created_at")
     last_success = runs.filter(
         kind=BackupRun.Kind.BACKUP, status=BackupRun.Status.SUCCEEDED
     ).first()

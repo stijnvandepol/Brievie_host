@@ -3,6 +3,10 @@ from django.utils.translation import gettext_lazy as _
 
 # Dutch (B1) reasons shown to the user; the code is what is stored and tested.
 REASONS: dict[str, Promise] = {
+    "label_invalid": _(
+        "De naam van een back-up van vóór het bijwerken ziet eruit als pre-update-0.3.0."
+    ),
+    "update_backup_unavailable": _("De noodback-up voor het bijwerken kon niet worden klaargezet."),
     "not_configured": _("Er is nog geen back-up ingesteld."),
     "destination_conflict": _(
         "Je kunt maar één bestemming instellen: een map of een adres. Haal er één weg."

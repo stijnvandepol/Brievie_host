@@ -24,8 +24,10 @@ class BackupRun(BaseModel):
     requested_by = models.CharField(max_length=10, default="cli")
     started_at = models.DateTimeField(null=True)
     finished_at = models.DateTimeField(null=True)
-    # The kind only, never a path: "" | folder | rest | s3.
+    # The kind only, never a path: "" | folder | rest | s3 | update (an update's fallback).
     destination_kind = models.CharField(max_length=10, blank=True)
+    # An update's safety back-up: `pre-update-X.Y.Z` (also a tag on both snapshots).
+    label = models.CharField(max_length=32, blank=True)
     reason_code = models.CharField(max_length=50, blank=True)
     reason = models.CharField(max_length=300, blank=True)
     size_bytes = models.BigIntegerField(null=True)

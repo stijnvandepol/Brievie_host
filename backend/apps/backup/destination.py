@@ -23,6 +23,14 @@ logger = logging.getLogger(__name__)
 MARKER_NAME = "brievie-backup.json"
 REPOSITORY_DIR = "restic"
 MARKER_FORMAT = 1
+# An update's emergency back-up on a server without a destination: the Docker volume
+# `update-backup`, mounted at /backup in the one-off admin container for that one call
+# (./brievie). Its marker says so, and the two kinds of run never cross: an ordinary run
+# (the keeper's, which prunes) refuses it, and the fallback run (which keeps only its
+# newest run) refuses anything else. A restore reads it like any folder.
+UPDATE_FALLBACK_PURPOSE = "update-fallback"
+# The destination kind recorded on such a run; `status` does not count it.
+UPDATE_FALLBACK_KIND = "update"
 
 _ALREADY_EXISTS = "config file already exists"
 
@@ -57,16 +65,28 @@ def _device(path: Path | str) -> int:
     return os.stat(path).st_dev
 
 
-def _marker_is_valid() -> bool:
+def _marker_content() -> dict[str, object] | None:
+    """The marker when it is valid (our format, our repository folder), else None."""
     try:
         content = json.loads(_marker().read_text())
     except (OSError, ValueError):
-        return False
-    return (
+        return None
+    if (
         isinstance(content, dict)
         and content.get("format") == MARKER_FORMAT
         and content.get("repository") == REPOSITORY_DIR
-    )
+    ):
+        return content
+    return None
+
+
+def _marker_is_valid() -> bool:
+    return _marker_content() is not None
+
+
+def _is_fallback() -> bool:
+    content = _marker_content()
+    return content is not None and content.get("purpose") == UPDATE_FALLBACK_PURPOSE
 
 
 def _remote_repository(kind: str) -> restic.Repository:
@@ -101,6 +121,24 @@ def configured_repository() -> restic.Repository:
             raise BackupError("destination_not_ready")
         return _folder_repository()
     return _remote_repository(kind)
+
+
+def backup_repository(*, fallback: bool) -> restic.Repository:
+    """The repository a back-up run writes to.
+
+    `fallback`: the run of an update without a destination, which keeps only its newest
+    run; anything but the fallback folder is refused (`update_backup_unavailable`). An
+    ordinary run refuses the fallback folder (`destination_not_ready`), so the keeper's
+    retention can never reach an update's way back.
+    """
+    if fallback:
+        if destination_kind() != "folder" or not _is_fallback():
+            raise BackupError("update_backup_unavailable")
+        return _folder_repository()
+    repository = configured_repository()
+    if repository.kind == "folder" and _is_fallback():
+        raise BackupError("destination_not_ready")
+    return repository
 
 
 def backup_password() -> str:
@@ -160,7 +198,7 @@ def _verify_password(repository: restic.Repository) -> None:
     restic.raise_for(restic.run(restic.cat_config_argv(), env, secrets=secrets()))
 
 
-def _finish_folder(owner_uid: int | None) -> None:
+def _finish_folder(owner_uid: int | None, *, fallback: bool = False) -> None:
     """Hand the tree over, then write the marker last: it means "ready".
 
     The marker is written to a temporary file relative to a descriptor of the mount
@@ -174,6 +212,8 @@ def _finish_folder(owner_uid: int | None) -> None:
         "created_at": datetime.now(UTC).isoformat(),
         "repository": REPOSITORY_DIR,
     }
+    if fallback:
+        content["purpose"] = UPDATE_FALLBACK_PURPOSE
     try:
         mount_fd = safepaths.open_dir_nofollow(mount, expect=safepaths.identity(mount))
     except OSError as error:
@@ -207,7 +247,9 @@ def _finish_folder(owner_uid: int | None) -> None:
         os.close(mount_fd)
 
 
-def initialise(*, allow_same_disk: bool, owner_uid: int | None) -> restic.Repository:
+def initialise(
+    *, allow_same_disk: bool, owner_uid: int | None, fallback: bool = False
+) -> restic.Repository:
     """Create the repository: the only place that may write to an empty destination.
 
     `owner_uid` is the keeper's uid; the one-off container runs as root, so the
@@ -219,8 +261,20 @@ def initialise(*, allow_same_disk: bool, owner_uid: int | None) -> restic.Reposi
 
     A folder is ready only when the marker exists, and the marker is written
     last, so a half-finished run is completed by running this again.
+
+    `fallback`: the volume of an update's emergency back-up (./brievie mounts it at
+    /backup for this call). It is on the same disk by design; a folder that is already a
+    destination of its own is never turned into one (`update_backup_unavailable`).
     """
     kind = destination_kind()
+    if fallback:
+        if kind != "folder":
+            raise BackupError("update_backup_unavailable")
+        if _marker_content() is not None:
+            if _is_fallback():
+                raise BackupError("already_initialised")
+            raise BackupError("update_backup_unavailable")
+        allow_same_disk = True
     if not kind:
         raise BackupError("not_configured")
     backup_password()
@@ -249,5 +303,5 @@ def initialise(*, allow_same_disk: bool, owner_uid: int | None) -> restic.Reposi
     if _run_init(repository):
         # A half-finished earlier run, or a re-plugged disk: take it over only with our password.
         _verify_password(repository)
-    _finish_folder(owner_uid)
+    _finish_folder(owner_uid, fallback=fallback)
     return repository

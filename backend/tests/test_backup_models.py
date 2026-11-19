@@ -47,6 +47,8 @@ EXPECTED_CODES = {
     "retention_incomplete",
     "env_copy_missing",
     "not_in_container",
+    "label_invalid",
+    "update_backup_unavailable",
 }
 
 
@@ -59,6 +61,7 @@ def test_backup_run_defaults() -> None:
     assert run.reason == ""
     assert run.reason_code == ""
     assert run.destination_kind == ""
+    assert run.label == ""
     assert run.started_at is None
     assert run.finished_at is None
 
