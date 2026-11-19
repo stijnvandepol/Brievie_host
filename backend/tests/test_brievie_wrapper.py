@@ -2979,3 +2979,122 @@ def test_keeping_the_destination_warns_about_the_original_server(install: Instal
 
     assert result.returncode == 0, result.stderr
     assert "oorspronkelijke server" in result.stdout
+
+
+# --- a recovery sheet never outlives the settings it was made from ------------------------
+
+NEW_MACHINE_MASTER = "6b" * 32
+SHEET_VOID = (
+    "Een herstelblad dat op deze computer vóór het herstel is gemaakt of afgedrukt, geldt "
+    "niet meer: de hoofdsleutel is nu die van het herstelblad waarmee je hebt hersteld. "
+    "Typ ./brievie recovery-sheet voor een herstelblad van deze server."
+)
+SHEET_REMOVED = (
+    "Het herstelblad dat hier stond, hoorde bij de instellingen van vóór het herstel en is "
+    "weggehaald. Typ ./brievie recovery-sheet voor een nieuw herstelblad."
+)
+
+
+def new_machine(install: Install) -> Path:
+    """What `./brievie start` left on a new machine: its own key, and its sheet."""
+    install.write_env(current_env().replace(MASTER, NEW_MACHINE_MASTER))
+    sheet = install.root / "brievie-herstelblad.html"
+    sheet.write_text("<html>sleutel van de lege installatie</html>")
+    return sheet
+
+
+def test_a_restore_after_a_first_start_voids_that_starts_sheet(installed: Install) -> None:
+    sheet = new_machine(installed)
+
+    result = installed.run(
+        "restore",
+        "--keep-hostname",
+        FAKE_DATA_ROWS="0",
+        **restore_inputs(installed, BRIEVIE_RESTORE_CONFIRM="", BRIEVIE_RESTORE_EMPTY_OK="ja"),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not sheet.exists()
+    lines = result.stdout.rstrip().splitlines()
+    assert lines[-1] == "Herstel gelukt."
+    assert SHEET_VOID in lines
+
+
+def test_a_restore_with_the_same_key_still_removes_the_old_sheet(installed: Install) -> None:
+    sheet = installed.root / "brievie-herstelblad.html"
+    sheet.write_text("<html>oud</html>")
+
+    result = installed.run("restore", "--replace", "--keep-hostname", **restore_inputs(installed))
+
+    assert result.returncode == 0, result.stderr
+    assert not sheet.exists()
+    assert SHEET_REMOVED in result.stdout
+    assert SHEET_VOID not in result.stdout
+
+
+def test_a_restore_without_a_sheet_says_nothing_about_one(installed: Install) -> None:
+    result = installed.run("restore", "--replace", "--keep-hostname", **restore_inputs(installed))
+
+    assert result.returncode == 0, result.stderr
+    assert "herstelblad dat hier stond" not in result.stdout
+    assert SHEET_VOID not in result.stdout
+
+
+def test_a_sheet_that_is_a_link_loses_the_link_and_never_its_target(installed: Install) -> None:
+    elsewhere = installed.tmp / "elsewhere.html"
+    elsewhere.write_text("not Brievie's")
+    (installed.root / "brievie-herstelblad.html").symlink_to(elsewhere)
+
+    result = installed.run("restore", "--replace", "--keep-hostname", **restore_inputs(installed))
+
+    assert result.returncode == 0, result.stderr
+    assert not (installed.root / "brievie-herstelblad.html").is_symlink()
+    assert elsewhere.read_text() == "not Brievie's"
+
+
+def test_a_failed_swap_keeps_the_sheet_of_the_settings_that_came_back(installed: Install) -> None:
+    sheet = new_machine(installed)
+
+    result = installed.run(
+        "restore",
+        "--replace",
+        "--keep-hostname",
+        FAKE_REMOVE_AT="stop keeper",
+        FAKE_REMOVE_PATH=str(installed.root / "deploy" / ".restore" / "env"),
+        **restore_inputs(installed),
+    )
+
+    assert result.returncode == 1
+    # The old deploy/.env is back, and so is the sheet that belongs to it.
+    assert NEW_MACHINE_MASTER in installed.dotenv.read_text()
+    assert sheet.read_text() == "<html>sleutel van de lege installatie</html>"
+
+
+def test_a_restore_that_stops_after_the_swap_leaves_no_sheet_and_says_so_when_done(
+    installed: Install,
+) -> None:
+    sheet = new_machine(installed)
+
+    stopped = installed.run(
+        "restore",
+        "--replace",
+        "--keep-hostname",
+        FAKE_DOCKER_FAIL="restore_files",
+        **restore_inputs(installed),
+    )
+    assert stopped.returncode == 1
+    # The restored settings are in place: the old sheet is already gone.
+    assert MASTER in installed.dotenv.read_text()
+    assert not sheet.exists()
+
+    finished = installed.run(
+        "restore",
+        RUN_ID,
+        "--replace",
+        "--skip-safety-backup",
+        "--keep-hostname",
+        **restore_inputs(installed),
+    )
+
+    assert finished.returncode == 0, finished.stderr
+    assert SHEET_VOID in finished.stdout.splitlines()
