@@ -7,6 +7,7 @@ from datetime import datetime
 from urllib.parse import urlsplit
 from uuid import UUID
 
+from django.conf import settings as django_settings
 from django.db import transaction
 from django.utils.functional import Promise
 from django.utils.translation import gettext
@@ -75,6 +76,27 @@ class AiSettingsError(ValueError):
 
 class ConsentRequiredError(ValueError):
     """Switching to this external service needs somebody's explicit consent first."""
+
+
+class AutopilotError(ValueError):
+    """The autopilot switches cannot be saved; `reason` says why in a word.
+
+    `forbidden`: the server does not allow it. `needs_ai`: the workspace's AI is off.
+    `ack_required`: a switch goes on without the notice being acknowledged.
+    """
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
+@dataclass(frozen=True)
+class Autopilot:
+    """The autopilot switches. `allowed` is the server switch."""
+
+    organise: bool
+    confirm: bool
+    allowed: bool
 
 
 @dataclass(frozen=True)
@@ -221,17 +243,29 @@ def configure(
             if kept is None:
                 raise AiSettingsError("key_required", "An external AI service needs an API key.")
             sealed = bytes(kept)
-        settings, _created = AISettings.objects.update_or_create(
-            workspace_id=workspace_id,
-            defaults={
-                "mode": target.mode,
-                "api": target.api,
-                "base_url": target.base_url,
-                "model": target.model,
-                "api_key_sealed": sealed,
-                "consented_base_url": consented,
-            },
+        # Autopilot was agreed to for the AI as it was: switching AI off, or agreeing to
+        # another address, ends it. Both stay off until somebody agrees again.
+        reset = current is not None and (
+            target.mode == AISettings.Mode.OFF or event == AIConsentEvent.Event.GRANTED
         )
+        was_organise = reset and current is not None and current.auto_organise
+        was_confirm = reset and current is not None and current.auto_confirm
+        defaults: dict[str, object] = {
+            "mode": target.mode,
+            "api": target.api,
+            "base_url": target.base_url,
+            "model": target.model,
+            "api_key_sealed": sealed,
+            "consented_base_url": consented,
+        }
+        if reset:
+            defaults |= {"auto_organise": False, "auto_confirm": False}
+        settings, _created = AISettings.objects.update_or_create(
+            workspace_id=workspace_id, defaults=defaults
+        )
+        for name, was in ((_ORGANISE, was_organise), (_CONFIRM, was_confirm)):
+            if was:
+                _record_switch(workspace_id, actor, name, False)
         if event is not None:
             AIConsentEvent.objects.create(
                 workspace_id=workspace_id,
@@ -252,6 +286,99 @@ def configure(
                 values={"setting": "ai", "value": target.mode},
             )
     return settings
+
+
+_ORGANISE = "ai_auto_organise"
+_CONFIRM = "ai_auto_confirm"
+
+
+def _record_switch(workspace_id: UUID, actor: Actor, name: str, value: bool) -> None:
+    record(
+        AuditCode.WORKSPACE_SETTING_CHANGED,
+        actor=_audit_actor(actor),
+        target=AuditTarget(TargetKind.WORKSPACE, workspace_id),
+        workspace_id=workspace_id,
+        values={"setting": name, "value": value},
+    )
+
+
+def autopilot(workspace_id: UUID) -> Autopilot:
+    """The stored switches (off without a settings row). Needs the workspace's RLS context."""
+    row = AISettings.objects.filter(workspace_id=workspace_id).first()
+    return Autopilot(
+        organise=row is not None and row.auto_organise,
+        confirm=row is not None and row.auto_confirm,
+        allowed=_autopilot_allowed(),
+    )
+
+
+def autopilot_in_force(workspace_id: UUID) -> Autopilot:
+    """What the pipeline may do now: nothing unless the server allows it and AI is on.
+
+    Checked at the moment of use, so a server switch turned off after the fact or a row
+    changed behind our back stops the autopilot at once. Needs the workspace's RLS context.
+    """
+    stored = autopilot(workspace_id)
+    row = AISettings.objects.filter(workspace_id=workspace_id).first()
+    on = stored.allowed and row is not None and row.mode != AISettings.Mode.OFF
+    return Autopilot(
+        organise=on and stored.organise, confirm=on and stored.confirm, allowed=stored.allowed
+    )
+
+
+def _autopilot_allowed() -> bool:
+    return bool(django_settings.BRIEVIE_AI_AUTOPILOT_ALLOWED)
+
+
+def autopilot_notice() -> str:
+    """What whoever switches the autopilot on must know and agree to (B1 Dutch)."""
+    return gettext(
+        "Je zet de AI-autopilot aan. Lees dit eerst.\n"
+        "\n"
+        "- Brievie zet brieven zelf onder personen en labels. Als je ook de tweede "
+        "schakelaar aanzet, bevestigt Brievie de brieven ook zelf.\n"
+        "- Niemand kijkt eerst. De brief staat meteen goed in je lijst.\n"
+        "- De AI kan fouten maken.\n"
+        "- Een deadline staat altijd in de brief zelf. Kijk dus naar de brief als het "
+        "ertoe doet.\n"
+        "- Alles wat Brievie zelf doet, zie je met het label Automatisch door AI. Je kunt "
+        "het terugdraaien.\n"
+        "- Heeft een taak geen deadline? Dan heeft de AI misschien iets gemist.\n"
+    )
+
+
+def configure_autopilot(
+    *, workspace_id: UUID, organise: bool, confirm: bool, acknowledged: bool, actor: Actor
+) -> Autopilot:
+    """Set the two autopilot switches and audit every one that changed.
+
+    Raises `AutopilotError`: `forbidden` or `needs_ai` when a switch would go on while the
+    server forbids it or the workspace's AI is off, `ack_required` when a switch goes
+    from off to on without `acknowledged`. Switching off always works. Needs the RLS context.
+    """
+    with transaction.atomic():
+        row = AISettings.objects.select_for_update().filter(workspace_id=workspace_id).first()
+        now = {_ORGANISE: organise, _CONFIRM: confirm}
+        before = {
+            _ORGANISE: row is not None and row.auto_organise,
+            _CONFIRM: row is not None and row.auto_confirm,
+        }
+        turned_on = [name for name, value in now.items() if value and not before[name]]
+        if organise or confirm:
+            if not _autopilot_allowed():
+                raise AutopilotError("forbidden")
+            if row is None or row.mode == AISettings.Mode.OFF:
+                raise AutopilotError("needs_ai")
+        if turned_on and not acknowledged:
+            raise AutopilotError("ack_required")
+        if row is not None:
+            row.auto_organise = organise
+            row.auto_confirm = confirm
+            row.save(update_fields=["auto_organise", "auto_confirm", "updated_at"])
+            for name, value in now.items():
+                if value != before[name]:
+                    _record_switch(workspace_id, actor, name, value)
+    return autopilot(workspace_id)
 
 
 def _audit_actor(actor: Actor) -> AuditActor:

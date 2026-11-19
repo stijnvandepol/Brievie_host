@@ -195,7 +195,7 @@ def test_switching_off_needs_no_consent(admin: Client, ws_a: Workspace) -> None:
     assert response.status_code == 200
     assert response.json() == {
         "mode": "off", "supplier": None, "host": None, "since": None, "has_api_key": False,
-        "model": None,
+        "model": None, "auto_organise": False, "auto_confirm": False, "autopilot_allowed": True,
     }  # fmt: skip
     assert [event.event for event in events(ws_a)] == ["granted", "switched_off"]
     # Switching on again asks again.

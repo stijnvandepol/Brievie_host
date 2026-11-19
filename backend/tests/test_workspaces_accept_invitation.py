@@ -134,7 +134,7 @@ def test_lookup_shows_the_ai_line_when_ai_is_on(ws_a: Workspace) -> None:
     token = invite(ws_a)
     assert lookup(Client(), token)[1]["ai"] == {
         "mode": "off", "supplier": None, "host": None, "since": None, "has_api_key": False,
-        "model": None,
+        "model": None, "auto_organise": False, "auto_confirm": False, "autopilot_allowed": True,
     }  # fmt: skip
     with workspace_context(ws_a.id):
         configure(
