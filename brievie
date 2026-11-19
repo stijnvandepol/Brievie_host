@@ -1,6 +1,6 @@
 #!/bin/sh
-# ./brievie: start, back-up, restore, status, sweep and the recovery sheet of a Brievie
-# server. Every piece of logic lives in the image's management commands; this script only
+# ./brievie: start, back-up, restore, update, status, sweep and the recovery sheet of a
+# Brievie server. Every piece of logic lives in the image's management commands; this script only
 # orders the docker calls, asks for input and prints plain Dutch.
 #
 # One installation is one checkout. The compose project and the image are worked out
@@ -17,6 +17,21 @@ set -eu
 umask 077
 
 here=$(CDPATH='' cd -P -- "$(dirname -- "$0")" 2>/dev/null && pwd -P) || here=""
+# ./brievie update runs from a copy, deploy/.update/brievie-running, because switching
+# the checkout replaces ./brievie itself. The copy names its folder in BRIEVIE_ROOT, and
+# that is honoured only for the copy that lies in that folder's deploy/.update.
+running_copy=""
+case $here in
+*/deploy/.update)
+	if [ -n "${BRIEVIE_ROOT:-}" ] && [ "$(basename -- "$0")" = brievie-running ]; then
+		root=$(CDPATH='' cd -P -- "$BRIEVIE_ROOT" 2>/dev/null && pwd -P) || root=""
+		if [ -n "$root" ] && [ "$root/deploy/.update" = "$here" ]; then
+			here=$root
+			running_copy=yes
+		fi
+	fi
+	;;
+esac
 case $here in
 /?*) ;;
 *)
@@ -59,6 +74,10 @@ restore_pending=""
 lock_taken=""
 restore_marked=""
 halfway_reported=""
+# Set from the moment an update stopped the server until the checkout is handed over:
+# any exit then starts the old version again (on_exit).
+update_live=""
+update_from=""
 restore_terminal() {
 	if [ -n "$saved_tty" ]; then
 		stty "$saved_tty" 2>/dev/null || true
@@ -75,7 +94,27 @@ on_exit() {
 		rm -rf "${here:?}/deploy/.restore"
 	fi
 	rm -f "${here:?}/deploy/.env.new.$$" "${here:?}/deploy/.restore/env.new.$$" \
-		"${here:?}/brievie-herstelblad.html.tmp.$$" "${here:?}/deploy/.restore-in-progress.new.$$"
+		"${here:?}/brievie-herstelblad.html.tmp.$$" "${here:?}/deploy/.restore-in-progress.new.$$" \
+		"${here:?}/deploy/.update/in-progress.new.$$" "${here:?}/deploy/.update/brievie-running.new.$$"
+	# An update stopped the server and did not get to the new version: the old one comes
+	# back, nothing was changed.
+	if [ -n "$update_live" ]; then
+		update_live=""
+		update_exit=1
+		# The fallback is mounted for its own calls only; deploy/.env decides again.
+		unset BRIEVIE_BACKUP_DIR
+		if [ "$exit_rc" -ge 128 ]; then
+			echo "Bijwerken afgebroken." >&9
+		fi
+		echo "Brievie wordt weer gestart op versie $update_from…" >&9
+		if quietly all compose_raw up -d --wait --no-build 2>/dev/null; then
+			rm -f "${here:?}/deploy/.update/in-progress"
+			echo "Er is niets bijgewerkt; Brievie draait weer op versie $update_from." >&9
+		else
+			rm -f "${here:?}/deploy/.update/in-progress"
+			echo "Er is niets bijgewerkt, maar Brievie kon niet opnieuw worden gestart. Typ ./brievie start." >&9
+		fi
+	fi
 	# Stopped after the restore began to replace things (an error or Ctrl-C): say where.
 	if [ "$exit_rc" -ne 0 ] && [ -n "$restore_marked" ] && [ -z "$halfway_reported" ]; then
 		report_halfway
@@ -84,7 +123,11 @@ on_exit() {
 		rm -f "${here:?}/deploy/.brievie-lock/started"
 		rmdir "${here:?}/deploy/.brievie-lock" 2>/dev/null || true
 	fi
+	if [ -n "$update_exit" ]; then
+		exit "$update_exit"
+	fi
 }
+update_exit=""
 # fd 9 is the terminal's stderr: a trap that fires while a step's stderr goes to its log
 # still reaches the user.
 exec 9>&2
@@ -105,6 +148,7 @@ Gebruik: ./brievie <opdracht>
                                   --separate-password, --keep-hostname,
                                   --skip-safety-backup (alleen als de vorige poging
                                   halverwege bleef steken).
+  ./brievie update [versie]       Werk Brievie bij naar de nieuwste versie (of naar die versie).
   ./brievie status                Laat zien hoe het met de back-ups gaat.
   ./brievie status --list         Laat de back-ups zien die je kunt terugzetten, met hun nummer.
   ./brievie sweep [--delete]      Zoek losse bestanden zonder document (en verwijder ze).
@@ -132,6 +176,11 @@ fail() {
 # Only one ./brievie per installation at a time (a restore's own safety back-up shares it).
 take_lock() {
 	if [ -n "${BRIEVIE_LOCK_HELD:-}" ]; then
+		# ./brievie update hands the lock to the new checkout's wrapper, which removes it.
+		if [ "${BRIEVIE_LOCK_HANDOVER:-}" = 1 ] && [ -d "${here:?}/deploy/.brievie-lock" ]; then
+			lock_taken=yes
+		fi
+		unset BRIEVIE_LOCK_HANDOVER
 		return 0
 	fi
 	if ! mkdir "${here:?}/deploy/.brievie-lock" 2>/dev/null; then
@@ -453,23 +502,21 @@ setup_installation() {
 	COMPOSE_PROJECT_NAME=$project
 	export COMPOSE_PROJECT_NAME
 
-	# A checkout with its own name never builds over the image another one runs.
-	image=${BRIEVIE_IMAGE:-}
-	if [ -z "$image" ]; then
-		image=$(unquote "$(env_value BRIEVIE_IMAGE)")
+	# The image: the user's own (BRIEVIE_IMAGE), else one per version and installation.
+	user_image=${BRIEVIE_IMAGE:-}
+	if [ -z "$user_image" ]; then
+		user_image=$(unquote "$(env_value BRIEVIE_IMAGE)")
 	fi
-	if [ -z "$image" ]; then
-		if [ "$project" = brievie ]; then
-			image=brievie/backend:local
-		else
-			image=brievie/backend:$project
-		fi
-	fi
-	if [ "$project" != brievie ] && [ "$image" = brievie/backend:local ]; then
+	if [ "$project" != brievie ] && [ "$user_image" = brievie/backend:local ]; then
 		fail "BRIEVIE_IMAGE=brievie/backend:local hoort bij de installatie met de naam brievie. Laat BRIEVIE_IMAGE weg (dan wordt het brievie/backend:$project) of kies een eigen naam; er is niets veranderd."
 	fi
-	BRIEVIE_IMAGE=$image
-	export BRIEVIE_IMAGE
+	# The version that runs: the pin in deploy/.env (start and update write it), else the
+	# checkout's. start and restore choose again, from the checkout.
+	pinned=$(unquote "$(env_value BRIEVIE_VERSION)")
+	if [ -n "$pinned" ] && ! valid_version "$pinned"; then
+		fail "BRIEVIE_VERSION in deploy/.env is geen versie (zoals 0.3.0). Zet de versie terug die draait, of haal de regel weg en typ ./brievie start; er is niets veranderd."
+	fi
+	choose_image "${pinned:-$(checkout_version)}"
 	# PostgreSQL is published on 127.0.0.1 only when this machine's deploy/.env asks for it
 	# (a developer's make test); an installation does not need it, and on a NAS the port
 	# is often taken.
@@ -492,6 +539,44 @@ setup_installation() {
 	caddy_config=$(cat "$here/deploy/Caddyfile" "$here/deploy/caddy-publish-root.sh" | cksum)
 	BRIEVIE_CADDY_CONFIG=$(printf '%s' "$caddy_config" | tr -s ' \t' '--')
 	export BRIEVIE_CADDY_CONFIG
+}
+
+# Whether $1 is a version X.Y.Z (no v, no leading zeros, at most four digits a part).
+valid_version() {
+	case $1 in
+	'' | *[!0-9.]*) return 1 ;;
+	esac
+	printf '%s\n' "$1" | grep -Eqx '(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})'
+}
+
+# The version of the checked-out code (backend/pyproject.toml), or nothing.
+checkout_version() {
+	found_version=$(sed -n 's/^version = "\([0-9.]*\)"$/\1/p' "${here:?}/backend/pyproject.toml" 2>/dev/null | head -n 1) || found_version=""
+	if valid_version "$found_version"; then
+		printf '%s\n' "$found_version"
+	fi
+}
+
+# The image of version $1 for this installation: brievie/backend:<version> for the
+# project brievie, brievie/backend:<version>-<project> for any other (two checkouts never
+# build over each other's image); `local` or the project name while no version is known.
+# The user's own BRIEVIE_IMAGE always wins.
+image_for() {
+	if [ -n "$user_image" ]; then
+		printf '%s\n' "$user_image"
+	elif [ "$project" = brievie ]; then
+		printf 'brievie/backend:%s\n' "${1:-local}"
+	elif [ -n "$1" ]; then
+		printf 'brievie/backend:%s-%s\n' "$1" "$project"
+	else
+		printf 'brievie/backend:%s\n' "$project"
+	fi
+}
+
+choose_image() {
+	image=$(image_for "$1")
+	BRIEVIE_IMAGE=$image
+	export BRIEVIE_IMAGE
 }
 
 # Whether host name $1 only reaches this computer: localhost, *.localhost or a loopback
@@ -724,6 +809,19 @@ store_env_copy() {
 
 cmd_start() {
 	[ $# -eq 0 ] || usage_error "./brievie start heeft geen extra woorden."
+	# An update that stopped halfway: after the switch to the new version only the update
+	# itself may go on; before it, nothing changed and this start brings Brievie back.
+	if [ -f "${here:?}/deploy/.update/in-progress" ]; then
+		if update_checked_out; then
+			report_unfinished_update
+			exit 1
+		fi
+		echo "Een eerdere update naar versie $(update_marker_value to) is afgebroken voordat er iets veranderde."
+		rm -f "${here:?}/deploy/.update/in-progress"
+	fi
+	# start runs the code that is checked out, and pins its version in deploy/.env.
+	start_version=$(checkout_version)
+	choose_image "$start_version"
 	claim_installation
 	bring_along
 	# The data is checked before anything is (re)created: build the image first if need be.
@@ -735,6 +833,10 @@ cmd_start() {
 	check_installation_id
 	if [ -z "$volume_id" ] && [ -n "$data_existed" ]; then
 		confirm_adopt
+	fi
+	if [ -n "$start_version" ] && [ "$(unquote "$(env_value BRIEVIE_VERSION)")" != "$start_version" ]; then
+		edit_env set BRIEVIE_VERSION "$start_version" env ||
+			fail "deploy/.env kon niet worden bijgewerkt. Controleer de rechten van de map deploy."
 	fi
 	echo "Brievie wordt gestart (en zo nodig bijgewerkt). Dat kan een paar minuten duren…"
 	quietly all compose_raw up -d --build --wait ||
@@ -829,7 +931,7 @@ next_step_for() {
 }
 
 cmd_backup() {
-	init="" same_disk="" separate="" check="" safety=""
+	init="" same_disk="" separate="" check="" safety="" label=""
 	for arg in "$@"; do
 		case $arg in
 		--init) init=yes ;;
@@ -838,6 +940,11 @@ cmd_backup() {
 		--check) check=yes ;;
 		# The safety back-up of a restore: kept 30 days, never removed by retention.
 		--safety) safety=yes ;;
+		# The safety back-up of an update, named pre-update-X.Y.Z (./brievie update only).
+		--label=pre-update-*)
+			label=${arg#--label=}
+			valid_version "${label#pre-update-}" || usage_error "Onbekend woord bij ./brievie backup: $arg"
+			;;
 		*) usage_error "Onbekend woord bij ./brievie backup: $arg" ;;
 		esac
 	done
@@ -846,6 +953,9 @@ cmd_backup() {
 	fi
 	if [ -n "$safety" ] && [ -n "$init$check" ]; then
 		usage_error "--safety hoort bij een gewone back-up."
+	fi
+	if [ -n "$label" ] && [ -z "$safety" ]; then
+		usage_error "--label hoort bij --safety."
 	fi
 
 	claim_installation
@@ -898,7 +1008,8 @@ cmd_backup() {
 	status=0
 	if [ -n "$safety" ]; then
 		# The run id of the safety back-up, for the restore that asked for it.
-		made=$(compose exec -T -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" keeper python manage.py backup --safety) || status=$?
+		made=$(compose exec -T -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" keeper python manage.py backup --safety \
+			${label:+--label "$label"}) || status=$?
 		human_lines "$made"
 		safety_id=$(machine_value safety_run_id "$made")
 		if [ -n "$safety_id" ]; then
@@ -1713,16 +1824,413 @@ EOF
 	echo "Herstel gelukt."
 }
 
+# --- update ---------------------------------------------------------------------------------
+
+update_marker="deploy/.update/in-progress"
+
+# The value of $1 in the marker of an unfinished update. Its keys (from, to, previous_ref,
+# run_id, kind, step, time) and steps (stopped, backed-up, checked-out) are read by every
+# later wrapper: they never change meaning.
+update_marker_value() {
+	env_value "$1" "${here:?}/$update_marker"
+}
+
+write_update_marker() {
+	{
+		printf 'from=%s\n' "$update_from"
+		printf 'to=%s\n' "$update_to"
+		printf 'previous_ref=%s\n' "$previous_ref"
+		printf 'run_id=%s\n' "$update_run_id"
+		printf 'kind=%s\n' "$update_kind"
+		printf 'step=%s\n' "$1"
+		printf 'time=%s\n' "$(date '+%d-%m-%Y %H:%M')"
+	} >"${here:?}/deploy/.update/in-progress.new.$$" &&
+		chmod 600 "${here:?}/deploy/.update/in-progress.new.$$" &&
+		mv "${here:?}/deploy/.update/in-progress.new.$$" "${here:?}/$update_marker"
+}
+
+# The commit of tag $1, or nothing.
+tag_commit() {
+	git -C "${here:?}" rev-parse -q --verify "$1^{commit}" 2>/dev/null || true
+}
+
+# Whether the unfinished update already switched the checkout: HEAD is no longer the
+# commit it started from (decided by HEAD, not by the step, so a kill between the switch
+# and writing the marker is still seen).
+update_checked_out() {
+	m_previous=$(update_marker_value previous_ref)
+	m_head=$(git -C "${here:?}" rev-parse -q --verify HEAD 2>/dev/null) || m_head=""
+	[ -n "$m_previous" ] && [ -n "$m_head" ] && [ "$m_head" != "$m_previous" ]
+}
+
+# The way back to the version before the update, on stdout: the old checkout, then the
+# back-up of the update restored over what the new version did.
+print_way_back() {
+	w_from=$(update_marker_value from)
+	w_to=$(update_marker_value to)
+	w_previous=$(update_marker_value previous_ref)
+	w_run=$(update_marker_value run_id)
+	w_ref=$w_previous
+	if [ -n "$w_previous" ] && [ "$(tag_commit "v$w_from")" = "$w_previous" ]; then
+		w_ref=v$w_from
+	else
+		w_ref=$(printf '%s' "$w_previous" | cut -c 1-12)
+	fi
+	echo "Terug naar versie $w_from (houd je herstelblad bij de hand):"
+	echo "  git checkout $w_ref"
+	echo "  ./brievie restore pre-update-$w_to --replace --skip-safety-backup"
+	if [ "$(update_marker_value kind)" = destination ]; then
+		echo "Die back-up staat op je back-upbestemming; ./brievie restore vraagt waar die is."
+	fi
+	if [ -n "$w_run" ]; then
+		echo "Het nummer van die back-up is $w_run."
+	fi
+	echo "Of probeer het opnieuw: ./brievie update $w_to"
+}
+
+report_unfinished_update() {
+	echo "Een eerdere update naar versie $(update_marker_value to) is niet afgemaakt (gestopt op $(update_marker_value time))."
+	print_way_back
+}
+
+# The release records for update_plan: per tag vX.Y.Z a line `--- vX.Y.Z` and that tag's
+# deploy/release.json. Tags without the file are left out.
+release_stream() {
+	git -C "${here:?}" tag -l 'v*' | while IFS= read -r tag; do
+		valid_version "${tag#v}" || continue
+		if git -C "${here:?}" cat-file -e "$tag:deploy/release.json" 2>/dev/null; then
+			printf '%s %s\n' '---' "$tag"
+			git -C "${here:?}" show "$tag:deploy/release.json"
+			printf '\n'
+		fi
+	done
+}
+
+# The highest version among the tags vX.Y.Z (no pre-releases), or nothing.
+newest_tag_version() {
+	git -C "${here:?}" tag -l 'v*' | sed 's/^v//' | while IFS= read -r version; do
+		if valid_version "$version"; then
+			printf '%s\n' "$version"
+		fi
+	done | sort -t . -k 1,1n -k 2,2n -k 3,3n | tail -n 1
+}
+
+# The pre-versions sentence, written here because an image from before versions has no
+# update_plan (the same text as apps.updates.release).
+refuse_before_versions() {
+	echo "Deze installatie is van vóór de versienummers. Werk één keer met de hand bij: git fetch --tags, git checkout v$1, ./brievie start. Daarna werkt ./brievie update. Er is niets veranderd." >&2
+	exit 1
+}
+
+# What was typed: one version, X.Y.Z or vX.Y.Z, checked before anything uses it.
+parse_update_args() {
+	target_arg=""
+	for arg in "$@"; do
+		case $arg in
+		-*) usage_error "Onbekend woord bij ./brievie update: $arg" ;;
+		*)
+			[ -z "$target_arg" ] || usage_error "Geef maar één versie."
+			target_arg=$arg
+			;;
+		esac
+	done
+	if [ -n "$target_arg" ] && ! valid_version "${target_arg#v}"; then
+		echo "Een versie ziet eruit als 0.3.0. Er is niets veranderd." >&2
+		exit 1
+	fi
+	target_arg=${target_arg#v}
+}
+
+# Hands the update to the wrapper of the checkout as it is now (the new version's), with
+# the lock: from here that file finishes the update.
+hand_over() {
+	update_live=""
+	lock_taken=""
+	# The next wrapper works out its own image (the new version's).
+	unset BRIEVIE_IMAGE
+	BRIEVIE_LOCK_HANDOVER=1
+	export BRIEVIE_LOCK_HANDOVER
+	exec sh "${here:?}/brievie" _update-finish
+}
+
+# The emergency back-up (design 7.3 step 4); sets update_run_id and update_kind.
+update_backup() {
+	label=pre-update-$update_to
+	if [ -n "$(env_value BRIEVIE_BACKUP_DIR)$(env_value BRIEVIE_BACKUP_REPOSITORY)" ]; then
+		update_kind=destination
+		echo "Eerst een back-up naar je back-upbestemming…"
+		backup_rc=0
+		backup_out=$(sh "$script_path" backup --safety "--label=$label") || backup_rc=$?
+		printf '%s\n' "$backup_out" | sed '/^[[:space:]]*$/d' | grep -v '^Veiligheidsback-up: ' || true
+		if [ "$backup_rc" -ne 0 ]; then
+			fail "De back-up vóór het bijwerken is mislukt."
+		fi
+		update_run_id=$(printf '%s\n' "$backup_out" | sed -n 's/^Veiligheidsback-up: \([0-9a-f-]*\) .*/\1/p' | tail -n 1)
+	else
+		update_kind=update
+		echo "Er is geen back-upbestemming ingesteld: eerst een noodback-up op deze computer…"
+		BRIEVIE_BACKUP_DIR=update-backup
+		export BRIEVIE_BACKUP_DIR
+		init_rc=0
+		compose run --rm --no-deps -T -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" admin python manage.py backup_init --update-fallback || init_rc=$?
+		if [ "$init_rc" -ne 0 ] && [ "$(step_code)" != already_initialised ]; then
+			unset BRIEVIE_BACKUP_DIR
+			fail "De noodback-up vóór het bijwerken kon niet worden klaargezet."
+		fi
+		rm -f "${here:?}/deploy/.brievie-step.log"
+		made_rc=0
+		made=$(compose run --rm --no-deps -T --user 10001 -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" admin python manage.py update_backup --label "$label") || made_rc=$?
+		unset BRIEVIE_BACKUP_DIR
+		human_lines "$made"
+		if [ "$made_rc" -ne 0 ]; then
+			fail "De back-up vóór het bijwerken is mislukt."
+		fi
+		update_run_id=$(machine_value run_id "$made")
+	fi
+	if ! valid_run_id "$update_run_id"; then
+		fail "Het nummer van de back-up vóór het bijwerken kwam niet terug."
+	fi
+}
+
+cmd_update() {
+	parse_update_args "$@"
+	refuse_while_halfway
+	command -v git >/dev/null 2>&1 ||
+		fail "git ontbreekt op deze computer; ./brievie update haalt de nieuwe versie met git op. Er is niets veranderd."
+	[ -d "${here:?}/.git" ] || [ -f "${here:?}/.git" ] ||
+		fail "Deze map is geen git-checkout van Brievie; werk dan met de hand bij. Er is niets veranderd."
+	claim_installation
+
+	# An update that stopped halfway goes first.
+	if [ -f "${here:?}/$update_marker" ]; then
+		m_to=$(update_marker_value to)
+		if update_checked_out; then
+			if [ "$(git -C "${here:?}" rev-parse HEAD)" = "$(tag_commit "v$m_to")" ] &&
+				{ [ -z "$target_arg" ] || [ "$target_arg" = "$m_to" ]; }; then
+				echo "Een eerdere update naar versie $m_to is niet afgemaakt; die wordt nu afgemaakt."
+				hand_over
+			fi
+			report_unfinished_update
+			exit 1
+		fi
+		update_from=$(update_marker_value from)
+		echo "Een eerdere update naar versie $m_to is afgebroken voordat er iets veranderde. Brievie wordt eerst weer gestart…"
+		quietly all compose_raw up -d --wait --no-build ||
+			fail "Brievie kon niet opnieuw worden gestart. Typ ./brievie start en daarna opnieuw ./brievie update."
+		rm -f "${here:?}/$update_marker"
+	fi
+
+	# 1. Check: nothing may change here.
+	if [ -n "$user_image" ]; then
+		fail "Deze installatie gebruikt een eigen image (BRIEVIE_IMAGE). Werk dan met de hand bij. Er is niets veranderd."
+	fi
+	installed=$pinned
+	if [ -z "$installed" ]; then
+		if quietly git -C "${here:?}" fetch --tags --quiet origin; then
+			refuse_before_versions "$(newest_tag_version)"
+		fi
+		refuse_before_versions 0.2.0
+	fi
+	checked_out=$(checkout_version)
+	if [ "$checked_out" != "$installed" ]; then
+		fail "Deze map staat op versie ${checked_out:-onbekend}, maar Brievie draait versie $installed. Typ ./brievie start om de versie van deze map te starten, of git checkout v$installed. Er is niets veranderd."
+	fi
+	if [ -n "$(git -C "${here:?}" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+		fail "Er zijn lokale wijzigingen in deze map (git status). ./brievie update werkt alleen op een map zonder eigen wijzigingen. Er is niets veranderd."
+	fi
+	if [ -n "$(git -C "${here:?}" rev-list HEAD --not --remotes --tags 2>/dev/null | head -n 1)" ]; then
+		fail "Deze map heeft eigen commits die niet in Brievie zelf staan; ./brievie update zou ze opzijzetten. Er is niets veranderd."
+	fi
+	if ! running postgres || ! running keeper; then
+		fail "Brievie draait niet. Start het eerst met ./brievie start en typ daarna opnieuw ./brievie update. Er is niets veranderd."
+	fi
+	if ! docker image inspect "$image" >/dev/null 2>&1; then
+		fail "Het image van versie $installed ontbreekt ($image). Typ eerst ./brievie start. Er is niets veranderd."
+	fi
+	check_installation_id
+	echo "De versies worden opgehaald…"
+	# No --force: a tag that moved upstream makes the fetch fail, and nothing is guessed.
+	quietly git -C "${here:?}" fetch --tags --quiet origin ||
+		fail "De versies konden niet worden opgehaald (geen internet, of een versie die achteraf is veranderd). Er is niets veranderd."
+	update_to=${target_arg:-$(newest_tag_version)}
+	if [ -z "$update_to" ]; then
+		fail "Er is geen versie gevonden om naar bij te werken. Er is niets veranderd."
+	fi
+	# shellcheck disable=SC2016 # $PGDATA is expanded by the shell inside the container
+	pg_major=$(compose_raw exec -T postgres sh -c 'cat "$PGDATA/PG_VERSION"' 2>>"${here:?}/deploy/.brievie-last.log") || pg_major=""
+	pg_major=$(printf '%s' "$pg_major" | tr -d ' \r\n')
+	case $pg_major in
+	'' | *[!0-9]*) fail "De versie van de database kon niet worden bepaald. Er is niets veranderd." ;;
+	esac
+	stream=$(release_stream)
+	plan_rc=0
+	# The image's own build-time values: update_plan needs no database and no network.
+	plan=$(printf '%s\n' "$stream" | {
+		SECRET_KEY=$build_secret_key
+		DATABASE_URL=$build_database_url
+		export SECRET_KEY DATABASE_URL
+		quietly docker run --rm -i --network none -e SECRET_KEY -e DATABASE_URL -e BRIEVIE_WRAPPER=1 \
+			-e "BRIEVIE_LOG_LEVEL=$log_level" "$image" python manage.py update_plan \
+			--installed "$installed" --target "$update_to" --postgres-major "$pg_major"
+	}) || plan_rc=$?
+	if [ "$plan_rc" -eq 1 ]; then
+		rm -f "${here:?}/deploy/.brievie-step.log"
+		exit 1
+	elif [ "$plan_rc" -ne 0 ]; then
+		fail "Er kon niet worden bepaald of deze update mag. Er is niets veranderd."
+	fi
+	case $plan in
+	already)
+		echo "Je hebt al versie $installed."
+		exit 0
+		;;
+	allowed) ;;
+	*) fail "Er kon niet worden bepaald of deze update mag. Er is niets veranderd." ;;
+	esac
+	compose run --rm --no-deps -T --user 10001 -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" admin python manage.py update_preflight ||
+		{
+			show_tail
+			exit 1
+		}
+
+	# The typed word before the point of no return (piped input never confirms).
+	echo "Brievie wordt bijgewerkt van versie $installed naar $update_to. Lees eerst wat er nieuw is: CHANGELOG.md van versie $update_to."
+	echo "Brievie is daarbij een tijdje niet bereikbaar: eerst wordt de nieuwe versie gebouwd, dan gestopt en een back-up gemaakt."
+	answer=${BRIEVIE_UPDATE_CONFIRM:-}
+	if [ -z "$answer" ]; then
+		if [ ! -t 0 ]; then
+			fail "Er is geen terminal om BIJWERKEN te typen. Zet BRIEVIE_UPDATE_CONFIRM=BIJWERKEN als je dit wilt. Er is niets veranderd."
+		fi
+		ask "Typ het woord BIJWERKEN om door te gaan:"
+	fi
+	if [ "$answer" != BIJWERKEN ]; then
+		fail "Je typte geen BIJWERKEN. Er is niets veranderd."
+	fi
+
+	# 2. Fetch: build the new version from its tag; the server keeps running.
+	target_image=$(image_for "$update_to")
+	echo "Versie $update_to wordt gebouwd. Dat duurt een paar minuten; Brievie draait gewoon door…"
+	if [ -z "$(tag_commit "v$update_to")" ] ||
+		! git -C "${here:?}" archive --format=tar "v$update_to" |
+		quietly all docker build --file deploy/Dockerfile --tag "$target_image" -; then
+		fail "Het bouwen van versie $update_to is mislukt. Er is niets veranderd; Brievie draait gewoon door."
+	fi
+
+	# 3. Stop. From here every exit before the switch starts the old version again.
+	update_from=$installed
+	previous_ref=$(git -C "${here:?}" rev-parse HEAD)
+	update_run_id="" update_kind=""
+	if ! mkdir -p "${here:?}/deploy/.update" || ! write_update_marker stopped; then
+		fail "De voortgang kon niet worden vastgelegd (deploy/.update). Er is niets veranderd."
+	fi
+	update_live=yes
+	echo "Brievie wordt gestopt…"
+	compose stop api worker caddy || fail "Brievie kon niet worden gestopt."
+	store_env_copy
+
+	# 4. Back up, then stop the keeper too.
+	update_backup
+	write_update_marker backed-up || fail "De voortgang kon niet worden vastgelegd."
+	echo "Back-up van versie $installed: pre-update-$update_to (nummer $update_run_id)."
+	compose stop keeper || fail "De back-updienst kon niet worden gestopt."
+
+	# 5. Switch the checkout; the new version's wrapper does the rest.
+	echo "De map wordt op versie $update_to gezet…"
+	if ! quietly git -C "${here:?}" -c advice.detachedHead=false checkout --quiet "v$update_to"; then
+		fail "De map kon niet op versie $update_to worden gezet (staat er een bestand in de weg?)."
+	fi
+	write_update_marker checked-out || true
+	hand_over
+}
+
+# The way back, once the new version's code is in place: Brievie stays stopped.
+finish_failed() {
+	printf '%s\n' "$1" >&2
+	show_tail
+	quietly compose_raw stop api worker keeper caddy || true
+	echo "Het bijwerken naar versie $finish_to is niet gelukt. Brievie is gestopt."
+	print_way_back
+	exit 3
+}
+
+# Steps 5 and 6 of an update, by the wrapper of the new version. Its only input is the
+# marker of ./brievie update.
+cmd_update_finish() {
+	[ $# -eq 0 ] || usage_error "./brievie _update-finish heeft geen extra woorden."
+	if [ ! -f "${here:?}/$update_marker" ]; then
+		usage_error "./brievie _update-finish hoort bij ./brievie update; er is geen update bezig."
+	fi
+	finish_from=$(update_marker_value from)
+	finish_to=$(update_marker_value to)
+	finish_run=$(update_marker_value run_id)
+	if ! valid_version "$finish_from" || ! valid_version "$finish_to"; then
+		fail "De voortgang van de update (deploy/.update/in-progress) is onleesbaar."
+	fi
+	if [ "$(git -C "${here:?}" rev-parse HEAD)" != "$(tag_commit "v$finish_to")" ] ||
+		[ "$(checkout_version)" != "$finish_to" ]; then
+		report_unfinished_update
+		exit 1
+	fi
+	choose_image "$finish_to"
+	claim_installation
+	bring_along
+	if ! docker image inspect "$image" >/dev/null 2>&1; then
+		echo "Versie $finish_to wordt gebouwd…"
+		quietly all docker build --file "${here:?}/deploy/Dockerfile" --tag "$image" "${here:?}" ||
+			finish_failed "Het bouwen van versie $finish_to is mislukt."
+	fi
+	edit_env set BRIEVIE_VERSION "$finish_to" env ||
+		finish_failed "deploy/.env kon niet worden bijgewerkt."
+	echo "De database wordt bijgewerkt…"
+	compose run --rm migrate || finish_failed "Het bijwerken van de database is mislukt."
+	echo "Brievie wordt gestart…"
+	quietly all compose_raw up -d --wait --no-build || finish_failed "Brievie is niet goed gestart."
+	compose exec -T api python manage.py check_health --expect-version "$finish_to" ||
+		finish_failed "Brievie antwoordt niet goed na het bijwerken."
+	if ! compose exec -T api python manage.py record_update --from "$finish_from" --to "$finish_to" \
+		${finish_run:+--backup-run "$finish_run"} >/dev/null; then
+		echo "Bijgewerkt, maar het vastleggen lukte niet. ./brievie status laat deze update daarom niet zien."
+	fi
+	kind=$(update_marker_value kind)
+	rm -f "${here:?}/$update_marker"
+	echo "Bijgewerkt naar versie $finish_to."
+	if [ "$kind" = update ]; then
+		echo "De back-up van versie $finish_from (pre-update-$finish_to) is een noodback-up op deze computer, in het Docker-volume ${project}_update-backup. Hij telt niet als back-up."
+	else
+		echo "De back-up van versie $finish_from staat op je back-upbestemming: pre-update-$finish_to (nummer $finish_run)."
+	fi
+}
+
 command=${1:-help}
 case $command in
 help | -h | --help)
 	usage
 	exit 0
 	;;
-start | backup | restore | status | sweep | recovery-sheet) ;;
+start | backup | restore | status | sweep | recovery-sheet | update | _update-finish) ;;
 *) usage_error "Onbekende opdracht: $command" ;;
 esac
 shift
+# The file that runs: ./brievie, or the update's running copy.
+script_path=$here/brievie
+if [ -n "$running_copy" ]; then
+	script_path=$here/deploy/.update/brievie-running
+fi
+# ./brievie update runs from a copy of itself: the switch to the new version replaces
+# ./brievie. The version typed is checked first; nothing else happens before the copy.
+if [ "$command" = update ] && [ -z "$running_copy" ]; then
+	parse_update_args "$@"
+	mkdir -p "${here:?}/deploy/.update" ||
+		fail "De map deploy/.update kon niet worden gemaakt. Controleer de rechten van de map deploy; er is niets veranderd."
+	if ! cp "${here:?}/brievie" "${here:?}/deploy/.update/brievie-running.new.$$" ||
+		! chmod 700 "${here:?}/deploy/.update/brievie-running.new.$$" ||
+		! mv "${here:?}/deploy/.update/brievie-running.new.$$" "${here:?}/deploy/.update/brievie-running"; then
+		fail "./brievie kon zichzelf niet klaarzetten in deploy/.update. Er is niets veranderd."
+	fi
+	BRIEVIE_ROOT=$here
+	export BRIEVIE_ROOT
+	exec sh "${here:?}/deploy/.update/brievie-running" update "$@"
+fi
 setup_installation
 take_lock
 start_log
@@ -1736,4 +2244,6 @@ restore) cmd_restore "$@" ;;
 status) cmd_status "$@" ;;
 sweep) cmd_sweep "$@" ;;
 recovery-sheet) cmd_recovery_sheet "$@" ;;
+update) cmd_update "$@" ;;
+_update-finish) cmd_update_finish "$@" ;;
 esac
