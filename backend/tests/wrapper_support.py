@@ -35,6 +35,7 @@ class Call(TypedDict, total=False):
     stdin: str | int
     image_env: str
     backup_dir_env: str
+    attest_env: str
 
 
 DEPLOY_FILES = (
@@ -49,7 +50,7 @@ DEPLOY_FILES = (
 )
 
 FAKE_DOCKER = """#!{python}
-import json, os, signal, sys
+import json, os, signal, sys, time
 
 argv = sys.argv[1:]
 joined = " ".join(argv)
@@ -57,12 +58,19 @@ entry = {{"argv": argv}}
 if "-i" in argv or "store_env_copy" in argv or "psql" in argv or argv[:1] == ["build"]:
     data = sys.stdin.buffer.read()
     entry["stdin"] = data.decode("utf-8", "replace") if argv[:1] != ["build"] else len(data)
+entry["attest_env"] = os.environ.get("BUILDX_NO_DEFAULT_ATTESTATIONS", "<unset>")
 if argv[:1] == ["compose"]:
     entry["image_env"] = os.environ.get("BRIEVIE_IMAGE", "")
     entry["backup_dir_env"] = os.environ.get("BRIEVIE_BACKUP_DIR", "<unset>")
 with open(os.environ["FAKE_DOCKER_LOG"], "a") as log:
     log.write(json.dumps(entry) + "\\n")
 
+sleep_at = os.environ.get("FAKE_SLEEP_AT", "")
+if sleep_at and sleep_at in joined:
+    # A Docker that hangs for a while (a credential helper that does not answer).
+    time.sleep(float(os.environ.get("FAKE_SLEEP_SECONDS", "3")))
+    with open(os.environ["FAKE_DOCKER_LOG"], "a") as log:
+        log.write(json.dumps({{"argv": ["<done>", *argv]}}) + "\\n")
 kill_at = os.environ.get("FAKE_KILL_AT", "")
 if kill_at and kill_at in joined:
     # Ctrl-C: the terminal sends SIGINT to the whole process group of ./brievie.

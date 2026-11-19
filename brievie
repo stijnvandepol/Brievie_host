@@ -56,6 +56,19 @@ verbose=""
 case ${BRIEVIE_VERBOSE:-} in
 1 | ja | yes | true) verbose=yes ;;
 esac
+# No default provenance attestation on the images built here: it holds the build's time,
+# so with Docker's containerd image store every build of unchanged code gets a new image
+# id and compose recreates every service on each start (docs.docker.com/build/metadata/
+# attestations). An environment variable, not a compose `build.provenance` key: older
+# Compose versions on a NAS refuse keys they do not know. Released images keep theirs.
+BUILDX_NO_DEFAULT_ATTESTATIONS=${BUILDX_NO_DEFAULT_ATTESTATIONS:-1}
+export BUILDX_NO_DEFAULT_ATTESTATIONS
+# After how many seconds of one build or start ./brievie says that Docker is slow.
+slow_seconds=${BRIEVIE_SLOW_SECONDS:-600}
+case $slow_seconds in
+'' | *[!0-9]* | 0) slow_seconds=600 ;;
+esac
+watchdog=""
 # The level the management commands run with (the services keep their own).
 log_level=WARNING
 if [ -n "$verbose" ]; then
@@ -90,6 +103,7 @@ restore_terminal() {
 on_exit() {
 	exit_rc=$?
 	restore_terminal
+	stop_watchdog
 	if [ -n "$swap_stamp" ] && [ ! -e "${here:?}/deploy/.env" ]; then
 		mv "${here:?}/deploy/.env.before-restore-$swap_stamp" "${here:?}/deploy/.env" 2>/dev/null || true
 	fi
@@ -317,6 +331,39 @@ end_step() {
 	last_code=$(step_code)
 	if [ "$1" -eq 0 ]; then
 		rm -f "${here:?}/deploy/.brievie-step.log"
+	fi
+}
+
+# Runs "$@" (a build, a pull or a start). When it still runs after $slow_seconds, one
+# line says that Docker is slow and what that means; $1 is the sentence about stopping.
+# It never stops anything itself: a hung credential helper or registry is Docker's, and
+# only the user decides to wait or press Ctrl-C.
+with_watchdog() {
+	wd_stop=$1
+	shift
+	(
+		# The sleep holds none of this script's output: a caller reading it is not kept
+		# waiting after the script ends.
+		sleep "$slow_seconds" >/dev/null 2>&1 9>&-
+		if [ "$slow_seconds" -ge 120 ]; then
+			wd_long="$((slow_seconds / 60)) minuten"
+		else
+			wd_long="$slow_seconds seconden"
+		fi
+		echo "Docker is al $wd_long bezig zonder klaar te zijn. Dit ligt meestal aan Docker zelf (bijvoorbeeld het inloggen bij een registry, of een trage verbinding). Je kunt wachten, of stoppen met Ctrl-C: $wd_stop" >&9
+	) </dev/null >/dev/null 2>&1 &
+	watchdog=$!
+	wd_rc=0
+	"$@" || wd_rc=$?
+	stop_watchdog
+	return "$wd_rc"
+}
+
+stop_watchdog() {
+	if [ -n "$watchdog" ]; then
+		kill "$watchdog" 2>/dev/null || true
+		wait "$watchdog" 2>/dev/null || true
+		watchdog=""
 	fi
 }
 
@@ -848,7 +895,7 @@ cmd_start() {
 	# The data is checked before anything is (re)created: build the image first if need be.
 	if ! docker image inspect "$image" >/dev/null 2>&1; then
 		echo "Brievie wordt gebouwd. Dat duurt een paar minuten…"
-		quietly all compose_raw build ||
+		with_watchdog "dan is er niets veranderd. Typ later opnieuw ./brievie start." quietly all compose_raw build ||
 			fail "Brievie kon niet worden gebouwd. Typ daarna opnieuw ./brievie start."
 	fi
 	check_installation_id
@@ -860,7 +907,7 @@ cmd_start() {
 			fail "deploy/.env kon niet worden bijgewerkt. Controleer de rechten van de map deploy."
 	fi
 	echo "Brievie wordt gestart (en zo nodig bijgewerkt). Dat kan een paar minuten duren…"
-	quietly all compose_raw up -d --build --wait ||
+	with_watchdog "typ daarna opnieuw ./brievie start." quietly all compose_raw up -d --build --wait ||
 		fail "Brievie is niet goed gestart. Typ daarna opnieuw ./brievie start."
 	ensure_backup_role ||
 		fail "De database kon niet worden bijgewerkt voor de back-up. Lees de melding hierboven."
@@ -1583,7 +1630,7 @@ cmd_restore() {
 	# 2. Open the back-up, outside compose: nothing is started and no volume is made.
 	if ! docker image inspect "$image" >/dev/null 2>&1; then
 		echo "Brievie wordt eerst gebouwd. Dat duurt een paar minuten."
-		quietly all docker build -f "$here/deploy/Dockerfile" -t "$image" "$here" ||
+		with_watchdog "er is dan nog niets teruggezet." quietly all docker build -f "$here/deploy/Dockerfile" -t "$image" "$here" ||
 			fail "Brievie kon niet worden gebouwd. Typ daarna opnieuw ./brievie restore."
 	fi
 	restore_pending=yes
@@ -2172,7 +2219,8 @@ cmd_update() {
 	echo "Versie $update_to wordt gebouwd. Dat duurt een paar minuten; Brievie draait gewoon door…"
 	if [ -z "$(tag_commit "v$update_to")" ] ||
 		! git -C "${here:?}" archive --format=tar "v$update_to" |
-		quietly all docker build --file deploy/Dockerfile --tag "$target_image" -; then
+		with_watchdog "er is dan niets veranderd en Brievie draait gewoon door." \
+			quietly all docker build --file deploy/Dockerfile --tag "$target_image" -; then
 		fail "Het bouwen van versie $update_to is mislukt. Er is niets veranderd; Brievie draait gewoon door."
 	fi
 
@@ -2238,7 +2286,8 @@ cmd_update_finish() {
 	bring_along
 	if ! docker image inspect "$image" >/dev/null 2>&1; then
 		echo "Versie $finish_to wordt gebouwd…"
-		quietly all docker build --file "${here:?}/deploy/Dockerfile" --tag "$image" "${here:?}" ||
+		with_watchdog "daarna staat hieronder de weg terug." \
+			quietly all docker build --file "${here:?}/deploy/Dockerfile" --tag "$image" "${here:?}" ||
 			finish_failed "Het bouwen van versie $finish_to is mislukt."
 	fi
 	edit_env set BRIEVIE_VERSION "$finish_to" env ||

@@ -4,7 +4,7 @@ For a home user with Brievie on a NAS or a Mac, and for the admin of a small com
 Simple things come first, advanced things last. Run every command in the folder where
 you installed Brievie. Sections 1 to 12 are about back-ups, 13 about pairing a phone from
 a link, 14 to 19 about people: inviting, roles, removing, sessions, the log and the
-export. Section 20 is about updating Brievie.
+export. Section 20 is about updating Brievie, 21 about Docker itself when it is slow.
 
 ## 1. In one minute
 
@@ -586,3 +586,26 @@ the way back typed literally) and with a fake Docker in the test suite. Not yet 
 an update on a real NAS or Raspberry Pi (building takes long there, and needs about
 4 GB free), an update interrupted by a power cut on real hardware, an update with a
 remote destination, and two releases in a row over months.
+
+## 21. When Docker is slow or seems stuck
+
+**`./brievie start` (or `update`, or `restore`) prints "Docker is al 10 minuten bezig
+zonder klaar te zijn" and nothing else happens.** `./brievie` waits for Docker and never
+stops it by itself; after ten minutes it says so once. The usual cause is Docker, not
+Brievie: on a Mac with Docker Desktop the credential helper (`docker-credential-desktop`)
+can stop answering when Docker looks up the base image, and the build then waits without
+end. What to do:
+
+1. Press Ctrl-C. During `./brievie start` nothing is lost; during `./brievie update` the
+   build happens before Brievie is stopped, so Brievie keeps running.
+2. Restart Docker Desktop (or sign out and in again in Docker Desktop), or run
+   `docker pull python:3.13-slim` to see whether Docker itself answers.
+3. Type the command again.
+
+`BRIEVIE_SLOW_SECONDS` sets after how many seconds the line appears (default 600).
+
+**Every `./brievie start` restarted all services, although nothing changed.** That was a
+build attestation with the build time in it, which gave every build a new image id with
+Docker's containerd image store. `./brievie` now builds without the default attestation
+(`BUILDX_NO_DEFAULT_ATTESTATIONS=1`), so a start without changes leaves the services
+running. If you build with `docker compose build` yourself, set that variable too.

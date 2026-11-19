@@ -9,6 +9,7 @@ import os
 import shutil
 import stat
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -329,7 +330,9 @@ def test_ctrl_c_during_the_backup_restarts_the_old_version(
     result = update_install.run("update", shell=shell, FAKE_KILL_AT="update_backup")
 
     assert result.returncode == 1
-    assert "Bijwerken afgebroken." in result.stderr
+    # The shell sees the signal and the step's failure in either order (under load the
+    # failure first): both end in the same place, the old version running again.
+    assert "Bijwerken afgebroken." in result.stderr or "mislukt" in result.stderr
     assert "Brievie draait weer op versie 0.2.0" in result.stderr
     assert update_install.index("up -d --wait --no-build") > update_install.index("update_backup")
     assert update_install.head() == before_head
@@ -630,7 +633,9 @@ def test_ctrl_c_during_the_migration_prints_the_way_back(update_install: UpdateI
     result = update_install.run("update", FAKE_KILL_AT="run --rm migrate")
 
     assert result.returncode != 0
-    way_back_lines(result.stderr)
+    # Printed by the exit trap (stderr) or, when the shell sees the failed step before
+    # the signal, by the failure path (stdout): the way back either way.
+    way_back_lines(result.stdout + result.stderr)
     assert update_install.marker.exists()
     assert not (update_install.root / "deploy" / ".brievie-lock").exists()
 
@@ -721,3 +726,56 @@ def test_status_shows_the_last_update(update_install: UpdateInstall) -> None:
     assert result.returncode == 0, result.stderr
     order_of(update_install, "backup_status", "update_status")
     assert "Laatst bijgewerkt: 0.2.0 → 0.3.0" in result.stdout
+
+
+# --- Docker itself: attestations and a step that hangs --------------------------------------
+
+
+@pytest.mark.parametrize("command", [("start",), ("update",)])
+def test_local_builds_get_no_default_attestation(
+    update_install: UpdateInstall, command: tuple[str, ...]
+) -> None:
+    # A provenance attestation holds the build time: with the containerd image store
+    # every build would get a new image id and compose would recreate every service.
+    result = update_install.run(*command)
+
+    assert result.returncode == 0, result.stderr
+    assert {c["attest_env"] for c in update_install.calls()} == {"1"}
+
+
+def test_a_slow_start_gets_one_honest_line_and_is_not_stopped(
+    update_install: UpdateInstall,
+) -> None:
+    result = update_install.run(
+        "start", FAKE_SLEEP_AT="up -d --build", FAKE_SLEEP_SECONDS="3", BRIEVIE_SLOW_SECONDS="1"
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stderr.count("Docker is al 1 seconden bezig") == 1
+    assert "Ctrl-C" in result.stderr
+    # The hanging call ran to its end; nothing was killed.
+    assert update_install.has("<done> compose")
+
+
+def test_a_slow_build_in_an_update_happens_before_anything_stops(
+    update_install: UpdateInstall,
+) -> None:
+    result = update_install.run(
+        "update", FAKE_SLEEP_AT="build --file", FAKE_SLEEP_SECONDS="3", BRIEVIE_SLOW_SECONDS="1"
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Brievie draait gewoon door" in result.stderr
+    assert update_install.index("<done> build") < update_install.index("stop api worker caddy")
+
+
+def test_a_quick_step_says_nothing_and_leaves_no_waiting_behind(
+    update_install: UpdateInstall,
+) -> None:
+    started = time.monotonic()
+    result = update_install.run("start", BRIEVIE_SLOW_SECONDS="60")
+
+    assert result.returncode == 0, result.stderr
+    assert "Docker is al" not in result.stderr
+    # The watchdog's sleep holds no pipe of ./brievie: the run ends when the work does.
+    assert time.monotonic() - started < 45

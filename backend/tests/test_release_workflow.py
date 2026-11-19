@@ -163,3 +163,21 @@ def test_no_expression_reaches_a_shell_directly() -> None:
     # Values from the event go through env:, never into a run: script.
     for block in re.findall(r"run: \|\n((?:\s{10,}.*\n)+)", WORKFLOW):
         assert "${{" not in block
+
+
+def test_local_builds_have_no_default_attestation_but_releases_keep_theirs() -> None:
+    # A local build's provenance holds its build time, which changes the image id of
+    # unchanged code under the containerd image store (every start recreated every
+    # service). The wrapper turns the default off for its own builds through the
+    # environment; compose gets no `provenance:` key, which older Compose refuses.
+    wrapper = (ROOT / "brievie").read_text()
+    assert re.search(
+        r"^BUILDX_NO_DEFAULT_ATTESTATIONS=\$\{BUILDX_NO_DEFAULT_ATTESTATIONS:-1\}\n"
+        r"export BUILDX_NO_DEFAULT_ATTESTATIONS$",
+        wrapper,
+        re.M,
+    )
+    compose = (ROOT / "deploy" / "docker-compose.yml").read_text()
+    assert "provenance:" not in compose
+    assert "BUILDX_NO_DEFAULT_ATTESTATIONS" not in WORKFLOW
+    assert "actions/attest-build-provenance@" in job("publish")
