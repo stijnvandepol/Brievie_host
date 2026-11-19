@@ -1015,3 +1015,11 @@ DELETE" that "AI settings in the web interface" left open is done for the consen
     on existing installs and after every restore. Kept read-write until that is solved
     and checked in a real stack (for example: the one-shot migrate step makes the
     directory, the image creates it for new volumes).
+
+## 2026-11-19: CI hardening
+
+Tools that only run in CI; none of them reaches the image or the running stack. Every
+third-party action is pinned to a full commit SHA, the version in a trailing comment;
+Dependabot (github-actions) proposes the updates.
+
+- **CodeQL** (`github/codeql-action` v4.39.3, `.github/workflows/codeql.yml`): static analysis of Python, TypeScript and the workflows with the `security-extended` suite, on pushes and pull requests to `main` and weekly. Results go to the repository's code scanning alerts. Dropped: Semgrep (a second rule set to maintain), GitHub's default setup (configured in the repository settings, so not reviewable in a pull request).
