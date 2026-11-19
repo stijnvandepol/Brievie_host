@@ -1,0 +1,166 @@
+name: Release
+
+# A release is a tag vX.Y.Z on a commit whose backend/pyproject.toml, deploy/release.json
+# and newest CHANGELOG.md entry all say X.Y.Z (.github/scripts/release-check.py). The
+# tag is the owner's step; nothing here creates one. On such a tag this workflow builds
+# the backend image for amd64 and arm64, scans it, pushes it to the GitHub Container
+# Registry with a build provenance attestation, and makes the GitHub release from the
+# CHANGELOG section. A run by hand (workflow_dispatch) checks, builds and scans without
+# publishing anything: the proof before the first tag.
+#
+# Only a tag pushed to this repository starts the publishing jobs: there is no
+# pull_request trigger, so a fork never reaches a token that can write. Every job gets
+# only the rights it needs; checkouts keep no credentials. The installation still builds
+# its image locally until compose moves to these images (U2).
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+  workflow_dispatch:
+
+permissions: {}
+
+# One release at a time per ref; a running release is never cancelled half-way.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/brievie-backend
+
+jobs:
+  # The version everywhere agrees, and the tag (when there is one) names it.
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Tag, pyproject, release.json and CHANGELOG say one version
+        id: check
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT" = push ]; then
+            set -- --tag "$REF_NAME"
+          fi
+          python3 .github/scripts/release-check.py "$@" --notes "$RUNNER_TEMP/notes.md" >>"$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/notes.md"
+
+  # Read-only: both architectures build, the image knows its version, and the scan
+  # finds nothing fixable. On every run, before anything is published.
+  scan:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build for arm64 (not kept)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/arm64
+          push: false
+      - name: Build for amd64
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: brievie/backend:release-scan
+      - name: The image reports the release's version
+        run: |
+          got=$(docker run --rm --network none brievie/backend:release-scan \
+            python -c 'import tomllib; print(tomllib.load(open("/app/pyproject.toml", "rb"))["project"]["version"])')
+          echo "$got"
+          test "$got" = "$VERSION"
+      - name: Scan the image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.2
+          image-ref: brievie/backend:release-scan
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          trivyignores: .trivyignore.yaml
+
+  # Only on a tag: build both architectures again and push them under the version (a
+  # fixed tag, never `latest`), with a provenance attestation.
+  publish:
+    if: ${{ github.event_name == 'push' }}
+    needs: [check, scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Log in to the GitHub Container Registry
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push both architectures
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          tags: ${{ env.IMAGE }}:${{ env.VERSION }}
+      - name: Attest the build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+  # The GitHub release, with the CHANGELOG section as its text, after the image is out.
+  release:
+    if: ${{ github.event_name == 'push' }}
+    needs: [check, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Make the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF_NAME: ${{ github.ref_name }}
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          python3 .github/scripts/release-check.py --tag "$REF_NAME" --notes "$RUNNER_TEMP/notes.md"
+          gh release create "$REF_NAME" --verify-tag --title "Brievie $VERSION" --notes-file "$RUNNER_TEMP/notes.md"

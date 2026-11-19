@@ -1,0 +1,165 @@
+"""The release workflow and its version check (.github/workflows/release.yml).
+
+Publishing itself only a real tag can prove. These tests run the version check against
+copies of the release files in tmp_path and read the workflow as text: what triggers it,
+which job may write what, and that a run by hand publishes nothing.
+"""
+
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[2]
+SCRIPT = ROOT / ".github" / "scripts" / "release-check.py"
+WORKFLOW = (ROOT / ".github" / "workflows" / "release.yml").read_text()
+FILES = ("backend/pyproject.toml", "deploy/release.json", "CHANGELOG.md")
+
+
+@pytest.fixture(autouse=True)
+def _database() -> None:
+    """Overrides the suite's database fixture: these tests read files only."""
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _test_role_is_subject_to_rls() -> None:
+    """Overrides the suite's session check: no database is used here."""
+
+
+def version() -> str:
+    match = re.search(r'^version = "([^"]+)"$', (ROOT / "backend/pyproject.toml").read_text(), re.M)
+    assert match
+    return match.group(1)
+
+
+@pytest.fixture
+def release(tmp_path: Path) -> Path:
+    for name in FILES:
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(ROOT / name, tmp_path / name)
+    return tmp_path
+
+
+def check(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(  # noqa: S603
+        [sys.executable, "-I", str(SCRIPT), "--root", str(root), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+
+
+def job(name: str) -> str:
+    match = re.search(rf"^  {name}:\n(.*?)(?=^  [\w-]+:\n|\Z)", WORKFLOW, re.M | re.S)
+    assert match, name
+    return match.group(0)
+
+
+# --- the version check ------------------------------------------------------------------
+
+
+def test_the_repository_is_one_version(release: Path) -> None:
+    notes = release / "notes.md"
+    done = check(release, "--tag", f"v{version()}", "--notes", str(notes))
+    assert done.returncode == 0, done.stderr
+    assert done.stdout == f"version={version()}\n"
+    assert "### " in notes.read_text()
+    assert "## [" not in notes.read_text()
+
+
+def test_a_tag_of_another_version_is_refused(release: Path) -> None:
+    done = check(release, "--tag", "v9.9.9")
+    assert done.returncode == 1
+    assert "v9.9.9" in done.stderr
+    assert done.stdout == ""
+
+
+def test_release_json_must_follow_pyproject(release: Path) -> None:
+    path = release / "deploy/release.json"
+    path.write_text(path.read_text().replace(f'"version": "{version()}"', '"version": "9.9.9"'))
+    done = check(release)
+    assert done.returncode == 1
+    assert "release.json" in done.stderr
+
+
+def test_the_changelog_must_have_the_version_on_top(release: Path) -> None:
+    path = release / "CHANGELOG.md"
+    text = path.read_text().replace(f"## [{version()}]", "## [9.9.9]", 1)
+    path.write_text(text)
+    assert check(release).returncode == 1
+
+
+def test_an_undated_changelog_entry_is_refused(release: Path) -> None:
+    path = release / "CHANGELOG.md"
+    path.write_text(re.sub(rf"(## \[{re.escape(version())}\]) - [\d-]+", r"\1", path.read_text()))
+    done = check(release)
+    assert done.returncode == 1
+    assert "date" in done.stderr
+
+
+def test_an_unreleased_section_is_skipped(release: Path) -> None:
+    path = release / "CHANGELOG.md"
+    text = path.read_text()
+    first = text.index("## [")
+    path.write_text(text[:first] + "## [Onuitgebracht]\n\n- iets\n\n" + text[first:])
+    notes = release / "notes.md"
+    assert check(release, "--notes", str(notes)).returncode == 0
+    assert "iets" not in notes.read_text()
+
+
+# --- the workflow -----------------------------------------------------------------------
+
+
+def test_only_a_version_tag_or_a_run_by_hand_starts_it() -> None:
+    trigger = WORKFLOW.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+    assert 'tags: ["v[0-9]+.[0-9]+.[0-9]+"]' in trigger
+    assert "workflow_dispatch:" in trigger
+    for other in ("pull_request", "branches", "schedule", "workflow_run", "repository_dispatch"):
+        assert other not in trigger
+
+
+def test_no_rights_by_default_and_each_job_names_its_own() -> None:
+    assert "\npermissions: {}\n" in WORKFLOW
+    for name in ("check", "scan", "publish", "release"):
+        block = job(name)
+        assert "    permissions:\n" in block, name
+        assert re.search(r"timeout-minutes: \d+", block), name
+
+
+def test_only_publish_may_write_packages_and_only_release_may_write_contents() -> None:
+    for name in ("check", "scan", "publish", "release"):
+        block = job(name)
+        assert ("packages: write" in block) == (name == "publish"), name
+        assert ("id-token: write" in block) == (name == "publish"), name
+        assert ("contents: write" in block) == (name == "release"), name
+
+
+def test_publishing_happens_only_on_a_tag() -> None:
+    for name in ("publish", "release"):
+        assert "if: ${{ github.event_name == 'push' }}" in job(name), name
+    assert "push: false" in job("scan")
+    assert "push: true" not in job("scan")
+    assert "needs: [check, scan]" in job("publish")
+    assert "needs: [check, publish]" in job("release")
+
+
+def test_no_checkout_keeps_credentials() -> None:
+    checkouts = WORKFLOW.count("uses: actions/checkout@")
+    assert checkouts == 4
+    assert WORKFLOW.count("persist-credentials: false") == checkouts
+
+
+def test_a_version_is_a_fixed_tag_never_latest() -> None:
+    assert ":latest" not in WORKFLOW
+    assert "tags: ${{ env.IMAGE }}:${{ env.VERSION }}" in job("publish")
+    assert "linux/amd64,linux/arm64" in job("publish")
+
+
+def test_no_expression_reaches_a_shell_directly() -> None:
+    # Values from the event go through env:, never into a run: script.
+    for block in re.findall(r"run: \|\n((?:\s{10,}.*\n)+)", WORKFLOW):
+        assert "${{" not in block
