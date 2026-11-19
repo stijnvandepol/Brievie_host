@@ -101,6 +101,47 @@ class RuleRunStartedOut(Schema):
     queued: bool
 
 
+class RuleTemplateConditionOut(Schema):
+    # As RuleConditionSchema.
+    field: str
+    op: str
+    # Filled in already; empty means the user types it (a word or a name).
+    value: str
+    # A placeholder for the blank, e.g. "Zilveren Kruis".
+    example: str
+    # One Dutch sentence: what goes here; may be empty.
+    hint: str
+
+
+class RuleTemplateActionOut(Schema):
+    # add_label or add_addressee; the user always picks the label or the person.
+    type: str
+    # One Dutch sentence: what to pick.
+    hint: str
+    # A start-set label to preselect when the workspace has one with this `system_key`,
+    # and its name; both empty when the template suggests none.
+    label_key: str
+    label_name: str
+
+
+class RuleTemplateOut(Schema):
+    # Stable: clients link to a template by it.
+    key: str
+    # The workspace kinds it is meant for: home, business or both.
+    kinds: list[str]
+    title: str
+    # What the rule does, in one Dutch sentence.
+    description: str
+    # A caveat to read before saving; may be empty.
+    tip: str
+    # The rule as the editor starts it: the RuleIn fields without the picked ids.
+    name: str
+    mode: str
+    match: str
+    conditions: list[RuleTemplateConditionOut]
+    actions: list[RuleTemplateActionOut]
+
+
 def _definition(rule: Rule) -> dict[str, object]:
     data: object = rule.definition
     return data if isinstance(data, dict) else {}

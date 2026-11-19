@@ -43,6 +43,7 @@ the translation. Add a line before introducing a new domain term.
 | naamherkenning | name matching |
 | startset-regel | preset rule |
 | handmatig (regel uitvoeren) | manual run |
+| voorbeeld (regel om mee te beginnen) | rule template |
 | betalen | pay |
 | reageren | respond |
 | bezwaar | object |
