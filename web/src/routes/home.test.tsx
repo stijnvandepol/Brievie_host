@@ -34,7 +34,7 @@ describe("home", () => {
     server.use(twoWorkspaces(), ...loggedInHandlers());
     renderApp("/");
     const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
-    expect(within(nav).getByRole("link", { name: "Werkruimtes" })).toHaveAttribute(
+    expect(await within(nav).findByRole("link", { name: "Werkruimtes" })).toHaveAttribute(
       "aria-current",
       "page",
     );

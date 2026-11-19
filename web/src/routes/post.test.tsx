@@ -58,7 +58,8 @@ describe("post", () => {
       "href",
       `/w/${workspace.id}/post`,
     );
-    expect(within(nav).getByRole("link", { name: "Werkruimtes" })).toBeInTheDocument();
+    // One workspace: nothing to choose, so no "Werkruimtes".
+    expect(within(nav).queryByRole("link", { name: "Werkruimtes" })).not.toBeInTheDocument();
   });
 
   it("shows the addressees in a column", async () => {

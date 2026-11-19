@@ -14,7 +14,7 @@ import {
   TextField,
 } from "react-aria-components";
 import { ApiFailure, api, errorMessage } from "../api/client";
-import { inboxCountsQuery, meQuery } from "../api/queries";
+import { inboxCountsQuery, meQuery, workspacesQuery } from "../api/queries";
 import { Icon, type IconName } from "./icons";
 import { NoticeBar } from "./notice-bar";
 import { initials, MessageBar } from "./ui";
@@ -371,6 +371,10 @@ export function Shell({ children, workspace }: { children: ReactNode; workspace?
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { data: me } = useQuery(meQuery);
+  // With exactly one workspace there is nothing to choose (`/` goes straight to it), so the
+  // entry is left out. Hidden while loading, so it never shows and then disappears.
+  const workspaces = useQuery(workspacesQuery);
+  const showWorkspaces = workspaces.data ? workspaces.data.length !== 1 : workspaces.isError;
   const nav = useNavPane();
   const navId = useId();
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -428,7 +432,7 @@ export function Shell({ children, workspace }: { children: ReactNode; workspace?
           {/* A pane over the page closes by itself: every page change draws a new shell. */}
           <nav aria-label={t`Hoofdmenu`} className="nav">
             {workspace ? <WorkspaceNav workspace={workspace} /> : null}
-            <NavItem to="/" exact icon="grid" label={t`Werkruimtes`} />
+            {showWorkspaces ? <NavItem to="/" exact icon="grid" label={t`Werkruimtes`} /> : null}
             <NavItem to="/koppel-app" icon="phone" label={t`Apparaten`} />
           </nav>
         </div>
