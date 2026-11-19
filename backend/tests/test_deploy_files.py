@@ -282,6 +282,20 @@ def test_the_image_marks_itself_as_the_container() -> None:
     assert re.search(r"^\s*BRIEVIE_IN_CONTAINER=1\b", runtime, re.MULTILINE), runtime
 
 
+def test_every_action_in_the_workflows_is_pinned_to_a_commit() -> None:
+    # A tag can be moved to other code; a full commit SHA cannot. The version goes in a
+    # trailing comment, which Dependabot keeps up to date.
+    workflows = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
+    assert workflows
+    for workflow in workflows:
+        for line in workflow.read_text().splitlines():
+            match = re.match(r"^\s*(?:- )?uses: (\S+)(.*)$", line)
+            if not match or match.group(1).startswith("./"):
+                continue
+            assert re.fullmatch(r"[\w.-]+/[\w./-]+@[0-9a-f]{40}", match.group(1)), line
+            assert re.fullmatch(r" # v\d+(\.\d+)*", match.group(2)), line
+
+
 def test_ci_runs_the_real_restic_tests_with_the_images_restic() -> None:
     pinned = re.search(r"restic/restic:[0-9.]+@sha256:[0-9a-f]{64}", DOCKERFILE)
     assert pinned

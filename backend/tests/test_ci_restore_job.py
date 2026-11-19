@@ -42,7 +42,8 @@ def test_the_job_stands_alone_with_a_timeout_and_the_default_permissions() -> No
     assert "timeout-minutes: 30" in header
     # Like the other jobs: only the workflow's `contents: read`, no wider grant.
     assert "permissions:" not in JOB
-    assert "uses: actions/checkout@v5" in JOB
+    # Like every action in the workflows: pinned to a full commit SHA.
+    assert re.search(r"uses: actions/checkout@[0-9a-f]{40} # v\d", JOB)
 
 
 def test_the_back_up_lives_in_a_folder_that_survives_the_destruction() -> None:

@@ -8,14 +8,16 @@ on:
 permissions:
   contents: read
 
-# A newer push to the same branch makes the older run pointless.
+# A newer push to a pull request makes its older run pointless. Pushes to main all run
+# to the end, so every commit on main has a complete result.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:18
@@ -44,8 +46,10 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           version: "0.13.8"
       - name: Create database roles
@@ -83,17 +87,20 @@ jobs:
 
   web:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       # The action reads "packageManager" from the repo root by default; ours is in web/.
       # (defaults.run.working-directory does not apply to `uses:` steps.)
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
           package_json_file: web/package.json
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 26.13
           cache: pnpm
@@ -116,17 +123,36 @@ jobs:
 
   secrets:
     runs-on: ubuntu-latest
-    # gitleaks-action lists the pull request's commits.
+    timeout-minutes: 10
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: read # gitleaks-action lists the pull request's commits.
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v3
+          persist-credentials: false
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # The workflows themselves: injection through expressions, unpinned or impostor
+  # actions, excessive permissions, leaked credentials (zizmor's online audits use
+  # the job's read-only token).
+  workflows:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: "0.13.8"
+      - name: zizmor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uvx zizmor@1.32.0 --format=github .github/workflows
 
   # The image as it ships: lint its Dockerfile, build it, scan what is inside (Debian
   # packages, the virtualenv, restic, the PostgreSQL client) for known vulnerabilities.
@@ -169,7 +195,9 @@ jobs:
     env:
       COMPOSE: docker compose --project-directory deploy -f deploy/docker-compose.yml
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Create deploy/.env with fresh secrets
         run: sh deploy/init-env.sh
       - name: Build and start the stack
@@ -275,7 +303,9 @@ jobs:
       # GitHub-hosted machine, never on a self-hosted runner that may run Brievie itself.
       - name: Only on a GitHub-hosted runner
         run: test "$RUNNER_ENVIRONMENT" = github-hosted
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Create deploy/.env and a back-up folder outside the stack
         run: |
           set -euo pipefail
