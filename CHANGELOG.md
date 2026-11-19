@@ -35,5 +35,7 @@ als 0.1.0.
 - Versies: de server heeft een versienummer, dat `/api/v1/health` laat zien
   (`server_version`), en elke versie staat in dit wijzigingslog.
 - `./brievie update`: werkt Brievie bij naar een nieuwere versie, met eerst een back-up en
-  bij een fout de weg terug.
+  bij een fout de weg terug (`./brievie restore pre-update-<versie>`). Zonder
+  back-upbestemming is die back-up een noodback-up op deze computer.
+- `./brievie status` laat ook zien wanneer Brievie voor het laatst is bijgewerkt.
 - De gezondheidscontrole (`/api/v1/health`) controleert nu ook de database.

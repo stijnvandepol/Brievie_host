@@ -1,10 +1,10 @@
-# Self-hosting: back-up, restore and people
+# Self-hosting: back-up, restore, people and updates
 
 For a home user with Brievie on a NAS or a Mac, and for the admin of a small company.
 Simple things come first, advanced things last. Run every command in the folder where
 you installed Brievie. Sections 1 to 12 are about back-ups, 13 about pairing a phone from
 a link, 14 to 19 about people: inviting, roles, removing, sessions, the log and the
-export.
+export. Section 20 is about updating Brievie.
 
 ## 1. In one minute
 
@@ -463,3 +463,126 @@ photos. An admin can switch exporting off for the whole workspace (**Instellinge
 by default in a business workspace). The export needs the document volume at
 `/data/documents`, which is the default; an install with another storage folder cannot
 export.
+
+## 20. Updating
+
+### Versions
+
+Brievie has version numbers (`0.2.0`, `0.3.0`, …), one git tag `vX.Y.Z` per release.
+What changed is in `CHANGELOG.md`, in Dutch. Read it before you update, and the part
+**Voor je bijwerkt** first when a version has one: that is where a release asks
+something of you. `/api/v1/health` shows the version that runs (`server_version`), and
+`deploy/.env` pins it (`BRIEVIE_VERSION`). Nothing updates by itself: an update only
+happens when you type it.
+
+### One command
+
+```sh
+./brievie update          # to the newest version
+./brievie update 0.3.0    # to that version
+```
+
+It asks you to type `BIJWERKEN` before it stops anything (from a script: set
+`BRIEVIE_UPDATE_CONFIRM=BIJWERKEN`; piped input never counts). In this order, stopping at
+the first problem with a sentence that says what to type:
+
+1. **Check.** The version you typed, your folder (no local changes, no commits of your
+   own), that Brievie runs, the versions on GitHub (`git fetch`), whether this jump is
+   allowed, and free disk space. Nothing has changed yet; every refusal ends with
+   "Er is niets veranderd."
+2. **Build** the new version from its tag. Brievie keeps running meanwhile.
+3. **Stop** the web interface, the API and the worker.
+4. **Back up** (below), then stop the back-up service.
+5. **Switch** the folder to the new version, update the database, start, and check that
+   the new version answers.
+6. **Record** the update: `./brievie status` shows "Laatst bijgewerkt".
+
+Brievie is away from step 3 until step 5 is done: for as long as the back-up and the
+database update take. After the first back-up, restic only sends what is new, so that
+is usually short.
+
+### The back-up before an update
+
+- **With a back-up destination** (section 4), the update makes a safety back-up there,
+  named `pre-update-<version>`, kept 30 days like the safety back-up of a restore.
+- **Without one**, it makes an **emergency copy** (noodback-up) in the Docker volume
+  `<project>_update-backup` (`brievie_update-backup` for a default install). It holds only
+  the newest one (each update replaces it), takes about as much space as one compressed
+  copy of your data, and **lies on the same machine**: it is a way back from a failed
+  update, not a back-up. It does not count in `./brievie status`. To free the space,
+  remove it when no update is unfinished: `docker volume rm brievie_update-backup`.
+
+### A jump that is refused
+
+Each release says from which version it can be reached (`deploy/release.json`). When
+your version is too old for a direct jump, the update names the version to go to first,
+for example "Werk eerst bij naar 0.3.1: ./brievie update 0.3.1". Going back to an older
+version is never an update; the way back is a restore (below).
+
+### When an update fails: the way back
+
+Before step 5 nothing changed: the old version is started again and you see "Er is
+niets bijgewerkt". If the database update, the start or the check of the new version
+fails, Brievie stays stopped and prints the way back, for example:
+
+```
+Het bijwerken naar versie 0.3.0 is niet gelukt. Brievie is gestopt.
+Terug naar versie 0.2.0 (houd je herstelblad bij de hand):
+  git checkout v0.2.0
+  ./brievie restore pre-update-0.3.0 --replace --skip-safety-backup
+Of probeer het opnieuw: ./brievie update 0.3.0
+```
+
+Type those two lines. The restore asks for the master key from your recovery sheet and
+for `WISSEN`, as every restore over a running server does (section 7). Without a
+destination it finds the emergency copy by itself; with one it asks where the back-up
+is. Migrations are never reversed: the way back is always the back-up from before the
+update. Anything that arrived after it is not in it, which is why the update stops
+Brievie before it backs up.
+
+### An update that was interrupted
+
+A closed terminal or a power cut during an update leaves `deploy/.update/in-progress`.
+Before the switch nothing changed: `./brievie start` (or the next `./brievie update`)
+starts the old version again. After the switch, `./brievie start` refuses and prints
+the way back, and `./brievie update` (without a version, or with the same one) finishes
+the update; a database update can safely run again. A restore while an update is
+unfinished only takes that update's own back-up, after `git checkout` of the old version.
+
+### Not (yet) done by `./brievie update`
+
+- **A new PostgreSQL major version.** A release that moves to one says so in
+  "Voor je bijwerkt"; `./brievie update` refuses it until the dump-and-load path exists.
+- **An installation from before versions** (it reports 0.1.0) moves once by hand:
+
+  ```sh
+  git fetch --tags
+  git checkout v0.2.0
+  ./brievie start
+  ```
+
+  After that, `./brievie update` works.
+- **Your own image** (`BRIEVIE_IMAGE` in `deploy/.env`): update by hand.
+- **Images from the registry.** Each release is also published as
+  `ghcr.io/stijnvandepol/brievie-backend:<version>` for amd64 and arm64, but an
+  installation still builds its image from the tag; switching to the published images
+  comes later.
+
+### On a NAS
+
+- PostgreSQL is not published on the machine any more (port 5432 is usually taken by the
+  NAS's own database). A developer who runs `make test` against an installation started
+  with `./brievie` sets `BRIEVIE_PUBLISH_POSTGRES=true` in `deploy/.env` and runs
+  `./brievie start` once.
+- Choosing other HTTP and HTTPS ports (`BRIEVIE_HTTP_PORT`, `BRIEVIE_HTTPS_PORT`) is needed
+  on almost every NAS; an update keeps them. Having the installer ask for them is not
+  done yet.
+- The documents live in Docker volumes (section 11); an update does not move them.
+
+### Not verified yet
+
+Proven on GitHub's Linux runners (the CI job `update`: an update, a failing update and
+the way back typed literally) and with a fake Docker in the test suite. Not yet proven:
+an update on a real NAS or Raspberry Pi (building takes long there, and needs about
+4 GB free), an update interrupted by a power cut on real hardware, an update with a
+remote destination, and two releases in a row over months.
