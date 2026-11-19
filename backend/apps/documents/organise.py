@@ -31,6 +31,15 @@ from apps.rules.models import Rule
 ADDRESSEES_MAX = 10
 LABELS_MAX = 30
 
+# Changes the system made on its own (a rule, the autopilot): the user may undo them.
+UNDOABLE_ORIGINS = (
+    DocumentEvent.Origin.RULE,
+    DocumentEvent.Origin.AI,
+    DocumentEvent.Origin.NAME_MATCH,
+)
+# Origins whose links are marked `automatic`: the autopilot put them there.
+_AUTOMATIC_ORIGINS = (DocumentEvent.Origin.AI, DocumentEvent.Origin.NAME_MATCH)
+
 _ADD_LABEL = DocumentSuggestion.Action.ADD_LABEL
 _ADD_ADDRESSEE = DocumentSuggestion.Action.ADD_ADDRESSEE
 
@@ -113,7 +122,10 @@ def add_addressee(
         if DocumentAddressee.objects.filter(document=document, person=person).exists():
             return False
         DocumentAddressee.objects.create(
-            workspace_id=document.workspace_id, document=document, person=person
+            workspace_id=document.workspace_id,
+            document=document,
+            person=person,
+            automatic=origin in _AUTOMATIC_ORIGINS,
         )
         _write_event(
             document, DocumentEvent.Kind.ADDRESSEE_ADDED, actor, origin, person=person, rule=rule
@@ -181,7 +193,10 @@ def add_label(
         if DocumentLabel.objects.filter(document=document, label=label).exists():
             return False
         DocumentLabel.objects.create(
-            workspace_id=document.workspace_id, document=document, label=label
+            workspace_id=document.workspace_id,
+            document=document,
+            label=label,
+            automatic=origin in _AUTOMATIC_ORIGINS,
         )
         _write_event(
             document, DocumentEvent.Kind.LABEL_ADDED, actor, origin, label=label, rule=rule
@@ -198,9 +213,10 @@ _UNDOABLE = (DocumentEvent.Kind.LABEL_ADDED, DocumentEvent.Kind.ADDRESSEE_ADDED)
 
 
 def undo_event(*, document: Document, event_id: UUID, actor: User) -> None:
-    """Reverse a change a rule made (design 13), and remember the user's "no".
+    """Reverse a change a rule or the autopilot made (design 13), and remember the user's "no".
 
-    Only a `label_added` or `addressee_added` event with origin `rule` that was not
+    Only a `label_added` or `addressee_added` event with origin `rule`, `ai` or
+    `name_match` that was not
     undone yet, while its label or person is still on the document.
     """
     with transaction.atomic():
@@ -210,7 +226,7 @@ def undo_event(*, document: Document, event_id: UUID, actor: User) -> None:
         if event is None:
             raise ApiError(404, "event_not_found", _("We kunnen deze gebeurtenis niet vinden."))
         if (
-            event.origin != DocumentEvent.Origin.RULE
+            event.origin not in UNDOABLE_ORIGINS
             or event.kind not in _UNDOABLE
             or DocumentEvent.objects.filter(undoes=event).exists()
             or _target_of(event) is None

@@ -6,6 +6,7 @@ from pydantic import Field
 
 from apps.common.schemas import InputSchema
 from apps.documents.models import DocumentEvent
+from apps.documents.organise import UNDOABLE_ORIGINS
 
 
 class FolderOut(Schema):
@@ -182,10 +183,10 @@ class DocumentEventOut(Schema):
 
     @staticmethod
     def resolve_can_undo(obj: DocumentEvent) -> bool:
-        # A change a rule made, not undone yet, whose label or person is still there and
-        # had nothing happen to it since (annotations of `list_document_events`).
+        # A change a rule or the autopilot made, not undone yet, whose label or person is
+        # still there and had nothing happen to it since (annotations of `list_document_events`).
         return (
-            obj.origin == DocumentEvent.Origin.RULE
+            obj.origin in UNDOABLE_ORIGINS
             and obj.kind in (DocumentEvent.Kind.LABEL_ADDED, DocumentEvent.Kind.ADDRESSEE_ADDED)
             and not getattr(obj, "undone", False)
             and bool(getattr(obj, "still_linked", False))

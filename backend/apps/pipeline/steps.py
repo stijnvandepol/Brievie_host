@@ -20,11 +20,12 @@ from apps.documents.models import Document, DocumentSuggestion, Extraction
 from apps.labels.models import Label
 from apps.people.matching import PRESELECT_FROM, PersonNames, match_addressees
 from apps.people.models import Person
+from apps.pipeline.autopilot import apply_open_proposals
 from apps.pipeline.choices import ExtractionRequest, aliased
 from apps.pipeline.errors import PermanentError
 from apps.pipeline.providers import LLMProvider
 from apps.pipeline.schema import ExtractionPayload
-from apps.pipeline.settings_service import provider_for
+from apps.pipeline.settings_service import autopilot_in_force, provider_for
 from apps.pipeline.validation import ValidatedChoice, ValidatedValue, validate, validate_choices
 from apps.rules import triggers
 from apps.workspaces.context import workspace_context
@@ -75,6 +76,8 @@ def run_pipeline(
             return
         store_proposals(document, values, provider)
         _organise_guarded(document, text, persons, choices)
+        if provider is not None and autopilot_in_force(workspace_id).organise:
+            _autopilot_guarded(document)
         document.status = Document.Status.NEEDS_REVIEW
         document.save(update_fields=["status", "updated_at"])
         suggestion_count = _open_suggestion_count(document)
@@ -253,6 +256,21 @@ def _organise_guarded(
         # The type only: an exception message may quote the document.
         logger.error(
             "Unexpected %s while proposing for document %s", type(exc).__name__, document.id
+        )
+
+
+def _autopilot_guarded(document: Document) -> None:
+    """`apply_open_proposals` in a savepoint: when it fails, its writes are rolled back
+    and the document still moves on to review with its proposals open."""
+    try:
+        with transaction.atomic():
+            apply_open_proposals(document)
+    except Exception as exc:  # noqa: BLE001 - the document must not stay processing
+        # The type only: an exception message may quote the document.
+        logger.error(
+            "Unexpected %s while applying proposals for document %s",
+            type(exc).__name__,
+            document.id,
         )
 
 
