@@ -562,7 +562,9 @@ describe("document made by the autopilot", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Automatisch toegevoegd: naam herkend (Papa)")).toBeInTheDocument();
     expect(screen.getByText("Automatisch bevestigd door AI")).toBeInTheDocument();
-    expect(screen.getByText("Bram zette de brief terug op Te doen om te controleren")).toBeInTheDocument();
+    expect(
+      screen.getByText("Bram zette de brief terug op Te doen om te controleren"),
+    ).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /^Terugdraaien:/ })).toHaveLength(2);
   });
 
