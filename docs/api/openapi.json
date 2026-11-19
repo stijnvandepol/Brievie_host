@@ -2290,6 +2290,11 @@
               "null"
             ]
           },
+          "created_by_ai": {
+            "default": false,
+            "title": "Created By Ai",
+            "type": "boolean"
+          },
           "deadline": {
             "format": "date",
             "title": "Deadline",

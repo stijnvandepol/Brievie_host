@@ -18,8 +18,9 @@ function Notice({ text }: { text: string }) {
       {text
         .split(/\n\s*\n/)
         .filter((part) => part.trim() !== "")
-        .map((part) => (
-          <p key={part} className="consent-notice">
+        .map((part, index) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: fixed text, two paragraphs may be equal
+          <p key={index} className="consent-notice">
             {part.trim()}
           </p>
         ))}
@@ -61,6 +62,10 @@ function AutopilotSwitch({
   );
 }
 
+/**
+ * The two switches. While the server forbids the autopilot only a switch still stored on is
+ * shown, so it can be switched off; switching on is not offered then.
+ */
 function Switches({ workspaceId, autopilot }: { workspaceId: string; autopilot: Autopilot }) {
   const queryClient = useQueryClient();
   const [asking, setAsking] = useState<Which | null>(null);
@@ -85,31 +90,41 @@ function Switches({ workspaceId, autopilot }: { workspaceId: string; autopilot: 
 
   function change(which: Which, on: boolean) {
     // Switching on needs the notice and a yes; switching off saves at once.
+    if (on && !autopilot.allowed) return;
     if (on) setAsking(which);
     else save.mutate({ which, on, acknowledged: false });
   }
 
+  const shown = (on: boolean) => autopilot.allowed || on;
   return (
     <>
-      <AutopilotSwitch
-        label={t`Brieven zelf onder personen en labels zetten`}
-        description={t`Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is.`}
-        isSelected={autopilot.auto_organise}
-        isDisabled={save.isPending}
-        onChange={(on) => change("auto_organise", on)}
-      />
-      <AutopilotSwitch
-        label={t`Brieven zelf bevestigen`}
-        description={t`Brievie bevestigt een brief zelf als alles in de brief duidelijk te lezen is. Anders blijft hij staan om te controleren.`}
-        isSelected={autopilot.auto_confirm}
-        isDisabled={save.isPending}
-        onChange={(on) => change("auto_confirm", on)}
-      />
+      {shown(autopilot.auto_organise) ? (
+        <AutopilotSwitch
+          label={t`Brieven zelf onder personen en labels zetten`}
+          description={t`Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is.`}
+          isSelected={autopilot.auto_organise}
+          isDisabled={save.isPending}
+          onChange={(on) => change("auto_organise", on)}
+        />
+      ) : null}
+      {shown(autopilot.auto_confirm) ? (
+        <AutopilotSwitch
+          label={t`Brieven zelf bevestigen`}
+          description={t`Brievie bevestigt een brief zelf als alles in de brief duidelijk te lezen is. Anders blijft hij staan om te controleren.`}
+          isSelected={autopilot.auto_confirm}
+          isDisabled={save.isPending}
+          onChange={(on) => change("auto_confirm", on)}
+        />
+      ) : null}
       <ErrorAlert error={asking === null ? save.error : null} />
       <ConfirmDialog
         isOpen={asking !== null}
         onOpenChange={(open) => {
-          if (!open) setAsking(null);
+          if (!open) {
+            setAsking(null);
+            // A refusal belongs to the question; cancelled, it is not shown again.
+            save.reset();
+          }
         }}
         title={t`Automatisch verwerken aanzetten?`}
         confirmLabel={t`Aanzetten`}
@@ -125,21 +140,25 @@ function Switches({ workspaceId, autopilot }: { workspaceId: string; autopilot: 
   );
 }
 
-/** A line for a member: whether the AI handles letters on its own. */
+/** A line for a member: what Brievie does with letters on its own, switch by switch. */
 function MemberLine({ autopilot }: { autopilot: Autopilot }) {
-  const on = autopilot.allowed && (autopilot.auto_organise || autopilot.auto_confirm);
+  const organise = autopilot.allowed && autopilot.auto_organise;
+  const confirm = autopilot.allowed && autopilot.auto_confirm;
+  const lines = [
+    organise ? t`Brievie zet brieven zelf onder personen en labels.` : null,
+    confirm ? t`Brievie bevestigt brieven zelf.` : null,
+  ].filter((line): line is string => line !== null);
   return (
     <p className="muted">
-      {on
-        ? t`Brieven worden automatisch verwerkt door de AI.`
-        : t`Brieven worden niet automatisch verwerkt.`}
+      {lines.length > 0 ? lines.join(" ") : t`Brieven worden niet automatisch verwerkt.`}
     </p>
   );
 }
 
 /**
  * "Automatisch verwerken" on the AI page. An administrator sees the two switches while AI is
- * on and the server allows them; a member sees one line and nothing to switch.
+ * on and the server allows them (while it forbids them, only a switch still on, to switch it
+ * off); a member sees one line and nothing to switch.
  */
 export function AutopilotPanel({ workspaceId, admin }: { workspaceId: string; admin: boolean }) {
   const status = useQuery({ ...aiStatusQuery(workspaceId), enabled: admin });
@@ -151,11 +170,12 @@ export function AutopilotPanel({ workspaceId, admin }: { workspaceId: string; ad
   return (
     <section className="panel panel-pad" aria-labelledby="autopilot-heading">
       <h2 id="autopilot-heading">{t`Automatisch verwerken`}</h2>
-      {data.allowed ? (
-        <Switches workspaceId={workspaceId} autopilot={data} />
-      ) : (
+      {data.allowed ? null : (
         <p className="muted">{t`De beheerder van de server heeft automatisch verwerken uitgezet. Hier kun je het niet aanzetten.`}</p>
       )}
+      {data.allowed || data.auto_organise || data.auto_confirm ? (
+        <Switches workspaceId={workspaceId} autopilot={data} />
+      ) : null}
     </section>
   );
 }

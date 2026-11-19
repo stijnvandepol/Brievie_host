@@ -516,8 +516,8 @@ describe("document made by the autopilot", () => {
     );
     renderApp(path);
     expect(await screen.findByText("Automatisch door AI")).toBeVisible();
-    expect(await screen.findByText("Automatisch gezet: Belastingdienst")).toBeVisible();
-    expect(await screen.findByText("Automatisch gezet: Papa")).toBeVisible();
+    expect(await screen.findByText("Automatisch toegevoegd: Belastingdienst")).toBeVisible();
+    expect(await screen.findByText("Automatisch toegevoegd: Papa")).toBeVisible();
     expect(screen.queryByRole("button", { name: "Zelf controleren" })).not.toBeInTheDocument();
   });
 
@@ -595,6 +595,27 @@ describe("document made by the autopilot", () => {
     await user.click(within(dialog).getByRole("button", { name: "Zelf controleren" }));
     await waitFor(() => expect(reopened).toHaveLength(1));
     await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    // The button is gone with the AI's confirmation: the focus lands on the page heading.
+    await waitFor(() => expect(screen.getByRole("heading", { level: 1 })).toHaveFocus());
+  });
+
+  it("marks a task the AI made, and only that one", async () => {
+    server.use(
+      ...loggedInHandlers(),
+      ...documentHandlers({
+        ...documentDetail,
+        tasks: [
+          { ...task, created_by_ai: true },
+          { ...task, id: "0f0e0d0c-0b0a-4908-8706-050403020102", description: "Bel terug" },
+        ],
+      }),
+    );
+    renderApp(path);
+    const tasks = await screen.findByRole("region", { name: "Taken" });
+    const [byAi, byHand] = await within(tasks).findAllByRole("listitem");
+    if (!byAi || !byHand) throw new Error("two tasks expected");
+    expect(within(byAi).getByText("Automatisch door AI")).toBeVisible();
+    expect(within(byHand).queryByText("Automatisch door AI")).not.toBeInTheDocument();
   });
 
   it("offers no reopen to a viewer", async () => {

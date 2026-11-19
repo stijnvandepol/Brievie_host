@@ -149,4 +149,9 @@ def test_list_filters_and_counts(ws_a: Workspace) -> None:
         assert ids(inbox_state="unassigned") == {unassigned.id}
         assert ids(person_id=papa.id) == {review.id, sorted_.id}
         assert ids(inbox_state="review", person_id=papa.id) == {review.id}
-        assert services.inbox_counts(ws_a) == {"new": 1, "review": 1, "unassigned": 1}
+        assert services.inbox_counts(ws_a) == {
+            "new": 1,
+            "review": 1,
+            "unassigned": 1,
+            "automatic": 0,
+        }

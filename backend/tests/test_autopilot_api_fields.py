@@ -236,3 +236,34 @@ def test_the_list_does_not_query_per_document(client_a: Client, ws_a: Workspace)
     automatic_documents(ws_a)
 
     assert queries() == few
+
+
+def test_automatic_documents_of_another_workspace_are_not_listed_or_counted(
+    client: Client, ws_a: Workspace, ws_b: Workspace
+) -> None:
+    from apps.documents import services
+
+    mine = automatic_documents(ws_a)
+    theirs = automatic_documents(ws_b)
+    counts = "/api/v1/workspaces/{}/inbox/counts"
+
+    client.force_login(admin_of(ws_a))
+    assert ids_of(client, ws_a, automatic="true") == {
+        str(mine[k].id) for k in ("ai_confirmed", "auto_label", "auto_person")
+    }
+    assert client.get(counts.format(ws_a.id)).json()["automatic"] == 3
+    # Even a query that forgets the workspace sees only A's rows (forced RLS).
+    with workspace_context(ws_a.id):
+        unfiltered = set(
+            Document.objects.annotate(has_automatic=services._has_automatic_link())
+            .filter(services._is_automatic())
+            .values_list("id", flat=True)
+        )
+    assert unfiltered == {mine[k].id for k in ("ai_confirmed", "auto_label", "auto_person")}
+
+    # Not vacuous: B's member does see B's automatic documents.
+    client.force_login(admin_of(ws_b))
+    assert ids_of(client, ws_b, automatic="true") == {
+        str(theirs[k].id) for k in ("ai_confirmed", "auto_label", "auto_person")
+    }
+    assert client.get(counts.format(ws_b.id)).json()["automatic"] == 3

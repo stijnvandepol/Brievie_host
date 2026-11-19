@@ -194,6 +194,44 @@ def test_consent_to_another_address_resets_both_switches(ws_a: Workspace) -> Non
         assert values(ws_a)[2:] == [("ai_auto_organise", False), ("ai_auto_confirm", False)]
 
 
+LOCAL = "http://ollama:11434/v1"
+
+
+def local(workspace: Workspace, *, model: str = "qwen") -> None:
+    settings_service.configure(
+        workspace_id=workspace.id, mode="local", base_url=LOCAL, model=model, api_key=None
+    )
+
+
+def test_moving_from_external_to_local_resets_both_switches(ws_a: Workspace) -> None:
+    with workspace_context(ws_a.id):
+        external(ws_a)
+        set_autopilot(ws_a, organise=True, confirm=True)
+        local(ws_a)
+        stored = AISettings.objects.get(workspace=ws_a)
+        assert (stored.mode, stored.auto_organise, stored.auto_confirm) == ("local", False, False)
+        assert values(ws_a)[2:] == [("ai_auto_organise", False), ("ai_auto_confirm", False)]
+
+
+def test_moving_from_local_to_external_resets_both_switches(ws_a: Workspace) -> None:
+    with workspace_context(ws_a.id):
+        local(ws_a)
+        set_autopilot(ws_a, organise=True, confirm=True)
+        external(ws_a)
+        stored = AISettings.objects.get(workspace=ws_a)
+        assert (stored.auto_organise, stored.auto_confirm) == (False, False)
+        assert values(ws_a)[2:] == [("ai_auto_organise", False), ("ai_auto_confirm", False)]
+
+
+def test_another_local_model_keeps_the_switches(ws_a: Workspace) -> None:
+    with workspace_context(ws_a.id):
+        local(ws_a)
+        set_autopilot(ws_a, organise=True, confirm=True)
+        local(ws_a, model="llama")
+        assert settings_service.autopilot(ws_a.id).confirm is True
+        assert len(rows(ws_a)) == 2
+
+
 def test_another_model_at_the_same_address_keeps_the_switches(ws_a: Workspace) -> None:
     with workspace_context(ws_a.id):
         external(ws_a)
@@ -232,14 +270,36 @@ def test_in_force_is_off_when_the_mode_is_off_even_if_stored_on(ws_a: Workspace)
 def test_the_notice_says_what_the_user_must_know() -> None:
     notice = settings_service.autopilot_notice()
     for part in (
-        "Automatisch door AI",
-        "fouten",
-        "deadline",
-        "bevestigt",
-        "niemand",
+        # what Brievie does, and that nobody checks first
+        "onder personen en labels",
+        '"Brieven zelf bevestigen"',
+        "zonder dat iemand eerst kijkt",
+        # the AI believes the letter, and a letter can mislead
+        "gelooft",
+        "misleiden",
+        "de afzender, de datum of de taak",
+        # what the guard rails check, and when the letter is left for you
+        "de afzender, de datum en elke termijn in de brief zelf",
+        "een taak met een datum",
+        "voor jou staan",
+        # it can still miss something
+        "iets missen",
+        "Lees dan zelf de brief",
+        # the mark, undo and checking yourself
+        'het kenmerk "Automatisch door AI"',
         "terugdraaien",
+        '"Zelf controleren"',
     ):
-        assert part.lower() in notice.lower()
+        assert part in notice, part
+
+
+def test_the_notice_has_short_paragraphs_and_no_reassurance() -> None:
+    notice = settings_service.autopilot_notice()
+    paragraphs = [p for p in notice.split("\n\n") if p.strip()]
+    assert len(paragraphs) >= 5
+    assert all(len(p) <= 300 for p in paragraphs)
+    assert "staat altijd in de brief zelf" not in notice
+    assert "kenmerken" not in notice
 
 
 def test_a_partial_switch_off_works_when_the_server_forbids_it(ws_a: Workspace) -> None:
@@ -264,7 +324,7 @@ def test_the_notice_names_the_mark_and_the_switch_and_claims_no_correctness() ->
     notice = settings_service.autopilot_notice()
     assert "personen en labels" in notice
     assert "kenmerken" not in notice
-    assert "het kenmerk Automatisch door AI" in notice
+    assert 'het kenmerk "Automatisch door AI"' in notice
     assert "Brieven zelf bevestigen" in notice
     assert "tweede" not in notice
     assert "staat meteen goed" not in notice

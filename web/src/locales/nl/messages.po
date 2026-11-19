@@ -430,6 +430,7 @@ msgid "Automatisch bevestigd door AI"
 msgstr "Automatisch bevestigd door AI"
 
 #: src/components/document-table.tsx
+#: src/components/task-list.tsx
 #: src/routes/post.tsx
 msgid "Automatisch door AI"
 msgstr "Automatisch door AI"
@@ -443,8 +444,8 @@ msgid "Automatisch door AI toegevoegd: label {label}"
 msgstr "Automatisch door AI toegevoegd: label {label}"
 
 #: src/routes/document.tsx
-msgid "Automatisch gezet: {list}"
-msgstr "Automatisch gezet: {list}"
+msgid "Automatisch toegevoegd: {list}"
+msgstr "Automatisch toegevoegd: {list}"
 
 #: src/components/document-history.tsx
 msgid "Automatisch toegevoegd: label {label}"
@@ -539,10 +540,6 @@ msgid "Brief"
 msgstr "Brief"
 
 #: src/components/autopilot-panel.tsx
-msgid "Brieven worden automatisch verwerkt door de AI."
-msgstr "Brieven worden automatisch verwerkt door de AI."
-
-#: src/components/autopilot-panel.tsx
 msgid "Brieven worden niet automatisch verwerkt."
 msgstr "Brieven worden niet automatisch verwerkt."
 
@@ -555,12 +552,20 @@ msgid "Brieven zelf onder personen en labels zetten"
 msgstr "Brieven zelf onder personen en labels zetten"
 
 #: src/components/autopilot-panel.tsx
+msgid "Brievie bevestigt brieven zelf."
+msgstr "Brievie bevestigt brieven zelf."
+
+#: src/components/autopilot-panel.tsx
 msgid "Brievie bevestigt een brief zelf als alles in de brief duidelijk te lezen is. Anders blijft hij staan om te controleren."
 msgstr "Brievie bevestigt een brief zelf als alles in de brief duidelijk te lezen is. Anders blijft hij staan om te controleren."
 
 #: src/routes/setup.tsx
 msgid "Brievie instellen"
 msgstr "Brievie instellen"
+
+#: src/components/autopilot-panel.tsx
+msgid "Brievie zet brieven zelf onder personen en labels."
+msgstr "Brievie zet brieven zelf onder personen en labels."
 
 #: src/components/autopilot-panel.tsx
 msgid "Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is."

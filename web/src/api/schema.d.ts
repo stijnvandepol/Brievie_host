@@ -2521,6 +2521,11 @@ export interface components {
              */
             completed_at: string | null;
             /**
+             * Created By Ai
+             * @default false
+             */
+            created_by_ai: boolean;
+            /**
              * Deadline
              * Format: date
              */

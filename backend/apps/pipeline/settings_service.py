@@ -243,10 +243,14 @@ def configure(
             if kept is None:
                 raise AiSettingsError("key_required", "An external AI service needs an API key.")
             sealed = bytes(kept)
-        # Autopilot was agreed to for the AI as it was: switching AI off, or agreeing to
-        # another address, ends it. Both stay off until somebody agrees again.
+        # Autopilot was agreed to for the AI as it was. Three things end it: AI switched
+        # off, another mode (external <-> local: another model, often weaker), or consent
+        # granted for another address. Another model in the same mode at the same address
+        # does not. Both switches stay off until somebody agrees again.
         reset = current is not None and (
-            target.mode == AISettings.Mode.OFF or event == AIConsentEvent.Event.GRANTED
+            target.mode == AISettings.Mode.OFF
+            or target.mode != current.mode
+            or event == AIConsentEvent.Event.GRANTED
         )
         was_organise = reset and current is not None and current.auto_organise
         was_confirm = reset and current is not None and current.auto_confirm
@@ -331,20 +335,28 @@ def _autopilot_allowed() -> bool:
 
 
 def autopilot_notice() -> str:
-    """What whoever switches the autopilot on must know and agree to (B1 Dutch)."""
+    """What whoever switches the autopilot on must know and agree to (B1 Dutch).
+
+    Paragraphs are separated by a blank line.
+    """
     return gettext(
         "Je zet de AI-autopilot aan. Lees dit eerst.\n"
         "\n"
-        '- Brievie zet brieven zelf bij personen en labels. Zet je ook "Brieven zelf '
-        'bevestigen" aan, dan bevestigt Brievie de brieven ook zelf.\n'
-        '- Niemand kijkt eerst. Brievie zet de brief meteen in je lijst. Met "Brieven zelf '
-        'bevestigen" is de brief ook meteen bevestigd.\n'
-        "- De AI kan fouten maken.\n"
-        "- Een deadline staat altijd in de brief zelf. Kijk dus naar de brief als het "
-        "ertoe doet.\n"
-        "- Alles wat Brievie zelf doet, zie je met het kenmerk Automatisch door AI. Je kunt "
-        "het terugdraaien.\n"
-        "- Heeft een taak geen deadline? Dan heeft de AI misschien iets gemist.\n"
+        "Brievie zet brieven dan zelf onder personen en labels. Zet je ook "
+        '"Brieven zelf bevestigen" aan? Dan bevestigt Brievie brieven ook zelf, '
+        "zonder dat iemand eerst kijkt.\n"
+        "\n"
+        "De AI leest wat er in de brief staat en gelooft dat. Maar een brief kan fout zijn, "
+        "of je misleiden. Dan klopt ook de afzender, de datum of de taak niet.\n"
+        "\n"
+        "Brievie bevestigt een brief alleen als het de afzender, de datum en elke termijn "
+        "in de brief zelf heeft gevonden. Noemt de brief een termijn die Brievie niet in "
+        "een taak met een datum kan zetten? Dan laat Brievie de brief voor jou staan.\n"
+        "\n"
+        "Toch kan Brievie iets missen. Is een brief belangrijk? Lees dan zelf de brief.\n"
+        "\n"
+        'Alles wat Brievie zelf doet, krijgt het kenmerk "Automatisch door AI". Je kunt '
+        'het terugdraaien. Of je controleert de brief zelf met "Zelf controleren".\n'
     )
 
 

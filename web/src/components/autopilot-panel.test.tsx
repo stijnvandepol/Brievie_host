@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import {
@@ -160,13 +160,22 @@ describe("automatisch verwerken", () => {
     );
   });
 
-  it("tells a member in one line, with nothing to switch", async () => {
-    autopilotServer("external", { auto_confirm: true });
+  it.each([
+    [{ auto_organise: true }, ["Brievie zet brieven zelf onder personen en labels."]],
+    [{ auto_confirm: true }, ["Brievie bevestigt brieven zelf."]],
+    [
+      { auto_organise: true, auto_confirm: true },
+      ["Brievie zet brieven zelf onder personen en labels.", "Brievie bevestigt brieven zelf."],
+    ],
+  ])("tells a member what is on (%o), with nothing to switch", async (initial, lines) => {
+    autopilotServer("external", initial);
     server.use(asRole("member"));
     renderApp(path);
-    expect(
-      await screen.findByText("Brieven worden automatisch verwerkt door de AI."),
-    ).toBeVisible();
+    for (const line of lines) {
+      expect(await screen.findByText(line, { exact: false })).toBeVisible();
+    }
+    expect(screen.queryByText("Brieven worden niet automatisch verwerkt.")).not.toBeInTheDocument();
+    expect(screen.queryByText(/automatisch verwerkt door de AI/)).not.toBeInTheDocument();
     expect(screen.queryByRole("switch")).not.toBeInTheDocument();
   });
 
@@ -175,5 +184,61 @@ describe("automatisch verwerken", () => {
     server.use(asRole("member"));
     renderApp(path);
     expect(await screen.findByText("Brieven worden niet automatisch verwerkt.")).toBeVisible();
+  });
+
+  it("tells a member nothing is automatic while the server forbids it", async () => {
+    autopilotServer("external", { allowed: false, auto_confirm: true });
+    server.use(asRole("member"));
+    renderApp(path);
+    expect(await screen.findByText("Brieven worden niet automatisch verwerkt.")).toBeVisible();
+  });
+
+  it("lets an admin switch off a switch still stored on while the server forbids it", async () => {
+    const state = autopilotServer("external", { allowed: false, auto_confirm: true });
+    const user = userEvent.setup();
+    renderApp(path);
+    expect(
+      await screen.findByText(
+        "De beheerder van de server heeft automatisch verwerken uitgezet. Hier kun je het niet aanzetten.",
+      ),
+    ).toBeVisible();
+    const confirm = await screen.findByRole("switch", { name: "Brieven zelf bevestigen" });
+    expect(confirm).toBeChecked();
+    // The one that is off cannot be switched on, so it is not offered.
+    expect(
+      screen.queryByRole("switch", { name: "Brieven zelf onder personen en labels zetten" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(confirm);
+
+    await waitFor(() =>
+      expect(state.puts).toEqual([
+        { auto_organise: false, auto_confirm: false, acknowledged: false },
+      ]),
+    );
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("switch")).not.toBeInTheDocument());
+  });
+
+  it("clears a refusal when the question is cancelled", async () => {
+    autopilotServer("external");
+    server.use(
+      http.put(`${base}/ai/autopilot`, () =>
+        HttpResponse.json(
+          errorBody("ai_autopilot_forbidden", "De serverbeheerder heeft dit uitgezet."),
+          { status: 409 },
+        ),
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp(path);
+    await user.click(await screen.findByRole("switch", { name: "Brieven zelf bevestigen" }));
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: "Aanzetten" }));
+    await within(dialog).findByRole("alert");
+    await user.click(within(dialog).getByRole("button", { name: "Annuleren" }));
+
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(screen.queryByText("De serverbeheerder heeft dit uitgezet.")).not.toBeInTheDocument();
   });
 });

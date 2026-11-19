@@ -13,7 +13,7 @@ import {
   typeLabel,
 } from "../components/document-table";
 import { LabelPicker, useSetLabels } from "../components/label-picker";
-import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
+import { ErrorAlert, focusPageHeading, PageHeader, Shell, usePageTitle } from "../components/page";
 import { PersonPicker, useSetAddressees } from "../components/person-picker";
 import { SuggestionList } from "../components/suggestion-list";
 import { TaskList } from "../components/task-list";
@@ -86,7 +86,7 @@ function StatusNotice({ document }: { document: Document }) {
 function AutomaticHint({ names }: { names: string[] }) {
   if (names.length === 0) return null;
   const list = names.join(", ");
-  return <p className="muted small">{t`Automatisch gezet: ${list}`}</p>;
+  return <p className="muted small">{t`Automatisch toegevoegd: ${list}`}</p>;
 }
 
 /** Hands a letter the AI confirmed back to "Te controleren"; the answer is the letter itself. */
@@ -103,6 +103,9 @@ function useReopen(workspaceId: string, documentId: string) {
     },
     onSuccess: (document) => {
       queryClient.setQueryData(["workspaces", workspaceId, "documents", documentId], document);
+      // The button and its dialog go away with the AI's confirmation: focus the page heading
+      // once they are gone, so it does not fall to the page's body.
+      setTimeout(focusPageHeading, 0);
     },
     onSettled: async () => {
       await Promise.all([
