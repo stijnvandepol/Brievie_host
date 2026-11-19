@@ -62,6 +62,24 @@ def test_runtime_image_takes_security_updates_and_drops_pip() -> None:
     assert "/usr/local/bin/python3 -m pip uninstall --yes pip" in apt
 
 
+def test_caddy_sends_the_isolation_headers_and_switches_unused_features_off() -> None:
+    snippet = re.search(r"\(security_headers\) \{(.*?)\n\}", CADDYFILE, re.DOTALL)
+    assert snippet
+    lines = snippet.group(1).splitlines()
+    headers = "\n".join(line for line in lines if not line.lstrip().startswith("#"))
+    assert 'Cross-Origin-Resource-Policy "same-origin"' in headers
+    assert 'Cross-Origin-Embedder-Policy "require-corp"' in headers
+    policy = re.search(r'Permissions-Policy "([^"]+)"', headers)
+    assert policy
+    features = dict(part.split("=") for part in policy.group(1).split(", "))
+    for feature in ("camera", "microphone", "geolocation", "payment", "usb"):
+        assert features[feature] == "()", feature
+    # The web app copies pairing details and links: the clipboard stays allowed.
+    assert not any(feature.startswith("clipboard") for feature in features)
+    # One place per header: Django sends Cross-Origin-Opener-Policy, Caddy does not.
+    assert "Cross-Origin-Opener-Policy" not in headers
+
+
 def test_caddy_compresses_with_zstd_and_gzip() -> None:
     assert re.search(r"^\tencode zstd gzip$", CADDYFILE, re.MULTILINE)
 

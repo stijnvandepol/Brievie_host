@@ -15,6 +15,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import OperationalError, transaction
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.utils.translation import gettext as _
+from django.views.decorators.csrf import csrf_exempt
 from ninja import NinjaAPI
 from ninja.errors import HttpError, Throttled, ValidationError
 from psycopg import errors as pg_errors
@@ -166,9 +167,28 @@ def install_error_handlers(api: NinjaAPI) -> None:
     api.add_exception_handler(Exception, handle_unexpected_error)
 
 
+@csrf_exempt  # it writes nothing: a POST is the JSON 404, not Django's HTML CSRF page
 def api_path_not_found(request: HttpRequest) -> JsonResponse:
-    """Fallback for /api/ paths that no endpoint matches."""
+    """Fallback for /api/ paths that no endpoint matches, whatever the method."""
     return http_error_response(404)
+
+
+class ApiCacheControlMiddleware:
+    """`Cache-Control: no-store` on every /api/ answer that sets no caching of its own.
+
+    An API answer can hold personal data (names, letters, sessions); no browser or
+    proxy may keep a copy. An endpoint that sets its own header (a page image's
+    `private, no-store`) keeps it. Web app paths keep theirs (the index: `no-cache`).
+    """
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
+        self.get_response = get_response
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        response = self.get_response(request)
+        if request.path.startswith("/api/") and not response.has_header("Cache-Control"):
+            response["Cache-Control"] = "no-store"
+        return response
 
 
 class ApiSessionMiddleware(SessionMiddleware):

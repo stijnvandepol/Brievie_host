@@ -64,6 +64,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "apps.common.errors.ApiCacheControlMiddleware",
     "apps.common.errors.ApiMethodNotAllowedMiddleware",
     "apps.common.errors.ApiContentLengthMiddleware",
     "apps.common.errors.ApiJsonBodyMiddleware",
@@ -158,6 +159,9 @@ def _is_hashed_asset(path: str, url: str) -> bool:
 
 
 WHITENOISE_IMMUTABLE_FILE_TEST = _is_hashed_asset
+# WhiteNoise sends `Access-Control-Allow-Origin: *` by default. The web app loads its files
+# from its own origin only, and the iOS app never reads them: no other site gets access.
+WHITENOISE_ALLOW_ALL_ORIGINS = False
 
 # The server is reachable from the internet behind Caddy, which terminates TLS.
 # Local http development can switch the secure cookies off in deploy/.env.
