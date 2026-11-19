@@ -1033,3 +1033,34 @@ Dependabot (github-actions) proposes the updates.
 - **First CI run of the scans (image).** restic **0.19.1** (2026-07-05, the newest release) replaces 0.18.1, again from the official image pinned by index digest (amd64 and arm64 published), in the Dockerfile and in CI's backend job. Changes in 0.19 that touch our calls: `forget` now exits 3 when it could not remove a snapshot (it exited 0), which the retention now reports as the warning `retention_incomplete` instead of `files_incomplete`; `backup` exits 3 for a missing source path (ours always exist); SIGINT exits 130; flags, JSON output and repository format are unchanged for what we use. 0.19.1 still carries 25 HIGH Go findings that are fixed upstream but not in a restic release (Go 1.25.10, x/net, x/text, grpc, …): they are accepted in `.trivyignore.yaml`, only for `usr/local/bin/restic`, each with its reason and `expired_at: 2027-01-31`, after which the job fails again. The Python findings (msgpack, urllib3, setuptools) and Trivy's "third-party SBOM" warning came from the base image's pip, which vendors those packages and ships their CycloneDX file (`pip/_vendor/bom.cdx.json`); nothing runs pip in the image, so the runtime stage uninstalls it (our own lock has none of the three). The runtime stage also installs pending Debian security updates in its apt layer (`apt-get upgrade`), because the base image lags behind them (zlib1g).
 - **ZAP needs a host name with a dot.** Java sends no SNI for `localhost`, so Caddy had no certificate to offer and every ZAP request failed the TLS handshake. The `dast` job serves its stack as `brievie.test` (in `deploy/.env` and the runner's `/etc/hosts`, which Docker copies into a `--network=host` container); real installations are unchanged. The scans run with `continue-on-error`, their reports are moved aside and uploaded as `zap-reports` in every case, and a last step fails the job when either scan did not succeed.
 - **What the first ZAP findings changed.** No CORS grant on the web app's files (`WHITENOISE_ALLOW_ALL_ORIGINS = False`; WhiteNoise sent `Access-Control-Allow-Origin: *` on `/assets/*` and the favicon by default, and nothing needs it). Every `/api/` answer that sets no caching of its own is `Cache-Control: no-store` (`ApiCacheControlMiddleware`; endpoints with their own header keep it). Unknown `/api/` paths answer the JSON 404 for every method (`api_path_not_found` is CSRF-exempt; a POST got Django's HTML CSRF page). Caddy adds `Permissions-Policy` (camera, microphone, geolocation, sensors, payment and USB off; the clipboard stays, the app copies pairing details), `Cross-Origin-Resource-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`; `Cross-Origin-Opener-Policy` stays Django's (one place per header). The iOS app is no browser and is not affected by any of these. Ignored with reasons in `.zap/rules.tsv`: the readable `csrftoken` cookie (10010, 10112), and caching and content-type rules outside `/api` (10015, 10049, 100001 out of scope for the web app's paths).
+
+## 2026-11-19: Te doen and Alle post
+
+The owner could not tell "Inbox" from "Post", nor "Nieuw" from "Te controleren". Wording
+and presentation only; API, `inbox_state` values, database, route paths and the iOS app
+are unchanged.
+
+- **Renamed.** "Inbox" is **Te doen** (post that waits for you), "Post" is **Alle post**
+  (every letter, also the finished ones), in the navigation, page and browser titles, aria
+  labels, the breadcrumb of a letter and the empty states. The paths stay `/inbox` and
+  `/post` so bookmarks keep working; the route files say so in a comment.
+- **One list, a status per letter.** Te doen no longer has tabs per system state. Each row
+  shows what it needs as a badge with words: `review` reads **Controleren**, `unassigned`
+  **Naam kiezen**, `new` **Bezig…** with "Je hoeft niets te doen". Order: what needs the
+  person (newest first), letters being read last. The list is three calls (one per
+  `inbox_state`), merged in the browser, so nothing outside the newest 200 per state drops.
+- **`new` is not "the same as review".** The request assumed it was; in the code `new` is
+  a letter still being read (status `processing`): nothing to do yet. So it is the Bezig…
+  row, not Controleren. The owner's point stands: for the person there is now one thing
+  to check, not two tabs that looked alike. A letter that could not be read (`failed`)
+  stays under Controleren with its own hint.
+- **Counts kept** in a line under the title ("Controleren: 1 · Naam kiezen: 2 · Bezig: 3");
+  the navigation count is still review plus unassigned ("Te doen, 3 brieven").
+- **Dropped:** keeping the three groups (as tabs or as headed sections): they named the
+  system's states, not the person's work, and two of them read as the same thing. The
+  `?tab=` of an old bookmark is ignored. In Alle post the status column uses the same
+  words (Controleren, Bezig…).
+- **A sentence under every page title** says what the page is for; where pages are easily
+  confused (Te doen and Alle post, Personen and Leden) it says how they differ. A person
+  is someone letters are addressed to, also without an account (a child); a member is
+  someone who logs in.
