@@ -43,6 +43,7 @@ EXPECTED_CODES = {
     "restore_target_unsafe",
     "caddy_not_ready",
     "clock_skew",
+    "retention_incomplete",
     "env_copy_missing",
     "not_in_container",
 }

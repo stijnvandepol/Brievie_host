@@ -49,6 +49,19 @@ def test_runtime_image_has_no_uv_and_no_tests() -> None:
     assert "backend/tests" in DOCKERIGNORE
 
 
+def test_runtime_image_takes_security_updates_and_drops_pip() -> None:
+    # The base image lags behind Debian's security updates between its rebuilds, and its
+    # pip (unused at run time) vendors packages with vulnerabilities of their own.
+    runtime = DOCKERFILE.split("AS builder", 1)[1].split("FROM ", 1)[1]
+    # One RUN instruction: from "RUN " up to the next instruction.
+    blocks = re.split(r"\n(?=[A-Z]+ )", runtime)
+    apt = next(block for block in blocks if "apt-get install" in block)
+    assert apt.startswith("RUN ")
+    assert "apt-get upgrade -y" in apt
+    assert apt.index("apt-get upgrade") < apt.index("rm -rf /var/lib/apt/lists")
+    assert "/usr/local/bin/python3 -m pip uninstall --yes pip" in apt
+
+
 def test_caddy_compresses_with_zstd_and_gzip() -> None:
     assert re.search(r"^\tencode zstd gzip$", CADDYFILE, re.MULTILINE)
 

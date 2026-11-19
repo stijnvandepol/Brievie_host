@@ -475,7 +475,13 @@ def _apply_retention(run_restic: "_Restic", current: UUID) -> str | None:
     for expired in _safety_runs(listed, now - SAFETY_KEEP):
         if expired != current:
             run_restic.forget_run(expired)
-    run_restic(restic.forget_argv(run_restic.host))
+    # restic >= 0.19 exits 3 when it could not remove some snapshots (0.18 exited 0):
+    # the back-up was made, so that is a warning, not `files_incomplete`.
+    pruned = run_restic.result(restic.forget_argv(run_restic.host))
+    if pruned.returncode == 3:
+        logger.warning("Backup run %s: retention could not remove every snapshot", current)
+        return "retention_incomplete"
+    restic.raise_for(pruned)
     return None
 
 

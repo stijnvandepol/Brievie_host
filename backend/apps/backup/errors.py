@@ -84,6 +84,9 @@ REASONS: dict[str, Promise] = {
     "clock_skew": _(
         "De klok van de server of van een back-up klopt niet; er wordt niets opgeruimd."
     ),
+    "retention_incomplete": _(
+        "De back-up is gemaakt, maar niet alle oude back-ups konden worden opgeruimd."
+    ),
     "env_copy_missing": _(
         "De kopie van de instellingen ontbreekt, dus deze back-up zou niet terug te zetten "
         "zijn. Typ ./brievie start."

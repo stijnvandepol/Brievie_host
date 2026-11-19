@@ -63,7 +63,7 @@ jobs:
       # as deploy/Dockerfile copies it (a text test compares the two).
       - name: restic from the image's pinned official image
         run: |
-          id=$(docker create restic/restic:0.18.1@sha256:39d9072fb5651c80d75c7a811612eb60b4c06b32ffe87c2e9f3c7222e1797e76)
+          id=$(docker create restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510)
           docker cp "$id:/usr/bin/restic" "$RUNNER_TEMP/restic"
           docker rm "$id"
           sudo install -m 0755 "$RUNNER_TEMP/restic" /usr/local/bin/restic
@@ -205,6 +205,8 @@ jobs:
           # Only what an update can fix: an unfixed CVE is no reason to stop a change.
           ignore-unfixed: true
           exit-code: "1"
+          # Accepted findings, scoped to one file and each with an expiry date.
+          trivyignores: .trivyignore.yaml
 
   # The way a user installs it: fresh secrets, build the images, start everything.
   stack:
