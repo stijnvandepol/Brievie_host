@@ -255,6 +255,65 @@ describe("automations", () => {
     );
   });
 
+  it("shows the examples instead of an empty list, the workspace's kind first", async () => {
+    server.use(...loggedInHandlers(), ...ruleHandlers([]));
+    renderApp(path);
+    const gallery = await screen.findByRole("region", { name: "Begin met een voorbeeld" });
+    const titles = within(gallery)
+      .getAllByRole("heading", { level: 3 })
+      .map((heading) => heading.textContent);
+    // A home workspace: the business-only example comes last.
+    expect(titles).toEqual([
+      "Label op afzender",
+      "De WOZ-beschikking van de gemeente",
+      "Facturen van een leverancier",
+    ]);
+    expect(within(gallery).getByText("Thuis en zakelijk")).toBeVisible();
+    expect(within(gallery).getByText("Zakelijk")).toBeVisible();
+    expect(
+      within(gallery).getByText("Stelt een label voor op alle post van één afzender."),
+    ).toBeVisible();
+    const use = within(gallery).getByRole("link", {
+      name: "Gebruik dit voorbeeld: Label op afzender",
+    });
+    expect(use).toHaveAttribute(
+      "href",
+      expect.stringContaining("/automatisering/nieuw?voorbeeld=label_by_sender"),
+    );
+    const how = screen.getByRole("region", { name: "Zo werkt een regel" });
+    expect(within(how).getByText("Wanneer")).toBeVisible();
+    expect(within(how).getByText("Als")).toBeVisible();
+    expect(within(how).getByText("Dan")).toBeVisible();
+  });
+
+  it("keeps the examples below the rules once there are rules", async () => {
+    server.use(...loggedInHandlers(), ...ruleHandlers());
+    renderApp(path);
+    expect(await screen.findByRole("link", { name: "APK naar Auto" })).toBeVisible();
+    expect(
+      await screen.findByRole("link", { name: "Gebruik dit voorbeeld: Label op afzender" }),
+    ).toBeVisible();
+  });
+
+  it("explains rules to a member but offers no examples", async () => {
+    let asked = false;
+    server.use(
+      asMember(),
+      http.get(`${base}/rules/templates`, () => {
+        asked = true;
+        return HttpResponse.json([]);
+      }),
+      ...loggedInHandlers(),
+      ...ruleHandlers([]),
+    );
+    renderApp(path);
+    expect(await screen.findByRole("region", { name: "Zo werkt een regel" })).toBeVisible();
+    expect(
+      screen.queryByRole("region", { name: "Begin met een voorbeeld" }),
+    ).not.toBeInTheDocument();
+    expect(asked).toBe(false);
+  });
+
   it("offers the start set to an admin only", async () => {
     server.use(asMember(), ...loggedInHandlers(), ...ruleHandlers([]));
     renderApp(path);

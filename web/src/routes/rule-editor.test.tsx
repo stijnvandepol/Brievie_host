@@ -599,4 +599,164 @@ describe("rule editor", () => {
     await user.click(screen.getByRole("button", { name: "Test op bestaande post" }));
     expect(await screen.findByText("Geen brieven passen.")).toBeVisible();
   });
+
+  describe("from an example", () => {
+    const senderPath = `${newPath}?voorbeeld=label_by_sender`;
+
+    it("opens the editor filled in, with the blanks marked and nothing saved", async () => {
+      let posts = 0;
+      server.use(
+        http.post(`${base}/rules`, () => {
+          posts += 1;
+          return HttpResponse.json(apkRule, { status: 201 });
+        }),
+        ...loggedInHandlers(),
+        ...ruleHandlers([]),
+      );
+      renderApp(senderPath);
+      expect(await screen.findByRole("textbox", { name: "Naam" })).toHaveValue("Label op afzender");
+      const intro = screen.getByRole("region", { name: "Voorbeeld: Label op afzender" });
+      expect(within(intro).getByText("Preciezer dan een woord in de brief.")).toBeVisible();
+      const row = condition(1);
+      expect(within(row).getByRole("combobox", { name: "Veld" })).toHaveValue("sender");
+      const value = within(row).getByRole("textbox", { name: "Waarde" });
+      expect(value).toHaveValue("");
+      expect(value).toHaveAttribute("placeholder", "bijv. Zilveren Kruis");
+      expect(value).toHaveAccessibleDescription(
+        "Typ de naam van de afzender, zoals die op de brief staat.",
+      );
+      expect(within(row).getByText("Vul in")).toBeVisible();
+      // No label is chosen for the user.
+      const label = within(action(1)).getByRole("combobox", { name: "Label" });
+      expect(label).toHaveValue("");
+      expect(within(action(1)).getByText("Kies")).toBeVisible();
+      expect(posts).toBe(0);
+    });
+
+    it("tries the filled-in example on existing post before anything is saved", async () => {
+      const tested: unknown[] = [];
+      let posts = 0;
+      server.use(
+        http.post(`${base}/rules/test`, async ({ request }) => {
+          tested.push(await request.json());
+          return HttpResponse.json({
+            total_count: 5,
+            checked_count: 5,
+            matched_count: 1,
+            documents: [documentSummary],
+          });
+        }),
+        http.post(`${base}/rules`, () => {
+          posts += 1;
+          return HttpResponse.json(apkRule, { status: 201 });
+        }),
+        ...loggedInHandlers(),
+        ...ruleHandlers([]),
+      );
+      const user = userEvent.setup();
+      renderApp(senderPath);
+      const value = await screen.findByRole("textbox", { name: "Waarde" });
+      await user.type(value, "Zilveren Kruis");
+      expect(within(condition(1)).queryByText("Vul in")).not.toBeInTheDocument();
+      await user.selectOptions(within(action(1)).getByRole("combobox", { name: "Label" }), "Sales");
+      await user.click(screen.getByRole("button", { name: "Test op bestaande post" }));
+      expect(await screen.findByText("1 van de nieuwste 5 brieven past")).toBeVisible();
+      expect(screen.getByText("Er is nog niets opgeslagen.")).toBeVisible();
+      expect(tested).toEqual([
+        {
+          name: "Label op afzender",
+          active: true,
+          mode: "propose",
+          stop: false,
+          match: "all",
+          conditions: [{ field: "sender", op: "contains_word", value: "Zilveren Kruis" }],
+          actions: [{ type: "add_label", label_id: sales.id }],
+        },
+      ]);
+      expect(posts).toBe(0);
+    });
+
+    it("asks for a label instead of trying the example without one", async () => {
+      let tests = 0;
+      server.use(
+        http.post(`${base}/rules/test`, () => {
+          tests += 1;
+          return HttpResponse.json({
+            total_count: 0,
+            checked_count: 0,
+            matched_count: 0,
+            documents: [],
+          });
+        }),
+        ...loggedInHandlers(),
+        ...ruleHandlers([]),
+      );
+      const user = userEvent.setup();
+      renderApp(senderPath);
+      await user.type(await screen.findByRole("textbox", { name: "Waarde" }), "Menzis");
+      await user.click(screen.getByRole("button", { name: "Test op bestaande post" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Kies bij elke voorwaarde en actie een label of persoon.",
+      );
+      expect(tests).toBe(0);
+    });
+
+    it("makes the suggested label only when asked, then picks it", async () => {
+      const wonen = { ...sales, id: "d3333333-3333-4333-8333-333333333333", name: "Wonen" };
+      const created: unknown[] = [];
+      let labels = [sales];
+      server.use(
+        http.post(`${base}/labels`, async ({ request }) => {
+          created.push(await request.json());
+          labels = [sales, wonen];
+          return HttpResponse.json(wonen, { status: 201 });
+        }),
+        http.get(`${base}/labels`, () => HttpResponse.json(labels)),
+        ...loggedInHandlers(),
+        ...ruleHandlers([]),
+      );
+      const user = userEvent.setup();
+      renderApp(`${newPath}?voorbeeld=municipality_woz`);
+      expect(await screen.findByRole("textbox", { name: "Naam" })).toHaveValue(
+        "WOZ van de gemeente",
+      );
+      expect(within(condition(1)).getByRole("textbox", { name: "Waarde" })).toHaveValue("gemeente");
+      expect(within(condition(2)).getByRole("textbox", { name: "Waarde" })).toHaveValue("WOZ");
+      const label = within(action(1)).getByRole("combobox", { name: "Label" });
+      expect(label).toHaveValue("");
+      expect(created).toEqual([]);
+      await user.click(within(action(1)).getByRole("button", { name: "Label Wonen maken" }));
+      await waitFor(() => expect(label).toHaveValue(wonen.id));
+      expect(within(label).getByRole("option", { name: "Wonen" })).toHaveProperty("selected", true);
+      expect(created).toEqual([{ name: "Wonen", color: "grey" }]);
+      expect(
+        within(action(1)).queryByRole("button", { name: "Label Wonen maken" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("picks the suggested start-set label when the workspace has it", async () => {
+      const wonen = {
+        ...sales,
+        id: "d3333333-3333-4333-8333-333333333333",
+        name: "Thuis en huis",
+        system_key: "wonen",
+      };
+      server.use(
+        http.get(`${base}/labels`, () => HttpResponse.json([sales, wonen])),
+        ...loggedInHandlers(),
+        ...ruleHandlers([]),
+      );
+      renderApp(`${newPath}?voorbeeld=municipality_woz`);
+      await screen.findByRole("textbox", { name: "Naam" });
+      expect(within(action(1)).getByRole("combobox", { name: "Label" })).toHaveValue(wonen.id);
+      expect(within(action(1)).queryByRole("button", { name: /maken/ })).not.toBeInTheDocument();
+    });
+
+    it("says so when the example does not exist, and offers an empty rule", async () => {
+      server.use(...loggedInHandlers(), ...ruleHandlers([]));
+      renderApp(`${newPath}?voorbeeld=bestaat_niet`);
+      expect(await screen.findByText("Dit voorbeeld bestaat niet (meer).")).toBeVisible();
+      expect(screen.getByRole("textbox", { name: "Naam" })).toHaveValue("");
+    });
+  });
 });

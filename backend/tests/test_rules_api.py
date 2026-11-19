@@ -12,6 +12,7 @@ from apps.labels.models import Label
 from apps.rules import engine
 from apps.rules.engine import DocumentFacts, Evaluation, RuleSpec
 from apps.rules.models import Rule, RuleRun
+from apps.rules.templates import rule_templates
 from apps.workspaces.context import workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.documents_support import admin_of, make_person
@@ -212,6 +213,7 @@ def test_viewer_cannot_read_or_change_rules(client: Client, ws_a: Workspace) -> 
 
     for r in (
         client.get(url),
+        client.get(f"{url}/templates"),
         post_json(client, f"/workspaces/{ws_a.id}/rules", rule_body(auto.id)),
         put_json(client, f"{url}/order", {"rule_ids": [str(rule.id)]}),
         post_json(client, f"/workspaces/{ws_a.id}/rules/test", rule_body(auto.id)),
@@ -224,6 +226,78 @@ def test_viewer_cannot_read_or_change_rules(client: Client, ws_a: Workspace) -> 
             "code": "forbidden",
             "message": "Je mag dit niet doen in deze werkruimte.",
         }
+
+
+def test_member_lists_the_templates(client: Client, ws_a: Workspace) -> None:
+    member = UserFactory.create()
+    Membership.objects.create(user=member, workspace=ws_a, role="member")
+    client.force_login(member)
+
+    r = client.get(f"{rules_url(ws_a.id)}/templates")
+
+    assert r.status_code == 200
+    rows = r.json()
+    assert [row["key"] for row in rows] == [t.key for t in rule_templates()]
+    first = rows[0]
+    assert set(first) == {
+        "key",
+        "kinds",
+        "title",
+        "description",
+        "tip",
+        "name",
+        "mode",
+        "match",
+        "conditions",
+        "actions",
+    }
+    assert first["conditions"][0] == {
+        "field": "sender",
+        "op": "contains_word",
+        "value": "",
+        "example": "Zilveren Kruis",
+        "hint": "Typ de naam van de afzender, zoals die op de brief staat.",
+    }
+
+
+def test_every_template_filled_in_can_be_tested_and_stores_nothing(
+    client_a: Client, ws_a: Workspace
+) -> None:
+    """The gallery's "try before saving": the test endpoint takes each filled-in template."""
+    auto = label(ws_a, "auto")
+    person = make_person(ws_a, "Sam")
+    make_document(ws_a)
+    before = client_a.get(rules_url(ws_a.id)).json()
+
+    for row in client_a.get(f"{rules_url(ws_a.id)}/templates").json():
+        body = {
+            "name": row["name"],
+            "mode": row["mode"],
+            "match": row["match"],
+            "conditions": [
+                {"field": c["field"], "op": c["op"], "value": c["value"] or c["example"]}
+                for c in row["conditions"]
+            ],
+            "actions": [
+                {"type": a["type"], "label_id": str(auto.id)}
+                if a["type"] == "add_label"
+                else {"type": a["type"], "person_id": str(person.id)}
+                for a in row["actions"]
+            ],
+        }
+        r = post_json(client_a, f"/workspaces/{ws_a.id}/rules/test", body)
+        assert r.status_code == 200, (row["key"], r.json())
+
+    assert client_a.get(rules_url(ws_a.id)).json() == before
+
+
+def test_a_suggested_template_label_is_in_the_start_set(ws_a: Workspace) -> None:
+    for template in rule_templates():
+        if Workspace.Kind.HOME not in template.kinds:
+            continue
+        for action in template.actions:
+            if action.label_key:
+                assert label(ws_a, action.label_key).name == action.label_name
 
 
 def test_reorder_sets_the_order(client_a: Client, ws_a: Workspace) -> None:

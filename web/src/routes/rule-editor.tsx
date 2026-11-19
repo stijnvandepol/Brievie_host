@@ -2,9 +2,9 @@ import { plural, t } from "@lingui/core/macro";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useId, useRef, useState } from "react";
-import { Button, Form, Input, Label, Switch, TextField } from "react-aria-components";
+import { Button, Form, Input, Label, Switch, Text, TextField } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
-import { labelsQuery, personsQuery, rulesQuery } from "../api/queries";
+import { labelsQuery, personsQuery, rulesQuery, ruleTemplatesQuery } from "../api/queries";
 import type { components } from "../api/schema";
 import { DocumentTable, typeLabel } from "../components/document-table";
 import { Icon } from "../components/icons";
@@ -18,16 +18,26 @@ import {
   SOURCES,
   sourceLabel,
 } from "../components/rule-sentence";
-import { Loading, MessageBar } from "../components/ui";
+import { Badge, Loading, MessageBar } from "../components/ui";
 import { workspaceRoute } from "./workspace";
 
 type RuleOut = components["schemas"]["RuleOut"];
 type RuleBody = components["schemas"]["RuleIn"];
 type LabelOut = components["schemas"]["LabelOut"];
 type PersonOut = components["schemas"]["PersonOut"];
+type RuleTemplate = components["schemas"]["RuleTemplateOut"];
 
-type ConditionRow = { key: number; field: string; op: string; value: string };
-type ActionRow = { key: number; type: string; id: string };
+/** `example` and `hint` come from an example rule: what the user types in the blank. */
+type ConditionRow = {
+  key: number;
+  field: string;
+  op: string;
+  value: string;
+  example?: string;
+  hint?: string;
+};
+/** `hint` and `labelName` come from an example rule: what to pick, and a label to offer. */
+type ActionRow = { key: number; type: string; id: string; hint?: string; labelName?: string };
 
 /** `persons` are the active ones; `everyone` also holds the archived, to name a saved value. */
 type Choices = { labels: LabelOut[]; persons: PersonOut[]; everyone: PersonOut[] };
@@ -41,11 +51,17 @@ function withCurrent(options: Option[], value: string, text: () => string): Opti
     : [...options, { value, text: text() }];
 }
 
+/** Without a choice yet, the list starts with a prompt, so no first entry looks chosen. */
+function withPrompt(options: Option[], value: string, prompt: () => string): Option[] {
+  return value === "" ? [{ value: "", text: prompt(), disabled: true }, ...options] : options;
+}
+
 function personOptions(choices: Choices, value: string): Option[] {
-  const options = choices.persons.map((person) => ({
-    value: person.id,
-    text: person.display_name,
-  }));
+  const options = withPrompt(
+    choices.persons.map((person) => ({ value: person.id, text: person.display_name })),
+    value,
+    () => t`Kies een persoon`,
+  );
   return withCurrent(options, value, () => {
     const known = choices.everyone.find((person) => person.id === value);
     return known ? `${known.display_name} ${t`(gearchiveerd)`}` : t`(verwijderd)`;
@@ -53,7 +69,11 @@ function personOptions(choices: Choices, value: string): Option[] {
 }
 
 function labelOptions(choices: Choices, value: string): Option[] {
-  const options = choices.labels.map((label) => ({ value: label.id, text: label.name }));
+  const options = withPrompt(
+    choices.labels.map((label) => ({ value: label.id, text: label.name })),
+    value,
+    () => t`Kies een label`,
+  );
   return withCurrent(options, value, () => t`(verwijderd)`);
 }
 
@@ -96,14 +116,21 @@ function SelectField({
   value,
   onChange,
   options,
+  describedBy,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: Option[];
+  describedBy?: string;
 }) {
   return (
-    <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>
+    <select
+      aria-label={label}
+      aria-describedby={describedBy}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    >
       {options.map((option) => (
         <option key={option.value} value={option.value} disabled={option.disabled}>
           {option.text}
@@ -135,8 +162,12 @@ function ConditionEditor({
     source: SOURCES.map((source) => ({ value: source, text: sourceLabel(source) })),
   };
   const options = valueOptions[row.field];
+  const hintId = useId();
+  const hint = row.hint ? hintId : undefined;
+  // A blank of an example rule: the user still has to type it.
+  const blank = row.example !== undefined && row.example !== "" && row.value.trim() === "";
   return (
-    <fieldset className="rule-row">
+    <fieldset className={blank ? "rule-row rule-row-fill" : "rule-row"}>
       <legend className="visually-hidden">{t`Voorwaarde ${number}`}</legend>
       <SelectField
         label={t`Veld`}
@@ -150,7 +181,8 @@ function ConditionEditor({
         }))}
         onChange={(field) => {
           const op = FIELD_OPERATORS[field]?.[0] ?? "";
-          onChange({ ...row, field, op, value: defaultValue(field, op, choices) });
+          // The example's hint was about the old field.
+          onChange({ key: row.key, field, op, value: defaultValue(field, op, choices) });
         }}
       />
       <SelectField
@@ -176,18 +208,21 @@ function ConditionEditor({
           label={t`Waarde`}
           value={row.value}
           options={options}
+          describedBy={hint}
           onChange={(value) => onChange({ ...row, value })}
         />
       ) : (
         <TextField
           aria-label={t`Waarde`}
+          aria-describedby={hint}
           className="rule-value"
           value={row.value}
           onChange={(value) => onChange({ ...row, value })}
         >
-          <Input />
+          <Input placeholder={row.example ? t`bijv. ${row.example}` : undefined} />
         </TextField>
       )}
+      {blank ? <Badge intent="warning">{t`Vul in`}</Badge> : null}
       <Button
         className="button-text danger"
         aria-label={t`Voorwaarde ${number} verwijderen`}
@@ -197,11 +232,17 @@ function ConditionEditor({
         <Icon name="delete" />
         {t`Verwijderen`}
       </Button>
+      {row.hint ? (
+        <p id={hintId} className="rule-hint">
+          {row.hint}
+        </p>
+      ) : null}
     </fieldset>
   );
 }
 
 function ActionEditor({
+  workspaceId,
   row,
   number,
   choices,
@@ -209,6 +250,7 @@ function ActionEditor({
   onChange,
   onRemove,
 }: {
+  workspaceId: string;
   row: ActionRow;
   number: number;
   choices: Choices;
@@ -216,9 +258,35 @@ function ActionEditor({
   onChange: (row: ActionRow) => void;
   onRemove: () => void;
 }) {
+  const queryClient = useQueryClient();
   const isLabel = row.type === "add_label";
+  const hintId = useId();
+  const hint = row.hint ? hintId : undefined;
+  // An example's label the workspace does not have: offered, never made unasked.
+  const missingLabel =
+    isLabel &&
+    row.id === "" &&
+    row.labelName &&
+    !choices.labels.some((label) => label.name.toLowerCase() === row.labelName?.toLowerCase())
+      ? row.labelName
+      : null;
+  const createLabel = useMutation({
+    mutationFn: async (name: string) => {
+      const { data, error } = await api.POST("/api/v1/workspaces/{workspace_id}/labels", {
+        params: { path: { workspace_id: workspaceId } },
+        body: { name, color: "grey" },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+    onSuccess: async (label) => {
+      // The list must hold the new label before it is picked.
+      await queryClient.invalidateQueries({ queryKey: labelsQuery(workspaceId).queryKey });
+      onChange({ ...row, id: label.id });
+    },
+  });
   return (
-    <fieldset className="rule-row">
+    <fieldset className={row.id === "" ? "rule-row rule-row-fill" : "rule-row"}>
       <legend className="visually-hidden">{t`Actie ${number}`}</legend>
       <SelectField
         label={t`Actie`}
@@ -231,14 +299,26 @@ function ActionEditor({
             disabled: choices.persons.length === 0,
           },
         ]}
-        onChange={(type) => onChange({ ...row, type, id: defaultAction(type, choices) })}
+        onChange={(type) => onChange({ key: row.key, type, id: defaultAction(type, choices) })}
       />
       <SelectField
         label={isLabel ? t`Label` : t`Persoon`}
         value={row.id}
         options={isLabel ? labelOptions(choices, row.id) : personOptions(choices, row.id)}
+        describedBy={hint}
         onChange={(id) => onChange({ ...row, id })}
       />
+      {row.id === "" ? <Badge intent="warning">{t`Kies`}</Badge> : null}
+      {missingLabel ? (
+        <Button
+          className="button-text"
+          isPending={createLabel.isPending}
+          onPress={() => createLabel.mutate(missingLabel)}
+        >
+          <Icon name="add" />
+          {t`Label ${missingLabel} maken`}
+        </Button>
+      ) : null}
       <Button
         className="button-text danger"
         aria-label={t`Actie ${number} verwijderen`}
@@ -248,33 +328,74 @@ function ActionEditor({
         <Icon name="delete" />
         {t`Verwijderen`}
       </Button>
+      {row.hint ? (
+        <p id={hintId} className="rule-hint">
+          {row.hint}
+        </p>
+      ) : null}
+      {createLabel.error ? <ErrorAlert error={createLabel.error} /> : null}
     </fieldset>
   );
+}
+
+/** The label an example suggests: the start-set label with its key, else one with its name. */
+function suggestedLabel(action: RuleTemplate["actions"][number], labels: LabelOut[]): string {
+  if (action.type !== "add_label" || !action.label_key) return "";
+  const name = action.label_name.toLowerCase();
+  const found =
+    labels.find((label) => label.system_key === action.label_key) ??
+    labels.find((label) => label.name.toLowerCase() === name);
+  return found?.id ?? "";
+}
+
+/** The rows an example starts with; a person is always left for the user to pick. */
+function templateRows(template: RuleTemplate, choices: Choices) {
+  return {
+    conditions: template.conditions.map(({ field, op, value, example, hint }) => ({
+      key: newKey(),
+      field,
+      op,
+      value,
+      example,
+      hint,
+    })),
+    actions: template.actions.map((action) => ({
+      key: newKey(),
+      type: action.type,
+      id: suggestedLabel(action, choices.labels),
+      hint: action.hint,
+      labelName: action.label_name,
+    })),
+  };
 }
 
 function RuleForm({
   workspaceId,
   rule,
+  template,
   choices,
   justCreated,
 }: {
   workspaceId: string;
   rule: RuleOut | null;
+  /** A new rule started from this example: filled in, nothing saved yet. */
+  template: RuleTemplate | null;
   choices: Choices;
   /** The page was opened by the first save of this rule: its "apply to existing post" offer stays. */
   justCreated: boolean;
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [name, setName] = useState(rule?.name ?? "");
-  const [match, setMatch] = useState(rule?.match ?? "all");
-  const [mode, setMode] = useState(rule?.mode ?? "propose");
+  const start = template && !rule ? templateRows(template, choices) : null;
+  const [name, setName] = useState(rule?.name ?? template?.name ?? "");
+  const [match, setMatch] = useState(rule?.match ?? template?.match ?? "all");
+  const [mode, setMode] = useState(rule?.mode ?? template?.mode ?? "propose");
   const [active, setActive] = useState(rule?.active ?? true);
   const [stop, setStop] = useState(rule?.stop ?? false);
   const [conditions, setConditions] = useState<ConditionRow[]>(
     rule
       ? rule.conditions.map((condition) => ({ key: newKey(), ...condition }))
-      : [{ key: newKey(), field: "text", op: "contains_word", value: "" }],
+      : (start?.conditions ?? [{ key: newKey(), field: "text", op: "contains_word", value: "" }]),
   );
   const [actions, setActions] = useState<ActionRow[]>(
     rule
@@ -283,7 +404,7 @@ function RuleForm({
           type: action.type,
           id: (action.type === "add_label" ? action.label_id : action.person_id) ?? "",
         }))
-      : [{ key: newKey(), ...newAction(choices) }],
+      : (start?.actions ?? [{ key: newKey(), ...newAction(choices) }]),
   );
   // A rule that was just created is changed, not created again, by the next save.
   const [savedId, setSavedId] = useState<string | null>(rule?.id ?? null);
@@ -419,6 +540,7 @@ function RuleForm({
 
   const params = { workspaceId };
   const formId = useId();
+  const templateTitle = template?.title ?? "";
   const matched = test.data?.matched_count ?? 0;
   const checked = test.data?.checked_count ?? 0;
   const total = test.data?.total_count ?? 0;
@@ -434,10 +556,25 @@ function RuleForm({
         if (check()) save.mutate();
       }}
     >
+      {template && !rule ? (
+        <section
+          className="panel panel-pad template-intro"
+          aria-label={t`Voorbeeld: ${templateTitle}`}
+        >
+          <h2>{template.title}</h2>
+          <p>{template.description}</p>
+          {template.tip ? <p className="muted">{template.tip}</p> : null}
+          <p>
+            {t`Vul de gemarkeerde delen in. Met Test op bestaande post zie je welke brieven de regel zou raken. Er wordt niets opgeslagen tot je op Opslaan drukt.`}
+          </p>
+        </section>
+      ) : null}
+
       <div className="builder-section">
         <TextField className="field" value={name} onChange={setName} isRequired maxLength={100}>
           <Label>{t`Naam`}</Label>
           <Input />
+          <Text slot="description">{t`Alleen om de regel terug te vinden.`}</Text>
         </TextField>
       </div>
 
@@ -445,6 +582,9 @@ function RuleForm({
         <h2 id={`${formId}-if`} className="builder-title">
           {t`Voorwaarden`}
         </h2>
+        <p className="builder-hint">
+          {t`Waar moet een brief aan voldoen? De tekst zoekt in de hele brief: ook een brief die het woord alleen noemt, past. De afzender en het soort post zijn preciezer; die zijn bekend als de AI de brief heeft gelezen, of zodra jij hem bevestigt.`}
+        </p>
         <div className="rule-match">
           <span>{t`Als`}</span>
           <SelectField
@@ -490,10 +630,14 @@ function RuleForm({
         <h2 id={`${formId}-then`} className="builder-title">
           {t`Acties`}
         </h2>
+        <p className="builder-hint">
+          {t`Wat er gebeurt met een brief die past: een label erop, of op naam van een persoon.`}
+        </p>
         <p className="rule-then">{t`Dan`}</p>
         {actions.map((row, index) => (
           <ActionEditor
             key={row.key}
+            workspaceId={workspaceId}
             row={row}
             number={index + 1}
             choices={choices}
@@ -531,10 +675,12 @@ function RuleForm({
           <span className="switch-track" aria-hidden="true" />
           {t`Stop daarna met de volgende regels`}
         </Switch>
+        <p className="switch-hint">{t`Aan: de regels hieronder slaan een brief over die bij deze past.`}</p>
         <Switch className="switch" isSelected={active} onChange={setActive}>
           <span className="switch-track" aria-hidden="true" />
           {t`Actief`}
         </Switch>
+        <p className="switch-hint">{t`Uit: de regel doet niets, maar blijft bewaard.`}</p>
       </section>
 
       {choices.labels.length === 0 ? (
@@ -585,6 +731,7 @@ function RuleForm({
             })}
           </p>
           {total > checked ? <p className="muted">{t`Je hebt ${total} brieven`}</p> : null}
+          {savedId ? null : <p className="muted">{t`Er is nog niets opgeslagen.`}</p>}
           <DocumentTable
             workspaceId={workspaceId}
             documents={test.data.documents}
@@ -634,7 +781,16 @@ function RuleForm({
   );
 }
 
-function RuleEditorPage({ ruleId, justCreated }: { ruleId: string | null; justCreated: boolean }) {
+function RuleEditorPage({
+  ruleId,
+  justCreated,
+  templateKey,
+}: {
+  ruleId: string | null;
+  justCreated: boolean;
+  /** A new rule from this example (`?voorbeeld=`). */
+  templateKey?: string;
+}) {
   const { workspace } = (ruleId ? ruleRoute : newRuleRoute).useRouteContext();
   usePageTitle(ruleId ? t`Regel wijzigen` : t`Nieuwe regel`);
   const canEdit = workspace.role === "admin";
@@ -642,8 +798,16 @@ function RuleEditorPage({ ruleId, justCreated }: { ruleId: string | null; justCr
   const rules = useQuery({ ...rulesQuery(workspace.id), enabled: canEdit });
   const labels = useQuery({ ...labelsQuery(workspace.id), enabled: canEdit });
   const persons = useQuery({ ...personsQuery(workspace.id), enabled: canEdit });
+  const fromTemplate = !ruleId && templateKey !== undefined;
+  const templates = useQuery({
+    ...ruleTemplatesQuery(workspace.id),
+    enabled: canEdit && fromTemplate,
+  });
   const rule = ruleId ? rules.data?.find((candidate) => candidate.id === ruleId) : undefined;
-  const ready = rules.data && labels.data && persons.data;
+  const template = fromTemplate
+    ? (templates.data?.find((candidate) => candidate.key === templateKey) ?? null)
+    : null;
+  const ready = rules.data && labels.data && persons.data && (!fromTemplate || templates.data);
 
   return (
     <Shell workspace={workspace}>
@@ -659,7 +823,10 @@ function RuleEditorPage({ ruleId, justCreated }: { ruleId: string | null; justCr
         <MessageBar intent="info">{t`Alleen een beheerder kan regels wijzigen.`}</MessageBar>
       )}
       {canEdit && !ready ? <Loading /> : null}
-      <ErrorAlert error={rules.error ?? labels.error ?? persons.error} />
+      <ErrorAlert error={rules.error ?? labels.error ?? persons.error ?? templates.error} />
+      {canEdit && ready && fromTemplate && !template ? (
+        <MessageBar intent="info">{t`Dit voorbeeld bestaat niet (meer).`}</MessageBar>
+      ) : null}
       {canEdit && ready && ruleId && !rule ? (
         <MessageBar intent="error" role="alert">
           {t`Deze regel bestaat niet (meer).`}
@@ -667,9 +834,10 @@ function RuleEditorPage({ ruleId, justCreated }: { ruleId: string | null; justCr
       ) : null}
       {canEdit && ready && (!ruleId || rule) ? (
         <RuleForm
-          key={ruleId ?? "new"}
+          key={ruleId ?? `new-${template?.key ?? ""}`}
           workspaceId={workspace.id}
           rule={rule ?? null}
+          template={template}
           justCreated={justCreated}
           choices={{
             labels: labels.data ?? [],
@@ -685,7 +853,15 @@ function RuleEditorPage({ ruleId, justCreated }: { ruleId: string | null; justCr
 export const newRuleRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: "automatisering/nieuw",
-  component: () => <RuleEditorPage ruleId={null} justCreated={false} />,
+  // `voorbeeld`: the key of the example rule the form starts from.
+  validateSearch: (search: Record<string, unknown>): { voorbeeld?: string } =>
+    typeof search.voorbeeld === "string" && search.voorbeeld !== ""
+      ? { voorbeeld: search.voorbeeld }
+      : {},
+  component: function NewRulePage() {
+    const { voorbeeld } = newRuleRoute.useSearch();
+    return <RuleEditorPage ruleId={null} justCreated={false} templateKey={voorbeeld} />;
+  },
 });
 
 export const ruleRoute = createRoute({

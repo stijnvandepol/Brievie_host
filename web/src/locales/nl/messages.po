@@ -188,6 +188,10 @@ msgstr "30 dagen"
 msgid "7 dagen"
 msgstr "7 dagen"
 
+#: src/routes/rule-editor.tsx
+msgid "Aan: de regels hieronder slaan een brief over die bij deze past."
+msgstr "Aan: de regels hieronder slaan een brief over die bij deze past."
+
 #: src/components/document-table.tsx
 msgid "Aanmaning"
 msgstr "Aanmaning"
@@ -362,11 +366,16 @@ msgstr "Alleen een beheerder kan regels wijzigen."
 msgid "Alleen leden en beheerders van deze werkruimte zien de regels."
 msgstr "Alleen leden en beheerders van deze werkruimte zien de regels."
 
+#: src/routes/rule-editor.tsx
+msgid "Alleen om de regel terug te vinden."
+msgstr "Alleen om de regel terug te vinden."
+
 #: src/routes/ai.tsx
 msgid "Alleen voor een andere dienst die werkt zoals OpenAI. Begint met https://. Vul je dit in, dan geldt de dienst die je hierboven koos niet meer en is een model verplicht."
 msgstr "Alleen voor een andere dienst die werkt zoals OpenAI. Begint met https://. Vul je dit in, dan geldt de dienst die je hierboven koos niet meer en is een model verplicht."
 
 #: src/components/rule-sentence.ts
+#: src/components/rule-templates.tsx
 #: src/routes/rule-editor.tsx
 msgid "Als"
 msgstr "Als"
@@ -456,9 +465,13 @@ msgstr "Bedrag incl. btw"
 msgid "Beëindigen"
 msgstr "Beëindigen"
 
+#: src/components/rule-templates.tsx
+msgid "Begin met een voorbeeld"
+msgstr "Begin met een voorbeeld"
+
 #: src/routes/automations.tsx
-msgid "Begin met de startset, of maak zelf een regel."
-msgstr "Begin met de startset, of maak zelf een regel."
+msgid "Begin met een voorbeeld hieronder, met de startset, of maak zelf een regel."
+msgstr "Begin met een voorbeeld hieronder, met de startset, of maak zelf een regel."
 
 #: src/components/role-dialog.tsx
 #: src/routes/home.tsx
@@ -498,6 +511,15 @@ msgstr "Bezig. Je ziet het resultaat bij de brieven zelf."
 #: src/routes/inbox.tsx
 msgid "Bezig…"
 msgstr "Bezig…"
+
+#: src/components/rule-templates.tsx
+msgid "Bij nieuwe post en als je een brief bevestigt. Bestaande post alleen als je daarom vraagt."
+msgstr "Bij nieuwe post en als je een brief bevestigt. Bestaande post alleen als je daarom vraagt."
+
+#. placeholder {0}: row.example
+#: src/routes/rule-editor.tsx
+msgid "bijv. {0}"
+msgstr "bijv. {0}"
 
 #: src/routes/ai.tsx
 msgid "Bijvoorbeeld http://ollama:11434/v1"
@@ -578,6 +600,7 @@ msgstr "Controleren: {0}"
 msgid "Daarna ben je ingelogd. Je moet je telefoon opnieuw koppelen."
 msgstr "Daarna ben je ingelogd. Je moet je telefoon opnieuw koppelen."
 
+#: src/components/rule-templates.tsx
 #: src/routes/rule-editor.tsx
 msgid "Dan"
 msgstr "Dan"
@@ -587,6 +610,10 @@ msgstr "Dan"
 #: src/routes/inbox.tsx
 msgid "Datum brief"
 msgstr "Datum brief"
+
+#: src/components/rule-templates.tsx
+msgid "De acties: een label of een naam op de brief. Eerst als voorstel dat jij bevestigt, tenzij je de regel automatisch laat toepassen."
+msgstr "De acties: een label of een naam op de brief. Eerst als voorstel dat jij bevestigt, tenzij je de regel automatisch laat toepassen."
 
 #: src/components/rule-sentence.ts
 msgid "de afzender"
@@ -668,6 +695,10 @@ msgstr "De twee wachtwoorden zijn niet hetzelfde."
 msgid "De uitnodiging is klaar"
 msgstr "De uitnodiging is klaar"
 
+#: src/components/rule-templates.tsx
+msgid "De voorwaarden: bijvoorbeeld een woord in de brief, of van wie de brief komt."
+msgstr "De voorwaarden: bijvoorbeeld een woord in de brief, of van wie de brief komt."
+
 #: src/routes/document.tsx
 msgid "Deadline"
 msgstr "Deadline"
@@ -718,6 +749,10 @@ msgstr "Deze werkruimte gebruikt nu een eigen adres ({0}). Vul dat adres opnieuw
 #: src/routes/member-devices.tsx
 msgid "Dit lid"
 msgstr "Dit lid"
+
+#: src/routes/rule-editor.tsx
+msgid "Dit voorbeeld bestaat niet (meer)."
+msgstr "Dit voorbeeld bestaat niet (meer)."
 
 #: src/components/audit-codes.ts
 msgid "Document"
@@ -803,6 +838,10 @@ msgstr "Er is nog geen post."
 msgid "Er is nog niets gebeurd."
 msgstr "Er is nog niets gebeurd."
 
+#: src/routes/rule-editor.tsx
+msgid "Er is nog niets opgeslagen."
+msgstr "Er is nog niets opgeslagen."
+
 #: src/components/device-table.tsx
 msgid "Er zijn nog geen apparaten gekoppeld."
 msgstr "Er zijn nog geen apparaten gekoppeld."
@@ -854,6 +893,14 @@ msgstr "Geavanceerd"
 #: src/components/audit-table.tsx
 msgid "Gebeurtenis"
 msgstr "Gebeurtenis"
+
+#: src/components/rule-templates.tsx
+msgid "Gebruik dit voorbeeld"
+msgstr "Gebruik dit voorbeeld"
+
+#: src/components/rule-templates.tsx
+msgid "Gebruik dit voorbeeld: {title}"
+msgstr "Gebruik dit voorbeeld: {title}"
 
 #: src/routes/login.tsx
 msgid "Gebruik het account van deze server."
@@ -1262,6 +1309,10 @@ msgid "Keuring"
 msgstr "Keuring"
 
 #: src/routes/rule-editor.tsx
+msgid "Kies"
+msgstr "Kies"
+
+#: src/routes/rule-editor.tsx
 msgid "Kies bij elke voorwaarde en actie een label of persoon."
 msgstr "Kies bij elke voorwaarde en actie een label of persoon."
 
@@ -1272,6 +1323,18 @@ msgstr "Kies bij Persoon of Label een andere waarde."
 #: src/routes/persons.tsx
 msgid "Kies een account"
 msgstr "Kies een account"
+
+#: src/routes/rule-editor.tsx
+msgid "Kies een label"
+msgstr "Kies een label"
+
+#: src/routes/rule-editor.tsx
+msgid "Kies een persoon"
+msgstr "Kies een persoon"
+
+#: src/components/rule-templates.tsx
+msgid "Kies een voorbeeld en vul de gemarkeerde delen in. Er wordt niets opgeslagen tot je op Opslaan drukt."
+msgstr "Kies een voorbeeld en vul de gemarkeerde delen in. Er wordt niets opgeslagen tot je op Opslaan drukt."
 
 #: src/routes/invitation.tsx
 #: src/routes/password-reset.tsx
@@ -1341,6 +1404,10 @@ msgstr "Laatst gebruikt"
 #: src/routes/rule-editor.tsx
 msgid "Label"
 msgstr "Label"
+
+#: src/routes/rule-editor.tsx
+msgid "Label {missingLabel} maken"
+msgstr "Label {missingLabel} maken"
 
 #: src/components/rule-sentence.ts
 msgid "label {name}"
@@ -2013,10 +2080,15 @@ msgstr "Terugzetten: {0}"
 msgid "Test op bestaande post"
 msgstr "Test op bestaande post"
 
+#: src/components/rule-templates.tsx
 #: src/routes/home.tsx
 #: src/routes/setup.tsx
 msgid "Thuis"
 msgstr "Thuis"
+
+#: src/components/rule-templates.tsx
+msgid "Thuis en zakelijk"
+msgstr "Thuis en zakelijk"
 
 #: src/components/audit-table.tsx
 msgid "Tijdstip"
@@ -2066,6 +2138,10 @@ msgstr "Uit"
 #: src/routes/rule-editor.tsx
 msgid "Uit: de regel doet een voorstel dat jij bevestigt."
 msgstr "Uit: de regel doet een voorstel dat jij bevestigt."
+
+#: src/routes/rule-editor.tsx
+msgid "Uit: de regel doet niets, maar blijft bewaard."
+msgstr "Uit: de regel doet niets, maar blijft bewaard."
 
 #. placeholder {0}: formatLetterDate(task.deadline)
 #: src/components/task-list.tsx
@@ -2197,6 +2273,10 @@ msgstr "Voor de post van je bedrijf."
 msgid "Voor je eigen post en die van je gezin. Alles bij elkaar, rustig en overzichtelijk."
 msgstr "Voor je eigen post en die van je gezin. Alles bij elkaar, rustig en overzichtelijk."
 
+#: src/routes/rule-editor.tsx
+msgid "Voorbeeld: {templateTitle}"
+msgstr "Voorbeeld: {templateTitle}"
+
 #: src/components/suggestion-list.tsx
 msgid "voorstel"
 msgstr "voorstel"
@@ -2229,9 +2309,17 @@ msgstr "Voorwaarde toevoegen"
 msgid "Voorwaarden"
 msgstr "Voorwaarden"
 
+#: src/routes/rule-editor.tsx
+msgid "Vul de gemarkeerde delen in. Met Test op bestaande post zie je welke brieven de regel zou raken. Er wordt niets opgeslagen tot je op Opslaan drukt."
+msgstr "Vul de gemarkeerde delen in. Met Test op bestaande post zie je welke brieven de regel zou raken. Er wordt niets opgeslagen tot je op Opslaan drukt."
+
 #: src/routes/ai.tsx
 msgid "Vul de naam van het model in, zoals de dienst die noemt."
 msgstr "Vul de naam van het model in, zoals de dienst die noemt."
+
+#: src/routes/rule-editor.tsx
+msgid "Vul in"
+msgstr "Vul in"
 
 #: src/routes/setup.tsx
 msgid "Waar gebruik je Brievie voor?"
@@ -2241,6 +2329,10 @@ msgstr "Waar gebruik je Brievie voor?"
 #: src/routes/sessions.tsx
 msgid "Waar je bent ingelogd"
 msgstr "Waar je bent ingelogd"
+
+#: src/routes/rule-editor.tsx
+msgid "Waar moet een brief aan voldoen? De tekst zoekt in de hele brief: ook een brief die het woord alleen noemt, past. De afzender en het soort post zijn preciezer; die zijn bekend als de AI de brief heeft gelezen, of zodra jij hem bevestigt."
+msgstr "Waar moet een brief aan voldoen? De tekst zoekt in de hele brief: ook een brief die het woord alleen noemt, past. De afzender en het soort post zijn preciezer; die zijn bekend als de AI de brief heeft gelezen, of zodra jij hem bevestigt."
 
 #: src/routes/rule-editor.tsx
 msgid "Waarde"
@@ -2266,9 +2358,17 @@ msgstr "Wachtwoord opslaan"
 msgid "Wachtwoord wijzigen"
 msgstr "Wachtwoord wijzigen"
 
+#: src/components/rule-templates.tsx
+msgid "Wanneer"
+msgstr "Wanneer"
+
 #: src/routes/document.tsx
 msgid "Wat de AI las"
 msgstr "Wat de AI las"
+
+#: src/routes/rule-editor.tsx
+msgid "Wat er gebeurt met een brief die past: een label erop, of op naam van een persoon."
+msgstr "Wat er gebeurt met een brief die past: een label erop, of op naam van een persoon."
 
 #. placeholder {0}: workspace.name
 #: src/routes/settings.tsx
@@ -2356,6 +2456,7 @@ msgstr "Wijzigen: {name}"
 msgid "Wordt gemaakt…"
 msgstr "Wordt gemaakt…"
 
+#: src/components/rule-templates.tsx
 #: src/routes/home.tsx
 #: src/routes/setup.tsx
 msgid "Zakelijk"
@@ -2376,3 +2477,7 @@ msgstr "Zie je hier een browser die je niet kent? Log die uit en wijzig je wacht
 #: src/routes/persons.tsx
 msgid "Zo staat de naam op brieven, bijvoorbeeld J. de Vries. Zet elke variant op een eigen regel."
 msgstr "Zo staat de naam op brieven, bijvoorbeeld J. de Vries. Zet elke variant op een eigen regel."
+
+#: src/components/rule-templates.tsx
+msgid "Zo werkt een regel"
+msgstr "Zo werkt een regel"
