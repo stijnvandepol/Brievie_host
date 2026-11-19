@@ -9,3 +9,6 @@ deploy/.env
 **/node_modules
 web/dist
 backend/tests
+**/.coverage
+**/coverage.xml
+web/coverage

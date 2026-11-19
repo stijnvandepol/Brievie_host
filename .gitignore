@@ -8,6 +8,8 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 backend/staticfiles/
+.coverage
+coverage.xml
 
 # Local secrets
 deploy/.env
@@ -34,6 +36,7 @@ brievie-herstelblad.html.tmp
 .vscode/
 node_modules/
 web/dist/
+web/coverage/
 
 # Worktrees of coding agents
 .claude/worktrees/

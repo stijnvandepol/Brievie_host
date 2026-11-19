@@ -24,6 +24,7 @@ dev = [
     "factory-boy>=3.3.3",
     "mypy>=2.4.1",
     "pytest>=9.2.0",
+    "pytest-cov>=7.1.0",
     "pytest-django>=4.14.0",
     "ruff>=0.17.5",
 ]
@@ -56,6 +57,18 @@ ignore_missing_imports = true
 
 [tool.django-stubs]
 django_settings_module = "brievie.settings"
+
+# Coverage is measured in CI (`pytest --cov`); a plain `make test` does not measure it.
+[tool.coverage.run]
+source = ["."]
+branch = true
+omit = ["tests/*", "*/migrations/*", "manage.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+# THE ONE PLACE for the backend's minimum: set `fail_under = <percent>` here, from the
+# first CI run's total. Until then coverage is reported, never enforced.
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "brievie.settings"
