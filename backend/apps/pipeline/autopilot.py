@@ -27,6 +27,7 @@ from apps.documents.models import (
 from apps.documents.organise import ADDRESSEES_MAX, LABELS_MAX
 from apps.documents.schemas import ConfirmIn, TaskIn
 from apps.people.matching import PRESELECT_FROM
+from apps.people.models import Person
 from apps.pipeline.schema import ExtractionPayload
 from apps.pipeline.validation import (
     ACTION_TYPES,
@@ -47,7 +48,8 @@ def apply_open_proposals(document: Document) -> int:
 
     Addressees first, then labels, each by confidence (highest first) and id.
     A target that is gone or an archived person is skipped, and so is anything that
-    would take the document over its limit.
+    would take the document over its limit. An AI pick of a person is applied only when
+    its quote names that person (`quote_names`); otherwise it stays open.
     """
     room: dict[str, int] = {
         _ADD_ADDRESSEE: ADDRESSEES_MAX
@@ -78,12 +80,35 @@ def apply_open_proposals(document: Document) -> int:
         else:
             if row.person is None or row.person.archived_at is not None:
                 continue
+            if row.origin == DocumentSuggestion.Origin.AI and not quote_names(
+                row.quote, row.person
+            ):
+                continue  # the letter's own words must name the person
             added = organise.add_addressee(document, row.person, actor=None, origin=event_origin)
         if added:
             suggestions.mark_accepted(document, row.action, suggestions.target_id_of(row))
             room[row.action] -= 1
             applied += 1
     return applied
+
+
+def quote_names(quote: str, person: Person) -> bool:
+    """Whether `quote` holds the person's display name or one of their name variants.
+
+    Case-insensitive, on whitespace-normalised text, as whole words. An AI pick of a person
+    whose quote does not name them ("Geachte heer/mevrouw") stays a proposal: otherwise the
+    letter alone could decide whose post it is.
+    """
+    text = _normalised(quote)
+    for name in (person.display_name, *person.name_variants):
+        wanted = _normalised(str(name))
+        if wanted and re.search(r"(?<!\w)" + re.escape(wanted) + r"(?!\w)", text):
+            return True
+    return False
+
+
+def _normalised(text: str) -> str:
+    return " ".join(unicodedata.normalize("NFC", text).split()).casefold()
 
 
 def _event_origin(row: DocumentSuggestion) -> str | None:
@@ -111,39 +136,69 @@ _NUMBER_WORDS = (
     "|vijftien|zestien|zeventien|achttien|negentien|honderd|" + _TENS + "|"
     "(?:een|één|eén|twee|tweeën|drie|vier|vijf|zes|zeven|acht|negen)(?:en|ën)(?:" + _TENS + ")"
 )
-_COUNT = r"(?:\d+|" + _NUMBER_WORDS + r")"
-_DAY_UNITS = r"(?:dagen|dag|werkdagen|werkdag|kalenderdagen|kalenderdag)"
-_UNITS = _DAY_UNITS[:-1] + r"|weken|week|maanden|maand|jaren|jaar)"
+_ONE_COUNT = r"(?:\d+|" + _NUMBER_WORDS + r")"
+# "veertien (14)", "2 (twee)": legal Dutch repeats the number in brackets.
+_BRACKETED = r"\s*\(\s*" + _ONE_COUNT + r"\s*\)"
+_COUNT = _ONE_COUNT + r"(?:" + _BRACKETED + r")?"
+_UNITS = (
+    r"(?:dagen|dag|werkdagen|werkdag|kalenderdagen|kalenderdag"
+    r"|weken|week|maanden|maand|jaren|jaar)"
+)
 _TERM_WORDS = re.compile(
-    r"uiterlijk|uiterste|vervaldatum|betaaldatum|termijn|\bdeadline|\bten\s+laatste\b"
-    r"|\bniet\s+later\s+dan\b|\btot\s+en\s+met\b|\bt/m\b",
+    r"uiterlijk|uiterste|vervaldag|vervaldatum|betaaldatum|termijn|\bdeadline"
+    r"|\bten\s+laatste\b|\bniet\s+later\s+dan\b|\btot\s+en\s+met\b|\bt/m\b"
+    r"|\bdue\s+date\b|\bno\s+later\s+than\b",
     re.IGNORECASE,
 )
-_WITHIN = re.compile(r"\bbinnen\s+" + _COUNT + r"\s+" + _UNITS + r"\b", re.IGNORECASE)
-# "30 dagen netto", "veertien dagen na factuurdatum"
+# "binnen 14 dagen", "binnen veertien (14) dagen", "binnen 14dagen" (OCR drops the space).
+_WITHIN = re.compile(r"\bbinnen\s+" + _COUNT + r"\s*" + _UNITS + r"\b", re.IGNORECASE)
+# "30 dagen netto", "veertien dagen na factuurdatum", "zes weken na de dagtekening",
+# and any bracketed count of a unit ("zes (6) weken").
 _PAYMENT_TERM = re.compile(
-    r"\b" + _COUNT + r"\s+" + _DAY_UNITS + r"\s+(?:netto\b|na\b)", re.IGNORECASE
+    r"\b" + _COUNT + r"\s*" + _UNITS + r"\s+(?:netto\b|na\b)"
+    r"|\b" + _ONE_COUNT + _BRACKETED + r"\s*" + _UNITS + r"\b",
+    re.IGNORECASE,
 )
 _WEEKDAYS = "maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag"
+_DATE = (
+    r"(?:\d{4}-\d{2}-\d{2}"
+    # "1-12", "01-12-26", "1/12/2026"; not "1.500" (an amount)
+    r"|\d{1,2}[-/.]\d{1,2}(?:[-/.]\d{2,4})?(?!\d)"
+    r"|\d{1,2}\s+(?:" + MONTH_NAMES_PATTERN + r")\b)"
+)
+# "vóór 1 december", "voor: maandag 01-12-2026", "tot 1 december"
 _BEFORE_A_DATE = re.compile(
-    r"\bv[oó][oó]r[:\s]+(?:(?:" + _WEEKDAYS + r")\s+)?(?:"
-    r"\d{4}-\d{2}-\d{2}"
-    r"|\d{1,2}[-/.]\d{1,2}[-/.]\d{4}"
-    r"|\d{1,2}\s+(?:" + MONTH_NAMES_PATTERN + r")\b"
-    r")",
+    r"\b(?:v[oó][oó]r|tot)[:\s]+(?:(?:" + _WEEKDAYS + r")\s+)?" + _DATE,
+    re.IGNORECASE,
+)
+_EN_MONTHS = "january|february|march|april|may|june|july|august|september|october|november|december"
+_EN_COUNT = (
+    r"(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen"
+    r"|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|sixty|ninety)"
+)
+# "within 14 days", "before 1 December 2026", "before December 1"
+_ENGLISH = re.compile(
+    r"\bwithin\s+" + _EN_COUNT + r"\s*(?:(?:business|working|calendar)\s+)?"
+    r"(?:days?|weeks?|months?|years?)\b"
+    r"|\bbefore\s+(?:\d{1,2}(?:st|nd|rd|th)?\s+(?:" + _EN_MONTHS + r")\b"
+    r"|(?:" + _EN_MONTHS + r")\s+\d{1,2}\b"
+    r"|\d{4}-\d{2}-\d{2}|\d{1,2}[-/.]\d{1,2}(?:[-/.]\d{2,4})?(?!\d))",
     re.IGNORECASE,
 )
 
 
 def mentions_term(text: str) -> bool:
-    """Whether the letter names a term or deadline in words ("binnen 14 dagen", "uiterlijk",
-    "vóór 1 december", "vervaldatum", "betaaldatum", "30 dagen netto", "niet later dan",
-    "tot en met", "termijn", "deadline", "ten laatste").
+    """Whether the letter names a term or deadline in words ("binnen 14 dagen",
+    "binnen veertien (14) dagen", "zes weken na de dagtekening", "uiterlijk", "vóór 1
+    december", "tot 1 december", "vervaldag", "betaaldatum", "30 dagen netto", "niet later
+    dan", "tot en met", "termijn", "deadline", "ten laatste", and a few English forms:
+    "within 14 days", "due date", "no later than", "before 1 December").
 
-    Pure. The models miss relative terms, so a letter that names one is not confirmed
-    when an action has no date. The text is read in NFC (OCR and PDF text often holds
-    "vóór" as `o` plus a combining accent). Blocking too often is better than too rarely:
-    a word that merely contains "termijn" matches too.
+    Pure, and linear in the text (no nested quantifiers). The models miss relative terms,
+    so a letter that names one is not confirmed unless every action has a date. The text
+    is read in NFC (OCR and PDF text often holds "vóór" as `o` plus a combining accent).
+    Blocking too often is better than too rarely: a word that merely contains "termijn"
+    matches too.
     """
     text = unicodedata.normalize("NFC", text)
     return bool(
@@ -151,6 +206,7 @@ def mentions_term(text: str) -> bool:
         or _PAYMENT_TERM.search(text)
         or _BEFORE_A_DATE.search(text)
         or _TERM_WORDS.search(text)
+        or _ENGLISH.search(text)
     )
 
 
@@ -189,13 +245,16 @@ def decide_confirmation(
         if task is None:
             return None
         tasks.append(task)
-    if any(task.deadline is None for task in tasks) and mentions_term(text):
+    # The letter names a term: every action must carry a date, and a letter without
+    # actions waits for a person (the model may have missed the action).
+    if mentions_term(text) and (not tasks or any(task.deadline is None for task in tasks)):
         return None
-    # The invoice names a due date, so a payment without a deadline missed it (any confidence).
-    if any(v.field == "invoice_due_date" for v in values) and any(
-        task.type == Task.Type.PAY and task.deadline is None for task in tasks
-    ):
-        return None
+    # The invoice names a due date (any confidence): there must be a payment, and every
+    # payment must carry a deadline.
+    if any(v.field == "invoice_due_date" for v in values):
+        payments = [task for task in tasks if task.type == Task.Type.PAY]
+        if not payments or any(task.deadline is None for task in payments):
+            return None
     summary = _best(values, "summary", 0)
     if summary is not None and len(summary.value) > _MAX_SUMMARY:
         return None

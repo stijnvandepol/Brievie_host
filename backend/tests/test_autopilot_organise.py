@@ -435,3 +435,57 @@ def test_apply_returns_how_many_it_applied(ws_a: Workspace) -> None:
         locked = Document.objects.select_for_update().get(id=document.id)
         assert autopilot.apply_open_proposals(locked) == 0
     assert Decimal("0.800") == autopilot.AUTO_APPLY_FROM
+
+
+NO_NAME_LETTER = "Geachte heer/mevrouw,\nUw afspraak bij de huisarts is verzet naar donderdag."
+
+
+def test_an_ai_pick_of_a_person_whose_quote_holds_no_name_stays_open(ws_a: Workspace) -> None:
+    switch_on(ws_a)
+    make_person(ws_a, "Jan de Vries")
+    document = new_document(ws_a, NO_NAME_LETTER)
+
+    run(ws_a, document, Picking(persons={"Jan de Vries": ("Geachte heer/mevrouw", 0.95)}))
+
+    assert on_document(ws_a, document) == (set(), set())
+    assert suggestion_states(ws_a, document) == {"Jan de Vries": ("open", "ai")}
+
+
+def _ai_pick(workspace: Workspace, document: Document, person: object, quote: str) -> None:
+    from apps.documents import suggestions
+
+    with workspace_context(workspace.id):
+        locked = Document.objects.select_for_update().get(id=document.id)
+        suggestions.propose(
+            locked,
+            action=DocumentSuggestion.Action.ADD_ADDRESSEE,
+            person=person,  # type: ignore[arg-type]
+            origin=DocumentSuggestion.Origin.AI,
+            quote=quote,
+            confidence=Decimal("0.950"),
+        )
+
+
+@pytest.mark.parametrize(
+    ("quote", "applied"),
+    [
+        ("Aan:  JAN de\nVRIES, Utrecht", 1),  # the name, other case and spaces
+        ("De heer J. de Vries", 1),  # a name variant
+        ("Geachte heer/mevrouw", 0),
+        ("Jan", 0),
+    ],
+)
+def test_an_ai_pick_of_a_person_is_applied_only_when_its_quote_holds_a_name(
+    ws_a: Workspace, quote: str, applied: int
+) -> None:
+    person = make_person(ws_a, "Jan de Vries")
+    with workspace_context(ws_a.id):
+        person.name_variants = ["J. de Vries"]
+        person.save()
+    document = new_document(ws_a, quote)
+    _ai_pick(ws_a, document, person, quote)
+
+    with workspace_context(ws_a.id):
+        locked = Document.objects.select_for_update().get(id=document.id)
+        assert autopilot.apply_open_proposals(locked) == applied
+        assert DocumentAddressee.objects.filter(document=document).count() == applied

@@ -14,6 +14,7 @@ from django.db import transaction
 from django.utils import timezone
 from pydantic import ValidationError
 
+from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
 from apps.documents import review, suggestions
 from apps.documents.models import Document, DocumentSuggestion, Extraction
@@ -77,19 +78,16 @@ def run_pipeline(
             logger.info("Document %s changed during processing; result dropped", document_id)
             return
         store_proposals(document, values, provider)
-        _organise_guarded(document, text, persons, choices)
-        in_force = autopilot_in_force(workspace_id) if provider is not None else None
-        organise_failed = False
+        organised = _organise_guarded(document, text, persons, choices)
+        # When proposing failed, nothing automatic happens: whatever is open is not this
+        # run's proposals, and nothing says the persons are right. A person looks.
+        in_force = autopilot_in_force(workspace_id) if provider is not None and organised else None
+        applied_ok = True
         if in_force is not None and in_force.organise:
-            organise_failed = not _autopilot_guarded(document)
+            applied_ok = _autopilot_guarded(document)
         confirmed = False
-        # When the organise step failed, nothing says the persons are right: a person looks.
-        if (
-            in_force is not None
-            and in_force.confirm
-            and payload is not None
-            and not organise_failed
-        ):
+        # When applying failed, nothing says the persons are right either.
+        if in_force is not None and in_force.confirm and payload is not None and applied_ok:
             confirmed = _confirm_guarded(
                 document, payload, values, text, day, organised=in_force.organise
             )
@@ -263,10 +261,10 @@ def _organise_guarded(
     text: str,
     persons: Sequence[PersonNames],
     ai_choices: Sequence[ValidatedChoice],
-) -> None:
-    """`organise_processed` in a savepoint: when proposing fails, its writes are rolled
-    back and the caller still stores what it has (the AI's proposals, a failure) and
-    moves the document on, so it never stays `processing`."""
+) -> bool:
+    """`organise_processed` in a savepoint; whether it succeeded. When proposing fails,
+    its writes are rolled back and the caller still stores what it has (the AI's
+    proposals, a failure) and moves the document on, so it never stays `processing`."""
     try:
         with transaction.atomic():
             organise_processed(document, text, persons, ai_choices)
@@ -275,6 +273,8 @@ def _organise_guarded(
         logger.error(
             "Unexpected %s while proposing for document %s", type(exc).__name__, document.id
         )
+        return False
+    return True
 
 
 def _autopilot_guarded(document: Document) -> bool:
@@ -316,6 +316,14 @@ def _confirm_guarded(
             if data is None or (organised and _open_suggestion_count(document) > 0):
                 return False
             review.confirm_automatically(document, data)
+    except ApiError:
+        # Expected: the built review did not pass the confirm's own checks (a quote that
+        # is not literally in the text). The message may quote the document.
+        logger.info(
+            "Document %s not confirmed by AI: the review did not pass validation", document.id
+        )
+        document.refresh_from_db()
+        return False
     except Exception as exc:  # noqa: BLE001 - the document must not stay processing
         # The type only: an exception message may quote the document.
         logger.error("Unexpected %s while confirming document %s", type(exc).__name__, document.id)

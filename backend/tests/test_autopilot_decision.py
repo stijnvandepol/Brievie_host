@@ -232,12 +232,42 @@ def test_an_action_without_a_deadline_while_the_letter_names_a_term_stays_a_prop
     assert build(change, text=text) is None
 
 
-def test_zero_actions_pass_even_when_the_letter_names_a_term() -> None:
-    text = "Belastingdienst\nDatum 3 november 2026\nDit is ter informatie, uiterlijk bewaren."
+def test_zero_actions_stay_a_proposal_when_the_letter_names_a_term() -> None:
+    # A letter can say "no actions" and still hold a real term further on: a person looks.
+    text = (
+        "Belastingdienst\nDatum 3 november 2026\nDeze brief is alleen ter informatie. "
+        "Tegen dit besluit kunt u binnen zes weken bezwaar maken."
+    )
+    assert build(set_("acties", []), text=text) is None
+
+
+def test_zero_actions_confirm_when_the_letter_names_no_term() -> None:
+    text = "Belastingdienst\nDatum 3 november 2026\nDeze brief is alleen ter informatie."
     data = build(set_("acties", []), text=text)
 
     assert data is not None
     assert data.tasks == []
+
+
+def test_every_action_with_a_deadline_passes_while_the_letter_names_a_term() -> None:
+    def change(raw: dict[str, object]) -> None:
+        second = copy.deepcopy(action(raw))
+        second.update(type="reageren", omschrijving="Stuur het formulier terug")
+        raw["acties"] = [action(raw), second]
+
+    assert build(change) is not None
+
+
+def test_one_action_without_a_deadline_among_dated_ones_stays_a_proposal() -> None:
+    def change(raw: dict[str, object]) -> None:
+        second = {
+            "type": "reageren",
+            "omschrijving": "Stuur het formulier terug",
+            "deadline": dict(NO_DEADLINE),
+        }
+        raw["acties"] = [action(raw), second]
+
+    assert build(change) is None
 
 
 @pytest.mark.parametrize(
@@ -283,6 +313,25 @@ def test_zero_actions_pass_even_when_the_letter_names_a_term() -> None:
         "uiterlijk op 1 december",
         "vo\u0301o\u0301r 1 december",  # decomposed "vóór"
         "termijnbedrag",
+        "binnen veertien (14) dagen",
+        "binnen 14 (veertien) dagen",
+        "binnen 2 (twee) weken",
+        "zes (6) weken",
+        "U kunt tot zes weken na de dagtekening bezwaar maken",
+        "Bezwaar: 6 weken na verzending",
+        "binnen 14dagen",
+        "vóór de vervaldag",
+        "op de vervaldag",
+        "vóór 1-12",
+        "betalen voor 01-12-26",
+        "u heeft tot 1 december",
+        "u heeft tot 1 december 2026",
+        "within 14 days",
+        "Within thirty days",
+        "the due date",
+        "no later than Friday",
+        "before 1 December 2026",
+        "before December 1, 2026",
     ],
 )
 def test_mentions_term_finds_a_term(phrase: str) -> None:
@@ -302,6 +351,10 @@ def test_mentions_term_finds_a_term(phrase: str) -> None:
         "voor 2026 geldt",
         "voor vrijdag",
         "30 dagen geleden",
+        "voor 1.500 euro",
+        "voor 12,50 euro",
+        "tot slot",
+        "before you",
         "",
     ],
 )
@@ -340,13 +393,44 @@ def test_a_pay_action_without_a_deadline_stays_a_proposal_when_an_invoice_due_da
     assert build(change, text=NO_TERM_TEXT) is None
 
 
-def test_an_invoice_due_date_does_not_block_an_action_that_is_not_a_payment() -> None:
+def test_an_invoice_due_date_with_only_an_action_that_is_not_a_payment_stays_a_proposal() -> None:
     def change(raw: dict[str, object]) -> None:
         without_deadline(raw)
         with_invoice_due(raw)
         action(raw).update(type="reageren")
 
-    assert build(change, text=NO_TERM_TEXT) is not None
+    assert build(change, text=NO_TERM_TEXT) is None
+
+
+def test_an_invoice_due_date_without_any_action_stays_a_proposal() -> None:
+    def change(raw: dict[str, object]) -> None:
+        with_invoice_due(raw)
+        raw["acties"] = []
+
+    assert build(change, text=NO_TERM_TEXT) is None
+
+
+def test_an_invoice_due_date_with_a_dated_payment_and_a_dated_other_action_passes() -> None:
+    def change(raw: dict[str, object]) -> None:
+        with_invoice_due(raw)
+        second = copy.deepcopy(action(raw))
+        second.update(type="reageren", omschrijving="Stuur het formulier terug")
+        raw["acties"] = [action(raw), second]
+
+    assert build(change) is not None
+
+
+def test_an_invoice_due_date_with_a_second_payment_without_a_deadline_stays_a_proposal() -> None:
+    def change(raw: dict[str, object]) -> None:
+        with_invoice_due(raw)
+        second = {
+            "type": "betalen",
+            "omschrijving": "Betaal de rente",
+            "deadline": dict(NO_DEADLINE),
+        }
+        raw["acties"] = [action(raw), second]
+
+    assert build(change, text=NO_TERM_TEXT) is None
 
 
 def test_an_invoice_due_date_does_not_block_a_pay_action_that_has_a_deadline() -> None:
@@ -411,3 +495,25 @@ def test_a_summary_over_the_limit_stays_a_proposal() -> None:
 def test_a_description_over_the_limit_stays_a_proposal() -> None:
     assert build(lambda raw: action(raw).update(omschrijving="d" * 501)) is None
     assert build(lambda raw: action(raw).update(omschrijving="d" * 500)) is not None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "binnen " * 100_000,
+        "1 " * 100_000,
+        "1" * 200_000,
+        "binnen 14" + " " * 200_000 + "x",
+        "veertien (" * 50_000,
+        "1 (1 (" * 50_000,
+        "voor 1-" * 50_000,
+        "within " * 100_000,
+        "before 1 " * 50_000,
+    ],
+)
+def test_mentions_term_stays_fast_on_long_text(text: str) -> None:
+    import time
+
+    started = time.monotonic()
+    mentions_term(text)
+    assert time.monotonic() - started < 1.0

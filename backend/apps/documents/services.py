@@ -453,8 +453,9 @@ def list_document_events(*, workspace: Workspace, document_id: UUID) -> list[Doc
     """The document's history, newest first.
 
     Annotated with `undone` (an undo event points at it), `still_linked` (its label or
-    person is on the document now) and `superseded` (a later event concerns the same
-    label or person), which `DocumentEventOut.can_undo` reads.
+    person is on the document now), `still_automatic` (that link is still marked
+    automatic) and `superseded` (a later event concerns the same label or person), which
+    `DocumentEventOut.can_undo` reads.
     """
     document = get_document(workspace=workspace, document_id=document_id)
     label_linked = DocumentLabel.objects.filter(
@@ -472,6 +473,8 @@ def list_document_events(*, workspace: Workspace, document_id: UUID) -> list[Doc
         .annotate(
             undone=models.Exists(DocumentEvent.objects.filter(undoes=models.OuterRef("pk"))),
             still_linked=models.Exists(label_linked) | models.Exists(person_linked),
+            still_automatic=models.Exists(label_linked.filter(automatic=True))
+            | models.Exists(person_linked.filter(automatic=True)),
             superseded=models.Exists(later.filter(label_id=models.OuterRef("label_id")))
             | models.Exists(later.filter(person_id=models.OuterRef("person_id"))),
         )

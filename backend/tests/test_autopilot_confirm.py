@@ -5,12 +5,20 @@ import json
 import logging
 import uuid
 from datetime import date
+from decimal import Decimal
 
 import pytest
 from django.test import override_settings
 
-from apps.documents import review
-from apps.documents.models import Document, DocumentEvent, DocumentLabel, DocumentSuggestion
+from apps.common.errors import ApiError
+from apps.documents import review, suggestions
+from apps.documents.models import (
+    Document,
+    DocumentAddressee,
+    DocumentEvent,
+    DocumentLabel,
+    DocumentSuggestion,
+)
 from apps.documents.schemas import ConfirmIn, TaskIn
 from apps.labels.models import Label
 from apps.pipeline import settings_service, steps
@@ -399,19 +407,84 @@ def test_when_applying_the_picks_failed_the_letter_is_not_confirmed(
     assert stored(ws_a, document).status == Document.Status.NEEDS_REVIEW
 
 
-def test_a_failed_organise_step_does_not_stop_a_confirm_when_organise_is_off(
-    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+def broken_organise(document: Document, text: str, persons: object, ai_choices: object) -> None:
+    raise RuntimeError("Jan de Vries")
+
+
+@pytest.mark.parametrize("organise_on", [False, True])
+def test_a_failed_organise_step_stops_the_confirm_whatever_the_switches(
+    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch, organise_on: bool
 ) -> None:
-    switch_on(ws_a, organise=False)
+    switch_on(ws_a, organise=organise_on)
     document = new_document(ws_a)
+    monkeypatch.setattr(steps, "organise_processed", broken_organise)
 
-    def broken(document: Document) -> int:
-        raise RuntimeError("stuk")
-
-    monkeypatch.setattr(steps, "apply_open_proposals", broken)
     run(ws_a, document, Answering())
 
-    assert stored(ws_a, document).status == Document.Status.DONE
+    after = stored(ws_a, document)
+    assert (after.status, after.confirmed_by_ai) == ("needs_review", False)
+    with workspace_context(ws_a.id):
+        assert not Task.objects.filter(document=document).exists()
+
+
+def test_a_failed_organise_step_stops_applying_proposals_left_open(
+    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A retry after `mark_failed`: a strong name match from the first run is still open.
+    switch_on(ws_a, organise=True)
+    person = make_person(ws_a, "Jan de Vries")
+    document = new_document(ws_a)
+    with workspace_context(ws_a.id):
+        locked = Document.objects.select_for_update().get(id=document.id)
+        suggestions.propose(
+            locked,
+            action=DocumentSuggestion.Action.ADD_ADDRESSEE,
+            person=person,
+            origin=DocumentSuggestion.Origin.NAME_MATCH,
+            quote="Jan de Vries",
+            confidence=Decimal("0.950"),
+            preselected=True,
+        )
+    applied: list[object] = []
+
+    def counting(locked: Document) -> int:
+        applied.append(locked.id)
+        return 0
+
+    monkeypatch.setattr(steps, "organise_processed", broken_organise)
+    monkeypatch.setattr(steps, "apply_open_proposals", counting)
+
+    run(ws_a, document, Answering())
+
+    assert applied == []
+    after = stored(ws_a, document)
+    assert (after.status, after.confirmed_by_ai) == ("needs_review", False)
+    with workspace_context(ws_a.id):
+        assert not DocumentAddressee.objects.filter(document=document).exists()
+        assert DocumentSuggestion.objects.get(document=document).state == "open"
+
+
+def test_a_refused_validation_is_logged_at_info_with_the_id_only(
+    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    switch_on(ws_a)
+    document = new_document(ws_a)
+
+    def refused(document: Document, data: ConfirmIn) -> None:
+        raise ApiError(422, "validation_error", "Jan de Vries")
+
+    monkeypatch.setattr(review, "confirm_automatically", refused)
+    with caplog.at_level(logging.INFO):
+        run(ws_a, document, Answering())
+
+    assert stored(ws_a, document).status == Document.Status.NEEDS_REVIEW
+    assert [r for r in caplog.records if r.levelno >= logging.ERROR] == []
+    line = next(r for r in caplog.records if "not confirmed" in r.getMessage())
+    assert line.levelno == logging.INFO
+    assert line.getMessage() == (
+        f"Document {document.id} not confirmed by AI: the review did not pass validation"
+    )
+    assert "Jan de Vries" not in caplog.text
 
 
 def test_the_rules_of_trigger_confirmed_run_exactly_once(
@@ -499,3 +572,125 @@ def test_a_task_the_person_ticked_off_is_not_created_again_after_a_reopen(
         ("Bel de Belastingdienst", "open", False),
         ("Betaal de aanslag", "done", True),
     ]
+
+
+def _organised_by_ai(workspace: Workspace) -> tuple[Document, Label, object]:
+    """A letter the AI organised and confirmed: label Gezondheid and Jan de Vries, automatic."""
+    switch_on(workspace, organise=True)
+    with workspace_context(workspace.id):
+        label = Label.objects.create(workspace=workspace, name="Gezondheid")
+    person = make_person(workspace, "Jan de Vries")
+    document = new_document(workspace)
+    run(workspace, document, Answering(labels={"Gezondheid": 0.9}))
+    assert stored(workspace, document).confirmed_by_ai is True
+    with workspace_context(workspace.id):
+        assert DocumentLabel.objects.get(document=document).automatic is True
+        assert DocumentAddressee.objects.get(document=document).automatic is True
+    return document, label, person
+
+
+def _person_review(label: Label, person: object, *, sets_organisation: bool) -> ConfirmIn:
+    return ConfirmIn(
+        sender="Belastingdienst",
+        document_type="assessment",
+        letter_date=date(2026, 11, 3),
+        summary="",
+        summary_by_ai=False,
+        tasks=[],
+        sets_organisation=sets_organisation,
+        label_ids=[label.id] if sets_organisation else [],
+        addressee_ids=[person.id] if sets_organisation else [],  # type: ignore[attr-defined]
+    )
+
+
+def _undoable(workspace: Workspace, document: Document) -> dict[str, bool]:
+    from apps.documents import services
+    from apps.documents.schemas import DocumentEventOut
+
+    with workspace_context(workspace.id):
+        events = services.list_document_events(workspace=workspace, document_id=document.id)
+    return {
+        e.kind: DocumentEventOut.resolve_can_undo(e)
+        for e in events
+        if e.kind in ("label_added", "addressee_added")
+    }
+
+
+def test_a_persons_confirm_with_the_organisation_takes_the_automatic_links_over(
+    ws_a: Workspace,
+) -> None:
+    from apps.documents import services
+
+    document, label, person = _organised_by_ai(ws_a)
+    assert _undoable(ws_a, document) == {"label_added": True, "addressee_added": True}
+    admin = admin_of(ws_a)
+    with workspace_context(ws_a.id):
+        services.reopen_document(workspace=ws_a, user=admin, document_id=document.id)
+        review.confirm_document(
+            workspace=ws_a,
+            user=admin,
+            document_id=document.id,
+            data=_person_review(label, person, sets_organisation=True),
+        )
+        assert DocumentLabel.objects.get(document=document).automatic is False
+        assert DocumentAddressee.objects.get(document=document).automatic is False
+    assert _undoable(ws_a, document) == {"label_added": False, "addressee_added": False}
+    with workspace_context(ws_a.id):
+        event = DocumentEvent.objects.get(document=document, kind="label_added")
+        with pytest.raises(ApiError) as refused:
+            services.undo_document_event(
+                workspace=ws_a, user=admin, document_id=document.id, event_id=event.id
+            )
+    assert (refused.value.status, refused.value.code) == (409, "event_not_undoable")
+
+
+def test_a_hand_edit_leaves_the_flag_of_kept_links_alone(ws_a: Workspace) -> None:
+    from apps.documents import services
+
+    document, label, person = _organised_by_ai(ws_a)
+    admin = admin_of(ws_a)
+    with workspace_context(ws_a.id):
+        services.set_document_labels(
+            workspace=ws_a, user=admin, document_id=document.id, label_ids=[label.id]
+        )
+        services.set_document_addressees(
+            workspace=ws_a,
+            user=admin,
+            document_id=document.id,
+            person_ids=[person.id],  # type: ignore[attr-defined]
+        )
+        assert DocumentLabel.objects.get(document=document).automatic is True
+        assert DocumentAddressee.objects.get(document=document).automatic is True
+    assert _undoable(ws_a, document) == {"label_added": True, "addressee_added": True}
+
+
+def test_a_persons_review_of_an_ai_confirmed_letter_is_no_repeat(ws_a: Workspace) -> None:
+    # The same review the AI stored, sent by a person: a conflict, as for any other review.
+    switch_on(ws_a)
+    document = new_document(ws_a)
+    run(ws_a, document, Answering())
+    with workspace_context(ws_a.id), pytest.raises(ApiError) as refused:
+        review.confirm_document(
+            workspace=ws_a,
+            user=admin_of(ws_a),
+            document_id=document.id,
+            data=ConfirmIn(
+                sender="Belastingdienst",
+                document_type="assessment",
+                letter_date=date(2026, 11, 3),
+                summary="Je moet de aanslag betalen.",
+                summary_by_ai=True,
+                tasks=[
+                    TaskIn(
+                        type="pay",
+                        description="Betaal de aanslag",
+                        deadline=date(2026, 12, 1),
+                        deadline_source="in_document",
+                        deadline_quote="vóór 1 december 2026",
+                    )
+                ],
+            ),
+        )
+    assert (refused.value.status, refused.value.code) == (409, "document_not_reviewable")
+    done = stored(ws_a, document)
+    assert (done.confirmed_by_ai, done.confirmed_by) == (True, None)

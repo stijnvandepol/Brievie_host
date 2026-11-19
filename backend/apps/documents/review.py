@@ -58,7 +58,12 @@ def confirm_document(
         )
         if document is None:
             raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
-        if document.status == Document.Status.DONE and _is_repeat(data, document):
+        # Only a person's review repeats: the AI's confirmation is taken back by reopening.
+        if (
+            document.status == Document.Status.DONE
+            and not document.confirmed_by_ai
+            and _is_repeat(data, document)
+        ):
             return document
         if document.status not in _REVIEWABLE:
             raise ApiError(
@@ -160,7 +165,8 @@ def _organisation(data: ConfirmIn) -> dict[str, list[str]]:
 
 def _set_organisation(document: Document, data: ConfirmIn, user: User) -> None:
     """Labels and addressees become the confirmed lists; the proposals not taken are
-    dismissed. A change the user took from an open proposal gets origin `suggestion`."""
+    dismissed. A change the user took from an open proposal gets origin `suggestion`.
+    Every link that stays loses its `automatic` mark: the person confirmed it."""
     open_rows = DocumentSuggestion.objects.filter(
         document=document, state=DocumentSuggestion.State.OPEN
     )
@@ -176,6 +182,8 @@ def _set_organisation(document: Document, data: ConfirmIn, user: User) -> None:
         suggested_ids=proposed_persons,
     )
     open_rows.update(state=DocumentSuggestion.State.DISMISSED)
+    # The person confirmed what stays: it is no longer the autopilot's.
+    organise.confirm_automatic_links(document)
 
 
 def _stored_tasks(data: ConfirmIn, document: Document) -> list[_StoredTask]:
