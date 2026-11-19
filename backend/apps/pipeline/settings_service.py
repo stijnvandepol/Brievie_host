@@ -335,13 +335,14 @@ def autopilot_notice() -> str:
     return gettext(
         "Je zet de AI-autopilot aan. Lees dit eerst.\n"
         "\n"
-        "- Brievie zet brieven zelf onder personen en labels. Als je ook de tweede "
-        "schakelaar aanzet, bevestigt Brievie de brieven ook zelf.\n"
-        "- Niemand kijkt eerst. De brief staat meteen goed in je lijst.\n"
+        '- Brievie zet brieven zelf bij personen en kenmerken. Zet je ook "Brieven zelf '
+        'bevestigen" aan, dan bevestigt Brievie de brieven ook zelf.\n'
+        '- Niemand kijkt eerst. Brievie zet de brief meteen in je lijst. Met "Brieven zelf '
+        'bevestigen" is de brief ook meteen bevestigd.\n'
         "- De AI kan fouten maken.\n"
         "- Een deadline staat altijd in de brief zelf. Kijk dus naar de brief als het "
         "ertoe doet.\n"
-        "- Alles wat Brievie zelf doet, zie je met het label Automatisch door AI. Je kunt "
+        "- Alles wat Brievie zelf doet, zie je met het kenmerk Automatisch door AI. Je kunt "
         "het terugdraaien.\n"
         "- Heeft een taak geen deadline? Dan heeft de AI misschien iets gemist.\n"
     )
@@ -364,7 +365,7 @@ def configure_autopilot(
             _CONFIRM: row is not None and row.auto_confirm,
         }
         turned_on = [name for name, value in now.items() if value and not before[name]]
-        if organise or confirm:
+        if turned_on:
             if not _autopilot_allowed():
                 raise AutopilotError("forbidden")
             if row is None or row.mode == AISettings.Mode.OFF:

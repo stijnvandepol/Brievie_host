@@ -32,7 +32,7 @@ from apps.common.tokens import new_token, token_hash
 from apps.people.models import Person
 from apps.people.services import ensure_person_for_member
 from apps.pipeline import settings_service
-from apps.pipeline.settings_service import AiStatus
+from apps.pipeline.settings_service import AiStatus, Autopilot
 from apps.workspaces.access import on_member_added, person_requires_email
 from apps.workspaces.context import workspace_context
 from apps.workspaces.models import Invitation, Membership, Workspace
@@ -290,6 +290,7 @@ class InvitationInfo:
     email_fixed: bool
     person_name: str
     ai: AiStatus
+    autopilot: Autopilot
 
 
 def _dead_invitation() -> ApiError:
@@ -342,6 +343,7 @@ def lookup_invitation(*, token: str) -> InvitationInfo:
             else None
         )
         ai = settings_service.status(invitation.workspace_id)
+        autopilot = settings_service.autopilot(invitation.workspace_id)
     return InvitationInfo(
         workspace_name=invitation.workspace.name,
         invited_by=invitation.created_by_name,
@@ -349,6 +351,7 @@ def lookup_invitation(*, token: str) -> InvitationInfo:
         email_fixed=bool(invitation.email),
         person_name=person_name or "",
         ai=ai,
+        autopilot=autopilot,
     )
 
 

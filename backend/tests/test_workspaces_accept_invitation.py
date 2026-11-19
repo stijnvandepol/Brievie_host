@@ -21,7 +21,7 @@ from apps.audit.models import ServerAuditEvent, WorkspaceAuditEvent
 from apps.audit.services import AuditActor
 from apps.common.errors import ApiError
 from apps.people.models import Person
-from apps.pipeline.settings_service import configure
+from apps.pipeline.settings_service import Actor, configure, configure_autopilot
 from apps.workspaces import invitations
 from apps.workspaces.context import workspace_context
 from apps.workspaces.invitations import accept_invitation
@@ -128,6 +128,31 @@ def test_lookup_names_the_person_from_inside_the_workspace_context(ws_a: Workspa
     token = invite(ws_a, person_id=str(papa.id))
 
     assert lookup(Client(), token)[1]["person_name"] == "Papa"
+
+
+def test_lookup_shows_the_real_autopilot_switches(ws_a: Workspace) -> None:
+    token = invite(ws_a)
+    with workspace_context(ws_a.id):
+        configure(
+            workspace_id=ws_a.id,
+            mode="external",
+            base_url="",
+            model="",
+            api_key="sk-geheim",
+            consent=True,
+        )
+        configure_autopilot(
+            workspace_id=ws_a.id,
+            organise=True,
+            confirm=True,
+            acknowledged=True,
+            actor=Actor(user_id=None, label="api"),
+        )
+
+    ai = lookup(Client(), token)[1]["ai"]
+
+    assert isinstance(ai, dict)
+    assert (ai["auto_organise"], ai["auto_confirm"], ai["autopilot_allowed"]) == (True, True, True)
 
 
 def test_lookup_shows_the_ai_line_when_ai_is_on(ws_a: Workspace) -> None:

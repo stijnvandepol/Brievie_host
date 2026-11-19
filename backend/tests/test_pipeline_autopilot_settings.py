@@ -240,3 +240,30 @@ def test_the_notice_says_what_the_user_must_know() -> None:
         "terugdraaien",
     ):
         assert part.lower() in notice.lower()
+
+
+def test_a_partial_switch_off_works_when_the_server_forbids_it(ws_a: Workspace) -> None:
+    with workspace_context(ws_a.id):
+        external(ws_a)
+        set_autopilot(ws_a, organise=True, confirm=True)
+        with override_settings(BRIEVIE_AI_AUTOPILOT_ALLOWED=False):
+            result = set_autopilot(ws_a, organise=True, confirm=False, acknowledged=False)
+        assert (result.organise, result.confirm) == (True, False)
+
+
+def test_a_partial_switch_off_works_when_the_mode_is_off(ws_a: Workspace) -> None:
+    with workspace_context(ws_a.id):
+        external(ws_a)
+        set_autopilot(ws_a, organise=True, confirm=True)
+        AISettings.objects.filter(workspace=ws_a).update(mode="off")
+        result = set_autopilot(ws_a, organise=True, confirm=False, acknowledged=False)
+        assert (result.organise, result.confirm) == (True, False)
+
+
+def test_the_notice_names_the_mark_and_the_switch_and_claims_no_correctness() -> None:
+    notice = settings_service.autopilot_notice()
+    assert "kenmerk" in notice
+    assert "label" not in notice.lower()
+    assert "Brieven zelf bevestigen" in notice
+    assert "tweede" not in notice
+    assert "staat meteen goed" not in notice
