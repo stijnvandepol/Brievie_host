@@ -71,14 +71,64 @@ class Call(TypedDict, total=False):
     mount_mode_env: str
     source_env: list[str]
     wrapper_env: dict[str, str]
+    created: list[str]
+    recreated: list[str]
 
 
 # The fake: logs each call as a JSON line, answers from FAKE_* variables, and writes the
 # restored files of `restore_fetch` into the folder mounted at /out. It reads stdin only
 # for the calls that pipe something in (store_env_copy, psql), never the user's answers.
 FAKE_DOCKER = """#!{python}
-import json, os, signal, sys
+import json, os, re, signal, sys
 from pathlib import Path
+
+
+def compose_up(argv):
+    # What `compose up` creates or recreates, decided like compose: a service is
+    # recreated when its definition changed since the last `up`, its text in the compose
+    # file with the values of the variables it names (the environment wins over the
+    # env file). The content of a bind-mounted file is no part of it.
+    compose_file = Path(argv[argv.index("-f") + 1])
+    project_dir = Path(argv[argv.index("--project-directory") + 1])
+    if "--env-file" in argv:
+        env_file = Path(argv[argv.index("--env-file") + 1])
+    else:
+        env_file = project_dir / ".env"
+    dotenv = dict()
+    if env_file.exists():
+        for line in env_file.read_text().splitlines():
+            if "=" in line and not line.lstrip().startswith("#"):
+                key, value = line.split("=", 1)
+                dotenv[key.strip()] = value
+    blocks = dict()
+    inside, name = False, None
+    for line in compose_file.read_text().splitlines():
+        if line and not line.startswith(" "):
+            inside, name = line == "services:", None
+        elif inside and re.match(r"^  [a-z][a-z-]*:$", line):
+            name = line.strip()[:-1]
+            blocks[name] = []
+        elif inside and name:
+            blocks[name].append(line)
+    wanted = [a for a in argv[argv.index("up") + 1:] if not a.startswith("-")]
+    state_path = Path(os.environ["FAKE_DOCKER_LOG"] + ".services")
+    state = json.loads(state_path.read_text()) if state_path.exists() else dict()
+    created, recreated = [], []
+    for name, lines in blocks.items():
+        text = "\\n".join(lines)
+        if (wanted and name not in wanted) or "profiles:" in text:
+            continue
+        names = sorted(set(re.findall(r"\\$\\{{([A-Z0-9_]+)", text)))
+        values = [n + "=" + os.environ.get(n, dotenv.get(n, "")) for n in names]
+        definition = "\\n".join([text] + values)
+        if name not in state:
+            created.append(name)
+        elif state[name] != definition:
+            recreated.append(name)
+        state[name] = definition
+    state_path.write_text(json.dumps(state))
+    return created, recreated
+
 
 argv = sys.argv[1:]
 # The quieting pairs the wrapper adds are recorded apart, so argv stays comparable.
@@ -108,6 +158,8 @@ if argv[:1] == ["compose"]:
                     "BRIEVIE_BACKUP_REST_USERNAME", "BRIEVIE_BACKUP_REST_PASSWORD",
                     "BRIEVIE_BACKUP_REPOSITORY")
     entry["source_env"] = [name for name in source_names if os.environ.get(name)]
+    if "up" in argv:
+        entry["created"], entry["recreated"] = compose_up(argv)
 if "restore_fetch" in argv:
     names = ("BRIEVIE_MASTER_KEY", "BRIEVIE_BACKUP_PASSWORD", "BRIEVIE_BACKUP_DIR_SET",
              "BRIEVIE_BACKUP_REPOSITORY", "BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY", "SECRET_KEY")
@@ -670,6 +722,163 @@ def test_start_brings_everything_up_and_writes_the_sheet(install: Install) -> No
     assert install.index("up -d --build --wait") < install.index("recovery_sheet")
     assert (install.root / "brievie-herstelblad.html").exists()
     install.assert_no_secret_in_argv()
+
+
+def services_touched(install: Install) -> tuple[list[str], list[str]]:
+    """The services the logged `compose up` calls created and recreated, in order."""
+    created: list[str] = []
+    recreated: list[str] = []
+    for call in install.calls():
+        created += call.get("created", [])
+        recreated += call.get("recreated", [])
+    return created, recreated
+
+
+def test_a_first_start_creates_caddy_with_the_rest(installed: Install) -> None:
+    result = installed.run("start")
+
+    assert result.returncode == 0, result.stderr
+    created, recreated = services_touched(installed)
+    assert {"postgres", "migrate", "api", "worker", "keeper", "caddy"} <= set(created)
+    assert recreated == []
+
+
+def test_a_start_with_the_same_caddy_configuration_recreates_nothing(installed: Install) -> None:
+    assert installed.run("start").returncode == 0
+    installed.log.unlink()
+
+    result = installed.run("start")
+
+    assert result.returncode == 0, result.stderr
+    assert services_touched(installed) == ([], [])
+
+
+@pytest.mark.parametrize("name", ["Caddyfile", "caddy-publish-root.sh"])
+def test_a_changed_caddy_configuration_recreates_caddy_alone(installed: Install, name: str) -> None:
+    assert installed.run("start").returncode == 0
+    installed.log.unlink()
+    # What `git pull` does to a file Caddy reads only when it starts.
+    config = installed.root / "deploy" / name
+    config.write_text(config.read_text() + "# a newer version\n")
+
+    result = installed.run("start")
+
+    assert result.returncode == 0, result.stderr
+    assert services_touched(installed) == ([], ["caddy"])
+    # Applied by compose's own comparison: never a restart that runs on every start.
+    assert not any(
+        "restart" in call["argv"] or "--force-recreate" in call["argv"]
+        for call in installed.calls()
+    )
+    assert "a newer version" not in result.stdout + result.stderr
+
+
+def test_an_older_installation_gets_its_caddy_recreated_once(installed: Install) -> None:
+    # The stack as an older ./brievie started it: compose without the fingerprint.
+    deploy = installed.root / "deploy"
+    older_up = subprocess.run(  # noqa: S603
+        [
+            str(installed.bin / "docker"),
+            "compose",
+            "-p",
+            "brievie",
+            "--project-directory",
+            str(deploy),
+            "-f",
+            str(deploy / "docker-compose.yml"),
+            "up",
+            "-d",
+            "--build",
+            "--wait",
+        ],
+        env={**installed.env, "BRIEVIE_IMAGE": "brievie/backend:local"},
+        check=False,
+    )
+    assert older_up.returncode == 0
+    installed.log.unlink()
+
+    assert installed.run("start").returncode == 0
+    assert services_touched(installed) == ([], ["caddy"])
+    installed.log.unlink()
+
+    assert installed.run("start").returncode == 0
+    assert services_touched(installed) == ([], [])
+
+
+def test_the_restore_starts_caddy_with_the_current_configuration(installed: Install) -> None:
+    assert installed.run("start").returncode == 0
+    caddyfile = installed.root / "deploy" / "Caddyfile"
+    caddyfile.write_text(caddyfile.read_text() + "# a newer version\n")
+
+    result = installed.run("restore", "--replace", **restore_inputs(installed))
+
+    assert result.returncode == 0, result.stderr
+    # The restore stops caddy and brings it up with the configuration as it is now ...
+    assert installed.index("stop api worker caddy") < installed.index("up -d --wait")
+    installed.log.unlink()
+    # ... so the next start finds nothing left to apply.
+    assert installed.run("start").returncode == 0
+    assert services_touched(installed) == ([], [])
+
+
+LOOPBACK_WARNING = (
+    "Let op: met BRIEVIE_HOSTNAME={host} kan een iPhone deze server niet bereiken; zet in "
+    "deploy/.env de naam of het IP-adres waarmee je telefoon deze computer in je thuisnetwerk "
+    "vindt (zoals mijnmac.local of 192.168.1.20) en typ opnieuw ./brievie start."
+)
+
+
+@pytest.mark.parametrize(
+    "host", ["localhost", "LocalHost", "127.0.0.1", "127.1.2.3", "::1", "[::1]", "app.localhost"]
+)
+def test_start_with_a_loopback_host_name_says_a_phone_cannot_reach_it(
+    installed: Install, host: str
+) -> None:
+    installed.write_env(
+        current_env().replace("BRIEVIE_HOSTNAME=brievie.local", f"BRIEVIE_HOSTNAME={host}")
+    )
+
+    result = installed.run("start")
+
+    # A developer may want it: the start goes on.
+    assert result.returncode == 0, result.stderr
+    assert installed.index("up -d --build --wait") >= 0
+    lines = result.stdout.splitlines()
+    address = next(line for line in lines if line.startswith("Brievie draait op"))
+    assert address.endswith(", alleen in een browser op deze computer.")
+    assert lines[lines.index(address) + 1] == LOOPBACK_WARNING.format(host=host)
+
+
+@pytest.mark.parametrize("host", ["brievie.local", "192.168.1.20", "localhost.example.nl", "nas"])
+def test_start_with_a_network_host_name_gives_no_warning(installed: Install, host: str) -> None:
+    installed.write_env(
+        current_env().replace("BRIEVIE_HOSTNAME=brievie.local", f"BRIEVIE_HOSTNAME={host}")
+    )
+
+    result = installed.run("start")
+
+    assert result.returncode == 0, result.stderr
+    assert "iPhone" not in result.stdout + result.stderr
+    assert f"Brievie draait op https://{host}." in result.stdout
+
+
+def test_a_hand_install_is_told_its_phone_cannot_pair(install: Install) -> None:
+    # git clone + ./brievie start: deploy/.env comes from the example.
+    result = install.run("start")
+
+    assert result.returncode == 0, result.stderr
+    assert LOOPBACK_WARNING.format(host="localhost") in result.stdout
+
+
+def test_a_host_name_given_at_the_first_start_lands_in_the_new_settings(install: Install) -> None:
+    result = install.run("start", BRIEVIE_HOSTNAME="mijnnas.local")
+
+    assert result.returncode == 0, result.stderr
+    assert setting(install.dotenv.read_text(), "BRIEVIE_HOSTNAME") == [
+        "BRIEVIE_HOSTNAME=mijnnas.local"
+    ]
+    assert "iPhone" not in result.stdout
+    assert "Brievie draait op https://mijnnas.local." in result.stdout
 
 
 def test_start_keeps_an_existing_sheet(installed: Install) -> None:

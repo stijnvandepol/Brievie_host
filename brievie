@@ -468,6 +468,24 @@ setup_installation() {
 	export BRIEVIE_IMAGE
 	# Only the restore steps mount the back-up read-only; nothing else follows the shell.
 	unset BRIEVIE_BACKUP_MOUNT_MODE
+	# Caddy reads these files only when it starts, and compose does not look inside them:
+	# their fingerprint is a label of the caddy service, so every `up` recreates caddy
+	# exactly when one of them changed (deploy/docker-compose.yml).
+	if [ ! -r "$here/deploy/Caddyfile" ] || [ ! -r "$here/deploy/caddy-publish-root.sh" ]; then
+		fail "De instellingen van Caddy (deploy/Caddyfile, deploy/caddy-publish-root.sh) zijn niet te lezen. Controleer of de map van Brievie compleet is; er is niets veranderd."
+	fi
+	caddy_config=$(cat "$here/deploy/Caddyfile" "$here/deploy/caddy-publish-root.sh" | cksum)
+	BRIEVIE_CADDY_CONFIG=$(printf '%s' "$caddy_config" | tr -s ' \t' '--')
+	export BRIEVIE_CADDY_CONFIG
+}
+
+# Whether host name $1 only reaches this computer: localhost, *.localhost or a loopback
+# address. A phone can never reach the server by such a name.
+loopback_host() {
+	case $(printf '%s' "$1" | tr '[:upper:]' '[:lower:]') in
+	localhost | localhost. | *.localhost | *.localhost. | 127.* | ::1 | \[::1\]) return 0 ;;
+	esac
+	return 1
 }
 
 # The settings compose reads: deploy/.env, or (set for one call) another file.
@@ -731,7 +749,13 @@ cmd_start() {
 	443) ;;
 	*) address="$address:$https_port" ;;
 	esac
-	echo "Brievie draait op $address."
+	if loopback_host "${host:-localhost}"; then
+		# Not a reason to stop (a developer may want it), but a phone can never pair.
+		echo "Brievie draait op $address, alleen in een browser op deze computer."
+		echo "Let op: met BRIEVIE_HOSTNAME=${host:-localhost} kan een iPhone deze server niet bereiken; zet in deploy/.env de naam of het IP-adres waarmee je telefoon deze computer in je thuisnetwerk vindt (zoals mijnmac.local of 192.168.1.20) en typ opnieuw ./brievie start."
+	else
+		echo "Brievie draait op $address."
+	fi
 	if [ -n "$(env_value BRIEVIE_BACKUP_DIR)$(env_value BRIEVIE_BACKUP_REPOSITORY)" ]; then
 		echo "Back-up: ingesteld in deploy/.env. Typ ./brievie status om te zien hoe het gaat."
 	else

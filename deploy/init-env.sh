@@ -9,6 +9,8 @@
 # master key inside the container (manage.py derive_backup_password).
 # Needs openssl or python3. POSTGRES_PORT in the environment sets the host port
 # (default 5432) in a new file; an existing file's own POSTGRES_PORT is used for it.
+# BRIEVIE_HOSTNAME in the environment sets the host name in a new file (default: the
+# example's localhost, which no phone can reach); an existing file is never changed.
 set -eu
 
 dir=$(cd "$(dirname "$0")" && pwd)
@@ -111,6 +113,17 @@ if [ -e "$target" ]; then
 	exit 0
 fi
 
+# BRIEVIE_HOSTNAME in the environment sets the host name in a new file, the same way
+# install.sh does (`BRIEVIE_HOSTNAME=mijnnas.local ./brievie start` on a hand install).
+hostname=${BRIEVIE_HOSTNAME:-}
+case $hostname in
+'') ;;
+.* | -* | *[!A-Za-z0-9.-]*)
+	echo "BRIEVIE_HOSTNAME may only hold letters, digits, dots and dashes; deploy/.env was not created." >&2
+	exit 1
+	;;
+esac
+
 secret=$(random base64)
 postgres_pw=$(random hex)
 owner_pw=$(random hex)
@@ -132,6 +145,7 @@ while IFS= read -r line || [ -n "$line" ]; do
 	DATABASE_OWNER_URL=*) line=$(replace "$(replace "$line" change-me-owner "$owner_pw")" :5432/ ":$port/") ;;
 	DATABASE_BACKUP_URL=*) line=$(replace "$(replace "$line" change-me-backup "$backup_db_pw")" :5432/ ":$port/") ;;
 	POSTGRES_PORT=*) line="POSTGRES_PORT=$port" ;;
+	BRIEVIE_HOSTNAME=*) line="BRIEVIE_HOSTNAME=${hostname:-${line#*=}}" ;;
 	BRIEVIE_MASTER_KEY=*) line="BRIEVIE_MASTER_KEY=$master" ;; # exactly 32 bytes
 	[A-Z_]*=*change-me*) line="${line%%=*}=$(random hex)" ;; # any other placeholder
 	esac
