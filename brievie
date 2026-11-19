@@ -1368,6 +1368,8 @@ cmd_restore() {
 	esac
 
 	master_key=${BRIEVIE_RESTORE_MASTER_KEY:-}
+	# Only used when nothing in the back-up can prove the key (see below).
+	master_key_again=${BRIEVIE_RESTORE_MASTER_KEY_AGAIN:-}
 	if [ -z "$master_key" ]; then
 		ask_secret "Typ je hoofdsleutel van het herstelblad (je ziet niet wat je typt):"
 		master_key=$answer
@@ -1386,6 +1388,7 @@ cmd_restore() {
 	# From here on compose reads every secret and the destination from deploy/.env (or
 	# from from_source): a value in this environment, even an empty one, would win.
 	unset BRIEVIE_RESTORE_MASTER_KEY BRIEVIE_RESTORE_BACKUP_PASSWORD BRIEVIE_MASTER_KEY \
+		BRIEVIE_RESTORE_MASTER_KEY_AGAIN \
 		BRIEVIE_BACKUP_PASSWORD BRIEVIE_BACKUP_DIR BRIEVIE_BACKUP_REPOSITORY \
 		BRIEVIE_BACKUP_S3_ACCESS_KEY_ID BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY \
 		BRIEVIE_BACKUP_REST_USERNAME BRIEVIE_BACKUP_REST_PASSWORD
@@ -1432,7 +1435,32 @@ cmd_restore() {
 			fetch_backup "$@"
 		fi
 	fi
-	master_key="" backup_password=""
+	# Nothing in the back-up can prove the key (a separate password and no workspaces):
+	# a typo would become this server's master key. It is taken only when it is typed a
+	# second time alike (a terminal, or BRIEVIE_RESTORE_MASTER_KEY_AGAIN; piped input
+	# never confirms).
+	if [ "$status" -eq 4 ]; then
+		again=$master_key_again
+		if [ -z "$again" ]; then
+			if [ ! -t 0 ]; then
+				fail "Er is geen terminal om de hoofdsleutel nog een keer te typen. Zet BRIEVIE_RESTORE_MASTER_KEY_AGAIN als je de sleutel echt hebt gecontroleerd. Er is niets veranderd." 2
+			fi
+			ask_secret "Typ je hoofdsleutel van het herstelblad nog een keer, ter controle (je ziet niet wat je typt):"
+			again=$answer
+			answer=""
+		fi
+		again=$(printf '%s' "$again" | tr -d ' \t\r\n-' | tr '[:upper:]' '[:lower:]')
+		if [ "$again" != "$master_key" ]; then
+			again=""
+			fail "De twee hoofdsleutels zijn niet gelijk. Er is niets veranderd. Controleer je herstelblad en typ opnieuw ./brievie restore." 2
+		fi
+		again=""
+		rm -rf "${here:?}/deploy/.restore"
+		mkdir -p "${here:?}/deploy/.restore" ||
+			fail "De map deploy/.restore kon niet worden gemaakt. Controleer de rechten van de map deploy; er is niets veranderd."
+		fetch_backup "$@" --accept-unverified-key
+	fi
+	master_key="" backup_password="" master_key_again=""
 	if [ "$status" -ne 0 ]; then
 		case $status in
 		2) fail "De hoofdsleutel past niet bij deze back-up, of het aparte back-upwachtwoord klopt niet. Controleer je herstelblad en typ opnieuw ./brievie restore." 2 ;;

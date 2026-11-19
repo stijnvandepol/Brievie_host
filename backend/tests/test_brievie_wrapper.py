@@ -185,6 +185,11 @@ wanted = os.environ.get("FAKE_FETCH_PASSWORD", "")
 if "restore_fetch" in argv and wanted and os.environ.get("BRIEVIE_BACKUP_PASSWORD", "") != wanted:
     sys.stderr.write("CommandError: Het wachtwoord van de back-up klopt niet.\\n")
     sys.exit(2)
+if ("restore_fetch" in argv and os.environ.get("FAKE_UNVERIFIED_KEY") == "1"
+        and "--accept-unverified-key" not in argv):
+    sys.stderr.write("CommandError: Deze back-up heeft een apart wachtwoord en nog geen "
+                     "werkruimtes, dus Brievie kan niet controleren of de hoofdsleutel klopt.\\n")
+    sys.exit(4)
 remove_at = os.environ.get("FAKE_REMOVE_AT", "")
 if remove_at and remove_at in joined:
     os.remove(os.environ["FAKE_REMOVE_PATH"])
@@ -2644,6 +2649,61 @@ def test_restore_asks_for_the_separate_password_when_the_key_alone_does_not_open
     assert [f["env"]["BRIEVIE_BACKUP_PASSWORD"] for f in fetches] == ["", TYPED_SEPARATE_PW]
     assert "Deze back-up heeft een apart wachtwoord" in result.stdout
     install.assert_no_secret_in_argv()
+
+
+def fetches(install: Install) -> list[Call]:
+    return [c for c in install.calls() if "restore_fetch" in c["argv"]]
+
+
+def test_a_key_nothing_can_prove_is_taken_after_it_is_typed_twice_alike(install: Install) -> None:
+    result = install.run(
+        "restore",
+        "--keep-hostname",
+        FAKE_UNVERIFIED_KEY="1",
+        # The same key in another spelling, as read off paper again.
+        BRIEVIE_RESTORE_MASTER_KEY_AGAIN="5a5a" * 16,
+        **restore_inputs(install),
+    )
+
+    assert result.returncode == 0, result.stderr
+    found = fetches(install)
+    assert ["--accept-unverified-key" in f["argv"] for f in found] == [False, True]
+    assert found[1]["env"]["BRIEVIE_MASTER_KEY"] == MASTER
+    assert "kan niet controleren of de hoofdsleutel klopt" in result.stderr
+    assert "Herstel gelukt." in result.stdout
+    install.assert_no_secret_in_argv()
+
+
+def test_a_second_key_that_differs_stops_the_restore(install: Install) -> None:
+    result = install.run(
+        "restore",
+        "--keep-hostname",
+        FAKE_UNVERIFIED_KEY="1",
+        BRIEVIE_RESTORE_MASTER_KEY_AGAIN="5b" * 32,
+        **restore_inputs(install),
+    )
+
+    assert result.returncode == 2
+    assert "De twee hoofdsleutels zijn niet gelijk" in result.stderr
+    assert len(fetches(install)) == 1
+    assert not any("restore_database" in command for command in install.commands())
+    assert not (install.root / "deploy" / ".restore").exists()
+    assert not install.dotenv.exists()
+
+
+def test_a_piped_second_key_never_confirms(install: Install) -> None:
+    result = install.run(
+        "restore",
+        "--keep-hostname",
+        stdin=TYPED_MASTER,
+        FAKE_UNVERIFIED_KEY="1",
+        **restore_inputs(install),
+    )
+
+    assert result.returncode == 2
+    assert "BRIEVIE_RESTORE_MASTER_KEY_AGAIN" in result.stderr
+    assert len(fetches(install)) == 1
+    assert not (install.root / "deploy" / ".restore").exists()
 
 
 def test_a_wrong_key_names_the_separate_password(install: Install) -> None:

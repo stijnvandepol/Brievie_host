@@ -184,6 +184,11 @@ even if it was "gemaakt, maar niet compleet".
 A wrong key or password stops at the start, and nothing is written. A back-up from a
 newer Brievie than the one installed is refused: update first.
 
+Brievie checks the key against the back-up. With a separate back-up password and a
+back-up that holds no workspace yet, there is nothing to check it against: then it says
+so and asks you to type the key a second time. Only when both are the same does the
+restore go on, so a typo never becomes the server's master key.
+
 The new machine is a new installation: it gets its own installation number, so it is
 never mistaken for the original server.
 
@@ -224,7 +229,8 @@ gecontroleerd: 2 werkruimtes, van elk is een pagina geopend." and finally
 "Herstel gelukt."
 
 For scripts there are variables: `BRIEVIE_RESTORE_SOURCE` (where the back-up is),
-`BRIEVIE_RESTORE_MASTER_KEY`, `BRIEVIE_RESTORE_BACKUP_PASSWORD`,
+`BRIEVIE_RESTORE_MASTER_KEY` (and `BRIEVIE_RESTORE_MASTER_KEY_AGAIN` for the second
+time), `BRIEVIE_RESTORE_BACKUP_PASSWORD`,
 `BRIEVIE_RESTORE_KEEP_DESTINATION=ja`, and the confirmations
 `BRIEVIE_RESTORE_CONFIRM=WISSEN`, `BRIEVIE_RESTORE_EMPTY_OK=ja` and
 `BRIEVIE_ADOPT_INSTALLATION=JA`. A key in an environment variable is visible to other
