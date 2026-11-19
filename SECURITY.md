@@ -38,6 +38,18 @@ Every pull request and every push to `main` runs these checks in GitHub Actions
 (`.github/workflows/`). They find known classes of problems; they do not prove the
 absence of others, and no external audit has been done.
 
+New vulnerabilities appear without a change of code, so the checks that can find one
+also run **on a schedule**, on `main`, every Monday, Wednesday and Friday in the early
+morning (UTC): pip-audit and `pnpm audit` on the locked packages, gitleaks over the whole
+history, Trivy on a freshly built image (the base image and Debian packages change under
+us), zizmor, the ZAP scans, and CodeQL. The checks that only judge the code (tests,
+linters, the stack and the restore proof) run on changes only. A failed scheduled run
+opens a GitHub issue titled "Scheduled security audit failed" (label `security-audit`), or
+comments on the one that is still open. The issue names the run and the failed jobs;
+it holds no log lines, because a log can contain a finding that is not yet fixed. Findings
+of CodeQL appear under *Security* → *Code scanning*; the ZAP reports are artifacts of the
+run. The list below says which check does what.
+
 - **Static analysis:** CodeQL (`security-extended` queries) on the Python, TypeScript and
   workflow code, also weekly; ruff with the flake8-bandit (`S`) rules; `mypy --strict`.
 - **Dependencies:** pip-audit on every package in `backend/uv.lock`, `pnpm audit` on the
