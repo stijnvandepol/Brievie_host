@@ -1,7 +1,9 @@
 """The autopilot's organise switch: strong AI picks and name matches land on the document."""
 
 import json
+import logging
 import uuid
+from collections.abc import Callable
 from datetime import date
 from decimal import Decimal
 
@@ -17,8 +19,9 @@ from apps.documents.models import (
     DocumentSuggestion,
 )
 from apps.labels.models import Label
-from apps.pipeline import autopilot, settings_service
+from apps.pipeline import autopilot, jobs, settings_service
 from apps.pipeline.choices import ExtractionRequest
+from apps.pipeline.errors import PermanentError
 from apps.pipeline.steps import run_pipeline
 from apps.workspaces.context import workspace_context
 from apps.workspaces.models import Workspace
@@ -50,8 +53,14 @@ class Picking:
         self.labels = labels or {}
         # person name -> (quote from the letter, confidence)
         self.persons = persons or {}
+        # Runs while the AI "is reading": a switch can change in that moment.
+        self.during_call: Callable[[], None] = lambda: None
+        self.error: Exception | None = None
 
     def extract(self, request: ExtractionRequest) -> str:
+        self.during_call()
+        if self.error is not None:
+            raise self.error
         return json.dumps(
             {
                 "afzender": {"naam": "", "bron": "", "zekerheid": 0.0},
@@ -227,11 +236,19 @@ def test_a_rule_proposal_stays_open(ws_a: Workspace) -> None:
 def test_a_letter_that_instructs_the_ai_does_not_get_its_label(ws_a: Workspace) -> None:
     switch_on(ws_a)
     label = new_label(ws_a, "Belastingdienst")
+    # The AI follows the instruction in the letter, with a confidence that would qualify.
+    provider = Picking(labels={"Belastingdienst": 0.8})
+
+    # Control: without a rule the very same pick, on the very same letter, is applied. So
+    # in the run below the pick does reach the proposal row and only the rule stops it.
+    control = new_document(ws_a, INJECTION)
+    run(ws_a, control, provider)
+    assert on_document(ws_a, control) == ({"Belastingdienst"}, set())
+    assert suggestion_states(ws_a, control) == {"Belastingdienst": ("accepted", "ai")}
+
     make_rule(ws_a, text_word("Belastingdienst"), actions=[add_label(label)])
     document = new_document(ws_a, INJECTION)
-
-    # The AI follows the instruction in the letter, with a confidence that would qualify.
-    run(ws_a, document, Picking(labels={"Belastingdienst": 0.8}))
+    run(ws_a, document, provider)
 
     assert on_document(ws_a, document) == (set(), set())
     assert suggestion_states(ws_a, document) == {"Belastingdienst": ("open", "rule")}
@@ -280,16 +297,98 @@ def test_without_a_provider_nothing_is_applied(ws_a: Workspace) -> None:
 
 
 def test_a_failed_document_is_not_applied(ws_a: Workspace) -> None:
-    from apps.pipeline.steps import mark_failed
-
     switch_on(ws_a)
     make_person(ws_a, "Jan de Vries")
     document = new_document(ws_a)
+    provider = Picking()
+    provider.error = PermanentError("ai_rejected")
 
-    mark_failed(ws_a.id, document.id, "ai_unavailable")
+    jobs.run_job(
+        ws_a.id,
+        document.id,
+        attempts=0,
+        run=lambda w, d: run_pipeline(w, d, provider_factory=lambda _: provider),
+    )
 
+    with workspace_context(ws_a.id):
+        failed = Document.objects.get(id=document.id)
+        assert (failed.status, failed.failure_code) == ("failed", "ai_rejected")
+        assert not DocumentEvent.objects.filter(document=document).exists()
+    # The strong name match is proposed (design 17) but nothing is applied by itself.
     assert on_document(ws_a, document) == (set(), set())
     assert suggestion_states(ws_a, document) == {"Jan de Vries": ("open", "name_match")}
+
+
+def test_the_switch_is_read_after_the_ai_call(ws_a: Workspace) -> None:
+    switch_on(ws_a)
+    new_label(ws_a, "Gezondheid")
+    document = new_document(ws_a)
+    provider = Picking(labels={"Gezondheid": 0.9})
+
+    def switch_off_meanwhile() -> None:
+        with workspace_context(ws_a.id):
+            settings_service.configure_autopilot(
+                workspace_id=ws_a.id,
+                organise=False,
+                confirm=False,
+                acknowledged=False,
+                actor=settings_service.Actor(user_id=None, label="api"),
+            )
+
+    provider.during_call = switch_off_meanwhile
+    run(ws_a, document, provider)
+
+    assert on_document(ws_a, document) == (set(), set())
+    assert suggestion_states(ws_a, document) == {"Gezondheid": ("open", "ai")}
+
+
+def test_the_server_switch_is_read_after_the_ai_call(ws_a: Workspace) -> None:
+    switch_on(ws_a)
+    new_label(ws_a, "Gezondheid")
+    document = new_document(ws_a)
+    provider = Picking(labels={"Gezondheid": 0.9})
+
+    with override_settings(BRIEVIE_AI_AUTOPILOT_ALLOWED=True):
+        # The server forbids it from the moment the AI is called.
+        def forbid_meanwhile() -> None:
+            from django.conf import settings
+
+            settings.BRIEVIE_AI_AUTOPILOT_ALLOWED = False
+
+        provider.during_call = forbid_meanwhile
+        run(ws_a, document, provider)
+
+    assert on_document(ws_a, document) == (set(), set())
+    assert suggestion_states(ws_a, document) == {"Gezondheid": ("open", "ai")}
+
+
+def test_a_failing_apply_is_rolled_back_and_the_document_goes_to_review(
+    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    switch_on(ws_a)
+    new_label(ws_a, "Gezondheid")
+    document = new_document(ws_a)
+    real_apply = autopilot.apply_open_proposals
+
+    def add_one_then_fail(locked: Document) -> int:
+        real_apply(locked)  # the label is added, its event written, the row accepted
+        raise RuntimeError("regel uit de brief van Jan")
+
+    monkeypatch.setattr("apps.pipeline.steps.apply_open_proposals", add_one_then_fail)
+
+    with caplog.at_level(logging.DEBUG):
+        run(ws_a, document, Picking(labels={"Gezondheid": 0.9}))
+
+    with workspace_context(ws_a.id):
+        assert Document.objects.get(id=document.id).status == "needs_review"
+        assert not DocumentEvent.objects.filter(document=document).exists()
+    assert on_document(ws_a, document) == (set(), set())
+    assert suggestion_states(ws_a, document) == {"Gezondheid": ("open", "ai")}
+    errors = [r.getMessage() for r in caplog.records if r.levelname == "ERROR"]
+    assert errors == [
+        f"Unexpected RuntimeError while applying proposals for document {document.id}"
+    ]
+    assert "regel uit de brief" not in caplog.text
 
 
 def test_the_limits_are_respected(ws_a: Workspace, monkeypatch: pytest.MonkeyPatch) -> None:
