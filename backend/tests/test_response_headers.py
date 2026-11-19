@@ -60,5 +60,9 @@ def test_the_web_apps_files_grant_no_cross_origin_access(tmp_path: Path) -> None
     with override_settings(WHITENOISE_ROOT=tmp_path):
         # A new client builds its middleware now, so WhiteNoise sees this root.
         response = Client().get("/favicon.svg")
-    assert response.status_code == 200
-    assert not response.has_header("Access-Control-Allow-Origin")
+    try:
+        assert response.status_code == 200
+        assert not response.has_header("Access-Control-Allow-Origin")
+    finally:
+        # WhiteNoise answers with an open file; an unclosed one fails a later test as a warning.
+        response.close()
