@@ -99,6 +99,18 @@ def test_caddy_waits_for_a_healthy_api() -> None:
     assert "healthcheck:" in service("api")
 
 
+def test_only_caddy_carries_the_fingerprint_of_its_configuration() -> None:
+    # Caddy reads the Caddyfile once, when it starts, and compose does not look inside a
+    # bind-mounted file: the fingerprint in its definition makes a changed file recreate
+    # caddy, and nothing else.
+    caddy = service("caddy")
+    assert "./Caddyfile:/etc/caddy/Caddyfile:ro" in caddy
+    assert "./caddy-publish-root.sh:/etc/caddy/publish-root.sh:ro" in caddy
+    assert "brievie.caddy-config: ${BRIEVIE_CADDY_CONFIG:-}" in caddy
+    assert COMPOSE.count("BRIEVIE_CADDY_CONFIG") == 1
+    assert "--watch" not in PUBLISH_ROOT
+
+
 def test_api_server_survives_a_slow_upload() -> None:
     # Final review: sync workers with the default 30 s timeout are killed during a slow
     # upload (Caddy streams the body), and two slow uploads would block the whole API.

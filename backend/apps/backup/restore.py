@@ -372,23 +372,26 @@ def check_master_key_against_dump(
     password: str,
     db_snapshot: restic.Snapshot,
     master_key: bytes,
-) -> None:
+) -> bool:
     """Refuse a master key that cannot unwrap the dump's first workspace key.
 
     The password alone does not prove the key: with a separate back-up password the
-    repository opens with any master key. A back-up without workspace keys passes.
+    repository opens with any master key. Returns True when the key unwrapped a workspace
+    key, and False when the dump holds none: then nothing was verified, and the caller
+    must not treat the key as correct.
     """
     output = _dump_through(
         repository, password, db_snapshot, PG_RESTORE_KEYS_COMMAND, _key_spellings(master_key)
     )
     row = _first_key_row(output.decode("utf-8", errors="replace"))
     if row is None:
-        return
+        return False
     workspace_id, wrapped = row
     try:
         crypto.open_sealed(master_key, wrapped, aad=workspace_id.bytes)
     except crypto.DecryptionError:
         raise BackupError("wrong_master_key") from None
+    return True
 
 
 def parse_master_key(master_key_hex: str) -> bytes:
@@ -513,12 +516,19 @@ def fetch(
     backup_dir_host: str | None,
     out_dir: Path,
     out_owner: tuple[int, int] | None,
+    accept_unverified_key: bool = False,
 ) -> Fetched:
     """Open the back-up, find the run, refuse what cannot be restored, then write.
 
     Writes `out_dir/manifest.json` and `out_dir/env` (the restored deploy/.env), and
     nothing at all when any check fails. The password is the separate one when given,
     else the one derived from the master key. The output folder is judged first.
+
+    A derived password that opens the back-up proves the key. A separate one does not:
+    then the key must unwrap a workspace key of the dump, and a dump without one is
+    refused (`master_key_unverified`) unless the user confirmed the key another way
+    (`accept_unverified_key`, after typing it twice). A key that does not fit is
+    refused whatever was confirmed.
     """
     avoid = [*_configured_directories(), *safepaths.PRODUCTION_VOLUMES, _backup_mount()]
     safepaths.require_out_dir(out_dir, avoid=avoid)
@@ -543,9 +553,11 @@ def fetch(
         found.files.id, str(config_dir / ENV_COPY_NAME), no_lock=reads_without_lock(repository)
     )
     env_copy = _text(_restic_output(repository, password, env_argv, hidden), "restore_failed")
-    check_master_key_against_dump(
+    verified = check_master_key_against_dump(
         repository=repository, password=password, db_snapshot=found.db, master_key=master_key
     )
+    if not verified and separate_password and not accept_unverified_key:
+        raise BackupError("master_key_unverified")
     env = restored_env(
         env_copy,
         master_key_hex=master_key.hex(),

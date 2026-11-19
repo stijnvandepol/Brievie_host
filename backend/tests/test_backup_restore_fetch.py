@@ -527,9 +527,81 @@ def test_master_key_check_reads_columns_in_the_order_of_the_header(backup: Backu
     assert caught.value.code == "wrong_master_key"
 
 
-def test_a_backup_without_workspaces_passes_the_check(backup: Backup) -> None:
+def test_the_check_says_when_it_verified_the_key(backup: Backup) -> None:
+    backup.contents()
+    db = restic.Snapshot(id="d0000001", time=T0, tags=(), paths=())
+    verified = check_master_key_against_dump(
+        repository=restic_repository(),
+        password="pw",
+        db_snapshot=db,
+        master_key=bytes.fromhex(MASTER),
+    )
+    assert verified is True
+
+
+def test_a_backup_without_workspaces_never_counts_as_a_verified_key(backup: Backup) -> None:
     backup.contents(keys=copy_block([]))
-    check(backup, OTHER_MASTER)
+    db = restic.Snapshot(id="d0000001", time=T0, tags=(), paths=())
+    verified = check_master_key_against_dump(
+        repository=restic_repository(),
+        password="pw",
+        db_snapshot=db,
+        master_key=bytes.fromhex(OTHER_MASTER),
+    )
+    assert verified is False
+
+
+def test_a_separate_password_and_no_workspaces_need_a_confirmed_key(
+    backup: Backup, out_dir: Path
+) -> None:
+    # Any key opens this back-up: nothing in it is sealed with the master key.
+    backup.one_run(keys=copy_block([]))
+    with pytest.raises(BackupError) as caught:
+        do_fetch(out_dir, master=OTHER_MASTER, separate=SEPARATE)
+    assert caught.value.code == "master_key_unverified"
+    assert list(out_dir.iterdir()) == []
+
+
+def test_a_confirmed_key_restores_a_backup_without_workspaces(
+    backup: Backup, out_dir: Path
+) -> None:
+    backup.one_run(keys=copy_block([]))
+    fetch(
+        run=None,
+        master_key_hex=MASTER,
+        separate_password=SEPARATE,
+        backup_dir_host=None,
+        out_dir=out_dir,
+        out_owner=None,
+        accept_unverified_key=True,
+    )
+    assert env_values((out_dir / "env").read_text())["BRIEVIE_MASTER_KEY"] == MASTER
+
+
+def test_a_confirmation_never_overrides_a_key_that_does_not_fit(
+    backup: Backup, out_dir: Path
+) -> None:
+    backup.one_run(keys=copy_block([(WORKSPACE, sealed_key(MASTER))]))
+    with pytest.raises(BackupError) as caught:
+        fetch(
+            run=None,
+            master_key_hex=OTHER_MASTER,
+            separate_password=SEPARATE,
+            backup_dir_host=None,
+            out_dir=out_dir,
+            out_owner=None,
+            accept_unverified_key=True,
+        )
+    assert caught.value.code == "wrong_master_key"
+
+
+def test_a_derived_password_proves_the_key_without_workspaces(
+    backup: Backup, out_dir: Path
+) -> None:
+    # The password is derived from the key: that it opened the back-up is the proof.
+    backup.one_run(keys=copy_block([]))
+    do_fetch(out_dir)
+    assert (out_dir / "env").exists()
 
 
 def test_a_failing_dump_is_not_masked_by_pg_restore(backup: Backup) -> None:
@@ -813,6 +885,12 @@ def test_restore_fetch_without_a_separate_password_derives_it(
         ("unsafe_manifest", 1, "De inhoudsopgave van de back-up kon niet worden gelezen."),
         ("newer_backup", 3, "Deze back-up komt van een nieuwere versie van Brievie."),
         (
+            "master_key_unverified",
+            4,
+            "Deze back-up heeft een apart wachtwoord en nog geen werkruimtes, dus Brievie kan "
+            "niet controleren of de hoofdsleutel klopt.",
+        ),
+        (
             "run_not_found",
             1,
             "Deze back-up is niet gevonden. Typ ./brievie status --list om te zien welke "
@@ -841,6 +919,9 @@ def test_restore_fetch_exit_codes(
         unsafe = json.loads(manifest_json(backup.run_id))
         unsafe["hostname"] = "brievie.example\nrun_id=forged"
         backup.one_run(manifest=json.dumps(unsafe).encode())
+    elif setup == "master_key_unverified":
+        settings.BRIEVIE_BACKUP_PASSWORD = SEPARATE
+        backup.one_run(keys=copy_block([]))
     elif setup == "newer_backup":
         backup.one_run(manifest=manifest_json(backup.run_id, migrations={"x": ["9999_future"]}))
     else:
@@ -852,6 +933,16 @@ def test_restore_fetch_exit_codes(
         assert str(caught.value) == sentence
     assert MASTER not in str(caught.value)
     assert list(out_dir.iterdir()) == []
+
+
+def test_restore_fetch_takes_a_confirmed_key(
+    backup: Backup, out_dir: Path, settings: Settings
+) -> None:
+    settings.BRIEVIE_MASTER_KEY = MASTER
+    settings.BRIEVIE_BACKUP_PASSWORD = SEPARATE
+    backup.one_run(keys=copy_block([]))
+    call_command("restore_fetch", "--out", str(out_dir), "--accept-unverified-key")
+    assert env_values((out_dir / "env").read_text())["BRIEVIE_MASTER_KEY"] == MASTER
 
 
 def test_restore_fetch_reads_the_owner(
