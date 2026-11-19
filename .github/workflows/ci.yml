@@ -128,6 +128,40 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # The image as it ships: lint its Dockerfile, build it, scan what is inside (Debian
+  # packages, the virtualenv, restic, the PostgreSQL client) for known vulnerabilities.
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Lint the Dockerfile
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+        with:
+          dockerfile: deploy/Dockerfile
+          # Style and info findings are shown, warnings and errors fail.
+          failure-threshold: warning
+          # DL3008 (pin apt package versions): postgresql-client-18 comes from PGDG,
+          # which keeps only the newest build of each major; a pinned build would stop
+          # resolving within weeks. The major is pinned and tested against the server
+          # (test_pg_client_major_matches_the_server); the Trivy scan below covers
+          # known vulnerabilities in what was installed.
+          ignore: DL3008
+      - name: Build the image
+        run: docker build --file deploy/Dockerfile --tag brievie/backend:scan .
+      - name: Scan the image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.2
+          image-ref: brievie/backend:scan
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          # Only what an update can fix: an unfixed CVE is no reason to stop a change.
+          ignore-unfixed: true
+          exit-code: "1"
+
   # The way a user installs it: fresh secrets, build the images, start everything.
   stack:
     runs-on: ubuntu-latest
