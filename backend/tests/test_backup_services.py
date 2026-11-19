@@ -1688,6 +1688,27 @@ def test_a_snapshot_from_the_future_stops_retention(
 
 
 @pytest.mark.django_db(transaction=True)
+def test_a_retention_that_could_not_remove_everything_is_a_warning(
+    configured_folder: Path, fake_restic: FakeBinary, fake_pg_dump: FakeBinary
+) -> None:
+    # restic >= 0.19 exits 3 when `forget` fails to remove a snapshot (it used to exit
+    # 0). The back-up itself was made: the run succeeds with a warning, never with the
+    # sentence of an incomplete back-up.
+    run = queued_run()
+    answer_both_backups(fake_restic, run.id)
+    fake_restic.respond(tuple(restic.forget_argv()), code=3)
+
+    services.perform_run(run.id)
+
+    run.refresh_from_db()
+    assert run.status == BackupRun.Status.SUCCEEDED
+    assert run.reason_code == "retention_incomplete"
+    assert run.reason == (
+        "De back-up is gemaakt, maar niet alle oude back-ups konden worden opgeruimd."
+    )
+
+
+@pytest.mark.django_db(transaction=True)
 def test_status_shows_the_warning_of_the_last_backup(
     configured_folder: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:

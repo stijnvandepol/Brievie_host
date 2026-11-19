@@ -204,6 +204,16 @@ def test_login_success_returns_the_user_and_a_session(client: Client) -> None:
     assert client.get("/api/v1/me").status_code == 200
 
 
+def test_the_session_cookie_is_http_only(client: Client) -> None:
+    UserFactory.create(email="jan@example.nl")
+
+    r = post(client, "/auth/login", {"email": "jan@example.nl", "password": TEST_PASSWORD})
+
+    assert r.status_code == 200
+    assert r.cookies["sessionid"]["httponly"]
+    assert r.cookies["sessionid"]["samesite"] == "Lax"
+
+
 def test_login_with_a_wrong_password_is_401(client: Client) -> None:
     UserFactory.create(email="jan@example.nl")
 

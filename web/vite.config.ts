@@ -21,5 +21,20 @@ export default defineConfig({
     setupFiles: ["./src/test-setup.ts"],
     css: false,
     testTimeout: 15000,
+    // Measured by `pnpm test:coverage` (CI), not by a plain `pnpm test`.
+    coverage: {
+      provider: "v8",
+      include: ["src/**/*.{ts,tsx}"],
+      // Generated files and the test set-up are not code to cover.
+      exclude: [
+        "src/api/schema.d.ts",
+        "src/locales/**",
+        "src/test-*.{ts,tsx}",
+        "src/**/*.test.{ts,tsx}",
+      ],
+      reporter: ["text-summary", "text", "cobertura"],
+      // THE ONE PLACE for the web's minimum: `thresholds: { lines: <percent> }`, set
+      // from the first CI run's total. Until then coverage is reported, never enforced.
+    },
   },
 });

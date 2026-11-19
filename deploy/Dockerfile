@@ -39,18 +39,25 @@ COPY --from=builder /opt/venv /opt/venv
 
 # Back-up tools (the keeper and admin services run them; DECISIONS 2026-11-17 B1).
 # restic: the static binary of the official image, pinned by version and digest.
-COPY --from=restic/restic:0.18.1@sha256:39d9072fb5651c80d75c7a811612eb60b4c06b32ffe87c2e9f3c7222e1797e76 \
+COPY --from=restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510 \
     /usr/bin/restic /usr/local/bin/restic
 # pg_dump/pg_restore from PGDG, the same major as the server (postgres:18 in compose;
 # test_pg_client_major_matches_the_server). The signing key is pinned by checksum.
+# The same layer installs Debian's pending security updates (the base image lags behind
+# them between its rebuilds) and removes the base image's pip: nothing runs it in this
+# image (the app's packages are in /opt/venv from the builder stage, whose python is
+# first on PATH, hence the full path), and it ships vendored packages of its own
+# (urllib3, msgpack, setuptools) with their own vulnerabilities.
 ADD --checksum=sha256:0144068502a1eddd2a0280ede10ef607d1ec592ce819940991203941564e8e76 --chmod=0644 \
     https://www.postgresql.org/media/keys/ACCC4CF8.asc /usr/share/keyrings/pgdg.asc
 RUN . /etc/os-release \
     && echo "deb [signed-by=/usr/share/keyrings/pgdg.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
         > /etc/apt/sources.list.d/pgdg.list \
     && apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends postgresql-client-18 \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && /usr/local/bin/python3 -m pip uninstall --yes pip
 
 # backend/tests is left out by .dockerignore.
 COPY backend/ ./

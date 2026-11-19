@@ -14,6 +14,15 @@
 		Referrer-Policy "same-origin"
 		# The web app loads only its own scripts and styles: no inline script, no eval.
 		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		# Browser features the web app never uses are off for it and anything it embeds.
+		# Not the clipboard: the app copies pairing details and links with it.
+		Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+		# Only this origin may load these responses, and the pages load nothing from
+		# elsewhere (the CSP already allows only 'self'). Cross-Origin-Opener-Policy
+		# comes from Django (SECURE_CROSS_ORIGIN_OPENER_POLICY, default same-origin).
+		# The iOS app is no browser: these headers do not apply to it.
+		Cross-Origin-Resource-Policy "same-origin"
+		Cross-Origin-Embedder-Policy "require-corp"
 		-Server
 	}
 }

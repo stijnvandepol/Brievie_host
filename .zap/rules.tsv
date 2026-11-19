@@ -1,0 +1,61 @@
+# ZAP rule configuration for the CI job `dast` (baseline and API scan).
+# Format: rule id <TAB> IGNORE|INFO|WARN|FAIL|OUTOFSCOPE <TAB> rule name, or for
+# OUTOFSCOPE a regular expression of URLs (Python re.match) the rule does not judge.
+# Lines starting with # are comments.
+# Rules not listed here are WARN: they show in the reports but do not fail the job
+# (the scans run with -I). FAIL is reserved for what the stack already guarantees
+# (Caddyfile headers, Django settings) and for injection findings, so a regression
+# fails the job. Every IGNORE and OUTOFSCOPE says why.
+#
+# Headers the Caddyfile sets on every response (security_headers).
+10020	FAIL	Anti-clickjacking Header
+10021	FAIL	X-Content-Type-Options Header Missing
+10038	FAIL	Content Security Policy (CSP) Header Not Set
+10063	FAIL	Permissions Policy Header Not Set
+10037	FAIL	Server Leaks Information via X-Powered-By
+# No CORS grant anywhere: WHITENOISE_ALLOW_ALL_ORIGINS = False, the API sends none.
+10098	FAIL	Cross-Domain Misconfiguration
+# Cookies: Django sets Secure (SESSION_/CSRF_COOKIE_SECURE) and SameSite=Lax.
+10011	FAIL	Cookie Without Secure Flag
+10054	FAIL	Cookie without SameSite Attribute
+# Errors and debug output.
+10023	FAIL	Information Disclosure - Debug Error Messages
+# Active scan (API scan only): injection findings are never acceptable.
+6	FAIL	Path Traversal
+7	FAIL	Remote File Inclusion
+40003	FAIL	CRLF Injection
+40012	FAIL	Cross Site Scripting (Reflected)
+40014	FAIL	Cross Site Scripting (Persistent)
+40018	FAIL	SQL Injection
+90019	FAIL	Server Side Code Injection
+90020	FAIL	Remote OS Command Injection
+90023	FAIL	XML External Entity Attack
+90035	FAIL	Server Side Template Injection
+# IGNORE, each by design:
+# 10035: Caddy sends max-age=0 while the server uses its private CA (BRIEVIE_HSTS_SECONDS,
+# see the Caddyfile): a browser must be able to pass the certificate warning.
+10035	IGNORE	Strict-Transport-Security Header
+# 10010: the only cookie without HttpOnly is csrftoken (all three alerts of the first
+# run). The web app reads it (web/src/api/client.ts) and sends it back as
+# X-CSRFToken, so it must be readable. The session cookie is HttpOnly
+# (test_the_session_cookie_is_http_only).
+10010	IGNORE	Cookie No HttpOnly Flag
+# 10112: informational; the "session token" it found is that same csrftoken, which
+# identifies no session.
+10112	IGNORE	Session Management Response Identified
+# 10027: matches words like 'user' or 'select' in the minified Vite bundle; there is
+# no server-side comment to leak, the bundle is the published AGPL source.
+10027	IGNORE	Information Disclosure - Suspicious Comments
+# 10096: matches large numbers in the bundle (constants, hashes) as Unix timestamps.
+10096	IGNORE	Timestamp Disclosure - Unix
+# 10109: only says the page is a single-page app, which is known.
+10109	IGNORE	Modern Web Application
+# OUTOFSCOPE for the web app's paths (everything but /api), judged on /api only:
+# 10015, 10049: the web app's files are public and meant to be cached (hashed assets
+# for a year, the index revalidated with no-cache). Every /api answer is no-store
+# (ApiCacheControlMiddleware) unless its endpoint sets a stricter header.
+10015	OUTOFSCOPE	^https://[^/]+(?:/(?!api(?:/|$|\?)).*)?$
+10049	OUTOFSCOPE	^https://[^/]+(?:/(?!api(?:/|$|\?)).*)?$
+# 100001: outside /api the server answers with the web app (HTML) or its files (CSS,
+# JavaScript), as it should; the API scan expects JSON everywhere.
+100001	OUTOFSCOPE	^https://[^/]+(?:/(?!api(?:/|$|\?)).*)?$

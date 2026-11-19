@@ -1,0 +1,22 @@
+name: Feature request
+description: An idea for Brievie host.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What do you want to do that Brievie does not let you do now? Who has this problem (a household, an office, a helper)?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you propose
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy
+      description: Does this change what is stored, or what leaves the server? See docs/PRIVACY.md.

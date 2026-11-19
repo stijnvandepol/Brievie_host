@@ -49,6 +49,37 @@ def test_runtime_image_has_no_uv_and_no_tests() -> None:
     assert "backend/tests" in DOCKERIGNORE
 
 
+def test_runtime_image_takes_security_updates_and_drops_pip() -> None:
+    # The base image lags behind Debian's security updates between its rebuilds, and its
+    # pip (unused at run time) vendors packages with vulnerabilities of their own.
+    runtime = DOCKERFILE.split("AS builder", 1)[1].split("FROM ", 1)[1]
+    # One RUN instruction: from "RUN " up to the next instruction.
+    blocks = re.split(r"\n(?=[A-Z]+ )", runtime)
+    apt = next(block for block in blocks if "apt-get install" in block)
+    assert apt.startswith("RUN ")
+    assert "apt-get upgrade -y" in apt
+    assert apt.index("apt-get upgrade") < apt.index("rm -rf /var/lib/apt/lists")
+    assert "/usr/local/bin/python3 -m pip uninstall --yes pip" in apt
+
+
+def test_caddy_sends_the_isolation_headers_and_switches_unused_features_off() -> None:
+    snippet = re.search(r"\(security_headers\) \{(.*?)\n\}", CADDYFILE, re.DOTALL)
+    assert snippet
+    lines = snippet.group(1).splitlines()
+    headers = "\n".join(line for line in lines if not line.lstrip().startswith("#"))
+    assert 'Cross-Origin-Resource-Policy "same-origin"' in headers
+    assert 'Cross-Origin-Embedder-Policy "require-corp"' in headers
+    policy = re.search(r'Permissions-Policy "([^"]+)"', headers)
+    assert policy
+    features = dict(part.split("=") for part in policy.group(1).split(", "))
+    for feature in ("camera", "microphone", "geolocation", "payment", "usb"):
+        assert features[feature] == "()", feature
+    # The web app copies pairing details and links: the clipboard stays allowed.
+    assert not any(feature.startswith("clipboard") for feature in features)
+    # One place per header: Django sends Cross-Origin-Opener-Policy, Caddy does not.
+    assert "Cross-Origin-Opener-Policy" not in headers
+
+
 def test_caddy_compresses_with_zstd_and_gzip() -> None:
     assert re.search(r"^\tencode zstd gzip$", CADDYFILE, re.MULTILINE)
 
@@ -280,6 +311,20 @@ def test_the_image_marks_itself_as_the_container() -> None:
     # /data/documents would otherwise pass the fixed allow-list).
     runtime = DOCKERFILE.split("AS builder", 1)[1].split("FROM ", 1)[1]
     assert re.search(r"^\s*BRIEVIE_IN_CONTAINER=1\b", runtime, re.MULTILINE), runtime
+
+
+def test_every_action_in_the_workflows_is_pinned_to_a_commit() -> None:
+    # A tag can be moved to other code; a full commit SHA cannot. The version goes in a
+    # trailing comment, which Dependabot keeps up to date.
+    workflows = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
+    assert workflows
+    for workflow in workflows:
+        for line in workflow.read_text().splitlines():
+            match = re.match(r"^\s*(?:- )?uses: (\S+)(.*)$", line)
+            if not match or match.group(1).startswith("./"):
+                continue
+            assert re.fullmatch(r"[\w.-]+/[\w./-]+@[0-9a-f]{40}", match.group(1)), line
+            assert re.fullmatch(r" # v\d+(\.\d+)*", match.group(2)), line
 
 
 def test_ci_runs_the_real_restic_tests_with_the_images_restic() -> None:

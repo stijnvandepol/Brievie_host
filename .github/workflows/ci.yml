@@ -8,14 +8,16 @@ on:
 permissions:
   contents: read
 
-# A newer push to the same branch makes the older run pointless.
+# A newer push to a pull request makes its older run pointless. Pushes to main all run
+# to the end, so every commit on main has a complete result.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:18
@@ -44,8 +46,10 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           version: "0.13.8"
       - name: Create database roles
@@ -59,7 +63,7 @@ jobs:
       # as deploy/Dockerfile copies it (a text test compares the two).
       - name: restic from the image's pinned official image
         run: |
-          id=$(docker create restic/restic:0.18.1@sha256:39d9072fb5651c80d75c7a811612eb60b4c06b32ffe87c2e9f3c7222e1797e76)
+          id=$(docker create restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510)
           docker cp "$id:/usr/bin/restic" "$RUNNER_TEMP/restic"
           docker rm "$id"
           sudo install -m 0755 "$RUNNER_TEMP/restic" /usr/local/bin/restic
@@ -71,25 +75,41 @@ jobs:
         run: uv run python manage.py makemigrations --check --dry-run
       - name: OpenAPI contract is up to date
         run: uv run python manage.py export_openapi --check
-      - run: uv run pytest
+      # Coverage is reported, not enforced: the minimum goes in pyproject.toml
+      # ([tool.coverage.report] fail_under), the one place for it.
+      - run: uv run pytest --cov --cov-report=term-missing:skip-covered --cov-report=xml
+      - name: Keep the coverage report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-backend
+          path: backend/coverage.xml
+          if-no-files-found: ignore
+      # Every package of uv.lock (runtime and dev), by exact version and hash, against
+      # the PyPI/OSV advisories; fails on any known vulnerability. --disable-pip: the
+      # locked, hashed list is audited as it is, nothing is resolved or installed.
+      # (uv 0.13.8 has `uv audit`, but marks it experimental.)
       - name: Audit dependencies
         run: |
-          uv export --frozen --no-hashes --no-emit-project > "$RUNNER_TEMP/requirements.txt"
-          uvx pip-audit --strict --requirement "$RUNNER_TEMP/requirements.txt"
+          uv export --frozen --no-emit-project > "$RUNNER_TEMP/requirements.txt"
+          uvx pip-audit@2.10.1 --strict --disable-pip --requirement "$RUNNER_TEMP/requirements.txt"
 
   web:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       # The action reads "packageManager" from the repo root by default; ours is in web/.
       # (defaults.run.working-directory does not apply to `uses:` steps.)
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
           package_json_file: web/package.json
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 26.13
           cache: pnpm
@@ -105,24 +125,88 @@ jobs:
         run: |
           pnpm extract
           git diff --exit-code -I POT-Creation-Date src/locales
-      - run: pnpm test
+      # Coverage is reported, not enforced: the minimum goes in vite.config.ts
+      # (test.coverage.thresholds), the one place for it.
+      - run: pnpm test:coverage
+      - name: Keep the coverage report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-web
+          path: web/coverage/
+          if-no-files-found: ignore
       - run: pnpm build
       - name: Audit dependencies
         run: pnpm audit --prod --audit-level high
 
   secrets:
     runs-on: ubuntu-latest
-    # gitleaks-action lists the pull request's commits.
+    timeout-minutes: 10
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: read # gitleaks-action lists the pull request's commits.
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v3
+          persist-credentials: false
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # The workflows themselves: injection through expressions, unpinned or impostor
+  # actions, excessive permissions, leaked credentials (zizmor's online audits use
+  # the job's read-only token).
+  workflows:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: "0.13.8"
+      - name: zizmor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uvx zizmor@1.32.0 --format=github .github/workflows
+
+  # The image as it ships: lint its Dockerfile, build it, scan what is inside (Debian
+  # packages, the virtualenv, restic, the PostgreSQL client) for known vulnerabilities.
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Lint the Dockerfile
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+        with:
+          dockerfile: deploy/Dockerfile
+          # Style and info findings are shown, warnings and errors fail.
+          failure-threshold: warning
+          # DL3008 (pin apt package versions): postgresql-client-18 comes from PGDG,
+          # which keeps only the newest build of each major; a pinned build would stop
+          # resolving within weeks. The major is pinned and tested against the server
+          # (test_pg_client_major_matches_the_server); the Trivy scan below covers
+          # known vulnerabilities in what was installed.
+          ignore: DL3008
+      - name: Build the image
+        run: docker build --file deploy/Dockerfile --tag brievie/backend:scan .
+      - name: Scan the image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.2
+          image-ref: brievie/backend:scan
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          # Only what an update can fix: an unfixed CVE is no reason to stop a change.
+          ignore-unfixed: true
+          exit-code: "1"
+          # Accepted findings, scoped to one file and each with an expiry date.
+          trivyignores: .trivyignore.yaml
 
   # The way a user installs it: fresh secrets, build the images, start everything.
   stack:
@@ -131,7 +215,9 @@ jobs:
     env:
       COMPOSE: docker compose --project-directory deploy -f deploy/docker-compose.yml
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Create deploy/.env with fresh secrets
         run: sh deploy/init-env.sh
       - name: Build and start the stack
@@ -159,6 +245,114 @@ jobs:
         if: always()
         run: $COMPOSE down --volumes
 
+  # OWASP ZAP against the running stack, started as in `stack`: a passive baseline scan
+  # of the web interface and an active scan of every operation in the OpenAPI contract,
+  # both unauthenticated. .zap/rules.tsv says which alerts fail the job (FAIL) and which
+  # are ignored and why; -I keeps the other warnings from failing. ZAP does not validate
+  # the server's certificate (zaproxy/zaproxy#7165), so Caddy's private CA is accepted.
+  #
+  # The host name: Java (ZAP) sends no SNI for a name without a dot such as `localhost`,
+  # and Caddy then has no certificate to offer (TLS "internal_error"). This job serves
+  # the stack as brievie.test (a reserved name) instead, resolved to the runner through
+  # /etc/hosts, which a --network=host container (how the ZAP actions run it) shares.
+  # Real installations keep their own BRIEVIE_HOSTNAME (default localhost).
+  dast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      COMPOSE: docker compose --project-directory deploy -f deploy/docker-compose.yml
+      ZAP_HOST: brievie.test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Create deploy/.env with fresh secrets, served as brievie.test
+        run: |
+          set -eu
+          sh deploy/init-env.sh
+          # Only the host name changes; nothing of deploy/.env is printed.
+          sed -i "s/^BRIEVIE_HOSTNAME=.*/BRIEVIE_HOSTNAME=$ZAP_HOST/" deploy/.env
+          test "$(grep -c "^BRIEVIE_HOSTNAME=$ZAP_HOST\$" deploy/.env)" = 1
+          echo "127.0.0.1 $ZAP_HOST" | sudo tee -a /etc/hosts
+      - name: Build and start the stack
+        id: up
+        run: $COMPOSE up -d --build --wait --wait-timeout 600
+      - name: The API answers through Caddy
+        run: |
+          # Caddy signs with its own CA, which this runner does not trust.
+          curl --fail --silent --show-error --insecure --retry 10 --retry-delay 3 --retry-all-errors \
+            "https://$ZAP_HOST/api/v1/health"
+      # The ZAP container has the workspace at /zap/wrk: the paths below are relative to
+      # the checkout, and the reports land in its root. The scans may fail (findings, or
+      # a scan that could not run); the reports are kept first, the verdict comes last.
+      - name: ZAP baseline scan of the web interface
+        id: baseline
+        continue-on-error: true
+        uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
+        with:
+          target: https://brievie.test/
+          # ZAP 2.17.0, the image the actions' default tag "stable" pointed at, by digest.
+          docker_name: ghcr.io/zaproxy/zaproxy:2.17.0@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af
+          rules_file_name: .zap/rules.tsv
+          cmd_options: -I
+          fail_action: true
+          allow_issue_writing: false
+          artifact_name: zap-baseline
+      - name: Keep the baseline reports
+        if: ${{ !cancelled() && steps.baseline.outcome != 'skipped' }}
+        run: |
+          mkdir -p zap-reports/baseline
+          for report in report_html.html report_md.md report_json.json; do
+            if [ -f "$report" ]; then mv "$report" zap-reports/baseline/; fi
+          done
+      - name: ZAP API scan of the OpenAPI contract
+        id: api
+        # Also when the baseline failed: both reports are wanted.
+        if: ${{ !cancelled() && steps.up.outcome == 'success' }}
+        continue-on-error: true
+        uses: zaproxy/action-api-scan@5158fe4d9d8fcc75ea204db81317cce7f9e5453d # v0.10.0
+        with:
+          target: docs/api/openapi.json
+          # ZAP 2.17.0, the image the actions' default tag "stable" pointed at, by digest.
+          docker_name: ghcr.io/zaproxy/zaproxy:2.17.0@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af
+          format: openapi
+          rules_file_name: .zap/rules.tsv
+          # The contract has no "servers": -O points every operation at the stack.
+          cmd_options: -I -O https://brievie.test
+          fail_action: true
+          allow_issue_writing: false
+          artifact_name: zap-api
+      - name: Keep the API scan reports
+        if: ${{ !cancelled() && steps.api.outcome != 'skipped' }}
+        run: |
+          mkdir -p zap-reports/api
+          for report in report_html.html report_md.md report_json.json; do
+            if [ -f "$report" ]; then mv "$report" zap-reports/api/; fi
+          done
+      - name: Upload the ZAP reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: zap-reports
+          path: zap-reports/
+          if-no-files-found: warn
+      - name: The scans passed
+        if: ${{ !cancelled() }}
+        env:
+          BASELINE: ${{ steps.baseline.outcome }}
+          API: ${{ steps.api.outcome }}
+        run: |
+          echo "baseline: $BASELINE, api: $API"
+          test "$BASELINE" = success
+          test "$API" = success
+      - name: Container state on failure
+        if: failure()
+        # No logs here: the api log holds the installation code.
+        run: $COMPOSE ps --all
+      - name: Stop
+        if: always()
+        run: $COMPOSE down --volumes
+
   # A back-up is only worth something when it restores onto an empty machine. This job
   # makes a server, seeds it, backs it up, destroys everything (containers, volumes,
   # deploy/.env) and restores from the back-up folder and the master key alone, twice:
@@ -177,7 +371,9 @@ jobs:
       # GitHub-hosted machine, never on a self-hosted runner that may run Brievie itself.
       - name: Only on a GitHub-hosted runner
         run: test "$RUNNER_ENVIRONMENT" = github-hosted
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Create deploy/.env and a back-up folder outside the stack
         run: |
           set -euo pipefail

@@ -29,6 +29,9 @@ def test_client_routes_get_the_index(client: Client, path: str) -> None:
 def test_index_sets_the_csrf_cookie_for_the_app(client: Client) -> None:
     r = client.get("/koppel-app")
     assert r.cookies["csrftoken"].value
+    # Not HttpOnly on purpose: the app reads it (web/src/api/client.ts) and sends it back
+    # as X-CSRFToken. It is no session: the session cookie is HttpOnly (accounts tests).
+    assert not r.cookies["csrftoken"]["httponly"]
 
 
 def test_unknown_api_path_still_returns_the_json_404(client: Client) -> None:
