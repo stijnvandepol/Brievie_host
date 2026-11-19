@@ -846,6 +846,11 @@
             "title": "Api Version",
             "type": "string"
           },
+          "server_version": {
+            "default": "",
+            "title": "Server Version",
+            "type": "string"
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -3026,6 +3031,16 @@
               }
             },
             "description": "OK"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Get Health"

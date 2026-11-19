@@ -379,3 +379,17 @@ def test_the_worker_that_builds_member_exports_mounts_the_documents() -> None:
     # writes the sealed export under the storage root, which the api reads for the
     # download. Without the volume the worker would use its own container's disk.
     assert re.search(r"^\s+- documents:/data/documents$", service("worker"), re.MULTILINE)
+
+
+def test_api_healthcheck_calls_the_health_endpoint() -> None:
+    # urlopen raises on a 503, so the check fails when the database does, and an
+    # `up --wait` (./brievie start and update) waits for a server that really works.
+    healthcheck = service("api").split("healthcheck:", 1)[1].split("volumes:", 1)[0]
+    assert "/api/v1/health" in healthcheck
+    assert "urlopen" in healthcheck
+
+
+def test_ci_checks_the_server_version_through_caddy() -> None:
+    stack = CI.split("\n  stack:\n", 1)[1].split("\n  dast:\n", 1)[0]
+    assert '["server_version"]' in stack
+    assert "backend/pyproject.toml" in stack

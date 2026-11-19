@@ -1769,6 +1769,11 @@ export interface components {
         HealthOut: {
             /** Api Version */
             api_version: string;
+            /**
+             * Server Version
+             * @default
+             */
+            server_version: string;
             /** Status */
             status: string;
         };
@@ -3030,6 +3035,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthOut"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
                 };
             };
         };

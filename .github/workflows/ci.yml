@@ -291,6 +291,10 @@ jobs:
           # Caddy signs with its own CA, which this runner does not trust.
           curl --fail --silent --show-error --insecure --retry 10 --retry-delay 3 --retry-all-errors \
             https://localhost/api/v1/health
+      - name: The health endpoint reports the version of backend/pyproject.toml
+        run: |
+          curl --fail --silent --show-error --insecure https://localhost/api/v1/health |
+            python3 -c 'import json, sys, tomllib; got = json.load(sys.stdin)["server_version"]; want = tomllib.load(open("backend/pyproject.toml", "rb"))["project"]["version"]; print(got); assert got == want, (got, want)'
       - name: The web interface is served
         run: |
           curl --fail --silent --show-error --insecure --output "$RUNNER_TEMP/index.html" https://localhost/
