@@ -1,7 +1,17 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { loggedInHandlers, renderApp, server, twoWorkspaces } from "../test-utils";
+import {
+  API,
+  gate,
+  HttpResponse,
+  http,
+  loggedInHandlers,
+  renderApp,
+  server,
+  twoWorkspaces,
+  workspace,
+} from "../test-utils";
 
 /** A screen narrower than the wide layout: `matchMedia` answers no to every query. */
 function narrowScreen() {
@@ -53,5 +63,58 @@ describe("navigation pane", () => {
     await u.keyboard("{Escape}");
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(toggle).toHaveFocus();
+  });
+});
+
+describe("Werkruimtes in the navigation", () => {
+  it("is left out with exactly one workspace: there is nothing to choose", async () => {
+    server.use(...loggedInHandlers());
+    // A workspace page: its route has loaded the workspaces before the page shows.
+    renderApp(`/w/${workspace.id}/personen`);
+    const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
+    await within(nav).findByRole("link", { name: "Te doen" });
+    expect(within(nav).queryByRole("link", { name: "Werkruimtes" })).not.toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "Apparaten" })).toBeInTheDocument();
+  });
+
+  it("is shown with two workspaces", async () => {
+    server.use(twoWorkspaces(), ...loggedInHandlers());
+    renderApp("/koppel-app");
+    const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
+    expect(await within(nav).findByRole("link", { name: "Werkruimtes" })).toHaveAttribute(
+      "href",
+      "/",
+    );
+  });
+
+  it("is shown with no workspace", async () => {
+    server.use(
+      http.get(`*${API}/workspaces`, () => HttpResponse.json([])),
+      ...loggedInHandlers(),
+    );
+    renderApp("/koppel-app");
+    const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
+    expect(await within(nav).findByRole("link", { name: "Werkruimtes" })).toBeInTheDocument();
+  });
+
+  it("does not flash in while the workspaces are loading", async () => {
+    const answer = gate();
+    let answered = false;
+    server.use(
+      http.get(`*${API}/workspaces`, async () => {
+        await answer.opened;
+        answered = true;
+        return HttpResponse.json([workspace]);
+      }),
+      ...loggedInHandlers(),
+    );
+    renderApp("/koppel-app");
+    const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
+    await within(nav).findByRole("link", { name: "Apparaten" });
+    expect(within(nav).queryByRole("link", { name: "Werkruimtes" })).not.toBeInTheDocument();
+    answer.open();
+    await waitFor(() => expect(answered).toBe(true));
+    await within(nav).findByRole("link", { name: "Apparaten" });
+    expect(within(nav).queryByRole("link", { name: "Werkruimtes" })).not.toBeInTheDocument();
   });
 });

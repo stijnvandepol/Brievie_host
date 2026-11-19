@@ -48,7 +48,10 @@ function HomePage() {
 
   return (
     <Shell>
-      <PageHeader title={t`Werkruimtes`} description={t`Kies de werkruimte die je wilt openen.`} />
+      <PageHeader
+        title={t`Werkruimtes`}
+        description={t`Een werkruimte heeft eigen post en eigen leden, bijvoorbeeld Thuis of je bedrijf. Kies welke je wilt openen.`}
+      />
       {isPending || only ? <Loading /> : null}
       <ErrorAlert error={error} />
       {data && !only ? (

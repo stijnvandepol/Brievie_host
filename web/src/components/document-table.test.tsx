@@ -46,7 +46,38 @@ describe("post on a phone", () => {
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     const card = link.closest("li") as HTMLElement;
     expect(within(card).getByText("Aanslag")).toBeInTheDocument();
-    expect(within(card).getByText("Te controleren")).toBeInTheDocument();
+    expect(within(card).getByText("Controleren")).toBeInTheDocument();
     expect(await within(card).findByText("Papa")).toBeInTheDocument();
+  });
+});
+
+describe("status in Alle post", () => {
+  it("says Naam kiezen for a read letter without a name, as Te doen does", async () => {
+    server.use(
+      http.get(`*${API}/workspaces/${workspace.id}/documents`, () =>
+        HttpResponse.json([{ ...documentSummary, status: "done", inbox_state: "unassigned" }]),
+      ),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
+    renderApp(`/w/${workspace.id}/post`);
+    const row = (await screen.findByRole("link", { name: "Belastingdienst" })).closest("tr");
+    expect(within(row as HTMLElement).getByText("Naam kiezen")).toBeInTheDocument();
+    expect(within(row as HTMLElement).queryByText("Klaar")).not.toBeInTheDocument();
+  });
+
+  it("says Klaar only when nothing waits", async () => {
+    server.use(
+      http.get(`*${API}/workspaces/${workspace.id}/documents`, () =>
+        HttpResponse.json([
+          { ...documentSummary, status: "done", inbox_state: "", addressee_ids: [papa.id] },
+        ]),
+      ),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
+    renderApp(`/w/${workspace.id}/post`);
+    const row = (await screen.findByRole("link", { name: "Belastingdienst" })).closest("tr");
+    expect(within(row as HTMLElement).getByText("Klaar")).toBeInTheDocument();
   });
 });
