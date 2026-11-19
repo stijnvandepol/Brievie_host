@@ -68,6 +68,8 @@ services:
       # applies the same limits when it cleans up. The idle limit may not exceed the other.
       BRIEVIE_SESSION_IDLE_DAYS: ${BRIEVIE_SESSION_IDLE_DAYS:-14}
       BRIEVIE_SESSION_MAX_DAYS: ${BRIEVIE_SESSION_MAX_DAYS:-90}
+      # Whether workspaces may switch on the AI autopilot at all.
+      BRIEVIE_AI_AUTOPILOT_ALLOWED: ${BRIEVIE_AI_AUTOPILOT_ALLOWED:-true}
     healthcheck:
       # The Host header must be an allowed host, so the first ALLOWED_HOSTS entry is used.
       test:
@@ -107,6 +109,8 @@ services:
       # Sessions past these limits are removed every hour (the same values as the api's).
       BRIEVIE_SESSION_IDLE_DAYS: ${BRIEVIE_SESSION_IDLE_DAYS:-14}
       BRIEVIE_SESSION_MAX_DAYS: ${BRIEVIE_SESSION_MAX_DAYS:-90}
+      # Whether workspaces may switch on the AI autopilot at all.
+      BRIEVIE_AI_AUTOPILOT_ALLOWED: ${BRIEVIE_AI_AUTOPILOT_ALLOWED:-true}
     command:
       - sh
       - -c
