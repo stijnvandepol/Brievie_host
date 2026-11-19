@@ -103,6 +103,14 @@ def _label_ids(document: Document) -> list[UUID]:
     return [link.label_id for link in document.label_links.all()]
 
 
+def _auto_addressee_ids(document: Document) -> list[UUID]:
+    return [link.person_id for link in document.addressee_links.all() if link.automatic]
+
+
+def _auto_label_ids(document: Document) -> list[UUID]:
+    return [link.label_id for link in document.label_links.all() if link.automatic]
+
+
 # The prefetch of a document's suggestions wherever several documents are shown: with
 # their persons, so `_open_suggestions` can leave out archived ones without a query each.
 SUGGESTIONS = models.Prefetch(
@@ -129,6 +137,22 @@ def _has_addressee() -> models.Exists:
     return models.Exists(DocumentAddressee.objects.filter(document=models.OuterRef("pk")))
 
 
+def _has_automatic_link() -> models.Q:
+    return models.Exists(
+        DocumentLabel.objects.filter(document=models.OuterRef("pk"), automatic=True)
+    ) | models.Exists(
+        DocumentAddressee.objects.filter(document=models.OuterRef("pk"), automatic=True)
+    )
+
+
+def _is_automatic() -> models.Q:
+    """The AI confirmed the document or put a label or addressee on it itself.
+
+    Needs the `has_automatic` annotation (an `Exists` cannot sit in an aggregate filter).
+    """
+    return models.Q(confirmed_by_ai=True) | models.Q(has_automatic=True)
+
+
 def _in_state(state: str) -> models.Q:
     if state == InboxState.NEW:
         return models.Q(status=Document.Status.PROCESSING)
@@ -143,12 +167,16 @@ def list_documents(
     inbox_state: str = "",
     person_id: UUID | None = None,
     label_id: UUID | None = None,
+    automatic: bool = False,
 ) -> list[Document]:
-    """The newest documents of the workspace (at most 200; paging comes later), filtered."""
+    """The newest documents of the workspace (at most 200; paging comes later), filtered.
+
+    `automatic` keeps the documents the autopilot confirmed or organised.
+    """
     if inbox_state and inbox_state not in INBOX_STATES:
         raise ApiError(422, "validation_error", _("Deze stand van de inbox kennen we niet."))
     documents = Document.objects.filter(workspace=workspace).annotate(
-        has_addressee=_has_addressee()
+        has_addressee=_has_addressee(), has_automatic=_has_automatic_link()
     )
     if inbox_state:
         documents = documents.filter(_in_state(inbox_state))
@@ -156,6 +184,8 @@ def list_documents(
         documents = documents.filter(addressee_links__person_id=person_id)
     if label_id is not None:
         documents = documents.filter(label_links__label_id=label_id)
+    if automatic:
+        documents = documents.filter(_is_automatic())
     return list(
         documents.prefetch_related("addressee_links", "label_links", SUGGESTIONS).order_by(
             "-created_at", "-id"
@@ -166,12 +196,13 @@ def list_documents(
 def inbox_counts(workspace: Workspace) -> dict[str, int]:
     """How many documents are in each inbox state, for the badges."""
     documents = Document.objects.filter(workspace=workspace).annotate(
-        has_addressee=_has_addressee()
+        has_addressee=_has_addressee(), has_automatic=_has_automatic_link()
     )
     counts = documents.aggregate(
-        **{state: models.Count("id", filter=_in_state(state)) for state in INBOX_STATES}
+        **{state: models.Count("id", filter=_in_state(state)) for state in INBOX_STATES},
+        automatic=models.Count("id", filter=_is_automatic()),
     )
-    return {state: int(counts[state]) for state in INBOX_STATES}
+    return {name: int(counts[name]) for name in (*INBOX_STATES, "automatic")}
 
 
 def get_document(*, workspace: Workspace, document_id: UUID) -> Document:
@@ -202,6 +233,9 @@ def _summary_out(
         label_ids=_label_ids(document),
         inbox_state=inbox_state(document),
         open_suggestion_count=len(open_suggestions),
+        confirmed_by_ai=document.confirmed_by_ai,
+        auto_label_ids=_auto_label_ids(document),
+        auto_addressee_ids=_auto_addressee_ids(document),
     )
 
 
@@ -241,6 +275,7 @@ def document_out(document: Document) -> DocumentOut:
                 deadline_quote=task.deadline_quote,
                 status=task.status,
                 completed_at=task.completed_at,
+                created_by_ai=task.created_by_ai,
             )
             for task in document.tasks.order_by("deadline", "created_at", "id")
         ],

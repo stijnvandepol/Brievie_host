@@ -29,6 +29,7 @@ const task = {
   deadline_source: "letter",
   status: "open",
   completed_at: null,
+  created_by_ai: false,
 };
 const path = `/w/${workspace.id}/post/${documentSummary.id}`;
 

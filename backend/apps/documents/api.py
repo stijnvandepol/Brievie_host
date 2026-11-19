@@ -108,7 +108,9 @@ def create_document(
     operation_id="listDocuments",
     description=(
         "The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), "
-        "`person_id` and `label_id` narrow the list; together they all apply."
+        "`person_id`, `label_id` and `automatic` narrow the list; together they all apply. "
+        "`automatic=true` keeps the documents the AI confirmed itself or put a label or "
+        "addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`)."
     ),
 )
 def list_documents(
@@ -117,10 +119,15 @@ def list_documents(
     inbox_state: str = "",
     person_id: UUID | None = None,
     label_id: UUID | None = None,
+    automatic: bool = False,
 ) -> list[DocumentSummaryOut]:
     membership = workspace_member(request, workspace_id)
     documents = services.list_documents(
-        membership.workspace, inbox_state=inbox_state, person_id=person_id, label_id=label_id
+        membership.workspace,
+        inbox_state=inbox_state,
+        person_id=person_id,
+        label_id=label_id,
+        automatic=automatic,
     )
     return [services.document_summary_out(document) for document in documents]
 
@@ -333,9 +340,10 @@ def list_document_events(
     response={200: DocumentOut, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS},
     operation_id="undoDocumentEvent",
     description=(
-        "Reverse a change a rule made (`can_undo`); the rule does not make it again on "
-        "this document. 409 `event_not_undoable` when the change is not a rule's, was "
-        "undone already or is gone anyway."
+        "Reverse a label or addressee a rule or the autopilot added (`can_undo`; origin "
+        "`rule`, `ai` or `name_match`); it is not made again on this document. 409 "
+        "`event_not_undoable` when the change is not one of those, was undone already or is "
+        "gone anyway."
     ),
 )
 def undo_document_event(

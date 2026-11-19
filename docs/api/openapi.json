@@ -634,10 +634,31 @@
             "title": "Addressee Ids",
             "type": "array"
           },
+          "auto_addressee_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Auto Addressee Ids",
+            "type": "array"
+          },
+          "auto_label_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Auto Label Ids",
+            "type": "array"
+          },
           "client_id": {
             "format": "uuid",
             "title": "Client Id",
             "type": "string"
+          },
+          "confirmed_by_ai": {
+            "default": false,
+            "title": "Confirmed By Ai",
+            "type": "boolean"
           },
           "created_at": {
             "format": "date-time",
@@ -761,10 +782,31 @@
             "title": "Addressee Ids",
             "type": "array"
           },
+          "auto_addressee_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Auto Addressee Ids",
+            "type": "array"
+          },
+          "auto_label_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Auto Label Ids",
+            "type": "array"
+          },
           "client_id": {
             "format": "uuid",
             "title": "Client Id",
             "type": "string"
+          },
+          "confirmed_by_ai": {
+            "default": false,
+            "title": "Confirmed By Ai",
+            "type": "boolean"
           },
           "created_at": {
             "format": "date-time",
@@ -926,6 +968,11 @@
       },
       "InboxCountsOut": {
         "properties": {
+          "automatic": {
+            "default": 0,
+            "title": "Automatic",
+            "type": "integer"
+          },
           "new": {
             "title": "New",
             "type": "integer"
@@ -2314,6 +2361,11 @@
               "string",
               "null"
             ]
+          },
+          "created_by_ai": {
+            "default": false,
+            "title": "Created By Ai",
+            "type": "boolean"
           },
           "deadline": {
             "format": "date",
@@ -5308,7 +5360,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/documents": {
       "get": {
-        "description": "The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id` and `label_id` narrow the list; together they all apply.",
+        "description": "The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`).",
         "operationId": "listDocuments",
         "parameters": [
           {
@@ -5355,6 +5407,16 @@
                 "string",
                 "null"
               ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "automatic",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Automatic",
+              "type": "boolean"
             }
           }
         ],
@@ -6017,7 +6079,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}/events/{event_id}/undo": {
       "post": {
-        "description": "Reverse a change a rule made (`can_undo`); the rule does not make it again on this document. 409 `event_not_undoable` when the change is not a rule's, was undone already or is gone anyway.",
+        "description": "Reverse a label or addressee a rule or the autopilot added (`can_undo`; origin `rule`, `ai` or `name_match`); it is not made again on this document. 409 `event_not_undoable` when the change is not one of those, was undone already or is gone anyway.",
         "operationId": "undoDocumentEvent",
         "parameters": [
           {
