@@ -59,8 +59,8 @@ After the proposals are made and the rules ran (`organise_processed`), when
 `auto_organise` is in force, each still-open proposal that qualifies is carried out
 through `organise.add_label` / `organise.add_addressee` with `actor=None`:
 
-- origin `ai` with confidence >= `AUTO_APPLY_FROM` (0.700; the model's own `zekerheid`,
-  clamped and capped at 0.800 as today), or
+- origin `ai` with confidence >= `AUTO_APPLY_FROM` (0.800: the cap, so the model itself said
+  0.8 or more; its own `zekerheid`, clamped as today), or
 - origin `name_match` with confidence >= `PRESELECT_FROM` (the existing "strong match").
 
 The history event gets origin `ai` or `name_match` (new values), the proposal becomes
@@ -82,6 +82,9 @@ keeps the document a proposal when any of these is true:
 - an action without description; more than 20 actions;
 - a deadline that was given but not found in the letter or not plausible, with confidence
   < 0.850, in the past, or before the letter date;
+- an action without a deadline while the letter's text names a term (`mentions_term`: "binnen
+  14 dagen", "uiterlijk", "vóór 1 december", "vervaldatum", "termijn" and the like): the
+  models miss relative terms, and a collection task without its date is worse than a proposal;
 - with `auto_organise` also on: a proposal is still open after (a) (a weak person or label
   match, or a rule that asks) — the person is not unambiguous.
 
@@ -146,8 +149,10 @@ A failure inside it rolls back to "needs review".
    is not the AI that found them. The badge still reads "Automatisch door AI" (one name
    for the feature); the history line says which it was.
 3. Rule proposals are never auto-applied (the rule's author chose "propose").
-4. A task without deadline is confirmed automatically: a missed deadline cannot be told
-   from a letter without one. Stated in the notice and in PRIVACY/SPEC as a limit.
+4. A task without deadline is confirmed automatically only when the letter's text names no
+   term at all (see the guard rail). Working the date out from a relative term ("binnen 14
+   dagen na dagtekening") with `needs_attention` is a follow-up, not this part. A needless
+   task ("bewaar" on a payslip) cannot be told apart and is a stated limit.
 5. When processing fails nothing is applied automatically, not even name matches.
 6. No per-workspace `AIConsentEvent` row: that table records consent about where text
    goes; the switches are settings and go to the audit log, which the app role cannot
@@ -156,6 +161,17 @@ A failure inside it rolls back to "needs review".
    done in the app.
 8. The summary is stored with `summary_by_ai` true, as a person's confirm of the AI's
    text does.
+
+9. Findings of the trial with a real key (12 made-up letters, three Claude models, 19-11):
+   the weak spot is the keyword rule, not the AI: a letter with an embedded instruction got
+   a rule's label at confidence 1.000 on a word in the text. So autopilot never carries out
+   a rule's proposal (ruling 3 stands, with a test using such a letter), and a proposal the
+   rule took over from the AI stays a proposal too. A rule in mode `auto` is the user's own
+   switch and is unchanged. The generated fields always carry 0.500 and are no signal: no
+   guard rail leans on them. A letter date whose quote lacks the day ("November 2026") has
+   confidence 0 in the existing validation and so blocks confirming (pinned by a test).
+   Person assignment came from name matching and was right 12/12, which supports ruling 2.
+   `AUTO_APPLY_FROM` went from 0.700 to 0.800 after a model gave loose extra labels.
 
 ## Left to the builder
 
