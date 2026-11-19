@@ -78,6 +78,7 @@ HOST_KEYS = (
     "POSTGRES_PORT",
     "BRIEVIE_HTTP_PORT",
     "BRIEVIE_HTTPS_PORT",
+    "BRIEVIE_PUBLISH_POSTGRES",
 )
 _HOST_LINE = _key_line(HOST_KEYS)
 # Every COMPOSE_* and DOCKER_* key steers docker compose itself (profiles, files, the

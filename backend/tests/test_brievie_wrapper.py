@@ -3098,3 +3098,37 @@ def test_a_restore_that_stops_after_the_swap_leaves_no_sheet_and_says_so_when_do
 
     assert finished.returncode == 0, finished.stderr
     assert SHEET_VOID in finished.stdout.splitlines()
+
+
+# --- PostgreSQL is published only for a developer ------------------------------------------
+
+
+def compose_files(install: Install) -> set[tuple[str, ...]]:
+    found = set()
+    for call in install.calls():
+        argv = call["argv"]
+        if argv[0] != "compose":
+            continue
+        found.add(tuple(Path(argv[i + 1]).name for i, a in enumerate(argv) if a == "-f"))
+    return found
+
+
+def test_an_installation_leaves_postgres_unpublished(installed: Install) -> None:
+    assert installed.run("start").returncode == 0
+    assert compose_files(installed) == {("docker-compose.yml",)}
+
+
+@pytest.mark.parametrize("value", ["true", "ja", "1"])
+def test_a_developer_installation_publishes_postgres(installed: Install, value: str) -> None:
+    installed.write_env(current_env() + f"BRIEVIE_PUBLISH_POSTGRES={value}\n")
+    assert installed.run("start").returncode == 0
+    assert compose_files(installed) == {("docker-compose.yml", "docker-compose.dev.yml")}
+
+
+def test_publishing_postgres_is_never_taken_from_a_backup(installed: Install) -> None:
+    installed.restored.write_text(restored_env() + "BRIEVIE_PUBLISH_POSTGRES=true\n")
+
+    result = installed.run("restore", "--replace", "--keep-hostname", **restore_inputs(installed))
+
+    assert result.returncode == 0, result.stderr
+    assert setting(installed.dotenv.read_text(), "BRIEVIE_PUBLISH_POSTGRES") == []

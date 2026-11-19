@@ -22,6 +22,10 @@ als 0.1.0.
   ```
 
   Daarna werkt `./brievie update` voor elke volgende versie.
+- PostgreSQL is niet meer bereikbaar op poort 5432 van deze computer: Brievie zelf heeft
+  die poort niet nodig, en op een NAS botst hij met een database die daar al draait.
+  Ontwikkel je aan Brievie en gebruik je `make test` tegen deze installatie? Zet dan
+  `BRIEVIE_PUBLISH_POSTGRES=true` in `deploy/.env` en typ `./brievie start`.
 
 ### Toegevoegd
 

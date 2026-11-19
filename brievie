@@ -470,6 +470,17 @@ setup_installation() {
 	fi
 	BRIEVIE_IMAGE=$image
 	export BRIEVIE_IMAGE
+	# PostgreSQL is published on 127.0.0.1 only when this machine's deploy/.env asks for it
+	# (a developer's make test); an installation does not need it, and on a NAS the port
+	# is often taken.
+	publish_postgres=""
+	publish=${BRIEVIE_PUBLISH_POSTGRES:-}
+	if [ -z "$publish" ]; then
+		publish=$(unquote "$(env_value BRIEVIE_PUBLISH_POSTGRES)")
+	fi
+	case $publish in
+	1 | true | yes | ja) publish_postgres=yes ;;
+	esac
 	# Only the restore steps mount the back-up read-only; nothing else follows the shell.
 	unset BRIEVIE_BACKUP_MOUNT_MODE
 	# Caddy reads these files only when it starts, and compose does not look inside them:
@@ -495,13 +506,15 @@ loopback_host() {
 # The settings compose reads: deploy/.env, or (set for one call) another file.
 compose_env_file=""
 compose_raw() {
-	if [ -n "$compose_env_file" ]; then
-		docker compose -p "$project" --project-directory "$here/deploy" \
-			--env-file "$compose_env_file" -f "$here/deploy/docker-compose.yml" "$@"
-	else
-		docker compose -p "$project" --project-directory "$here/deploy" \
-			-f "$here/deploy/docker-compose.yml" "$@"
+	# A developer's installation may publish PostgreSQL for make test (setup_installation).
+	if [ -n "$publish_postgres" ]; then
+		set -- -f "$here/deploy/docker-compose.dev.yml" "$@"
 	fi
+	set -- -f "$here/deploy/docker-compose.yml" "$@"
+	if [ -n "$compose_env_file" ]; then
+		set -- --env-file "$compose_env_file" "$@"
+	fi
+	docker compose -p "$project" --project-directory "$here/deploy" "$@"
 }
 
 compose() {
@@ -1070,7 +1083,7 @@ pin_restored_identity() {
 	keep_current BRIEVIE_IMAGE || return 1
 	if [ -e "$env_file" ]; then
 		for key in POSTGRES_PORT BRIEVIE_HTTP_PORT BRIEVIE_HTTPS_PORT BRIEVIE_INSTALLATION_ID \
-			$destination_keys; do
+			BRIEVIE_PUBLISH_POSTGRES $destination_keys; do
 			keep_current "$key" || return 1
 		done
 		if [ -n "$(env_value BRIEVIE_BACKUP_DIR)$(env_value BRIEVIE_BACKUP_REPOSITORY)" ]; then

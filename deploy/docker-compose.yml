@@ -12,8 +12,10 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
-    ports:
-      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    # Not published: the stack reaches it on its own network, and on a NAS port 5432 is
+    # often taken by the NAS's own database. make (and ./brievie with
+    # BRIEVIE_PUBLISH_POSTGRES=true) adds docker-compose.dev.yml, which publishes it on
+    # 127.0.0.1:${POSTGRES_PORT} for the tools on the host (make test, make migrate).
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d brievie"]
       interval: 2s
@@ -23,7 +25,7 @@ services:
   # One-shot: applies migrations as the schema owner, then exits. Only this
   # container gets the owner credentials; the api never sees them.
   migrate:
-    image: ${BRIEVIE_IMAGE:-brievie/backend:local}
+    image: ${BRIEVIE_IMAGE:-brievie/backend:${BRIEVIE_VERSION:-local}}
     # Same image as api, which builds it.
     pull_policy: never
     depends_on:
@@ -38,7 +40,7 @@ services:
     restart: "no"
 
   api:
-    image: ${BRIEVIE_IMAGE:-brievie/backend:local}
+    image: ${BRIEVIE_IMAGE:-brievie/backend:${BRIEVIE_VERSION:-local}}
     build:
       context: ..
       dockerfile: deploy/Dockerfile
@@ -92,7 +94,7 @@ services:
   # processed from text in the database; only the member export reads the sealed page
   # files and writes its sealed ZIP, which is why the documents volume is mounted.
   worker:
-    image: ${BRIEVIE_IMAGE:-brievie/backend:local}
+    image: ${BRIEVIE_IMAGE:-brievie/backend:${BRIEVIE_VERSION:-local}}
     pull_policy: never
     restart: unless-stopped
     depends_on:
@@ -107,6 +109,9 @@ services:
       # Sessions past these limits are removed every hour (the same values as the api's).
       BRIEVIE_SESSION_IDLE_DAYS: ${BRIEVIE_SESSION_IDLE_DAYS:-14}
       BRIEVIE_SESSION_MAX_DAYS: ${BRIEVIE_SESSION_MAX_DAYS:-90}
+    # A job cut off when an update stops the worker is picked up again by the retry of
+    # stalled jobs (retry_stalled_jobs).
+    stop_grace_period: 1m
     command:
       - sh
       - -c
@@ -122,7 +127,7 @@ services:
   # the document files and Caddy's CA read-only. It holds no master key, no superuser or
   # owner password: a stolen keeper cannot decrypt documents or change the schema.
   keeper:
-    image: ${BRIEVIE_IMAGE:-brievie/backend:local}
+    image: ${BRIEVIE_IMAGE:-brievie/backend:${BRIEVIE_VERSION:-local}}
     pull_policy: never
     restart: unless-stopped
     depends_on:
@@ -162,7 +167,7 @@ services:
   # restore writes every volume; it is the only container that holds both the master
   # key and the superuser password.
   admin:
-    image: ${BRIEVIE_IMAGE:-brievie/backend:local}
+    image: ${BRIEVIE_IMAGE:-brievie/backend:${BRIEVIE_VERSION:-local}}
     pull_policy: never
     profiles: ["admin"]
     restart: "no"
@@ -238,3 +243,7 @@ volumes:
   caddy-authority:
   backup-config:
   backup-unset:
+  # An update's emergency back-up on a server without a destination. No service mounts
+  # it: ./brievie mounts it at /backup of the one-off admin container for one call
+  # (BRIEVIE_BACKUP_DIR=update-backup), so only the update itself ever prunes it.
+  update-backup:

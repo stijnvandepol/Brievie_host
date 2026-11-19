@@ -1,0 +1,8 @@
+# Development only: what the host's own tools need on top of docker-compose.yml.
+# `make` always adds this file; ./brievie adds it when deploy/.env sets
+# BRIEVIE_PUBLISH_POSTGRES=true. An installation leaves PostgreSQL unpublished.
+services:
+  postgres:
+    # make test and make migrate reach the database here; 127.0.0.1 only.
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"

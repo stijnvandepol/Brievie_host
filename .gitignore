@@ -25,6 +25,10 @@ deploy/.brievie-lock/
 deploy/.restore-in-progress
 deploy/.restore-in-progress.new.*
 deploy/.env.new.*
+# ./brievie update: the running copy of the wrapper and the unfinished-update marker
+deploy/.update/
+# A throwaway installation to prove an update for real (never committed)
+/.e2e/
 brievie-herstelblad.html.tmp.*
 # ./brievie recovery-sheet: holds the master key
 brievie-herstelblad.html
