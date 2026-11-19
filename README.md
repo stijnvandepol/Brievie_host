@@ -113,8 +113,9 @@ What is stored where and what leaves the server is described in
   after five failures for fifteen minutes; web sessions and phones expire when unused.
 - **Transport:** Caddy serves HTTPS with its own certificate authority. The pairing QR
   code carries that authority's fingerprint, and the app trusts only that authority.
-- **Back-ups** are encrypted by restic. The master key is never in a back-up; the
-  recovery sheet is the one thing to keep safe.
+- **Back-ups** are encrypted by restic. The master key is never in a back-up; keep the
+  recovery sheet safe, and with a REST or S3 destination also its user name and password
+  (they are not on the sheet).
 - **Honest limits:** recognised text, summaries and names in the database are not
   encrypted (put the database volume on an encrypted disk); whoever runs the server can
   read the database and the log. See "Honest limits" in `docs/PRIVACY.md`.

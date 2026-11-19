@@ -37,8 +37,9 @@ database superuser and owner. Without the master key the documents cannot be rea
 it must live somewhere else.
 
 restic encrypts the back-up with the back-up password. By default that password is
-derived from the master key. So the recovery sheet, which shows the master key, is the
-one thing to keep.
+derived from the master key. So keep the recovery sheet, which shows the master key; with
+a REST server or S3 storage as the destination, also keep its user name and password
+(or access keys), which are not on the sheet (section 3).
 
 ## 3. The recovery sheet
 
@@ -163,10 +164,14 @@ scheduler running the command.
 
 **On a new machine**
 
-1. Install Brievie on the new machine and start it (`./brievie start`). A running
-   installation without users, workspaces or documents counts as empty. Brievie can
-   only see that while it is running: an installation that is stopped is treated as
-   one with data.
+1. Put Brievie on the new machine (`git clone`), but **do not start it**:
+   `./brievie restore` builds and starts it itself, with the settings and the master
+   key from the back-up. A first `./brievie start` would make a new master key and a
+   recovery sheet for it, which the restore makes worthless. Did you start it anyway? A
+   running installation without users, workspaces or documents counts as empty and is
+   replaced after you confirm; the restore removes the sheet that start wrote and tells
+   you that any sheet printed from it is void. (Brievie can only see that an
+   installation is empty while it runs: a stopped one is treated as one with data.)
 2. Connect the disk (or have the address of the remote back-up, and its user name and
    password, ready).
 3. `./brievie restore`. It asks where the back-up is and for the master key from your
@@ -175,7 +180,9 @@ scheduler running the command.
    confirm.
 4. It asks whether this server should keep making back-ups to the same place. Answer
    "ja" only if the original server will never make back-ups there again (section 4).
-5. Wait for "Herstel gelukt."
+5. Wait for "Herstel gelukt." Then make a recovery sheet of this server with
+   `./brievie recovery-sheet` (it shows the restored master key), print it and remove
+   the file.
 
 `./brievie status --list` shows the back-ups and their numbers; `./brievie restore
 NUMMER` takes that one instead of the newest. Without a number the newest is taken,
