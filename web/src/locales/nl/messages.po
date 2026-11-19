@@ -136,6 +136,10 @@ msgstr "{subject} het woord {0} bevat"
 msgid "{subject} het woord {0} niet bevat"
 msgstr "{subject} het woord {0} niet bevat"
 
+#: src/components/page.tsx
+msgid "{todo, plural, one {Te doen, # brief} other {Te doen, # brieven}}"
+msgstr "{todo, plural, one {Te doen, # brief} other {Te doen, # brieven}}"
+
 #: src/components/document-history.tsx
 msgid "{who} bevestigde deze brief"
 msgstr "{who} bevestigde deze brief"
@@ -309,6 +313,10 @@ msgstr "AI op je eigen netwerk"
 msgid "AI uit: de tekst van brieven gaat naar geen enkele AI-dienst."
 msgstr "AI uit: de tekst van brieven gaat naar geen enkele AI-dienst."
 
+#: src/routes/post.tsx
+msgid "Al je brieven, ook de afgehandelde. Zoek op persoon of label. Wat nog op jou wacht, staat bij Te doen."
+msgstr "Al je brieven, ook de afgehandelde. Zoek op persoon of label. Wat nog op jou wacht, staat bij Te doen."
+
 #: src/routes/rule-editor.tsx
 msgid "alle"
 msgstr "alle"
@@ -320,6 +328,14 @@ msgstr "Alle gebeurtenissen"
 #: src/routes/post.tsx
 msgid "Alle labels"
 msgstr "Alle labels"
+
+#: src/components/document-table.tsx
+#: src/components/page.tsx
+#: src/routes/document.tsx
+#: src/routes/inbox.tsx
+#: src/routes/post.tsx
+msgid "Alle post"
+msgstr "Alle post"
 
 #: src/routes/member-devices.tsx
 msgid "Alle sessies beëindigen"
@@ -469,9 +485,19 @@ msgstr "bevat niet het woord"
 msgid "Bewaakte map"
 msgstr "Bewaakte map"
 
+#. placeholder {0}: counts.new
+#: src/routes/inbox.tsx
+msgid "Bezig: {0}"
+msgstr "Bezig: {0}"
+
 #: src/routes/rule-editor.tsx
 msgid "Bezig. Je ziet het resultaat bij de brieven zelf."
 msgstr "Bezig. Je ziet het resultaat bij de brieven zelf."
+
+#: src/components/document-table.tsx
+#: src/routes/inbox.tsx
+msgid "Bezig…"
+msgstr "Bezig…"
 
 #: src/routes/ai.tsx
 msgid "Bijvoorbeeld http://ollama:11434/v1"
@@ -493,9 +519,21 @@ msgstr "Bonnetje"
 msgid "Brief"
 msgstr "Brief"
 
+#: src/routes/inbox.tsx
+msgid "Brieven waar jij nog iets mee moet doen. Al je brieven, ook de afgehandelde, staan bij Alle post."
+msgstr "Brieven waar jij nog iets mee moet doen. Al je brieven, ook de afgehandelde, staan bij Alle post."
+
 #: src/routes/setup.tsx
 msgid "Brievie instellen"
 msgstr "Brievie instellen"
+
+#: src/routes/inbox.tsx
+msgid "Brievie kon deze brief niet goed lezen. Controleer hem in de app."
+msgstr "Brievie kon deze brief niet goed lezen. Controleer hem in de app."
+
+#: src/routes/inbox.tsx
+msgid "Brievie leest deze brief nog. Je hoeft niets te doen."
+msgstr "Brievie leest deze brief nog. Je hoeft niets te doen."
 
 #: src/routes/sessions.tsx
 msgid "Browser"
@@ -525,6 +563,16 @@ msgstr "Contract"
 #: src/routes/inbox.tsx
 msgid "Controleer deze brief in de app."
 msgstr "Controleer deze brief in de app."
+
+#: src/components/document-table.tsx
+#: src/routes/inbox.tsx
+msgid "Controleren"
+msgstr "Controleren"
+
+#. placeholder {0}: counts.review
+#: src/routes/inbox.tsx
+msgid "Controleren: {0}"
+msgstr "Controleren: {0}"
 
 #: src/routes/password-reset.tsx
 msgid "Daarna ben je ingelogd. Je moet je telefoon opnieuw koppelen."
@@ -580,15 +628,6 @@ msgstr "De export is niet gelukt. Probeer het opnieuw."
 msgid "De link werkt daarna niet meer. Wie hem al heeft, kan er niet meer mee binnenkomen."
 msgstr "De link werkt daarna niet meer. Wie hem al heeft, kan er niet meer mee binnenkomen."
 
-#. placeholder {0}: workspace.name
-#: src/routes/members.tsx
-msgid "De mensen die bij {0} horen en bij de post kunnen."
-msgstr "De mensen die bij {0} horen en bij de post kunnen."
-
-#: src/routes/persons.tsx
-msgid "De mensen op wiens naam post binnenkomt. Brievie herkent ze aan hun naam en naamvarianten."
-msgstr "De mensen op wiens naam post binnenkomt. Brievie herkent ze aan hun naam en naamvarianten."
-
 #: src/routes/rule-editor.tsx
 msgid "De regel is opgeslagen."
 msgstr "De regel is opgeslagen."
@@ -634,7 +673,6 @@ msgid "Deadline"
 msgstr "Deadline"
 
 #: src/routes/document.tsx
-#: src/routes/inbox.tsx
 msgid "Deze brief wordt nog gelezen."
 msgstr "Deze brief wordt nog gelezen."
 
@@ -724,6 +762,10 @@ msgstr "Een regel zet labels of een naam op nieuwe post. De regels draaien van b
 #: src/routes/rule-editor.tsx
 msgid "een van"
 msgstr "een van"
+
+#: src/routes/home.tsx
+msgid "Een werkruimte heeft eigen post en eigen leden, bijvoorbeeld Thuis of je bedrijf. Kies welke je wilt openen."
+msgstr "Een werkruimte heeft eigen post en eigen leden, bijvoorbeeld Thuis of je bedrijf. Kies welke je wilt openen."
 
 #: src/routes/ai.tsx
 msgid "Eigen adres"
@@ -968,10 +1010,6 @@ msgstr "het soort post {type} is"
 msgid "het soort post niet {type} is"
 msgstr "het soort post niet {type} is"
 
-#: src/routes/inbox.tsx
-msgid "Hier is niets te doen."
-msgstr "Hier is niets te doen."
-
 #: src/routes/rule-editor.tsx
 msgid "Hoeveel voorwaarden moeten kloppen"
 msgstr "Hoeveel voorwaarden moeten kloppen"
@@ -1016,15 +1054,6 @@ msgstr "In deze link zit geen herstelcode. Open de link uit je bericht opnieuw."
 #: src/routes/invitation.tsx
 msgid "In deze link zit geen uitnodiging. Open de link uit je bericht opnieuw."
 msgstr "In deze link zit geen uitnodiging. Open de link uit je bericht opnieuw."
-
-#: src/components/page.tsx
-#: src/routes/inbox.tsx
-msgid "Inbox"
-msgstr "Inbox"
-
-#: src/components/page.tsx
-msgid "Inbox, {todo} te doen"
-msgstr "Inbox, {todo} te doen"
 
 #: src/components/document-table.tsx
 msgid "Informatie"
@@ -1123,6 +1152,10 @@ msgstr "Je bent hier nog alleen."
 #: src/routes/members.tsx
 msgid "Je bent hier nog alleen. Nodig iemand uit om samen de post te doen."
 msgstr "Je bent hier nog alleen. Nodig iemand uit om samen de post te doen."
+
+#: src/routes/inbox.tsx
+msgid "Je bent klaar. Er is niets te doen."
+msgstr "Je bent klaar. Er is niets te doen."
 
 #: src/routes/invitation.tsx
 msgid "Je bent nu lid. Koppel ook de Brievie-app op je telefoon, dan scan je brieven met de app."
@@ -1236,10 +1269,6 @@ msgstr "Kies bij elke voorwaarde en actie een label of persoon."
 msgid "Kies bij Persoon of Label een andere waarde."
 msgstr "Kies bij Persoon of Label een andere waarde."
 
-#: src/routes/home.tsx
-msgid "Kies de werkruimte die je wilt openen."
-msgstr "Kies de werkruimte die je wilt openen."
-
 #: src/routes/persons.tsx
 msgid "Kies een account"
 msgstr "Kies een account"
@@ -1260,10 +1289,6 @@ msgstr "Klaar"
 #: src/routes/labels.tsx
 msgid "Kleur"
 msgstr "Kleur"
-
-#: src/routes/inbox.tsx
-msgid "Komt er een brief binnen die je moet controleren of op een naam moet zetten, dan staat die hier."
-msgstr "Komt er een brief binnen die je moet controleren of op een naam moet zetten, dan staat die hier."
 
 #: src/routes/pair-app.tsx
 msgid "Kopieer koppelgegevens"
@@ -1287,8 +1312,8 @@ msgid "Koppel aan account: {0}"
 msgstr "Koppel aan account: {0}"
 
 #: src/routes/pair-app.tsx
-msgid "Koppel de Brievie-app op je telefoon aan deze server. Daarna scan je brieven met de app."
-msgstr "Koppel de Brievie-app op je telefoon aan deze server. Daarna scan je brieven met de app."
+msgid "Koppel de Brievie-app op je telefoon aan deze server en zie welke telefoons gekoppeld zijn. Met de app scan je brieven."
+msgstr "Koppel de Brievie-app op je telefoon aan deze server en zie welke telefoons gekoppeld zijn. Met de app scan je brieven."
 
 #: src/routes/pair-app.tsx
 msgid "Koppelcode"
@@ -1501,6 +1526,15 @@ msgstr "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
 msgid "Naam"
 msgstr "Naam"
 
+#: src/routes/inbox.tsx
+msgid "Naam kiezen"
+msgstr "Naam kiezen"
+
+#. placeholder {0}: counts.unassigned
+#: src/routes/inbox.tsx
+msgid "Naam kiezen: {0}"
+msgstr "Naam kiezen: {0}"
+
 #: src/routes/setup.tsx
 msgid "Naam van de werkruimte"
 msgstr "Naam van de werkruimte"
@@ -1532,10 +1566,6 @@ msgstr "Negeren: {text}"
 #: src/components/person-picker.tsx
 msgid "Niemand"
 msgstr "Niemand"
-
-#: src/routes/inbox.tsx
-msgid "Nieuw"
-msgstr "Nieuw"
 
 #: src/routes/invitation.tsx
 msgid "Nieuw account"
@@ -1634,7 +1664,6 @@ msgstr "Ontvangen"
 #: src/components/person-picker.tsx
 #: src/components/rule-sentence.ts
 #: src/routes/document.tsx
-#: src/routes/inbox.tsx
 msgid "Op naam van"
 msgstr "Op naam van"
 
@@ -1650,9 +1679,9 @@ msgstr "Op naam van {name}?"
 msgid "Op naam zetten van"
 msgstr "Op naam zetten van"
 
-#: src/routes/inbox.tsx
-msgid "Op niemands naam"
-msgstr "Op niemands naam"
+#: src/routes/persons.tsx
+msgid "Op wiens naam brieven binnenkomen, ook iemand zonder account, zoals een kind. Wie zelf inlogt, staat bij Leden."
+msgstr "Op wiens naam brieven binnenkomen, ook iemand zonder account, zoals een kind. Wie zelf inlogt, staat bij Leden."
 
 #: src/routes/pair-app.tsx
 msgid "Open de app op je telefoon en scan de code. De telefoon moet op hetzelfde netwerk zitten als deze server."
@@ -1754,17 +1783,6 @@ msgstr "Persoon wijzigen"
 #: src/components/document-table.tsx
 msgid "Polis"
 msgstr "Polis"
-
-#: src/components/document-table.tsx
-#: src/components/page.tsx
-#: src/routes/document.tsx
-#: src/routes/post.tsx
-msgid "Post"
-msgstr "Post"
-
-#: src/routes/inbox.tsx
-msgid "Post die op jou wacht: brieven om te controleren of op een naam te zetten."
-msgstr "Post die op jou wacht: brieven om te controleren of op een naam te zetten."
 
 #: src/routes/root.tsx
 msgid "Probeer opnieuw"
@@ -1868,6 +1886,10 @@ msgstr "Scan deze code met de Brievie-app"
 msgid "Scan een brief met de Brievie-app op je telefoon. Daarna staat hij hier."
 msgstr "Scan een brief met de Brievie-app op je telefoon. Daarna staat hij hier."
 
+#: src/routes/inbox.tsx
+msgid "Scan een nieuwe brief met de Brievie-app. Eerdere brieven vind je bij"
+msgstr "Scan een nieuwe brief met de Brievie-app. Eerdere brieven vind je bij"
+
 #: src/routes/pair-app.tsx
 msgid "Scan met de Brievie-app"
 msgstr "Scan met de Brievie-app"
@@ -1952,10 +1974,10 @@ msgstr "Taak"
 msgid "Taken"
 msgstr "Taken"
 
-#: src/components/document-table.tsx
+#: src/components/page.tsx
 #: src/routes/inbox.tsx
-msgid "Te controleren"
-msgstr "Te controleren"
+msgid "Te doen"
+msgstr "Te doen"
 
 #: src/routes/document.tsx
 msgid "Tekst van de brief"
@@ -2249,8 +2271,8 @@ msgstr "Wat de AI las"
 
 #. placeholder {0}: workspace.name
 #: src/routes/settings.tsx
-msgid "Wat leden in {0} mogen doen, en wat er is gebeurd."
-msgstr "Wat leden in {0} mogen doen, en wat er is gebeurd."
+msgid "Wat leden in {0} mogen doen, en het logboek van wat er is gebeurd. Alleen beheerders zien deze pagina."
+msgstr "Wat leden in {0} mogen doen, en het logboek van wat er is gebeurd. Alleen beheerders zien deze pagina."
 
 #: src/routes/inbox.tsx
 msgid "Wat te doen"
@@ -2306,6 +2328,11 @@ msgid "Wie leest je brieven?"
 msgstr "Wie leest je brieven?"
 
 #. placeholder {0}: workspace.name
+#: src/routes/members.tsx
+msgid "Wie met een eigen account inlogt in {0}. Op wiens naam brieven staan, regel je bij Personen."
+msgstr "Wie met een eigen account inlogt in {0}. Op wiens naam brieven staan, regel je bij Personen."
+
+#. placeholder {0}: workspace.name
 #: src/routes/audit-log.tsx
 msgid "Wie wat heeft gedaan in {0}. Er staat nooit de inhoud van een brief in."
 msgstr "Wie wat heeft gedaan in {0}. Er staat nooit de inhoud van een brief in."
@@ -2327,10 +2354,6 @@ msgstr "Wijzigen: {name}"
 #: src/components/export-panel.tsx
 msgid "Wordt gemaakt…"
 msgstr "Wordt gemaakt…"
-
-#: src/components/document-table.tsx
-msgid "Wordt verwerkt"
-msgstr "Wordt verwerkt"
 
 #: src/routes/home.tsx
 #: src/routes/setup.tsx

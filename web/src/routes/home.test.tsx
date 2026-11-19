@@ -61,13 +61,7 @@ describe("home", () => {
     server.use(...loggedInHandlers());
     const { router } = renderApp("/");
     await waitFor(() => expect(router.state.location.pathname).toBe(`/w/${workspace.id}/inbox`));
-    // The inbox picks its first tab and writes it into the URL: the test ends on that page,
-    // not halfway through the navigation (a late update would land after jsdom is gone).
-    expect(await screen.findByRole("tab", { name: /Te controleren/ })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    await waitFor(() => expect(router.state.resolvedLocation?.search).toEqual({ tab: "review" }));
+    expect(await screen.findByRole("heading", { level: 1, name: "Te doen" })).toBeInTheDocument();
   });
 
   it("logs out with the CSRF token and returns to the login screen", async () => {

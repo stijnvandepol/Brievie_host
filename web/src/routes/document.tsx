@@ -210,7 +210,7 @@ function DocumentPage() {
         breadcrumb={{
           to: "/w/$workspaceId/post",
           params: { workspaceId: workspace.id },
-          label: t`Post`,
+          label: t`Alle post`,
         }}
       />
       {isPending ? <Loading /> : null}

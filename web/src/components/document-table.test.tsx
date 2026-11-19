@@ -46,7 +46,7 @@ describe("post on a phone", () => {
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     const card = link.closest("li") as HTMLElement;
     expect(within(card).getByText("Aanslag")).toBeInTheDocument();
-    expect(within(card).getByText("Te controleren")).toBeInTheDocument();
+    expect(within(card).getByText("Controleren")).toBeInTheDocument();
     expect(await within(card).findByText("Papa")).toBeInTheDocument();
   });
 });

@@ -1,4 +1,4 @@
-import { t } from "@lingui/core/macro";
+import { plural, t } from "@lingui/core/macro";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
@@ -207,7 +207,8 @@ function NavItem({
 /** The workspace a page belongs to, as far as the navigation needs it. */
 type NavWorkspace = { id: string; name: string; role?: string };
 
-/** The entries of one workspace; the inbox shows what waits for you (review plus unassigned).
+/** The entries of one workspace; "Te doen" (route `inbox`) counts what waits for you (review
+ * plus unassigned; a letter still being read waits for nobody).
  * A viewer may not read the rules, so Automatisering is left out for them. */
 function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
   const { data: counts } = useQuery(inboxCountsQuery(workspace.id));
@@ -222,11 +223,15 @@ function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
         to="/w/$workspaceId/inbox"
         params={params}
         icon="inbox"
-        label={t`Inbox`}
-        ariaLabel={todo > 0 ? t`Inbox, ${todo} te doen` : undefined}
+        label={t`Te doen`}
+        ariaLabel={
+          todo > 0
+            ? plural(todo, { one: "Te doen, # brief", other: "Te doen, # brieven" })
+            : undefined
+        }
         count={todo}
       />
-      <NavItem to="/w/$workspaceId/post" params={params} icon="mail" label={t`Post`} />
+      <NavItem to="/w/$workspaceId/post" params={params} icon="mail" label={t`Alle post`} />
       <NavItem to="/w/$workspaceId/personen" params={params} icon="people" label={t`Personen`} />
       <NavItem to="/w/$workspaceId/leden" params={params} icon="personAdd" label={t`Leden`} />
       <NavItem to="/w/$workspaceId/labels" params={params} icon="tag" label={t`Labels`} />

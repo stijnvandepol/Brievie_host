@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
+import type { components } from "../api/schema";
 import {
   API,
   belasting,
@@ -15,95 +16,178 @@ import {
   workspace,
 } from "../test-utils";
 
+// The page is "Te doen"; its path stays `/inbox` so bookmarks keep working.
 const path = `/w/${workspace.id}/inbox`;
 const base = `*${API}/workspaces/${workspace.id}`;
 
-type App = ReturnType<typeof renderApp>;
+type Summary = components["schemas"]["DocumentSummaryOut"];
+type State = "new" | "review" | "unassigned";
 
-/**
- * Waits until the inbox has written its tab into the URL and that navigation has finished.
- * The inbox does that by itself after loading; a test that ends before it would leave a
- * navigation running that lands after the test.
- */
-async function onTab({ router }: App, tab: string) {
-  await waitFor(() => expect(router.state.resolvedLocation?.search).toEqual({ tab }));
-}
-
-function counts(value: { new: number; review: number; unassigned: number }) {
+function counts(value: Record<State, number>) {
   return http.get(`${base}/inbox/counts`, () => HttpResponse.json(value));
 }
 
-describe("inbox", () => {
-  it("shows the tabs with their counts and opens the first non-empty one", async () => {
-    server.use(
-      counts({ new: 1, review: 0, unassigned: 2 }),
-      ...loggedInHandlers(),
-      ...personHandlers(),
-      http.get(`${base}/documents`, () => HttpResponse.json([documentSummary])),
+const reviewLetter: Summary = {
+  ...documentSummary,
+  id: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b1111",
+  sender: "Gemeente",
+  status: "needs_review",
+  inbox_state: "review",
+  created_at: "2026-11-09T09:30:00Z",
+};
+const unassignedLetter: Summary = { ...documentSummary, created_at: "2026-11-10T09:30:00Z" };
+const readingLetter: Summary = {
+  ...documentSummary,
+  id: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b2222",
+  sender: "Zorgverzekeraar",
+  status: "processing",
+  inbox_state: "new",
+  // The newest letter: it still comes last, because nothing is needed for it yet.
+  created_at: "2026-11-11T09:30:00Z",
+};
+
+/** Answers the list per `inbox_state`, the way the server filters it. */
+function letters(list: Summary[], taken: () => string[] = () => []) {
+  return http.get(`${base}/documents`, ({ request }) => {
+    const state = new URL(request.url).searchParams.get("inbox_state");
+    return HttpResponse.json(
+      list.filter((document) => document.inbox_state === state && !taken().includes(document.id)),
     );
-    const app = renderApp(path);
-    const selected = await screen.findByRole("tab", { name: /Op niemands naam/, selected: true });
-    expect(selected).toHaveTextContent("2");
-    expect(screen.getByRole("tab", { name: /Te controleren/ })).toHaveTextContent("0");
-    expect(screen.getByRole("tab", { name: /Nieuw/ })).toHaveTextContent("1");
-    await onTab(app, "unassigned");
+  });
+}
+
+function rowOf(sender: string): HTMLElement {
+  return screen.getByRole("link", { name: sender }).closest("tr") as HTMLElement;
+}
+
+describe("te doen", () => {
+  it("is named Te doen in the title, the heading and the navigation", async () => {
+    server.use(counts({ new: 0, review: 0, unassigned: 0 }), ...loggedInHandlers(), letters([]));
+    renderApp(path);
+    expect(await screen.findByRole("heading", { level: 1, name: "Te doen" })).toBeInTheDocument();
+    await waitFor(() => expect(document.title).toBe("Te doen - Brievie"));
+    expect(
+      screen.getByText(
+        "Brieven waar jij nog iets mee moet doen. Al je brieven, ook de afgehandelde, staan bij Alle post.",
+      ),
+    ).toBeInTheDocument();
+    const nav = screen.getByRole("navigation", { name: "Hoofdmenu" });
+    expect(within(nav).getByRole("link", { name: "Te doen" })).toHaveAttribute("href", path);
   });
 
-  it("honours the tab in the URL", async () => {
-    const seen: string[] = [];
+  it("shows one list without tabs, each letter with what it needs", async () => {
     server.use(
       counts({ new: 1, review: 1, unassigned: 1 }),
       ...loggedInHandlers(),
       ...personHandlers(),
-      http.get(`${base}/documents`, ({ request }) => {
-        seen.push(new URL(request.url).searchParams.get("inbox_state") ?? "");
-        return HttpResponse.json([{ ...documentSummary, status: "processing" }]);
-      }),
+      letters([reviewLetter, unassignedLetter, readingLetter]),
     );
-    renderApp(`${path}?tab=new`);
-    expect(await screen.findByRole("tab", { name: /Nieuw/, selected: true })).toBeInTheDocument();
-    await screen.findByText("Deze brief wordt nog gelezen.");
-    expect(seen).toEqual(["new"]);
+    renderApp(path);
+    await screen.findByRole("link", { name: "Zorgverzekeraar" });
+    await screen.findByRole("link", { name: "Gemeente" });
+    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("table")).toHaveLength(1);
+
+    expect(within(rowOf("Gemeente")).getByText("Controleren")).toBeInTheDocument();
+    expect(
+      within(rowOf("Gemeente")).getByText("Controleer deze brief in de app."),
+    ).toBeInTheDocument();
+    expect(within(rowOf("Belastingdienst")).getByText("Naam kiezen")).toBeInTheDocument();
+    expect(
+      within(rowOf("Belastingdienst")).getByRole("button", { name: /Op naam van/ }),
+    ).toBeInTheDocument();
+    expect(within(rowOf("Zorgverzekeraar")).getByText("Bezig…")).toBeInTheDocument();
+    expect(
+      within(rowOf("Zorgverzekeraar")).getByText(
+        "Brievie leest deze brief nog. Je hoeft niets te doen.",
+      ),
+    ).toBeInTheDocument();
   });
 
-  it("changes the tab in the URL", async () => {
+  it("puts what needs you first, newest first, and letters being read last", async () => {
     server.use(
-      counts({ new: 0, review: 1, unassigned: 1 }),
+      counts({ new: 1, review: 1, unassigned: 1 }),
       ...loggedInHandlers(),
       ...personHandlers(),
-      http.get(`${base}/documents`, () => HttpResponse.json([])),
+      letters([reviewLetter, unassignedLetter, readingLetter]),
     );
-    const user = userEvent.setup();
-    const app = renderApp(path);
-    await user.click(await screen.findByRole("tab", { name: /Op niemands naam/ }));
-    await onTab(app, "unassigned");
+    renderApp(path);
+    await screen.findByRole("link", { name: "Zorgverzekeraar" });
+    await screen.findByRole("link", { name: "Gemeente" });
+    const senders = within(screen.getByRole("table"))
+      .getAllByRole("rowheader")
+      .map((cell) => cell.textContent);
+    expect(senders).toEqual(["Belastingdienst", "Gemeente", "Zorgverzekeraar"]);
   });
 
-  it("points a letter to review at the app", async () => {
+  it("keeps the numbers per kind of work in the header", async () => {
+    server.use(
+      counts({ new: 3, review: 1, unassigned: 2 }),
+      ...loggedInHandlers(),
+      ...personHandlers(),
+      letters([]),
+    );
+    renderApp(path);
+    expect(
+      await screen.findByText("Controleren: 1 · Naam kiezen: 2 · Bezig: 3"),
+    ).toBeInTheDocument();
+  });
+
+  it("says a letter that could not be read must be checked", async () => {
     server.use(
       counts({ new: 0, review: 1, unassigned: 0 }),
       ...loggedInHandlers(),
       ...personHandlers(),
-      http.get(`${base}/documents`, () =>
-        HttpResponse.json([{ ...documentSummary, status: "needs_review" }]),
-      ),
+      letters([{ ...reviewLetter, status: "failed" }]),
     );
-    const app = renderApp(path);
-    expect(await screen.findByText("Controleer deze brief in de app.")).toBeInTheDocument();
-    await onTab(app, "review");
+    renderApp(path);
+    await screen.findByRole("link", { name: "Gemeente" });
+    expect(within(rowOf("Gemeente")).getByText("Controleren")).toBeInTheDocument();
+    expect(
+      within(rowOf("Gemeente")).getByText(
+        "Brievie kon deze brief niet goed lezen. Controleer hem in de app.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("says you are done and where to go next when nothing waits", async () => {
+    server.use(
+      counts({ new: 0, review: 0, unassigned: 0 }),
+      ...loggedInHandlers(),
+      ...personHandlers(),
+      letters([]),
+    );
+    renderApp(path);
+    expect(await screen.findByText("Je bent klaar. Er is niets te doen.")).toBeInTheDocument();
+    const inPanel = screen
+      .getAllByRole("link", { name: "Alle post" })
+      .find((link) => link.closest(".empty-state"));
+    expect(inPanel).toHaveAttribute("href", `/w/${workspace.id}/post`);
+  });
+
+  it("ignores the tab of an old bookmark", async () => {
+    server.use(
+      counts({ new: 1, review: 1, unassigned: 0 }),
+      ...loggedInHandlers(),
+      ...personHandlers(),
+      letters([reviewLetter, readingLetter]),
+    );
+    renderApp(`${path}?tab=new`);
+    expect(await screen.findByRole("link", { name: "Gemeente" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Zorgverzekeraar" })).toBeInTheDocument();
   });
 
   it("puts a letter on a name and removes the row", async () => {
     const puts: unknown[] = [];
-    let assigned = false;
+    const taken: string[] = [];
     server.use(
       counts({ new: 0, review: 0, unassigned: 1 }),
       http.put(`${base}/documents/${documentSummary.id}/addressees`, async ({ request }) => {
         puts.push(await request.json());
-        assigned = true;
+        taken.push(documentSummary.id);
         return HttpResponse.json({ ...documentSummary, addressee_ids: [papa.id] });
       }),
-      http.get(`${base}/documents`, () => HttpResponse.json(assigned ? [] : [documentSummary])),
+      letters([unassignedLetter], () => taken),
       ...loggedInHandlers(),
       ...personHandlers(),
     );
@@ -119,22 +203,19 @@ describe("inbox", () => {
   });
 });
 
-describe("inbox labels and roles", () => {
+describe("te doen labels and roles", () => {
   it("shows the labels of a letter as chips", async () => {
     server.use(
       counts({ new: 0, review: 0, unassigned: 1 }),
       ...loggedInHandlers(),
       ...personHandlers(),
-      http.get(`${base}/documents`, () =>
-        HttpResponse.json([{ ...documentSummary, label_ids: [belasting.id] }]),
-      ),
+      letters([{ ...unassignedLetter, label_ids: [belasting.id] }]),
     );
-    const app = renderApp(path);
+    renderApp(path);
     const row = (await screen.findByRole("link", { name: "Belastingdienst" })).closest("tr");
     expect(
       await within(row as HTMLElement).findByText("Belastingdienst", { selector: ".label-chip" }),
     ).toHaveClass("label-blue");
-    await onTab(app, "unassigned");
   });
 
   it("disables the person picker for a viewer", async () => {
@@ -143,22 +224,21 @@ describe("inbox labels and roles", () => {
       counts({ new: 0, review: 0, unassigned: 1 }),
       ...loggedInHandlers(),
       ...personHandlers(),
-      http.get(`${base}/documents`, () => HttpResponse.json([documentSummary])),
+      letters([unassignedLetter]),
     );
-    const app = renderApp(path);
+    renderApp(path);
     expect(await screen.findByRole("button", { name: /Op naam van/ })).toBeDisabled();
-    await onTab(app, "unassigned");
   });
 });
 
-describe("inbox focus and URL", () => {
+describe("te doen focus", () => {
   const second = {
-    ...documentSummary,
+    ...unassignedLetter,
     id: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b5555",
     sender: "Gemeente",
   };
   const third = {
-    ...documentSummary,
+    ...unassignedLetter,
     id: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b6666",
     sender: "Zorgverzekeraar",
   };
@@ -169,12 +249,6 @@ describe("inbox focus and URL", () => {
     await user.click(await screen.findByRole("option", { name: "Papa" }));
   }
 
-  function rows(list: (typeof documentSummary)[], taken: () => string[]) {
-    return http.get(`${base}/documents`, () =>
-      HttpResponse.json(list.filter((document) => !taken().includes(document.id))),
-    );
-  }
-
   it("moves focus to the picker of the row that takes its place", async () => {
     const taken: string[] = [];
     server.use(
@@ -183,12 +257,13 @@ describe("inbox focus and URL", () => {
         taken.push(documentSummary.id);
         return HttpResponse.json({ ...documentSummary, addressee_ids: [papa.id] });
       }),
-      rows([documentSummary, second, third], () => taken),
+      letters([unassignedLetter, second, third], () => taken),
       ...loggedInHandlers(),
       ...personHandlers(),
     );
     const user = userEvent.setup();
     renderApp(path);
+    await screen.findByRole("link", { name: "Zorgverzekeraar" });
     await assign(user, "Belastingdienst");
     await waitFor(() =>
       expect(screen.queryByRole("link", { name: "Belastingdienst" })).not.toBeInTheDocument(),
@@ -209,12 +284,13 @@ describe("inbox focus and URL", () => {
         taken.push(second.id);
         return HttpResponse.json({ ...second, addressee_ids: [papa.id] });
       }),
-      rows([documentSummary, second], () => taken),
+      letters([unassignedLetter, second], () => taken),
       ...loggedInHandlers(),
       ...personHandlers(),
     );
     const user = userEvent.setup();
     renderApp(path);
+    await screen.findByRole("link", { name: "Belastingdienst" });
     await assign(user, "Gemeente");
     await waitFor(() =>
       expect(screen.queryByRole("link", { name: "Gemeente" })).not.toBeInTheDocument(),
@@ -227,6 +303,28 @@ describe("inbox focus and URL", () => {
     );
   });
 
+  it("moves focus to the sender of a row without a picker", async () => {
+    const taken: string[] = [];
+    server.use(
+      counts({ new: 0, review: 1, unassigned: 1 }),
+      http.put(`${base}/documents/${documentSummary.id}/addressees`, () => {
+        taken.push(documentSummary.id);
+        return HttpResponse.json({ ...documentSummary, addressee_ids: [papa.id] });
+      }),
+      letters([unassignedLetter, reviewLetter], () => taken),
+      ...loggedInHandlers(),
+      ...personHandlers(),
+    );
+    const user = userEvent.setup();
+    renderApp(path);
+    await screen.findByRole("link", { name: "Gemeente" });
+    await assign(user, "Belastingdienst");
+    await waitFor(() =>
+      expect(screen.queryByRole("link", { name: "Belastingdienst" })).not.toBeInTheDocument(),
+    );
+    await waitFor(() => expect(screen.getByRole("link", { name: "Gemeente" })).toHaveFocus());
+  });
+
   it("moves focus to the empty panel when the list is empty", async () => {
     const taken: string[] = [];
     server.use(
@@ -235,27 +333,15 @@ describe("inbox focus and URL", () => {
         taken.push(documentSummary.id);
         return HttpResponse.json({ ...documentSummary, addressee_ids: [papa.id] });
       }),
-      rows([documentSummary], () => taken),
+      letters([unassignedLetter], () => taken),
       ...loggedInHandlers(),
       ...personHandlers(),
     );
     const user = userEvent.setup();
     renderApp(path);
     await assign(user, "Belastingdienst");
-    const note = await screen.findByText("Hier is niets te doen.");
+    const note = await screen.findByText("Je bent klaar. Er is niets te doen.");
     await waitFor(() => expect(note.closest("section")).toHaveFocus());
-  });
-
-  it("writes the chosen tab into the URL, replacing the entry", async () => {
-    server.use(
-      counts({ new: 0, review: 1, unassigned: 1 }),
-      ...loggedInHandlers(),
-      ...personHandlers(),
-      http.get(`${base}/documents`, () => HttpResponse.json([])),
-    );
-    const app = renderApp(path);
-    await onTab(app, "review");
-    expect(app.router.history.length).toBe(1);
   });
 
   it("keeps focus on the picker and shows the error when the PUT fails", async () => {
@@ -264,7 +350,7 @@ describe("inbox focus and URL", () => {
       http.put(`${base}/documents/${documentSummary.id}/addressees`, () =>
         HttpResponse.json({ code: "forbidden", message: "Dat mag je niet." }, { status: 403 }),
       ),
-      rows([documentSummary, second], () => []),
+      letters([unassignedLetter, second]),
       ...loggedInHandlers(),
       ...personHandlers(),
     );

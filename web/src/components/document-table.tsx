@@ -49,9 +49,9 @@ export function typeLabel(type: string): string {
 export function statusLabel(status: string): string {
   switch (status) {
     case "processing":
-      return t`Wordt verwerkt`;
+      return t`Bezig…`;
     case "needs_review":
-      return t`Te controleren`;
+      return t`Controleren`;
     case "done":
       return t`Klaar`;
     case "failed":
@@ -120,7 +120,7 @@ export function DocumentTable({
   const phone = useMediaQuery(PHONE);
   if (documents.length === 0) {
     return (
-      <section className="panel" aria-label={t`Post`}>
+      <section className="panel" aria-label={t`Alle post`}>
         <EmptyState icon="mail" hint={hint}>
           {empty}
         </EmptyState>
@@ -129,7 +129,7 @@ export function DocumentTable({
   }
   if (phone) {
     return (
-      <section className="panel" aria-label={t`Post`}>
+      <section className="panel" aria-label={t`Alle post`}>
         <ul className="letter-cards">
           {documents.map((document) => (
             <li key={document.id} className="letter-card">
@@ -162,7 +162,7 @@ export function DocumentTable({
   }
   return (
     // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrolling box must be reachable by keyboard (WCAG 2.1.1).
-    <section className="panel table-scroll" aria-label={t`Post`} tabIndex={0}>
+    <section className="panel table-scroll" aria-label={t`Alle post`} tabIndex={0}>
       <table className="table table-wide">
         <thead>
           <tr>

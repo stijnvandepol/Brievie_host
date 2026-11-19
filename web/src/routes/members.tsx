@@ -388,7 +388,7 @@ function MembersPage() {
     <Shell workspace={workspace}>
       <PageHeader
         title={t`Leden`}
-        description={t`De mensen die bij ${workspace.name} horen en bij de post kunnen.`}
+        description={t`Wie met een eigen account inlogt in ${workspace.name}. Op wiens naam brieven staan, regel je bij Personen.`}
         commands={
           isAdmin ? (
             <Button className="button" onPress={() => setInviting(true)}>
