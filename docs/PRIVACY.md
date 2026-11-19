@@ -94,6 +94,32 @@ the web interface, or with `manage.py configure_ai`. Both go through the same ru
 The iPhone app recognises the text on the phone itself and uploads the pages and that
 text to your server only.
 
+## Automated processing (the autopilot)
+
+Normally a person checks every letter before it is final. An administrator can let
+Brievie skip that, per workspace: put letters under persons and labels by itself, and
+confirm them by itself. That is automated processing without a person in between, so:
+
+- **Opt-in, off by default.** Only an administrator can switch it on, from a web session
+  (not with a phone's token), only while AI is on, and only after reading the notice the
+  server shows and agreeing to it. The notice says nobody checks first, the AI can make
+  mistakes and a deadline is always in the letter itself.
+- **Logged.** Every switch that changes is a row in the log: who, when, which switch
+  (`ai_auto_organise` or `ai_auto_confirm`) and whether it went on or off.
+- **Marked.** What Brievie did by itself has no person behind it and says so: the list
+  and the letter show "Automatisch door AI", the history says it was automatic, and the
+  list can be filtered on it. No user is recorded for what nobody did.
+- **Reversible.** A member can undo an automatic label or person, and reopen a letter
+  Brievie confirmed ("Zelf controleren"): its fields are emptied and the tasks Brievie
+  made that are still open are removed. A change somebody undid is not made again.
+- **Nothing extra leaves the server.** It uses the answer the AI already gave; no more
+  text goes to the service than without it. Switching AI off, or agreeing to another
+  address, switches both off. A server owner can forbid it for the whole server
+  (`BRIEVIE_AI_AUTOPILOT_ALLOWED=false`, see SELFHOST).
+- **Limits.** It reduces checking; it does not make the AI right. A rule's proposal and
+  anything unclear is still left to a person, but a wrong name match or a needless task
+  can be applied or confirmed without anyone looking.
+
 ## Members, sessions and devices
 
 - **Who can do what to an account.** A workspace admin can invite, change roles, remove
