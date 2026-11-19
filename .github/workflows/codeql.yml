@@ -6,14 +6,17 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    # Weekly, so new queries also run over code that has not changed.
-    - cron: "17 4 * * 1"
+    # Monday, Wednesday and Friday, 04:41 UTC (not on the hour, and an hour after ci.yml's
+    # schedule), so new queries also run over code that has not changed.
+    - cron: "41 4 * * 1,3,5"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: codeql-${{ github.ref }}
+  # The event is in the group: a scheduled run and a push run never cancel each other.
+  group: codeql-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -41,3 +44,15 @@ jobs:
       - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           category: /language:${{ matrix.language }}
+
+  # When the scheduled run fails, open an issue (see audit-failed.yml). Findings are not
+  # failures: they go to the code scanning alerts. This reports a run that broke.
+  audit-failed:
+    if: ${{ always() && github.event_name == 'schedule' && contains(needs.*.result, 'failure') }}
+    needs: [analyze]
+    permissions:
+      issues: write
+    # actionlint (1.7.12) does not know the `$/` self-repository syntax yet.
+    uses: ./.github/workflows/audit-failed.yml # zizmor: ignore[self-repository]
+    with:
+      needs: ${{ toJSON(needs) }}

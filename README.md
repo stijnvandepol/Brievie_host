@@ -232,8 +232,9 @@ Every pull request and every push to `main` runs `.github/workflows/ci.yml`:
 - **restore:** makes a server, seeds it, backs it up, destroys it and restores it twice,
   then checks every page against the old certificate authority.
 
-`.github/workflows/codeql.yml` runs CodeQL on Python, TypeScript and the workflows, also
-weekly. Dependabot proposes updates for actions, Python, npm and Docker images weekly.
+`.github/workflows/codeql.yml` runs CodeQL on Python, TypeScript and the workflows. The
+dependency audits, gitleaks, zizmor, the image scan, ZAP and CodeQL also run every
+Monday, Wednesday and Friday on `main`; a failure opens an issue (see `SECURITY.md`). Dependabot proposes updates for actions, Python, npm and Docker images weekly.
 Every third-party action is pinned to a commit.
 
 ## Project status and roadmap
