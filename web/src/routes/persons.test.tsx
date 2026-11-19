@@ -21,6 +21,16 @@ const path = `/w/${workspace.id}/personen`;
 const base = `*${API}/workspaces/${workspace.id}`;
 
 describe("persons", () => {
+  it("says how a person differs from a member", async () => {
+    server.use(...loggedInHandlers(), ...personHandlers());
+    renderApp(path);
+    expect(
+      await screen.findByText(
+        "Op wiens naam brieven binnenkomen, ook iemand zonder account, zoals een kind. Wie zelf inlogt, staat bij Leden.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("lists persons with variants, account and number of letters", async () => {
     server.use(...loggedInHandlers(), ...personHandlers());
     renderApp(path);

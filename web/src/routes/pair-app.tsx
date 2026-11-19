@@ -103,7 +103,7 @@ function PairAppPage() {
     <Shell>
       <PageHeader
         title={t`Apparaten`}
-        description={t`Koppel de Brievie-app op je telefoon aan deze server. Daarna scan je brieven met de app.`}
+        description={t`Koppel de Brievie-app op je telefoon aan deze server en zie welke telefoons gekoppeld zijn. Met de app scan je brieven.`}
         commands={
           pairing === undefined || expired ? (
             <>

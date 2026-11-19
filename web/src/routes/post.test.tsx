@@ -37,16 +37,29 @@ describe("post", () => {
     expect(await screen.findByRole("link", { name: "Onbekende afzender" })).toBeInTheDocument();
   });
 
-  it("names the workspace in the sidebar and links Post", async () => {
+  it("is named Alle post and says how it differs from Te doen", async () => {
+    server.use(...loggedInHandlers(), ...documentHandlers());
+    renderApp(`/w/${workspace.id}/post`);
+    expect(await screen.findByRole("heading", { level: 1, name: "Alle post" })).toBeInTheDocument();
+    await waitFor(() => expect(document.title).toBe("Alle post - Brievie"));
+    expect(
+      screen.getByText(
+        "Al je brieven, ook de afgehandelde. Zoek op persoon of label. Wat nog op jou wacht, staat bij Te doen.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("names the workspace in the sidebar and links Alle post", async () => {
     server.use(...loggedInHandlers(), ...documentHandlers());
     renderApp(`/w/${workspace.id}/post`);
     const nav = await screen.findByRole("navigation");
     expect(within(nav).getByText("Thuis")).toBeInTheDocument();
-    expect(within(nav).getByRole("link", { name: "Post" })).toHaveAttribute(
+    expect(within(nav).getByRole("link", { name: "Alle post" })).toHaveAttribute(
       "href",
       `/w/${workspace.id}/post`,
     );
-    expect(within(nav).getByRole("link", { name: "Werkruimtes" })).toBeInTheDocument();
+    // One workspace: nothing to choose, so no "Werkruimtes".
+    expect(within(nav).queryByRole("link", { name: "Werkruimtes" })).not.toBeInTheDocument();
   });
 
   it("shows the addressees in a column", async () => {
@@ -156,12 +169,25 @@ describe("post", () => {
     );
     renderApp(`/w/${workspace.id}/post`);
     const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
-    const inbox = await within(nav).findByRole("link", { name: "Inbox, 3 te doen" });
-    expect(inbox).toHaveAttribute("href", `/w/${workspace.id}/inbox`);
+    const todo = await within(nav).findByRole("link", { name: "Te doen, 3 brieven" });
+    expect(todo).toHaveAttribute("href", `/w/${workspace.id}/inbox`);
     expect(within(nav).getByRole("link", { name: "Personen" })).toHaveAttribute(
       "href",
       `/w/${workspace.id}/personen`,
     );
+  });
+
+  it("names a single letter to do in the singular", async () => {
+    server.use(
+      http.get(`*${API}/workspaces/${workspace.id}/inbox/counts`, () =>
+        HttpResponse.json({ new: 0, review: 0, unassigned: 1 }),
+      ),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
+    renderApp(`/w/${workspace.id}/post`);
+    const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
+    expect(await within(nav).findByRole("link", { name: "Te doen, 1 brief" })).toBeInTheDocument();
   });
 
   it("shows a filter value that is not in the list as '(verwijderd)'", async () => {

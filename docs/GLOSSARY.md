@@ -35,7 +35,11 @@ the translation. Add a line before introducing a new domain term.
 | voorstel | proposal |
 | label | label |
 | geschiedenis | history (`DocumentEvent`) |
-| inbox (te controleren post) | inbox |
+| Te doen (pagina: post die op jou wacht; route `inbox`) | inbox |
+| Alle post (pagina: alle brieven; route `post`) | documents list |
+| Controleren (wat een brief op Te doen nodig heeft) | `inbox_state` `review` (status `needs_review` or `failed`) |
+| Naam kiezen (wat een brief op Te doen nodig heeft) | `inbox_state` `unassigned` |
+| Bezig… (brief wordt nog gelezen, niets te doen) | `inbox_state` `new` (status `processing`) |
 | naamherkenning | name matching |
 | startset-regel | preset rule |
 | handmatig (regel uitvoeren) | manual run |

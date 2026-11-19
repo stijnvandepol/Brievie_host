@@ -123,7 +123,7 @@ function DocumentView({
             <div>
               <dt>{t`Status`}</dt>
               <dd>
-                <StatusBadge status={document.status} />
+                <StatusBadge status={document.status} inboxState={document.inbox_state} />
               </dd>
             </div>
             <div>
@@ -210,7 +210,7 @@ function DocumentPage() {
         breadcrumb={{
           to: "/w/$workspaceId/post",
           params: { workspaceId: workspace.id },
-          label: t`Post`,
+          label: t`Alle post`,
         }}
       />
       {isPending ? <Loading /> : null}

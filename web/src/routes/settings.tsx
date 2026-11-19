@@ -35,7 +35,7 @@ function SettingsPage() {
     <Shell workspace={workspace}>
       <PageHeader
         title={t`Instellingen`}
-        description={t`Wat leden in ${workspace.name} mogen doen, en wat er is gebeurd.`}
+        description={t`Wat leden in ${workspace.name} mogen doen, en het logboek van wat er is gebeurd. Alleen beheerders zien deze pagina.`}
       />
       {settings.isPending ? <Loading /> : null}
       <ErrorAlert error={settings.error ?? save.error} />
