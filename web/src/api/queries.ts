@@ -39,7 +39,12 @@ export const devicesQuery = queryOptions({
   },
 });
 
-export type DocumentFilters = { inbox_state?: string; person_id?: string; label_id?: string };
+export type DocumentFilters = {
+  inbox_state?: string;
+  person_id?: string;
+  label_id?: string;
+  automatic?: boolean;
+};
 
 export const documentsQuery = (
   workspaceId: string,
@@ -61,6 +66,7 @@ export const documentsQuery = (
             inbox_state: filters.inbox_state || undefined,
             person_id: filters.person_id || undefined,
             label_id: filters.label_id || undefined,
+            automatic: filters.automatic || undefined,
           },
         },
       });
@@ -170,6 +176,19 @@ export const aiStatusQuery = (workspaceId: string) =>
     queryKey: ["workspaces", workspaceId, "ai"],
     queryFn: async () => {
       const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/ai", {
+        params: { path: { workspace_id: workspaceId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
+/** The autopilot switches, whether the server allows them, and the notice shown before a yes. */
+export const aiAutopilotQuery = (workspaceId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "ai", "autopilot"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/ai/autopilot", {
         params: { path: { workspace_id: workspaceId } },
       });
       if (error !== undefined || !data) throw new ApiFailure(error);

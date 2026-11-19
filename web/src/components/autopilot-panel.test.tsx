@@ -1,0 +1,179 @@
+import { screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it } from "vitest";
+import {
+  API,
+  asRole,
+  errorBody,
+  HttpResponse,
+  http,
+  loggedInHandlers,
+  renderApp,
+  server,
+  workspace,
+} from "../test-utils";
+
+const path = `/w/${workspace.id}/ai`;
+const base = `*${API}/workspaces/${workspace.id}`;
+const NOTICE =
+  "Niemand controleert deze brieven.\n\nFouten zijn mogelijk.\nDe termijnen staan in de brief.";
+
+type Body = Record<string, unknown>;
+
+/** A server with AI in `mode` and the autopilot in `initial`; it records every PUT. */
+function autopilotServer(mode: string, initial: Body = {}) {
+  const state = {
+    current: {
+      allowed: true,
+      auto_organise: false,
+      auto_confirm: false,
+      notice: NOTICE,
+      ...initial,
+    },
+    puts: [] as Body[],
+  };
+  server.use(
+    ...loggedInHandlers(),
+    http.get(`${base}/ai`, () =>
+      HttpResponse.json({ mode, has_api_key: false, autopilot_allowed: state.current.allowed }),
+    ),
+    http.get(`${base}/ai/suppliers`, () => HttpResponse.json([])),
+    http.get(`${base}/ai/autopilot`, () => HttpResponse.json(state.current)),
+    http.put(`${base}/ai/autopilot`, async ({ request }) => {
+      const body = (await request.json()) as Body;
+      state.puts.push(body);
+      state.current = {
+        ...state.current,
+        auto_organise: Boolean(body.auto_organise),
+        auto_confirm: Boolean(body.auto_confirm),
+      };
+      return HttpResponse.json(state.current);
+    }),
+  );
+  return state;
+}
+
+describe("automatisch verwerken", () => {
+  it("is not shown while AI is off", async () => {
+    autopilotServer("off");
+    renderApp(path);
+    await screen.findByRole("heading", { name: "AI", level: 1 });
+    expect(
+      screen.queryByRole("heading", { name: "Automatisch verwerken" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+  });
+
+  it("says the server's administrator switched it off, with no switches", async () => {
+    autopilotServer("external", { allowed: false });
+    renderApp(path);
+    expect(
+      await screen.findByText(
+        "De beheerder van de server heeft automatisch verwerken uitgezet. Hier kun je het niet aanzetten.",
+      ),
+    ).toBeVisible();
+    expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+  });
+
+  it("shows both switches with a label and a description, in their state", async () => {
+    autopilotServer("external", { auto_organise: true });
+    renderApp(path);
+    const organise = await screen.findByRole("switch", {
+      name: "Brieven zelf onder personen en labels zetten",
+    });
+    const confirm = screen.getByRole("switch", { name: "Brieven zelf bevestigen" });
+    expect(organise).toBeChecked();
+    expect(confirm).not.toBeChecked();
+    expect(organise).toHaveAccessibleDescription(/\.$/);
+    expect(confirm).toHaveAccessibleDescription(/\.$/);
+  });
+
+  it("shows the notice as paragraphs and sends nothing until 'Aanzetten'", async () => {
+    const state = autopilotServer("external");
+    const user = userEvent.setup();
+    renderApp(path);
+    await user.click(await screen.findByRole("switch", { name: "Brieven zelf bevestigen" }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText("Niemand controleert deze brieven.")).toBeVisible();
+    expect(
+      within(dialog).getByText(/Fouten zijn mogelijk\.\s*De termijnen staan in de brief\./),
+    ).toBeVisible();
+    expect(within(dialog).getByRole("button", { name: "Annuleren" })).toHaveFocus();
+    expect(state.puts).toEqual([]);
+
+    await user.click(within(dialog).getByRole("button", { name: "Aanzetten" }));
+    await within(document.body).findByRole("switch", {
+      name: "Brieven zelf bevestigen",
+      checked: true,
+    });
+    expect(state.puts).toEqual([{ auto_organise: false, auto_confirm: true, acknowledged: true }]);
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+
+  it("changes nothing on 'Annuleren'", async () => {
+    const state = autopilotServer("external");
+    const user = userEvent.setup();
+    renderApp(path);
+    const organise = await screen.findByRole("switch", {
+      name: "Brieven zelf onder personen en labels zetten",
+    });
+    await user.click(organise);
+    await user.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Annuleren" }),
+    );
+
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(state.puts).toEqual([]);
+    expect(organise).not.toBeChecked();
+  });
+
+  it("switches off at once, without a question", async () => {
+    const state = autopilotServer("external", { auto_organise: true, auto_confirm: true });
+    const user = userEvent.setup();
+    renderApp(path);
+    await user.click(await screen.findByRole("switch", { name: "Brieven zelf bevestigen" }));
+
+    await screen.findByRole("switch", { name: "Brieven zelf bevestigen", checked: false });
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(state.puts).toEqual([{ auto_organise: true, auto_confirm: false, acknowledged: false }]);
+  });
+
+  it("shows the server's Dutch message when it refuses", async () => {
+    autopilotServer("external");
+    server.use(
+      http.put(`${base}/ai/autopilot`, () =>
+        HttpResponse.json(
+          errorBody("ai_autopilot_forbidden", "De serverbeheerder heeft dit uitgezet."),
+          { status: 409 },
+        ),
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp(path);
+    await user.click(await screen.findByRole("switch", { name: "Brieven zelf bevestigen" }));
+    await user.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Aanzetten" }),
+    );
+    expect(await within(screen.getByRole("alertdialog")).findByRole("alert")).toHaveTextContent(
+      "De serverbeheerder heeft dit uitgezet.",
+    );
+  });
+
+  it("tells a member in one line, with nothing to switch", async () => {
+    autopilotServer("external", { auto_confirm: true });
+    server.use(asRole("member"));
+    renderApp(path);
+    expect(
+      await screen.findByText("Brieven worden automatisch verwerkt door de AI."),
+    ).toBeVisible();
+    expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+  });
+
+  it("tells a member that letters are not processed automatically", async () => {
+    autopilotServer("external");
+    server.use(asRole("member"));
+    renderApp(path);
+    expect(await screen.findByText("Brieven worden niet automatisch verwerkt.")).toBeVisible();
+  });
+});

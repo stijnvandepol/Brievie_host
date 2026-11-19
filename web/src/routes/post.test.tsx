@@ -197,4 +197,51 @@ describe("post", () => {
     renderApp(`/w/${workspace.id}/post`);
     expect(await screen.findByText("Er is nog geen post.")).toBeVisible();
   });
+  it("shows the badge only on a letter the AI had a hand in", async () => {
+    server.use(
+      ...loggedInHandlers(),
+      http.get(`*${API}/workspaces/${workspace.id}/documents`, () =>
+        HttpResponse.json([
+          { ...documentSummary, confirmed_by_ai: true },
+          { ...documentSummary, id: "2", sender: "Gemeente", auto_label_ids: [belasting.id] },
+          { ...documentSummary, id: "3", sender: "Bank" },
+        ]),
+      ),
+      ...documentHandlers(),
+    );
+    renderApp(`/w/${workspace.id}/post`);
+    const rows = await screen.findAllByRole("row");
+    const text = (name: string) =>
+      within(rows.find((row) => within(row).queryByRole("link", { name })) as HTMLElement);
+    expect(text("Belastingdienst").getByText("Automatisch door AI")).toBeVisible();
+    expect(text("Gemeente").getByText("Automatisch door AI")).toBeVisible();
+    expect(text("Bank").queryByText("Automatisch door AI")).not.toBeInTheDocument();
+  });
+
+  it("filters on letters the AI handled and keeps that in the URL", async () => {
+    const seen: (string | null)[] = [];
+    server.use(
+      ...loggedInHandlers(),
+      http.get(`*${API}/workspaces/${workspace.id}/documents`, ({ request }) => {
+        seen.push(new URL(request.url).searchParams.get("automatic"));
+        return HttpResponse.json([documentSummary]);
+      }),
+      ...documentHandlers(),
+    );
+    const user = userEvent.setup();
+    const { router } = renderApp(`/w/${workspace.id}/post`);
+    const filter = await screen.findByRole("checkbox", { name: "Automatisch door AI" });
+    expect(filter).not.toBeChecked();
+    expect(seen).not.toContain("true");
+    await user.click(filter);
+    await waitFor(() => expect(router.state.location.search).toEqual({ automatisch: true }));
+    await waitFor(() => expect(seen).toContain("true"));
+    expect(screen.getByRole("checkbox", { name: "Automatisch door AI" })).toBeChecked();
+  });
+
+  it("reads the automatic filter from the URL", async () => {
+    server.use(...loggedInHandlers(), ...documentHandlers());
+    renderApp(`/w/${workspace.id}/post?automatisch=true`);
+    expect(await screen.findByRole("checkbox", { name: "Automatisch door AI" })).toBeChecked();
+  });
 });

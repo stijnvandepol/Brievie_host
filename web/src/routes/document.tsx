@@ -1,10 +1,17 @@
 import { t } from "@lingui/core/macro";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createRoute } from "@tanstack/react-router";
+import { ApiFailure, api } from "../api/client";
 import { documentQuery, labelsQuery, personsQuery } from "../api/queries";
 import type { components } from "../api/schema";
+import { ConfirmAction } from "../components/confirm-dialog";
 import { DocumentHistory } from "../components/document-history";
-import { formatLetterDate, StatusBadge, typeLabel } from "../components/document-table";
+import {
+  AutomaticBadge,
+  formatLetterDate,
+  StatusBadge,
+  typeLabel,
+} from "../components/document-table";
 import { LabelPicker, useSetLabels } from "../components/label-picker";
 import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
 import { PersonPicker, useSetAddressees } from "../components/person-picker";
@@ -75,6 +82,37 @@ function StatusNotice({ document }: { document: Document }) {
   return null;
 }
 
+/** What is on the letter because Brievie put it there itself: names, one hint per kind. */
+function AutomaticHint({ names }: { names: string[] }) {
+  if (names.length === 0) return null;
+  const list = names.join(", ");
+  return <p className="muted small">{t`Automatisch gezet: ${list}`}</p>;
+}
+
+/** Hands a letter the AI confirmed back to "Te controleren"; the answer is the letter itself. */
+function useReopen(workspaceId: string, documentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/documents/{document_id}/reopen",
+        { params: { path: { workspace_id: workspaceId, document_id: documentId } } },
+      );
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+    onSuccess: (document) => {
+      queryClient.setQueryData(["workspaces", workspaceId, "documents", documentId], document);
+    },
+    onSettled: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["workspaces", workspaceId, "documents"] }),
+        queryClient.invalidateQueries({ queryKey: ["workspaces", workspaceId, "inbox-counts"] }),
+      ]);
+    },
+  });
+}
+
 function DocumentView({
   workspaceId,
   document,
@@ -88,6 +126,13 @@ function DocumentView({
   const labels = useQuery(labelsQuery(workspaceId));
   const setAddressees = useSetAddressees(workspaceId, document.id);
   const setLabels = useSetLabels(workspaceId, document.id);
+  const reopen = useReopen(workspaceId, document.id);
+  const autoLabels = (labels.data ?? [])
+    .filter((label) => (document.auto_label_ids ?? []).includes(label.id))
+    .map((label) => label.name);
+  const autoPeople = (persons.data ?? [])
+    .filter((person) => (document.auto_addressee_ids ?? []).includes(person.id))
+    .map((person) => person.display_name);
   const sender = document.sender || t`Onbekende afzender`;
   const pages = Array.from({ length: document.page_count }, (_, index) => index + 1);
   const reviewing = document.status === "needs_review" || document.status === "failed";
@@ -123,7 +168,10 @@ function DocumentView({
             <div>
               <dt>{t`Status`}</dt>
               <dd>
-                <StatusBadge status={document.status} />
+                <span className="cell-badges">
+                  <StatusBadge status={document.status} />
+                  <AutomaticBadge document={document} />
+                </span>
               </dd>
             </div>
             <div>
@@ -135,6 +183,7 @@ function DocumentView({
                   onChange={(ids) => setAddressees.mutate(ids)}
                   disabled={!canEdit || document.status === "processing" || setAddressees.isPending}
                 />
+                <AutomaticHint names={autoPeople} />
               </dd>
             </div>
             <div>
@@ -146,12 +195,27 @@ function DocumentView({
                   onChange={(ids) => setLabels.mutate(ids)}
                   disabled={!canEdit || document.status === "processing" || setLabels.isPending}
                 />
+                <AutomaticHint names={autoLabels} />
               </dd>
             </div>
           </dl>
           <ErrorAlert
             error={setAddressees.error ?? setLabels.error ?? persons.error ?? labels.error}
           />
+          {canEdit && document.confirmed_by_ai ? (
+            <div className="panel-actions">
+              <ConfirmAction
+                label={t`Zelf controleren`}
+                icon="undo"
+                title={t`Zelf controleren?`}
+                confirmLabel={t`Zelf controleren`}
+                tone="primary"
+                onConfirm={() => reopen.mutateAsync()}
+              >
+                <p>{t`De brief gaat terug naar Te controleren. De taken die de AI maakte en die nog open staan, verdwijnen. Je controleert de brief daarna in de app.`}</p>
+              </ConfirmAction>
+            </div>
+          ) : null}
         </section>
         <SuggestionList
           workspaceId={workspaceId}

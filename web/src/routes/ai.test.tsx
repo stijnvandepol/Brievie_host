@@ -52,6 +52,9 @@ function aiServer(initial: Body = { mode: "off" }) {
     ...loggedInHandlers(),
     http.get(`${base}/ai`, () => HttpResponse.json(state.current)),
     http.get(`${base}/ai/suppliers`, () => HttpResponse.json(suppliers)),
+    http.get(`${base}/ai/autopilot`, () =>
+      HttpResponse.json({ allowed: true, auto_organise: false, auto_confirm: false, notice: "" }),
+    ),
     http.post(`${base}/ai/preview`, async ({ request }) => {
       const body = (await request.json()) as Body;
       state.previews.push(body);

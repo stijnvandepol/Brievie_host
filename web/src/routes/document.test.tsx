@@ -1,9 +1,10 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import {
   API,
   annaPerson,
+  asRole,
   belasting,
   documentDetail,
   documentHandlers,
@@ -471,5 +472,135 @@ describe("document", () => {
     renderApp(path);
     expect(await screen.findByText("Regel APK zette het label Auto erop")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Terugdraaien/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("document made by the autopilot", () => {
+  const eventsUrl = `*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/events`;
+  const base = {
+    can_undo: false,
+    undone: false,
+    label_name: "",
+    rule_name: "",
+    person_name: "",
+    actor_name: "",
+    origin: "ai",
+  };
+  const confirmedByAi = { ...documentDetail, confirmed_by_ai: true, status: "done" };
+
+  it("shows no badge on a letter a person handled", async () => {
+    server.use(...loggedInHandlers(), ...documentHandlers());
+    renderApp(path);
+    await screen.findByText("Betaal de aanslag");
+    expect(screen.queryByText("Automatisch door AI")).not.toBeInTheDocument();
+  });
+
+  it("shows the badge when the AI confirmed the letter", async () => {
+    server.use(...loggedInHandlers(), ...documentHandlers(confirmedByAi));
+    renderApp(path);
+    expect(await screen.findByText("Automatisch door AI")).toBeVisible();
+  });
+
+  it("keeps the badge and marks what is automatic after the letter was reopened", async () => {
+    server.use(
+      ...loggedInHandlers(),
+      ...documentHandlers({
+        ...documentDetail,
+        status: "needs_review",
+        confirmed_by_ai: false,
+        label_ids: [belasting.id, sales.id],
+        auto_label_ids: [belasting.id],
+        addressee_ids: [papa.id],
+        auto_addressee_ids: [papa.id],
+      }),
+    );
+    renderApp(path);
+    expect(await screen.findByText("Automatisch door AI")).toBeVisible();
+    expect(await screen.findByText("Automatisch gezet: Belastingdienst")).toBeVisible();
+    expect(await screen.findByText("Automatisch gezet: Papa")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Zelf controleren" })).not.toBeInTheDocument();
+  });
+
+  it("describes the automatic history lines and offers undo", async () => {
+    server.use(
+      http.get(eventsUrl, () =>
+        HttpResponse.json([
+          {
+            ...base,
+            id: "a1",
+            kind: "label_added",
+            label_name: "Auto",
+            can_undo: true,
+            created_at: "2026-11-10T10:00:00Z",
+          },
+          {
+            ...base,
+            id: "a2",
+            kind: "addressee_added",
+            origin: "name_match",
+            person_name: "Papa",
+            can_undo: true,
+            created_at: "2026-11-10T10:01:00Z",
+          },
+          { ...base, id: "a3", kind: "confirmed", created_at: "2026-11-10T10:02:00Z" },
+          {
+            ...base,
+            id: "a4",
+            kind: "reopened",
+            origin: "user",
+            actor_name: "Bram",
+            created_at: "2026-11-10T10:03:00Z",
+          },
+        ]),
+      ),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
+    renderApp(path);
+    expect(
+      await screen.findByText("Automatisch door AI toegevoegd: label Auto"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Automatisch toegevoegd: naam herkend (Papa)")).toBeInTheDocument();
+    expect(screen.getByText("Automatisch bevestigd door AI")).toBeInTheDocument();
+    expect(screen.getByText("Bram zette de brief terug naar Te controleren")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^Terugdraaien:/ })).toHaveLength(2);
+  });
+
+  it("reopens a letter the AI confirmed, after a question", async () => {
+    const reopened: string[] = [];
+    server.use(
+      http.post(`*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/reopen`, () => {
+        reopened.push(documentSummary.id);
+        return HttpResponse.json({
+          ...confirmedByAi,
+          status: "needs_review",
+          confirmed_by_ai: false,
+        });
+      }),
+      ...loggedInHandlers(),
+      ...documentHandlers(confirmedByAi),
+    );
+    const user = userEvent.setup();
+    renderApp(path);
+    await user.click(await screen.findByRole("button", { name: "Zelf controleren" }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(
+      within(dialog).getByText(
+        "De brief gaat terug naar Te controleren. De taken die de AI maakte en die nog open staan, verdwijnen. Je controleert de brief daarna in de app.",
+      ),
+    ).toBeVisible();
+    expect(within(dialog).getByRole("button", { name: "Annuleren" })).toHaveFocus();
+    expect(reopened).toEqual([]);
+    await user.click(within(dialog).getByRole("button", { name: "Zelf controleren" }));
+    await waitFor(() => expect(reopened).toHaveLength(1));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+  });
+
+  it("offers no reopen to a viewer", async () => {
+    server.use(asRole("viewer"), ...loggedInHandlers(), ...documentHandlers(confirmedByAi));
+    renderApp(path);
+    await screen.findByText("Automatisch door AI");
+    expect(screen.queryByRole("button", { name: "Zelf controleren" })).not.toBeInTheDocument();
   });
 });
