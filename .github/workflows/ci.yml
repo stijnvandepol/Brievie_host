@@ -421,6 +421,130 @@ jobs:
         if: always()
         run: $COMPOSE down --volumes
 
+  # The way an admin updates (design 7.3): install a release, seed it, `./brievie update`
+  # to the next one, then an update whose migration fails, and the way back it prints,
+  # typed literally. The releases are throwaway tags in a clone on the runner
+  # (update-releases.py); nothing is pushed. No back-up destination: the emergency copy
+  # in the volume update-backup is the way back.
+  update:
+    if: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      COMPOSE: docker compose -p brievie --project-directory deploy -f deploy/docker-compose.yml
+      GIT_AUTHOR_NAME: CI
+      GIT_AUTHOR_EMAIL: ci@example.invalid
+      GIT_COMMITTER_NAME: CI
+      GIT_COMMITTER_EMAIL: ci@example.invalid
+    steps:
+      # This job ends with `down --volumes` of the fixed project brievie: only on a fresh
+      # GitHub-hosted machine, never on a self-hosted runner that may run Brievie itself.
+      - name: Only on a GitHub-hosted runner
+        run: test "$RUNNER_ENVIRONMENT" = github-hosted
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Make throwaway releases and install the oldest
+        id: releases
+        run: |
+          set -euo pipefail
+          # A branch at the commit under test: a pull request's checkout is detached.
+          git -C "$GITHUB_WORKSPACE" branch -f ci-update HEAD
+          git clone -q --no-hardlinks --branch ci-update "$GITHUB_WORKSPACE" "$RUNNER_TEMP/source"
+          python3 .github/scripts/update-releases.py "$RUNNER_TEMP/source" | tee -a "$GITHUB_OUTPUT"
+          git clone -q --bare "$RUNNER_TEMP/source" "$RUNNER_TEMP/origin.git"
+          git clone -q "$RUNNER_TEMP/origin.git" "$RUNNER_TEMP/install"
+          installed=$(sed -n 's/^installed=//p' "$GITHUB_OUTPUT" | tail -n 1)
+          git -C "$RUNNER_TEMP/install" -c advice.detachedHead=false checkout -q "v$installed"
+      - name: Start the oldest release, keep its authority and its master key
+        env:
+          INSTALLED: ${{ steps.releases.outputs.installed }}
+        run: |
+          set -euo pipefail
+          umask 077
+          cd "$RUNNER_TEMP/install"
+          sh deploy/init-env.sh
+          ./brievie start
+          grep -qx "BRIEVIE_VERSION=$INSTALLED" deploy/.env
+          curl --fail --silent --show-error --insecure --retry 10 --retry-delay 3 --retry-all-errors \
+            https://localhost/api/v1/server/ca-certificate | jq -j .pem > "$RUNNER_TEMP/old-root.pem"
+          key=$(grep '^BRIEVIE_MASTER_KEY=' deploy/.env | tail -n 1 | cut -d= -f2-)
+          echo "::add-mask::$key"
+          printf '%s\n' "$key" > "$RUNNER_TEMP/master-key"
+      - name: Seed two workspaces, a letter in each and a paired device
+        run: |
+          set -euo pipefail
+          umask 077
+          cd "$RUNNER_TEMP/install"
+          $COMPOSE exec -T api python manage.py shell -c "$(cat .github/scripts/restore-seed.py)" |
+            grep '^{"token"' > "$RUNNER_TEMP/seed.json"
+          echo "::add-mask::$(jq -r .token "$RUNNER_TEMP/seed.json")"
+          test "$(jq '.workspaces | length' "$RUNNER_TEMP/seed.json")" = 2
+      - name: Update to the next release
+        env:
+          INSTALLED: ${{ steps.releases.outputs.installed }}
+          GOOD: ${{ steps.releases.outputs.good }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/install"
+          BRIEVIE_UPDATE_CONFIRM=BIJWERKEN ./brievie update "$GOOD" | tee "$RUNNER_TEMP/update.log"
+          grep -qx "Bijgewerkt naar versie $GOOD\." "$RUNNER_TEMP/update.log"
+          grep -q 'telt niet als back-up' "$RUNNER_TEMP/update.log"
+          test ! -e deploy/.update/in-progress
+          grep -qx "BRIEVIE_VERSION=$GOOD" deploy/.env
+          curl --fail --silent --show-error --cacert "$RUNNER_TEMP/old-root.pem" https://localhost/api/v1/health |
+            jq -e --arg want "$GOOD" '.server_version == $want'
+          ./brievie status | tee "$RUNNER_TEMP/status.log"
+          grep -q "Laatst bijgewerkt: $INSTALLED → $GOOD" "$RUNNER_TEMP/status.log"
+      - name: The updated server has the same pages, devices and authority
+        run: .github/scripts/restore-check.sh "$RUNNER_TEMP/seed.json" "$RUNNER_TEMP/old-root.pem"
+      - name: An update whose migration fails prints the way back
+        env:
+          GOOD: ${{ steps.releases.outputs.good }}
+          BAD: ${{ steps.releases.outputs.bad }}
+        run: |
+          set -uo pipefail
+          cd "$RUNNER_TEMP/install"
+          BRIEVIE_UPDATE_CONFIRM=BIJWERKEN ./brievie update "$BAD" > "$RUNNER_TEMP/failed.log" 2>&1
+          rc=$?
+          cat "$RUNNER_TEMP/failed.log"
+          set -e
+          test "$rc" = 3
+          grep -qx "  git checkout v$GOOD" "$RUNNER_TEMP/failed.log"
+          grep -qx "  ./brievie restore pre-update-$BAD --replace --skip-safety-backup" "$RUNNER_TEMP/failed.log"
+          test -e deploy/.update/in-progress
+      - name: Take the way back, as printed
+        env:
+          GOOD: ${{ steps.releases.outputs.good }}
+          BAD: ${{ steps.releases.outputs.bad }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/install"
+          git -c advice.detachedHead=false checkout -q "v$GOOD"
+          # The key comes on stdin (no terminal), as in the job `restore`.
+          BRIEVIE_RESTORE_CONFIRM=WISSEN ./brievie restore "pre-update-$BAD" --replace --skip-safety-backup \
+            --keep-hostname < "$RUNNER_TEMP/master-key" | tee "$RUNNER_TEMP/back.log"
+          grep -qx 'Herstel gelukt\.' "$RUNNER_TEMP/back.log"
+          test ! -e deploy/.update/in-progress
+          grep -qx "BRIEVIE_VERSION=$GOOD" deploy/.env
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors \
+            --cacert "$RUNNER_TEMP/old-root.pem" https://localhost/api/v1/health |
+            jq -e --arg want "$GOOD" '.server_version == $want'
+          ./brievie update "$GOOD" | tee "$RUNNER_TEMP/again.log"
+          grep -qx "Je hebt al versie $GOOD\." "$RUNNER_TEMP/again.log"
+      - name: The server after the way back has the same pages, devices and authority
+        run: .github/scripts/restore-check.sh "$RUNNER_TEMP/seed.json" "$RUNNER_TEMP/old-root.pem"
+      - name: Container state on failure
+        if: failure()
+        # No logs here: the api log holds the installation code.
+        run: cd "$RUNNER_TEMP/install" && $COMPOSE ps --all || true
+      - name: Stop
+        if: always()
+        run: cd "$RUNNER_TEMP/install" && $COMPOSE down --volumes || true
+
   # Nobody watches a scheduled run: when one fails, open an issue (or comment on the open
   # one). Only the schedule, never a pull request or a push; the job ids and the run URL
   # go in the issue, no log lines (workflow audit-failed.yml). Only `issues: write` here.
