@@ -39,6 +39,14 @@ def test_authentication_error_is_401_not_authenticated(client: Client) -> None:
     assert_error(r.json(), "not_authenticated")
 
 
+def test_session_interrupted_is_401_not_authenticated(client: Client) -> None:
+    # The session was ended (another tab, "end this session") while this request ran.
+    r = client.get("/api/session-interrupted")
+
+    assert r.status_code == 401
+    assert r.json()["code"] == "not_authenticated"
+
+
 def test_authorization_error_is_403_forbidden(client: Client) -> None:
     r = client.get("/api/forbidden")
     assert r.status_code == 403

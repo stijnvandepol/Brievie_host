@@ -1,11 +1,10 @@
 import { plural, t } from "@lingui/core/macro";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId } from "react";
-import { Button, Dialog, DialogTrigger, Heading, Modal, ModalOverlay } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
-import { devicesQuery } from "../api/queries";
+import { devicesQuery, userDevicesQuery } from "../api/queries";
 import type { components } from "../api/schema";
-import { Icon } from "./icons";
+import { ConfirmAction } from "./confirm-dialog";
 import { ErrorAlert } from "./page";
 import { Badge, EmptyState, Loading } from "./ui";
 
@@ -13,24 +12,37 @@ type Device = components["schemas"]["DeviceOut"];
 
 const dateTime = new Intl.DateTimeFormat("nl-NL", { dateStyle: "medium", timeStyle: "short" });
 
-function DeviceRow({ device }: { device: Device }) {
+function DeviceRow({
+  device,
+  userId,
+  ownerName,
+}: {
+  device: Device;
+  userId?: string;
+  ownerName?: string;
+}) {
   const queryClient = useQueryClient();
-  const revoke = useMutation({
-    mutationFn: async () => {
-      const { error, response } = await api.DELETE("/api/v1/devices/{device_id}", {
-        params: { path: { device_id: device.id } },
-      });
-      if (!response.ok) throw new ApiFailure(error);
-    },
+  const listKey = userId ? userDevicesQuery(userId).queryKey : devicesQuery.queryKey;
+
+  async function revoke() {
+    const { error, response } = userId
+      ? await api.DELETE("/api/v1/users/{user_id}/devices/{device_id}", {
+          params: { path: { user_id: userId, device_id: device.id } },
+        })
+      : await api.DELETE("/api/v1/devices/{device_id}", {
+          params: { path: { device_id: device.id } },
+        });
     // Also after a failure (e.g. already revoked elsewhere): the list shows the truth.
-    onSettled: () => queryClient.invalidateQueries({ queryKey: devicesQuery.queryKey }),
-  });
+    await queryClient.invalidateQueries({ queryKey: listKey });
+    if (!response.ok) throw new ApiFailure(error);
+  }
 
   return (
     <tr>
       <th scope="row" className="cell-strong">
         {device.name}
       </th>
+      <td>{device.app_version || <span className="muted">{t`Onbekend`}</span>}</td>
       <td className="num">
         <time dateTime={device.created_at}>{dateTime.format(new Date(device.created_at))}</time>
       </td>
@@ -39,54 +51,32 @@ function DeviceRow({ device }: { device: Device }) {
         <Badge intent="success">{t`Actief`}</Badge>
       </td>
       <td className="cell-action">
-        <DialogTrigger>
-          <Button className="button-text danger" aria-label={t`Intrekken: ${device.name}`}>
-            <Icon name="dismiss" />
-            {t`Intrekken`}
-          </Button>
-          <ModalOverlay isDismissable className="overlay">
-            <Modal className="modal">
-              <Dialog role="alertdialog" className="dialog">
-                {({ close }) => (
-                  <>
-                    <Heading slot="title" className="dialog-title">
-                      {t`Apparaat intrekken?`}
-                    </Heading>
-                    <p>{t`${device.name} kan daarna niet meer bij Brievie. Je kunt het apparaat opnieuw koppelen.`}</p>
-                    <div className="dialog-actions">
-                      <Button className="button secondary" onPress={close}>
-                        {t`Annuleren`}
-                      </Button>
-                      <Button
-                        className="button danger-solid"
-                        onPress={() => {
-                          revoke.mutate();
-                          close();
-                        }}
-                      >
-                        {t`Intrekken`}
-                      </Button>
-                    </div>
-                  </>
-                )}
-              </Dialog>
-            </Modal>
-          </ModalOverlay>
-        </DialogTrigger>
-        {revoke.isError ? (
-          <div role="alert" className="field-error">
-            {revoke.error.message}
-          </div>
-        ) : null}
+        <ConfirmAction
+          label={t`Intrekken`}
+          ariaLabel={t`Intrekken: ${device.name}`}
+          icon="dismiss"
+          title={t`Apparaat intrekken?`}
+          confirmLabel={t`Intrekken`}
+          onConfirm={revoke}
+        >
+          <p>
+            {ownerName
+              ? t`${device.name} kan daarna niet meer bij Brievie. ${ownerName} kan het apparaat opnieuw koppelen.`
+              : t`${device.name} kan daarna niet meer bij Brievie. Je kunt het apparaat opnieuw koppelen.`}
+          </p>
+        </ConfirmAction>
       </td>
     </tr>
   );
 }
 
-/** The devices of the logged-in user, each with a confirmed "Intrekken". */
-export function DeviceTable() {
+/**
+ * The devices of the logged-in user, each with a confirmed "Intrekken". With `userId` it
+ * is the list of another account, for an admin who may manage it (`ownerName` is whose).
+ */
+export function DeviceTable({ userId, ownerName }: { userId?: string; ownerName?: string }) {
   const headingId = useId();
-  const { data, error, isPending } = useQuery(devicesQuery);
+  const { data, error, isPending } = useQuery(userId ? userDevicesQuery(userId) : devicesQuery);
 
   return (
     <section className="panel" aria-labelledby={headingId}>
@@ -118,6 +108,7 @@ export function DeviceTable() {
             <thead>
               <tr>
                 <th scope="col">{t`Apparaat`}</th>
+                <th scope="col">{t`App-versie`}</th>
                 <th scope="col">{t`Gekoppeld op`}</th>
                 <th scope="col">{t`Status`}</th>
                 <th scope="col" className="cell-action">
@@ -127,7 +118,7 @@ export function DeviceTable() {
             </thead>
             <tbody>
               {data.map((device) => (
-                <DeviceRow key={device.id} device={device} />
+                <DeviceRow key={device.id} device={device} userId={userId} ownerName={ownerName} />
               ))}
             </tbody>
           </table>

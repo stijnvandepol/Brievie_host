@@ -1,12 +1,32 @@
-from django.http import HttpRequest
+from uuid import UUID
+
+from django.http import HttpRequest, HttpResponse
 from ninja import Router, Status
 
-from apps.accounts import services
+from apps.accounts import notices, resets, services, user_actions
 from apps.accounts.auth import session_auth
 from apps.accounts.models import User
-from apps.accounts.schemas import LoginIn, SetupIn, SetupOut, SetupStatusOut, UserOut
+from apps.accounts.notices import NoticeView
+from apps.accounts.resets import IssuedReset
+from apps.accounts.schemas import (
+    LoginIn,
+    NoticeOut,
+    NoticesSeenIn,
+    PasswordChangeIn,
+    PasswordResetIn,
+    PasswordResetOut,
+    SessionOut,
+    SetupIn,
+    SetupOut,
+    SetupStatusOut,
+    UserOut,
+)
+from apps.accounts.services import SessionView
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
-from apps.common.throttling import ClientAddressThrottle
+from apps.common.throttling import CallerThrottle, ClientAddressThrottle
+from apps.devices import services as device_services
+from apps.devices.models import Device
+from apps.devices.schemas import DeviceOut
 from apps.workspaces.schemas import WorkspaceOut
 
 router = Router(tags=["accounts"])
@@ -39,6 +59,8 @@ def setup_server(request: HttpRequest, payload: SetupIn) -> Status[SetupOut]:
     "/auth/login",
     response={200: UserOut, 401: ErrorOut, 429: ErrorOut, **BODY_ERRORS},
     auth=None,
+    # Counts failed sign-ins only (see services.LOGIN_FAILURES).
+    throttle=services.LOGIN_FAILURES,
     operation_id="login",
 )
 def login(request: HttpRequest, payload: LoginIn) -> User:
@@ -60,3 +82,167 @@ def logout(request: HttpRequest) -> Status[None]:
 @router.get("/me", response={200: UserOut, **AUTH_ERRORS}, operation_id="getMe")
 def get_me(request: HttpRequest) -> User:
     return services.current_user(request)
+
+
+WEB_SESSION_ONLY = "Web session only: a bearer token answers 401 not_authenticated."
+
+
+@router.get(
+    "/me/sessions",
+    response={200: list[SessionOut], **AUTH_ERRORS},
+    auth=session_auth,
+    description=WEB_SESSION_ONLY,
+    operation_id="listMySessions",
+)
+def list_my_sessions(request: HttpRequest) -> list[SessionView]:
+    return services.list_my_sessions(request)
+
+
+@router.delete(
+    "/me/sessions/{session_id}",
+    response={204: None, 404: ErrorOut, **SESSION_WRITE_ERRORS},
+    auth=session_auth,
+    description=WEB_SESSION_ONLY + " Ending the current session signs this browser out.",
+    operation_id="endMySession",
+)
+def end_my_session(request: HttpRequest, session_id: UUID) -> Status[None]:
+    services.end_my_session(request, session_id=session_id)
+    return Status(204, None)
+
+
+@router.post(
+    "/me/password",
+    response={204: None, 429: ErrorOut, **SESSION_WRITE_ERRORS, **BODY_ERRORS},
+    auth=session_auth,
+    throttle=CallerThrottle("password", "10/10m"),
+    description=WEB_SESSION_ONLY
+    + " 400 wrong_password when the current password is wrong; every other session ends.",
+    operation_id="changePassword",
+)
+def change_password(request: HttpRequest, payload: PasswordChangeIn) -> Status[None]:
+    services.change_password(
+        request, current_password=payload.current_password, new_password=payload.new_password
+    )
+    return Status(204, None)
+
+
+@router.get(
+    "/me/notices",
+    response={200: list[NoticeOut], **AUTH_ERRORS},
+    auth=session_auth,
+    description=WEB_SESSION_ONLY + " Notices not dismissed yet, oldest first.",
+    operation_id="listMyNotices",
+)
+def list_my_notices(request: HttpRequest) -> list[NoticeView]:
+    return notices.unseen_notices(request)
+
+
+@router.post(
+    "/me/notices/seen",
+    response={204: None, **SESSION_WRITE_ERRORS, **BODY_ERRORS},
+    auth=session_auth,
+    description=WEB_SESSION_ONLY
+    + " Ids of other users' notices, unknown ids and notices this session may not dismiss"
+    " are left as they are.",
+    operation_id="markNoticesSeen",
+)
+def mark_notices_seen(request: HttpRequest, payload: NoticesSeenIn) -> Status[None]:
+    notices.mark_seen(request, payload.notice_ids)
+    return Status(204, None)
+
+
+@router.post(
+    "/users/{user_id}/password-reset",
+    response={
+        201: PasswordResetOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        429: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+    },
+    auth=session_auth,
+    # Every link writes a row, a notice and audit rows: 30 per caller per 10 minutes.
+    throttle=CallerThrottle("password_reset_create", "30/10m", per_path=False),
+    description=WEB_SESSION_ONLY
+    + " A one-time link (24 hours) with which the member chooses a new password;"
+    " the token is in its fragment and is shown only here. An earlier unused link stops"
+    " working. A server admin may do this for anyone; a workspace admin only for a member"
+    " whose only workspace is theirs and who is no server admin (403 server_admin_only)."
+    " 403 own_account for the caller's own account; 404 user_not_found for an unknown"
+    " account or one outside the caller's workspaces; 409 account_inactive; 429 after 30"
+    " links in 10 minutes by the same caller.",
+    operation_id="createPasswordReset",
+)
+def create_password_reset(
+    request: HttpRequest, response: HttpResponse, user_id: UUID
+) -> Status[IssuedReset]:
+    issued = resets.create_password_reset(request, target_id=user_id)
+    response["Cache-Control"] = "no-store"
+    return Status(201, issued)
+
+
+@router.post(
+    "/auth/password-reset",
+    response={200: UserOut, 429: ErrorOut, **BODY_ERRORS},
+    auth=None,
+    throttle=ClientAddressThrottle("password_reset", "10/10m"),
+    description="Set a new password with the token from a reset link's fragment and sign"
+    " in; every other session of the account ends. 400 reset_link_invalid for an unknown,"
+    " used, expired or revoked link, or when its maker may no longer act on the account;"
+    " 422 when the password rules refuse it (the link stays usable). Every paired device"
+    " and every other open reset link of the account is revoked.",
+    operation_id="completePasswordReset",
+)
+def complete_password_reset(
+    request: HttpRequest, response: HttpResponse, payload: PasswordResetIn
+) -> User:
+    user = resets.complete_password_reset(request, token=payload.token, password=payload.password)
+    response["Cache-Control"] = "no-store"
+    return user
+
+
+ADMIN_ACTION = (
+    " A server admin may do this for anyone else; a workspace admin only for a member whose"
+    " only workspace is theirs and who is no server admin (403 server_admin_only). 403"
+    " own_account for the caller's own account; 404 user_not_found for an unknown account or"
+    " one outside the caller's workspaces."
+)
+
+
+@router.delete(
+    "/users/{user_id}/sessions",
+    response={204: None, 404: ErrorOut, **SESSION_WRITE_ERRORS},
+    auth=session_auth,
+    description=WEB_SESSION_ONLY
+    + " Ends every web session of the account; the member gets a notice."
+    + ADMIN_ACTION,
+    operation_id="endUserSessions",
+)
+def end_user_sessions(request: HttpRequest, user_id: UUID) -> Status[None]:
+    user_actions.end_user_sessions(request, target_id=user_id)
+    return Status(204, None)
+
+
+@router.get(
+    "/users/{user_id}/devices",
+    response={200: list[DeviceOut], 404: ErrorOut, **AUTH_ERRORS, 403: ErrorOut},
+    auth=session_auth,
+    description=WEB_SESSION_ONLY + " The account's active devices." + ADMIN_ACTION,
+    operation_id="listUserDevices",
+)
+def list_user_devices(request: HttpRequest, user_id: UUID) -> list[Device]:
+    return device_services.list_user_devices(request, target_id=user_id)
+
+
+@router.delete(
+    "/users/{user_id}/devices/{device_id}",
+    response={204: None, 404: ErrorOut, **SESSION_WRITE_ERRORS},
+    auth=session_auth,
+    description=WEB_SESSION_ONLY
+    + " Revokes the device; the member gets a notice. 404 device_not_found when the"
+    " account has no such active device." + ADMIN_ACTION,
+    operation_id="revokeUserDevice",
+)
+def revoke_user_device(request: HttpRequest, user_id: UUID, device_id: UUID) -> Status[None]:
+    device_services.revoke_user_device(request, target_id=user_id, device_id=device_id)
+    return Status(204, None)

@@ -147,14 +147,23 @@ def test_folder_parent_id_is_nullable_uuid() -> None:
     assert parent_id["format"] == "uuid"
 
 
-RELEASED = Path(__file__).parent / "fixtures" / "openapi_1b.json"
+Contract = dict[str, dict[str, dict[str, object]]]
+
+FIXTURES = Path(__file__).parent / "fixtures"
+# What each released app was built against: an app of 1b and one of 1c must both keep
+# working against this server.
+RELEASED = {"1b": FIXTURES / "openapi_1b.json", "1c": FIXTURES / "openapi_1c.json"}
 
 
-def released_contract() -> dict[str, dict[str, dict[str, object]]]:
-    contract: dict[str, dict[str, dict[str, object]]] = json.loads(
-        RELEASED.read_text(encoding="utf-8")
-    )
+def read_contract(path: Path) -> Contract:
+    contract: Contract = json.loads(path.read_text(encoding="utf-8"))
     return contract
+
+
+@pytest.fixture(params=list(RELEASED))
+def released_contract(request: pytest.FixtureRequest) -> Contract:
+    version: str = request.param
+    return read_contract(RELEASED[version])
 
 
 def current_contract() -> dict[str, dict[str, dict[str, object]]]:
@@ -195,15 +204,17 @@ def schema_required(schema: object) -> set[str]:
     return set(required)
 
 
-def test_released_schemas_still_exist() -> None:
-    released = released_contract()["components"]["schemas"]
+def test_released_schemas_still_exist(released_contract: Contract) -> None:
+    released = released_contract["components"]["schemas"]
     current = current_contract()["components"]["schemas"]
     missing = sorted(set(released) - set(current))
     assert missing == [], f"schemas of the released contract are gone: {missing}"
 
 
-def test_released_operations_still_exist_with_the_same_operation_id() -> None:
-    released = contract_operations(released_contract())
+def test_released_operations_still_exist_with_the_same_operation_id(
+    released_contract: Contract,
+) -> None:
+    released = contract_operations(released_contract)
     current = contract_operations(current_contract())
     missing = sorted(f"{method.upper()} {path}" for path, method in set(released) - set(current))
     assert missing == [], f"operations of the released contract are gone: {missing}"
@@ -218,8 +229,27 @@ def test_released_operations_still_exist_with_the_same_operation_id() -> None:
     assert renamed == {}, f"released operations changed their operationId (old, new): {renamed}"
 
 
-def test_released_operations_gain_no_required_parameters() -> None:
-    released = contract_operations(released_contract())
+def success_codes(operation: dict[str, object]) -> set[str]:
+    responses = operation["responses"]
+    assert isinstance(responses, dict)
+    return {code for code in responses if code.startswith("2")}
+
+
+def test_released_operations_keep_their_auth_and_success_codes(
+    released_contract: Contract,
+) -> None:
+    """An app in the field calls these with the auth it was built for: narrowing one to
+    the web session only, or dropping a success status, breaks it while CI stays green."""
+    current = contract_operations(current_contract())
+    for key, operation in contract_operations(released_contract).items():
+        now = current[key]
+        operation_id = operation["operationId"]
+        assert now.get("security") == operation.get("security"), operation_id
+        assert success_codes(operation) <= success_codes(now), operation_id
+
+
+def test_released_operations_gain_no_required_parameters(released_contract: Contract) -> None:
+    released = contract_operations(released_contract)
     current = contract_operations(current_contract())
     gained = {
         str(operation["operationId"]): sorted(
@@ -237,11 +267,9 @@ DOCUMENTING_KEYS = frozenset({"title", "description", "default"})
 
 # Request bodies whose schema was renamed on purpose, keeping the same wire shape:
 # operationId -> (released schema, current schema). The generated iOS type name changes
-# at the next contract sync. `updateLabel` arrived in 1c, so it is not in the 1b fixture
-# yet; the entry records the rename for whoever compares against a 1c contract.
-RENAMED_REQUEST_BODIES: dict[str, tuple[str, str]] = {
-    "updateLabel": ("#/components/schemas/LabelIn", "#/components/schemas/LabelUpdateIn"),
-}
+# at the next contract sync. (`updateLabel` was released in 1c with `LabelUpdateIn`
+# already, so it needs no entry.)
+RENAMED_REQUEST_BODIES: dict[str, tuple[str, str]] = {}
 
 
 def wire_shape(definition: object) -> object:
@@ -270,8 +298,8 @@ def request_body_refs(operation: dict[str, object]) -> dict[str, object]:
     return refs
 
 
-def test_released_schemas_lose_no_properties() -> None:
-    released = released_contract()["components"]["schemas"]
+def test_released_schemas_lose_no_properties(released_contract: Contract) -> None:
+    released = released_contract["components"]["schemas"]
     current = current_contract()["components"]["schemas"]
     lost = {
         name: sorted(set(schema_properties(old)) - set(schema_properties(current.get(name))))
@@ -282,9 +310,9 @@ def test_released_schemas_lose_no_properties() -> None:
     assert lost == {}, f"released schemas lost properties: {lost}"
 
 
-def test_released_schema_properties_keep_their_definition() -> None:
+def test_released_schema_properties_keep_their_definition(released_contract: Contract) -> None:
     """Type, format, $ref, items, enum, ...: all but title, description and default."""
-    released = released_contract()["components"]["schemas"]
+    released = released_contract["components"]["schemas"]
     current = current_contract()["components"]["schemas"]
     changed: dict[str, tuple[object, object]] = {}
     for name, old in released.items():
@@ -296,8 +324,8 @@ def test_released_schema_properties_keep_their_definition() -> None:
     assert changed == {}, f"released properties changed their definition (old, new): {changed}"
 
 
-def test_released_request_bodies_do_not_become_required() -> None:
-    released = contract_operations(released_contract())
+def test_released_request_bodies_do_not_become_required(released_contract: Contract) -> None:
+    released = contract_operations(released_contract)
     current = contract_operations(current_contract())
     became = sorted(
         str(operation["operationId"])
@@ -312,8 +340,8 @@ def _body_required(operation: dict[str, object]) -> bool:
     return isinstance(body, dict) and bool(body.get("required"))
 
 
-def test_released_request_bodies_keep_their_schema() -> None:
-    released = contract_operations(released_contract())
+def test_released_request_bodies_keep_their_schema(released_contract: Contract) -> None:
+    released = contract_operations(released_contract)
     current = contract_operations(current_contract())
     changed: dict[str, tuple[object, object]] = {}
     for key, operation in released.items():
@@ -329,9 +357,9 @@ def test_released_request_bodies_keep_their_schema() -> None:
     assert changed == {}, f"released request bodies changed their schema (old, new): {changed}"
 
 
-def test_released_schemas_gain_no_required_properties() -> None:
+def test_released_schemas_gain_no_required_properties(released_contract: Contract) -> None:
     """A new app must read an old server: nothing that was optional becomes required."""
-    released = released_contract()["components"]["schemas"]
+    released = released_contract["components"]["schemas"]
     current = current_contract()["components"]["schemas"]
     gained = {
         name: sorted(schema_required(current[name]) - schema_required(old))

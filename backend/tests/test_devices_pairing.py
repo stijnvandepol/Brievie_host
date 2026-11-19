@@ -171,7 +171,7 @@ def test_list_devices_shows_no_secrets(session_client: Client, user: User) -> No
     assert r.status_code == 200
     body = r.json()
     assert [d["name"] for d in body] == ["A"]
-    assert set(body[0]) == {"id", "name", "created_at", "last_seen_at"}
+    assert set(body[0]) == {"id", "name", "created_at", "last_seen_at", "app_version"}
     text = r.content.decode()
     assert "token" not in text
     assert token not in text

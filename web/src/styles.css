@@ -1086,6 +1086,11 @@ input[type="checkbox"]:checked:disabled {
   gap: var(--s-m);
 }
 
+.cards-stack {
+  grid-template-columns: 1fr;
+  gap: var(--s-s);
+}
+
 .card {
   display: flex;
   flex-direction: column;
@@ -2796,4 +2801,125 @@ section[tabindex="-1"]:focus-visible {
   width: 18px;
   height: 18px;
   margin: 2px 0 0;
+}
+
+/* Disclosure: "Meer opties" */
+
+.disclosure-heading {
+  margin: 0;
+  font-size: inherit;
+}
+
+.disclosure-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-xs);
+  min-height: var(--control-height);
+  padding: 0 var(--s-s);
+  margin-left: calc(var(--s-s) * -1);
+  border: 0;
+  border-radius: var(--radius-medium);
+  background: transparent;
+  color: var(--brand-fg1);
+  font: inherit;
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.disclosure-trigger[data-hovered] {
+  background: var(--subtle-bg-hover);
+}
+
+.disclosure-trigger[data-focus-visible] {
+  outline: 2px solid var(--focus-stroke);
+  outline-offset: 2px;
+}
+
+.disclosure-chevron {
+  transition: transform var(--duration-fast) var(--ease);
+}
+
+.disclosure[data-expanded] .disclosure-chevron {
+  transform: rotate(90deg);
+}
+
+.disclosure-panel {
+  padding-top: var(--s-s);
+}
+
+/* A link that is shown once, and its QR code */
+
+.one-time-link {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-s);
+}
+
+.one-time-link input {
+  font-family: var(--font-mono);
+  font-size: var(--caption-size);
+}
+
+.invite-qr {
+  display: flex;
+  justify-content: center;
+}
+
+.invite-qr svg {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--neutral-stroke2);
+  border-radius: var(--radius-medium);
+  background: #ffffff;
+}
+
+/* After accepting an invitation: continue in the app */
+
+.invite-app {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-s);
+}
+
+.invite-app .code {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--subtitle-size);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.08em;
+}
+
+.invite-continue {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-s);
+}
+
+a.menu-item {
+  text-decoration: none;
+}
+
+a.menu-item:hover {
+  background: var(--neutral-bg1-hover);
+}
+
+.form-narrow {
+  max-width: 420px;
+}
+
+/* Notices from the server, above every page */
+
+.notice-bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-s);
+}
+
+.notice-bar .message-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-s);
 }

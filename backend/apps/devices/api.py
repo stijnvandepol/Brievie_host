@@ -1,32 +1,50 @@
 from uuid import UUID
 
-from django.http import HttpRequest
+from django.http import HttpRequest, HttpResponse
 from ninja import Router, Status
 
 from apps.accounts.auth import session_auth
 from apps.accounts.schemas import UserOut
 from apps.accounts.services import current_user
+from apps.audit.services import actor_from_request
+from apps.common.net import valid_client_ip
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
-from apps.common.throttling import ClientAddressThrottle
+from apps.common.throttling import CallerThrottle, ClientAddressThrottle
 from apps.devices import services
-from apps.devices.models import Device
-from apps.devices.schemas import CaCertificateOut, DeviceOut, PairIn, PairingCodeOut, PairOut
+from apps.devices.models import Device, PairingChallenge
+from apps.devices.schemas import (
+    CaCertificateOut,
+    DeviceOut,
+    PairIn,
+    PairingChallengeOut,
+    PairingCodeOut,
+    PairOut,
+    PairProofIn,
+)
 
 router = Router(tags=["devices"])
 
 
 @router.post(
     "/devices/pairing-codes",
-    response={201: PairingCodeOut, **SESSION_WRITE_ERRORS},
+    response={201: PairingCodeOut, 429: ErrorOut, **SESSION_WRITE_ERRORS},
     auth=session_auth,
+    # Each code costs a slow key derivation (proof.py): ten per user per ten minutes.
+    throttle=CallerThrottle("pairing_code", "10/10m"),
     description=(
         "Web session only. A bearer token (even a valid one) is not accepted here and "
-        "answers 401 not_authenticated; a session without a valid CSRF token answers 403."
+        "answers 401 not_authenticated; a session without a valid CSRF token answers 403. "
+        "The response carries the code once and is not stored (Cache-Control: no-store). "
+        "server_link opens the app without the code: it pairs with a proof."
     ),
     operation_id="createPairingCode",
 )
-def create_pairing_code(request: HttpRequest) -> Status[services.IssuedPairingCode]:
-    return Status(201, services.issue_pairing_code(current_user(request)))
+def create_pairing_code(
+    request: HttpRequest, response: HttpResponse
+) -> Status[services.IssuedPairingCode]:
+    issued = services.issue_pairing_code(request)
+    response["Cache-Control"] = "no-store"
+    return Status(201, issued)
 
 
 @router.post(
@@ -36,8 +54,62 @@ def create_pairing_code(request: HttpRequest) -> Status[services.IssuedPairingCo
     throttle=ClientAddressThrottle("pairing", "10/10m"),
     operation_id="pairDevice",
 )
-def pair_device(request: HttpRequest, payload: PairIn) -> Status[PairOut]:
-    device, token = services.pair_device(code=payload.code, device_name=payload.device_name)
+def pair_device(request: HttpRequest, response: HttpResponse, payload: PairIn) -> Status[PairOut]:
+    device, token = services.pair_device(
+        code=payload.code,
+        device_name=payload.device_name,
+        app_version=payload.app_version,
+        client_ip=valid_client_ip(request),
+    )
+    # The device token is shown once.
+    response["Cache-Control"] = "no-store"
+    user = UserOut.model_validate(device.user, from_attributes=True)
+    return Status(201, PairOut(device_id=device.id, token=token, user=user))
+
+
+@router.post(
+    "/devices/pairing-challenges",
+    response={201: PairingChallengeOut, 429: ErrorOut},
+    auth=None,
+    throttle=ClientAddressThrottle("pairing_challenge", "20/10m"),
+    description=(
+        "A one-time nonce (five minutes) for pairDeviceWithProof. Takes no input and "
+        "reveals nothing about any pairing code."
+    ),
+    operation_id="createPairingChallenge",
+)
+def create_pairing_challenge(request: HttpRequest) -> Status[PairingChallenge]:
+    return Status(201, services.create_pairing_challenge())
+
+
+@router.post(
+    "/devices/pair-with-proof",
+    response={201: PairOut, 429: ErrorOut, **BODY_ERRORS},
+    auth=None,
+    # The scope of pairDevice: both share one count per client address.
+    throttle=ClientAddressThrottle("pairing", "10/10m"),
+    description=(
+        "Pair from a brievie://server link without sending the code: proof = "
+        "HMAC-SHA256(PBKDF2-HMAC-SHA256(code, 'brievie-pair-v1' + pairing_id, 600000), "
+        "'brievie-pair-v1' + nonce + trust binding), the binding being the pinned CA's "
+        "SHA-256 or the host name connected to. 400 pairing_challenge_invalid for an "
+        "unknown, expired or used nonce; 400 pairing_code_invalid for a wrong proof or a "
+        "code that cannot pair (five wrong proofs burn the code)."
+    ),
+    operation_id="pairDeviceWithProof",
+)
+def pair_device_with_proof(
+    request: HttpRequest, response: HttpResponse, payload: PairProofIn
+) -> Status[PairOut]:
+    device, token = services.pair_device_with_proof(
+        pairing_id=payload.pairing_id,
+        nonce=payload.nonce,
+        proof=payload.proof,
+        device_name=payload.device_name,
+        app_version=payload.app_version,
+        client_ip=valid_client_ip(request),
+    )
+    response["Cache-Control"] = "no-store"
     user = UserOut.model_validate(device.user, from_attributes=True)
     return Status(201, PairOut(device_id=device.id, token=token, user=user))
 
@@ -57,7 +129,7 @@ def list_devices(request: HttpRequest) -> list[Device]:
     operation_id="revokeDevice",
 )
 def revoke_device(request: HttpRequest, device_id: UUID) -> Status[None]:
-    services.revoke_device(current_user(request), device_id)
+    services.revoke_device(current_user(request), device_id, actor=actor_from_request(request))
     return Status(204, None)
 
 

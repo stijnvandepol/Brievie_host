@@ -13,6 +13,7 @@ sections 11, 12, 14, 18 and 19 before changing architecture). Decisions live in
 - `make migrate`: apply migrations as the owner role
 - `make openapi`: write `docs/api/openapi.json`
 - `uv run python manage.py configure_ai --workspace <id> --mode off|external|local [--supplier mistral|openai|claude] [--accept-external-ai]`: AI per workspace (`external` asks to type `akkoord`)
+- `uv run python manage.py set_server_admin --email <address> [--remove]` and `reset_password --email <address>`: server admin and a lost password, on the server
 
 Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
 
@@ -57,7 +58,25 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
 - Text is BSN-masked (`apps.common.privacy.mask_bsns`) before it is stored, logged or sent
   to an AI service. Document files are sealed (`apps.common.crypto`) before they touch disk.
 - A field added to an existing API schema has a default (never newly required; the
-  contract test compares with `backend/tests/fixtures/openapi_1b.json`).
+  contract test compares with `backend/tests/fixtures/openapi_1b.json` and
+  `openapi_1c.json`).
 - Nullable fields in API schemas are primitives only, and nullable inputs have a default
   (the iOS generator needs both); the contract test forbids `anyOf`.
+- Apps of phase 1d part A: `audit` (the log), `accounts` (sessions, resets, notices, account
+  state), `devices` (pairing, proof, expiry) and `workspaces` (members, invitations).
+- `apps.audit.services.record()` is the only writer of audit rows. It takes only a code of
+  the closed list and the value keys that code allows, and a name only for people, devices,
+  invitations and workspaces; a label, rule, document, export or session is an id.
+  `brievie_app` may not UPDATE or DELETE audit rows or `AIConsentEvent` (a migration
+  REVOKE, tested as that role); old rows go only through the purge functions.
+- `apps.accounts.sessions.start_session` is the only sign-in path (the only caller of
+  Django's `login`); a web session without a `UserSession` row is signed out.
+- Endpoints that administer people (members, invitations, roles, accounts, sessions or
+  devices of others, workspace settings, the log, exports) use `auth=session_auth`: a device
+  token gets 401. A response that carries a secret once sets `Cache-Control: no-store`.
+- Only `apps.workspaces.members` changes a role or removes a membership (under the
+  workspace's membership lock); only `apps.accounts.account_state` switches an account off or
+  changes server-admin rights after setup (under `lock_active_server_admins`).
+- Export files are made, read and removed only through the guarded functions in
+  `apps/documents/export_files.py`.
 - Tests first for logic. Conventional commits.

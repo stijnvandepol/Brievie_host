@@ -33,6 +33,7 @@ export function loggedInHandlers() {
     http.get(`*${API}/me`, () => HttpResponse.json(user)),
     http.get(`*${API}/workspaces`, () => HttpResponse.json([workspace])),
     http.get(`*${API}/devices`, () => HttpResponse.json([])),
+    http.get(`*${API}/me/notices`, () => HttpResponse.json([])),
     http.get(`*${API}/workspaces/${workspace.id}/inbox/counts`, () =>
       HttpResponse.json({ new: 0, review: 0, unassigned: 0 }),
     ),
@@ -149,12 +150,19 @@ export const annaPerson: Person = {
 };
 
 export const members: components["schemas"]["MemberOut"][] = [
-  { user_id: user.id, name: "Anna", role: "admin", person_id: annaPerson.id },
+  {
+    user_id: user.id,
+    name: "Anna",
+    role: "admin",
+    person_id: annaPerson.id,
+    can_manage_account: false,
+  },
   {
     user_id: "b3333333-3333-4333-8333-333333333333",
     name: "Bram",
     role: "member",
     person_id: null,
+    can_manage_account: true,
   },
 ];
 
@@ -254,4 +262,62 @@ export function ruleHandlers(rules: Rule[] = [apkRule, bankRule]) {
     ...personHandlers(),
     http.get(`*${API}/workspaces/${workspace.id}/rules`, () => HttpResponse.json(rules)),
   ];
+}
+
+/** The caller's export in its states: `none`, `pending`, `ready`, `failed`. */
+export function exportState(
+  status: "none" | "pending" | "ready" | "failed" = "none",
+  allowed = true,
+): components["schemas"]["MyExportOut"] {
+  return {
+    allowed,
+    status,
+    document_count: 0,
+    size: 0,
+    ...(status === "ready"
+      ? {
+          id: "ee111111-1111-4111-8111-111111111111",
+          created_at: "2026-11-18T09:00:00Z",
+          expires_at: "2099-11-19T09:00:00Z",
+          document_count: 3,
+          size: 1234,
+        }
+      : {}),
+  };
+}
+
+/** What the page "Leden" asks: members, open invitations and the caller's export. */
+export function memberHandlers(
+  list: components["schemas"]["MemberOut"][] = members,
+  invitations: components["schemas"]["InvitationOut"][] = [],
+  myExport: components["schemas"]["MyExportOut"] = exportState(),
+) {
+  return [
+    http.get(`*${API}/workspaces/${workspace.id}/members`, () => HttpResponse.json(list)),
+    http.get(`*${API}/workspaces/${workspace.id}/invitations`, () =>
+      HttpResponse.json(invitations),
+    ),
+    http.get(`*${API}/workspaces/${workspace.id}/my-export`, () => HttpResponse.json(myExport)),
+  ];
+}
+
+/** The first workspace with the caller in another role. */
+export function asRole(role: "admin" | "member" | "viewer", kind: "home" | "business" = "home") {
+  return http.get(`*${API}/workspaces`, () => HttpResponse.json([{ ...workspace, role, kind }]));
+}
+
+/**
+ * Remembers whether an element with role "alert" was ever in the page: a flash of an error
+ * that is gone again when the test looks. Call `stop()` at the end.
+ */
+export function watchAlerts() {
+  let seen = document.querySelector('[role="alert"]') !== null;
+  const observer = new MutationObserver(() => {
+    if (document.querySelector('[role="alert"]') !== null) seen = true;
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+  return {
+    seen: () => seen,
+    stop: () => observer.disconnect(),
+  };
 }

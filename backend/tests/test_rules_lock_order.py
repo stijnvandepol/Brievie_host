@@ -9,6 +9,7 @@ from collections.abc import Callable
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
+from apps.audit.services import AuditActor
 from apps.labels import services as label_services
 from apps.labels.models import Label
 from apps.people import services as people_services
@@ -46,7 +47,12 @@ def test_delete_label_locks_the_rules_first_in_id_order(ws_a: Workspace) -> None
     with workspace_context(ws_a.id):
         own = Label.objects.create(workspace=ws_a, name="Eigen")
 
-    sql = locks(ws_a, lambda: label_services.delete_label(workspace=ws_a, label_id=own.id))
+    sql = locks(
+        ws_a,
+        lambda: label_services.delete_label(
+            workspace=ws_a, label_id=own.id, actor=AuditActor.system()
+        ),
+    )
 
     [label_lock] = [i for i, q in enumerate(sql) if 'FROM "labels_label"' in q]
     assert rule_lock_index(sql) < label_lock
@@ -56,7 +62,12 @@ def test_delete_person_locks_the_rules_first_in_id_order(ws_a: Workspace) -> Non
     make_rule(ws_a, text_word("APK"), actions=[add_label(_any_label(ws_a))])
     person = make_person(ws_a, "Oud")
 
-    sql = locks(ws_a, lambda: people_services.delete_person(workspace=ws_a, person_id=person.id))
+    sql = locks(
+        ws_a,
+        lambda: people_services.delete_person(
+            workspace=ws_a, person_id=person.id, actor=AuditActor.system()
+        ),
+    )
 
     [person_lock] = [i for i, q in enumerate(sql) if 'FROM "people_person"' in q]
     assert rule_lock_index(sql) < person_lock

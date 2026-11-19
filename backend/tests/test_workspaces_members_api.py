@@ -27,6 +27,7 @@ def test_list_members_names_their_person(client: Client, ws_a: Workspace) -> Non
         "name": admin.name,
         "role": "admin",
         "person_id": str(admin_person.id),
+        "can_manage_account": False,
     }
     assert by_user[str(viewer.id)]["person_id"] is None
     assert by_user[str(viewer.id)]["role"] == "viewer"

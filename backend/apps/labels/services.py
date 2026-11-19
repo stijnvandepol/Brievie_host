@@ -6,6 +6,8 @@ from django.db.models.functions import Lower
 from django.utils.translation import gettext as _
 from psycopg import errors as pg_errors
 
+from apps.audit.codes import AuditCode, TargetKind
+from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
 from apps.labels.models import COLORS, Label
@@ -98,7 +100,7 @@ def update_label(*, workspace: Workspace, label_id: UUID, name: str, color: str)
         return _labels(workspace).get(id=label.id)
 
 
-def delete_label(*, workspace: Workspace, label_id: UUID) -> None:
+def delete_label(*, workspace: Workspace, label_id: UUID, actor: AuditActor) -> None:
     """Removes the label from its documents too; their events keep its name.
 
     The label's preset rule goes with it when adding this label is all it does. Another
@@ -128,6 +130,13 @@ def delete_label(*, workspace: Workspace, label_id: UUID) -> None:
         for rule in own_rules:
             rule.delete()
         label.delete()
+        # A label's name is the user's own words: the row carries the id only.
+        record(
+            AuditCode.LABEL_DELETED,
+            actor=actor,
+            target=AuditTarget(TargetKind.LABEL, label_id),
+            workspace_id=workspace.id,
+        )
 
 
 def create_extra_labels(*, workspace: Workspace, names: Sequence[str]) -> None:

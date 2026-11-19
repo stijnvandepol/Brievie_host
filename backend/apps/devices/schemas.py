@@ -13,11 +13,29 @@ class PairingCodeOut(Schema):
     expires_at: datetime
     # JSON string: {"v": 1, "urls": [...], "code": "XXXX-XXXX", "ca_sha256": <hex> | null}
     qr_payload: str
+    # brievie://server#v=1&url=…&ca_sha256=…&pairing=<id>: no code, no token (D 6.2).
+    server_link: str = ""
 
 
 class PairIn(InputSchema):
     code: str = Field(max_length=20)
     device_name: str = Field(min_length=1, max_length=100)
+    app_version: str = Field(default="", max_length=50)
+
+
+class PairingChallengeOut(Schema):
+    # Not secret; 43 characters, single use, valid until expires_at (five minutes).
+    nonce: str
+    expires_at: datetime
+
+
+class PairProofIn(InputSchema):
+    pairing_id: UUID
+    nonce: str = Field(max_length=64)
+    # HMAC-SHA256 as lower-case hex (apps.devices.proof); never the code itself.
+    proof: str = Field(pattern=r"^[0-9a-f]{64}$")
+    device_name: str = Field(min_length=1, max_length=100)
+    app_version: str = Field(default="", max_length=50)
 
 
 class PairOut(Schema):
@@ -31,6 +49,7 @@ class DeviceOut(Schema):
     name: str
     created_at: datetime
     last_seen_at: datetime | None
+    app_version: str = ""
 
 
 class CaCertificateOut(Schema):

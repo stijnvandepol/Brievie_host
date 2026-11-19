@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "apps.pipeline",
     "apps.devices",
     "apps.backup",
+    "apps.audit",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
@@ -67,11 +68,14 @@ MIDDLEWARE = [
     "apps.common.errors.ApiContentLengthMiddleware",
     "apps.common.errors.ApiJsonBodyMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
+    # Django's SessionMiddleware; a session ended during an /api/ request answers 401 JSON.
+    "apps.common.errors.ApiSessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # After authentication: signs out a session without a record or past its limits.
+    "apps.accounts.middleware.UserSessionMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
@@ -161,6 +165,16 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE: bool = env.bool("SESSION_COOKIE_SECURE", default=True)
 CSRF_COOKIE_SECURE: bool = env.bool("CSRF_COOKIE_SECURE", default=True)
 SESSION_COOKIE_SAMESITE = "Lax"
+# Web sessions (D 7.2): signed out after this many days without use, and after at most
+# this many days in all. Enforced by apps.accounts.middleware; part C moves them to the
+# server settings page.
+BRIEVIE_SESSION_IDLE_DAYS: int = env.int("BRIEVIE_SESSION_IDLE_DAYS", default=14)
+BRIEVIE_SESSION_MAX_DAYS: int = env.int("BRIEVIE_SESSION_MAX_DAYS", default=90)
+if BRIEVIE_SESSION_IDLE_DAYS < 1 or BRIEVIE_SESSION_MAX_DAYS < 1:
+    raise ImproperlyConfigured("BRIEVIE_SESSION_IDLE_DAYS and _MAX_DAYS must be at least 1.")
+if BRIEVIE_SESSION_IDLE_DAYS > BRIEVIE_SESSION_MAX_DAYS:
+    raise ImproperlyConfigured("BRIEVIE_SESSION_IDLE_DAYS may not exceed BRIEVIE_SESSION_MAX_DAYS.")
+SESSION_COOKIE_AGE = BRIEVIE_SESSION_IDLE_DAYS * 24 * 3600
 CSRF_TRUSTED_ORIGINS: list[str] = env.list("CSRF_TRUSTED_ORIGINS", default=[])
 # One variable for Django and Caddy. Compose sets 0 by default: with the private CA
 # a browser must still be able to click through its certificate warning, which
@@ -188,7 +202,10 @@ AXES_VERBOSE = False
 SILENCED_SYSTEM_CHECKS = ["axes.W002"]  # AxesMiddleware: see above.
 
 # Addresses the app uses to reach this server, local address first; each must be
-# https://. They go into the pairing QR code.
+# https://. They go into the pairing QR code and the pairing link. A phone that reaches
+# the server through an address that is not listed here and is not covered by the
+# server's own certificate authority cannot pair from a link; five failed attempts make
+# that code useless and a new one must be made.
 BRIEVIE_PUBLIC_URLS: list[str] = [
     url.strip() for url in env.list("BRIEVIE_PUBLIC_URLS", default=[]) if url.strip()
 ]
@@ -256,6 +273,12 @@ BRIEVIE_BACKUP_REST_PASSWORD: str = env.str("BRIEVIE_BACKUP_REST_PASSWORD", defa
 BRIEVIE_BACKUP_CONFIG_DIR: str = env.str("BRIEVIE_BACKUP_CONFIG_DIR", default="/data/backup-config")
 BRIEVIE_AUTHORITY_COPY_DIR: str = env.str("BRIEVIE_AUTHORITY_COPY_DIR", default="/data/authority")
 BRIEVIE_HOSTNAME: str = env.str("BRIEVIE_HOSTNAME", default="")
+
+# Audit rows older than this are removed every night (apps.audit.jobs). The database
+# refuses to remove rows younger than 90 days, so a lower value is a mistake.
+BRIEVIE_AUDIT_RETENTION_DAYS: int = env.int("BRIEVIE_AUDIT_RETENTION_DAYS", default=365)
+if BRIEVIE_AUDIT_RETENTION_DAYS < 90:
+    raise ImproperlyConfigured("BRIEVIE_AUDIT_RETENTION_DAYS must be at least 90.")
 
 # Every handler masks BSNs: no log line may carry one, whatever code wrote it.
 LOGGING = {

@@ -13,6 +13,7 @@ msgid "(gearchiveerd)"
 msgstr "(gearchiveerd)"
 
 #. placeholder {0}: formatTimeLeft(secondsLeft)
+#: src/routes/invitation.tsx
 #: src/routes/pair-app.tsx
 msgid "(nog {0})"
 msgstr "(nog {0})"
@@ -33,6 +34,11 @@ msgstr "{0, plural, one {# apparaat} other {# apparaten}}"
 msgid "{0, plural, one {# bestond al} other {# bestonden al}}"
 msgstr "{0, plural, one {# bestond al} other {# bestonden al}}"
 
+#. placeholder {0}: current.document_count ?? 0
+#: src/components/export-panel.tsx
+msgid "{0, plural, one {# brief} other {# brieven}}"
+msgstr "{0, plural, one {# brief} other {# brieven}}"
+
 #. placeholder {0}: result.added
 #: src/routes/labels.tsx
 msgid "{0, plural, one {# label toegevoegd} other {# labels toegevoegd}}"
@@ -43,10 +49,37 @@ msgstr "{0, plural, one {# label toegevoegd} other {# labels toegevoegd}}"
 msgid "{0, plural, one {Serveradres} other {Serveradressen}}"
 msgstr "{0, plural, one {Serveradres} other {Serveradressen}}"
 
+#. placeholder {0}: session.browser || t`Onbekende browser`
+#: src/routes/sessions.tsx
+msgid "{0} is daarna uitgelogd."
+msgstr "{0} is daarna uitgelogd."
+
+#. placeholder {0}: device.name
+#: src/components/device-table.tsx
+msgid "{0} kan daarna niet meer bij Brievie. {ownerName} kan het apparaat opnieuw koppelen."
+msgstr "{0} kan daarna niet meer bij Brievie. {ownerName} kan het apparaat opnieuw koppelen."
+
 #. placeholder {0}: device.name
 #: src/components/device-table.tsx
 msgid "{0} kan daarna niet meer bij Brievie. Je kunt het apparaat opnieuw koppelen."
 msgstr "{0} kan daarna niet meer bij Brievie. Je kunt het apparaat opnieuw koppelen."
+
+#. placeholder {0}: member.name
+#. placeholder {1}: member.name
+#: src/routes/members.tsx
+msgid "{0} kan daarna niet meer bij deze werkruimte. De post blijft hier. Taken van {1} hebben daarna niemand."
+msgstr "{0} kan daarna niet meer bij deze werkruimte. De post blijft hier. Taken van {1} hebben daarna niemand."
+
+#. placeholder {0}: info.invited_by
+#. placeholder {1}: info.workspace_name
+#: src/routes/invitation.tsx
+msgid "{0} nodigt je uit voor {1}"
+msgstr "{0} nodigt je uit voor {1}"
+
+#. placeholder {0}: member.name
+#: src/routes/members.tsx
+msgid "{0} verwijderen?"
+msgstr "{0} verwijderen?"
 
 #. placeholder {0}: person.display_name
 #: src/routes/persons.tsx
@@ -61,11 +94,11 @@ msgstr "{applied} keer toegepast, {proposed} keer voorgesteld"
 msgid "{matched, plural, one {# van de nieuwste {checked} brieven past} other {# van de nieuwste {checked} brieven passen}}"
 msgstr "{matched, plural, one {# van de nieuwste {checked} brieven past} other {# van de nieuwste {checked} brieven passen}}"
 
-#: src/routes/pair-app.tsx
+#: src/components/countdown.ts
 msgid "{minutes, plural, one {# minuut} other {# minuten}}"
 msgstr "{minutes, plural, one {# minuut} other {# minuten}}"
 
-#: src/routes/pair-app.tsx
+#: src/components/countdown.ts
 msgid "{minutesText} en {secondsText}"
 msgstr "{minutesText} en {secondsText}"
 
@@ -81,7 +114,7 @@ msgstr "{name} wordt verwijderd en van 1 brief gehaald. Dit kun je niet ongedaan
 msgid "{name} wordt verwijderd. Wat de regel al heeft gedaan, blijft staan."
 msgstr "{name} wordt verwijderd. Wat de regel al heeft gedaan, blijft staan."
 
-#: src/routes/pair-app.tsx
+#: src/components/countdown.ts
 msgid "{seconds, plural, one {# seconde} other {# seconden}}"
 msgstr "{seconds, plural, one {# seconde} other {# seconden}}"
 
@@ -115,9 +148,17 @@ msgstr "{who} haalde {person} weg"
 msgid "{who} haalde het label {label} eraf"
 msgstr "{who} haalde het label {label} eraf"
 
+#: src/routes/member-devices.tsx
+msgid "{who} is overal uitgelogd."
+msgstr "{who} is overal uitgelogd."
+
 #: src/components/document-history.tsx
 msgid "{who} rondde een taak af"
 msgstr "{who} rondde een taak af"
+
+#: src/routes/member-devices.tsx
+msgid "{who} wordt overal uitgelogd en krijgt daar een melding van. Gekoppelde telefoons blijven werken."
+msgstr "{who} wordt overal uitgelogd en krijgt daar een melding van. Gekoppelde telefoons blijven werken."
 
 #: src/components/document-history.tsx
 msgid "{who} zette deze brief op naam van {person}"
@@ -130,6 +171,18 @@ msgstr "{who} zette een taak weer open"
 #: src/components/document-history.tsx
 msgid "{who} zette het label {label} erop"
 msgstr "{who} zette het label {label} erop"
+
+#: src/components/invite-dialog.tsx
+msgid "1 dag"
+msgstr "1 dag"
+
+#: src/components/invite-dialog.tsx
+msgid "30 dagen"
+msgstr "30 dagen"
+
+#: src/components/invite-dialog.tsx
+msgid "7 dagen"
+msgstr "7 dagen"
 
 #: src/components/document-table.tsx
 msgid "Aanmaning"
@@ -145,9 +198,24 @@ msgid "Aantal brieven"
 msgstr "Aantal brieven"
 
 #: src/components/page.tsx
+#: src/routes/members.tsx
 #: src/routes/persons.tsx
 msgid "Account"
 msgstr "Account"
+
+#: src/routes/invitation.tsx
+msgid "Account maken en meedoen"
+msgstr "Account maken en meedoen"
+
+#. placeholder {0}: member.name
+#: src/routes/members.tsx
+msgid "Account van {0}"
+msgstr "Account van {0}"
+
+#. placeholder {0}: member.name
+#: src/routes/members.tsx
+msgid "Account: {0}"
+msgstr "Account: {0}"
 
 #: src/components/device-table.tsx
 #: src/routes/rule-editor.tsx
@@ -177,10 +245,17 @@ msgid "Actief: {name}"
 msgstr "Actief: {name}"
 
 #: src/routes/labels.tsx
+#: src/routes/members.tsx
 #: src/routes/persons.tsx
 #: src/routes/rule-editor.tsx
+#: src/routes/sessions.tsx
 msgid "Acties"
 msgstr "Acties"
+
+#: src/components/audit-table.tsx
+#: src/routes/sessions.tsx
+msgid "Adres"
+msgstr "Adres"
 
 #: src/routes/ai.tsx
 msgid "Adres van de AI op je netwerk"
@@ -238,13 +313,29 @@ msgstr "AI uit: de tekst van brieven gaat naar geen enkele AI-dienst."
 msgid "alle"
 msgstr "alle"
 
+#: src/components/audit-table.tsx
+msgid "Alle gebeurtenissen"
+msgstr "Alle gebeurtenissen"
+
 #: src/routes/post.tsx
 msgid "Alle labels"
 msgstr "Alle labels"
 
+#: src/routes/member-devices.tsx
+msgid "Alle sessies beëindigen"
+msgstr "Alle sessies beëindigen"
+
+#: src/routes/member-devices.tsx
+msgid "Alle sessies beëindigen?"
+msgstr "Alle sessies beëindigen?"
+
 #: src/routes/ai.tsx
 msgid "Alleen de beheerder van deze werkruimte kan dit veranderen."
 msgstr "Alleen de beheerder van deze werkruimte kan dit veranderen."
+
+#: src/components/invite-dialog.tsx
+msgid "Alleen dit adres kan de uitnodiging gebruiken."
+msgstr "Alleen dit adres kan de uitnodiging gebruiken."
 
 #: src/routes/automations.tsx
 #: src/routes/rule-editor.tsx
@@ -264,7 +355,9 @@ msgstr "Alleen voor een andere dienst die werkt zoals OpenAI. Begint met https:/
 msgid "Als"
 msgstr "Als"
 
-#: src/components/device-table.tsx
+#: src/components/confirm-dialog.tsx
+#: src/components/invite-dialog.tsx
+#: src/components/role-dialog.tsx
 #: src/routes/ai.tsx
 #: src/routes/automations.tsx
 #: src/routes/labels.tsx
@@ -272,22 +365,44 @@ msgstr "Als"
 msgid "Annuleren"
 msgstr "Annuleren"
 
-#: src/routes/pair-app.tsx
-msgid "App koppelen"
-msgstr "App koppelen"
+#: src/components/device-table.tsx
+msgid "App-versie"
+msgstr "App-versie"
 
+#: src/components/audit-codes.ts
 #: src/components/device-table.tsx
 msgid "Apparaat"
 msgstr "Apparaat"
+
+#: src/components/audit-codes.ts
+msgid "Apparaat gekoppeld"
+msgstr "Apparaat gekoppeld"
 
 #: src/components/device-table.tsx
 msgid "Apparaat intrekken?"
 msgstr "Apparaat intrekken?"
 
+#: src/components/audit-codes.ts
+msgid "Apparaat ontkoppeld"
+msgstr "Apparaat ontkoppeld"
+
+#: src/components/audit-codes.ts
+msgid "Apparaat verlopen"
+msgstr "Apparaat verlopen"
+
 #: src/components/page.tsx
 #: src/routes/pair-app.tsx
 msgid "Apparaten"
 msgstr "Apparaten"
+
+#: src/routes/member-devices.tsx
+#: src/routes/members.tsx
+msgid "Apparaten en sessies"
+msgstr "Apparaten en sessies"
+
+#: src/routes/member-devices.tsx
+msgid "Apparaten en sessies van {name}"
+msgstr "Apparaten en sessies van {name}"
 
 #: src/routes/persons.tsx
 msgid "Archiveren"
@@ -321,10 +436,15 @@ msgstr "Automatisering"
 msgid "Bedrag incl. btw"
 msgstr "Bedrag incl. btw"
 
+#: src/routes/member-devices.tsx
+msgid "Beëindigen"
+msgstr "Beëindigen"
+
 #: src/routes/automations.tsx
 msgid "Begin met de startset, of maak zelf een regel."
 msgstr "Begin met de startset, of maak zelf een regel."
 
+#: src/components/role-dialog.tsx
 #: src/routes/home.tsx
 msgid "Beheerder"
 msgstr "Beheerder"
@@ -377,6 +497,14 @@ msgstr "Brief"
 msgid "Brievie instellen"
 msgstr "Brievie instellen"
 
+#: src/routes/sessions.tsx
+msgid "Browser"
+msgstr "Browser"
+
+#: src/routes/member-devices.tsx
+msgid "Browsers"
+msgstr "Browsers"
+
 #: src/routes/pair-app.tsx
 msgid "Certificaat"
 msgstr "Certificaat"
@@ -397,6 +525,10 @@ msgstr "Contract"
 #: src/routes/inbox.tsx
 msgid "Controleer deze brief in de app."
 msgstr "Controleer deze brief in de app."
+
+#: src/routes/password-reset.tsx
+msgid "Daarna ben je ingelogd. Je moet je telefoon opnieuw koppelen."
+msgstr "Daarna ben je ingelogd. Je moet je telefoon opnieuw koppelen."
 
 #: src/routes/rule-editor.tsx
 msgid "Dan"
@@ -440,6 +572,19 @@ msgstr "De bron"
 msgid "de bron {source} is"
 msgstr "de bron {source} is"
 
+#: src/components/export-panel.tsx
+msgid "De export is niet gelukt. Probeer het opnieuw."
+msgstr "De export is niet gelukt. Probeer het opnieuw."
+
+#: src/routes/members.tsx
+msgid "De link werkt daarna niet meer. Wie hem al heeft, kan er niet meer mee binnenkomen."
+msgstr "De link werkt daarna niet meer. Wie hem al heeft, kan er niet meer mee binnenkomen."
+
+#. placeholder {0}: workspace.name
+#: src/routes/members.tsx
+msgid "De mensen die bij {0} horen en bij de post kunnen."
+msgstr "De mensen die bij {0} horen en bij de post kunnen."
+
 #: src/routes/persons.tsx
 msgid "De mensen op wiens naam post binnenkomt. Brievie herkent ze aan hun naam en naamvarianten."
 msgstr "De mensen op wiens naam post binnenkomt. Brievie herkent ze aan hun naam en naamvarianten."
@@ -468,6 +613,22 @@ msgstr "De tekst"
 msgid "De tekst van elke brief gaat naar een bedrijf dat de AI levert. Je krijgt eerst te zien wat er precies weggaat."
 msgstr "De tekst van elke brief gaat naar een bedrijf dat de AI levert. Je krijgt eerst te zien wat er precies weggaat."
 
+#: src/routes/member-devices.tsx
+msgid "De telefoons en browsers waarmee {who} bij Brievie kan."
+msgstr "De telefoons en browsers waarmee {who} bij Brievie kan."
+
+#: src/routes/password.tsx
+msgid "De twee nieuwe wachtwoorden zijn niet hetzelfde."
+msgstr "De twee nieuwe wachtwoorden zijn niet hetzelfde."
+
+#: src/routes/password-reset.tsx
+msgid "De twee wachtwoorden zijn niet hetzelfde."
+msgstr "De twee wachtwoorden zijn niet hetzelfde."
+
+#: src/components/invite-dialog.tsx
+msgid "De uitnodiging is klaar"
+msgstr "De uitnodiging is klaar"
+
 #: src/routes/document.tsx
 msgid "Deadline"
 msgstr "Deadline"
@@ -477,9 +638,18 @@ msgstr "Deadline"
 msgid "Deze brief wordt nog gelezen."
 msgstr "Deze brief wordt nog gelezen."
 
+#: src/routes/sessions.tsx
+msgid "Deze browser"
+msgstr "Deze browser"
+
+#: src/routes/invitation.tsx
 #: src/routes/pair-app.tsx
 msgid "Deze code is verlopen."
 msgstr "Deze code is verlopen."
+
+#: src/components/invite-dialog.tsx
+msgid "Deze link werkt alleen op je thuisnetwerk."
+msgstr "Deze link werkt alleen op je thuisnetwerk."
 
 #: src/routes/root.tsx
 msgid "Deze pagina bestaat niet."
@@ -488,6 +658,15 @@ msgstr "Deze pagina bestaat niet."
 #: src/routes/rule-editor.tsx
 msgid "Deze regel bestaat niet (meer)."
 msgstr "Deze regel bestaat niet (meer)."
+
+#. placeholder {0}: info.person_name
+#: src/routes/invitation.tsx
+msgid "Deze uitnodiging is voor {0}."
+msgstr "Deze uitnodiging is voor {0}."
+
+#: src/routes/invitation.tsx
+msgid "Deze uitnodiging is voor één e-mailadres. Vul dat adres in."
+msgstr "Deze uitnodiging is voor één e-mailadres. Vul dat adres in."
 
 #: src/routes/rule-editor.tsx
 msgid "deze voorwaarden kloppen"
@@ -498,6 +677,25 @@ msgstr "deze voorwaarden kloppen"
 msgid "Deze werkruimte gebruikt nu een eigen adres ({0}). Vul dat adres opnieuw in onder Geavanceerd als je het wilt houden."
 msgstr "Deze werkruimte gebruikt nu een eigen adres ({0}). Vul dat adres opnieuw in onder Geavanceerd als je het wilt houden."
 
+#: src/routes/member-devices.tsx
+msgid "Dit lid"
+msgstr "Dit lid"
+
+#: src/components/audit-codes.ts
+msgid "Document"
+msgstr "Document"
+
+#. placeholder {0}: dateTime.format(new Date(current.expires_at))
+#: src/components/export-panel.tsx
+msgid "Download ({letters}, geldig tot {0})"
+msgstr "Download ({letters}, geldig tot {0})"
+
+#: src/components/audit-table.tsx
+msgid "Download als CSV"
+msgstr "Download als CSV"
+
+#: src/components/invite-dialog.tsx
+#: src/routes/invitation.tsx
 #: src/routes/login.tsx
 #: src/routes/setup.tsx
 msgid "E-mailadres"
@@ -535,6 +733,10 @@ msgstr "Eigen adres"
 msgid "Eigen CA, vingerafdruk zit in de code"
 msgstr "Eigen CA, vingerafdruk zit in de code"
 
+#: src/routes/settings.tsx
+msgid "Elk lid kan dan een ZIP-bestand met de eigen post downloaden."
+msgstr "Elk lid kan dan een ZIP-bestand met de eigen post downloaden."
+
 #: src/components/rule-sentence.ts
 msgid "en"
 msgstr "en"
@@ -567,6 +769,30 @@ msgstr "Er zijn nog geen apparaten gekoppeld."
 msgid "Even laden..."
 msgstr "Even laden..."
 
+#: src/components/audit-codes.ts
+msgid "Export"
+msgstr "Export"
+
+#: src/components/audit-codes.ts
+msgid "Export gedownload"
+msgstr "Export gedownload"
+
+#: src/components/audit-codes.ts
+msgid "Export gemaakt"
+msgstr "Export gemaakt"
+
+#: src/routes/members.tsx
+msgid "Exporteer eerst je post: na het verlaten kun je niet meer downloaden."
+msgstr "Exporteer eerst je post: na het verlaten kun je niet meer downloaden."
+
+#: src/components/export-panel.tsx
+msgid "Exporteren staat uit voor deze werkruimte."
+msgstr "Exporteren staat uit voor deze werkruimte."
+
+#: src/components/export-panel.tsx
+msgid "Exporteren staat uit voor deze werkruimte. Vraag een beheerder om dit aan te zetten."
+msgstr "Exporteren staat uit voor deze werkruimte. Vraag een beheerder om dit aan te zetten."
+
 #: src/components/document-table.tsx
 msgid "Factuur"
 msgstr "Factuur"
@@ -583,9 +809,21 @@ msgstr "Gearchiveerd"
 msgid "Geavanceerd"
 msgstr "Geavanceerd"
 
+#: src/components/audit-table.tsx
+msgid "Gebeurtenis"
+msgstr "Gebeurtenis"
+
 #: src/routes/login.tsx
 msgid "Gebruik het account van deze server."
 msgstr "Gebruik het account van deze server."
+
+#: src/components/audit-codes.ts
+msgid "Gebruiker"
+msgstr "Gebruiker"
+
+#: src/components/reset-link-dialog.tsx
+msgid "Geef deze link aan {name}. Hij werkt 24 uur en één keer."
+msgstr "Geef deze link aan {name}. Hij werkt 24 uur en één keer."
 
 #: src/components/label-chip.tsx
 msgid "Geel"
@@ -611,10 +849,19 @@ msgstr "Geen brieven passen."
 msgid "Geen eigen CA"
 msgstr "Geen eigen CA"
 
+#: src/components/audit-table.tsx
+msgid "Geen gebeurtenissen gevonden."
+msgstr "Geen gebeurtenissen gevonden."
+
+#: src/components/audit-codes.ts
+msgid "Geen serverbeheerder meer"
+msgstr "Geen serverbeheerder meer"
+
 #: src/routes/document.tsx
 msgid "Gegevens"
 msgstr "Gegevens"
 
+#: src/components/one-time-link.tsx
 #: src/routes/pair-app.tsx
 msgid "Gekopieerd"
 msgstr "Gekopieerd"
@@ -627,9 +874,18 @@ msgstr "Gekoppeld op"
 msgid "Gekoppelde apparaten"
 msgstr "Gekoppelde apparaten"
 
+#: src/components/invite-dialog.tsx
+#: src/routes/members.tsx
+msgid "Geldig"
+msgstr "Geldig"
+
 #: src/routes/pair-app.tsx
 msgid "Geldig tot"
 msgstr "Geldig tot"
+
+#: src/components/invite-dialog.tsx
+msgid "Geldig tot {expires}."
+msgstr "Geldig tot {expires}."
 
 #: src/routes/document.tsx
 msgid "Gemaakt door AI. Controleer of het klopt."
@@ -638,6 +894,14 @@ msgstr "Gemaakt door AI. Controleer of het klopt."
 #: src/components/document-history.tsx
 msgid "Geschiedenis"
 msgstr "Geschiedenis"
+
+#: src/routes/sessions.tsx
+msgid "Gestart"
+msgstr "Gestart"
+
+#: src/components/notice-bar.tsx
+msgid "Gezien"
+msgstr "Gezien"
 
 #: src/components/label-chip.tsx
 msgid "Grijs"
@@ -651,6 +915,10 @@ msgstr "Groen"
 msgid "Groenblauw"
 msgstr "Groenblauw"
 
+#: src/routes/invitation.tsx
+msgid "Heb je al een account?"
+msgstr "Heb je al een account?"
+
 #: src/components/rule-sentence.ts
 msgid "heeft"
 msgstr "heeft"
@@ -659,6 +927,11 @@ msgstr "heeft"
 msgid "heeft niet"
 msgstr "heeft niet"
 
+#: src/routes/password-reset.tsx
+#: src/routes/password.tsx
+msgid "Herhaal nieuw wachtwoord"
+msgstr "Herhaal nieuw wachtwoord"
+
 #: src/components/document-table.tsx
 msgid "Herinnering"
 msgstr "Herinnering"
@@ -666,6 +939,22 @@ msgstr "Herinnering"
 #: src/components/suggestion-list.tsx
 msgid "Herkend in de brief"
 msgstr "Herkend in de brief"
+
+#: src/components/audit-codes.ts
+msgid "Herstellink gemaakt"
+msgstr "Herstellink gemaakt"
+
+#: src/routes/members.tsx
+msgid "Herstellink maken"
+msgstr "Herstellink maken"
+
+#: src/components/reset-link-dialog.tsx
+msgid "Herstellink maken voor {name}?"
+msgstr "Herstellink maken voor {name}?"
+
+#: src/components/reset-link-dialog.tsx
+msgid "Herstellink voor {name}"
+msgstr "Herstellink voor {name}"
 
 #: src/components/rule-sentence.ts
 msgid "Het soort post"
@@ -691,6 +980,11 @@ msgstr "Hoeveel voorwaarden moeten kloppen"
 msgid "Hoofdmenu"
 msgstr "Hoofdmenu"
 
+#: src/routes/password.tsx
+msgid "Huidig wachtwoord"
+msgstr "Huidig wachtwoord"
+
+#: src/components/audit-table.tsx
 #: src/routes/post.tsx
 msgid "Iedereen"
 msgstr "Iedereen"
@@ -699,9 +993,29 @@ msgstr "Iedereen"
 msgid "Iemand"
 msgstr "Iemand"
 
+#: src/components/invite-dialog.tsx
+msgid "Iemand nieuw"
+msgstr "Iemand nieuw"
+
+#: src/components/invite-dialog.tsx
+msgid "Iemand uitnodigen"
+msgstr "Iemand uitnodigen"
+
+#: src/routes/invitation.tsx
+msgid "Ik heb al een account"
+msgstr "Ik heb al een account"
+
 #: src/routes/ai.tsx
 msgid "Ik heb dit gelezen en ga akkoord, ook voor iedereen van wie post in deze werkruimte staat."
 msgstr "Ik heb dit gelezen en ga akkoord, ook voor iedereen van wie post in deze werkruimte staat."
+
+#: src/routes/password-reset.tsx
+msgid "In deze link zit geen herstelcode. Open de link uit je bericht opnieuw."
+msgstr "In deze link zit geen herstelcode. Open de link uit je bericht opnieuw."
+
+#: src/routes/invitation.tsx
+msgid "In deze link zit geen uitnodiging. Open de link uit je bericht opnieuw."
+msgstr "In deze link zit geen uitnodiging. Open de link uit je bericht opnieuw."
 
 #: src/components/page.tsx
 #: src/routes/inbox.tsx
@@ -716,19 +1030,56 @@ msgstr "Inbox, {todo} te doen"
 msgid "Informatie"
 msgstr "Informatie"
 
+#: src/components/audit-codes.ts
+msgid "Ingelogd"
+msgstr "Ingelogd"
+
 #: src/routes/login.tsx
 msgid "Inloggen"
 msgstr "Inloggen"
+
+#: src/routes/invitation.tsx
+msgid "Inloggen en meedoen"
+msgstr "Inloggen en meedoen"
+
+#: src/components/audit-codes.ts
+msgid "Inloggen mislukt"
+msgstr "Inloggen mislukt"
+
+#: src/components/audit-codes.ts
+msgid "Inloggen tijdelijk geblokkeerd"
+msgstr "Inloggen tijdelijk geblokkeerd"
+
+#: src/components/audit-codes.ts
+#: src/routes/sessions.tsx
+msgid "Inloggen via organisatie"
+msgstr "Inloggen via organisatie"
+
+#: src/routes/server-audit-log.tsx
+msgid "Inloggen, apparaten en instellingen van de hele server. Er staat nooit de inhoud van een brief in."
+msgstr "Inloggen, apparaten en instellingen van de hele server. Er staat nooit de inhoud van een brief in."
 
 #: src/routes/setup.tsx
 msgid "Installatiecode"
 msgstr "Installatiecode"
 
+#: src/components/audit-codes.ts
+msgid "Instelling gewijzigd"
+msgstr "Instelling gewijzigd"
+
+#: src/components/page.tsx
+#: src/routes/audit-log.tsx
 #: src/routes/rule-editor.tsx
+#: src/routes/settings.tsx
 msgid "Instellingen"
 msgstr "Instellingen"
 
+#: src/components/audit-codes.ts
+msgid "Instellingen voor inloggen via organisatie gewijzigd"
+msgstr "Instellingen voor inloggen via organisatie gewijzigd"
+
 #: src/components/device-table.tsx
+#: src/routes/members.tsx
 msgid "Intrekken"
 msgstr "Intrekken"
 
@@ -736,6 +1087,10 @@ msgstr "Intrekken"
 #: src/components/device-table.tsx
 msgid "Intrekken: {0}"
 msgstr "Intrekken: {0}"
+
+#: src/routes/members.tsx
+msgid "Intrekken: {name}"
+msgstr "Intrekken: {name}"
 
 #: src/components/rule-sentence.ts
 msgid "is"
@@ -757,6 +1112,22 @@ msgstr "is precies"
 msgid "Jaaropgave"
 msgstr "Jaaropgave"
 
+#: src/routes/members.tsx
+msgid "Je bent de enige beheerder. Maak eerst iemand anders beheerder als je wilt stoppen."
+msgstr "Je bent de enige beheerder. Maak eerst iemand anders beheerder als je wilt stoppen."
+
+#: src/routes/members.tsx
+msgid "Je bent hier nog alleen."
+msgstr "Je bent hier nog alleen."
+
+#: src/routes/members.tsx
+msgid "Je bent hier nog alleen. Nodig iemand uit om samen de post te doen."
+msgstr "Je bent hier nog alleen. Nodig iemand uit om samen de post te doen."
+
+#: src/routes/invitation.tsx
+msgid "Je bent nu lid. Koppel ook de Brievie-app op je telefoon, dan scan je brieven met de app."
+msgstr "Je bent nu lid. Koppel ook de Brievie-app op je telefoon, dan scan je brieven met de app."
+
 #: src/components/external-ai-notice.tsx
 msgid "Je gebruikt een externe AI-dienst. De namen op deze pagina gaan mee met elke brief die de AI leest."
 msgstr "Je gebruikt een externe AI-dienst. De namen op deze pagina gaan mee met elke brief die de AI leest."
@@ -769,9 +1140,25 @@ msgstr "Je hebt {total} brieven"
 msgid "Je hebt nog geen regels."
 msgstr "Je hebt nog geen regels."
 
+#: src/components/invite-dialog.tsx
+msgid "Je krijgt een link en een QR-code. Wie die opent, maakt een account of logt in en hoort daarna bij deze werkruimte."
+msgstr "Je krijgt een link en een QR-code. Wie die opent, maakt een account of logt in en hoort daarna bij deze werkruimte."
+
+#: src/routes/members.tsx
+msgid "Je kunt daarna niet meer bij {workspaceName}. De post blijft hier voor de andere leden."
+msgstr "Je kunt daarna niet meer bij {workspaceName}. De post blijft hier voor de andere leden."
+
+#: src/routes/invitation.tsx
+msgid "Je logt in met je account van deze server."
+msgstr "Je logt in met je account van deze server."
+
 #: src/routes/ai.tsx
 msgid "Je maakt de sleutel aan in je account bij de dienst. Brievie bewaart hem versleuteld en laat hem nooit meer zien."
 msgstr "Je maakt de sleutel aan in je account bij de dienst. Brievie bewaart hem versleuteld en laat hem nooit meer zien."
+
+#: src/routes/invitation.tsx
+msgid "Je maakt een account op deze server."
+msgstr "Je maakt een account op deze server."
 
 #: src/routes/setup.tsx
 msgid "Je naam"
@@ -793,6 +1180,30 @@ msgstr "Je vindt de installatiecode in het logboek van de Brievie-container."
 msgid "Je vult zelf in wat er in een brief staat. Er gaat niets naar een AI."
 msgstr "Je vult zelf in wat er in een brief staat. Er gaat niets naar een AI."
 
+#: src/routes/password.tsx
+msgid "Je wachtwoord is gewijzigd. Je andere sessies zijn beëindigd."
+msgstr "Je wachtwoord is gewijzigd. Je andere sessies zijn beëindigd."
+
+#: src/routes/invitation.tsx
+msgid "Je wordt beheerder: je kunt leden uitnodigen en alles instellen."
+msgstr "Je wordt beheerder: je kunt leden uitnodigen en alles instellen."
+
+#: src/routes/sessions.tsx
+msgid "Je wordt hier uitgelogd en gaat naar de inlogpagina."
+msgstr "Je wordt hier uitgelogd en gaat naar de inlogpagina."
+
+#: src/routes/invitation.tsx
+msgid "Je wordt lid: je kunt post scannen, controleren en ordenen."
+msgstr "Je wordt lid: je kunt post scannen, controleren en ordenen."
+
+#: src/routes/invitation.tsx
+msgid "Je wordt meekijker: je kunt alles lezen, maar niets wijzigen."
+msgstr "Je wordt meekijker: je kunt alles lezen, maar niets wijzigen."
+
+#: src/components/reset-link-dialog.tsx
+msgid "Je ziet de link maar één keer. Geldig tot {expires}."
+msgstr "Je ziet de link maar één keer. Geldig tot {expires}."
+
 #: src/components/document-history.tsx
 msgid "Jij"
 msgstr "Jij"
@@ -800,6 +1211,18 @@ msgstr "Jij"
 #: src/routes/setup.tsx
 msgid "Jouw account"
 msgstr "Jouw account"
+
+#: src/components/role-dialog.tsx
+msgid "Kan alles lezen, maar niets wijzigen."
+msgstr "Kan alles lezen, maar niets wijzigen."
+
+#: src/components/role-dialog.tsx
+msgid "Kan leden uitnodigen en alles instellen."
+msgstr "Kan leden uitnodigen en alles instellen."
+
+#: src/components/role-dialog.tsx
+msgid "Kan post scannen, controleren en ordenen."
+msgstr "Kan post scannen, controleren en ordenen."
 
 #: src/components/document-table.tsx
 msgid "Keuring"
@@ -821,11 +1244,16 @@ msgstr "Kies de werkruimte die je wilt openen."
 msgid "Kies een account"
 msgstr "Kies een account"
 
+#: src/routes/invitation.tsx
+#: src/routes/password-reset.tsx
+#: src/routes/password.tsx
 #: src/routes/setup.tsx
 msgid "Kies minstens 12 tekens."
 msgstr "Kies minstens 12 tekens."
 
 #: src/components/document-table.tsx
+#: src/components/invite-dialog.tsx
+#: src/components/reset-link-dialog.tsx
 msgid "Klaar"
 msgstr "Klaar"
 
@@ -840,6 +1268,14 @@ msgstr "Komt er een brief binnen die je moet controleren of op een naam moet zet
 #: src/routes/pair-app.tsx
 msgid "Kopieer koppelgegevens"
 msgstr "Kopieer koppelgegevens"
+
+#: src/components/one-time-link.tsx
+msgid "Kopieer link"
+msgstr "Kopieer link"
+
+#: src/components/one-time-link.tsx
+msgid "Kopiëren lukt niet. Kopieer de link hierboven zelf."
+msgstr "Kopiëren lukt niet. Kopieer de link hierboven zelf."
 
 #: src/routes/pair-app.tsx
 msgid "Kopiëren lukt niet. Kopieer de tekst hieronder zelf."
@@ -870,6 +1306,11 @@ msgstr "Koppelgegevens"
 msgid "Kruimelpad"
 msgstr "Kruimelpad"
 
+#: src/routes/sessions.tsx
+msgid "Laatst gebruikt"
+msgstr "Laatst gebruikt"
+
+#: src/components/audit-codes.ts
 #: src/routes/labels.tsx
 #: src/routes/post.tsx
 #: src/routes/rule-editor.tsx
@@ -889,6 +1330,10 @@ msgstr "Label {name}?"
 msgid "Label toevoegen"
 msgstr "Label toevoegen"
 
+#: src/components/audit-codes.ts
+msgid "Label verwijderd"
+msgstr "Label verwijderd"
+
 #: src/routes/labels.tsx
 msgid "Label verwijderen?"
 msgstr "Label verwijderen?"
@@ -906,18 +1351,69 @@ msgstr "Label wijzigen"
 msgid "Labels"
 msgstr "Labels"
 
+#: src/components/page.tsx
+#: src/routes/member-devices.tsx
+#: src/routes/members.tsx
+#: src/routes/settings.tsx
+msgid "Leden"
+msgstr "Leden"
+
+#: src/routes/settings.tsx
+msgid "Leden mogen hun eigen post exporteren"
+msgstr "Leden mogen hun eigen post exporteren"
+
 #. placeholder {0}: chosen?.default_model ?? ""
 #: src/routes/ai.tsx
 msgid "Leeg laten kiest {0}."
 msgstr "Leeg laten kiest {0}."
 
+#: src/components/role-dialog.tsx
 #: src/routes/home.tsx
 msgid "Lid"
 msgstr "Lid"
 
+#: src/components/audit-codes.ts
+msgid "Lid aan afdeling toegevoegd"
+msgstr "Lid aan afdeling toegevoegd"
+
+#: src/components/audit-codes.ts
+msgid "Lid uit afdeling gehaald"
+msgstr "Lid uit afdeling gehaald"
+
+#: src/components/audit-codes.ts
+msgid "Lid vertrokken"
+msgstr "Lid vertrokken"
+
+#: src/components/audit-codes.ts
+msgid "Lid verwijderd"
+msgstr "Lid verwijderd"
+
+#: src/components/one-time-link.tsx
+msgid "Link"
+msgstr "Link"
+
+#: src/components/invite-dialog.tsx
+#: src/components/reset-link-dialog.tsx
+msgid "Link maken"
+msgstr "Link maken"
+
+#: src/components/audit-table.tsx
+#: src/routes/audit-log.tsx
+#: src/routes/settings.tsx
+msgid "Logboek"
+msgstr "Logboek"
+
 #: src/components/document-table.tsx
 msgid "Loonstrook"
 msgstr "Loonstrook"
+
+#: src/routes/invitation.tsx
+msgid "Lukt dat niet? Typ deze code in de app."
+msgstr "Lukt dat niet? Typ deze code in de app."
+
+#: src/routes/members.tsx
+msgid "Maak een ZIP-bestand met jouw post. Het staat 24 uur klaar om te downloaden."
+msgstr "Maak een ZIP-bestand met jouw post. Het staat 24 uur klaar om te downloaden."
 
 #: src/routes/rule-editor.tsx
 msgid "Maak eerst een label of voeg een persoon toe."
@@ -931,17 +1427,34 @@ msgstr "Maak eerst een label."
 msgid "Mail"
 msgstr "Mail"
 
+#: src/components/role-dialog.tsx
 #: src/routes/home.tsx
 msgid "Meekijker"
 msgstr "Meekijker"
+
+#: src/components/audit-table.tsx
+msgid "Meer laden"
+msgstr "Meer laden"
+
+#: src/components/invite-dialog.tsx
+msgid "Meer opties"
+msgstr "Meer opties"
 
 #: src/routes/labels.tsx
 msgid "Meerdere tegelijk toevoegen"
 msgstr "Meerdere tegelijk toevoegen"
 
+#: src/routes/member-devices.tsx
+msgid "Meld {who} overal af als een account misbruikt kan zijn. Gekoppelde telefoons blijven werken."
+msgstr "Meld {who} overal af als een account misbruikt kan zijn. Gekoppelde telefoons blijven werken."
+
 #: src/components/page.tsx
 msgid "Menu"
 msgstr "Menu"
+
+#: src/components/reset-link-dialog.tsx
+msgid "Met de link kiest {name} een nieuw wachtwoord. Daarna moet {name} opnieuw inloggen en de telefoon opnieuw koppelen. Een eerdere herstellink van {name} werkt daarna niet meer."
+msgstr "Met de link kiest {name} een nieuw wachtwoord. Daarna moet {name} opnieuw inloggen en de telefoon opnieuw koppelen. Een eerdere herstellink van {name} werkt daarna niet meer."
 
 #: src/routes/labels.tsx
 msgid "Met labels zet je orde in je post, bijvoorbeeld Belasting of Zorg."
@@ -951,6 +1464,18 @@ msgstr "Met labels zet je orde in je post, bijvoorbeeld Belasting of Zorg."
 msgid "Met labels zet je orde in je post, bijvoorbeeld Belasting of Zorg. Met de startset krijg je in één keer de gebruikelijke labels."
 msgstr "Met labels zet je orde in je post, bijvoorbeeld Belasting of Zorg. Met de startset krijg je in één keer de gebruikelijke labels."
 
+#: src/routes/sessions.tsx
+msgid "Methode"
+msgstr "Methode"
+
+#: src/routes/members.tsx
+msgid "Mijn post"
+msgstr "Mijn post"
+
+#: src/components/export-panel.tsx
+msgid "Mijn post exporteren"
+msgstr "Mijn post exporteren"
+
 #: src/components/ai-status-line.tsx
 msgid "Mistral in Frankrijk ({host})"
 msgstr "Mistral in Frankrijk ({host})"
@@ -959,12 +1484,18 @@ msgstr "Mistral in Frankrijk ({host})"
 msgid "Model"
 msgstr "Model"
 
+#: src/routes/password.tsx
+msgid "Na het wijzigen word je in je andere browsers uitgelogd. Je gekoppelde telefoon blijft werken."
+msgstr "Na het wijzigen word je in je andere browsers uitgelogd. Je gekoppelde telefoon blijft werken."
+
 #: src/routes/login.tsx
 msgid "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
 msgstr "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
 
 #: src/routes/home.tsx
+#: src/routes/invitation.tsx
 #: src/routes/labels.tsx
+#: src/routes/members.tsx
 #: src/routes/persons.tsx
 #: src/routes/rule-editor.tsx
 msgid "Naam"
@@ -977,6 +1508,10 @@ msgstr "Naam van de werkruimte"
 #: src/routes/persons.tsx
 msgid "Naamvarianten"
 msgstr "Naamvarianten"
+
+#: src/routes/invitation.tsx
+msgid "Naar Brievie"
+msgstr "Naar Brievie"
 
 #: src/routes/root.tsx
 msgid "Naar de startpagina"
@@ -1002,18 +1537,64 @@ msgstr "Niemand"
 msgid "Nieuw"
 msgstr "Nieuw"
 
+#: src/routes/invitation.tsx
+msgid "Nieuw account"
+msgstr "Nieuw account"
+
+#: src/routes/password-reset.tsx
+#: src/routes/password.tsx
+msgid "Nieuw wachtwoord"
+msgstr "Nieuw wachtwoord"
+
+#: src/routes/password-reset.tsx
+msgid "Nieuw wachtwoord kiezen"
+msgstr "Nieuw wachtwoord kiezen"
+
+#: src/routes/invitation.tsx
 #: src/routes/pair-app.tsx
 msgid "Nieuwe code"
 msgstr "Nieuwe code"
+
+#: src/routes/members.tsx
+msgid "Nieuwe link"
+msgstr "Nieuwe link"
+
+#: src/routes/members.tsx
+msgid "Nieuwe link: {name}"
+msgstr "Nieuwe link: {name}"
 
 #: src/routes/automations.tsx
 #: src/routes/rule-editor.tsx
 msgid "Nieuwe regel"
 msgstr "Nieuwe regel"
 
+#: src/components/audit-codes.ts
+msgid "Noodtoegang aangezet"
+msgstr "Noodtoegang aangezet"
+
+#: src/components/audit-codes.ts
+msgid "Noodtoegang gebruikt"
+msgstr "Noodtoegang gebruikt"
+
+#: src/components/audit-codes.ts
+msgid "Noodtoegang uitgezet"
+msgstr "Noodtoegang uitgezet"
+
+#: src/components/invite-dialog.tsx
+msgid "Notitie voor jezelf"
+msgstr "Notitie voor jezelf"
+
 #: src/components/rule-sentence.ts
 msgid "of"
 msgstr "of"
+
+#: src/routes/invitation.tsx
+msgid "Of typ deze code in de app."
+msgstr "Of typ deze code in de app."
+
+#: src/components/audit-table.tsx
+msgid "Om wie of wat"
+msgstr "Om wie of wat"
 
 #: src/routes/automations.tsx
 msgid "Omhoog"
@@ -1031,11 +1612,19 @@ msgstr "Omlaag"
 msgid "Omlaag: {name}"
 msgstr "Omlaag: {name}"
 
+#: src/components/device-table.tsx
+msgid "Onbekend"
+msgstr "Onbekend"
+
 #: src/components/document-table.tsx
 #: src/routes/document.tsx
 #: src/routes/inbox.tsx
 msgid "Onbekende afzender"
 msgstr "Onbekende afzender"
+
+#: src/routes/sessions.tsx
+msgid "Onbekende browser"
+msgstr "Onbekende browser"
 
 #: src/components/document-table.tsx
 msgid "Ontvangen"
@@ -1069,14 +1658,31 @@ msgstr "Op niemands naam"
 msgid "Open de app op je telefoon en scan de code. De telefoon moet op hetzelfde netwerk zitten als deze server."
 msgstr "Open de app op je telefoon en scan de code. De telefoon moet op hetzelfde netwerk zitten als deze server."
 
+#: src/routes/invitation.tsx
+msgid "Open de Brievie-app"
+msgstr "Open de Brievie-app"
+
+#: src/routes/members.tsx
+msgid "Open uitnodigingen"
+msgstr "Open uitnodigingen"
+
 #: src/components/ai-status-line.tsx
 msgid "OpenAI in de Verenigde Staten ({host})"
 msgstr "OpenAI in de Verenigde Staten ({host})"
+
+#: src/routes/settings.tsx
+msgid "Opgeslagen"
+msgstr "Opgeslagen"
 
 #: src/routes/ai.tsx
 msgid "Opgeslagen."
 msgstr "Opgeslagen."
 
+#: src/components/export-panel.tsx
+msgid "Opnieuw exporteren"
+msgstr "Opnieuw exporteren"
+
+#: src/components/role-dialog.tsx
 #: src/routes/ai.tsx
 #: src/routes/labels.tsx
 #: src/routes/persons.tsx
@@ -1105,19 +1711,37 @@ msgstr "Pagina {n} van {0}"
 msgid "Pagina niet gevonden"
 msgstr "Pagina niet gevonden"
 
+#: src/components/audit-table.tsx
+msgid "Pas de filters aan om andere gebeurtenissen te zien."
+msgstr "Pas de filters aan om andere gebeurtenissen te zien."
+
 #: src/components/page.tsx
 #: src/routes/persons.tsx
 msgid "Personen"
 msgstr "Personen"
 
+#: src/components/audit-codes.ts
+#: src/components/audit-table.tsx
 #: src/routes/post.tsx
 #: src/routes/rule-editor.tsx
 msgid "Persoon"
 msgstr "Persoon"
 
+#: src/components/audit-codes.ts
+msgid "Persoon gekoppeld aan een account"
+msgstr "Persoon gekoppeld aan een account"
+
+#: src/components/audit-codes.ts
+msgid "Persoon losgekoppeld van een account"
+msgstr "Persoon losgekoppeld van een account"
+
 #: src/routes/persons.tsx
 msgid "Persoon toevoegen"
 msgstr "Persoon toevoegen"
+
+#: src/components/audit-codes.ts
+msgid "Persoon verwijderd"
+msgstr "Persoon verwijderd"
 
 #: src/routes/persons.tsx
 msgid "Persoon verwijderen?"
@@ -1146,13 +1770,38 @@ msgstr "Post die op jou wacht: brieven om te controleren of op een naam te zette
 msgid "Probeer opnieuw"
 msgstr "Probeer opnieuw"
 
+#: src/components/invite-dialog.tsx
+msgid "QR-code met de uitnodiging"
+msgstr "QR-code met de uitnodiging"
+
+#: src/routes/invitation.tsx
 #: src/routes/pair-app.tsx
 msgid "QR-code om de app te koppelen"
 msgstr "QR-code om de app te koppelen"
 
+#: src/components/audit-codes.ts
+msgid "Regel"
+msgstr "Regel"
+
 #: src/components/document-history.tsx
 msgid "Regel {ruleName}"
 msgstr "Regel {ruleName}"
+
+#: src/components/audit-codes.ts
+msgid "Regel gemaakt"
+msgstr "Regel gemaakt"
+
+#: src/components/audit-codes.ts
+msgid "Regel gewijzigd"
+msgstr "Regel gewijzigd"
+
+#: src/components/audit-codes.ts
+msgid "Regel met de hand uitgevoerd"
+msgstr "Regel met de hand uitgevoerd"
+
+#: src/components/audit-codes.ts
+msgid "Regel verwijderd"
+msgstr "Regel verwijderd"
 
 #: src/routes/automations.tsx
 msgid "Regel verwijderen?"
@@ -1174,9 +1823,30 @@ msgstr "Regels"
 msgid "Rekening"
 msgstr "Rekening"
 
+#: src/components/invite-dialog.tsx
+#: src/components/role-dialog.tsx
 #: src/routes/home.tsx
+#: src/routes/members.tsx
 msgid "Rol"
 msgstr "Rol"
+
+#: src/components/audit-codes.ts
+msgid "Rol gewijzigd"
+msgstr "Rol gewijzigd"
+
+#. placeholder {0}: member.name
+#: src/components/role-dialog.tsx
+msgid "Rol van {0}"
+msgstr "Rol van {0}"
+
+#: src/routes/members.tsx
+msgid "Rol wijzigen"
+msgstr "Rol wijzigen"
+
+#. placeholder {0}: member.name
+#: src/routes/members.tsx
+msgid "Rol wijzigen: {0}"
+msgstr "Rol wijzigen: {0}"
 
 #: src/components/label-chip.tsx
 msgid "Rood"
@@ -1190,6 +1860,10 @@ msgstr "Samenvatting"
 msgid "Scan"
 msgstr "Scan"
 
+#: src/routes/invitation.tsx
+msgid "Scan deze code met de Brievie-app"
+msgstr "Scan deze code met de Brievie-app"
+
 #: src/routes/post.tsx
 msgid "Scan een brief met de Brievie-app op je telefoon. Daarna staat hij hier."
 msgstr "Scan een brief met de Brievie-app op je telefoon. Daarna staat hij hier."
@@ -1202,6 +1876,23 @@ msgstr "Scan met de Brievie-app"
 #: src/components/page.tsx
 msgid "Server: {0}"
 msgstr "Server: {0}"
+
+#: src/components/audit-codes.ts
+msgid "Serverbeheerder gemaakt"
+msgstr "Serverbeheerder gemaakt"
+
+#: src/components/page.tsx
+#: src/routes/server-audit-log.tsx
+msgid "Serverlogboek"
+msgstr "Serverlogboek"
+
+#: src/components/audit-codes.ts
+msgid "Sessie"
+msgstr "Sessie"
+
+#: src/routes/sessions.tsx
+msgid "Sessies"
+msgstr "Sessies"
 
 #: src/routes/ai.tsx
 msgid "Sleutel van de dienst (API-sleutel)"
@@ -1244,6 +1935,14 @@ msgstr "Stel je eigen Brievie-server in. Dit doe je maar één keer."
 #: src/routes/rule-editor.tsx
 msgid "Stop daarna met de volgende regels"
 msgstr "Stop daarna met de volgende regels"
+
+#: src/components/invite-dialog.tsx
+msgid "Stuur deze link, of laat de QR-code scannen. Je ziet de link maar één keer: sluit je dit venster, dan maak je een nieuwe."
+msgstr "Stuur deze link, of laat de QR-code scannen. Je ziet de link maar één keer: sluit je dit venster, dan maak je een nieuwe."
+
+#: src/components/audit-codes.ts
+msgid "Systeem"
+msgstr "Systeem"
 
 #: src/routes/document.tsx
 msgid "Taak"
@@ -1296,6 +1995,10 @@ msgstr "Test op bestaande post"
 msgid "Thuis"
 msgstr "Thuis"
 
+#: src/components/audit-table.tsx
+msgid "Tijdstip"
+msgstr "Tijdstip"
+
 #: src/routes/rule-editor.tsx
 msgid "Toepassen"
 msgstr "Toepassen"
@@ -1317,6 +2020,22 @@ msgstr "Toevoegen"
 msgid "Toevoegen: {text}"
 msgstr "Toevoegen: {text}"
 
+#: src/components/audit-table.tsx
+msgid "Tot"
+msgstr "Tot"
+
+#: src/components/audit-codes.ts
+msgid "Tweestapsverificatie aangezet"
+msgstr "Tweestapsverificatie aangezet"
+
+#: src/components/audit-codes.ts
+msgid "Tweestapsverificatie gewist door beheerder"
+msgstr "Tweestapsverificatie gewist door beheerder"
+
+#: src/components/audit-codes.ts
+msgid "Tweestapsverificatie uitgezet"
+msgstr "Tweestapsverificatie uitgezet"
+
 #: src/routes/automations.tsx
 msgid "Uit"
 msgstr "Uit"
@@ -1330,17 +2049,65 @@ msgstr "Uit: de regel doet een voorstel dat jij bevestigt."
 msgid "Uiterlijk {0}"
 msgstr "Uiterlijk {0}"
 
+#: src/components/audit-codes.ts
+msgid "Uitgelogd"
+msgstr "Uitgelogd"
+
 #: src/routes/rule-editor.tsx
 msgid "Uitkomst van de test"
 msgstr "Uitkomst van de test"
 
 #: src/components/page.tsx
+#: src/routes/sessions.tsx
 msgid "Uitloggen"
 msgstr "Uitloggen"
+
+#. placeholder {0}: session.browser || t`Onbekende browser`
+#: src/routes/sessions.tsx
+msgid "Uitloggen: {0}"
+msgstr "Uitloggen: {0}"
+
+#: src/routes/sessions.tsx
+msgid "Uitloggen?"
+msgstr "Uitloggen?"
+
+#: src/routes/members.tsx
+msgid "Uitnodigen"
+msgstr "Uitnodigen"
+
+#: src/components/audit-codes.ts
+#: src/components/invite-dialog.tsx
+#: src/routes/invitation.tsx
+msgid "Uitnodiging"
+msgstr "Uitnodiging"
+
+#: src/components/audit-codes.ts
+msgid "Uitnodiging aangenomen"
+msgstr "Uitnodiging aangenomen"
+
+#: src/components/audit-codes.ts
+msgid "Uitnodiging gemaakt"
+msgstr "Uitnodiging gemaakt"
+
+#: src/components/audit-codes.ts
+msgid "Uitnodiging ingetrokken"
+msgstr "Uitnodiging ingetrokken"
+
+#: src/routes/members.tsx
+msgid "Uitnodiging intrekken?"
+msgstr "Uitnodiging intrekken?"
+
+#: src/routes/members.tsx
+msgid "Uitnodiging zonder naam"
+msgstr "Uitnodiging zonder naam"
 
 #: src/components/rule-sentence.ts
 msgid "Upload"
 msgstr "Upload"
+
+#: src/components/audit-table.tsx
+msgid "Van"
+msgstr "Van"
 
 #: src/routes/rule-editor.tsx
 msgid "Veld"
@@ -1349,6 +2116,19 @@ msgstr "Veld"
 #: src/routes/rule-editor.tsx
 msgid "Vergelijking"
 msgstr "Vergelijking"
+
+#: src/routes/members.tsx
+msgid "Verlaten"
+msgstr "Verlaten"
+
+#. placeholder {0}: dateTime.format(new Date(invitation.expires_at))
+#: src/routes/members.tsx
+msgid "Verloopt op {0}"
+msgstr "Verloopt op {0}"
+
+#: src/routes/members.tsx
+msgid "Verlopen"
+msgstr "Verlopen"
 
 #: src/routes/document.tsx
 msgid "Vervaldatum"
@@ -1360,12 +2140,15 @@ msgstr "Verwerken mislukt"
 
 #: src/routes/automations.tsx
 #: src/routes/labels.tsx
+#: src/routes/members.tsx
 #: src/routes/persons.tsx
 #: src/routes/rule-editor.tsx
 msgid "Verwijderen"
 msgstr "Verwijderen"
 
+#. placeholder {0}: member.name
 #. placeholder {0}: person.display_name
+#: src/routes/members.tsx
 #: src/routes/persons.tsx
 msgid "Verwijderen: {0}"
 msgstr "Verwijderen: {0}"
@@ -1378,6 +2161,10 @@ msgstr "Verwijderen: {name}"
 #: src/routes/rule-editor.tsx
 msgid "Voeg eerst een persoon toe."
 msgstr "Voeg eerst een persoon toe."
+
+#: src/routes/members.tsx
+msgid "Voor"
+msgstr "Voor"
 
 #: src/routes/setup.tsx
 msgid "Voor de post van je bedrijf."
@@ -1427,18 +2214,43 @@ msgstr "Vul de naam van het model in, zoals de dienst die noemt."
 msgid "Waar gebruik je Brievie voor?"
 msgstr "Waar gebruik je Brievie voor?"
 
+#: src/components/page.tsx
+#: src/routes/sessions.tsx
+msgid "Waar je bent ingelogd"
+msgstr "Waar je bent ingelogd"
+
 #: src/routes/rule-editor.tsx
 msgid "Waarde"
 msgstr "Waarde"
 
+#: src/routes/invitation.tsx
 #: src/routes/login.tsx
+#: src/routes/sessions.tsx
 #: src/routes/setup.tsx
 msgid "Wachtwoord"
 msgstr "Wachtwoord"
 
+#: src/components/audit-codes.ts
+msgid "Wachtwoord gewijzigd"
+msgstr "Wachtwoord gewijzigd"
+
+#: src/routes/password-reset.tsx
+msgid "Wachtwoord opslaan"
+msgstr "Wachtwoord opslaan"
+
+#: src/components/page.tsx
+#: src/routes/password.tsx
+msgid "Wachtwoord wijzigen"
+msgstr "Wachtwoord wijzigen"
+
 #: src/routes/document.tsx
 msgid "Wat de AI las"
 msgstr "Wat de AI las"
+
+#. placeholder {0}: workspace.name
+#: src/routes/settings.tsx
+msgid "Wat leden in {0} mogen doen, en wat er is gebeurd."
+msgstr "Wat leden in {0} mogen doen, en wat er is gebeurd."
 
 #: src/routes/inbox.tsx
 msgid "Wat te doen"
@@ -1452,18 +2264,51 @@ msgstr "We kunnen de server niet bereiken. Controleer je verbinding en probeer h
 msgid "Welke dienst?"
 msgstr "Welke dienst?"
 
+#: src/routes/invitation.tsx
+msgid "Welkom bij {workspaceName}"
+msgstr "Welkom bij {workspaceName}"
+
 #: src/routes/setup.tsx
 msgid "Welkom bij Brievie"
 msgstr "Welkom bij Brievie"
+
+#: src/components/audit-codes.ts
+msgid "Werkruimte"
+msgstr "Werkruimte"
+
+#: src/routes/members.tsx
+msgid "Werkruimte verlaten"
+msgstr "Werkruimte verlaten"
+
+#: src/routes/members.tsx
+msgid "Werkruimte verlaten?"
+msgstr "Werkruimte verlaten?"
 
 #: src/components/page.tsx
 #: src/routes/home.tsx
 msgid "Werkruimtes"
 msgstr "Werkruimtes"
 
+#: src/components/audit-table.tsx
+msgid "Wie"
+msgstr "Wie"
+
+#: src/routes/settings.tsx
+msgid "Wie heeft wie uitgenodigd, welke rol veranderde en wat er verder is ingesteld."
+msgstr "Wie heeft wie uitgenodigd, welke rol veranderde en wat er verder is ingesteld."
+
+#: src/components/invite-dialog.tsx
+msgid "Wie is het?"
+msgstr "Wie is het?"
+
 #: src/routes/ai.tsx
 msgid "Wie leest je brieven?"
 msgstr "Wie leest je brieven?"
+
+#. placeholder {0}: workspace.name
+#: src/routes/audit-log.tsx
+msgid "Wie wat heeft gedaan in {0}. Er staat nooit de inhoud van een brief in."
+msgstr "Wie wat heeft gedaan in {0}. Er staat nooit de inhoud van een brief in."
 
 #: src/routes/labels.tsx
 #: src/routes/persons.tsx
@@ -1479,6 +2324,10 @@ msgstr "Wijzigen: {0}"
 msgid "Wijzigen: {name}"
 msgstr "Wijzigen: {name}"
 
+#: src/components/export-panel.tsx
+msgid "Wordt gemaakt…"
+msgstr "Wordt gemaakt…"
+
 #: src/components/document-table.tsx
 msgid "Wordt verwerkt"
 msgstr "Wordt verwerkt"
@@ -1487,6 +2336,18 @@ msgstr "Wordt verwerkt"
 #: src/routes/setup.tsx
 msgid "Zakelijk"
 msgstr "Zakelijk"
+
+#: src/components/export-panel.tsx
+msgid "Zet het aan bij Instellingen."
+msgstr "Zet het aan bij Instellingen."
+
+#: src/components/audit-codes.ts
+msgid "Zichtbaarheid gewijzigd"
+msgstr "Zichtbaarheid gewijzigd"
+
+#: src/routes/sessions.tsx
+msgid "Zie je hier een browser die je niet kent? Log die uit en wijzig je wachtwoord."
+msgstr "Zie je hier een browser die je niet kent? Log die uit en wijzig je wachtwoord."
 
 #: src/routes/persons.tsx
 msgid "Zo staat de naam op brieven, bijvoorbeeld J. de Vries. Zet elke variant op een eigen regel."

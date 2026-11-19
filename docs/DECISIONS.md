@@ -806,3 +806,212 @@ delegated the choices.
 10. **The CI job `restore` proves a back-up restores onto an empty machine, on every change.** On a GitHub runner it makes a server (`./brievie start`), seeds one user, two workspaces with a one-page letter and a recorded AI decision each, and a paired device (`.github/scripts/restore-seed.py`, through the app's own services; AI stays off), backs up to a folder under `$RUNNER_TEMP` (a named volume would go with `down --volumes`), then destroys everything: containers, every volume of the project, `deploy/.env`. It restores from the folder and the master key alone (key on stdin), and again over the running server with `--replace`. After each restore one request per seeded page (`.github/scripts/restore-check.sh`) must return the seeded bytes over a connection that trusts only the **old** authority (`--cacert`, never `--insecure`): that single hash proves the sealed page opens, the workspace is complete, the device token still signs in and the certificate chains to the old authority; the fresh authority is also byte-identical to the saved one, and `./brievie backup` and `./brievie status` work again without handwork. The job prints no logs (they hold the installation code) and keeps the token out of every process argument. It cannot prove: a real or slow disk, an external disk or a Synology (the runner's folder is a plain ext4 directory owned by uid 10001), a Linux host other than the runner's Ubuntu, a REST or S3 destination, a restore on another host name (pairing again), or an authority older than a week (D 4.7: a clock moved forward in the Caddy container or a pre-made authority fixture; belongs with the B2 restore test). Those stay with the manual proofs in `SELFHOST.md` and with B2.
 11. **Retention, and the fourth safety round.** Retention is `forget --prune --group-by host,paths --keep-within 2d --keep-within-daily 7d --keep-within-weekly 1m --keep-within-monthly 1y`: every snapshot of the last two days (counted from the newest) stays, older ones thin out to one a day for a week, one a week for a month and one a month for a year. Why: the daily rule alone keeps one snapshot per day, so a second back-up on the same day removed the first; the CI restore job found the safety back-up made right before `restore --replace` pruning the run the user had chosen, after the database had already been dropped. The safety back-up of a restore (`backup --no-prune`, stored as `requested_by=restore`) applies no retention at all. Before its destructive step `./brievie` can check cheaply that the chosen run still has both snapshots (`restore_check --run <id>`, read with `--no-lock`, exit 0/1), and `backup_status --list` lists the runs on the destination (id, date, complete; no paths), which the `run_not_found` sentence points to. `restore_database` and `restore_files` find the run before they change anything. Also in this round: every path guard first judges the path's text (absolute, depth, home trees, the fixed list, the test root) and only then looks at its components, and nothing is listed, opened or created before a path is accepted, so the outcome is the same on Linux (where `/etc` is a directory) and macOS (where it is a link); the restore output folder is exactly `/out` (the staging bind mount) or a folder in the test root, the back-up mount exactly `/backup`, and the sweep judges its root before it lists it (a linked storage root is no longer listed either).
 12. **Fifth safety round: what a back-up is, what retention may remove, and the restored queue.** Retention now runs, per installation, in this order: list the installation's own snapshots (`snapshots --host <host>`); stop, without removing anything, when one lies more than 24 hours ahead of now (the run is recorded as succeeded with the warning `clock_skew`, which `backup_status` shows: retention is relative to the newest snapshot, so one wrong clock would otherwise remove almost everything); remove runs that have only one of their two snapshots and are older than 48 hours, by their run tag; remove safety back-ups older than 30 days, counted from now, by their run tag (not with `forget --tag kind:safety --keep-within 30d`: restic counts `--keep-within` from the newest snapshot of the group, so a lone safety snapshot would never expire; checked against restic 0.18.1); then `forget --prune --host <host> --group-by host,paths --keep-tag kind:safety --keep-within 2d --keep-within-daily 7d --keep-within-weekly 1m --keep-within-monthly 1y`. Nothing of this on append-only. Both snapshots of a run carry the run's start as their time (`--time`, UTC; restic gets `TZ=UTC`), so retention can never keep one half of a run and drop the other (found by review: the halves lie in different groups). The safety back-up of a restore (`backup --safety`, older name `--no-prune`) is tagged `kind:safety` on both halves, applies no retention, is kept by ordinary retention and goes after 30 days; with `BRIEVIE_WRAPPER=1` the command prints `safety_run_id=<id>`, and an ordinary back-up that was already open is waited for first. The restic host is `brievie-<first 12 hex of the installation id>` when `/data/backup-config/installation-id` is a regular file holding 32 lowercase hex, else `brievie`; so two installations on one repository never prune each other. Snapshots made before this change stay under the host `brievie` and are no longer pruned automatically; `backup_status --list` (which, like `find_run` and `restore_check`, never filters by host) still shows and restores them. The installation id is never part of a back-up (excluded from the files snapshot), is never restored (restic restores of the config folder only `manifest.json` and `env`), and `--replace` keeps it when it empties the config folder. A back-up without the `.env` copy fails (`env_copy_missing`) before anything is made, because `fetch` needs that copy. The clean-up after a restore also runs when restic fails (a failing clean-up never hides restic's error), and a restore never restores extended attributes or ACLs (`--exclude-xattr '*'`). Every dump holds the job of the back-up that made it, fetched and holding the task lock `backup`: right after `pg_restore`, in the transaction that closes the restored runs, the restored queue is settled with Procrastinate's own SQL (back-up jobs that wait or run become `failed`, running jobs of other queues go back to `todo`, the old server's workers are unregistered), so a new back-up job is fetched at once instead of after the stalled-job retry (confirmed in a container of brievie-b1: before the fix the fetch returned nothing, after it the new job). The destructive commands (`restore_database`, `restore_files`, `sweep_storage --delete`, `backup_init`) refuse to run without `BRIEVIE_IN_CONTAINER=1`, which the image sets (`not_in_container`); the test suite is let through by the test root it installs. `backup_init` repairs an invalid marker when the repository opens with the configured password (else `wrong_password`). `init-env.sh` recognises its keys in every spelling (`export`, quotes, spaces), and `ensure-backup-role.sh` reads the project with the Makefile's own expression. CI's backend job runs the real-restic tests with the image's pinned restic (they fail there without it); the `restore` job only runs on a GitHub-hosted runner. Also: a restore reads a folder source with `--no-lock` (it is mounted read-only) but a remote one (`rest:`, `s3:`) with restic's shared lock, so another server pruning it cannot pull packs from under the restore; an abandoned run is removed only when it lacks one of its two snapshots (one that died after its files snapshot is a whole back-up); and `_empty` and the pre-restore check refuse a tree that holds the back-up mount itself (`BRIEVIE_BACKUP_DIR` inside a data volume's host path).
+
+## 2026-11-18 — Phase 1d part A: members, roles, devices
+
+Built from `docs/superpowers/specs/2026-11-17-fase-1d-leden-rollen-sso-design.md` (the
+design) and `docs/superpowers/plans/2026-11-17-host-1d-a-leden-apparaten.md`. Private post
+(part B), second factor and SSO (part C) and the external address (part D) are not built.
+No new dependency was added in this part. This section supersedes two lines of "Open
+items": "Device tokens never expire…" (they do now, item 8) and "Removing a member must
+unlink their person…" (it does, item 11). The "database rule that forbids UPDATE and
+DELETE" that "AI settings in the web interface" left open is done for the consent history
+(item 1).
+
+1. **The audit log.** Two tables, `audit_workspaceauditevent` (workspace rows, forced RLS)
+   and `audit_serverauditevent` (sign-ins, devices, server admin; read by server admins).
+   `apps.audit.services.record()` is the only writer. It accepts only a code of a closed
+   list and, per code, only listed value keys with short text, numbers or flags. A name is
+   stored only for people, devices, invitations and workspaces; labels, rules, documents,
+   exports and sessions are an id only, because a label or rule name can hold what
+   the log must never hold. The rows have no foreign keys (the workspace field is
+   `db_constraint=False, on_delete=DO_NOTHING`), so deleting a user or workspace never
+   needs a right the app role lacks. The migration REVOKEs UPDATE, DELETE and TRUNCATE for
+   `brievie_app` on both audit tables **and on `pipeline_aiconsentevent`** (the AI consent
+   history), and GRANTs SELECT and INSERT; the test checks the privileges of
+   `brievie_app` itself, because the suite runs as the owner and would not notice a
+   forgotten REVOKE. A restore keeps the privileges (`pg_restore` runs without
+   `--no-privileges`). Old rows leave only through two `SECURITY DEFINER` functions owned
+   by the schema owner (`brievie_purge_workspace_audit`, `brievie_purge_server_audit`)
+   that refuse a cut-off younger than 90 days; the nightly job `purge_audit_events` calls
+   them with `BRIEVIE_AUDIT_RETENTION_DAYS` (default 365, minimum 90, refused at start-up
+   below that). Note on cascades: `AIConsentEvent.workspace` is `CASCADE` and its `actor`
+   `SET_NULL`, so a workspace or user deletion as the app role now fails on that table.
+   No code deletes either today; a later one must run as the owner, or keep the history
+   some other way. The purge walks the workspaces that exist, so the rows of a workspace
+   that was deleted later would stay until that deletion handles them on purpose.
+2. **Server admin.** `User.is_server_admin`; a server admin reads the server log and may
+   act on accounts that live in more than one workspace. There is always at least one
+   active server admin: every path that takes the power away (`set_server_admin
+   --remove`, deactivating the account) takes the row lock `lock_active_server_admins`
+   and answers `last_admin` when it would be the last one. A second one is appointed on
+   the server with `manage.py set_server_admin`; a web page for that belongs with part C.
+   Workspace creation stays at `/setup`.
+3. **`start_session` is the only sign-in.** `apps.accounts.sessions.start_session` is the
+   only caller of Django's `login` (a test scans `apps` and `brievie`) and writes the
+   `UserSession` row; a session without a row is signed out (the middleware fails
+   closed). Part C hangs the second factor on this one place. The `user_logged_in`
+   receiver that records sessions exists only in the test run (`conftest`), so a stray
+   `login()` in production gives a session that does not work.
+4. **Web sessions** end after 14 days idle or 90 days in all, whichever comes first
+   (`BRIEVIE_SESSION_IDLE_DAYS`, `BRIEVIE_SESSION_MAX_DAYS`; the idle limit may not exceed
+   the other). Enforced twice: by Django's own expiry and by an explicit check of both
+   limits in `UserSessionMiddleware`; an hourly job removes sessions past a limit. The
+   limits are environment settings until part C's server settings page; both the api and
+   the worker read them, so compose passes them to both.
+5. **People administration is web-session only.** Every endpoint that administers
+   members, accounts, invitations, roles, devices or sessions of others, workspace
+   settings, the log and the export uses `auth=session_auth`, never the default that also
+   takes a device token (a test per endpoint: a device token gets 401). A stolen phone
+   must not be able to manage people. `listMembers` is the one read the app may use. Every
+   response that carries a secret once (reset link, invitation link, pairing code or
+   link) sets `Cache-Control: no-store`.
+6. **Reset links.** An admin makes one for a member ("Herstellink"); nobody makes one for
+   their own account (403 `own_account`: a stolen admin session must not set a password
+   without the current one). Only the SHA-256 of the token is stored. The link is
+   `/wachtwoord-herstellen#<token>`: the token sits in the fragment, never in a query string, and goes
+   to the server in a POST body. It works once and for 24 hours, and only while its maker
+   still may act on the account: the authority rule is checked when the link is made and
+   again when it is used. Every dead link (unknown, used, expired, revoked, maker no
+   longer allowed) gets the same sentence. Completing a reset ends every session of the
+   account, **revokes every paired device** (a reset is what one does after a suspected
+   break-in; the member pairs the phone again) and every other open link, and leaves a
+   notice. The same holds for `manage.py reset_password`. What the log cannot prove: the
+   completion row has no asserted actor (nobody proved it was the member) and carries the
+   maker's id as `reset_by`. Said plainly: after an admin's reset the admin can sign in
+   with the new password and dismiss the notice from that later session. Only the session
+   the reset itself started cannot dismiss it (`can_dismiss` is false there). So the
+   notice does not stop an admin who misuses a reset; the audit log keeps the trace (the
+   link's creation, its maker's id on the completion, the revoked devices), in rows
+   the application cannot change or delete.
+7. **Notices** ("meldingen") are composed in Dutch on the server (`AccountNotice`), so
+   the web and a later iOS screen show the same sentence.
+8. **Device tokens expire 180 days after their last use** (`TOKEN_IDLE_LIMIT`). The
+   install moment of the update is one row (`TokenExpiryStart`), so no phone stops on the
+   day of the update. An expired token is revoked when it is noticed (a conditional
+   update, so the expiry is logged once) and the request gets the same `401
+   not_authenticated` as a revoked token. The app sends `X-Brievie-App-Version`; the
+   server stores it at most once a day (`app_version_at`). `Device.paired_via` records
+   how a device was paired (part C reads it for SSO).
+9. **Pairing by proof.** The link is `brievie://server#v=1&url=…&ca_sha256=…&pairing=…`
+   (fragment, URL-encoded, no code in it). From a link the phone never sends the typed
+   code: it asks `createPairingChallenge` for a one-time nonce (valid five minutes) and
+   sends `proof = HMAC-SHA256(key, "brievie-pair-v1" || nonce || trust binding)`, with
+   `key = PBKDF2-HMAC-SHA256(code, "brievie-pair-v1" || pairing id, 600,000 rounds)`.
+   The code has only 40 bits, so a relay that saw one HMAC keyed with the bare code could
+   try every code offline within its ten minutes; 600,000 rounds make that cost years of
+   GPU time, while phone and server pay about half a second once per code. Salting with
+   the pairing id lets the server keep the derived key (sealed with the master key) and
+   not the code. The trust binding is the SHA-256 of the CA the phone pinned, or, for a
+   publicly certified host, the lower-case host name it connected to; a relay with
+   another CA or host cannot make a proof the server accepts. **Hosts no public authority
+   certifies** (`.local`, `.lan`, `.home.arpa`, `.internal`, single-label names, private,
+   loopback and link-local addresses) **get no host binding**: only the CA pin binds
+   them. **The phone enforces the 43-character nonce**: the proof's fields are not
+   length-prefixed, so a nonce of another length could shift bytes between nonce and
+   binding. **A version 2 of the proof must length-prefix its fields**; version 1 stays
+   as it is, because the shared test vector (`tests/fixtures/pairing_proof_v1.json`, the
+   same bytes in the iOS app) pins it. Five wrong proofs burn the code; whoever learns
+   the pairing id can burn it (the user makes a new code; accepted). The QR code and
+   `pairDevice` stay exactly as in 1c. `createPairingCode` is limited to 10 per 10
+   minutes per caller. An address that is not in `BRIEVIE_PUBLIC_URLS` makes proofs fail
+   and burns codes. The app contacts nothing when a link is opened until the user taps
+   "Server zoeken"; it then shows the address it found; without a certificate pin it
+   keeps only that one proven address.
+10. **Invitations** are server rows (`Invitation`), not workspace rows. Only the token's
+    hash is stored; the link is `/uitnodiging#<token>` (fragment, POST body for the
+    lookup and the accept, `history.replaceState` removes it from the address bar). Valid
+    1, 7 or 30 days, default 7; works once. **The maker must still be an active admin of
+    the workspace**: an admin who lost the role cannot hand out the role any more, and
+    their open links end (demotion, removal or leaving of an admin revokes them, audited). The lookup
+    and the accept answer one sentence for every dead link, and cost one query whatever
+    the reason. Role, person and e-mail address are fixed by the maker; the invitee
+    chooses none of them. **An e-mail address on an invitation proves only that the
+    address the account stores equals it.** No mail is sent and nobody proves control of
+    the mailbox, so it is not proof that the invitee owns that mailbox: part B must not
+    rest private post on it (a person with private post accepts only with an existing
+    account or with proof given outside the system). An existing account is found only by
+    its address with its own password (the sign-in lockout applies); a new account whose
+    address is taken answers 409 `account_exists`. The lookup shows the workspace's AI
+    line, including the flag `has_api_key`, to anybody who holds the link (accepted: a
+    flag, never the key; it closes the per-member "read" step 1c deferred). Reactivating a
+    switched-off account happens only here, with the account's own password.
+11. **Roles and members** change only in `apps.workspaces.members` (role change, removal,
+    leaving), always under one lock on the workspace's memberships in id order. A
+    workspace always keeps an admin (409 `last_admin`). Removal unlinks the person with a
+    queryset `update()` before the membership goes (`Person.save` refuses a user who is no
+    longer a member), revokes what an admin made when they lose the role (open invitations
+    of this workspace, their reset links) and records the invitations. **Reset-link
+    revocation on demotion is server-wide and not audited** (accepted): a reset link
+    belongs to an account, not to a workspace, so it stops every open link the person
+    made, also one made as admin of another workspace; no log row says so.
+12. **Deactivation.** When the last membership goes (removal, leaving) the account is
+    switched off in `accounts.account_state.deactivate_account`: web sessions end, devices
+    are revoked, unused pairing codes are deleted, reset links for it and made by it stop.
+    **It also takes the server-admin flag away** (and records `server_admin_revoked`), so
+    an invitation that brings the account back can never bring server authority back; a
+    returning server admin is appointed again with `set_server_admin`. A workspace admin
+    never deactivates a server admin (403 `server_admin_only`), and nobody deactivates the
+    last active one. The rule for acting on another account is one function,
+    `account_authority`: 404 for strangers, 403 `server_admin_only` when the person also
+    lives elsewhere, 403 `own_account` for oneself.
+13. **Accepted races.** A member removed while their phone uploads or confirms: the
+    request that passed the check a moment before the removal finishes as if it had
+    finished a moment earlier (the letter belongs to the workspace and stays; a
+    confirmation is a change an admin can see in the letter's history); every later
+    request answers 401 or 404. A `FOR KEY SHARE` lock on every write would hold a row
+    lock for the length of an upload. Task assignment, when it is built, must lock the
+    assignee's membership (`select_for_share`); part B must lock the person link against
+    the membership check, because `Person.save` does not.
+14. **The member export** ("Mijn post exporteren"): the member's own post only (part A:
+    documents with an addressee linked to the member; part B changes the one function
+    `member_document_ids`), as a ZIP of page images (JPEG) and a JSON file with a
+    `LEESMIJ.txt`, until part E adds PDFs. Asked for in the web interface, built by a job
+    on the `pipeline` queue (so the worker needs the documents volume), sealed in 4 MiB
+    AES-GCM chunks with index and last-chunk flag in the associated data (no plaintext on
+    disk, bounded memory, truncation is detected), valid for 24 hours, one per member and
+    workspace (a new one replaces the old). A workspace switches it off or on
+    (`allow_member_export`): on in Thuis, off in Zakelijk. The files live in
+    `<storage root>/exports/`, which is kept out of the back-up (a restore has no use for
+    them) and swept when no row names a file and it is older than a day. Every removal
+    goes through the guarded functions in `documents/export_files.py`, which accept only
+    `<root>/<uuid>/<uuid>.sealed` under the export directory, and that directory must lie
+    inside the safe-path list (`apps.backup.safepaths`: `/data/documents` in production).
+    So an install whose storage root lies elsewhere cannot export. The download does its
+    checks, key and audit row first and returns a plain iterator, because a generator
+    would run after the request transaction is gone.
+15. **The audit log is read** by a workspace's admins (their workspace) and by server
+    admins (the server log), through web-session endpoints with filters and a CSV (at most
+    10,000 rows, times in Amsterdam time, a cell that would start a formula gets an
+    apostrophe).
+16. **Login throttle:** 30 failed sign-ins per 10 minutes per client address (successful
+    ones are not counted: an office shares one address); the lockout of `django-axes`
+    (5 failures, 15 minutes per address and account) stays.
+17. **Contract.** `openapi_1c.json` joins `openapi_1b.json` as a fixture: the contract
+    test guards what an app built against 1c expects. Fields added in this part have
+    defaults. `AcceptInvitationIn.account` is a validated `str`, so part C adds `"sso"`
+    without changing a released enum.
+18. **Invitations bound to an address end with that account's membership.** When a
+    member is removed or leaves, the workspace's open invitations bound to their address
+    are revoked (`reason: member_removed`); when somebody joins, the workspace's other
+    open invitations bound to their address are revoked (`reason: superseded`). Without
+    this, an admin link made for someone before they joined another way could bring them
+    back after a removal. Unbound links cannot be attributed; the Leden page lists them.
+    Removal revokes invitations before it locks the server admins and the user, so the
+    lock order is the same everywhere (written at the top of `workspaces/members.py`).
+19. **`mask_bsns` also masks a run of nine digits inside an id in a log line** (a uuid4
+    holds one now and then, and the elfproef passes about one in eleven). Accepted: a log
+    line then shows `[BSN]` inside the id; finding the row takes the other half of the id
+    or the time. Tests compare with `mask_bsns(id)`. Skipping candidates inside a
+    canonical UUID would change what the privacy filter lets through and is not done.
+20. **A restore brings back sessions, devices and links as they were at the back-up.**
+    A phone revoked after the back-up works again. Not changed in code in this part; the
+    restore guide (SELFHOST section 8) says to check the devices and sessions afterwards.
+21. **The export files stay on the documents volume for now.** The security reading asked
+    for a read-only documents mount in the worker with a separate `exports` volume. A
+    volume mounted inside a read-only mount needs its mount point to exist in the parent
+    volume before the container starts; Docker can only create it through a writable
+    mount (the api), so the worker's start would depend on the api having started first,
+    on existing installs and after every restore. Kept read-write until that is solved
+    and checked in a real stack (for example: the one-shot migrate step makes the
+    directory, the image creates it for new volumes).

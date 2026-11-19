@@ -14,4 +14,11 @@ regexes = [
   # Made-up back-up passwords in the tests of back-up and restore (B1).
   '''^Geheim-Wachtwoord-123$''',
   '''^S3CR3T-0123456789$''',
+  # Made-up passwords in the tests of members and devices (1d part A), and the derived
+  # key of the published pairing test vector (tests/fixtures/pairing_proof_v1.json).
+  '''^een-lang-wachtwoord-voor-mila-2026$''',
+  '''^een-lang-nieuw-wachtwoord-2026$''',
+  '''^een-nieuw-lang-wachtwoord-2026$''',
+  '''^nog-een-ander-wachtwoord-77$''',
+  '''^b0d30d4a0224e576656286cc732bc500d8b93217860fd69ca42cb95cf245105f$''',
 ]

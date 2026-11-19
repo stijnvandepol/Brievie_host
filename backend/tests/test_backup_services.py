@@ -26,6 +26,7 @@ from apps.backup import restic, services
 from apps.backup.locks import BACKUP_LOCK_KEY
 from apps.backup.manifest import MANIFEST_NAME, manifest_from_json
 from apps.backup.models import BackupRun
+from apps.common.privacy import mask_bsns
 from apps.workspaces.models import Workspace
 from tests.backup_support import FakeBinary
 
@@ -445,7 +446,9 @@ def test_failed_run_reason_and_log_hold_no_secret(
     run.refresh_from_db()
     assert run.status == BackupRun.Status.FAILED
     assert run.reason_code == "restic_failed"
-    assert f"Backup run {run.id} failed: restic_failed" in caplog.text
+    # The log filter masks a run of nine digits that passes the BSN check, also inside an
+    # id; compare with the id as it is logged.
+    assert mask_bsns(f"Backup run {run.id} failed: restic_failed") in caplog.text
     assert "Fatal" in caplog.text  # the redacted tail is logged
     for text in (run.reason, caplog.text):
         assert "geheim" not in text
@@ -1631,19 +1634,21 @@ def test_a_linked_installation_id_is_never_read(
 
 
 @pytest.mark.django_db(transaction=True)
-def test_the_installation_id_is_not_part_of_a_back_up(
+def test_the_installation_id_and_the_exports_are_not_part_of_a_back_up(
     configured_folder: Path, fake_restic: FakeBinary, fake_pg_dump: FakeBinary
 ) -> None:
     config = django_settings.BRIEVIE_BACKUP_CONFIG_DIR
     assert services.file_excludes() == [
         f"{config}/installation-id",
         f"{config}/installation-id.tmp",
+        f"{django_settings.BRIEVIE_STORAGE_ROOT}/exports",
     ]
     run = queued_run()
     answer_both_backups(fake_restic, run.id)
     services.perform_run(run.id)
     files = next(call for call in fake_restic.calls if "kind:files" in call)
     assert f"{config}/installation-id" in files
+    assert f"{django_settings.BRIEVIE_STORAGE_ROOT}/exports" in files
 
 
 @pytest.mark.django_db(transaction=True)

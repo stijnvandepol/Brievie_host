@@ -16,8 +16,14 @@ const phone = {
   name: "iPhone van Anna",
   created_at: "2026-11-14T12:41:00Z",
   last_seen_at: null,
+  app_version: "1.2.0 (45)",
 };
-const tablet = { ...phone, id: "5d1c3b7e-2f6a-4c3e-9b1a-7a2d4e5f6002", name: "iPad" };
+const tablet = {
+  ...phone,
+  id: "5d1c3b7e-2f6a-4c3e-9b1a-7a2d4e5f6002",
+  name: "iPad",
+  app_version: "",
+};
 
 describe("device table", () => {
   it("lists a device with its date and an Actief label", async () => {
@@ -32,7 +38,8 @@ describe("device table", () => {
     expect(scope.getByText(/2026/)).toBeInTheDocument();
     expect(scope.getByText("Actief")).toBeInTheDocument();
     expect(scope.getByRole("button", { name: /intrekken/i })).toBeInTheDocument();
-    for (const name of ["Apparaat", "Gekoppeld op", "Status"]) {
+    expect(scope.getByText("1.2.0 (45)")).toBeInTheDocument();
+    for (const name of ["Apparaat", "App-versie", "Gekoppeld op", "Status"]) {
       expect(screen.getByRole("columnheader", { name })).toBeInTheDocument();
     }
     expect(screen.getByText("1 apparaat")).toBeInTheDocument();
@@ -105,5 +112,15 @@ describe("device table", () => {
 
     expect(await screen.findByText("Er zijn nog geen apparaten gekoppeld.")).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("shows a calm word when an old app sent no version", async () => {
+    server.use(
+      http.get(`*${API}/devices`, () => HttpResponse.json([tablet])),
+      ...loggedInHandlers(),
+    );
+    renderApp("/koppel-app");
+    const row = (await screen.findByRole("rowheader", { name: "iPad" })).closest("tr");
+    expect(within(row as HTMLElement).getByText("Onbekend")).toBeInTheDocument();
   });
 });

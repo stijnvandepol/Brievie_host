@@ -16,6 +16,7 @@ import {
 import { ApiFailure, api, errorMessage } from "../api/client";
 import { inboxCountsQuery, meQuery } from "../api/queries";
 import { Icon, type IconName } from "./icons";
+import { NoticeBar } from "./notice-bar";
 import { initials, MessageBar } from "./ui";
 
 /** Every page gets its own title (WCAG 2.4.2). */
@@ -148,7 +149,11 @@ export function PageHeader({
   );
 }
 
-type BreadcrumbTarget = "/w/$workspaceId/post" | "/w/$workspaceId/automatisering";
+type BreadcrumbTarget =
+  | "/w/$workspaceId/post"
+  | "/w/$workspaceId/automatisering"
+  | "/w/$workspaceId/leden"
+  | "/w/$workspaceId/instellingen";
 
 const NAV_LINK = "nav-link";
 
@@ -168,6 +173,8 @@ function NavItem({
     | "/w/$workspaceId/inbox"
     | "/w/$workspaceId/post"
     | "/w/$workspaceId/personen"
+    | "/w/$workspaceId/leden"
+    | "/w/$workspaceId/instellingen"
     | "/w/$workspaceId/labels"
     | "/w/$workspaceId/automatisering"
     | "/w/$workspaceId/ai";
@@ -221,6 +228,7 @@ function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
       />
       <NavItem to="/w/$workspaceId/post" params={params} icon="mail" label={t`Post`} />
       <NavItem to="/w/$workspaceId/personen" params={params} icon="people" label={t`Personen`} />
+      <NavItem to="/w/$workspaceId/leden" params={params} icon="personAdd" label={t`Leden`} />
       <NavItem to="/w/$workspaceId/labels" params={params} icon="tag" label={t`Labels`} />
       {workspace.role === "viewer" ? null : (
         <NavItem
@@ -231,6 +239,14 @@ function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
         />
       )}
       <NavItem to="/w/$workspaceId/ai" params={params} icon="lightbulb" label={t`AI`} />
+      {workspace.role === "admin" ? (
+        <NavItem
+          to="/w/$workspaceId/instellingen"
+          params={params}
+          icon="settings"
+          label={t`Instellingen`}
+        />
+      ) : null}
       <hr className="nav-divider" />
     </>
   );
@@ -296,7 +312,7 @@ function AccountMenu({
   me,
   onLogout,
 }: {
-  me: { name: string; email: string } | null | undefined;
+  me: { name: string; email: string; is_server_admin?: boolean } | null | undefined;
   onLogout: () => void;
 }) {
   return (
@@ -320,6 +336,20 @@ function AccountMenu({
                 <span className="account-email">{me.email}</span>
               </div>
             </div>
+          ) : null}
+          <Link to="/account/sessies" className="menu-item">
+            <Icon name="grid" />
+            {t`Waar je bent ingelogd`}
+          </Link>
+          <Link to="/account/wachtwoord" className="menu-item">
+            <Icon name="edit" />
+            {t`Wachtwoord wijzigen`}
+          </Link>
+          {me?.is_server_admin ? (
+            <Link to="/server/logboek" className="menu-item">
+              <Icon name="document" />
+              {t`Serverlogboek`}
+            </Link>
           ) : null}
           <Button className="menu-item" onPress={onLogout}>
             <Icon name="signOut" />
@@ -404,6 +434,7 @@ export function Shell({ children, workspace }: { children: ReactNode; workspace?
         <main className="content">
           <div className="content-inner">
             <ErrorAlert error={logout.error} />
+            <NoticeBar />
             {children}
           </div>
         </main>

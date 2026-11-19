@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from apps.accounts.api import router as accounts_router
 from apps.accounts.auth import session_auth
+from apps.audit.api import router as audit_router
 from apps.common.errors import install_error_handlers
 from apps.common.schemas import HealthOut
 from apps.devices.api import router as devices_router
@@ -60,3 +61,4 @@ api.add_router("", rules_router)
 api.add_router("", tasks_router)
 api.add_router("", pipeline_router)
 api.add_router("", devices_router)
+api.add_router("", audit_router)

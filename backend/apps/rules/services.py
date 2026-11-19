@@ -10,6 +10,8 @@ from django.db.models import F, Max, Sum, Value, Window, prefetch_related_object
 from django.db.models.functions import Least, Left, Length
 from django.utils.translation import gettext as _
 
+from apps.audit.codes import AuditCode, TargetKind
+from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
 from apps.documents.models import Document
@@ -94,7 +96,22 @@ def _fill(rule: Rule, workspace: Workspace, data: RuleIn) -> None:
     rule.definition = definition.to_json(data.match, conditions, actions)
 
 
-def create_rule(*, workspace: Workspace, data: RuleIn) -> Rule:
+def _record(code: AuditCode, workspace: Workspace, actor: AuditActor, rule_id: UUID) -> None:
+    """A rule's name can hold a label name, so its row carries the id only."""
+    record(
+        code,
+        actor=actor,
+        target=AuditTarget(TargetKind.RULE, rule_id),
+        workspace_id=workspace.id,
+    )
+
+
+def _content(rule: Rule) -> tuple[object, ...]:
+    """What an update can change, to see whether it changed anything."""
+    return (rule.name, rule.active, rule.mode, rule.stop, rule.definition)
+
+
+def create_rule(*, workspace: Workspace, data: RuleIn, actor: AuditActor) -> Rule:
     """Append a rule after the workspace's rules."""
     with transaction.atomic():
         # Two creates at once would both take the same position; the second waits here.
@@ -106,21 +123,27 @@ def create_rule(*, workspace: Workspace, data: RuleIn) -> Rule:
         rule = Rule(workspace=workspace, position=(last or 0) + 1)
         _fill(rule, workspace, data)
         rule.save()
+        _record(AuditCode.RULE_CREATED, workspace, actor, rule.id)
         return _rules(workspace).get(id=rule.id)
 
 
-def update_rule(*, workspace: Workspace, rule_id: UUID, data: RuleIn) -> Rule:
+def update_rule(*, workspace: Workspace, rule_id: UUID, data: RuleIn, actor: AuditActor) -> Rule:
     with transaction.atomic():
         rule = _get_for_update(workspace, rule_id)
+        before = _content(rule)
         _fill(rule, workspace, data)
-        rule.save()
+        if _content(rule) != before:
+            rule.save()
+            _record(AuditCode.RULE_CHANGED, workspace, actor, rule.id)
         return _rules(workspace).get(id=rule.id)
 
 
-def delete_rule(*, workspace: Workspace, rule_id: UUID) -> None:
+def delete_rule(*, workspace: Workspace, rule_id: UUID, actor: AuditActor) -> None:
     """Its runs go with it; history events keep the rule's name."""
     with transaction.atomic():
-        _get_for_update(workspace, rule_id).delete()
+        rule = _get_for_update(workspace, rule_id)
+        rule.delete()
+        _record(AuditCode.RULE_DELETED, workspace, actor, rule_id)
 
 
 def reorder_rules(*, workspace: Workspace, rule_ids: list[UUID]) -> list[Rule]:
@@ -190,7 +213,7 @@ def _within_text_budget(documents: "models.QuerySet[Document]") -> list[Document
     return result
 
 
-def run_rule(*, workspace: Workspace, rule_id: UUID) -> None:
+def run_rule(*, workspace: Workspace, rule_id: UUID, actor: AuditActor) -> None:
     """Queue applying the rule to the workspace's existing documents."""
     with transaction.atomic():
         rule = Rule.objects.filter(workspace=workspace, id=rule_id).first()
@@ -200,3 +223,4 @@ def run_rule(*, workspace: Workspace, rule_id: UUID) -> None:
             raise ApiError(409, "rule_inactive", _("Deze regel staat uit. Zet hem eerst aan."))
         # A second click while the first run waits is the same ask.
         jobs.defer_rule_run(workspace.id, rule.id)
+        _record(AuditCode.RULE_RUN, workspace, actor, rule.id)

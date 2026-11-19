@@ -64,6 +64,10 @@ services:
       BRIEVIE_MASTER_KEY: ${BRIEVIE_MASTER_KEY:?set BRIEVIE_MASTER_KEY in deploy/.env (sh deploy/init-env.sh adds it)}
       # Requests arrive through Caddy, which sets X-Forwarded-For.
       BRIEVIE_PROXY_COUNT: "1"
+      # How long a web session may sit idle and how long it lives at most; the worker
+      # applies the same limits when it cleans up. The idle limit may not exceed the other.
+      BRIEVIE_SESSION_IDLE_DAYS: ${BRIEVIE_SESSION_IDLE_DAYS:-14}
+      BRIEVIE_SESSION_MAX_DAYS: ${BRIEVIE_SESSION_MAX_DAYS:-90}
     healthcheck:
       # The Host header must be an allowed host, so the first ALLOWED_HOSTS entry is used.
       test:
@@ -84,8 +88,9 @@ services:
       - documents:/data/documents
     # No published port: only Caddy is reachable from outside.
 
-  # Background jobs: same image as api, serves the queue in PostgreSQL. It reads
-  # and writes text in the database only; the document files stay with the api.
+  # Background jobs: same image as api, serves the queue in PostgreSQL. Letters are
+  # processed from text in the database; only the member export reads the sealed page
+  # files and writes its sealed ZIP, which is why the documents volume is mounted.
   worker:
     image: ${BRIEVIE_IMAGE:-brievie/backend:local}
     pull_policy: never
@@ -97,10 +102,19 @@ services:
       DATABASE_URL: postgres://brievie_app:${BRIEVIE_APP_PASSWORD}@postgres:5432/brievie
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in deploy/.env}
       BRIEVIE_MASTER_KEY: ${BRIEVIE_MASTER_KEY:?set BRIEVIE_MASTER_KEY in deploy/.env (sh deploy/init-env.sh adds it)}
+      # Audit rows older than this many days are removed at night (at least 90).
+      BRIEVIE_AUDIT_RETENTION_DAYS: ${BRIEVIE_AUDIT_RETENTION_DAYS:-365}
+      # Sessions past these limits are removed every hour (the same values as the api's).
+      BRIEVIE_SESSION_IDLE_DAYS: ${BRIEVIE_SESSION_IDLE_DAYS:-14}
+      BRIEVIE_SESSION_MAX_DAYS: ${BRIEVIE_SESSION_MAX_DAYS:-90}
     command:
       - sh
       - -c
       - python manage.py check_master_key && exec python manage.py procrastinate worker --queues pipeline
+    volumes:
+      # Encrypted document files (BRIEVIE_STORAGE_ROOT): the member export reads the pages
+      # and writes its file under exports/, which the api serves for the download.
+      - documents:/data/documents
     # No published port.
 
   # Back-ups: same image, serves only the `backup` queue. It reads the database as the

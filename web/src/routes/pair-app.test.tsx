@@ -40,8 +40,7 @@ describe("pair the app", () => {
 
     expect(await screen.findByRole("img", { name: /qr-code/i })).toBeInTheDocument();
     expect(qrValues.at(-1)).toBe(QR_PAYLOAD);
-    expect(screen.getByRole("heading", { level: 1, name: "App koppelen" })).toBeInTheDocument();
-    expect(screen.getByText("Apparaten", { selector: ".eyebrow" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Apparaten" })).toBeInTheDocument();
     expect(screen.getByText("ABCD-EFGH")).toBeInTheDocument();
     expect(screen.getByText("https://192.168.1.20:443")).toBeInTheDocument();
     expect(screen.getByText("Eigen CA, vingerafdruk zit in de code")).toBeInTheDocument();

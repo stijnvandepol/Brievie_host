@@ -7,6 +7,7 @@ from ninja import Router
 
 from apps.accounts.services import current_user
 from apps.common.errors import ApiError
+from apps.common.net import valid_client_ip
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.common.throttling import CallerThrottle
 from apps.pipeline import settings_service
@@ -20,7 +21,6 @@ from apps.pipeline.schemas import (
 from apps.pipeline.settings_service import (
     Actor,
     AiSettingsError,
-    AiStatus,
     ConsentRequiredError,
 )
 from apps.workspaces.deps import workspace_member
@@ -48,7 +48,7 @@ def get_ai_status(request: HttpRequest, workspace_id: UUID) -> AiStatusOut:
     membership = workspace_member(request, workspace_id)
     status = settings_service.status(workspace_id)
     # The model is for the form of an administrator only.
-    return _status_out(status, with_model=membership.has_role(Membership.Role.ADMIN))
+    return AiStatusOut.from_status(status, with_model=membership.has_role(Membership.Role.ADMIN))
 
 
 @router.get(
@@ -138,7 +138,9 @@ def update_ai_settings(
             base_url=payload.base_url,
             model=payload.model,
             api_key=payload.api_key or None,
-            actor=Actor(user_id=current_user(request).id, label=API),
+            actor=Actor(
+                user_id=current_user(request).id, label=API, client_ip=valid_client_ip(request)
+            ),
             consent_address=payload.consent_address,
         )
     except ConsentRequiredError as exc:
@@ -149,18 +151,7 @@ def update_ai_settings(
         ) from exc
     except AiSettingsError as exc:
         raise _invalid(exc) from exc
-    return _status_out(settings_service.status(workspace_id), with_model=True)
-
-
-def _status_out(status: AiStatus, *, with_model: bool) -> AiStatusOut:
-    return AiStatusOut(
-        mode=status.mode,
-        supplier=status.supplier,
-        host=status.host,
-        since=status.since,
-        has_api_key=status.has_api_key,
-        model=status.model if with_model else None,
-    )
+    return AiStatusOut.from_status(settings_service.status(workspace_id), with_model=True)
 
 
 def _invalid(error: AiSettingsError) -> ApiError:

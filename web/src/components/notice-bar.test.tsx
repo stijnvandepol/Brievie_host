@@ -1,0 +1,87 @@
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it } from "vitest";
+import {
+  API,
+  HttpResponse,
+  http,
+  loggedInHandlers,
+  renderApp,
+  server,
+  workspace,
+} from "../test-utils";
+
+const notice = {
+  id: "f1111111-1111-4111-8111-111111111111",
+  code: "password_reset_by_admin",
+  message: "Je wachtwoord is op 3 mei opnieuw ingesteld door Anne.",
+  created_at: "2026-05-03T10:00:00Z",
+  can_dismiss: true,
+};
+
+describe("notices", () => {
+  it("shows until it is marked seen", async () => {
+    let list = [notice];
+    let body: unknown = null;
+    server.use(
+      http.get(`*${API}/me/notices`, () => HttpResponse.json(list)),
+      http.post(`*${API}/me/notices/seen`, async ({ request }) => {
+        body = await request.json();
+        list = [];
+        return new HttpResponse(null, { status: 204 });
+      }),
+      ...loggedInHandlers(),
+    );
+    const u = userEvent.setup();
+    renderApp("/koppel-app");
+    expect(
+      await screen.findByText("Je wachtwoord is op 3 mei opnieuw ingesteld door Anne."),
+    ).toBeInTheDocument();
+    await u.click(screen.getByRole("button", { name: "Gezien" }));
+    await waitFor(() =>
+      expect(screen.queryByText(/opnieuw ingesteld door Anne/)).not.toBeInTheDocument(),
+    );
+    expect(body).toEqual({ notice_ids: [notice.id] });
+  });
+
+  it("a notice that cannot be dismissed has no Gezien button", async () => {
+    server.use(
+      http.get(`*${API}/me/notices`, () => HttpResponse.json([{ ...notice, can_dismiss: false }])),
+      ...loggedInHandlers(),
+    );
+    renderApp("/koppel-app");
+    expect(await screen.findByText(/opnieuw ingesteld door Anne/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Gezien" })).not.toBeInTheDocument();
+  });
+
+  it("shows one bar per notice, on every page of the app", async () => {
+    server.use(
+      http.get(`*${API}/me/notices`, () =>
+        HttpResponse.json([
+          notice,
+          {
+            ...notice,
+            id: "f2222222-2222-4222-8222-222222222222",
+            message: "Een apparaat is ingetrokken.",
+          },
+        ]),
+      ),
+      ...loggedInHandlers(),
+      http.get(`*${API}/workspaces/${workspace.id}/members`, () => HttpResponse.json([])),
+      http.get(`*${API}/workspaces/${workspace.id}/invitations`, () => HttpResponse.json([])),
+    );
+    renderApp(`/w/${workspace.id}/leden`);
+    expect(await screen.findByText("Een apparaat is ingetrokken.")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Gezien" })).toHaveLength(2);
+  });
+
+  it("stays quiet when the notices cannot be read", async () => {
+    server.use(
+      http.get(`*${API}/me/notices`, () => HttpResponse.error()),
+      ...loggedInHandlers(),
+    );
+    renderApp("/koppel-app");
+    await screen.findByRole("heading", { level: 1, name: "Apparaten" });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});

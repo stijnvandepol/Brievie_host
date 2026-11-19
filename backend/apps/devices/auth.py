@@ -18,7 +18,9 @@ class DeviceTokenAuth(HttpBearer):
     """
 
     def authenticate(self, request: HttpRequest, token: str) -> User | None:
-        device = services.device_for_token(token)
+        device = services.device_for_token(
+            token, app_version=request.headers.get(services.APP_VERSION_HEADER, "")
+        )
         if device is None:
             raise ApiError(401, "not_authenticated", _("Je bent niet ingelogd."))
         request.user = device.user

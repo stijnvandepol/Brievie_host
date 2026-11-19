@@ -1,5 +1,6 @@
 """A throwaway API, mounted only by tests/test_common_errors.py, that fails on purpose."""
 
+from django.contrib.sessions.exceptions import SessionInterrupted
 from django.core.exceptions import (
     BadRequest,
     PermissionDenied,
@@ -69,6 +70,11 @@ def crash(request: HttpRequest, payload: SecretIn) -> None:
 @errors_api.get("/suspicious", auth=None)
 def suspicious(request: HttpRequest) -> None:
     raise SuspiciousOperation("Invalid HTTP_HOST header")
+
+
+@errors_api.get("/session-interrupted", auth=None)
+def session_interrupted(request: HttpRequest) -> None:
+    raise SessionInterrupted("The session was deleted before the request completed.")
 
 
 @errors_api.get("/bad-request", auth=None)

@@ -189,3 +189,80 @@ export const rulesQuery = (workspaceId: string) =>
       return data;
     },
   });
+
+/** The invitations of a workspace that are still open or just ran out (admins only). The
+ * link itself is never part of it: it is shown once, when it is made. */
+export const invitationsQuery = (workspaceId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "invitations"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/invitations", {
+        params: { path: { workspace_id: workspaceId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
+/** The web sessions of the logged-in user ("Waar je bent ingelogd"). */
+export const mySessionsQuery = queryOptions({
+  queryKey: ["me", "sessions"],
+  queryFn: async () => {
+    const { data, error } = await api.GET("/api/v1/me/sessions");
+    if (error !== undefined || !data) throw new ApiFailure(error);
+    return data;
+  },
+});
+
+/** The devices of another account, for an admin who may manage it. */
+export const userDevicesQuery = (userId: string) =>
+  queryOptions({
+    queryKey: ["users", userId, "devices"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/users/{user_id}/devices", {
+        params: { path: { user_id: userId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
+/** What the server has to tell the logged-in user, not seen yet (a reset by an admin, a revoked device). */
+export const noticesQuery = queryOptions({
+  queryKey: ["me", "notices"],
+  queryFn: async () => {
+    const { data, error } = await api.GET("/api/v1/me/notices");
+    if (error !== undefined || !data) throw new ApiFailure(error);
+    return data;
+  },
+});
+
+/** The settings of a workspace that admins can switch. */
+export const workspaceSettingsQuery = (workspaceId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "settings"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/settings", {
+        params: { path: { workspace_id: workspaceId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
+/** How often the page asks again while an export is being built. */
+export const EXPORT_POLL_MS = 3000;
+
+/** The caller's own export of their post: none, being built, ready or failed. */
+export const myExportQuery = (workspaceId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "my-export"],
+    refetchInterval: (query) => (query.state.data?.status === "pending" ? EXPORT_POLL_MS : false),
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/my-export", {
+        params: { path: { workspace_id: workspaceId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });

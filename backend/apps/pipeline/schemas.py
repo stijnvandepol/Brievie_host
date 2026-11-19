@@ -1,9 +1,13 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from ninja import Schema
 from pydantic import Field
 
 from apps.common.schemas import InputSchema
+
+if TYPE_CHECKING:
+    from apps.pipeline.settings_service import AiStatus
 
 
 class AiStatusOut(Schema):
@@ -20,6 +24,18 @@ class AiStatusOut(Schema):
     has_api_key: bool = False
     # The model in use, for an administrator only, so a form can keep it.
     model: str | None = None
+
+    @classmethod
+    def from_status(cls, status: "AiStatus", *, with_model: bool) -> "AiStatusOut":
+        """What every member sees; `with_model` only for an administrator's form."""
+        return cls(
+            mode=status.mode,
+            supplier=status.supplier,
+            host=status.host,
+            since=status.since,
+            has_api_key=status.has_api_key,
+            model=status.model if with_model else None,
+        )
 
 
 class AiSupplierOut(Schema):
