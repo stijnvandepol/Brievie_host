@@ -72,10 +72,14 @@ jobs:
       - name: OpenAPI contract is up to date
         run: uv run python manage.py export_openapi --check
       - run: uv run pytest
+      # Every package of uv.lock (runtime and dev), by exact version and hash, against
+      # the PyPI/OSV advisories; fails on any known vulnerability. --disable-pip: the
+      # locked, hashed list is audited as it is, nothing is resolved or installed.
+      # (uv 0.13.8 has `uv audit`, but marks it experimental.)
       - name: Audit dependencies
         run: |
-          uv export --frozen --no-hashes --no-emit-project > "$RUNNER_TEMP/requirements.txt"
-          uvx pip-audit --strict --requirement "$RUNNER_TEMP/requirements.txt"
+          uv export --frozen --no-emit-project > "$RUNNER_TEMP/requirements.txt"
+          uvx pip-audit@2.10.1 --strict --disable-pip --requirement "$RUNNER_TEMP/requirements.txt"
 
   web:
     runs-on: ubuntu-latest

@@ -1023,3 +1023,4 @@ third-party action is pinned to a full commit SHA, the version in a trailing com
 Dependabot (github-actions) proposes the updates.
 
 - **CodeQL** (`github/codeql-action` v4.39.3, `.github/workflows/codeql.yml`): static analysis of Python, TypeScript and the workflows with the `security-extended` suite, on pushes and pull requests to `main` and weekly. Results go to the repository's code scanning alerts. Dropped: Semgrep (a second rule set to maintain), GitHub's default setup (configured in the repository settings, so not reviewable in a pull request).
+- **pip-audit** pinned to 2.10.1 (it ran unpinned through `uvx` before) and fed the hashed `uv export` with `--disable-pip`: the lock is audited as it is, without a resolver run. Dropped for now: `uv audit` (present in the pinned uv 0.13.8, gives the same result on this lock, but uv marks it experimental and "may change without warning"); revisit when it is stable.
