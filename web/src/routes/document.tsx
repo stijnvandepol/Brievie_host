@@ -123,7 +123,7 @@ function DocumentView({
             <div>
               <dt>{t`Status`}</dt>
               <dd>
-                <StatusBadge status={document.status} />
+                <StatusBadge status={document.status} inboxState={document.inbox_state} />
               </dd>
             </div>
             <div>
