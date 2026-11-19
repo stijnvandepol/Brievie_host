@@ -102,6 +102,12 @@ Keep one copy off the machine, and one out of the house. A disk next to the serv
 protects you against a broken disk, not against a fire or a burglar. A second disk
 that you swap and take elsewhere, or a remote destination, covers that.
 
+Brievie's back-up is **not enough on its own**. Also make a copy that Brievie does not
+make: a snapshot or copy of the whole machine or NAS volume (with the system's own tool),
+and keep the printed recovery sheet somewhere else than that machine and that disk. Then
+try a restore at least once a year, on a spare machine or after a clean install (section
+7), so you know it works before you need it.
+
 ## 5. First set-up
 
 `./brievie backup --init`
