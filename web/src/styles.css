@@ -1613,6 +1613,14 @@ input[type="checkbox"]:checked:disabled {
   color: var(--neutral-fg3);
 }
 
+/* What a letter on "Te doen" needs: its badge, then the picker or a hint. */
+.cell-todo {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-s);
+}
+
 /* Letters on a phone: a card per letter instead of a seven-column table. */
 
 .letter-cards {
@@ -1777,81 +1785,6 @@ input[type="checkbox"]:checked:disabled {
 .inline-select {
   max-width: 200px;
   margin-left: var(--s-xs);
-}
-
-/* Tabs: an underline marks the selected one. */
-
-.tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-xs);
-  margin-bottom: var(--s-m);
-  border-bottom: 1px solid var(--neutral-stroke2);
-}
-
-.tab {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-s);
-  min-height: 40px;
-  padding: 0 var(--s-m);
-  color: var(--neutral-fg2);
-  cursor: pointer;
-  outline: none;
-}
-
-.tab[data-hovered] {
-  color: var(--neutral-fg1);
-}
-
-.tab[data-hovered]::after {
-  content: "";
-  position: absolute;
-  left: var(--s-m);
-  right: var(--s-m);
-  bottom: -1px;
-  height: 3px;
-  border-radius: var(--radius-circular);
-  background: var(--neutral-stroke1-hover);
-}
-
-.tab[data-selected] {
-  color: var(--neutral-fg1);
-  font-weight: var(--weight-semibold);
-}
-
-.tab[data-selected]::after {
-  content: "";
-  position: absolute;
-  left: var(--s-m);
-  right: var(--s-m);
-  bottom: -1px;
-  height: 3px;
-  border-radius: var(--radius-circular);
-  background: var(--brand-bg);
-}
-
-.tab-count {
-  min-width: 20px;
-  height: 20px;
-  padding: 0 var(--s-sn);
-  border-radius: var(--radius-circular);
-  background: var(--neutral-bg5);
-  color: var(--neutral-fg2);
-  font-size: var(--caption-size);
-  line-height: 20px;
-  font-weight: var(--weight-semibold);
-  text-align: center;
-}
-
-.tab[data-selected] .tab-count {
-  background: var(--brand-bg2);
-  color: var(--brand-bg-selected);
-}
-
-.tab-panel {
-  outline: none;
 }
 
 /* Pickers (Select with a list box) */
@@ -2676,6 +2609,100 @@ input[type="checkbox"]:checked:disabled {
 
 .apply-offer h2 {
   font-size: var(--subtitle-size);
+}
+
+/* Explanations in the builder, and a part an example leaves for the user. */
+
+.builder-hint,
+.rule-hint {
+  margin: 0;
+  color: var(--neutral-fg3);
+  font-size: var(--caption-size);
+  line-height: var(--caption-line);
+}
+
+.builder-hint {
+  max-width: 72ch;
+}
+
+.rule-hint {
+  flex-basis: 100%;
+}
+
+.rule-row-fill {
+  border-color: var(--warning-stroke);
+  background: var(--warning-bg);
+}
+
+.template-intro h2,
+.rule-explainer h2,
+.template-gallery h2 {
+  font-size: var(--subtitle-size);
+}
+
+/* Zo werkt een regel: three short lines, the word in front. */
+
+.rule-explainer dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--s-xs) var(--s-m);
+  margin: 0;
+}
+
+.rule-explainer dt {
+  font-weight: var(--weight-semibold);
+}
+
+.rule-explainer dd {
+  margin: 0;
+  color: var(--neutral-fg2);
+}
+
+/* Begin met een voorbeeld */
+
+.template-gallery {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-s);
+}
+
+.template-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: var(--s-m);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.template-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-s);
+  padding: var(--s-l);
+  border-radius: var(--radius-medium);
+  background: var(--neutral-bg1);
+  box-shadow: var(--shadow4);
+}
+
+.template-card p {
+  flex: 1;
+  margin: 0;
+  color: var(--neutral-fg2);
+}
+
+.template-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-s);
+}
+
+.template-head h3 {
+  margin: 0;
+  font-size: var(--body-size);
+  line-height: var(--body-line);
 }
 
 /* ------------------------------------------------------------------ */

@@ -174,6 +174,10 @@ write_marker() {
 		if [ -z "$data_present" ] || [ -n "$empty_install" ]; then
 			printf 'fresh=yes\n'
 		fi
+		# The master key changes: a sheet from before is void, also for a resumed restore.
+		if [ -n "$sheet_void" ]; then
+			printf 'sheet=void\n'
+		fi
 		printf 'time=%s\n' "$(date '+%d-%m-%Y %H:%M')"
 	} >"${here:?}/deploy/.restore-in-progress.new.$$" &&
 		chmod 600 "${here:?}/deploy/.restore-in-progress.new.$$" &&
@@ -468,6 +472,24 @@ setup_installation() {
 	export BRIEVIE_IMAGE
 	# Only the restore steps mount the back-up read-only; nothing else follows the shell.
 	unset BRIEVIE_BACKUP_MOUNT_MODE
+	# Caddy reads these files only when it starts, and compose does not look inside them:
+	# their fingerprint is a label of the caddy service, so every `up` recreates caddy
+	# exactly when one of them changed (deploy/docker-compose.yml).
+	if [ ! -r "$here/deploy/Caddyfile" ] || [ ! -r "$here/deploy/caddy-publish-root.sh" ]; then
+		fail "De instellingen van Caddy (deploy/Caddyfile, deploy/caddy-publish-root.sh) zijn niet te lezen. Controleer of de map van Brievie compleet is; er is niets veranderd."
+	fi
+	caddy_config=$(cat "$here/deploy/Caddyfile" "$here/deploy/caddy-publish-root.sh" | cksum)
+	BRIEVIE_CADDY_CONFIG=$(printf '%s' "$caddy_config" | tr -s ' \t' '--')
+	export BRIEVIE_CADDY_CONFIG
+}
+
+# Whether host name $1 only reaches this computer: localhost, *.localhost or a loopback
+# address. A phone can never reach the server by such a name.
+loopback_host() {
+	case $(printf '%s' "$1" | tr '[:upper:]' '[:lower:]') in
+	localhost | localhost. | *.localhost | *.localhost. | 127.* | ::1 | \[::1\]) return 0 ;;
+	esac
+	return 1
 }
 
 # The settings compose reads: deploy/.env, or (set for one call) another file.
@@ -731,7 +753,13 @@ cmd_start() {
 	443) ;;
 	*) address="$address:$https_port" ;;
 	esac
-	echo "Brievie draait op $address."
+	if loopback_host "${host:-localhost}"; then
+		# Not a reason to stop (a developer may want it), but a phone can never pair.
+		echo "Brievie draait op $address, alleen in een browser op deze computer."
+		echo "Let op: met BRIEVIE_HOSTNAME=${host:-localhost} kan een iPhone deze server niet bereiken; zet in deploy/.env de naam of het IP-adres waarmee je telefoon deze computer in je thuisnetwerk vindt (zoals mijnmac.local of 192.168.1.20) en typ opnieuw ./brievie start."
+	else
+		echo "Brievie draait op $address."
+	fi
 	if [ -n "$(env_value BRIEVIE_BACKUP_DIR)$(env_value BRIEVIE_BACKUP_REPOSITORY)" ]; then
 		echo "Back-up: ingesteld in deploy/.env. Typ ./brievie status om te zien hoe het gaat."
 	else
@@ -1245,7 +1273,7 @@ confirm_replace() {
 
 cmd_restore() {
 	run="" replace="" skip_safety="" separate="" keep_hostname=""
-	safety_run_id="" empty_install="" resuming=""
+	safety_run_id="" empty_install="" resuming="" sheet_void="" sheet_removed=""
 	for arg in "$@"; do
 		case $arg in
 		--replace) replace=yes ;;
@@ -1271,6 +1299,9 @@ cmd_restore() {
 			replace=yes
 			skip_safety=yes
 			safety_run_id=$(marker_value safety)
+			if [ "$(marker_value sheet)" = void ]; then
+				sheet_void=yes
+			fi
 		else
 			report_halfway
 			exit 1
@@ -1344,6 +1375,8 @@ cmd_restore() {
 	esac
 
 	master_key=${BRIEVIE_RESTORE_MASTER_KEY:-}
+	# Only used when nothing in the back-up can prove the key (see below).
+	master_key_again=${BRIEVIE_RESTORE_MASTER_KEY_AGAIN:-}
 	if [ -z "$master_key" ]; then
 		ask_secret "Typ je hoofdsleutel van het herstelblad (je ziet niet wat je typt):"
 		master_key=$answer
@@ -1362,6 +1395,7 @@ cmd_restore() {
 	# From here on compose reads every secret and the destination from deploy/.env (or
 	# from from_source): a value in this environment, even an empty one, would win.
 	unset BRIEVIE_RESTORE_MASTER_KEY BRIEVIE_RESTORE_BACKUP_PASSWORD BRIEVIE_MASTER_KEY \
+		BRIEVIE_RESTORE_MASTER_KEY_AGAIN \
 		BRIEVIE_BACKUP_PASSWORD BRIEVIE_BACKUP_DIR BRIEVIE_BACKUP_REPOSITORY \
 		BRIEVIE_BACKUP_S3_ACCESS_KEY_ID BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY \
 		BRIEVIE_BACKUP_REST_USERNAME BRIEVIE_BACKUP_REST_PASSWORD
@@ -1408,7 +1442,32 @@ cmd_restore() {
 			fetch_backup "$@"
 		fi
 	fi
-	master_key="" backup_password=""
+	# Nothing in the back-up can prove the key (a separate password and no workspaces):
+	# a typo would become this server's master key. It is taken only when it is typed a
+	# second time alike (a terminal, or BRIEVIE_RESTORE_MASTER_KEY_AGAIN; piped input
+	# never confirms).
+	if [ "$status" -eq 4 ]; then
+		again=$master_key_again
+		if [ -z "$again" ]; then
+			if [ ! -t 0 ]; then
+				fail "Er is geen terminal om de hoofdsleutel nog een keer te typen. Zet BRIEVIE_RESTORE_MASTER_KEY_AGAIN als je de sleutel echt hebt gecontroleerd. Er is niets veranderd." 2
+			fi
+			ask_secret "Typ je hoofdsleutel van het herstelblad nog een keer, ter controle (je ziet niet wat je typt):"
+			again=$answer
+			answer=""
+		fi
+		again=$(printf '%s' "$again" | tr -d ' \t\r\n-' | tr '[:upper:]' '[:lower:]')
+		if [ "$again" != "$master_key" ]; then
+			again=""
+			fail "De twee hoofdsleutels zijn niet gelijk. Er is niets veranderd. Controleer je herstelblad en typ opnieuw ./brievie restore." 2
+		fi
+		again=""
+		rm -rf "${here:?}/deploy/.restore"
+		mkdir -p "${here:?}/deploy/.restore" ||
+			fail "De map deploy/.restore kon niet worden gemaakt. Controleer de rechten van de map deploy; er is niets veranderd."
+		fetch_backup "$@" --accept-unverified-key
+	fi
+	master_key="" backup_password="" master_key_again=""
 	if [ "$status" -ne 0 ]; then
 		case $status in
 		2) fail "De hoofdsleutel past niet bij deze back-up, of het aparte back-upwachtwoord klopt niet. Controleer je herstelblad en typ opnieuw ./brievie restore." 2 ;;
@@ -1512,6 +1571,16 @@ EOF
 		fail "Er is niets teruggezet. Typ ./brievie restore zonder nummer om de nieuwste back-up te nemen, of geef een ander nummer."
 	fi
 
+	# A sheet made from the settings here now (the first start on a new machine writes one)
+	# holds a key that opens nothing once the restored key is in place. Compared in this
+	# shell only; neither value is in any argument.
+	old_key=$(unquote "$(env_value BRIEVIE_MASTER_KEY)" | tr '[:upper:]' '[:lower:]')
+	new_key=$(unquote "$(env_value BRIEVIE_MASTER_KEY "$restore_env")" | tr '[:upper:]' '[:lower:]')
+	if [ -n "$old_key" ] && [ "$old_key" != "$new_key" ]; then
+		sheet_void=yes
+	fi
+	old_key="" new_key=""
+
 	# From here on things are replaced: the marker says how far it got.
 	write_marker "de instellingen" ||
 		fail "De voortgang van het herstel kon niet worden vastgelegd; er is niets teruggezet. Controleer de rechten van de map deploy."
@@ -1532,6 +1601,16 @@ EOF
 	restore_pending=""
 	if [ -n "$data_present" ]; then
 		echo "Je oude instellingen staan in deploy/.env.before-restore-$stamp."
+	fi
+	# The sheet here was made from the settings that were just moved aside. Only now,
+	# once the restored ones are in place: a swap that fails puts the old settings back
+	# next to their own sheet. rm removes a link, never what it points to.
+	if [ -e "${here:?}/brievie-herstelblad.html" ] || [ -L "${here:?}/brievie-herstelblad.html" ]; then
+		if rm -f "${here:?}/brievie-herstelblad.html"; then
+			sheet_removed=yes
+		else
+			sheet_removed=failed
+		fi
 	fi
 	# Nothing may write while the data comes back: stop whatever runs.
 	compose stop api worker caddy keeper || step_failed $? "Brievie kon niet worden gestopt."
@@ -1602,6 +1681,13 @@ EOF
 	rm -rf "${here:?}/deploy/.restore"
 	if [ -n "$hostname_changed" ]; then
 		echo "De servernaam is veranderd. Maak een nieuw herstelblad met ./brievie recovery-sheet en koppel je telefoons opnieuw."
+	fi
+	if [ "$sheet_removed" = failed ]; then
+		echo "Verwijder brievie-herstelblad.html zelf: het hoort bij de instellingen van vóór het herstel. Typ daarna ./brievie recovery-sheet voor een nieuw herstelblad."
+	elif [ -n "$sheet_void" ]; then
+		echo "Een herstelblad dat op deze computer vóór het herstel is gemaakt of afgedrukt, geldt niet meer: de hoofdsleutel is nu die van het herstelblad waarmee je hebt hersteld. Typ ./brievie recovery-sheet voor een herstelblad van deze server."
+	elif [ -n "$sheet_removed" ]; then
+		echo "Het herstelblad dat hier stond, hoorde bij de instellingen van vóór het herstel en is weggehaald. Typ ./brievie recovery-sheet voor een nieuw herstelblad."
 	fi
 	if [ -n "$safety_run_id" ]; then
 		echo "De veiligheidsback-up $safety_run_id van je oude gegevens wordt 30 dagen bewaard."

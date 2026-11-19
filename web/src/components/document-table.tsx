@@ -49,9 +49,9 @@ export function typeLabel(type: string): string {
 export function statusLabel(status: string): string {
   switch (status) {
     case "processing":
-      return t`Wordt verwerkt`;
+      return t`Bezig…`;
     case "needs_review":
-      return t`Te controleren`;
+      return t`Controleren`;
     case "done":
       return t`Klaar`;
     case "failed":
@@ -76,8 +76,12 @@ function statusIntent(status: string): Intent | "brand" | undefined {
   }
 }
 
-/** The status of a letter as a badge: its word, a tint and an icon. */
-export function StatusBadge({ status }: { status: string }) {
+/** The status of a letter as a badge: its word, a tint and an icon. A read letter that still
+ * waits for a name says so, in the word "Te doen" uses; "Klaar" only when nothing waits. */
+export function StatusBadge({ status, inboxState }: { status: string; inboxState?: string }) {
+  if (status === "done" && inboxState === "unassigned") {
+    return <Badge intent="warning">{t`Naam kiezen`}</Badge>;
+  }
   return <Badge intent={statusIntent(status)}>{statusLabel(status)}</Badge>;
 }
 
@@ -140,7 +144,7 @@ export function DocumentTable({
   const phone = useMediaQuery(PHONE);
   if (documents.length === 0) {
     return (
-      <section className="panel" aria-label={t`Post`}>
+      <section className="panel" aria-label={t`Alle post`}>
         <EmptyState icon="mail" hint={hint}>
           {empty}
         </EmptyState>
@@ -149,7 +153,7 @@ export function DocumentTable({
   }
   if (phone) {
     return (
-      <section className="panel" aria-label={t`Post`}>
+      <section className="panel" aria-label={t`Alle post`}>
         <ul className="letter-cards">
           {documents.map((document) => (
             <li key={document.id} className="letter-card">
@@ -161,7 +165,7 @@ export function DocumentTable({
                 >
                   {document.sender || t`Onbekende afzender`}
                 </Link>
-                <StatusBadge status={document.status} />
+                <StatusBadge status={document.status} inboxState={document.inbox_state} />
               </div>
               <p className="letter-card-meta">
                 <span>{typeLabel(document.document_type)}</span>
@@ -183,7 +187,7 @@ export function DocumentTable({
   }
   return (
     // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrolling box must be reachable by keyboard (WCAG 2.1.1).
-    <section className="panel table-scroll" aria-label={t`Post`} tabIndex={0}>
+    <section className="panel table-scroll" aria-label={t`Alle post`} tabIndex={0}>
       <table className="table table-wide">
         <thead>
           <tr>
@@ -219,7 +223,7 @@ export function DocumentTable({
               </td>
               <td>
                 <span className="cell-badges">
-                  <StatusBadge status={document.status} />
+                  <StatusBadge status={document.status} inboxState={document.inbox_state} />
                   <SuggestionMark count={document.open_suggestion_count} />
                   <AutomaticBadge document={document} />
                 </span>

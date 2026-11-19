@@ -71,14 +71,64 @@ class Call(TypedDict, total=False):
     mount_mode_env: str
     source_env: list[str]
     wrapper_env: dict[str, str]
+    created: list[str]
+    recreated: list[str]
 
 
 # The fake: logs each call as a JSON line, answers from FAKE_* variables, and writes the
 # restored files of `restore_fetch` into the folder mounted at /out. It reads stdin only
 # for the calls that pipe something in (store_env_copy, psql), never the user's answers.
 FAKE_DOCKER = """#!{python}
-import json, os, signal, sys
+import json, os, re, signal, sys
 from pathlib import Path
+
+
+def compose_up(argv):
+    # What `compose up` creates or recreates, decided like compose: a service is
+    # recreated when its definition changed since the last `up`, its text in the compose
+    # file with the values of the variables it names (the environment wins over the
+    # env file). The content of a bind-mounted file is no part of it.
+    compose_file = Path(argv[argv.index("-f") + 1])
+    project_dir = Path(argv[argv.index("--project-directory") + 1])
+    if "--env-file" in argv:
+        env_file = Path(argv[argv.index("--env-file") + 1])
+    else:
+        env_file = project_dir / ".env"
+    dotenv = dict()
+    if env_file.exists():
+        for line in env_file.read_text().splitlines():
+            if "=" in line and not line.lstrip().startswith("#"):
+                key, value = line.split("=", 1)
+                dotenv[key.strip()] = value
+    blocks = dict()
+    inside, name = False, None
+    for line in compose_file.read_text().splitlines():
+        if line and not line.startswith(" "):
+            inside, name = line == "services:", None
+        elif inside and re.match(r"^  [a-z][a-z-]*:$", line):
+            name = line.strip()[:-1]
+            blocks[name] = []
+        elif inside and name:
+            blocks[name].append(line)
+    wanted = [a for a in argv[argv.index("up") + 1:] if not a.startswith("-")]
+    state_path = Path(os.environ["FAKE_DOCKER_LOG"] + ".services")
+    state = json.loads(state_path.read_text()) if state_path.exists() else dict()
+    created, recreated = [], []
+    for name, lines in blocks.items():
+        text = "\\n".join(lines)
+        if (wanted and name not in wanted) or "profiles:" in text:
+            continue
+        names = sorted(set(re.findall(r"\\$\\{{([A-Z0-9_]+)", text)))
+        values = [n + "=" + os.environ.get(n, dotenv.get(n, "")) for n in names]
+        definition = "\\n".join([text] + values)
+        if name not in state:
+            created.append(name)
+        elif state[name] != definition:
+            recreated.append(name)
+        state[name] = definition
+    state_path.write_text(json.dumps(state))
+    return created, recreated
+
 
 argv = sys.argv[1:]
 # The quieting pairs the wrapper adds are recorded apart, so argv stays comparable.
@@ -108,6 +158,8 @@ if argv[:1] == ["compose"]:
                     "BRIEVIE_BACKUP_REST_USERNAME", "BRIEVIE_BACKUP_REST_PASSWORD",
                     "BRIEVIE_BACKUP_REPOSITORY")
     entry["source_env"] = [name for name in source_names if os.environ.get(name)]
+    if "up" in argv:
+        entry["created"], entry["recreated"] = compose_up(argv)
 if "restore_fetch" in argv:
     names = ("BRIEVIE_MASTER_KEY", "BRIEVIE_BACKUP_PASSWORD", "BRIEVIE_BACKUP_DIR_SET",
              "BRIEVIE_BACKUP_REPOSITORY", "BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY", "SECRET_KEY")
@@ -133,6 +185,11 @@ wanted = os.environ.get("FAKE_FETCH_PASSWORD", "")
 if "restore_fetch" in argv and wanted and os.environ.get("BRIEVIE_BACKUP_PASSWORD", "") != wanted:
     sys.stderr.write("CommandError: Het wachtwoord van de back-up klopt niet.\\n")
     sys.exit(2)
+if ("restore_fetch" in argv and os.environ.get("FAKE_UNVERIFIED_KEY") == "1"
+        and "--accept-unverified-key" not in argv):
+    sys.stderr.write("CommandError: Deze back-up heeft een apart wachtwoord en nog geen "
+                     "werkruimtes, dus Brievie kan niet controleren of de hoofdsleutel klopt.\\n")
+    sys.exit(4)
 remove_at = os.environ.get("FAKE_REMOVE_AT", "")
 if remove_at and remove_at in joined:
     os.remove(os.environ["FAKE_REMOVE_PATH"])
@@ -670,6 +727,163 @@ def test_start_brings_everything_up_and_writes_the_sheet(install: Install) -> No
     assert install.index("up -d --build --wait") < install.index("recovery_sheet")
     assert (install.root / "brievie-herstelblad.html").exists()
     install.assert_no_secret_in_argv()
+
+
+def services_touched(install: Install) -> tuple[list[str], list[str]]:
+    """The services the logged `compose up` calls created and recreated, in order."""
+    created: list[str] = []
+    recreated: list[str] = []
+    for call in install.calls():
+        created += call.get("created", [])
+        recreated += call.get("recreated", [])
+    return created, recreated
+
+
+def test_a_first_start_creates_caddy_with_the_rest(installed: Install) -> None:
+    result = installed.run("start")
+
+    assert result.returncode == 0, result.stderr
+    created, recreated = services_touched(installed)
+    assert {"postgres", "migrate", "api", "worker", "keeper", "caddy"} <= set(created)
+    assert recreated == []
+
+
+def test_a_start_with_the_same_caddy_configuration_recreates_nothing(installed: Install) -> None:
+    assert installed.run("start").returncode == 0
+    installed.log.unlink()
+
+    result = installed.run("start")
+
+    assert result.returncode == 0, result.stderr
+    assert services_touched(installed) == ([], [])
+
+
+@pytest.mark.parametrize("name", ["Caddyfile", "caddy-publish-root.sh"])
+def test_a_changed_caddy_configuration_recreates_caddy_alone(installed: Install, name: str) -> None:
+    assert installed.run("start").returncode == 0
+    installed.log.unlink()
+    # What `git pull` does to a file Caddy reads only when it starts.
+    config = installed.root / "deploy" / name
+    config.write_text(config.read_text() + "# a newer version\n")
+
+    result = installed.run("start")
+
+    assert result.returncode == 0, result.stderr
+    assert services_touched(installed) == ([], ["caddy"])
+    # Applied by compose's own comparison: never a restart that runs on every start.
+    assert not any(
+        "restart" in call["argv"] or "--force-recreate" in call["argv"]
+        for call in installed.calls()
+    )
+    assert "a newer version" not in result.stdout + result.stderr
+
+
+def test_an_older_installation_gets_its_caddy_recreated_once(installed: Install) -> None:
+    # The stack as an older ./brievie started it: compose without the fingerprint.
+    deploy = installed.root / "deploy"
+    older_up = subprocess.run(  # noqa: S603
+        [
+            str(installed.bin / "docker"),
+            "compose",
+            "-p",
+            "brievie",
+            "--project-directory",
+            str(deploy),
+            "-f",
+            str(deploy / "docker-compose.yml"),
+            "up",
+            "-d",
+            "--build",
+            "--wait",
+        ],
+        env={**installed.env, "BRIEVIE_IMAGE": "brievie/backend:local"},
+        check=False,
+    )
+    assert older_up.returncode == 0
+    installed.log.unlink()
+
+    assert installed.run("start").returncode == 0
+    assert services_touched(installed) == ([], ["caddy"])
+    installed.log.unlink()
+
+    assert installed.run("start").returncode == 0
+    assert services_touched(installed) == ([], [])
+
+
+def test_the_restore_starts_caddy_with_the_current_configuration(installed: Install) -> None:
+    assert installed.run("start").returncode == 0
+    caddyfile = installed.root / "deploy" / "Caddyfile"
+    caddyfile.write_text(caddyfile.read_text() + "# a newer version\n")
+
+    result = installed.run("restore", "--replace", **restore_inputs(installed))
+
+    assert result.returncode == 0, result.stderr
+    # The restore stops caddy and brings it up with the configuration as it is now ...
+    assert installed.index("stop api worker caddy") < installed.index("up -d --wait")
+    installed.log.unlink()
+    # ... so the next start finds nothing left to apply.
+    assert installed.run("start").returncode == 0
+    assert services_touched(installed) == ([], [])
+
+
+LOOPBACK_WARNING = (
+    "Let op: met BRIEVIE_HOSTNAME={host} kan een iPhone deze server niet bereiken; zet in "
+    "deploy/.env de naam of het IP-adres waarmee je telefoon deze computer in je thuisnetwerk "
+    "vindt (zoals mijnmac.local of 192.168.1.20) en typ opnieuw ./brievie start."
+)
+
+
+@pytest.mark.parametrize(
+    "host", ["localhost", "LocalHost", "127.0.0.1", "127.1.2.3", "::1", "[::1]", "app.localhost"]
+)
+def test_start_with_a_loopback_host_name_says_a_phone_cannot_reach_it(
+    installed: Install, host: str
+) -> None:
+    installed.write_env(
+        current_env().replace("BRIEVIE_HOSTNAME=brievie.local", f"BRIEVIE_HOSTNAME={host}")
+    )
+
+    result = installed.run("start")
+
+    # A developer may want it: the start goes on.
+    assert result.returncode == 0, result.stderr
+    assert installed.index("up -d --build --wait") >= 0
+    lines = result.stdout.splitlines()
+    address = next(line for line in lines if line.startswith("Brievie draait op"))
+    assert address.endswith(", alleen in een browser op deze computer.")
+    assert lines[lines.index(address) + 1] == LOOPBACK_WARNING.format(host=host)
+
+
+@pytest.mark.parametrize("host", ["brievie.local", "192.168.1.20", "localhost.example.nl", "nas"])
+def test_start_with_a_network_host_name_gives_no_warning(installed: Install, host: str) -> None:
+    installed.write_env(
+        current_env().replace("BRIEVIE_HOSTNAME=brievie.local", f"BRIEVIE_HOSTNAME={host}")
+    )
+
+    result = installed.run("start")
+
+    assert result.returncode == 0, result.stderr
+    assert "iPhone" not in result.stdout + result.stderr
+    assert f"Brievie draait op https://{host}." in result.stdout
+
+
+def test_a_hand_install_is_told_its_phone_cannot_pair(install: Install) -> None:
+    # git clone + ./brievie start: deploy/.env comes from the example.
+    result = install.run("start")
+
+    assert result.returncode == 0, result.stderr
+    assert LOOPBACK_WARNING.format(host="localhost") in result.stdout
+
+
+def test_a_host_name_given_at_the_first_start_lands_in_the_new_settings(install: Install) -> None:
+    result = install.run("start", BRIEVIE_HOSTNAME="mijnnas.local")
+
+    assert result.returncode == 0, result.stderr
+    assert setting(install.dotenv.read_text(), "BRIEVIE_HOSTNAME") == [
+        "BRIEVIE_HOSTNAME=mijnnas.local"
+    ]
+    assert "iPhone" not in result.stdout
+    assert "Brievie draait op https://mijnnas.local." in result.stdout
 
 
 def test_start_keeps_an_existing_sheet(installed: Install) -> None:
@@ -2437,6 +2651,61 @@ def test_restore_asks_for_the_separate_password_when_the_key_alone_does_not_open
     install.assert_no_secret_in_argv()
 
 
+def fetches(install: Install) -> list[Call]:
+    return [c for c in install.calls() if "restore_fetch" in c["argv"]]
+
+
+def test_a_key_nothing_can_prove_is_taken_after_it_is_typed_twice_alike(install: Install) -> None:
+    result = install.run(
+        "restore",
+        "--keep-hostname",
+        FAKE_UNVERIFIED_KEY="1",
+        # The same key in another spelling, as read off paper again.
+        BRIEVIE_RESTORE_MASTER_KEY_AGAIN="5a5a" * 16,
+        **restore_inputs(install),
+    )
+
+    assert result.returncode == 0, result.stderr
+    found = fetches(install)
+    assert ["--accept-unverified-key" in f["argv"] for f in found] == [False, True]
+    assert found[1]["env"]["BRIEVIE_MASTER_KEY"] == MASTER
+    assert "kan niet controleren of de hoofdsleutel klopt" in result.stderr
+    assert "Herstel gelukt." in result.stdout
+    install.assert_no_secret_in_argv()
+
+
+def test_a_second_key_that_differs_stops_the_restore(install: Install) -> None:
+    result = install.run(
+        "restore",
+        "--keep-hostname",
+        FAKE_UNVERIFIED_KEY="1",
+        BRIEVIE_RESTORE_MASTER_KEY_AGAIN="5b" * 32,
+        **restore_inputs(install),
+    )
+
+    assert result.returncode == 2
+    assert "De twee hoofdsleutels zijn niet gelijk" in result.stderr
+    assert len(fetches(install)) == 1
+    assert not any("restore_database" in command for command in install.commands())
+    assert not (install.root / "deploy" / ".restore").exists()
+    assert not install.dotenv.exists()
+
+
+def test_a_piped_second_key_never_confirms(install: Install) -> None:
+    result = install.run(
+        "restore",
+        "--keep-hostname",
+        stdin=TYPED_MASTER,
+        FAKE_UNVERIFIED_KEY="1",
+        **restore_inputs(install),
+    )
+
+    assert result.returncode == 2
+    assert "BRIEVIE_RESTORE_MASTER_KEY_AGAIN" in result.stderr
+    assert len(fetches(install)) == 1
+    assert not (install.root / "deploy" / ".restore").exists()
+
+
 def test_a_wrong_key_names_the_separate_password(install: Install) -> None:
     result = install.run(
         "restore",
@@ -2710,3 +2979,122 @@ def test_keeping_the_destination_warns_about_the_original_server(install: Instal
 
     assert result.returncode == 0, result.stderr
     assert "oorspronkelijke server" in result.stdout
+
+
+# --- a recovery sheet never outlives the settings it was made from ------------------------
+
+NEW_MACHINE_MASTER = "6b" * 32
+SHEET_VOID = (
+    "Een herstelblad dat op deze computer vóór het herstel is gemaakt of afgedrukt, geldt "
+    "niet meer: de hoofdsleutel is nu die van het herstelblad waarmee je hebt hersteld. "
+    "Typ ./brievie recovery-sheet voor een herstelblad van deze server."
+)
+SHEET_REMOVED = (
+    "Het herstelblad dat hier stond, hoorde bij de instellingen van vóór het herstel en is "
+    "weggehaald. Typ ./brievie recovery-sheet voor een nieuw herstelblad."
+)
+
+
+def new_machine(install: Install) -> Path:
+    """What `./brievie start` left on a new machine: its own key, and its sheet."""
+    install.write_env(current_env().replace(MASTER, NEW_MACHINE_MASTER))
+    sheet = install.root / "brievie-herstelblad.html"
+    sheet.write_text("<html>sleutel van de lege installatie</html>")
+    return sheet
+
+
+def test_a_restore_after_a_first_start_voids_that_starts_sheet(installed: Install) -> None:
+    sheet = new_machine(installed)
+
+    result = installed.run(
+        "restore",
+        "--keep-hostname",
+        FAKE_DATA_ROWS="0",
+        **restore_inputs(installed, BRIEVIE_RESTORE_CONFIRM="", BRIEVIE_RESTORE_EMPTY_OK="ja"),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not sheet.exists()
+    lines = result.stdout.rstrip().splitlines()
+    assert lines[-1] == "Herstel gelukt."
+    assert SHEET_VOID in lines
+
+
+def test_a_restore_with_the_same_key_still_removes_the_old_sheet(installed: Install) -> None:
+    sheet = installed.root / "brievie-herstelblad.html"
+    sheet.write_text("<html>oud</html>")
+
+    result = installed.run("restore", "--replace", "--keep-hostname", **restore_inputs(installed))
+
+    assert result.returncode == 0, result.stderr
+    assert not sheet.exists()
+    assert SHEET_REMOVED in result.stdout
+    assert SHEET_VOID not in result.stdout
+
+
+def test_a_restore_without_a_sheet_says_nothing_about_one(installed: Install) -> None:
+    result = installed.run("restore", "--replace", "--keep-hostname", **restore_inputs(installed))
+
+    assert result.returncode == 0, result.stderr
+    assert "herstelblad dat hier stond" not in result.stdout
+    assert SHEET_VOID not in result.stdout
+
+
+def test_a_sheet_that_is_a_link_loses_the_link_and_never_its_target(installed: Install) -> None:
+    elsewhere = installed.tmp / "elsewhere.html"
+    elsewhere.write_text("not Brievie's")
+    (installed.root / "brievie-herstelblad.html").symlink_to(elsewhere)
+
+    result = installed.run("restore", "--replace", "--keep-hostname", **restore_inputs(installed))
+
+    assert result.returncode == 0, result.stderr
+    assert not (installed.root / "brievie-herstelblad.html").is_symlink()
+    assert elsewhere.read_text() == "not Brievie's"
+
+
+def test_a_failed_swap_keeps_the_sheet_of_the_settings_that_came_back(installed: Install) -> None:
+    sheet = new_machine(installed)
+
+    result = installed.run(
+        "restore",
+        "--replace",
+        "--keep-hostname",
+        FAKE_REMOVE_AT="stop keeper",
+        FAKE_REMOVE_PATH=str(installed.root / "deploy" / ".restore" / "env"),
+        **restore_inputs(installed),
+    )
+
+    assert result.returncode == 1
+    # The old deploy/.env is back, and so is the sheet that belongs to it.
+    assert NEW_MACHINE_MASTER in installed.dotenv.read_text()
+    assert sheet.read_text() == "<html>sleutel van de lege installatie</html>"
+
+
+def test_a_restore_that_stops_after_the_swap_leaves_no_sheet_and_says_so_when_done(
+    installed: Install,
+) -> None:
+    sheet = new_machine(installed)
+
+    stopped = installed.run(
+        "restore",
+        "--replace",
+        "--keep-hostname",
+        FAKE_DOCKER_FAIL="restore_files",
+        **restore_inputs(installed),
+    )
+    assert stopped.returncode == 1
+    # The restored settings are in place: the old sheet is already gone.
+    assert MASTER in installed.dotenv.read_text()
+    assert not sheet.exists()
+
+    finished = installed.run(
+        "restore",
+        RUN_ID,
+        "--replace",
+        "--skip-safety-backup",
+        "--keep-hostname",
+        **restore_inputs(installed),
+    )
+
+    assert finished.returncode == 0, finished.stderr
+    assert SHEET_VOID in finished.stdout.splitlines()

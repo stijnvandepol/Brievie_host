@@ -464,6 +464,10 @@ Choices:
   - There is no undo of a whole manual run.
   - Visibility per document and "Zorg private" wait for members (inviting members, 1d).
   - Folders, NL rules (calculated deadlines), full-text search, learned rule suggestions and paging of `listDocuments` are not built.
+- From writing the install docs (2026-11-19), for a NAS:
+  - PostgreSQL is published on `127.0.0.1:${POSTGRES_PORT:-5432}` of the host, which collides with a database a NAS often already runs on 5432. Only the host-side tools (`make test`, `make migrate`) use that port; the stack itself does not need it published.
+  - `.env.example` says to change `BRIEVIE_HTTP_PORT`/`BRIEVIE_HTTPS_PORT` "only to run a second stack", while nearly every NAS already serves its own pages on 80/443; and the HTTPS port is part of the address in the pairing QR code, so changing it later means pairing every phone again.
+  - The documents (and the database and Caddy's authority) live in Docker volumes, not in the Brievie folder: a NAS's own back-up of that folder does not hold them. Only `./brievie backup` does.
 
 ## 2026-11-16: more than one AI supplier
 
@@ -1034,6 +1038,37 @@ Dependabot (github-actions) proposes the updates.
 - **ZAP needs a host name with a dot.** Java sends no SNI for `localhost`, so Caddy had no certificate to offer and every ZAP request failed the TLS handshake. The `dast` job serves its stack as `brievie.test` (in `deploy/.env` and the runner's `/etc/hosts`, which Docker copies into a `--network=host` container); real installations are unchanged. The scans run with `continue-on-error`, their reports are moved aside and uploaded as `zap-reports` in every case, and a last step fails the job when either scan did not succeed.
 - **What the first ZAP findings changed.** No CORS grant on the web app's files (`WHITENOISE_ALLOW_ALL_ORIGINS = False`; WhiteNoise sent `Access-Control-Allow-Origin: *` on `/assets/*` and the favicon by default, and nothing needs it). Every `/api/` answer that sets no caching of its own is `Cache-Control: no-store` (`ApiCacheControlMiddleware`; endpoints with their own header keep it). Unknown `/api/` paths answer the JSON 404 for every method (`api_path_not_found` is CSRF-exempt; a POST got Django's HTML CSRF page). Caddy adds `Permissions-Policy` (camera, microphone, geolocation, sensors, payment and USB off; the clipboard stays, the app copies pairing details), `Cross-Origin-Resource-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`; `Cross-Origin-Opener-Policy` stays Django's (one place per header). The iOS app is no browser and is not affected by any of these. Ignored with reasons in `.zap/rules.tsv`: the readable `csrftoken` cookie (10010, 10112), and caching and content-type rules outside `/api` (10015, 10049, 100001 out of scope for the web app's paths).
 
+## 2026-11-19: Te doen and Alle post
+
+The owner could not tell "Inbox" from "Post", nor "Nieuw" from "Te controleren". Wording
+and presentation only; API, `inbox_state` values, database, route paths and the iOS app
+are unchanged.
+
+- **Renamed.** "Inbox" is **Te doen** (post that waits for you), "Post" is **Alle post**
+  (every letter, also the finished ones), in the navigation, page and browser titles, aria
+  labels, the breadcrumb of a letter and the empty states. The paths stay `/inbox` and
+  `/post` so bookmarks keep working; the route files say so in a comment.
+- **One list, a status per letter.** Te doen no longer has tabs per system state. Each row
+  shows what it needs as a badge with words: `review` reads **Controleren**, `unassigned`
+  **Naam kiezen**, `new` **Bezig…** with "Je hoeft niets te doen". Order: what needs the
+  person (newest first), letters being read last. The list is three calls (one per
+  `inbox_state`), merged in the browser, so nothing outside the newest 200 per state drops.
+- **`new` is not "the same as review".** The request assumed it was; in the code `new` is
+  a letter still being read (status `processing`): nothing to do yet. So it is the Bezig…
+  row, not Controleren. The owner's point stands: for the person there is now one thing
+  to check, not two tabs that looked alike. A letter that could not be read (`failed`)
+  stays under Controleren with its own hint.
+- **Counts kept** in a line under the title ("Controleren: 1 · Naam kiezen: 2 · Bezig: 3");
+  the navigation count is still review plus unassigned ("Te doen, 3 brieven").
+- **Dropped:** keeping the three groups (as tabs or as headed sections): they named the
+  system's states, not the person's work, and two of them read as the same thing. The
+  `?tab=` of an old bookmark is ignored. In Alle post the status column uses the same
+  words (Controleren, Bezig…).
+- **A sentence under every page title** says what the page is for; where pages are easily
+  confused (Te doen and Alle post, Personen and Leden) it says how they differ. A person
+  is someone letters are addressed to, also without an account (a child); a member is
+  someone who logs in.
+
 ## 2026-11-19: Scheduled security audits
 
 New CVEs, a new Debian update in the image or a new scanner rule do not need a code change, so a check that only runs on a change misses them. The checks that can find such a problem now also run **Monday, Wednesday and Friday** on `main` (ci.yml 03:23 UTC, codeql.yml 04:41 UTC; not on the hour, when many schedules start and GitHub delays or drops some), and on demand (`workflow_dispatch`).
@@ -1045,6 +1080,21 @@ New CVEs, a new Debian update in the image or a new scanner rule do not need a c
 - **A failing audit does not block merging** by itself; the issue is the signal. Only the existing required checks gate a pull request.
 - Limit: GitHub switches off scheduled workflows of a public repository after 60 days without repository activity. after a long pause, enable the workflow again in the Actions tab.
 - **Dropped:** daily runs (three a week finds an advisory within days; a daily ZAP scan and image build costs runner time for little extra); an external monitoring or vulnerability service (an account and a third party that sees our dependency list, for what the OSV data in pip-audit, Trivy's database and GitHub's alerts already give); Dependabot security alerts are on GitHub's side and not changed here.
+
+## 2026-11-19: `./brievie start` applies a changed Caddy configuration, and says when no phone can pair
+
+- **Why Caddy stayed stale.** Caddy reads `deploy/Caddyfile` once, when `caddy-publish-root.sh` (also bind-mounted) runs `caddy run` without `--watch`. Compose recreates a service only when its definition (image, command, environment, labels, mount *paths*) changed, never because the content of a bind-mounted file changed; so after `git pull` the `up -d --build --wait` of `./brievie start` recreated api and worker (new image) and left caddy running with the old file. On Linux a single-file bind mount even keeps showing the old file after git replaced it (git writes a new file and renames it; the mount holds the old inode), so a `caddy reload` inside the container would not help either.
+- **The fix.** `./brievie` exports `BRIEVIE_CADDY_CONFIG`, the POSIX `cksum` of `Caddyfile` plus `caddy-publish-root.sh`, for every command; the caddy service has it as the label `brievie.caddy-config`. A changed file changes caddy's definition, and compose's own comparison recreates caddy, and only caddy; an unchanged one changes nothing; a first start creates it with the label; an installation started by an older wrapper gets caddy recreated once. `restore` stops caddy and starts it with the current files anyway, and its `up` carries the label too. No other service reads a bind-mounted file at run time: `postgres-init` is a directory mount whose scripts run only on a new volume, and `backup-role.psql` is read fresh on each `\i`.
+- **Dropped:** `caddy run --watch` (does not see a replaced single-file mount, and does not cover `caddy-publish-root.sh`); `docker compose exec caddy caddy reload` (same inode problem); always `--force-recreate caddy` or `restart caddy` (a restart and dropped connections on every start); a hash recorded in a file under `deploy/` with an explicit restart (one more state file, a special case for the first start and for installations without a record, and a stale record after a failed start; compose already keeps the comparison). A strong hash is not needed: `cksum` is in POSIX and only detects a change. A hand `docker compose up -d` (without the label value) recreates caddy once; the docs say `./brievie start` everywhere.
+- **Loopback host name.** `./brievie start` still starts with `BRIEVIE_HOSTNAME` set to `localhost`, `*.localhost`, `127.*` or `::1` (a developer may want it), but the address line then says it works only in a browser on this computer, followed by one sentence with the fix. `deploy/init-env.sh` takes `BRIEVIE_HOSTNAME` from the environment for a new `deploy/.env` (letters, digits, dots and dashes only), so `BRIEVIE_HOSTNAME=mijnmac.local ./brievie start` on a hand install ends where `install.sh` ends; an existing file is never changed.
+
+## 2026-11-19: Example rules on Automatisering ("Begin met een voorbeeld")
+
+- **What.** Seven example rules (`apps/rules/templates.py`), listed by `GET /workspaces/{id}/rules/templates` (`listRuleTemplates`, member and up, as `listRules`). The page shows them under the rules and instead of an empty list, with "Zo werkt een regel" (wanneer, als, dan). "Gebruik dit voorbeeld" opens the existing editor at `automatisering/nieuw?voorbeeld=<key>`, filled in; nothing is stored until Opslaan. The existing "Test op bestaande post" already takes an unsaved rule, so trying an example before saving needs no new endpoint; its result now says "Er is nog niets opgeslagen."
+- **Only what the engine does today.** No new condition, action or trigger. Every example proposes (mode `propose`, as a new rule) and its sentence starts with "Stelt … voor".
+- **Blanks, never a silent choice.** The words or name to type are empty with an `example` placeholder and a hint, marked "Vul in"; the label or person is always picked by the user (marked "Kies"; the selects now start with "Kies een label/persoon" instead of looking as if the first entry was chosen). An example may suggest a start-set label (`label_key`, matched on `system_key`, then on name); when the workspace lacks it, the editor offers a button "Label … maken" (the existing `createLabel`), never creates it unasked.
+- **Server list, not frontend data.** The iOS app can show the same gallery without a copy, the texts go through `gettext` like every other server sentence, and `tests/test_rules_templates.py` fills every blank and checks the result against `RuleIn`, `definition.validate`, `to_spec` and the engine (a letter it must match, one it must not), without a database. Dropped: the list as TypeScript data in `web/` (no check against the real definition, and a second copy for iOS).
+- **Honest texts.** Word examples say the word may appear anywhere in the letter (a letter that only mentions it gets the proposal) and point to the sender example; sender and type examples say these are known once the AI read the letter or the user confirmed it (without AI, a sender rule acts on confirming).
 
 ## 2026-11-19: AI autopilot
 

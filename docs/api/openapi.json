@@ -2012,6 +2012,134 @@
         "title": "RuleRunStartedOut",
         "type": "object"
       },
+      "RuleTemplateActionOut": {
+        "properties": {
+          "hint": {
+            "title": "Hint",
+            "type": "string"
+          },
+          "label_key": {
+            "title": "Label Key",
+            "type": "string"
+          },
+          "label_name": {
+            "title": "Label Name",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "hint",
+          "label_key",
+          "label_name"
+        ],
+        "title": "RuleTemplateActionOut",
+        "type": "object"
+      },
+      "RuleTemplateConditionOut": {
+        "properties": {
+          "example": {
+            "title": "Example",
+            "type": "string"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "hint": {
+            "title": "Hint",
+            "type": "string"
+          },
+          "op": {
+            "title": "Op",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "op",
+          "value",
+          "example",
+          "hint"
+        ],
+        "title": "RuleTemplateConditionOut",
+        "type": "object"
+      },
+      "RuleTemplateOut": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/RuleTemplateActionOut"
+            },
+            "title": "Actions",
+            "type": "array"
+          },
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/RuleTemplateConditionOut"
+            },
+            "title": "Conditions",
+            "type": "array"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "kinds": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Kinds",
+            "type": "array"
+          },
+          "match": {
+            "title": "Match",
+            "type": "string"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "tip": {
+            "title": "Tip",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "kinds",
+          "title",
+          "description",
+          "tip",
+          "name",
+          "mode",
+          "match",
+          "conditions",
+          "actions"
+        ],
+        "title": "RuleTemplateOut",
+        "type": "object"
+      },
       "RuleTestOut": {
         "properties": {
           "checked_count": {
@@ -9392,6 +9520,72 @@
           }
         ],
         "summary": "Reorder Rules",
+        "tags": [
+          "rules"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/rules/templates": {
+      "get": {
+        "description": "Example rules to start from, with blanks: a condition with an empty `value` is typed by the user, and the label or person of every action is picked by the user. The same list for every workspace; `kinds` says whom each is meant for.",
+        "operationId": "listRuleTemplates",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RuleTemplateOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "List Rule Templates",
         "tags": [
           "rules"
         ]

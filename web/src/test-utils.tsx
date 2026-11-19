@@ -260,11 +260,81 @@ export const bankRule: Rule = {
   proposed_count: 0,
 };
 
+type RuleTemplate = components["schemas"]["RuleTemplateOut"];
+
+/** Three of the server's example rules, as `listRuleTemplates` returns them. */
+export const senderTemplate: RuleTemplate = {
+  key: "label_by_sender",
+  kinds: ["home", "business"],
+  title: "Label op afzender",
+  description: "Stelt een label voor op alle post van één afzender.",
+  tip: "Preciezer dan een woord in de brief.",
+  name: "Label op afzender",
+  mode: "propose",
+  match: "all",
+  conditions: [
+    {
+      field: "sender",
+      op: "contains_word",
+      value: "",
+      example: "Zilveren Kruis",
+      hint: "Typ de naam van de afzender, zoals die op de brief staat.",
+    },
+  ],
+  actions: [
+    {
+      type: "add_label",
+      hint: "Kies het label dat de brief krijgt.",
+      label_key: "",
+      label_name: "",
+    },
+  ],
+};
+
+export const supplierTemplate: RuleTemplate = {
+  ...senderTemplate,
+  key: "supplier_invoice",
+  kinds: ["business"],
+  title: "Facturen van een leverancier",
+  description: "Stelt een label voor op facturen van één leverancier.",
+  tip: "",
+  name: "Facturen van een leverancier",
+};
+
+export const wozTemplate: RuleTemplate = {
+  key: "municipality_woz",
+  kinds: ["home"],
+  title: "De WOZ-beschikking van de gemeente",
+  description: "Stelt het label Wonen voor op post van de gemeente waarin het woord WOZ staat.",
+  tip: "Twee voorwaarden samen zijn preciezer dan één.",
+  name: "WOZ van de gemeente",
+  mode: "propose",
+  match: "all",
+  conditions: [
+    { field: "sender", op: "contains_word", value: "gemeente", example: "", hint: "" },
+    { field: "text", op: "contains_word", value: "WOZ", example: "", hint: "" },
+  ],
+  actions: [
+    {
+      type: "add_label",
+      hint: "Kies het label dat de brief krijgt.",
+      label_key: "wonen",
+      label_name: "Wonen",
+    },
+  ],
+};
+
 /** The rules of the first workspace, plus the labels and persons their sentences need. */
-export function ruleHandlers(rules: Rule[] = [apkRule, bankRule]) {
+export function ruleHandlers(
+  rules: Rule[] = [apkRule, bankRule],
+  templates: RuleTemplate[] = [supplierTemplate, senderTemplate, wozTemplate],
+) {
   return [
     ...personHandlers(),
     http.get(`*${API}/workspaces/${workspace.id}/rules`, () => HttpResponse.json(rules)),
+    http.get(`*${API}/workspaces/${workspace.id}/rules/templates`, () =>
+      HttpResponse.json(templates),
+    ),
   ];
 }
 

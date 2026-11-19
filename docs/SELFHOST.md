@@ -37,8 +37,9 @@ database superuser and owner. Without the master key the documents cannot be rea
 it must live somewhere else.
 
 restic encrypts the back-up with the back-up password. By default that password is
-derived from the master key. So the recovery sheet, which shows the master key, is the
-one thing to keep.
+derived from the master key. So keep the recovery sheet, which shows the master key; with
+a REST server or S3 storage as the destination, also keep its user name and password
+(or access keys), which are not on the sheet (section 3).
 
 ## 3. The recovery sheet
 
@@ -163,10 +164,14 @@ scheduler running the command.
 
 **On a new machine**
 
-1. Install Brievie on the new machine and start it (`./brievie start`). A running
-   installation without users, workspaces or documents counts as empty. Brievie can
-   only see that while it is running: an installation that is stopped is treated as
-   one with data.
+1. Put Brievie on the new machine (`git clone`), but **do not start it**:
+   `./brievie restore` builds and starts it itself, with the settings and the master
+   key from the back-up. A first `./brievie start` would make a new master key and a
+   recovery sheet for it, which the restore makes worthless. Did you start it anyway? A
+   running installation without users, workspaces or documents counts as empty and is
+   replaced after you confirm; the restore removes the sheet that start wrote and tells
+   you that any sheet printed from it is void. (Brievie can only see that an
+   installation is empty while it runs: a stopped one is treated as one with data.)
 2. Connect the disk (or have the address of the remote back-up, and its user name and
    password, ready).
 3. `./brievie restore`. It asks where the back-up is and for the master key from your
@@ -175,7 +180,9 @@ scheduler running the command.
    confirm.
 4. It asks whether this server should keep making back-ups to the same place. Answer
    "ja" only if the original server will never make back-ups there again (section 4).
-5. Wait for "Herstel gelukt."
+5. Wait for "Herstel gelukt." Then make a recovery sheet of this server with
+   `./brievie recovery-sheet` (it shows the restored master key), print it and remove
+   the file.
 
 `./brievie status --list` shows the back-ups and their numbers; `./brievie restore
 NUMMER` takes that one instead of the newest. Without a number the newest is taken,
@@ -183,6 +190,11 @@ even if it was "gemaakt, maar niet compleet".
 
 A wrong key or password stops at the start, and nothing is written. A back-up from a
 newer Brievie than the one installed is refused: update first.
+
+Brievie checks the key against the back-up. With a separate back-up password and a
+back-up that holds no workspace yet, there is nothing to check it against: then it says
+so and asks you to type the key a second time. Only when both are the same does the
+restore go on, so a typo never becomes the server's master key.
 
 The new machine is a new installation: it gets its own installation number, so it is
 never mistaken for the original server.
@@ -224,7 +236,8 @@ gecontroleerd: 2 werkruimtes, van elk is een pagina geopend." and finally
 "Herstel gelukt."
 
 For scripts there are variables: `BRIEVIE_RESTORE_SOURCE` (where the back-up is),
-`BRIEVIE_RESTORE_MASTER_KEY`, `BRIEVIE_RESTORE_BACKUP_PASSWORD`,
+`BRIEVIE_RESTORE_MASTER_KEY` (and `BRIEVIE_RESTORE_MASTER_KEY_AGAIN` for the second
+time), `BRIEVIE_RESTORE_BACKUP_PASSWORD`,
 `BRIEVIE_RESTORE_KEEP_DESTINATION=ja`, and the confirmations
 `BRIEVIE_RESTORE_CONFIRM=WISSEN`, `BRIEVIE_RESTORE_EMPTY_OK=ja` and
 `BRIEVIE_ADOPT_INSTALLATION=JA`. A key in an environment variable is visible to other
@@ -420,7 +433,7 @@ Both commands write the log (the actor is "Brievie").
 - A web session ends after **14 days without use**, and after **90 days** whatever
   happens. Change that in `deploy/.env` with `BRIEVIE_SESSION_IDLE_DAYS` and
   `BRIEVIE_SESSION_MAX_DAYS` (whole days, at least 1; the first may not be larger than
-  the second), then run `docker compose ... up -d` again. The new limits apply to a session
+  the second), then run `./brievie start` again. The new limits apply to a session
   from its next use.
 - A paired phone stops working **180 days after it was last used** and answers like a
   revoked one: the app asks to pair again. Nobody loses a phone on the day of the update:

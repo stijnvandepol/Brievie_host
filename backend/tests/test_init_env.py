@@ -265,6 +265,36 @@ def test_postgres_port_can_be_chosen(deploy: Path) -> None:
     assert ":55432/" in values["DATABASE_OWNER_URL"]
 
 
+def test_host_name_can_be_chosen_for_a_new_file(deploy: Path) -> None:
+    run_script(deploy, BRIEVIE_HOSTNAME="mijnnas.local")
+
+    assert read_env(deploy / ".env")["BRIEVIE_HOSTNAME"] == "mijnnas.local"
+
+
+def test_without_a_host_name_a_new_file_keeps_the_examples(deploy: Path) -> None:
+    run_script(deploy)
+
+    assert read_env(deploy / ".env")["BRIEVIE_HOSTNAME"] == "localhost"
+
+
+def test_a_host_name_never_changes_an_existing_file(deploy: Path) -> None:
+    run_script(deploy)
+    before = (deploy / ".env").read_bytes()
+
+    run_script(deploy, BRIEVIE_HOSTNAME="mijnnas.local")
+
+    assert (deploy / ".env").read_bytes() == before
+
+
+@pytest.mark.parametrize("host", ["mijn nas", "a/b", "-x", ".local", "x;rm"])
+def test_a_strange_host_name_is_refused_and_no_file_is_made(deploy: Path, host: str) -> None:
+    result = run_script(deploy, check=False, BRIEVIE_HOSTNAME=host)
+
+    assert result.returncode != 0
+    assert "BRIEVIE_HOSTNAME" in result.stderr
+    assert not (deploy / ".env").exists()
+
+
 def test_generated_env_is_accepted_by_the_settings(
     deploy: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

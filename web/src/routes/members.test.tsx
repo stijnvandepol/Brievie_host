@@ -26,6 +26,16 @@ const anna = members[0] as (typeof members)[number];
 const twoAdmins = [anna, { ...bram, role: "admin" }];
 
 describe("members", () => {
+  it("says how a member differs from a person", async () => {
+    server.use(...loggedInHandlers(), ...memberHandlers());
+    renderApp(path);
+    expect(
+      await screen.findByText(
+        "Wie met een eigen account inlogt in Thuis. Op wiens naam brieven staan, regel je bij Personen.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("lists members with their role in a business workspace", async () => {
     server.use(asRole("admin", "business"), ...loggedInHandlers(), ...memberHandlers());
     renderApp(path);

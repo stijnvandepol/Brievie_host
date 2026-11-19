@@ -89,7 +89,7 @@ function AutomaticHint({ names }: { names: string[] }) {
   return <p className="muted small">{t`Automatisch toegevoegd: ${list}`}</p>;
 }
 
-/** Hands a letter the AI confirmed back to "Te controleren"; the answer is the letter itself. */
+/** Hands a letter the AI confirmed back to "Te doen" (Controleren); the answer is the letter itself. */
 function useReopen(workspaceId: string, documentId: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -172,7 +172,7 @@ function DocumentView({
               <dt>{t`Status`}</dt>
               <dd>
                 <span className="cell-badges">
-                  <StatusBadge status={document.status} />
+                  <StatusBadge status={document.status} inboxState={document.inbox_state} />
                   <AutomaticBadge document={document} />
                 </span>
               </dd>
@@ -215,7 +215,7 @@ function DocumentView({
                 tone="primary"
                 onConfirm={() => reopen.mutateAsync()}
               >
-                <p>{t`De brief gaat terug naar Te controleren. De taken die de AI maakte en die nog open staan, verdwijnen. Je controleert de brief daarna in de app.`}</p>
+                <p>{t`De brief komt terug op Te doen, bij Controleren. De taken die de AI maakte en die nog open staan, verdwijnen. Je controleert de brief daarna in de app.`}</p>
               </ConfirmAction>
             </div>
           ) : null}
@@ -277,7 +277,7 @@ function DocumentPage() {
         breadcrumb={{
           to: "/w/$workspaceId/post",
           params: { workspaceId: workspace.id },
-          label: t`Post`,
+          label: t`Alle post`,
         }}
       />
       {isPending ? <Loading /> : null}

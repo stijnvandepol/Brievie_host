@@ -1,8 +1,7 @@
 import { t } from "@lingui/core/macro";
 import { useQuery } from "@tanstack/react-query";
-import { createRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
-import { Tab, TabList, TabPanel, Tabs } from "react-aria-components";
 import { documentsQuery, inboxCountsQuery, labelsQuery, personsQuery } from "../api/queries";
 import type { components } from "../api/schema";
 import { AiStatusLine } from "../components/ai-status-line";
@@ -11,24 +10,27 @@ import { LabelChips } from "../components/label-chip";
 import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
 import { PersonPicker, useSetAddressees } from "../components/person-picker";
 import { SuggestionMark } from "../components/suggestion-list";
-import { EmptyState, Loading } from "../components/ui";
+import { Badge, EmptyState, Loading } from "../components/ui";
 import { workspaceRoute } from "./workspace";
 
 type DocumentSummary = components["schemas"]["DocumentSummaryOut"];
 type Person = components["schemas"]["PersonOut"];
 type LabelOut = components["schemas"]["LabelOut"];
+type Counts = components["schemas"]["InboxCountsOut"];
 
-const TABS = ["review", "unassigned", "new"] as const;
-type InboxTab = (typeof TABS)[number];
-
-function isTab(value: unknown): value is InboxTab {
-  return TABS.some((tab) => tab === value);
+/**
+ * The page "Te doen" (route and API keep the name inbox). For the person, `review` and
+ * `unassigned` are things to do, `new` is a letter still being read: nothing to do yet.
+ */
+function ActionBadge({ state }: { state: string }) {
+  if (state === "unassigned") return <Badge intent="warning">{t`Naam kiezen`}</Badge>;
+  if (state === "new") return <Badge intent="info">{t`Bezig…`}</Badge>;
+  return <Badge intent="warning">{t`Controleren`}</Badge>;
 }
 
 function InboxRow({
   workspaceId,
   document,
-  tab,
   persons,
   labels,
   canEdit,
@@ -36,7 +38,6 @@ function InboxRow({
 }: {
   workspaceId: string;
   document: DocumentSummary;
-  tab: InboxTab;
   persons: Person[];
   labels: LabelOut[];
   canEdit: boolean;
@@ -44,6 +45,7 @@ function InboxRow({
   onAssigned: () => void;
 }) {
   const setAddressees = useSetAddressees(workspaceId, document.id, onAssigned);
+  const state = document.inbox_state ?? "";
   return (
     <tr>
       <th scope="row" className="cell-strong">
@@ -63,48 +65,77 @@ function InboxRow({
         </span>
       </td>
       <td>
-        {tab === "unassigned" ? (
-          <>
+        <span className="cell-todo">
+          <ActionBadge state={state} />
+          {state === "unassigned" ? (
             <PersonPicker
               persons={persons}
               selectedIds={document.addressee_ids ?? []}
               onChange={(ids) => setAddressees.mutate(ids)}
               disabled={!canEdit || setAddressees.isPending}
             />
-            <ErrorAlert error={setAddressees.error} />
-          </>
-        ) : null}
-        {tab === "review" ? (
-          <span className="cell-hint">{t`Controleer deze brief in de app.`}</span>
-        ) : null}
-        {tab === "new" ? (
-          <span className="cell-hint">{t`Deze brief wordt nog gelezen.`}</span>
-        ) : null}
+          ) : null}
+          {state === "review" ? (
+            <span className="cell-hint">
+              {document.status === "failed"
+                ? t`Brievie kon deze brief niet goed lezen. Controleer hem in de app.`
+                : t`Controleer deze brief in de app.`}
+            </span>
+          ) : null}
+          {state === "new" ? (
+            <span className="cell-hint">{t`Brievie leest deze brief nog. Je hoeft niets te doen.`}</span>
+          ) : null}
+        </span>
+        {state === "unassigned" ? <ErrorAlert error={setAddressees.error} /> : null}
       </td>
     </tr>
   );
 }
 
-function InboxList({
-  workspaceId,
-  tab,
-  canEdit,
-  poll,
-}: {
-  workspaceId: string;
-  tab: InboxTab;
-  canEdit: boolean;
-  /** Fetch the list again by itself (letters are still being read). */
-  poll: boolean;
-}) {
-  const documents = useQuery(documentsQuery(workspaceId, { inbox_state: tab }, { poll }));
+const newestFirst = (a: DocumentSummary, b: DocumentSummary) =>
+  b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id);
+
+/** What needs the person first (newest first), letters still being read last. */
+function useTodoList(workspaceId: string) {
+  const review = useQuery(documentsQuery(workspaceId, { inbox_state: "review" }));
+  const unassigned = useQuery(documentsQuery(workspaceId, { inbox_state: "unassigned" }));
+  const reading = useQuery(documentsQuery(workspaceId, { inbox_state: "new" }, { poll: true }));
+
+  // A letter that is read moves on to Controleren or Naam kiezen: fetch those again.
+  const readingIds = reading.data?.map((document) => document.id).join(",");
+  const previous = useRef(readingIds);
+  const { refetch: refetchReview } = review;
+  const { refetch: refetchUnassigned } = unassigned;
+  useEffect(() => {
+    const before = previous.current;
+    previous.current = readingIds;
+    if (before === undefined || readingIds === undefined) return;
+    const now = new Set(readingIds.split(","));
+    if (before.split(",").some((id) => id && !now.has(id))) {
+      void refetchReview();
+      void refetchUnassigned();
+    }
+  }, [readingIds, refetchReview, refetchUnassigned]);
+
+  const data =
+    review.data && unassigned.data && reading.data
+      ? [...[...review.data, ...unassigned.data].sort(newestFirst), ...reading.data]
+      : undefined;
+  return {
+    data,
+    error: review.error ?? unassigned.error ?? reading.error,
+    isFetching: review.isFetching || unassigned.isFetching || reading.isFetching,
+  };
+}
+
+function TodoList({ workspaceId, canEdit }: { workspaceId: string; canEdit: boolean }) {
+  const { data, error, isFetching } = useTodoList(workspaceId);
   const persons = useQuery(personsQuery(workspaceId));
   const labels = useQuery(labelsQuery(workspaceId));
   const body = useRef<HTMLTableSectionElement>(null);
   const emptyPanel = useRef<HTMLElement>(null);
   // The row a letter was put on a name from: when it leaves the list, focus must not fall to <body>.
   const assigned = useRef<{ id: string; index: number } | null>(null);
-  const { data, isFetching } = documents;
   useEffect(() => {
     const pending = assigned.current;
     if (!pending || !data || isFetching) return;
@@ -114,26 +145,35 @@ function InboxList({
       emptyPanel.current?.focus();
       return;
     }
+    // The row that takes its place: its picker, or its sender when it has no picker.
     const row = body.current?.querySelectorAll("tr")[Math.min(pending.index, data.length - 1)];
-    row?.querySelector<HTMLElement>(".picker-button")?.focus();
+    (row?.querySelector<HTMLElement>(".picker-button") ?? row?.querySelector("a"))?.focus();
   }, [data, isFetching]);
-  if (documents.isPending) return <Loading />;
-  if (documents.error) return <ErrorAlert error={documents.error} />;
-  if (documents.data.length === 0) {
+  if (error) return <ErrorAlert error={error} />;
+  if (!data) return <Loading />;
+  if (data.length === 0) {
     return (
       <section className="panel" ref={emptyPanel} tabIndex={-1}>
         <EmptyState
           icon="success"
-          hint={t`Komt er een brief binnen die je moet controleren of op een naam moet zetten, dan staat die hier.`}
+          hint={
+            <>
+              {t`Scan een nieuwe brief met de Brievie-app. Eerdere brieven vind je bij`}{" "}
+              <Link to="/w/$workspaceId/post" params={{ workspaceId }}>
+                {t`Alle post`}
+              </Link>
+              .
+            </>
+          }
         >
-          {t`Hier is niets te doen.`}
+          {t`Je bent klaar. Er is niets te doen.`}
         </EmptyState>
       </section>
     );
   }
   return (
     // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrolling box must be reachable by keyboard (WCAG 2.1.1).
-    <section className="panel table-scroll" aria-label={t`Inbox`} tabIndex={0}>
+    <section className="panel table-scroll" aria-label={t`Te doen`} tabIndex={0}>
       <ErrorAlert error={persons.error ?? labels.error} />
       <table className="table table-wide">
         <thead>
@@ -142,16 +182,15 @@ function InboxList({
             <th scope="col">{t`Soort`}</th>
             <th scope="col">{t`Datum brief`}</th>
             <th scope="col">{t`Labels`}</th>
-            <th scope="col">{tab === "unassigned" ? t`Op naam van` : t`Wat te doen`}</th>
+            <th scope="col">{t`Wat te doen`}</th>
           </tr>
         </thead>
         <tbody ref={body}>
-          {documents.data.map((document, index) => (
+          {data.map((document, index) => (
             <InboxRow
               key={document.id}
               workspaceId={workspaceId}
               document={document}
-              tab={tab}
               persons={persons.data ?? []}
               labels={labels.data ?? []}
               canEdit={canEdit}
@@ -166,81 +205,37 @@ function InboxList({
   );
 }
 
+/** The numbers per kind of work, in the words of the badges; nothing when nothing waits. */
+function CountsLine({ counts }: { counts: Counts }) {
+  const parts = [
+    counts.review > 0 ? t`Controleren: ${counts.review}` : "",
+    counts.unassigned > 0 ? t`Naam kiezen: ${counts.unassigned}` : "",
+    counts.new > 0 ? t`Bezig: ${counts.new}` : "",
+  ].filter(Boolean);
+  return parts.length > 0 ? <p className="muted">{parts.join(" · ")}</p> : null;
+}
+
 function InboxPage() {
-  usePageTitle(t`Inbox`);
+  usePageTitle(t`Te doen`);
   const { workspace } = inboxRoute.useRouteContext();
-  const search = inboxRoute.useSearch();
-  const navigate = useNavigate();
   const { data: counts, error } = useQuery(inboxCountsQuery(workspace.id));
-
-  // Without a tab in the URL: the first one that has something to do.
-  const tab: InboxTab | undefined =
-    search.tab ??
-    (counts ? (TABS.find((candidate) => counts[candidate] > 0) ?? TABS[0]) : undefined);
-  // Once a tab is chosen it is in the URL, so it does not jump when that tab becomes empty.
-  const chosen = search.tab === undefined ? tab : undefined;
-  useEffect(() => {
-    if (!chosen) return;
-    void navigate({
-      to: "/w/$workspaceId/inbox",
-      params: { workspaceId: workspace.id },
-      search: { tab: chosen },
-      replace: true,
-    });
-  }, [chosen, navigate, workspace.id]);
-  const labels: Record<InboxTab, string> = {
-    review: t`Te controleren`,
-    unassigned: t`Op niemands naam`,
-    new: t`Nieuw`,
-  };
-
   return (
     <Shell workspace={workspace}>
       <PageHeader
-        title={t`Inbox`}
-        description={t`Post die op jou wacht: brieven om te controleren of op een naam te zetten.`}
+        title={t`Te doen`}
+        description={t`Brieven waar jij nog iets mee moet doen. Al je brieven, ook de afgehandelde, staan bij Alle post.`}
       />
       <AiStatusLine workspaceId={workspace.id} />
       <ErrorAlert error={error} />
-      {tab && counts ? (
-        <Tabs
-          selectedKey={tab}
-          onSelectionChange={(key) => {
-            if (!isTab(key)) return;
-            void navigate({
-              to: "/w/$workspaceId/inbox",
-              params: { workspaceId: workspace.id },
-              search: { tab: key },
-            });
-          }}
-        >
-          <TabList aria-label={t`Inbox`} className="tabs">
-            {TABS.map((id) => (
-              <Tab key={id} id={id} className="tab">
-                {labels[id]} <span className="tab-count">{counts[id]}</span>
-              </Tab>
-            ))}
-          </TabList>
-          <TabPanel id={tab} className="tab-panel">
-            <InboxList
-              workspaceId={workspace.id}
-              tab={tab}
-              canEdit={workspace.role !== "viewer"}
-              poll={tab === "new"}
-            />
-          </TabPanel>
-        </Tabs>
-      ) : (
-        !error && <Loading />
-      )}
+      {counts ? <CountsLine counts={counts} /> : null}
+      <TodoList workspaceId={workspace.id} canEdit={workspace.role !== "viewer"} />
     </Shell>
   );
 }
 
 export const inboxRoute = createRoute({
   getParentRoute: () => workspaceRoute,
+  // The path stays "inbox" (bookmarks); the page is called "Te doen".
   path: "inbox",
-  validateSearch: (search: Record<string, unknown>): { tab?: InboxTab } =>
-    isTab(search.tab) ? { tab: search.tab } : {},
   component: InboxPage,
 });

@@ -304,7 +304,7 @@ function PersonsPage() {
     <Shell workspace={workspace}>
       <PageHeader
         title={t`Personen`}
-        description={t`De mensen op wiens naam post binnenkomt. Brievie herkent ze aan hun naam en naamvarianten.`}
+        description={t`Op wiens naam brieven binnenkomen, ook iemand zonder account, zoals een kind. Wie zelf inlogt, staat bij Leden.`}
         commands={
           canEdit ? (
             <Button

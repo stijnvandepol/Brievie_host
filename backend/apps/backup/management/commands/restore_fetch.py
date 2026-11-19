@@ -8,12 +8,14 @@ from apps.backup import restore
 from apps.backup.errors import BackupError
 from apps.backup.manifest import MANIFEST_NAME, manifest_from_json
 
-# Exit codes for ./brievie: 2 = the key or password does not fit, 3 = a newer back-up.
+# Exit codes for ./brievie: 2 = the key or password does not fit, 3 = a newer back-up,
+# 4 = nothing in the back-up can prove the key (./brievie asks for it a second time).
 _EXIT_CODES = {
     "wrong_password": 2,
     "wrong_master_key": 2,
     "master_key_malformed": 2,
     "newer_backup": 3,
+    "master_key_unverified": 4,
 }
 
 
@@ -40,6 +42,12 @@ class Command(BaseCommand):
         parser.add_argument(
             "--backup-dir-host", help="The back-up folder on the host, for BRIEVIE_BACKUP_DIR."
         )
+        parser.add_argument(
+            "--accept-unverified-key",
+            action="store_true",
+            help="The key was typed twice: accept it when the back-up holds nothing to "
+            "check it against (a separate password and no workspaces).",
+        )
 
     def handle(self, *args: object, **options: object) -> None:
         owner = _owner(options["out_owner"])  # type: ignore[arg-type]
@@ -54,6 +62,7 @@ class Command(BaseCommand):
                 backup_dir_host=None if backup_dir_host is None else str(backup_dir_host),
                 out_dir=out_dir,
                 out_owner=owner,
+                accept_unverified_key=bool(options["accept_unverified_key"]),
             )
         except BackupError as error:
             raise CommandError(error.message, returncode=_EXIT_CODES.get(error.code, 1)) from error

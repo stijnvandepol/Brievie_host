@@ -7,7 +7,15 @@ from apps.audit.services import actor_from_request
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.rules import services
 from apps.rules.models import Rule
-from apps.rules.schemas import RuleIn, RuleOrderIn, RuleOut, RuleRunStartedOut, RuleTestOut
+from apps.rules.schemas import (
+    RuleIn,
+    RuleOrderIn,
+    RuleOut,
+    RuleRunStartedOut,
+    RuleTemplateOut,
+    RuleTestOut,
+)
+from apps.rules.templates import RuleTemplate
 from apps.workspaces.deps import workspace_member
 from apps.workspaces.models import Membership
 
@@ -44,7 +52,22 @@ def create_rule(request: HttpRequest, workspace_id: UUID, payload: RuleIn) -> St
     )
 
 
-# Before `_RULE`, so `order` and `test` are not read as a rule id.
+# Before `_RULE`, so `templates`, `order` and `test` are not read as a rule id.
+@router.get(
+    f"{_RULES}/templates",
+    response={200: list[RuleTemplateOut], 404: ErrorOut, **AUTH_ERRORS},
+    operation_id="listRuleTemplates",
+    description=(
+        "Example rules to start from, with blanks: a condition with an empty `value` is "
+        "typed by the user, and the label or person of every action is picked by the "
+        "user. The same list for every workspace; `kinds` says whom each is meant for."
+    ),
+)
+def list_rule_templates(request: HttpRequest, workspace_id: UUID) -> tuple[RuleTemplate, ...]:
+    workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    return services.list_templates()
+
+
 @router.put(
     f"{_RULES}/order",
     response={200: list[RuleOut], 404: ErrorOut, **SESSION_WRITE_ERRORS, **BODY_ERRORS},

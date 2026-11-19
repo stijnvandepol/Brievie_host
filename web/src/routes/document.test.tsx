@@ -562,7 +562,7 @@ describe("document made by the autopilot", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Automatisch toegevoegd: naam herkend (Papa)")).toBeInTheDocument();
     expect(screen.getByText("Automatisch bevestigd door AI")).toBeInTheDocument();
-    expect(screen.getByText("Bram zette de brief terug naar Te controleren")).toBeInTheDocument();
+    expect(screen.getByText("Bram zette de brief terug op Te doen om te controleren")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /^Terugdraaien:/ })).toHaveLength(2);
   });
 
@@ -587,7 +587,7 @@ describe("document made by the autopilot", () => {
     const dialog = await screen.findByRole("alertdialog");
     expect(
       within(dialog).getByText(
-        "De brief gaat terug naar Te controleren. De taken die de AI maakte en die nog open staan, verdwijnen. Je controleert de brief daarna in de app.",
+        "De brief komt terug op Te doen, bij Controleren. De taken die de AI maakte en die nog open staan, verdwijnen. Je controleert de brief daarna in de app.",
       ),
     ).toBeVisible();
     expect(within(dialog).getByRole("button", { name: "Annuleren" })).toHaveFocus();

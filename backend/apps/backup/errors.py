@@ -42,6 +42,10 @@ REASONS: dict[str, Promise] = {
         "back-ups er zijn."
     ),
     "wrong_master_key": _("De hoofdsleutel hoort niet bij deze back-up."),
+    "master_key_unverified": _(
+        "Deze back-up heeft een apart wachtwoord en nog geen werkruimtes, dus Brievie kan "
+        "niet controleren of de hoofdsleutel klopt."
+    ),
     "restore_failed": _("Het herstel is niet gelukt."),
     "backup_folder_unwritable": _(
         "De naam van de back-upmap bevat een aanhalingsteken of een regeleinde. "

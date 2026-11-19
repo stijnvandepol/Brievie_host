@@ -24,6 +24,7 @@ EXPECTED_CODES = {
     "busy",
     "env_copy_has_secret",
     "manifest_unreadable",
+    "master_key_unverified",
     "newer_backup",
     "run_not_found",
     "wrong_master_key",

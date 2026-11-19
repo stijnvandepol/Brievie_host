@@ -211,6 +211,11 @@ services:
       api:
         condition: service_healthy
     command: ["/bin/sh", "/etc/caddy/publish-root.sh"]
+    # Caddy reads the two files below only when it starts, and compose never looks inside
+    # a bind-mounted file. ./brievie sets this fingerprint of both: when a file changed,
+    # the definition changed, and `up` recreates caddy (and only caddy).
+    labels:
+      brievie.caddy-config: ${BRIEVIE_CADDY_CONFIG:-}
     environment:
       BRIEVIE_HOSTNAME: ${BRIEVIE_HOSTNAME:?set BRIEVIE_HOSTNAME in deploy/.env}
       BRIEVIE_HSTS_SECONDS: ${BRIEVIE_HSTS_SECONDS:-0}

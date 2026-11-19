@@ -18,7 +18,7 @@ function withCurrent(options: FilterOption[], value: string | undefined): Filter
 }
 
 function PostPage() {
-  usePageTitle(t`Post`);
+  usePageTitle(t`Alle post`);
   const { workspace } = postRoute.useRouteContext();
   const { persoon, label, automatisch } = postRoute.useSearch();
   const navigate = useNavigate();
@@ -45,7 +45,10 @@ function PostPage() {
 
   return (
     <Shell workspace={workspace}>
-      <PageHeader title={t`Post`} />
+      <PageHeader
+        title={t`Alle post`}
+        description={t`Al je brieven, ook de afgehandelde. Zoek op persoon of label. Wat nog op jou wacht, staat bij Te doen.`}
+      />
       <AiStatusLine workspaceId={workspace.id} />
       <div className="filter-bar">
         <div className="filter">
@@ -140,6 +143,7 @@ function PostPage() {
 
 export const postRoute = createRoute({
   getParentRoute: () => workspaceRoute,
+  // The path stays "post" (bookmarks); the page is called "Alle post".
   path: "post",
   validateSearch: (
     search: Record<string, unknown>,
