@@ -32,6 +32,26 @@ Out of scope: problems that need an attacker who already is administrator of the
 or has the master key, and the AI service or other third parties a user chose to
 connect.
 
+## How this repository is checked
+
+Every pull request and every push to `main` runs these checks in GitHub Actions
+(`.github/workflows/`). They find known classes of problems; they do not prove the
+absence of others, and no external audit has been done.
+
+- **Static analysis:** CodeQL (`security-extended` queries) on the Python, TypeScript and
+  workflow code, also weekly; ruff with the flake8-bandit (`S`) rules; `mypy --strict`.
+- **Dependencies:** pip-audit on every package in `backend/uv.lock`, `pnpm audit` on the
+  web interface's production packages (high and critical), Dependabot for updates.
+- **Secrets:** gitleaks on the commits of every push and pull request.
+- **The image:** hadolint on `deploy/Dockerfile`; Trivy on the built image, failing on
+  high and critical vulnerabilities that have a fix.
+- **The running server:** OWASP ZAP against the stack as a user installs it: a passive
+  scan of the web interface and an active scan of every API operation in the OpenAPI
+  contract, without logging in. Pages behind a login are not scanned yet.
+- **The workflows:** zizmor; every third-party action is pinned to a commit.
+- **Behaviour:** the test suite runs as a database role that row-level security applies
+  to, and a CI job restores a back-up onto an empty machine on every change.
+
 ## What Brievie promises
 
 `docs/PRIVACY.md` in `Brievie_host` describes what is stored, how it is protected and

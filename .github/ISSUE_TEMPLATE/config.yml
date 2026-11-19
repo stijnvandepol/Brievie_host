@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security problem
+    url: https://github.com/stijnvandepol/Brievie_host/security/policy
+    about: Never in a public issue. Read SECURITY.md for how to report it privately.
+  - name: Brievie website
+    url: https://brievie.com
+    about: What Brievie is and who makes it.

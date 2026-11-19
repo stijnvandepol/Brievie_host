@@ -1,0 +1,43 @@
+name: Bug report
+description: Something in Brievie host does not work as described.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A security problem? Do not report it here: see SECURITY.md.
+        Never paste real letters, passwords, tokens, BSNs or the contents of `deploy/.env`. Made-up data is enough.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ./brievie start
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The commit you run (`git rev-parse --short HEAD`), or the branch.
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Machine
+      description: For example "Mac with Docker Desktop 4.x", "Ubuntu 24.04", "Synology DS920+".
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: What `./brievie` printed, or the error in the web interface. Remove anything personal first.
+      render: text
