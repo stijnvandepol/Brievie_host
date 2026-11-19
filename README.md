@@ -28,13 +28,17 @@ free.
 ```sh
 git clone https://github.com/stijnvandepol/Brievie_host.git
 cd Brievie_host
-./brievie start
+BRIEVIE_HOSTNAME=mijnmac.local ./brievie start
 ```
 
-The first start creates `deploy/.env` with random secrets, builds the image, starts
-everything and writes a recovery sheet (`brievie-herstelblad.html`) that holds the master
-key: print it, keep it off this machine, and remove the file. Then open
-`https://localhost` and follow [First set-up](#first-set-up). The details, including the
+`BRIEVIE_HOSTNAME` is the name or fixed IP address your phone reaches this computer by on
+the home network (`mijnmac.local`, `192.168.1.20`). Without it the server is called
+`localhost`: that works in a browser on this computer only, and no phone can ever pair
+with it (`./brievie start` says so). The first start creates `deploy/.env` with random
+secrets, builds the image, starts everything and writes a recovery sheet
+(`brievie-herstelblad.html`) that holds the master key: print it, keep it off this
+machine, and remove the file. Then open the address it prints and follow
+[First set-up](#first-set-up). The details, including the
 phone and back-ups, are under [Installation](#installation).
 
 ## What it does today
@@ -132,9 +136,10 @@ installation up to date. `./brievie help` lists every command.
 
 ### First set-up
 
-`https://localhost` shows a certificate warning: that is expected, see below. The first
-person to set up the server becomes its administrator, so set-up asks for an
-installation code. The `api` container prints it once in its log:
+The address `./brievie start` prints (`https://<BRIEVIE_HOSTNAME>`) shows a certificate
+warning: that is expected, see below. The first person to set up the server becomes its
+administrator, so set-up asks for an installation code. The `api` container prints it
+once in its log:
 
 ```sh
 docker compose --project-directory deploy -f deploy/docker-compose.yml logs api | grep Installatiecode

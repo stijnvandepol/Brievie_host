@@ -420,7 +420,7 @@ Both commands write the log (the actor is "Brievie").
 - A web session ends after **14 days without use**, and after **90 days** whatever
   happens. Change that in `deploy/.env` with `BRIEVIE_SESSION_IDLE_DAYS` and
   `BRIEVIE_SESSION_MAX_DAYS` (whole days, at least 1; the first may not be larger than
-  the second), then run `docker compose ... up -d` again. The new limits apply to a session
+  the second), then run `./brievie start` again. The new limits apply to a session
   from its next use.
 - A paired phone stops working **180 days after it was last used** and answers like a
   revoked one: the app asks to pair again. Nobody loses a phone on the day of the update:
