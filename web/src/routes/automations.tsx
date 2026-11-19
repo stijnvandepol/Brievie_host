@@ -4,11 +4,12 @@ import { createRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { Button, Dialog, Heading, Modal, ModalOverlay, Switch } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
-import { labelsQuery, personsQuery, rulesQuery } from "../api/queries";
+import { labelsQuery, personsQuery, rulesQuery, ruleTemplatesQuery } from "../api/queries";
 import type { components } from "../api/schema";
 import { Icon } from "../components/icons";
 import { ErrorAlert, focusPageHeading, PageHeader, Shell, usePageTitle } from "../components/page";
 import { ruleSentence } from "../components/rule-sentence";
+import { HowRulesWork, TemplateGallery } from "../components/rule-templates";
 import { Badge, EmptyState, Loading } from "../components/ui";
 import { workspaceRoute } from "./workspace";
 
@@ -212,6 +213,8 @@ function AutomationsPage() {
   const persons = useQuery({ ...personsQuery(workspace.id), enabled: canRead });
   const [rowError, setRowError] = useState<unknown>(null);
   const canEdit = workspace.role === "admin";
+  // Only an admin can make a rule from an example.
+  const templates = useQuery({ ...ruleTemplatesQuery(workspace.id), enabled: canEdit });
   const params = { workspaceId: workspace.id };
 
   const reorder = useMutation({
@@ -292,12 +295,18 @@ function AutomationsPage() {
         }
       />
       {canRead && rules.isPending ? <Loading /> : null}
-      <ErrorAlert error={rules.error ?? reorder.error ?? applyPreset.error ?? rowError} />
+      <ErrorAlert
+        error={rules.error ?? reorder.error ?? applyPreset.error ?? rowError ?? templates.error}
+      />
       {rules.data && list.length === 0 ? (
         <section className="panel" aria-label={t`Regels`}>
           <EmptyState
             icon="flash"
-            hint={canEdit ? t`Begin met de startset, of maak zelf een regel.` : undefined}
+            hint={
+              canEdit
+                ? t`Begin met een voorbeeld hieronder, met de startset, of maak zelf een regel.`
+                : undefined
+            }
           >
             {t`Je hebt nog geen regels.`}
           </EmptyState>
@@ -340,6 +349,14 @@ function AutomationsPage() {
             />
           ))}
         </ol>
+      ) : null}
+      {rules.data ? <HowRulesWork /> : null}
+      {canEdit && rules.data && templates.data && templates.data.length > 0 ? (
+        <TemplateGallery
+          workspaceId={workspace.id}
+          kind={workspace.kind}
+          templates={templates.data}
+        />
       ) : null}
     </Shell>
   );

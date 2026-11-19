@@ -23,6 +23,7 @@ from apps.rules.engine import Condition, evaluate
 from apps.rules.facts import facts_for_many
 from apps.rules.models import Rule, RuleRun
 from apps.rules.schemas import RuleIn, RuleTestOut
+from apps.rules.templates import RuleTemplate, rule_templates
 from apps.workspaces.models import Workspace
 
 RULES_MAX = 200
@@ -52,6 +53,11 @@ def _rules(workspace: Workspace) -> "models.QuerySet[Rule]":
 def list_rules(workspace: Workspace) -> list[Rule]:
     """Rules in the order they run."""
     return list(_rules(workspace).order_by("position", "id"))
+
+
+def list_templates() -> tuple[RuleTemplate, ...]:
+    """The example rules of the gallery; the same for every workspace."""
+    return rule_templates()
 
 
 def rule_not_found() -> ApiError:
