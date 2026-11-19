@@ -298,12 +298,25 @@ def _not_undoable() -> ApiError:
     return ApiError(409, "event_not_undoable", _("Deze wijziging kun je niet meer terugdraaien."))
 
 
-def record_confirmed(document: Document, *, actor: User) -> None:
-    """The history line for a confirmed review."""
+def record_confirmed(
+    document: Document, *, actor: User | None, origin: str = DocumentEvent.Origin.USER
+) -> None:
+    """The history line for a confirmed review (the AI's has origin `ai` and no actor)."""
     DocumentEvent.objects.create(
         workspace_id=document.workspace_id,
         document=document,
         kind=DocumentEvent.Kind.CONFIRMED,
+        origin=origin,
+        actor=actor,
+    )
+
+
+def record_reopened(document: Document, *, actor: User) -> None:
+    """The history line for taking the AI's confirmation back."""
+    DocumentEvent.objects.create(
+        workspace_id=document.workspace_id,
+        document=document,
+        kind=DocumentEvent.Kind.REOPENED,
         origin=DocumentEvent.Origin.USER,
         actor=actor,
     )

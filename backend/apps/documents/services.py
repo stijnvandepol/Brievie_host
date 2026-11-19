@@ -29,6 +29,7 @@ from apps.documents.schemas import (
 )
 from apps.documents.storage import default_storage
 from apps.pipeline.jobs import defer_processing
+from apps.tasks.models import Task
 from apps.workspaces.keys import workspace_key
 from apps.workspaces.models import Workspace
 
@@ -291,6 +292,40 @@ def retry_processing(*, workspace: Workspace, document_id: UUID) -> Document:
         document.failure_code = ""
         document.save(update_fields=["status", "failure_code", "updated_at"])
         defer_processing(workspace_id=workspace.id, document_id=document.id)
+    return document
+
+
+def reopen_document(*, workspace: Workspace, user: User, document_id: UUID) -> Document:
+    """Take the AI's confirmation back: the document returns to review.
+
+    Only a `done` document the AI confirmed. The confirmed fields are emptied and the
+    tasks the AI made that are still open are removed (a task somebody ticked off stays).
+    Labels, addressees, proposals and suggestions stay, so the normal review follows.
+    """
+    with transaction.atomic():
+        document = (
+            Document.objects.select_for_update().filter(workspace=workspace, id=document_id).first()
+        )
+        if document is None:
+            raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
+        if document.status != Document.Status.DONE or not document.confirmed_by_ai:
+            raise ApiError(
+                409,
+                "document_not_reopenable",
+                _("Dit document kun je niet opnieuw controleren."),
+            )
+        document.status = Document.Status.NEEDS_REVIEW
+        document.sender = ""
+        document.document_type = ""
+        document.summary = ""
+        document.letter_date = None
+        document.confirmed_at = None
+        document.confirmed_organisation = None
+        document.summary_by_ai = False
+        document.confirmed_by_ai = False
+        document.save()
+        Task.objects.filter(document=document, created_by_ai=True, status=Task.Status.OPEN).delete()
+        organise.record_reopened(document, actor=user)
     return document
 
 

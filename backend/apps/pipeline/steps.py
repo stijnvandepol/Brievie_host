@@ -15,12 +15,12 @@ from django.utils import timezone
 from pydantic import ValidationError
 
 from apps.common.privacy import mask_bsns
-from apps.documents import suggestions
+from apps.documents import review, suggestions
 from apps.documents.models import Document, DocumentSuggestion, Extraction
 from apps.labels.models import Label
 from apps.people.matching import PRESELECT_FROM, PersonNames, match_addressees
 from apps.people.models import Person
-from apps.pipeline.autopilot import apply_open_proposals
+from apps.pipeline.autopilot import apply_open_proposals, decide_confirmation
 from apps.pipeline.choices import ExtractionRequest, aliased
 from apps.pipeline.errors import PermanentError
 from apps.pipeline.providers import LLMProvider
@@ -62,10 +62,12 @@ def run_pipeline(
 
     values: list[ValidatedValue] = []
     choices: list[ValidatedChoice] = []
+    payload: ExtractionPayload | None = None
     dropped = 0
+    day = today()
     if provider is not None and request is not None:
         payload = extract(provider, request)
-        values = validate(payload, text, today=today())
+        values = validate(payload, text, today=day)
         choices, dropped = validate_choices(payload, text, request)
 
     with workspace_context(workspace_id):
@@ -76,17 +78,26 @@ def run_pipeline(
             return
         store_proposals(document, values, provider)
         _organise_guarded(document, text, persons, choices)
-        if provider is not None and autopilot_in_force(workspace_id).organise:
+        in_force = autopilot_in_force(workspace_id) if provider is not None else None
+        if in_force is not None and in_force.organise:
             _autopilot_guarded(document)
-        document.status = Document.Status.NEEDS_REVIEW
-        document.save(update_fields=["status", "updated_at"])
+        confirmed = False
+        if in_force is not None and in_force.confirm and payload is not None:
+            confirmed = _confirm_guarded(
+                document, payload, values, text, day, organised=in_force.organise
+            )
+        if not confirmed:
+            document.status = Document.Status.NEEDS_REVIEW
+            document.save(update_fields=["status", "updated_at"])
         suggestion_count = _open_suggestion_count(document)
     logger.info(
-        "Processed document %s: %d proposals, %d suggestions, %d AI picks dropped in %.1f s",
+        "Processed document %s: %d proposals, %d suggestions, %d AI picks dropped, "
+        "confirmed by AI: %s, in %.1f s",
         document_id,
         len(values),
         suggestion_count,
         dropped,
+        confirmed,
         time.monotonic() - started,
     )
 
@@ -272,6 +283,36 @@ def _autopilot_guarded(document: Document) -> None:
             type(exc).__name__,
             document.id,
         )
+
+
+def _confirm_guarded(
+    document: Document,
+    payload: ExtractionPayload,
+    values: Sequence[ValidatedValue],
+    text: str,
+    today: date,
+    *,
+    organised: bool,
+) -> bool:
+    """Confirm the document when every guard rail holds; whether it was confirmed.
+
+    A proposal still open after the organise step also stops it when `organised`: the
+    person is then not unambiguous. The confirmation runs in a savepoint: when it fails
+    (validation included), its writes are rolled back and the document is reloaded, so
+    the caller moves it on to review with its proposals.
+    """
+    data = decide_confirmation(payload=payload, values=values, text=text, today=today)
+    if data is None or (organised and _open_suggestion_count(document) > 0):
+        return False
+    try:
+        with transaction.atomic():
+            review.confirm_automatically(document, data)
+    except Exception as exc:  # noqa: BLE001 - the document must not stay processing
+        # The type only: an exception message may quote the document.
+        logger.error("Unexpected %s while confirming document %s", type(exc).__name__, document.id)
+        document.refresh_from_db()
+        return False
+    return True
 
 
 def _lock_processing(document_id: UUID) -> Document | None:

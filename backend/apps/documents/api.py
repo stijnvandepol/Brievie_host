@@ -208,6 +208,22 @@ def confirm_document(
     return services.document_out(document)
 
 
+@router.post(
+    "/workspaces/{workspace_id}/documents/{document_id}/reopen",
+    response={200: DocumentOut, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS},
+    description="Takes back the AI's confirmation: the document returns to review, the confirmed"
+    " fields are emptied and the tasks the AI made that are still open are removed."
+    " 409 document_not_reopenable unless the AI confirmed the document.",
+    operation_id="reopenDocument",
+)
+def reopen_document(request: HttpRequest, workspace_id: UUID, document_id: UUID) -> DocumentOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    document = services.reopen_document(
+        workspace=membership.workspace, user=current_user(request), document_id=document_id
+    )
+    return services.document_out(document)
+
+
 @router.put(
     "/workspaces/{workspace_id}/documents/{document_id}/addressees",
     response={
