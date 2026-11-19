@@ -188,18 +188,36 @@ def test_a_failing_rail_leaves_the_letter_for_review_with_its_proposals(ws_a: Wo
         assert not Task.objects.filter(document=document).exists()
 
 
-def test_both_switches_on_with_an_open_proposal_left_waits_for_review(ws_a: Workspace) -> None:
+def test_an_open_label_proposal_does_not_stop_the_confirm(ws_a: Workspace) -> None:
     switch_on(ws_a, organise=True)
     with workspace_context(ws_a.id):
         Label.objects.create(workspace=ws_a, name="Gezondheid")
     document = new_document(ws_a)
 
-    # Below AUTO_APPLY_FROM, so the proposal stays open after the organise step.
+    # Below AUTO_APPLY_FROM, so the proposal stays open after the organise step. A label
+    # that is still a question says nothing about the sender, the date or the tasks.
     run(ws_a, document, Answering(labels={"Gezondheid": 0.7}))
+
+    assert stored(ws_a, document).status == Document.Status.DONE
+    with workspace_context(ws_a.id):
+        assert DocumentSuggestion.objects.filter(document=document, state="open").count() == 1
+
+
+def test_an_open_addressee_proposal_waits_for_review(
+    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    switch_on(ws_a, organise=True)
+    make_person(ws_a, "Jan de Vries")
+    document = new_document(ws_a)
+    # The organise step leaves the name match open: whose letter it is, is still a question.
+    monkeypatch.setattr(steps, "apply_open_proposals", lambda _document: 0)
+
+    run(ws_a, document, Answering())
 
     assert stored(ws_a, document).status == Document.Status.NEEDS_REVIEW
     with workspace_context(ws_a.id):
-        assert DocumentSuggestion.objects.filter(document=document, state="open").count() == 1
+        open_rows = DocumentSuggestion.objects.filter(document=document, state="open")
+        assert [row.action for row in open_rows] == ["add_addressee"]
 
 
 def test_an_open_proposal_does_not_block_when_organise_is_off(ws_a: Workspace) -> None:

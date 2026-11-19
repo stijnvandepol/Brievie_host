@@ -85,8 +85,8 @@ keeps the document a proposal when any of these is true:
 - an action without a deadline while the letter's text names a term (`mentions_term`: "binnen
   14 dagen", "uiterlijk", "vóór 1 december", "vervaldatum", "termijn" and the like): the
   models miss relative terms, and a collection task without its date is worse than a proposal;
-- with `auto_organise` also on: a proposal is still open after (a) (a weak person or label
-  match, or a rule that asks) — the person is not unambiguous.
+- with `auto_organise` also on: an addressee proposal is still open after (a) — the person
+  is not unambiguous. (An open label proposal does not block: ruling 10.)
 
 0.850 is the existing `NEEDS_ATTENTION_BELOW`. The signals are the ones that exist: the
 model's `zekerheid` per sourced value, and the deterministic checks (quote literally in
@@ -172,6 +172,10 @@ A failure inside it rolls back to "needs review".
    confidence 0 in the existing validation and so blocks confirming (pinned by a test).
    Person assignment came from name matching and was right 12/12, which supports ruling 2.
    `AUTO_APPLY_FROM` went from 0.700 to 0.800 after a model gave loose extra labels.
+
+10. Only an open addressee proposal blocks the confirm, not a label proposal: preset rules in
+    mode "propose" match most letters, and a label that is still a question says nothing
+    about the sender, the date or the tasks.
 
 ## Left to the builder
 

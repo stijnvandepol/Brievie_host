@@ -197,6 +197,14 @@ def _labels() -> list[tuple[UUID, str]]:
     return list(Label.objects.values_list("id", "name"))
 
 
+def _has_open_addressee_proposal(document: Document) -> bool:
+    return DocumentSuggestion.objects.filter(
+        document=document,
+        state=DocumentSuggestion.State.OPEN,
+        action=DocumentSuggestion.Action.ADD_ADDRESSEE,
+    ).exists()
+
+
 def _open_suggestion_count(document: Document) -> int:
     return DocumentSuggestion.objects.filter(
         document=document, state=DocumentSuggestion.State.OPEN
@@ -305,15 +313,18 @@ def _confirm_guarded(
 ) -> bool:
     """Confirm the document when every guard rail holds; whether it was confirmed.
 
-    A proposal still open after the organise step also stops it when `organised`: the
-    person is then not unambiguous. The decision and the confirmation run in a savepoint:
+    An addressee proposal still open after the organise step also stops it when
+    `organised`: whose letter it is, is then still a question. An open label proposal
+    does not: it says nothing about the sender, the date or the tasks, and it stays
+    visible as a proposal on the confirmed letter. The decision and the confirmation run
+    in a savepoint:
     when either fails (validation of the built review included), its writes are rolled back
     and the document is reloaded, so the caller moves it on to review with its proposals.
     """
     try:
         with transaction.atomic():
             data = decide_confirmation(payload=payload, values=values, text=text, today=today)
-            if data is None or (organised and _open_suggestion_count(document) > 0):
+            if data is None or (organised and _has_open_addressee_proposal(document)):
                 return False
             review.confirm_automatically(document, data)
     except ApiError:
