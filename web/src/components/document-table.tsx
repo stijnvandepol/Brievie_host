@@ -76,8 +76,12 @@ function statusIntent(status: string): Intent | "brand" | undefined {
   }
 }
 
-/** The status of a letter as a badge: its word, a tint and an icon. */
-export function StatusBadge({ status }: { status: string }) {
+/** The status of a letter as a badge: its word, a tint and an icon. A read letter that still
+ * waits for a name says so, in the word "Te doen" uses; "Klaar" only when nothing waits. */
+export function StatusBadge({ status, inboxState }: { status: string; inboxState?: string }) {
+  if (status === "done" && inboxState === "unassigned") {
+    return <Badge intent="warning">{t`Naam kiezen`}</Badge>;
+  }
   return <Badge intent={statusIntent(status)}>{statusLabel(status)}</Badge>;
 }
 
@@ -141,7 +145,7 @@ export function DocumentTable({
                 >
                   {document.sender || t`Onbekende afzender`}
                 </Link>
-                <StatusBadge status={document.status} />
+                <StatusBadge status={document.status} inboxState={document.inbox_state} />
               </div>
               <p className="letter-card-meta">
                 <span>{typeLabel(document.document_type)}</span>
@@ -198,7 +202,7 @@ export function DocumentTable({
               </td>
               <td>
                 <span className="cell-badges">
-                  <StatusBadge status={document.status} />
+                  <StatusBadge status={document.status} inboxState={document.inbox_state} />
                   <SuggestionMark count={document.open_suggestion_count} />
                 </span>
               </td>

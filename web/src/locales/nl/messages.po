@@ -1526,6 +1526,7 @@ msgstr "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
 msgid "Naam"
 msgstr "Naam"
 
+#: src/components/document-table.tsx
 #: src/routes/inbox.tsx
 msgid "Naam kiezen"
 msgstr "Naam kiezen"
