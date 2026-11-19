@@ -1201,6 +1201,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/rules/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Rule Templates
+         * @description Example rules to start from, with blanks: a condition with an empty `value` is typed by the user, and the label or person of every action is picked by the user. The same list for every workspace; `kinds` says whom each is meant for.
+         */
+        get: operations["listRuleTemplates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/rules/test": {
         parameters: {
             query?: never;
@@ -2282,6 +2302,53 @@ export interface components {
         RuleRunStartedOut: {
             /** Queued */
             queued: boolean;
+        };
+        /** RuleTemplateActionOut */
+        RuleTemplateActionOut: {
+            /** Hint */
+            hint: string;
+            /** Label Key */
+            label_key: string;
+            /** Label Name */
+            label_name: string;
+            /** Type */
+            type: string;
+        };
+        /** RuleTemplateConditionOut */
+        RuleTemplateConditionOut: {
+            /** Example */
+            example: string;
+            /** Field */
+            field: string;
+            /** Hint */
+            hint: string;
+            /** Op */
+            op: string;
+            /** Value */
+            value: string;
+        };
+        /** RuleTemplateOut */
+        RuleTemplateOut: {
+            /** Actions */
+            actions: components["schemas"]["RuleTemplateActionOut"][];
+            /** Conditions */
+            conditions: components["schemas"]["RuleTemplateConditionOut"][];
+            /** Description */
+            description: string;
+            /** Key */
+            key: string;
+            /** Kinds */
+            kinds: string[];
+            /** Match */
+            match: string;
+            /** Mode */
+            mode: string;
+            /** Name */
+            name: string;
+            /** Tip */
+            tip: string;
+            /** Title */
+            title: string;
         };
         /** RuleTestOut */
         RuleTestOut: {
@@ -7046,6 +7113,46 @@ export interface operations {
             };
             /** @description Unprocessable Content */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    listRuleTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleTemplateOut"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
