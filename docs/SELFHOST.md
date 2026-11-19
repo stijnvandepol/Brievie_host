@@ -455,3 +455,8 @@ server: no workspace can switch it on (the API answers 409 `ai_autopilot_forbidd
 the pipeline applies nothing automatically, also where a switch is stored as on. Letters
 then wait for a person, as before. Run `docker compose ... up -d` again after changing it.
 It is a setting for the whole server: a single workspace cannot be forbidden yet.
+
+While it is `false`, an administrator still sees a switch that is stored as on and can
+switch it off (not on). When you set it back to `true`, switches that were stored as on
+work again at once, without a new agreement. If that is not what you want, switch them off
+in each workspace first (page **AI**), while the server still forbids the autopilot.

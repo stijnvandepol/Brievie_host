@@ -54,20 +54,27 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
 - The AI autopilot (`auto_organise`, `auto_confirm`; both off by default) is written only by
   `apps.pipeline.settings_service.configure_autopilot`: admin, AI not `off`, `acknowledged`
   when a switch goes on, one audit row per changed switch. `configure` switches both off
-  when AI goes off or consent moves to another address. `BRIEVIE_AI_AUTOPILOT_ALLOWED=false`
-  stops it server-wide, also where a switch is stored as on.
+  (audited) when AI goes off, the mode changes (external <-> local), or consent is granted
+  for another address; another model in the same mode at the same address keeps them.
+  `BRIEVIE_AI_AUTOPILOT_ALLOWED=false` stops it server-wide, also where a switch is stored
+  as on.
 - `updateAiAutopilot` is session-only (`auth=session_auth`): a device token gets 401.
 - Automatic changes have no actor and are marked: `DocumentLabel`/`DocumentAddressee`
   `automatic`, `Document.confirmed_by_ai`, `Task.created_by_ai`, history origin `ai` or
   `name_match`. Never record a user for what nobody did.
 - The pipeline applies only on a `processing` document under its row lock and reads
-  `autopilot_in_force` at that moment. Nothing automatic happens when processing failed or
-  the organise step failed.
+  `autopilot_in_force` at that moment. Nothing automatic happens (no apply, no confirm,
+  whatever the switches) when processing failed or the organise step (`organise_processed`)
+  failed; no confirm when applying failed.
 - `apps.pipeline.autopilot.decide_confirmation` and `mentions_term` stay pure: no database.
-  `mentions_term` blocks rather than guesses: a letter that names a term while an action has
-  no deadline stays a proposal.
+  `mentions_term` blocks rather than guesses (linear-time regexes): a letter that names a term
+  stays a proposal unless it has actions and every one has a deadline. An invoice due date
+  needs a payment action, and every payment a deadline.
 - The autopilot never applies a rule's proposal (origin `rule`); it applies only `ai` picks
-  from `AUTO_APPLY_FROM` and `name_match` picks from `PRESELECT_FROM`.
+  from `AUTO_APPLY_FROM` and `name_match` picks from `PRESELECT_FROM`. An `ai` pick of a
+  person only when its quote names that person (`quote_names`).
+- A person's confirm with `sets_organisation` clears `automatic` on the links that stay; the
+  autopilot's change is then no longer undoable. Hand edits leave the flag alone.
 - The rules engine (`apps.rules.engine`) stays pure: no Django import.
 - No Redis, no Celery, no Node runtime container. Background jobs: Procrastinate, in an
   app's `jobs.py`; a job takes ids only and enters `workspace_context` itself, in short
