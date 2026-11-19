@@ -688,7 +688,9 @@ def test_status_asks_the_keeper(installed: Install) -> None:
     result = installed.run("status")
 
     assert result.returncode == 0, result.stderr
-    assert "exec -T keeper python manage.py backup_status" in installed.commands()[-1]
+    # The back-ups, then the last update (./brievie update).
+    assert "exec -T keeper python manage.py backup_status" in installed.commands()[-2]
+    assert "keeper python manage.py update_status" in installed.commands()[-1]
 
 
 @pytest.mark.parametrize("args", [(), ("--delete",)])

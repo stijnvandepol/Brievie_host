@@ -78,6 +78,9 @@ halfway_reported=""
 # any exit then starts the old version again (on_exit).
 update_live=""
 update_from=""
+# Set while the new version's wrapper finishes an update: any other exit than the end
+# prints the way back (the marker stays).
+finish_live=""
 restore_terminal() {
 	if [ -n "$saved_tty" ]; then
 		stty "$saved_tty" 2>/dev/null || true
@@ -115,6 +118,13 @@ on_exit() {
 			echo "Er is niets bijgewerkt, maar Brievie kon niet opnieuw worden gestart. Typ ./brievie start." >&9
 		fi
 	fi
+	if [ -n "$finish_live" ]; then
+		finish_live=""
+		{
+			echo "Het bijwerken naar versie $(update_marker_value to) is niet afgemaakt. Brievie draait misschien niet."
+			print_way_back
+		} >&9
+	fi
 	# Stopped after the restore began to replace things (an error or Ctrl-C): say where.
 	if [ "$exit_rc" -ne 0 ] && [ -n "$restore_marked" ] && [ -z "$halfway_reported" ]; then
 		report_halfway
@@ -143,11 +153,14 @@ Gebruik: ./brievie <opdracht>
   ./brievie backup --init         Stel de back-up de eerste keer in.
                                   Extra: --allow-same-disk, --separate-password.
   ./brievie backup --check        Controleer of de back-ups nog te lezen zijn.
-  ./brievie restore [nummer]      Zet een back-up terug (de nieuwste, of dat nummer).
+  ./brievie restore [nummer]      Zet een back-up terug (de nieuwste, of dat nummer;
+                                  pre-update-0.3.0 is de back-up van vóór de update
+                                  naar 0.3.0).
                                   Extra: --replace (vervang wat er nu staat),
                                   --separate-password, --keep-hostname,
                                   --skip-safety-backup (alleen als de vorige poging
-                                  halverwege bleef steken).
+                                  halverwege bleef steken, of op de weg terug na een
+                                  mislukte update).
   ./brievie update [versie]       Werk Brievie bij naar de nieuwste versie (of naar die versie).
   ./brievie status                Laat zien hoe het met de back-ups gaat.
   ./brievie status --list         Laat de back-ups zien die je kunt terugzetten, met hun nummer.
@@ -549,6 +562,14 @@ valid_version() {
 	printf '%s\n' "$1" | grep -Eqx '(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})'
 }
 
+# Whether $1 names the back-up of an update: pre-update-X.Y.Z.
+valid_update_label() {
+	case $1 in
+	pre-update-*) valid_version "${1#pre-update-}" ;;
+	*) return 1 ;;
+	esac
+}
+
 # The version of the checked-out code (backend/pyproject.toml), or nothing.
 checkout_version() {
 	found_version=$(sed -n 's/^version = "\([0-9.]*\)"$/\1/p' "${here:?}/backend/pyproject.toml" 2>/dev/null | head -n 1) || found_version=""
@@ -943,7 +964,7 @@ cmd_backup() {
 		# The safety back-up of an update, named pre-update-X.Y.Z (./brievie update only).
 		--label=pre-update-*)
 			label=${arg#--label=}
-			valid_version "${label#pre-update-}" || usage_error "Onbekend woord bij ./brievie backup: $arg"
+			valid_update_label "$label" || usage_error "Onbekend woord bij ./brievie backup: $arg"
 			;;
 		*) usage_error "Onbekend woord bij ./brievie backup: $arg" ;;
 		esac
@@ -1047,7 +1068,10 @@ cmd_status() {
 		return 0
 	fi
 	require_keeper
-	compose exec -T -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" keeper python manage.py backup_status
+	status_rc=0
+	compose exec -T -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" keeper python manage.py backup_status || status_rc=$?
+	compose exec -T -e BRIEVIE_WRAPPER=1 -e "BRIEVIE_LOG_LEVEL=$log_level" keeper python manage.py update_status || true
+	return "$status_rc"
 }
 
 cmd_sweep() {
@@ -1192,6 +1216,12 @@ pin_restored_identity() {
 		edit_env set COMPOSE_PROJECT_NAME "$project" restore || return 1
 	fi
 	keep_current BRIEVIE_IMAGE || return 1
+	# The version that runs is the checkout's, not the back-up's.
+	if [ -n "$restore_version" ]; then
+		edit_env set BRIEVIE_VERSION "$restore_version" restore || return 1
+	else
+		keep_current BRIEVIE_VERSION || return 1
+	fi
 	if [ -e "$env_file" ]; then
 		for key in POSTGRES_PORT BRIEVIE_HTTP_PORT BRIEVIE_HTTPS_PORT BRIEVIE_INSTALLATION_ID \
 			BRIEVIE_PUBLISH_POSTGRES $destination_keys; do
@@ -1408,8 +1438,8 @@ cmd_restore() {
 		*)
 			[ -z "$run" ] || usage_error "Geef maar één back-upnummer."
 			run=$(printf '%s' "$arg" | tr '[:upper:]' '[:lower:]')
-			valid_run_id "$run" ||
-				usage_error "Een back-upnummer ziet eruit als 0b6c3f7e-1d2a-4c5b-9e8f-7a6b5c4d3e2f."
+			valid_run_id "$run" || valid_update_label "$run" ||
+				usage_error "Een back-upnummer ziet eruit als 0b6c3f7e-1d2a-4c5b-9e8f-7a6b5c4d3e2f, de back-up van vóór een update als pre-update-0.3.0."
 			;;
 		esac
 	done
@@ -1431,6 +1461,23 @@ cmd_restore() {
 			exit 1
 		fi
 	fi
+	# An unfinished update: only its own back-up comes back, and only once the checkout is
+	# back on the version from before it (the way back that ./brievie update printed).
+	update_restore=""
+	if [ -f "${here:?}/$update_marker" ]; then
+		u_run=$(update_marker_value run_id)
+		u_head=$(git -C "${here:?}" rev-parse -q --verify HEAD 2>/dev/null) || u_head=""
+		if { [ "$run" = "pre-update-$(update_marker_value to)" ] || { [ -n "$u_run" ] && [ "$run" = "$u_run" ]; }; } &&
+			[ -n "$u_head" ] && [ "$u_head" = "$(update_marker_value previous_ref)" ]; then
+			update_restore=yes
+		else
+			report_unfinished_update
+			exit 1
+		fi
+	fi
+	# A restore runs the code that is checked out: its image, and its version is pinned.
+	restore_version=$(checkout_version)
+	choose_image "$restore_version"
 	claim_installation
 	data_present=""
 	if [ -e "$env_file" ]; then
@@ -1446,6 +1493,15 @@ cmd_restore() {
 
 	# 1. The source and the secrets.
 	source=${BRIEVIE_RESTORE_SOURCE:-}
+	# The back-up of an update without a destination is the emergency copy on this machine.
+	if [ -z "$source" ] && valid_update_label "$run"; then
+		if [ "$(update_marker_value kind)" = update ] ||
+			{ [ ! -f "${here:?}/$update_marker" ] && [ -e "$env_file" ] &&
+				[ -z "$(env_value BRIEVIE_BACKUP_DIR)$(env_value BRIEVIE_BACKUP_REPOSITORY)" ]; }; then
+			source=volume:update-backup
+			echo "De back-up $run wordt gezocht in de noodback-up op deze computer (volume ${project}_update-backup)."
+		fi
+	fi
 	if [ -z "$source" ]; then
 		ask "Waar staat de back-up? Typ het pad van de map (bijvoorbeeld /Volumes/Backup/brievie), een volume (zoals volume:backup-unset) of een adres dat begint met rest: of s3:"
 		source=$answer
@@ -1803,6 +1859,10 @@ EOF
 	rm -f "${here:?}/deploy/.restore-in-progress"
 	restore_marked=""
 	rm -rf "${here:?}/deploy/.restore"
+	if [ -n "$update_restore" ]; then
+		rm -f "${here:?}/$update_marker"
+		echo "Brievie is terug op versie ${restore_version:-van deze map}, met de gegevens van vóór het bijwerken."
+	fi
 	if [ -n "$hostname_changed" ]; then
 		echo "De servernaam is veranderd. Maak een nieuw herstelblad met ./brievie recovery-sheet en koppel je telefoons opnieuw."
 	fi
@@ -2145,6 +2205,7 @@ cmd_update() {
 
 # The way back, once the new version's code is in place: Brievie stays stopped.
 finish_failed() {
+	finish_live=""
 	printf '%s\n' "$1" >&2
 	show_tail
 	quietly compose_raw stop api worker keeper caddy || true
@@ -2172,6 +2233,7 @@ cmd_update_finish() {
 		exit 1
 	fi
 	choose_image "$finish_to"
+	finish_live=yes
 	claim_installation
 	bring_along
 	if ! docker image inspect "$image" >/dev/null 2>&1; then
@@ -2193,6 +2255,7 @@ cmd_update_finish() {
 	fi
 	kind=$(update_marker_value kind)
 	rm -f "${here:?}/$update_marker"
+	finish_live=""
 	echo "Bijgewerkt naar versie $finish_to."
 	if [ "$kind" = update ]; then
 		echo "De back-up van versie $finish_from (pre-update-$finish_to) is een noodback-up op deze computer, in het Docker-volume ${project}_update-backup. Hij telt niet als back-up."

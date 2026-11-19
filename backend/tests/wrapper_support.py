@@ -78,7 +78,7 @@ for rule in filter(None, os.environ.get("FAKE_FAIL", "").split("|")):
 if argv[:2] == ["ps", "-a"]:
     sys.exit(0)
 if argv[:2] == ["volume", "inspect"]:
-    sys.exit(0 if argv[-1].endswith("_pgdata") else 1)
+    sys.exit(0 if argv[-1].endswith(("_pgdata", "_update-backup")) else 1)
 if argv[:2] == ["image", "inspect"]:
     missing = os.environ.get("FAKE_MISSING_IMAGES", "").split()
     sys.exit(1 if argv[-1] in missing else 0)

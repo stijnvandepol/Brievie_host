@@ -624,3 +624,100 @@ def test_a_copy_outside_its_folder_is_not_trusted(update_install: UpdateInstall)
     assert "docker-compose.yml" in done.stderr
     assert update_install.calls() == []
     assert os.environ.get("BRIEVIE_ROOT") is None
+
+
+def test_ctrl_c_during_the_migration_prints_the_way_back(update_install: UpdateInstall) -> None:
+    result = update_install.run("update", FAKE_KILL_AT="run --rm migrate")
+
+    assert result.returncode != 0
+    way_back_lines(result.stderr)
+    assert update_install.marker.exists()
+    assert not (update_install.root / "deploy" / ".brievie-lock").exists()
+
+
+# --- the way back: a restore by name ------------------------------------------------------
+
+
+def restore_env(**extra: str) -> dict[str, str]:
+    return {
+        "BRIEVIE_RESTORE_MASTER_KEY": MASTER,
+        "BRIEVIE_RESTORE_CONFIRM": "WISSEN",
+        **extra,
+    }
+
+
+def failed_update(install: UpdateInstall) -> None:
+    result = install.run("update", FAKE_FAIL="check_health=1")
+    assert result.returncode == 3
+    assert install.marker.exists()
+
+
+def test_the_way_back_restores_the_fallback_by_name(update_install: UpdateInstall) -> None:
+    failed_update(update_install)
+    update_install.git("checkout", "-q", "v0.2.0")
+    # The env copy in the back-up carries no version: the restore pins the checkout's.
+    update_install.restored.write_text(env_text(version=None))
+    first = len(update_install.calls())
+
+    result = update_install.run(
+        "restore",
+        "pre-update-0.3.0",
+        "--replace",
+        "--skip-safety-backup",
+        "--keep-hostname",
+        **restore_env(),
+    )
+
+    assert result.returncode == 0, result.stderr
+    fetch = next(c for c in update_install.calls()[first:] if "restore_fetch" in c["argv"])
+    argv = fetch["argv"]
+    assert "brievie_update-backup:/backup:ro" in argv
+    assert argv[argv.index("--run") + 1] == "pre-update-0.3.0"
+    assert "brievie/backend:0.2.0" in argv
+    assert setting(update_install, "BRIEVIE_VERSION") == ["BRIEVIE_VERSION=0.2.0"]
+    assert not update_install.marker.exists()
+    assert "versie 0.2.0" in result.stdout
+    update_install.assert_no_secret_in_argv()
+
+
+def test_a_restore_by_name_needs_the_old_checkout_first(update_install: UpdateInstall) -> None:
+    failed_update(update_install)  # HEAD is still v0.3.0
+    first = len(update_install.calls())
+
+    result = update_install.run(
+        "restore", "pre-update-0.3.0", "--replace", "--skip-safety-backup", **restore_env()
+    )
+
+    assert result.returncode == 1
+    way_back_lines(result.stdout)
+    assert not any("restore_fetch" in c["argv"] for c in update_install.calls()[first:])
+    assert update_install.marker.exists()
+
+
+def test_a_restore_of_another_backup_waits_for_the_update(update_install: UpdateInstall) -> None:
+    failed_update(update_install)
+    update_install.git("checkout", "-q", "v0.2.0")
+    first = len(update_install.calls())
+
+    result = update_install.run(
+        "restore", "0b6c3f7e-0000-4c5b-9e8f-7a6b5c4d3e2f", "--replace", **restore_env()
+    )
+
+    assert result.returncode == 1
+    assert "niet afgemaakt" in result.stdout
+    assert not any("restore_fetch" in c["argv"] for c in update_install.calls()[first:])
+
+
+@pytest.mark.parametrize("name", ["pre-update-0.3", "pre-update-latest", "pre-update-0.3.0;x"])
+def test_a_malformed_backup_name_is_usage(update_install: UpdateInstall, name: str) -> None:
+    result = update_install.run("restore", name, "--replace", **restore_env())
+    assert result.returncode == 2
+    assert update_install.calls() == []
+
+
+def test_status_shows_the_last_update(update_install: UpdateInstall) -> None:
+    result = update_install.run("status")
+
+    assert result.returncode == 0, result.stderr
+    order_of(update_install, "backup_status", "update_status")
+    assert "Laatst bijgewerkt: 0.2.0 → 0.3.0" in result.stdout
