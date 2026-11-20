@@ -16,6 +16,10 @@ class Command(BaseCommand):
         "superuser (DATABASE_SUPERUSER_URL). Exit 1 with the problems when any."
     )
 
+    # ./brievie starts this in a new container (run --no-deps), PostgreSQL may be down:
+    # no system checks, they read database features (GeneratedField).
+    requires_system_checks: list[str] = []  # noqa: RUF012 - Django's own attribute
+
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument("--dbname", required=True, help="The restored database.")
         parser.add_argument("--storage-root", required=True, help="The restored documents.")

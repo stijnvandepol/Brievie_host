@@ -35,6 +35,10 @@ class Command(BaseCommand):
         "BRIEVIE_BACKUP_PASSWORD. Runs in a one-off container."
     )
 
+    # ./brievie starts this in a new container (run --no-deps), PostgreSQL may be down:
+    # no system checks, they read database features (GeneratedField).
+    requires_system_checks: list[str] = []  # noqa: RUF012 - Django's own attribute
+
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument("--run", help="The run id of the back-up (default: the newest).")
         parser.add_argument("--out", required=True, help="Folder for env and manifest.json.")

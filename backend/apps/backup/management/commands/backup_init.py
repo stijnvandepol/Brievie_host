@@ -10,6 +10,10 @@ from apps.backup.errors import BackupError
 class Command(BaseCommand):
     help = "Prepare the back-up destination for the first time (runs in a one-off container)."
 
+    # ./brievie starts this in a new container (run --no-deps), PostgreSQL may be down:
+    # no system checks, they read database features (GeneratedField).
+    requires_system_checks: list[str] = []  # noqa: RUF012 - Django's own attribute
+
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(
             "--allow-same-disk",

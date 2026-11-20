@@ -12,6 +12,10 @@ class Command(BaseCommand):
         "with --delete, remove them. Files younger than 24 hours are never touched."
     )
 
+    # ./brievie starts this in a new container (run --no-deps), PostgreSQL may be down:
+    # no system checks, they read database features (GeneratedField).
+    requires_system_checks: list[str] = []  # noqa: RUF012 - Django's own attribute
+
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument("--delete", action="store_true", help="Delete the files found.")
 
