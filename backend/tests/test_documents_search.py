@@ -574,7 +574,9 @@ def test_without_workspace_context_nothing_is_found(ws_a: Workspace) -> None:
     letter(ws_a, "Geheime brief over de fusie.")
 
     with pytest.raises(RuntimeError):
-        search_documents(membership_of(ws_a), q="fusie", filters=SearchFilters(), limit=30, offset=0)
+        search_documents(
+            membership_of(ws_a), q="fusie", filters=SearchFilters(), limit=30, offset=0
+        )
 
 
 @pytest.fixture
