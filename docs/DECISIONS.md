@@ -1375,5 +1375,9 @@ plane). One line per finding is in the pull request; the choices are here.
   person's letters are, and later who may read them); the contract test names it with the
   AI settings as deliberately narrowed, and no app calls it. A proposal of an AI on the own network names its
   reader `local` instead of the host (`ProposalOut.provider` reaches every member, while
-  `status` already hid the local address); proposals stored before keep their host.
+  `status` already hid the local address); proposals stored before keep their host. A workspace holds at most 500 persons
+  and 200 labels made by hand (409 `too_many_persons` / `too_many_labels`): the AI sees only
+  the first 50 persons and 100 labels, and name matching walks every person on every letter
+  on the shared worker. Persons made for members and preset labels are not counted against
+  the moment they are made, only against the next one made by hand.
 

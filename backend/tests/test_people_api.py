@@ -480,3 +480,23 @@ def test_a_member_whose_name_another_person_has_gets_no_shared_variant(
         (f"/workspaces/{ws_a.id}/persons/{person.id}", "Anna (lid)"),
     ):
         assert put(client_a, path, {"display_name": name}).status_code == 200
+
+
+def test_a_workspace_holds_a_limited_number_of_persons(
+    client_a: Client, ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Security review 2026-11-20 (content L5): every letter's name matching walks them all.
+    from apps.people import services
+
+    with workspace_context(ws_a.id):
+        present = Person.objects.filter(workspace=ws_a).count()
+    monkeypatch.setattr(services, "MAX_PERSONS", present + 1)
+
+    assert create(client_a, ws_a.id, {"display_name": "Oma"}).status_code == 201
+    r = create(client_a, ws_a.id, {"display_name": "Opa"})
+
+    assert r.status_code == 409
+    assert r.json() == {
+        "code": "too_many_persons",
+        "message": "Deze werkruimte heeft het grootste aantal personen. Verwijder er eerst een.",
+    }
