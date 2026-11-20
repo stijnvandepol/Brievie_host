@@ -255,9 +255,7 @@ def test_automatic_documents_of_another_workspace_are_not_listed_or_counted(
     # Even a query that forgets the workspace sees only A's rows (forced RLS).
     with workspace_context(ws_a.id, actor=SYSTEM):
         unfiltered = set(
-            Document.objects.annotate(has_automatic=services._has_automatic_link())
-            .filter(services._is_automatic())
-            .values_list("id", flat=True)
+            Document.objects.filter(services._is_automatic()).values_list("id", flat=True)
         )
     assert unfiltered == {mine[k].id for k in ("ai_confirmed", "auto_label", "auto_person")}
 

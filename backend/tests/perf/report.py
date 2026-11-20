@@ -129,8 +129,8 @@ def render(report: Report) -> tuple[str, list[str]]:
         f"Threshold: median <= {_ms(THRESHOLD)} ms per list, preview count <="
         f" {_ms(PREVIEW_THRESHOLD)} ms. Measured with jit=off, the production setting;"
         ' "jit on" is the same service with PostgreSQL\'s default, for comparison. A list'
-        " passes on today's service, or on its proposed form (tests/perf/candidates.py,"
-        " same result required), or with the member filter. "
+        " passes on the service as it ships (with the member filter where it applies;"
+        " the same result without it required). "
         f"{RUNS} timed runs after one first run; p95 by nearest rank (over {RUNS} runs: the"
         ' slowest). "first" is the first run of that query in the measurement: a new plan,'
         " but the server's and the machine's caches are not emptied.",

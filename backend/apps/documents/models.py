@@ -270,6 +270,15 @@ class DocumentAddressee(WorkspaceModel):
                 fields=["document", "person"], name="documents_documentaddressee_unique"
             ),
         ]
+        indexes: ClassVar[list[models.Index]] = [
+            # The autopilot's links, for the "automatic" filter and count (DECISIONS
+            # 2026-11-20): a few letters' worth, not every link of the workspace.
+            models.Index(
+                fields=["document"],
+                condition=models.Q(automatic=True),
+                name="documents_addressee_automatic",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.document_id} {self.person_id}"
@@ -292,6 +301,15 @@ class DocumentLabel(WorkspaceModel):
         constraints: ClassVar[list[models.BaseConstraint]] = [
             models.UniqueConstraint(
                 fields=["document", "label"], name="documents_documentlabel_unique"
+            ),
+        ]
+        indexes: ClassVar[list[models.Index]] = [
+            # The autopilot's links, for the "automatic" filter and count (DECISIONS
+            # 2026-11-20): a few letters' worth, not every link of the workspace.
+            models.Index(
+                fields=["document"],
+                condition=models.Q(automatic=True),
+                name="documents_label_automatic",
             ),
         ]
 

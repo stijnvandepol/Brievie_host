@@ -2,7 +2,7 @@ import unicodedata
 from collections.abc import Collection
 from uuid import UUID
 
-from django.db import IntegrityError, models, transaction
+from django.db import IntegrityError, connection, models, transaction
 from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -47,9 +47,14 @@ def _in_use(person: Person) -> bool:
 
 
 def list_persons(workspace: Workspace) -> list[Person]:
-    """Active persons by name, then archived ones; needs the workspace's RLS context."""
-    return list(
-        _persons(workspace).order_by(
+    """Active persons by name, then archived ones; needs the workspace's RLS context.
+
+    `document_count` from one grouped count over the letters the policy shows, not a
+    link-by-link join (measured, DECISIONS 2026-11-20). The same number: a link is
+    visible exactly when its letter is, and `addressee_ids` mirrors the links.
+    """
+    persons = list(
+        Person.objects.filter(workspace=workspace).order_by(
             models.ExpressionWrapper(
                 models.Q(archived_at__isnull=False), output_field=models.BooleanField()
             ).asc(),
@@ -57,6 +62,17 @@ def list_persons(workspace: Workspace) -> list[Person]:
             "id",
         )
     )
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT a.id, pg_catalog.count(*) FROM public.documents_document d,"
+            " LATERAL pg_catalog.unnest(d.addressee_ids) AS a(id)"
+            " WHERE d.workspace_id = %s GROUP BY a.id",
+            [workspace.id],
+        )
+        counts: dict[UUID, int] = {row[0]: int(row[1]) for row in cursor.fetchall()}
+    for person in persons:
+        person.document_count = counts.get(person.id, 0)  # type: ignore[attr-defined]
+    return persons
 
 
 def _get_for_update(workspace: Workspace, person_id: UUID) -> Person:

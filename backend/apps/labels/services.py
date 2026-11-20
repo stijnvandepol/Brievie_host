@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from uuid import UUID
 
-from django.db import IntegrityError, models, transaction
+from django.db import IntegrityError, connection, models, transaction
 from django.db.models.functions import Lower
 from django.utils.translation import gettext as _
 from psycopg import errors as pg_errors
@@ -31,8 +31,23 @@ def _labels(workspace: Workspace) -> "models.QuerySet[Label]":
 
 
 def list_labels(workspace: Workspace) -> list[Label]:
-    """Labels by name; needs the workspace's RLS context."""
-    return list(_labels(workspace).order_by(Lower("name"), "id"))
+    """Labels by name; needs the workspace's RLS context.
+
+    `document_count` from one grouped count over the label links (each through its
+    policy, the visible letters hashed once), not a join of every label to every link
+    (measured, DECISIONS 2026-11-20). Same count: the links the policy shows.
+    """
+    labels = list(Label.objects.filter(workspace=workspace).order_by(Lower("name"), "id"))
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT l.label_id, pg_catalog.count(*) FROM public.documents_documentlabel l"
+            " WHERE l.workspace_id = %s GROUP BY l.label_id",
+            [workspace.id],
+        )
+        counts: dict[UUID, int] = {row[0]: int(row[1]) for row in cursor.fetchall()}
+    for label in labels:
+        label.document_count = counts.get(label.id, 0)  # type: ignore[attr-defined]
+    return labels
 
 
 def _get_for_update(workspace: Workspace, label_id: UUID) -> Label:

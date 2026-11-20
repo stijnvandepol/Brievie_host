@@ -23,7 +23,7 @@ from django.utils import timezone
 
 from apps.documents.models import Document, DocumentReader, DocumentShare
 from apps.people.models import DepartmentMember, Person
-from apps.workspaces.context import SYSTEM, system_actor, workspace_context
+from apps.workspaces.context import SYSTEM, current_actor, system_actor, workspace_context
 from apps.workspaces.models import Membership, Workspace
 from apps.workspaces.visibility_sql import viewer_pairs_sql
 
@@ -180,6 +180,35 @@ def recompute_where(
 def can_read(document_id: UUID) -> bool:
     """Whether the current actor sees the letter (the policies decide, no system)."""
     return Document.objects.filter(id=document_id).exists()
+
+
+def member_filter() -> Q | None:
+    """For a user who neither sees all post nor sorts it: a condition the lists add so
+    PostgreSQL can use the indexes (S 4.9.5). Otherwise None.
+
+    A superset of what the policy shows such a user, every arm on an index: the
+    addressees through the GIN index, the scanner through its foreign key, the reader
+    rows (a private letter is seen only through one) through theirs. The policy still
+    decides; the filter changes no result. One query, through the policy's own helpers.
+    """
+    actor = current_actor()
+    if not isinstance(actor, UUID):
+        return None
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT public.brievie_sees_all_post(%s), public.brievie_actor_sorts_post(%s),"
+            " public.brievie_my_post_ids(%s)",
+            [actor, actor, actor],
+        )
+        row = cursor.fetchone()
+    if row is None or row[0] or row[1]:
+        return None
+    my_post_ids: list[UUID] = list(row[2])
+    return (
+        Q(addressee_ids__overlap=my_post_ids)
+        | Q(scanned_by_id=actor)
+        | Q(id__in=DocumentReader.objects.filter(user_id=actor).values("document_id"))
+    )
 
 
 def status_of(document_id: UUID) -> str:

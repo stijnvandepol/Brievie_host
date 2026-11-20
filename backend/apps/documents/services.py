@@ -185,24 +185,15 @@ def _open_suggestions(document: Document) -> list[DocumentSuggestion]:
     return sorted(rows, key=lambda s: (not s.preselected, -s.confidence, s.created_at, s.id))
 
 
-def _has_addressee() -> models.Exists:
-    return models.Exists(DocumentAddressee.objects.filter(document=models.OuterRef("pk")))
-
-
-def _has_automatic_link() -> models.Q:
-    return models.Exists(
-        DocumentLabel.objects.filter(document=models.OuterRef("pk"), automatic=True)
-    ) | models.Exists(
-        DocumentAddressee.objects.filter(document=models.OuterRef("pk"), automatic=True)
-    )
-
-
 def _is_automatic() -> models.Q:
     """The AI confirmed the document or put a label or addressee on it itself.
 
-    Needs the `has_automatic` annotation (an `Exists` cannot sit in an aggregate filter).
+    The links as two uncorrelated subqueries, each hashed once, instead of a probe per
+    letter (measured, DECISIONS 2026-11-20).
     """
-    return models.Q(confirmed_by_ai=True) | models.Q(has_automatic=True)
+    labels = DocumentLabel.objects.filter(automatic=True).values("document_id")
+    addressees = DocumentAddressee.objects.filter(automatic=True).values("document_id")
+    return models.Q(confirmed_by_ai=True) | models.Q(id__in=labels) | models.Q(id__in=addressees)
 
 
 def _in_state(state: str) -> models.Q:
@@ -210,7 +201,16 @@ def _in_state(state: str) -> models.Q:
         return models.Q(status=Document.Status.PROCESSING)
     if state == InboxState.REVIEW:
         return models.Q(status__in=_REVIEW_STATUSES)
-    return models.Q(status=Document.Status.DONE, has_addressee=False)
+    # `addressee_ids` mirrors the links (one writer, checked nightly); this form uses the
+    # partial index `documents_document_unassigned`.
+    return models.Q(status=Document.Status.DONE, addressee_ids=[])
+
+
+def _documents(workspace: Workspace) -> "models.QuerySet[Document]":
+    """The workspace's documents, with the member filter when it applies (S 4.9.5)."""
+    documents = Document.objects.filter(workspace=workspace)
+    member = visibility.member_filter()
+    return documents if member is None else documents.filter(member)
 
 
 def list_documents(
@@ -227,13 +227,12 @@ def list_documents(
     """
     if inbox_state and inbox_state not in INBOX_STATES:
         raise ApiError(422, "validation_error", _("Deze stand van de inbox kennen we niet."))
-    documents = Document.objects.filter(workspace=workspace).annotate(
-        has_addressee=_has_addressee(), has_automatic=_has_automatic_link()
-    )
+    documents = _documents(workspace)
     if inbox_state:
         documents = documents.filter(_in_state(inbox_state))
     if person_id is not None:
-        documents = documents.filter(addressee_links__person_id=person_id)
+        # The GIN index on `addressee_ids`.
+        documents = documents.filter(addressee_ids__contains=[person_id])
     if label_id is not None:
         documents = documents.filter(label_links__label_id=label_id)
     if automatic:
@@ -246,11 +245,8 @@ def list_documents(
 
 
 def inbox_counts(workspace: Workspace) -> dict[str, int]:
-    """How many documents are in each inbox state, for the badges."""
-    documents = Document.objects.filter(workspace=workspace).annotate(
-        has_addressee=_has_addressee(), has_automatic=_has_automatic_link()
-    )
-    counts = documents.aggregate(
+    """How many documents are in each inbox state, for the badges: one pass."""
+    counts = _documents(workspace).aggregate(
         **{state: models.Count("id", filter=_in_state(state)) for state in INBOX_STATES},
         automatic=models.Count("id", filter=_is_automatic()),
     )

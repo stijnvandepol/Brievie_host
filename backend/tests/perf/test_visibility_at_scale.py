@@ -8,8 +8,8 @@ forced policies, with `brievie.workspace_id` and `brievie.actor` set transaction
 
 JIT: the app's connections run with `jit=off` (brievie/settings.py), and so does this
 measurement; each list is measured once more with `SET LOCAL jit = on` (PostgreSQL's
-default) so the report shows both. Next to each service, the proposed form of
-tests/perf/candidates.py where there is one, with the same result required.
+default) so the report shows both. The services add the member filter themselves
+(S 4.9.5, plan Task 11); for a filtered list the result without it must be the same.
 
 Per state x actor x list: one first run (reported as "first": a new plan for that query,
 but shared buffers already hold the data of earlier lists; nothing here empties the
@@ -25,26 +25,24 @@ import os
 import platform
 import time
 from collections.abc import Callable, Iterator, Sequence
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Final
 from uuid import UUID, uuid4
 
 import pytest
 from django.db import connection
-from django.db.models import BooleanField, Q, QuerySet
-from django.db.models.expressions import RawSQL
 from django.test.utils import CaptureQueriesContext
 from pytest_django import DjangoDbBlocker
 
 from apps.documents import services as documents
+from apps.documents import visibility
 from apps.documents.models import Document
 from apps.labels import services as labels
 from apps.people import services as people
 from apps.tasks import services as tasks
 from apps.workspaces.models import Workspace
 from apps.workspaces.visibility_sql import viewer_groups_sql, viewer_pairs_sql
-from tests.perf import candidates, data
+from tests.perf import data
 from tests.perf.data import PerfWorld
 from tests.perf.report import (
     ACTORS,
@@ -64,25 +62,12 @@ pytestmark = pytest.mark.skipif(
     reason="The 100,000-letter measurement runs with BRIEVIE_PERF=1 (CI job visibility-perf).",
 )
 
-# The lists the member filter applies to (S 4.9.5; ships in Task 11).
+# The lists the member filter applies to (S 4.9.5).
 FILTERED: Final = (
     "list_documents",
     "list_documents_unassigned",
     "list_documents_own_person",
     "inbox_counts",
-)
-
-# The member filter, measured here before Task 11 builds it: a superset of what the
-# policy shows a member who neither sees all nor sorts post, so the result is the same
-# (checked on every run), with every arm on an index so PostgreSQL can combine them in
-# a BitmapOr: the GIN index for the addressees, the foreign-key index for the scanner,
-# the primary key for the reader rows. The policy still decides.
-MEMBER_FILTER: Final = (
-    '("documents_document"."addressee_ids" OPERATOR(pg_catalog.&&)'
-    " (SELECT public.brievie_my_post_ids(%s::uuid))"
-    ' OR "documents_document"."scanned_by_id" = %s::uuid'
-    ' OR "documents_document"."id" = ANY (ARRAY('
-    "SELECT r.document_id FROM public.documents_documentreader r WHERE r.user_id = %s::uuid)))"
 )
 
 
@@ -136,51 +121,16 @@ def _enter(world: PerfWorld, actor: UUID | str) -> None:
         )
 
 
-@contextmanager
-def _member_filter(actor: UUID) -> Iterator[None]:
-    """`Document.objects.filter(…)` with the member filter added, for the services."""
-    manager = Document.objects
-    original = manager.filter
-    # A fixed fragment; the actor's id goes in as a parameter.
-    condition = RawSQL(MEMBER_FILTER, [str(actor)] * 3, output_field=BooleanField())  # noqa: S611
-
-    def filtered(*args: Q, **kwargs: object) -> QuerySet[Document]:
-        return original(*args, **kwargs).filter(condition)
-
-    manager.filter = filtered  # type: ignore[method-assign]
-    try:
-        yield
-    finally:
-        del manager.filter
-
-
-def _list(
-    name: str, workspace: Workspace, world: PerfWorld, actor: UUID, variant: str = "policy"
-) -> Callable[[], str] | None:
+def _list(name: str, workspace: Workspace, world: PerfWorld, actor: UUID) -> Callable[[], str]:
     def ids(rows: list[Document]) -> str:
         # Every id, in order: the member filter must give exactly the same list.
         digest = hashlib.sha256(",".join(str(row.id) for row in rows).encode()).hexdigest()
         return f"{len(rows)} rows #{digest[:12]}"
 
     def counted(rows: Sequence[object]) -> str:
-        # Every row with its count: the candidate must give the same counts.
+        # Every row with its count: the run without the member filter must match.
         pairs = ",".join(f"{getattr(r, 'id', '')}={getattr(r, 'document_count', '')}" for r in rows)
         return f"{len(rows)} rows #{hashlib.sha256(pairs.encode()).hexdigest()[:12]}"
-
-    candidate: dict[str, Callable[[], str]] = {
-        "list_documents": lambda: ids(candidates.list_documents(workspace)),
-        "list_documents_unassigned": lambda: ids(
-            candidates.list_documents(workspace, inbox_state="unassigned")
-        ),
-        "list_documents_own_person": lambda: ids(
-            candidates.list_documents(workspace, person_id=world.own_person[actor])
-        ),
-        "inbox_counts": lambda: json.dumps(candidates.inbox_counts(workspace), sort_keys=True),
-        "list_persons": lambda: counted(candidates.list_persons(workspace)),
-        "list_labels": lambda: counted(candidates.list_labels(workspace)),
-    }
-    if variant == "candidate":
-        return candidate.get(name)
 
     calls: dict[str, Callable[[], str]] = {
         "list_documents": lambda: ids(documents.list_documents(workspace)),
@@ -283,12 +233,6 @@ def test_measure_list(
 
     result = record("policy", _measure(call, label))
 
-    proposed = _list(name, workspace, perf_world, user, "candidate")
-    if proposed is not None:
-        same = record("candidate", _measure(proposed, f"{label}-candidate"))
-        if same != result:
-            perf_report.mismatches.append(f"candidate {state} {actor} {name}: {same} != {result}")
-
     with connection.cursor() as c:
         c.execute(
             "SELECT public.brievie_sees_all_post(%s), public.brievie_actor_sorts_post(%s)",
@@ -298,10 +242,14 @@ def test_measure_list(
     assert row is not None
     sees_all, sorts = row
     if name in FILTERED and not sees_all and not sorts:
-        with _member_filter(user):
-            filtered = record("member filter", _measure(call, f"{label}-member-filter"))
-        if filtered != result:
-            perf_report.mismatches.append(f"filter {state} {actor} {name}: {filtered} != {result}")
+        # The services as before Task 11: the policy alone.
+        with pytest.MonkeyPatch.context() as m:
+            m.setattr(visibility, "member_filter", lambda: None)
+            unfiltered = call()
+        if unfiltered != result:
+            perf_report.mismatches.append(
+                f"filter {state} {actor} {name}: {result} != {unfiltered} without it"
+            )
 
     # PostgreSQL's default, for the comparison only.
     with connection.cursor() as c:
@@ -391,9 +339,10 @@ def test_explain_member_filter_and_the_gin_index(
     _set_state(perf_world, "own")
     _enter(perf_world, perf_world.plain_member)
     workspace = Workspace.objects.get(id=perf_world.workspace_id)
-    with _member_filter(perf_world.plain_member), CaptureQueriesContext(connection) as captured:
+    with CaptureQueriesContext(connection) as captured:
         documents.inbox_counts(workspace)
-    (query,) = captured.captured_queries
+    # The member filter's own lookup first, then the count.
+    query = captured.captured_queries[-1]
     text, top = _explain(query["sql"], analyze=False)
     plan = top.get("Plan")
     assert isinstance(plan, dict)
