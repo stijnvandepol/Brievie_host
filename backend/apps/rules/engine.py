@@ -239,3 +239,82 @@ def evaluate(facts: DocumentFacts, rules: Sequence[RuleSpec]) -> Evaluation:
         if rule.stop:
             break
     return Evaluation(matched_rule_ids=tuple(matched), planned=tuple(planned))
+
+
+# The letterhead: the start of the text up to the first blank line, at most this many
+# non-empty lines and characters. Scanned letters seldom keep their blank lines, so the
+# caps usually decide: sender, address, date, reference and subject line fit in eight.
+LETTERHEAD_LINES = 8
+LETTERHEAD_CHARS = 400
+
+# The operators that find words; `not_contains_word` finds none, so it is no hit.
+_FINDING = frozenset({"contains_word", "contains", "equals"})
+
+
+def letterhead(text: str) -> str:
+    """The letterhead of a letter's text (see `LETTERHEAD_LINES`).
+
+    Leading blank lines are skipped. A word cut by the character cap is left out, so a
+    part of a longer word ("Belastingdienst" of "Belastingdienstverlening") is no hit.
+    """
+    start = text.lstrip()
+    head = start[:LETTERHEAD_CHARS]
+    if len(start) > LETTERHEAD_CHARS and not start[LETTERHEAD_CHARS].isspace():
+        cut = max((i for i, char in enumerate(head) if char.isspace()), default=-1)
+        head = head[: cut + 1] if cut >= 0 else ""
+    lines: list[str] = []
+    for line in head.splitlines():
+        if not line.strip():
+            break
+        lines.append(line)
+        if len(lines) == LETTERHEAD_LINES:
+            break
+    return "\n".join(lines).rstrip()
+
+
+@dataclass(frozen=True)
+class PhraseHit:
+    """A text or sender condition of a rule that holds, and where its words are."""
+
+    condition: Condition
+    on_sender: bool
+    in_letterhead: bool
+
+
+def phrase_hits(rule: RuleSpec, facts: DocumentFacts) -> tuple[PhraseHit, ...]:
+    """The rule's text and sender conditions that hold on the document by finding words,
+    each with whether the words are on the sender and whether in the letterhead.
+
+    A sender condition is on the sender. A text condition is on the sender when the
+    sender holds the same words, and in the letterhead when the letterhead does. A
+    condition that does not hold, or holds by the absence of a word, is left out.
+    """
+    phrases = _Phrases(prepare(facts.text), prepare(facts.sender))
+    head: Prepared | None = None
+    hits: list[PhraseHit] = []
+    for condition in rule.conditions:
+        if condition.field not in ("text", "sender") or condition.op not in _FINDING:
+            continue
+        if condition.op not in OPERATORS[condition.field] or not phrases.holds(condition)[0]:
+            continue
+        if condition.field == "sender":
+            hits.append(PhraseHit(condition, on_sender=True, in_letterhead=False))
+            continue
+        if head is None:
+            head = prepare(letterhead(facts.text))
+        hits.append(
+            PhraseHit(
+                condition,
+                on_sender=_phrase(phrases.sender, condition.op, condition.value)[0],
+                in_letterhead=_phrase(head, condition.op, condition.value)[0],
+            )
+        )
+    return tuple(hits)
+
+
+def rests_on_letterhead(rule: RuleSpec, facts: DocumentFacts) -> bool:
+    """Whether the rule's hit is not only a keyword in the running text: every text or
+    sender condition that holds, holds on the sender or in the letterhead. A rule without
+    such a condition (only the type, a person, a label or the source) rests on no keyword.
+    """
+    return all(hit.on_sender or hit.in_letterhead for hit in phrase_hits(rule, facts))

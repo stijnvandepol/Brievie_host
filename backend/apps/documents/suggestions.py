@@ -43,13 +43,15 @@ def propose(
     """Record a proposal; None when the change is already on the document or was dismissed.
 
     A second proposal of the same change strengthens the open row: the strongest origin
-    (with its quote and rule name), the highest confidence, preselected when either was.
+    (with its quote and rule name), the highest confidence, preselected when either was,
+    `proposed_by_ai` when either was a pick of the AI with a confidence above 0.
 
     The caller holds the document's row lock (`select_for_update`, as the pipeline's
     `_lock_processing` does) for its whole transaction: two runs on the same document
     could otherwise both create the row.
     """
     target_id = _target_id(action, label, person)
+    by_ai = origin == Origin.AI and confidence > 0
     with transaction.atomic():
         if _is_on_document(document, action, target_id):
             return None
@@ -67,6 +69,7 @@ def propose(
                 quote=mask_bsns(quote.strip()),
                 confidence=confidence,
                 preselected=preselected,
+                proposed_by_ai=by_ai,
             )
         if row.state == State.DISMISSED:
             return None
@@ -80,6 +83,7 @@ def propose(
             row.quote = mask_bsns(quote.strip())
             row.confidence = confidence
             row.preselected = preselected
+            row.proposed_by_ai = by_ai
             row.save()
             return row
         if _STRENGTH[Origin(origin)] > _STRENGTH[Origin(row.origin)]:
@@ -89,6 +93,7 @@ def propose(
             row.quote = mask_bsns(quote.strip())
         row.confidence = max(row.confidence, confidence)
         row.preselected = row.preselected or preselected
+        row.proposed_by_ai = row.proposed_by_ai or by_ai
         row.save()
         return row
 

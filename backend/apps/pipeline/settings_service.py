@@ -346,6 +346,10 @@ def autopilot_notice() -> str:
         '"Brieven zelf bevestigen" aan? Dan bevestigt Brievie brieven ook zelf, '
         "zonder dat iemand eerst kijkt.\n"
         "\n"
+        "Een label dat een regel voorstelt, zet Brievie er dan ook zelf op. Maar alleen als "
+        "de regel het woord in de afzender of bovenaan de brief vond, of als de AI hetzelfde "
+        'label voorstelt. Een regel op "Automatisch toepassen" doet dat altijd.\n'
+        "\n"
         "De AI leest wat er in de brief staat en gelooft dat. Maar een brief kan fout zijn, "
         "of je misleiden. Dan klopt ook de afzender, de datum of de taak niet.\n"
         "\n"

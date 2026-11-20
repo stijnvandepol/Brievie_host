@@ -40,6 +40,9 @@ UNDOABLE_ORIGINS = (
 )
 # Origins whose links are marked `automatic`: the autopilot put them there. Such a change
 # is undoable only while its link is still `automatic` (a person's confirm takes it over).
+# A rule's label proposal the autopilot applied has origin `rule` and an `automatic` link;
+# like a rule's own change it stays undoable after a confirm (the history cannot tell
+# the two apart).
 AUTOMATIC_ORIGINS = (DocumentEvent.Origin.AI, DocumentEvent.Origin.NAME_MATCH)
 
 _ADD_LABEL = DocumentSuggestion.Action.ADD_LABEL
@@ -186,10 +189,12 @@ def add_label(
     actor: User | None,
     origin: str,
     rule: Rule | None = None,
+    automatic: bool = False,
 ) -> bool:
     """Put `label` on the document; False when it was already there.
 
-    `rule` is the rule that made the change (origin `rule`).
+    `rule` is the rule that made the change (origin `rule`). `automatic` marks the link
+    as the autopilot's when the origin does not already (a rule's proposal it applied).
     """
     with transaction.atomic():
         if DocumentLabel.objects.filter(document=document, label=label).exists():
@@ -198,7 +203,7 @@ def add_label(
             workspace_id=document.workspace_id,
             document=document,
             label=label,
-            automatic=origin in AUTOMATIC_ORIGINS,
+            automatic=automatic or origin in AUTOMATIC_ORIGINS,
         )
         _write_event(
             document, DocumentEvent.Kind.LABEL_ADDED, actor, origin, label=label, rule=rule

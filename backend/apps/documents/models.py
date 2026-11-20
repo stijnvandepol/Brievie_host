@@ -377,6 +377,9 @@ class DocumentSuggestion(WorkspaceModel):
     confidence = models.DecimalField(max_digits=4, decimal_places=3, default=Decimal("0"))
     # True once a name match of 0.85 or higher contributed to this row.
     preselected = models.BooleanField(default=False)
+    # True once the AI proposed this change (confidence above 0), also when a stronger
+    # origin took the row over: the autopilot applies a rule's label the AI agrees with.
+    proposed_by_ai = models.BooleanField(default=False)
     state = models.CharField(max_length=20, choices=State.choices, default=State.OPEN)
 
     class Meta:

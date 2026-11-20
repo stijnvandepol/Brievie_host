@@ -70,8 +70,12 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
   `mentions_term` blocks rather than guesses (linear-time regexes): a letter that names a term
   stays a proposal unless it has actions and every one has a deadline. An invoice due date
   needs a payment action, and every payment a deadline.
-- The autopilot never applies a rule's proposal (origin `rule`); it applies only `ai` picks
-  from `AUTO_APPLY_FROM` and `name_match` picks from `PRESELECT_FROM`. An `ai` pick of a
+- The autopilot applies `ai` picks from `AUTO_APPLY_FROM`, `name_match` picks from
+  `PRESELECT_FROM`, and a rule's label proposal (origin `rule`) only when
+  `rule_labels_to_apply` names it: the rule rests on the sender or the letterhead
+  (`apps.rules.engine.rests_on_letterhead`), or the AI proposed the same label
+  (`proposed_by_ai`); none when a matching rule's label was dismissed on the letter or more
+  than `RULE_LABELS_MAX` qualify. Never a rule's addressee proposal. An `ai` pick of a
   person only when its quote names that person (`quote_names`).
 - A person's confirm with `sets_organisation` clears `automatic` on the links that stay; the
   autopilot's change is then no longer undoable. Hand edits leave the flag alone.
