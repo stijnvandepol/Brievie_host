@@ -89,3 +89,33 @@ def test_viewer_may_read_the_history(client: Client, ws_a: Workspace) -> None:
 
     assert r.status_code == 200
     assert r.json() == []
+
+
+def test_deleting_a_label_leaves_a_removed_line_in_each_letters_history(
+    client: Client, ws_a: Workspace
+) -> None:
+    # The finding: the history still ended in `label_added` after the label was deleted.
+    admin = admin_of(ws_a)
+    client.force_login(admin)
+    first, second = make_document(ws_a, "needs_review"), make_document(ws_a, "needs_review")
+    created = post_json(client, f"/workspaces/{ws_a.id}/labels", {"name": "TEST tijdelijk"})
+    label_id = created.json()["id"]
+    for document in (first, second):
+        r = client.put(
+            f"{documents_url(ws_a.id)}/{document.id}/labels",
+            {"label_ids": [label_id]},
+            content_type="application/json",
+        )
+        assert r.status_code == 200
+
+    assert client.delete(f"/api/v1/workspaces/{ws_a.id}/labels/{label_id}").status_code == 204
+
+    for document in (first, second):
+        rows = client.get(f"{documents_url(ws_a.id)}/{document.id}/events").json()
+        assert [(row["kind"], row["label_name"]) for row in rows] == [
+            ("label_removed", "TEST tijdelijk"),
+            ("label_added", "TEST tijdelijk"),
+        ]
+        assert (rows[0]["origin"], rows[0]["actor_id"]) == ("user", str(admin.id))
+        assert rows[0]["can_undo"] is False
+        assert client.get(f"{documents_url(ws_a.id)}/{document.id}").json()["label_ids"] == []

@@ -189,6 +189,25 @@ def add_label(
         return True
 
 
+def record_label_deleted(label: Label, *, actor_id: UUID | None) -> None:
+    """Before a label is deleted (its links go with it): a `label_removed` line, with the
+    label's name, in the history of every document that has it.
+
+    The documents are not locked: nothing else is changed on them, and a rule that runs
+    holds the label's row, which the caller has locked.
+    """
+    for link in DocumentLabel.objects.filter(label=label).order_by("document_id"):
+        DocumentEvent.objects.create(
+            workspace_id=link.workspace_id,
+            document_id=link.document_id,
+            kind=DocumentEvent.Kind.LABEL_REMOVED,
+            origin=DocumentEvent.Origin.USER,
+            actor_id=actor_id,
+            label=label,
+            label_name=label.name,
+        )
+
+
 def record_task_event(document: Document, kind: str, actor: User) -> None:
     """History entry for ticking a task off or reopening it (`task_completed`, `task_reopened`)."""
     _write_event(document, kind, actor, DocumentEvent.Origin.USER)

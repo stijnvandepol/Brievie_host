@@ -130,6 +130,10 @@ def delete_label(*, workspace: Workspace, label_id: UUID, actor: AuditActor) -> 
             )
         for rule in own_rules:
             rule.delete()
+        # Imported here: organise imports this module (label_not_found).
+        from apps.documents import organise
+
+        organise.record_label_deleted(label, actor_id=actor.user_id)
         label.delete()
         # A label's name is the user's own words: the row carries the id only.
         record(
