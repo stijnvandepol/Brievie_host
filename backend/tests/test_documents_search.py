@@ -158,6 +158,73 @@ def test_an_archived_persons_name_still_finds_their_letters(ws_a: Workspace) -> 
     assert ids(search(ws_a, "bep")) == [document.id]
 
 
+def test_words_combine_across_text_and_a_person(ws_a: Workspace) -> None:
+    for_papa = letter(ws_a, "Uw aanslag inkomstenbelasting 2026.")
+    letter(ws_a, "Uw aanslag waterschapsbelasting.")
+    letter(ws_a, "Een brief voor Papa.")
+    other_for_papa = letter(ws_a, "Een uitnodiging.")
+    papa = make_person(ws_a, "Papa")
+    addressee(ws_a, for_papa, papa)
+    addressee(ws_a, other_for_papa, papa)
+
+    assert ids(search(ws_a, "aanslag papa")) == [for_papa.id]
+    assert ids(search(ws_a, "papa aanslag")) == [for_papa.id]
+    # A stop word is not required, also when it is part of a name ("de" in a preset label).
+    assert ids(search(ws_a, "de aanslag voor papa")) == [for_papa.id]
+
+
+def test_words_combine_across_a_label_and_the_text(ws_a: Workspace) -> None:
+    labelled = letter(ws_a, "De jaarafrekening van uw energie.")
+    letter(ws_a, "De jaarafrekening van uw water.")
+    other = letter(ws_a, "Een herinnering.")
+    label = label_on(ws_a, labelled, "Belasting")
+    with workspace_context(ws_a.id):
+        DocumentLabel.objects.create(workspace=ws_a, document=other, label=label)
+
+    assert ids(search(ws_a, "belasting jaarafrekening")) == [labelled.id]
+    assert ids(search(ws_a, "jaarafrekening belasting")) == [labelled.id]
+
+
+def test_all_words_in_names(ws_a: Workspace) -> None:
+    both = letter(ws_a, "Een brief.")
+    only_label = letter(ws_a, "Een andere brief.")
+    label = label_on(ws_a, both, "Huurwoning")
+    with workspace_context(ws_a.id):
+        DocumentLabel.objects.create(workspace=ws_a, document=only_label, label=label)
+    papa = make_person(ws_a, "Papa")
+    addressee(ws_a, both, papa)
+
+    assert ids(search(ws_a, "papa huurwon")) == [both.id]
+    assert ids(search(ws_a, "huurwon papa")) == [both.id]
+
+
+def test_all_words_in_the_text_rank_more_words_higher(ws_a: Workspace) -> None:
+    both = letter(ws_a, "De parkeervergunning en de parkeerboete.")
+    letter(ws_a, "Alleen een parkeervergunning.")
+
+    assert ids(search(ws_a, "parkeervergunning parkeerboete")) == [both.id]
+
+
+def test_a_word_in_neither_text_nor_name_finds_nothing(ws_a: Workspace) -> None:
+    document = letter(ws_a, "Uw aanslag inkomstenbelasting.")
+    addressee(ws_a, document, make_person(ws_a, "Papa"))
+
+    result = search(ws_a, "aanslag papa qqqzzz")
+
+    assert result.hits == []
+
+
+def test_a_letter_matching_a_word_in_text_and_name_ranks_above_text_only(
+    ws_a: Workspace,
+) -> None:
+    text_only = letter(ws_a, "Uw huur en de huurwoning.")
+    named = letter(ws_a, "Uw huur.")
+    label_on(ws_a, named, "Huurwoning")
+
+    found = ids(search(ws_a, "huurwoning"))
+    assert found == [named.id, text_only.id]
+
+
 # --- filters ----------------------------------------------------------------------------
 
 
@@ -303,12 +370,59 @@ def test_a_bsn_in_the_term_is_removed(ws_a: Workspace) -> None:
 
 
 def test_a_bsn_with_the_word_bsn_is_removed_and_the_rest_searched(ws_a: Workspace) -> None:
-    found = letter(ws_a, "Uw zorgtoeslag. BSN: [BSN]")
-    letter(ws_a, "Een andere brief.")
+    # Only "zorgtoeslag" is searched: also the letter without a (masked) BSN is found.
+    with_bsn = letter(ws_a, "Uw zorgtoeslag. BSN: [BSN]")
+    without = letter(ws_a, "Uw zorgtoeslag voor 2027.")
+    letter(ws_a, "Een andere brief. BSN: [BSN]")
 
     result = search(ws_a, f"zorgtoeslag BSN {VALID_BSN}")
 
     assert result.bsn_removed is True
+    assert set(ids(result)) == {with_bsn.id, without.id}
+
+
+@pytest.mark.parametrize("q", ["bsn", "BSN", "[bsn", "bsn]", "[ BSN ]", "Burgerservicenummer"])
+def test_the_word_bsn_finds_nothing_and_says_so(ws_a: Workspace, q: str) -> None:
+    letter(ws_a, "Uw BSN is [BSN].")
+    letter(ws_a, "Het burgerservicenummer staat niet op deze brief.")
+
+    result = search(ws_a, q)
+
+    assert result.hits == []
+    assert result.bsn_removed is True
+
+
+@pytest.mark.parametrize(
+    "q",
+    [
+        "111\u2013222\u2013333",  # en dash
+        "111/222/333",
+        "111,222,333",
+        "111_222_333",
+        "111\u200b222333",  # zero-width space
+        "111\u00ad222\u00ad333",  # soft hyphen
+        "\uff11\uff11\uff11222333",  # full-width digits (NFKC)
+        "1112/22/333",
+        "zorgtoeslag 111;222;333",
+    ],
+)
+def test_a_bsn_with_other_separators_is_removed(ws_a: Workspace, q: str) -> None:
+    # Stored text never holds a BSN; this letter stands for a number the mask missed.
+    letter(ws_a, "Kenmerk 111222333 en 111 222 333.")
+
+    result = search(ws_a, q)
+
+    assert result.bsn_removed is True
+    assert result.hits == []
+
+
+def test_nine_digits_that_fail_the_elfproef_are_kept(ws_a: Workspace) -> None:
+    # 123456789 fails the elfproef: a reference number, not a BSN.
+    found = letter(ws_a, "Uw kenmerk 123 456 789 bij de gemeente.")
+
+    result = search(ws_a, "123/456/789")
+
+    assert result.bsn_removed is False
     assert ids(result) == [found.id]
 
 

@@ -14,6 +14,7 @@ puts it in an error message, and it only ever reaches SQL as a bound parameter.
 """
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import date
 from difflib import SequenceMatcher
@@ -31,7 +32,7 @@ from django.db.models.functions import Cast, Coalesce, Greatest, Left, Replace, 
 from django.utils.translation import gettext as _
 
 from apps.common.errors import ApiError
-from apps.common.privacy import MASK, mask_bsns
+from apps.common.privacy import MASK, mask_bsns, passes_elfproef
 from apps.documents import visibility
 from apps.documents.models import Document, DocumentAddressee, DocumentLabel
 from apps.documents.schemas import DocumentSearchHitOut, DocumentSearchOut, SnippetPartOut
@@ -50,7 +51,8 @@ MAX_TERM = 200
 MAX_WORDS = 8
 MIN_TERM = 2
 MAX_OFFSET = 1000
-# Added to the full-text rank when every word is in a label or person name.
+# Added to the full-text rank for every word the letter matches through a label or
+# person name.
 NAME_BOOST = 1.0
 # pg_trgm word similarity a word needs with the sender or the summary in the fallback.
 FUZZY_THRESHOLD = 0.45
@@ -68,6 +70,12 @@ START, STOP = "\x02", "\x03"
 
 _MASK_LITERAL = re.compile(re.escape(MASK), re.IGNORECASE)
 _WORD_CHARS = frozenset("-'.")
+# Characters that do not show: removed before anything else, so they split no number.
+_INVISIBLE = dict.fromkeys(map(ord, "\u00ad\u200b\u200c\u200d\u2060\ufeff"))
+# Words that only ever find the mask in stored text.
+_BSN_WORDS = frozenset({"bsn", "burgerservicenummer"})
+_WORD_PARTS = re.compile(r"[-'.]")
+BSN_DIGITS = 9
 # A word of a fragment: letters and digits, joined by - ' or . ("e-mail", "o'brien").
 _FRAGMENT_WORD = re.compile(r"[^\W_]+(?:[-'.][^\W_]+)*")
 _SPACE = re.compile(r"\s+")
@@ -109,33 +117,82 @@ class SearchResult:
 
 
 def clean_term(q: str) -> tuple[str, bool]:
-    """The term with collapsed spaces, at most `MAX_TERM` characters, without BSNs and
-    without the literal mask; and whether a BSN was removed."""
-    text = " ".join(q.split())[:MAX_TERM]
+    """The term normalised (NFKC, invisible characters removed), with collapsed spaces,
+    at most `MAX_TERM` characters, without BSNs and without the literal mask; and
+    whether a BSN was removed."""
+    text = " ".join(unicodedata.normalize("NFKC", q).translate(_INVISIBLE).split())[:MAX_TERM]
     masked = mask_bsns(text)
     removed = masked.count(MASK) > text.count(MASK)
     return " ".join(_MASK_LITERAL.sub(" ", masked).split()), removed
 
 
-def search_words(term: str) -> list[str]:
-    """At most `MAX_WORDS` words, lower-cased, with only letters, digits, - ' and . kept;
-    a word without a letter or digit is dropped."""
+def _without_bsn_digits(words: list[str]) -> tuple[list[str], bool]:
+    """`words` without every run of adjacent digit groups that holds exactly nine digits
+    and passes the elfproef: a BSN written with a separator `mask_bsns` does not know
+    ("111/222/333"). Groups inside a word count too ("111-222"); a word that loses a
+    group keeps its other parts as words. And whether a run was removed."""
+    # (word index, group) for every group of every word, split on - ' and .
+    parts = [(index, part) for index, word in enumerate(words) for part in _WORD_PARTS.split(word)]
+    parts = [(index, part) for index, part in parts if part]
+    dropped: set[int] = set()
+    start = 0
+    while start < len(parts):
+        end, digits = start, ""
+        while end < len(parts) and parts[end][1].isdigit() and len(digits) < BSN_DIGITS:
+            digits += parts[end][1]
+            end += 1
+        if len(digits) == BSN_DIGITS and passes_elfproef(digits):
+            dropped.update(range(start, end))
+            start = end
+        else:
+            start += 1
+    if not dropped:
+        return words, False
+    touched = {parts[n][0] for n in dropped}
+    kept: list[str] = []
+    for index, word in enumerate(words):
+        if index not in touched:
+            kept.append(word)
+            continue
+        kept.extend(
+            part for n, (owner, part) in enumerate(parts) if owner == index and n not in dropped
+        )
+    return kept, True
+
+
+def search_words(term: str) -> tuple[list[str], bool]:
+    """At most `MAX_WORDS` words, lower-cased, of letters, digits, - ' and . (every other
+    character splits words); and whether a BSN or the word "BSN" was taken out.
+
+    A word without a letter or digit is dropped, and so are the words "bsn" and
+    "burgerservicenummer": stored text holds `[BSN]` for every masked number, so they
+    would only find masked letters.
+    """
+    split = "".join(c if c.isalnum() or c in _WORD_CHARS else " " for c in term).lower()
+    candidates, removed = _without_bsn_digits(split.split())
     words: list[str] = []
-    for raw in term.split():
-        word = "".join(c for c in raw if c.isalnum() or c in _WORD_CHARS).lower()
-        if any(c.isalnum() for c in word):
+    for word in candidates:
+        if word.strip("-'.") in _BSN_WORDS:
+            removed = True
+        elif any(c.isalnum() for c in word):
             words.append(word)
-    return words[:MAX_WORDS]
+    return words[:MAX_WORDS], removed
 
 
-def _tsquery(words: list[str]) -> SearchQuery:
-    """Every word as a quoted lexeme with a prefix match, all required.
+def _tsquery(words: list[str], operator: str = "&") -> SearchQuery:
+    """Every word as a quoted lexeme with a prefix match, joined by `operator` (& all
+    required, | any).
 
     Quoting (with ' doubled) means no input can be read as tsquery syntax; the string is
-    a bound parameter of `to_tsquery`, never part of the SQL text.
+    a bound parameter of `to_tsquery`.
     """
-    lexemes = " & ".join("'{}':*".format(word.replace("'", "''")) for word in words)
+    lexemes = f" {operator} ".join(_lexeme(word) for word in words)
     return SearchQuery(lexemes, search_type="raw", config="dutch")
+
+
+def _lexeme(word: str) -> str:
+    """`word` as a quoted tsquery lexeme with a prefix match."""
+    return "'{}':*".format(word.replace("'", "''"))
 
 
 def _validate(filters: SearchFilters) -> None:
@@ -187,35 +244,50 @@ def _filtered(membership: Membership, filters: SearchFilters) -> "models.QuerySe
     return documents
 
 
-def _name_match(membership: Membership, words: list[str]) -> models.Q | None:
-    """The letters where every word is part of the name of one of the letter's labels, or
-    of the name or a name variant of one of its persons (archived ones too).
+@dataclass(frozen=True)
+class _Names:
+    """The labels and persons whose name holds a word."""
 
-    The few labels and persons are looked up first, so the letters follow from their link
-    tables by index. None when some word is in no name at all.
-    """
-    workspace_id = membership.workspace_id
-    match = models.Q()
-    for word in words:
-        labels = list(
-            Label.objects.filter(workspace_id=workspace_id, name__icontains=word).values_list(
-                "id", flat=True
+    labels: list[UUID]
+    persons: list[UUID]
+
+    def __bool__(self) -> bool:
+        return bool(self.labels or self.persons)
+
+    def linked(self) -> models.Q:
+        """The letters linked to one of these labels or persons (by index on the link
+        tables)."""
+        return models.Q(
+            pk__in=DocumentLabel.objects.filter(label_id__in=self.labels).values("document_id")
+        ) | models.Q(
+            pk__in=DocumentAddressee.objects.filter(person_id__in=self.persons).values(
+                "document_id"
             )
         )
-        persons = list(
-            Person.objects.filter(workspace_id=workspace_id)
-            .annotate(variants=Cast("name_variants", models.TextField()))
-            .filter(models.Q(display_name__icontains=word) | models.Q(variants__icontains=word))
-            .values_list("id", flat=True)
+
+
+def _names(membership: Membership, word: str) -> _Names:
+    """The labels whose name, and the persons (archived ones too) whose name or a name
+    variant, holds `word` (case-insensitive substring). Labels and persons are few."""
+    workspace_id = membership.workspace_id
+    labels = list(
+        Label.objects.filter(workspace_id=workspace_id, name__icontains=word).values_list(
+            "id", flat=True
         )
-        if not labels and not persons:
-            return None
-        match &= models.Q(
-            pk__in=DocumentLabel.objects.filter(label_id__in=labels).values("document_id")
-        ) | models.Q(
-            pk__in=DocumentAddressee.objects.filter(person_id__in=persons).values("document_id")
-        )
-    return match
+    )
+    persons = list(
+        Person.objects.filter(workspace_id=workspace_id)
+        .annotate(variants=Cast("name_variants", models.TextField()))
+        .filter(models.Q(display_name__icontains=word) | models.Q(variants__icontains=word))
+        .values_list("id", flat=True)
+    )
+    return _Names(labels, persons)
+
+
+def _word_match(word: str, names: _Names) -> models.Q:
+    """A letter has `word` in its sender, summary or text, or through a name."""
+    match = models.Q(search_vector=_tsquery([word]))
+    return match | names.linked() if names else match
 
 
 def _page(
@@ -230,42 +302,69 @@ def _page(
     return rows[:limit], (offset + limit if more else None)
 
 
+def _without_stop_words(words: list[str]) -> list[str]:
+    """`words` without the ones the `dutch` configuration drops, in one query."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT numnode(to_tsquery('dutch', w)) > 0 FROM unnest(%s::text[]) WITH ORDINALITY"
+            " AS t(w, n) ORDER BY n",
+            [[_lexeme(word) for word in words]],
+        )
+        kept = [row[0] for row in cursor.fetchall()]
+    return [word for word, keep in zip(words, kept, strict=True) if keep]
+
+
 def _exact(
     membership: Membership,
     documents: "models.QuerySet[Document]",
     words: list[str],
-    query: SearchQuery,
 ) -> "models.QuerySet[Document] | None":
     """The exact matches, best first; None when there are none.
 
-    Two indexed lookups of ids (the text index; the names), each the newest
-    MAX_CANDIDATES, and then one ranking of only those letters. One query with an OR of
-    both could not use the text index and read every letter of the workspace.
+    Every word must be found: in the sender, summary or text (a word beginning, Dutch
+    stems), or in the name of one of the letter's labels or persons. The words that are
+    in no name at all must be in the text: they drive one lookup on the text index.
+    Without such a word the first word drives two lookups (the text index; its labels and
+    persons). Each lookup applies the other words as row filters and keeps the newest
+    MAX_CANDIDATES; then one ranking of only those letters. One query with an OR of text
+    and names could not use the text index and read every letter of the workspace.
     """
     newest = ("-created_at", "-id")
-    ids = set(
-        documents.filter(search_vector=query)
-        .order_by(*newest)
-        .values_list("pk", flat=True)[:MAX_CANDIDATES]
-    )
-    named: set[UUID] = set()
-    names = _name_match(membership, words)
-    if names is not None:
-        named = set(
-            documents.filter(names).order_by(*newest).values_list("pk", flat=True)[:MAX_CANDIDATES]
+    # A Dutch stop word ("een", "de") is no lexeme: full-text search ignores it, so it is
+    # not required here either (unless every word is one).
+    words = _without_stop_words(words) or words
+    names = {word: _names(membership, word) for word in words}
+    text_only = [word for word in words if not names[word]]
+
+    def lookup(driver: models.Q, others: list[str]) -> set[UUID]:
+        rows = documents.filter(driver)
+        for word in others:
+            rows = rows.filter(_word_match(word, names[word]))
+        return set(rows.order_by(*newest).values_list("pk", flat=True)[:MAX_CANDIDATES])
+
+    if text_only:
+        named_words = [word for word in words if names[word]]
+        ids = lookup(models.Q(search_vector=_tsquery(text_only)), named_words)
+    else:
+        first, *others = words
+        ids = lookup(models.Q(search_vector=_tsquery([first])), others) | lookup(
+            names[first].linked(), others
         )
-    if not ids and not named:
+    if not ids:
         return None
-    return (
-        documents.filter(pk__in=ids | named)
-        .annotate(
-            rank=SearchRank(models.F("search_vector"), query, cover_density=True)
-            + models.Case(
-                models.When(pk__in=named, then=models.Value(NAME_BOOST)),
+    rank: models.Expression = SearchRank(
+        models.F("search_vector"), _tsquery(words, "|"), cover_density=True
+    )
+    for word in words:
+        if names[word]:
+            rank = rank + models.Case(
+                models.When(names[word].linked(), then=models.Value(NAME_BOOST)),
                 default=models.Value(0.0),
                 output_field=models.FloatField(),
             )
-        )
+    return (
+        documents.filter(pk__in=ids)
+        .annotate(rank=models.ExpressionWrapper(rank, output_field=models.FloatField()))
         .order_by("-rank", *newest)
     )
 
@@ -318,12 +417,14 @@ def search_documents(
     """
     _validate(filters)
     term, bsn_removed = clean_term(q)
-    words = search_words(term)
+    words, removed = search_words(term)
+    bsn_removed = bsn_removed or removed
     if len(term) < MIN_TERM or not words:
         return SearchResult(bsn_removed=bsn_removed)
-    query = _tsquery(words)
+    # Any word marks the fragment: a word can also be found through a name.
+    query = _tsquery(words, "|")
     documents = _filtered(membership, filters)
-    exact = _exact(membership, documents, words, query)
+    exact = _exact(membership, documents, words)
     rows, next_offset = _page(exact, limit, offset) if exact is not None else ([], None)
     # Only when nothing matched exactly, also on a later page of an approximate result.
     fuzzy = exact is None

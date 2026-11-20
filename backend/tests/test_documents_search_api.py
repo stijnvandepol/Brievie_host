@@ -184,3 +184,15 @@ def test_the_operation_is_documented(client_a: Client) -> None:
         "text",
         "hit",
     }
+
+
+def test_searching_is_throttled_per_caller(client_a: Client, ws_a: Workspace) -> None:
+    statuses = [
+        client_a.post(search_url(ws_a.id), {"q": TERM}, content_type="application/json")
+        for _ in range(31)
+    ]
+
+    assert [r.status_code for r in statuses[:30]] == [200] * 30
+    refused = statuses[30]
+    assert refused.status_code == 429
+    assert TERM not in refused.content.decode()
