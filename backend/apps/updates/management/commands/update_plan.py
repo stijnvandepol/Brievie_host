@@ -5,6 +5,8 @@ from django.core.management.base import BaseCommand, CommandError, CommandParser
 
 from apps.updates.release import (
     REASONS,
+    Release,
+    ReleaseEntry,
     ReleaseError,
     Version,
     decide,
@@ -15,8 +17,9 @@ from apps.updates.release import (
 
 class Command(BaseCommand):
     help = (
-        "Whether ./brievie update may go from --installed to --target. Reads the releases "
-        "on stdin ('--- vX.Y.Z' and that tag's release.json, per tag). Prints 'allowed' or "
+        "Whether ./brievie update may go from --installed to --target (default: the newest "
+        "release that can be read). Reads the releases on stdin ('--- vX.Y.Z' and that "
+        "tag's release.json, per tag). Prints 'target=X.Y.Z' and then 'allowed' or "
         "'already' (exit 0); a refusal is a Dutch sentence (exit 1); a bad argument exit 2. "
         "Needs no database."
     )
@@ -26,13 +29,14 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument("--installed", required=True)
-        parser.add_argument("--target", required=True)
+        parser.add_argument("--target", default=None)
         parser.add_argument("--postgres-major", required=True)
 
     def handle(self, *args: object, **options: object) -> None:
         try:
             installed = Version.parse(str(options["installed"]))
-            target = Version.parse(str(options["target"]))
+            typed = options["target"]
+            target = Version.parse(str(typed)) if typed is not None else None
         except ReleaseError:
             raise CommandError(str(REASONS["version_invalid"]), returncode=2) from None
         major_text = str(options["postgres_major"])
@@ -41,6 +45,15 @@ class Command(BaseCommand):
         stdin = options.get("stdin")
         source: IO[str] = stdin if hasattr(stdin, "read") else sys.stdin  # type: ignore[assignment]
         releases = parse_release_stream(source.read())
+        if target is None:
+            target = newest_readable(releases, installed=installed)
+            for version in sorted(releases):
+                if version > target and isinstance(releases[version], ReleaseError):
+                    self.stderr.write(
+                        f"Versie {version} is overgeslagen: de gegevens van die versie "
+                        "(deploy/release.json) kloppen niet. Typ ./brievie update met een "
+                        "versie als je die toch wilt proberen."
+                    )
         decision = decide(
             installed=installed,
             target=target,
@@ -52,4 +65,12 @@ class Command(BaseCommand):
                 decision, installed=installed, target=target, postgres_major=int(major_text)
             )
             raise CommandError(message, returncode=1)
+        self.stdout.write(f"target={target}")
         self.stdout.write(decision.outcome)
+
+
+def newest_readable(releases: dict[Version, ReleaseEntry], *, installed: Version) -> Version:
+    """The highest release whose release.json could be read, or `installed` when none is
+    newer (the answer is then "already")."""
+    readable = [version for version, entry in releases.items() if isinstance(entry, Release)]
+    return max([installed, *readable])

@@ -35,28 +35,38 @@ def stream(*records: tuple[str, str, int]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def plan(installed: str, target: str, text: str, major: str = "18") -> str:
+def plan(
+    installed: str, target: str | None, text: str, major: str = "18", err: io.StringIO | None = None
+) -> str:
     out = io.StringIO()
+    args = ["--installed", installed, "--postgres-major", major]
+    if target is not None:
+        args += ["--target", target]
     call_command(
-        "update_plan",
-        "--installed",
-        installed,
-        "--target",
-        target,
-        "--postgres-major",
-        major,
-        stdin=io.StringIO(text),
-        stdout=out,
+        "update_plan", *args, stdin=io.StringIO(text), stdout=out, stderr=err or io.StringIO()
     )
     return out.getvalue()
 
 
 def test_update_plan_prints_allowed() -> None:
-    assert plan("0.2.0", "0.3.0", stream(("0.3.0", "0.2.0", 18))).strip() == "allowed"
+    out = plan("0.2.0", "0.3.0", stream(("0.3.0", "0.2.0", 18)))
+    assert out.split() == ["target=0.3.0", "allowed"]
 
 
 def test_update_plan_prints_already() -> None:
-    assert plan("0.3.0", "v0.3.0", "").strip() == "already"
+    assert plan("0.3.0", "v0.3.0", "").split() == ["target=0.3.0", "already"]
+
+
+def test_without_a_target_the_newest_readable_release_is_chosen() -> None:
+    text = stream(("0.3.0", "0.2.0", 18)) + "--- v0.4.0\n{not json\n"
+    err = io.StringIO()
+    assert plan("0.2.0", None, text, err=err).split() == ["target=0.3.0", "allowed"]
+    assert "Versie 0.4.0 is overgeslagen" in err.getvalue()
+
+
+def test_without_a_target_and_nothing_newer_it_is_already() -> None:
+    text = stream(("0.2.0", "0.2.0", 18))
+    assert plan("0.2.0", None, text).split() == ["target=0.2.0", "already"]
 
 
 def test_update_plan_refusal_is_dutch_and_exit_1() -> None:

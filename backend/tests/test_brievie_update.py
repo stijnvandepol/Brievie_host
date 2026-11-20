@@ -9,6 +9,7 @@ import os
 import shutil
 import stat
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -191,11 +192,14 @@ def test_update_without_version_takes_the_newest_tag(update_install: UpdateInsta
     update_install.git("tag", "v0.11.0-rc.1", cwd=update_install.source)
     update_install.publish()
 
-    update_install.run("update", FAKE_PLAN="already")
+    update_install.run("update", FAKE_PLAN="already", FAKE_PLAN_TARGET="0.10.0")
 
-    plan = next(c for c in update_install.commands() if "update_plan" in c)
-    assert "--target 0.10.0" in plan
-    assert "--installed 0.2.0" in plan
+    # The installed image chooses the newest valid release from the stream it gets.
+    plan = next(c for c in update_install.calls() if "update_plan" in c["argv"])
+    assert "--target" not in plan["argv"]
+    assert "--installed 0.2.0" in " ".join(plan["argv"])
+    assert "--- v0.10.0" in str(plan["stdin"])
+    assert "--- v0.11.0-rc.1" not in str(plan["stdin"])
 
 
 def test_release_stream_reaches_update_plan(update_install: UpdateInstall) -> None:
@@ -779,3 +783,302 @@ def test_a_quick_step_says_nothing_and_leaves_no_waiting_behind(
     assert "Docker is al" not in result.stderr
     # The watchdog's sleep holds no pipe of ./brievie: the run ends when the work does.
     assert time.monotonic() - started < 45
+
+
+# --- review: a failed update is never "nothing changed" --------------------------------------
+
+
+def failed_after_migrate(install: UpdateInstall) -> str:
+    """A finish that migrated and then failed its health check; returns the old HEAD."""
+    previous = install.head()
+    result = install.run("update", FAKE_FAIL="check_health=1")
+    assert result.returncode == 3
+    assert install.marker.exists()
+    return previous
+
+
+@pytest.mark.parametrize("command", ["start", "update"])
+def test_a_failed_migration_with_the_checkout_put_back_still_refuses(
+    update_install: UpdateInstall, command: str
+) -> None:
+    # The user typed only the first line of the way back (git checkout), then start or
+    # update: the database is the new version's, so nothing may start the old code.
+    previous = failed_after_migrate(update_install)
+    update_install.git("checkout", "-q", previous)
+    first = len(update_install.calls())
+
+    result = update_install.run(command)
+
+    assert result.returncode == 1
+    way_back_lines(result.stdout)
+    assert update_install.marker.exists()
+    assert setting(update_install, "BRIEVIE_VERSION") == ["BRIEVIE_VERSION=0.3.0"]
+    later = [" ".join(c["argv"]) for c in update_install.calls()[first:]]
+    assert not any(" up " in c or "update_plan" in c for c in later)
+
+
+def test_status_during_an_unfinished_update_names_the_way_back(
+    update_install: UpdateInstall,
+) -> None:
+    failed_after_migrate(update_install)
+    first = len(update_install.calls())
+
+    result = update_install.run("status")
+
+    assert result.returncode == 1
+    way_back_lines(result.stdout)
+    assert not any("backup_status" in c["argv"] for c in update_install.calls()[first:])
+
+
+def stopped_marker(install: UpdateInstall, step: str = "stopped") -> None:
+    install.write_marker(
+        **{
+            "from": "0.2.0",
+            "to": "0.3.0",
+            "previous_ref": install.head(),
+            "run_id": RUN_ID,
+            "kind": "update",
+            "step": step,
+            "time": "19-11-2026 21:00",
+        }
+    )
+
+
+def test_status_after_an_untouched_interruption_says_start(update_install: UpdateInstall) -> None:
+    stopped_marker(update_install)
+    result = update_install.run("status")
+    assert result.returncode == 1
+    assert "./brievie start" in result.stdout
+    assert "git checkout" not in result.stdout
+
+
+def test_a_dirty_tree_with_the_marker_at_stopped_is_not_untouched(
+    update_install: UpdateInstall,
+) -> None:
+    # A power cut during `git checkout` can leave HEAD old and the files half new.
+    stopped_marker(update_install, "backed-up")
+    (update_install.root / "deploy" / "Caddyfile").write_text("# half switched\n")
+
+    result = update_install.run("start")
+
+    assert result.returncode == 1
+    assert "niet afgemaakt" in result.stdout
+    assert "git checkout --force v0.2.0" in result.stdout
+    assert not update_install.has(" up ")
+    assert update_install.marker.exists()
+
+
+def test_a_marker_at_migrating_with_the_old_head_is_not_untouched(
+    update_install: UpdateInstall,
+) -> None:
+    stopped_marker(update_install, "migrating")
+    result = update_install.run("start")
+    assert result.returncode == 1
+    way_back_lines(result.stdout)
+    assert update_install.marker.exists()
+
+
+def test_the_finish_marks_the_migration_before_it_runs(update_install: UpdateInstall) -> None:
+    result = update_install.run("update", FAKE_FAIL="run --rm migrate=1")
+    assert result.returncode == 3
+    assert "step=migrating" in update_install.marker.read_text()
+
+
+def install_post_checkout_interrupt(install: UpdateInstall) -> None:
+    """A git hook that stops ./brievie (SIGTERM to git's parent) right after a successful
+    checkout: the shell runs its trap as soon as git returns, before the hand-over."""
+    hook = install.root / ".git" / "hooks" / "post-checkout"
+    hook.write_text(
+        f"#!{sys.executable}\nimport os, signal, subprocess\n"
+        "git = os.getppid()\n"
+        "out = subprocess.run(['/bin/ps', '-o', 'ppid=', '-p', str(git)],\n"
+        "                     capture_output=True, text=True, check=True).stdout\n"
+        "os.kill(int(out), signal.SIGTERM)\n"
+    )
+    hook.chmod(0o755)
+
+
+def test_ctrl_c_right_after_the_checkout_keeps_the_update_resumable(
+    update_install: UpdateInstall,
+) -> None:
+    install_post_checkout_interrupt(update_install)
+
+    result = update_install.run("update")
+
+    assert result.returncode != 0
+    assert update_install.head() == update_install.tag_commit("v0.3.0")
+    keeper = update_install.index("stop keeper")
+    assert not any("up -d" in c for c in update_install.commands()[keeper:])
+    assert update_install.marker.exists()
+    assert "Er is niets bijgewerkt" not in result.stderr
+    assert "./brievie update 0.3.0" in result.stdout + result.stderr
+
+    (update_install.root / ".git" / "hooks" / "post-checkout").unlink()
+    resumed = update_install.run("update")
+    assert resumed.returncode == 0, resumed.stderr
+    assert not update_install.marker.exists()
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_a_hangup_during_the_backup_restarts_the_old_version_into_the_log(
+    update_install: UpdateInstall, shell: str
+) -> None:
+    result = update_install.run("update", shell=shell, FAKE_HUP_AT="update_backup")
+
+    assert result.returncode != 0
+    assert update_install.index("up -d --wait --no-build") > update_install.index("update_backup")
+    assert not update_install.marker.exists()
+    assert not (update_install.root / "deploy" / ".brievie-lock").exists()
+    log = (update_install.root / "deploy" / ".brievie-last.log").read_text()
+    assert "Brievie draait weer op versie 0.2.0" in log
+
+
+def test_the_finish_checks_health_before_caddy_opens_the_door(
+    update_install: UpdateInstall,
+) -> None:
+    result = update_install.run("update")
+
+    assert result.returncode == 0, result.stderr
+    migrate = update_install.index("run --rm migrate")
+    order_of(
+        update_install,
+        "run --rm migrate",
+        "up -d --wait --no-build api worker keeper",
+        "check_health",
+        "up -d --wait --no-build caddy",
+    )
+    assert not any(
+        c.endswith("up -d --wait --no-build") for c in update_install.commands()[migrate:]
+    )
+
+
+def known_migrations(install: UpdateInstall) -> None:
+    folder = install.root / "backend" / "apps" / "updates" / "migrations"
+    folder.mkdir(parents=True)
+    (folder / "0001_initial.py").write_text("")
+
+
+def test_start_refuses_code_older_than_the_database(update_install: UpdateInstall) -> None:
+    known_migrations(update_install)
+    result = update_install.run(
+        "start", FAKE_APPLIED_MIGRATIONS="updates|0001_initial\nupdates|0099_from_the_future\n"
+    )
+
+    assert result.returncode == 1
+    assert "nieuwere versie" in result.stderr
+    assert "updates 0099_from_the_future" in result.stderr
+    assert not update_install.has(" up ")
+
+
+def test_start_accepts_a_database_the_code_knows(update_install: UpdateInstall) -> None:
+    known_migrations(update_install)
+    result = update_install.run(
+        "start", FAKE_APPLIED_MIGRATIONS="updates|0001_initial\nauth|0012_whatever\n"
+    )
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("command", [("backup",), ("sweep", "--delete"), ("recovery-sheet",)])
+def test_commands_that_change_things_wait_for_an_unfinished_update(
+    update_install: UpdateInstall, command: tuple[str, ...]
+) -> None:
+    checked_out_marker(update_install)
+    result = update_install.run(*command)
+    assert result.returncode == 1
+    assert "niet afgemaakt" in result.stdout
+    assert not any("manage.py" in c for c in update_install.commands())
+
+
+def test_update_without_a_version_lets_the_image_choose_and_says_what_it_skipped(
+    update_install: UpdateInstall,
+) -> None:
+    result = update_install.run(
+        "update",
+        FAKE_PLAN="already",
+        FAKE_PLAN_TARGET="0.2.0",
+        FAKE_PLAN_STDERR="Versie 0.4.0 is overgeslagen: deploy/release.json klopt niet.\n",
+    )
+
+    assert result.returncode == 0, result.stderr
+    plan = next(c for c in update_install.commands() if "update_plan" in c)
+    assert "--target" not in plan
+    assert "Versie 0.4.0 is overgeslagen" in result.stderr
+    assert "Je hebt al versie 0.2.0." in result.stdout
+
+
+# --- the lock -------------------------------------------------------------------------------
+
+
+def boot_id() -> str:
+    linux = Path("/proc/sys/kernel/random/boot_id")
+    if linux.exists():
+        return linux.read_text().strip()
+    return subprocess.run(
+        ["/usr/sbin/sysctl", "-n", "kern.boottime"], capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+
+def write_lock(install: UpdateInstall, *, pid: int | None, boot: str | None) -> None:
+    lock = install.root / "deploy" / ".brievie-lock"
+    lock.mkdir()
+    (lock / "started").write_text(f"{int(time.time())}\n")
+    if pid is not None:
+        (lock / "pid").write_text(f"{pid}\n")
+    if boot is not None:
+        (lock / "boot").write_text(boot + "\n")
+
+
+def gone_pid() -> int:
+    done = subprocess.Popen(["/bin/sh", "-c", "exit 0"])
+    done.wait()
+    return done.pid
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_a_lock_of_a_process_that_is_gone_is_taken_over(
+    update_install: UpdateInstall, shell: str
+) -> None:
+    write_lock(update_install, pid=gone_pid(), boot=boot_id())
+    result = update_install.run("status", shell=shell)
+    assert result.returncode == 0, result.stderr
+    assert "niet meer draait" in result.stderr
+    assert not (update_install.root / "deploy" / ".brievie-lock").exists()
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_a_lock_of_a_running_process_is_respected(
+    update_install: UpdateInstall, shell: str
+) -> None:
+    write_lock(update_install, pid=os.getpid(), boot=boot_id())
+    result = update_install.run("status", shell=shell)
+    assert result.returncode == 1
+    assert "al een ./brievie bezig" in result.stderr
+    assert (update_install.root / "deploy" / ".brievie-lock").exists()
+
+
+def test_a_lock_from_before_a_restart_of_the_machine_is_taken_over(
+    update_install: UpdateInstall,
+) -> None:
+    # The PID may live again after a reboot (another program): the boot decides.
+    write_lock(update_install, pid=os.getpid(), boot="an earlier boot")
+    result = update_install.run("status")
+    assert result.returncode == 0, result.stderr
+
+
+def test_a_lock_without_a_pid_keeps_the_twelve_hour_rule(update_install: UpdateInstall) -> None:
+    write_lock(update_install, pid=None, boot=None)
+    result = update_install.run("status")
+    assert result.returncode == 1
+    assert "al een ./brievie bezig" in result.stderr
+
+
+def test_the_watchdog_leaves_no_sleep_behind(update_install: UpdateInstall) -> None:
+    result = update_install.run("start", BRIEVIE_SLOW_SECONDS="4171")
+    assert result.returncode == 0, result.stderr
+    time.sleep(1.5)
+    processes = subprocess.run(
+        ["/bin/ps", "-A", "-o", "args="], capture_output=True, text=True, check=True
+    ).stdout
+    # Neither the watchdog's subshell (it shows as ./brievie itself) nor a long sleep.
+    assert str(update_install.root / "brievie") not in processes
+    assert "sleep 4171" not in processes

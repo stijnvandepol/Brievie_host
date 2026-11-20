@@ -60,7 +60,9 @@ esac
 # so with Docker's containerd image store every build of unchanged code gets a new image
 # id and compose recreates every service on each start (docs.docker.com/build/metadata/
 # attestations). An environment variable, not a compose `build.provenance` key: older
-# Compose versions on a NAS refuse keys they do not know. Released images keep theirs.
+# Compose versions on a NAS refuse keys they do not know. The release workflow builds
+# without this attestation too and attests its images with GitHub's own provenance
+# (actions/attest-build-provenance) instead.
 BUILDX_NO_DEFAULT_ATTESTATIONS=${BUILDX_NO_DEFAULT_ATTESTATIONS:-1}
 export BUILDX_NO_DEFAULT_ATTESTATIONS
 # After how many seconds of one build or start ./brievie says that Docker is slow.
@@ -100,8 +102,14 @@ restore_terminal() {
 		saved_tty=""
 	fi
 }
+# A line for the user from the exit trap: never fails (the terminal may be gone).
+say() {
+	printf '%s\n' "$1" >&9 2>/dev/null || true
+}
 on_exit() {
 	exit_rc=$?
+	# Nothing in the trap may stop it half-way: a write to a terminal that hung up fails.
+	set +e
 	restore_terminal
 	stop_watchdog
 	if [ -n "$swap_stamp" ] && [ ! -e "${here:?}/deploy/.env" ]; then
@@ -114,38 +122,41 @@ on_exit() {
 		"${here:?}/brievie-herstelblad.html.tmp.$$" "${here:?}/deploy/.restore-in-progress.new.$$" \
 		"${here:?}/deploy/.update/in-progress.new.$$" "${here:?}/deploy/.update/brievie-running.new.$$"
 	# An update stopped the server and did not get to the new version: the old one comes
-	# back, nothing was changed.
+	# back, nothing was changed. Only when that is certain (update_untouched): once the
+	# checkout moved, or the files are half switched, the way back is printed instead.
 	if [ -n "$update_live" ]; then
 		update_live=""
 		update_exit=1
 		# The fallback is mounted for its own calls only; deploy/.env decides again.
 		unset BRIEVIE_BACKUP_DIR
 		if [ "$exit_rc" -ge 128 ]; then
-			echo "Bijwerken afgebroken." >&9
+			say "Bijwerken afgebroken."
 		fi
-		echo "Brievie wordt weer gestart op versie $update_from…" >&9
-		if quietly all compose_raw up -d --wait --no-build 2>/dev/null; then
-			rm -f "${here:?}/deploy/.update/in-progress"
-			echo "Er is niets bijgewerkt; Brievie draait weer op versie $update_from." >&9
+		if update_untouched; then
+			say "Brievie wordt weer gestart op versie $update_from…"
+			if quietly all compose_raw up -d --wait --no-build 2>/dev/null; then
+				rm -f "${here:?}/deploy/.update/in-progress"
+				say "Er is niets bijgewerkt; Brievie draait weer op versie $update_from."
+			else
+				rm -f "${here:?}/deploy/.update/in-progress"
+				say "Er is niets bijgewerkt, maar Brievie kon niet opnieuw worden gestart. Typ ./brievie start."
+			fi
 		else
-			rm -f "${here:?}/deploy/.update/in-progress"
-			echo "Er is niets bijgewerkt, maar Brievie kon niet opnieuw worden gestart. Typ ./brievie start." >&9
+			say "Het bijwerken naar versie $update_to is niet afgemaakt. Brievie is gestopt."
+			say "$(print_way_back)"
 		fi
 	fi
 	if [ -n "$finish_live" ]; then
 		finish_live=""
-		{
-			echo "Het bijwerken naar versie $(update_marker_value to) is niet afgemaakt. Brievie draait misschien niet."
-			print_way_back
-		} >&9
+		say "Het bijwerken naar versie $(update_marker_value to) is niet afgemaakt. Brievie draait misschien niet."
+		say "$(print_way_back)"
 	fi
 	# Stopped after the restore began to replace things (an error or Ctrl-C): say where.
 	if [ "$exit_rc" -ne 0 ] && [ -n "$restore_marked" ] && [ -z "$halfway_reported" ]; then
 		report_halfway
 	fi
 	if [ -n "$lock_taken" ]; then
-		rm -f "${here:?}/deploy/.brievie-lock/started"
-		rmdir "${here:?}/deploy/.brievie-lock" 2>/dev/null || true
+		remove_lock
 	fi
 	if [ -n "$update_exit" ]; then
 		exit "$update_exit"
@@ -156,7 +167,19 @@ update_exit=""
 # still reaches the user.
 exec 9>&2
 trap on_exit EXIT
-trap 'exit 130' INT TERM HUP
+trap 'exit 130' INT TERM
+trap hung_up HUP
+# The terminal closed (an SSH connection dropped). While an update runs, it goes on into
+# its log, as far as the step that was cut off lets it: that step fails and the update
+# restarts the old version or prints the way back, both into deploy/.brievie-last.log.
+# Any other command stops, as with Ctrl-C.
+hung_up() {
+	if [ -n "$update_live$finish_live" ]; then
+		exec >>"${here:?}/deploy/.brievie-last.log" 2>&1 9>&2 </dev/null
+		return 0
+	fi
+	exit 130
+}
 
 usage() {
 	cat <<'EOF'
@@ -210,7 +233,14 @@ take_lock() {
 		unset BRIEVIE_LOCK_HANDOVER
 		return 0
 	fi
-	if ! mkdir "${here:?}/deploy/.brievie-lock" 2>/dev/null; then
+	l_made=""
+	if mkdir "${here:?}/deploy/.brievie-lock" 2>/dev/null; then
+		l_made=yes
+	elif lock_is_stale; then
+		echo "Er stond nog een slot van een ./brievie die niet meer draait (deploy/.brievie-lock); dat is weggehaald." >&2
+		remove_lock
+	fi
+	if [ -z "$l_made" ] && ! mkdir "${here:?}/deploy/.brievie-lock" 2>/dev/null; then
 		started=$(cat "${here:?}/deploy/.brievie-lock/started" 2>/dev/null) || started=""
 		now=$(date +%s)
 		case $started in
@@ -225,15 +255,67 @@ take_lock() {
 		fi
 		ask "Draait er echt geen ./brievie meer? Typ JA om het slot weg te halen:"
 		[ "$answer" = JA ] || fail "Je typte geen JA. Er is niets veranderd."
-		rm -f "${here:?}/deploy/.brievie-lock/started"
-		rmdir "${here:?}/deploy/.brievie-lock" 2>/dev/null || true
+		remove_lock
 		mkdir "${here:?}/deploy/.brievie-lock" 2>/dev/null ||
 			fail "Er is al een ./brievie bezig voor deze installatie. Probeer het straks opnieuw."
 	fi
 	lock_taken=yes
 	date +%s >"${here:?}/deploy/.brievie-lock/started"
+	# Who holds it, on which boot: exec keeps the process id through the update's
+	# hand-overs, so a lock whose process is gone is surely left behind.
+	printf '%s\n' "$$" >"${here:?}/deploy/.brievie-lock/pid"
+	boot_id >"${here:?}/deploy/.brievie-lock/boot"
 	BRIEVIE_LOCK_HELD=1
 	export BRIEVIE_LOCK_HELD
+}
+
+# Removes the lock's fixed files and its folder (never anything else).
+remove_lock() {
+	rm -f "${here:?}/deploy/.brievie-lock/started" "${here:?}/deploy/.brievie-lock/pid" \
+		"${here:?}/deploy/.brievie-lock/boot"
+	rmdir "${here:?}/deploy/.brievie-lock" 2>/dev/null || true
+}
+
+# Something that changes when the machine starts again, or nothing: Linux's boot id,
+# macOS's boot time.
+boot_id() {
+	if [ -r /proc/sys/kernel/random/boot_id ]; then
+		cat /proc/sys/kernel/random/boot_id 2>/dev/null || true
+		return 0
+	fi
+	for b_sysctl in sysctl /usr/sbin/sysctl /sbin/sysctl; do
+		if command -v "$b_sysctl" >/dev/null 2>&1; then
+			"$b_sysctl" -n kern.boottime 2>/dev/null || true
+			return 0
+		fi
+	done
+}
+
+# Whether process $1 surely does not exist. Unsure (no /proc and no working ps) counts
+# as alive: a lock wrongly taken over is as bad as one stuck.
+process_gone() {
+	if [ -d /proc/self ]; then
+		[ ! -e "/proc/$1" ]
+		return
+	fi
+	ps -p "$$" >/dev/null 2>&1 || return 1
+	! ps -p "$1" >/dev/null 2>&1
+}
+
+# Whether the lock was left by a ./brievie that no longer runs: the machine started
+# again since, or (same boot) its process is gone. A lock without a process id (from an
+# older ./brievie) is never judged here; the twelve-hour rule below applies to it.
+lock_is_stale() {
+	l_pid=$(cat "${here:?}/deploy/.brievie-lock/pid" 2>/dev/null) || l_pid=""
+	case $l_pid in
+	'' | *[!0-9]*) return 1 ;;
+	esac
+	l_boot=$(cat "${here:?}/deploy/.brievie-lock/boot" 2>/dev/null) || l_boot=""
+	l_now=$(boot_id)
+	if [ -n "$l_boot" ] && [ -n "$l_now" ] && [ "$l_boot" != "$l_now" ]; then
+		return 0
+	fi
+	process_gone "$l_pid"
 }
 
 # The value of $1 in the restore-in-progress marker.
@@ -342,9 +424,14 @@ with_watchdog() {
 	wd_stop=$1
 	shift
 	(
-		# The sleep holds none of this script's output: a caller reading it is not kept
-		# waiting after the script ends.
-		sleep "$slow_seconds" >/dev/null 2>&1 9>&-
+		# Short sleeps that hold none of this script's output: when the step ends and this
+		# subshell is stopped, at most one second of sleep is left, and no caller reading
+		# the output is kept waiting.
+		wd_left=$slow_seconds
+		while [ "$wd_left" -gt 0 ]; do
+			sleep 1 >/dev/null 2>&1 9>&-
+			wd_left=$((wd_left - 1))
+		done
 		if [ "$slow_seconds" -ge 120 ]; then
 			wd_long="$((slow_seconds / 60)) minuten"
 		else
@@ -880,7 +967,7 @@ cmd_start() {
 	# An update that stopped halfway: after the switch to the new version only the update
 	# itself may go on; before it, nothing changed and this start brings Brievie back.
 	if [ -f "${here:?}/deploy/.update/in-progress" ]; then
-		if update_checked_out; then
+		if ! update_untouched; then
 			report_unfinished_update
 			exit 1
 		fi
@@ -901,6 +988,11 @@ cmd_start() {
 	check_installation_id
 	if [ -z "$volume_id" ] && [ -n "$data_existed" ]; then
 		confirm_adopt
+	fi
+	# Code older than its database (a newer version migrated it) never starts on it.
+	newer=$(unknown_migrations)
+	if [ -n "$newer" ]; then
+		fail "De database is al bijgewerkt door een nieuwere versie van Brievie; de code in deze map kent deze stappen niet: $(printf '%s' "$newer" | head -n 3 | tr '\n' ',' | sed 's/,$//; s/,/, /g'). Zet de map op die nieuwere versie (./brievie update) of zet de back-up van vóór de update terug. Er is niets veranderd."
 	fi
 	if [ -n "$start_version" ] && [ "$(unquote "$(env_value BRIEVIE_VERSION)")" != "$start_version" ]; then
 		edit_env set BRIEVIE_VERSION "$start_version" env ||
@@ -1025,6 +1117,10 @@ cmd_backup() {
 	if [ -n "$label" ] && [ -z "$safety" ]; then
 		usage_error "--label hoort bij --safety."
 	fi
+	# The update's own safety back-up runs under its lock (lock_taken stays empty there).
+	if [ -z "$label" ] || [ -n "$lock_taken" ]; then
+		refuse_while_updating
+	fi
 
 	claim_installation
 	bring_along
@@ -1105,6 +1201,7 @@ cmd_status() {
 	done
 	if [ -z "$list" ]; then
 		refuse_while_halfway
+		refuse_while_updating
 	fi
 	claim_installation
 	bring_along
@@ -1129,6 +1226,9 @@ cmd_sweep() {
 		*) usage_error "Onbekend woord bij ./brievie sweep: $arg" ;;
 		esac
 	done
+	if [ -n "$delete" ]; then
+		refuse_while_updating
+	fi
 	claim_installation
 	bring_along
 	if [ -n "$delete" ]; then
@@ -1140,6 +1240,7 @@ cmd_sweep() {
 
 cmd_recovery_sheet() {
 	[ $# -eq 0 ] || usage_error "./brievie recovery-sheet heeft geen extra woorden."
+	refuse_while_updating
 	claim_installation
 	bring_along
 	check_installation_id
@@ -1422,6 +1523,27 @@ installation_is_empty() {
 		printf '%s\n' '\else' 'SELECT 0;' '\endif'
 	} | compose exec -T postgres psql -U postgres -d brievie -v ON_ERROR_STOP=1 -q -t -A) || return 1
 	[ "$rows" = 0 ]
+}
+
+# The migrations the database has applied that the checked-out code does not have, one
+# "app name" per line; only Brievie's own apps (backend/apps/<app>/migrations). Read-only,
+# over the socket; nothing when postgres does not run or has no such table yet.
+unknown_migrations() {
+	running postgres || return 0
+	applied=$(printf '%s\n' "SELECT app || '|' || name FROM django_migrations;" |
+		compose exec -T postgres psql -U postgres -d brievie -q -t -A 2>/dev/null) || return 0
+	printf '%s\n' "$applied" | while IFS='|' read -r m_app m_name; do
+		case $m_app in
+		'' | *[!a-z0-9_]*) continue ;;
+		esac
+		case $m_name in
+		'' | *[!a-z0-9_]*) continue ;;
+		esac
+		if [ -d "${here:?}/backend/apps/$m_app/migrations" ] &&
+			[ ! -f "${here:?}/backend/apps/$m_app/migrations/$m_name.py" ]; then
+			printf '%s %s\n' "$m_app" "$m_name"
+		fi
+	done
 }
 
 # A yes before an empty installation is replaced (a terminal, or BRIEVIE_RESTORE_EMPTY_OK).
@@ -1961,13 +2083,49 @@ tag_commit() {
 	git -C "${here:?}" rev-parse -q --verify "$1^{commit}" 2>/dev/null || true
 }
 
-# Whether the unfinished update already switched the checkout: HEAD is no longer the
-# commit it started from (decided by HEAD, not by the step, so a kill between the switch
-# and writing the marker is still seen).
-update_checked_out() {
-	m_previous=$(update_marker_value previous_ref)
-	m_head=$(git -C "${here:?}" rev-parse -q --verify HEAD 2>/dev/null) || m_head=""
-	[ -n "$m_previous" ] && [ -n "$m_head" ] && [ "$m_head" != "$m_previous" ]
+# Whether no tracked file differs from HEAD (unknown counts as not clean).
+tree_clean() {
+	t_status=$(git -C "${here:?}" status --porcelain --untracked-files=no 2>/dev/null) || return 1
+	[ -z "$t_status" ]
+}
+
+# Whether the unfinished update surely changed nothing: it stopped before the switch
+# (step stopped or backed-up), HEAD is still the commit it started from, and no tracked
+# file differs from it. Anything else (a later step, another HEAD, files half switched by
+# an interrupted checkout) means the new version may have touched the data: only the way
+# back, or finishing the update, resolves it. Decided by the step AND the checkout, so
+# putting HEAD back by hand after a migration never reads as "nothing changed".
+update_untouched() {
+	case $(update_marker_value step) in
+	stopped | backed-up) ;;
+	*) return 1 ;;
+	esac
+	u_previous=$(update_marker_value previous_ref)
+	u_head=$(git -C "${here:?}" rev-parse -q --verify HEAD 2>/dev/null) || u_head=""
+	[ -n "$u_previous" ] && [ "$u_head" = "$u_previous" ] && tree_clean
+}
+
+# Whether the checkout is exactly the target of the unfinished update (to resume it).
+update_at_target() {
+	a_head=$(git -C "${here:?}" rev-parse -q --verify HEAD 2>/dev/null) || a_head=""
+	[ -n "$a_head" ] && [ "$a_head" = "$(tag_commit "v$(update_marker_value to)")" ] && tree_clean
+}
+
+# Rewrites the step of the marker (the finish knows only the marker, not the update's
+# variables).
+set_update_step() {
+	sed "s/^step=.*/step=$1/" "${here:?}/$update_marker" >"${here:?}/deploy/.update/in-progress.new.$$" &&
+		chmod 600 "${here:?}/deploy/.update/in-progress.new.$$" &&
+		mv "${here:?}/deploy/.update/in-progress.new.$$" "${here:?}/$update_marker"
+}
+
+# start, status, backup, sweep --delete and recovery-sheet wait while an update is
+# unfinished; the report names the one next step.
+refuse_while_updating() {
+	if [ -f "${here:?}/$update_marker" ]; then
+		report_unfinished_update
+		exit 1
+	fi
 }
 
 # The way back to the version before the update, on stdout: the old checkout, then the
@@ -1983,8 +2141,14 @@ print_way_back() {
 	else
 		w_ref=$(printf '%s' "$w_previous" | cut -c 1-12)
 	fi
+	# Files half switched by an interrupted checkout: only --force puts them back (the
+	# update refused to start on a tree with changes, so there is nothing of the user's).
+	w_force=""
+	if ! tree_clean; then
+		w_force="--force "
+	fi
 	echo "Terug naar versie $w_from (houd je herstelblad bij de hand):"
-	echo "  git checkout $w_ref"
+	echo "  git checkout $w_force$w_ref"
 	echo "  ./brievie restore pre-update-$w_to --replace --skip-safety-backup"
 	if [ "$(update_marker_value kind)" = destination ]; then
 		echo "Die back-up staat op je back-upbestemming; ./brievie restore vraagt waar die is."
@@ -1996,6 +2160,10 @@ print_way_back() {
 }
 
 report_unfinished_update() {
+	if update_untouched; then
+		echo "Een eerdere update naar versie $(update_marker_value to) is afgebroken voordat er iets veranderde. Typ ./brievie start om versie $(update_marker_value from) weer te starten."
+		return 0
+	fi
 	echo "Een eerdere update naar versie $(update_marker_value to) is niet afgemaakt (gestopt op $(update_marker_value time))."
 	print_way_back
 }
@@ -2111,9 +2279,8 @@ cmd_update() {
 	# An update that stopped halfway goes first.
 	if [ -f "${here:?}/$update_marker" ]; then
 		m_to=$(update_marker_value to)
-		if update_checked_out; then
-			if [ "$(git -C "${here:?}" rev-parse HEAD)" = "$(tag_commit "v$m_to")" ] &&
-				{ [ -z "$target_arg" ] || [ "$target_arg" = "$m_to" ]; }; then
+		if ! update_untouched; then
+			if update_at_target && { [ -z "$target_arg" ] || [ "$target_arg" = "$m_to" ]; }; then
 				echo "Een eerdere update naar versie $m_to is niet afgemaakt; die wordt nu afgemaakt."
 				hand_over
 			fi
@@ -2159,10 +2326,6 @@ cmd_update() {
 	# No --force: a tag that moved upstream makes the fetch fail, and nothing is guessed.
 	quietly git -C "${here:?}" fetch --tags --quiet origin ||
 		fail "De versies konden niet worden opgehaald (geen internet, of een versie die achteraf is veranderd). Er is niets veranderd."
-	update_to=${target_arg:-$(newest_tag_version)}
-	if [ -z "$update_to" ]; then
-		fail "Er is geen versie gevonden om naar bij te werken. Er is niets veranderd."
-	fi
 	# shellcheck disable=SC2016 # $PGDATA is expanded by the shell inside the container
 	pg_major=$(compose_raw exec -T postgres sh -c 'cat "$PGDATA/PG_VERSION"' 2>>"${here:?}/deploy/.brievie-last.log") || pg_major=""
 	pg_major=$(printf '%s' "$pg_major" | tr -d ' \r\n')
@@ -2178,7 +2341,7 @@ cmd_update() {
 		export SECRET_KEY DATABASE_URL
 		quietly docker run --rm -i --network none -e SECRET_KEY -e DATABASE_URL -e BRIEVIE_WRAPPER=1 \
 			-e "BRIEVIE_LOG_LEVEL=$log_level" "$image" python manage.py update_plan \
-			--installed "$installed" --target "$update_to" --postgres-major "$pg_major"
+			--installed "$installed" ${target_arg:+--target "$target_arg"} --postgres-major "$pg_major"
 	}) || plan_rc=$?
 	if [ "$plan_rc" -eq 1 ]; then
 		rm -f "${here:?}/deploy/.brievie-step.log"
@@ -2186,6 +2349,13 @@ cmd_update() {
 	elif [ "$plan_rc" -ne 0 ]; then
 		fail "Er kon niet worden bepaald of deze update mag. Er is niets veranderd."
 	fi
+	# Without a version typed, the installed image chooses the newest release it can read
+	# (and says which newer one it skipped); with one, it must answer that one.
+	update_to=$(machine_value target "$plan")
+	if ! valid_version "$update_to" || { [ -n "$target_arg" ] && [ "$update_to" != "$target_arg" ]; }; then
+		fail "Er kon niet worden bepaald of deze update mag. Er is niets veranderd."
+	fi
+	plan=$(printf '%s\n' "$plan" | grep -v '^target=' | tail -n 1)
 	case $plan in
 	already)
 		echo "Je hebt al versie $installed."
@@ -2292,12 +2462,18 @@ cmd_update_finish() {
 	fi
 	edit_env set BRIEVIE_VERSION "$finish_to" env ||
 		finish_failed "deploy/.env kon niet worden bijgewerkt."
+	# From here the database may be the new version's: no later wrapper reads this
+	# update as "nothing changed", whatever the checkout says.
+	set_update_step migrating || finish_failed "De voortgang kon niet worden vastgelegd."
 	echo "De database wordt bijgewerkt…"
 	compose run --rm migrate || finish_failed "Het bijwerken van de database is mislukt."
 	echo "Brievie wordt gestart…"
-	quietly all compose_raw up -d --wait --no-build || finish_failed "Brievie is niet goed gestart."
+	# Caddy (the door for phones and browsers) opens only after the new version answers
+	# well: nothing is written to a version that the way back would throw away.
+	quietly all compose_raw up -d --wait --no-build api worker keeper || finish_failed "Brievie is niet goed gestart."
 	compose exec -T api python manage.py check_health --expect-version "$finish_to" ||
 		finish_failed "Brievie antwoordt niet goed na het bijwerken."
+	quietly all compose_raw up -d --wait --no-build caddy || finish_failed "Caddy is niet goed gestart."
 	if ! compose exec -T api python manage.py record_update --from "$finish_from" --to "$finish_to" \
 		${finish_run:+--backup-run "$finish_run"} >/dev/null; then
 		echo "Bijgewerkt, maar het vastleggen lukte niet. ./brievie status laat deze update daarom niet zien."

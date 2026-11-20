@@ -71,6 +71,12 @@ if sleep_at and sleep_at in joined:
     time.sleep(float(os.environ.get("FAKE_SLEEP_SECONDS", "3")))
     with open(os.environ["FAKE_DOCKER_LOG"], "a") as log:
         log.write(json.dumps({{"argv": ["<done>", *argv]}}) + "\\n")
+hup_at = os.environ.get("FAKE_HUP_AT", "")
+if hup_at and hup_at in joined:
+    # A closed terminal or a dropped SSH connection: SIGHUP to the whole process group.
+    signal.signal(signal.SIGHUP, signal.SIG_IGN)
+    os.killpg(os.getpgid(0), signal.SIGHUP)
+    sys.exit(129)
 kill_at = os.environ.get("FAKE_KILL_AT", "")
 if kill_at and kill_at in joined:
     # Ctrl-C: the terminal sends SIGINT to the whole process group of ./brievie.
@@ -104,7 +110,12 @@ elif "update_plan" in argv:
     if plan.startswith("refuse:"):
         sys.stderr.write("CommandError: " + plan[len("refuse:"):] + "\\n")
         sys.exit(1)
-    sys.stdout.write(plan + "\\n")
+    target = argv[argv.index("--target") + 1] if "--target" in argv else os.environ.get(
+        "FAKE_PLAN_TARGET", "0.3.0")
+    sys.stderr.write(os.environ.get("FAKE_PLAN_STDERR", ""))
+    sys.stdout.write("target=" + target + "\\n" + plan + "\\n")
+elif "psql" in argv and "django_migrations" in entry.get("stdin", ""):
+    sys.stdout.write(os.environ.get("FAKE_APPLIED_MIGRATIONS", ""))
 elif "update_backup" in argv:
     sys.stdout.write("run_id={run_id}\\nDe noodback-up is gemaakt (1 MB).\\n")
 elif "manage.py" in argv and "--safety" in argv:
