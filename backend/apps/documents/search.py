@@ -2,12 +2,12 @@
 
 Design: docs/superpowers/specs/2026-11-20-search-design.md.
 
-Two steps. The exact step uses PostgreSQL full-text search in Dutch (`search_vector`:
-sender, summary, text), every word as a word beginning, or the names of the letter's
-labels and persons. Only when that finds nothing does the fallback run: `pg_trgm` word
-similarity over sender and summary, for typos (not the text: measured too slow). Every
-query starts from `visibility.visible_documents`, so a hit is always a letter the member
-may see.
+Two steps. The exact step uses PostgreSQL full-text search in Dutch (`search_vector` of
+`DocumentSearch`, one row per letter: sender, summary, text), every word as a word
+beginning, or the names of the letter's labels and persons. Only when that finds
+nothing does the fallback run: `pg_trgm` word similarity over sender and summary, for
+typos (not the text: measured too slow). Every query starts from
+`visibility.visible_documents`, so a hit is always a letter the member may see.
 
 The term is a name or a number somebody looks for: nothing here logs it, audits it or
 puts it in an error message, and it only ever reaches SQL as a bound parameter.
@@ -285,7 +285,7 @@ def _names(membership: Membership, word: str) -> _Names:
 
 def _word_match(word: str, names: _Names) -> models.Q:
     """A letter has `word` in its sender, summary or text, or through a name."""
-    match = models.Q(search_vector=_tsquery([word]))
+    match = models.Q(search__search_vector=_tsquery([word]))
     return match | names.linked() if names else match
 
 
@@ -343,16 +343,16 @@ def _exact(
 
     if text_only:
         named_words = [word for word in words if names[word]]
-        ids = lookup(models.Q(search_vector=_tsquery(text_only)), named_words)
+        ids = lookup(models.Q(search__search_vector=_tsquery(text_only)), named_words)
     else:
         first, *others = words
-        ids = lookup(models.Q(search_vector=_tsquery([first])), others) | lookup(
+        ids = lookup(models.Q(search__search_vector=_tsquery([first])), others) | lookup(
             names[first].linked(), others
         )
     if not ids:
         return None
     rank: models.Expression = SearchRank(
-        models.F("search_vector"), _tsquery(words, "|"), cover_density=True
+        models.F("search__search_vector"), _tsquery(words, "|"), cover_density=True
     )
     for word in words:
         if names[word]:

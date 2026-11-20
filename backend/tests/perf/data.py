@@ -484,6 +484,7 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
             "people_departmentmember",
             "labels_label",
             "documents_document",
+            "documents_documentsearch",
             "documents_documentaddressee",
             "documents_documentlabel",
             "documents_documentevent",
