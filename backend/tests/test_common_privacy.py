@@ -1,5 +1,7 @@
 import logging
+import random
 import sys
+import time
 from typing import cast
 
 import pytest
@@ -162,3 +164,120 @@ def test_holds_bsn_finds_a_number_or_the_mask() -> None:
     assert holds_bsn("[bsn]")
     assert not holds_bsn("BSN")
     assert not holds_bsn("Jan de Vries")
+
+
+# --- Security review 2026-11-20: forms OCR and print produce that leaked ---
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "nr 111  222  333",  # two spaces: OCR of columns
+        "BSN: 111 222  333",
+        "111 222\n333",  # a line break inside the number
+        "111\r\n222\r\n333",
+        "111\u202f222\u202f333",  # narrow no-break space
+        "111\u2009222\u2009333",  # thin space
+        "111\u2007222\u2007333",  # figure space
+        "111/222/333",
+        "111,222,333",
+        "111_222_333",
+        "111 - 222 - 333",
+        "111\u2013222\u2013333",  # en dash
+        "111\u2212222\u2212333",  # minus sign
+        "111\u00ad222\u00ad333",  # soft hyphen
+        "111\u200b222\u200b333",  # zero-width space
+        "1112 / 22 / 333",
+        "11.12.22.333",
+        "11 12  22 333",
+    ],
+)
+def test_bsn_with_other_separators_is_masked(text: str) -> None:
+    masked = mask_bsns(text)
+    assert "[BSN]" in masked
+    assert "222" not in masked
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "BSN 12345678",  # an old sofinummer printed without its leading 0
+        "BSN: 1234 5678",
+        "burgerservicenummer 1 2 3 4 5 6 7 8",
+        "BSN: 11 122 2333",  # an unusual grouping, but labelled
+    ],
+)
+def test_a_labelled_number_of_eight_or_nine_digits_is_masked(text: str) -> None:
+    masked = mask_bsns(text)
+    assert masked.endswith("[BSN]"), masked
+    assert not any(c.isdigit() for c in masked)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Tel 06 12 34 56 78",  # ten digits
+        "Datum 14-11-2026",
+        "Bedrag 1.234,56",
+        "Postcode 1234 AB, huisnummer 12",
+        "1112223334",
+    ],
+)
+def test_other_numbers_with_separators_are_kept(text: str) -> None:
+    assert mask_bsns(text) == text
+
+
+def _valid_bsns(count: int) -> list[str]:
+    rng = random.Random(20261120)  # noqa: S311 - test data, not a secret
+    found: list[str] = []
+    while len(found) < count:
+        digits = f"{rng.randrange(10**8, 10**9):09d}"
+        if passes_elfproef(digits):
+            found.append(digits)
+    return found
+
+
+_LAYOUTS = ((3, 3, 3), (4, 2, 3), (2, 2, 2, 3))
+_SEPARATORS = (" ", "  ", ".", "-", "/", ",", "\n", "\u00a0", "\u202f", " / ", "\t")
+
+
+def _grouped(digits: str, layout: tuple[int, ...], separator: str) -> str:
+    groups, position = [], 0
+    for size in layout:
+        groups.append(digits[position : position + size])
+        position += size
+    return separator.join(groups)
+
+
+def test_every_valid_bsn_in_every_printed_form_is_masked() -> None:
+    # Property-style: every layout and separator, inside ordinary text.
+    for digits in _valid_bsns(40):
+        for layout in _LAYOUTS:
+            for separator in _SEPARATORS:
+                number = _grouped(digits, layout, separator)
+                text = f"Geachte heer, uw nummer {number} staat hieronder."
+                masked = mask_bsns(text)
+                assert masked == "Geachte heer, uw nummer [BSN] staat hieronder.", repr(text)
+
+
+def test_nine_digits_that_fail_the_elfproef_stay_without_a_label() -> None:
+    rng = random.Random(7)  # noqa: S311 - test data, not a secret
+    for _ in range(200):
+        digits = f"{rng.randrange(10**8, 10**9):09d}"
+        if passes_elfproef(digits):
+            continue
+        text = f"Kenmerk {_grouped(digits, (3, 3, 3), ' ')} van uw factuur"
+        assert mask_bsns(text) == text
+
+
+def test_masking_is_linear_in_labels_and_numbers() -> None:
+    # Many labels and many numbers on one page: once quadratic (review L3).
+    # Numbers that fail the elfproef first, so every one is checked against every label.
+    page = ("123456789 " * 4000) + ("bsn " * 20000) + "bsn 123456789"
+    started = time.perf_counter()
+    masked = mask_bsns(page)
+    elapsed = time.perf_counter() - started
+
+    assert masked.count("123456789") == 4000
+    assert masked.endswith("bsn [BSN]")
+    assert elapsed < 0.5, elapsed

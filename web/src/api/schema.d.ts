@@ -13,7 +13,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Login */
+        /**
+         * Login
+         * @description 429 too_many_attempts with Retry-After: five wrong passwords for this email from this address, thirty from this address, or, from a browser that never signed in to this account, more than ten for the account from anywhere (then a wait that doubles from 15 seconds to at most 15 minutes).
+         */
         post: operations["login"];
         delete?: never;
         options?: never;
@@ -55,6 +58,26 @@ export interface paths {
          * @description Set a new password with the token from a reset link's fragment and sign in; every other session of the account ends. 400 reset_link_invalid for an unknown, used, expired or revoked link, or when its maker may no longer act on the account; 422 when the password rules refuse it (the link stays usable). Every paired device and every other open reset link of the account is revoked.
          */
         post: operations["completePasswordReset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/reauthenticate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reauthenticate
+         * @description Web session only: a bearer token answers 401 not_authenticated. Type the password again before an action that needs a recent sign-in (creating a pairing code answers 403 reauthentication_required otherwise). 400 wrong_password; wrong passwords count for the same lockout as signing in (429).
+         */
+        post: operations["reauthenticate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -146,7 +169,7 @@ export interface paths {
         put?: never;
         /**
          * Create Pairing Code
-         * @description Web session only. A bearer token (even a valid one) is not accepted here and answers 401 not_authenticated; a session without a valid CSRF token answers 403. The response carries the code once and is not stored (Cache-Control: no-store). server_link opens the app without the code: it pairs with a proof.
+         * @description Web session only. A bearer token (even a valid one) is not accepted here and answers 401 not_authenticated; a session without a valid CSRF token answers 403. A session that signed in more than 15 minutes ago answers 403 reauthentication_required: call reauthenticate first. The response carries the code once and is not stored (Cache-Control: no-store). server_link opens the app without the code: it pairs with a proof.
          */
         post: operations["createPairingCode"];
         delete?: never;
@@ -532,7 +555,7 @@ export interface paths {
         get: operations["getAiStatus"];
         /**
          * Update Ai Settings
-         * @description Set how the workspace's letters are read. Administrators only. Switching to an external address without consent in force answers 409 `ai_consent_required` unless `consent_address` is exactly the address these settings lead to: first show the notice of `previewAiSettings`. Without `api_key` the stored key stays, at the same address only. The key is never returned.
+         * @description Set how the workspace's letters are read. Web session only: a bearer token answers 401 not_authenticated. Administrators only. Switching to an external address without consent in force answers 409 `ai_consent_required` unless `consent_address` is exactly the address these settings lead to: first show the notice of `previewAiSettings`. Without `api_key` the stored key stays, at the same address only. The key is never returned.
          */
         put: operations["updateAiSettings"];
         post?: never;
@@ -577,7 +600,7 @@ export interface paths {
         put?: never;
         /**
          * Preview Ai Settings
-         * @description Check AI settings without saving them. When saving them needs consent, `notice` is the text to show (the same `configure_ai` prints) and `address` is what to send back as `consent_address`. Administrators only.
+         * @description Check AI settings without saving them. Web session only: a bearer token answers 401 not_authenticated. When saving them needs consent, `notice` is the text to show (the same `configure_ai` prints) and `address` is what to send back as `consent_address`. Administrators only.
          */
         post: operations["previewAiSettings"];
         delete?: never;
@@ -661,7 +684,7 @@ export interface paths {
         put?: never;
         /**
          * Create Document
-         * @description Upload a scanned document as multipart/form-data: `metadata` is a JSON string (schema `UploadMetadataIn`), followed by one `page` file (image/jpeg) per page in page order. Repeating an upload with the same `client_id` and pages answers 200 with the existing document.
+         * @description Upload a scanned document as multipart/form-data: `metadata` is a JSON string (schema `UploadMetadataIn`), followed by one `page` file (image/jpeg) per page in page order. Repeating an upload with the same `client_id` and pages answers 200 with the existing document. 429 `too_many_uploads` with Retry-After when the member or the workspace uploaded too much in a short time (by default 60 per member per 10 minutes, 600 per workspace per hour).
          */
         post: operations["createDocument"];
         delete?: never;
@@ -1215,7 +1238,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Link Person To Member */
+        /**
+         * Link Person To Member
+         * @description Web session only: a bearer token answers 401 not_authenticated. Link the person to a member of the workspace (`user_id`), or unlink it (null). Administrators only.
+         */
         put: operations["linkPersonToMember"];
         post?: never;
         delete?: never;
@@ -2517,6 +2543,11 @@ export interface components {
             /** Value */
             value: string;
         };
+        /** ReauthenticateIn */
+        ReauthenticateIn: {
+            /** Password */
+            password: string;
+        };
         /** RuleActionSchema */
         RuleActionSchema: {
             /**
@@ -3076,6 +3107,91 @@ export interface operations {
             };
             /** @description Bad Request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    reauthenticate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReauthenticateIn"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5101,6 +5217,15 @@ export interface operations {
             };
             /** @description Unprocessable Content */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

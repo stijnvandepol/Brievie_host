@@ -588,6 +588,10 @@ msgstr "bevat het woord"
 msgid "bevat niet het woord"
 msgstr "bevat niet het woord"
 
+#: src/routes/pair-app.tsx
+msgid "Bevestigen"
+msgstr "Bevestigen"
+
 #: src/components/rule-sentence.ts
 msgid "Bewaakte map"
 msgstr "Bewaakte map"
@@ -2501,6 +2505,10 @@ msgstr "Vul de naam van het model in, zoals de dienst die noemt."
 msgid "Vul in"
 msgstr "Vul in"
 
+#: src/routes/pair-app.tsx
+msgid "Vul je wachtwoord in voordat je een telefoon koppelt. Zo weten we dat jij het bent."
+msgstr "Vul je wachtwoord in voordat je een telefoon koppelt. Zo weten we dat jij het bent."
+
 #: src/routes/setup.tsx
 msgid "Waar gebruik je Brievie voor?"
 msgstr "Waar gebruik je Brievie voor?"
@@ -2520,6 +2528,7 @@ msgstr "Waarde"
 
 #: src/routes/invitation.tsx
 #: src/routes/login.tsx
+#: src/routes/pair-app.tsx
 #: src/routes/sessions.tsx
 #: src/routes/setup.tsx
 msgid "Wachtwoord"

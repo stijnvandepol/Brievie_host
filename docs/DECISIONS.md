@@ -1147,7 +1147,7 @@ Design: `docs/superpowers/specs/2026-11-19-ai-autopilot-design.md`. Opt-in per w
    - A person's confirm with `sets_organisation` clears `automatic` on the links that stay, and the autopilot's change is then no longer undoable (`can_undo` and `undo_event` both check the link's flag). A hand edit leaves the flag. A person's review of an AI-confirmed letter is never a repeat (409 `document_not_reviewable`).
    - The switches reset when AI goes off, the mode changes (external <-> local), or consent is granted for another address. Another model in the same mode at the same address keeps them.
    - `TaskItemOut.created_by_ai` (additive, default false), so a task list can show the mark.
-   - Follow-ups: work out relative terms with `needs_attention`; a per-workspace prohibition for the enterprise layer; `updateAiSettings` still accepts a device token while `updateAiAutopilot` does not (session only); iOS follows. Before private post (phase 1d part B) an automatic addressee link must not by itself grant reading rights. iOS must show the mark "Automatisch door AI" (documents and tasks) before the autopilot is used in households that only use the app.
+   - Follow-ups: work out relative terms with `needs_attention`; a per-workspace prohibition for the enterprise layer; ~~`updateAiSettings` still accepts a device token~~ (closed 2026-11-20, security review: session only). Before private post (phase 1d part B) an automatic addressee link must not by itself grant reading rights. iOS must show the mark "Automatisch door AI" (documents and tasks) before the autopilot is used in households that only use the app.
 
 ## 2026-11-20: Fixes from the exploratory API test of 19 November
 
@@ -1271,3 +1271,162 @@ Design: `docs/superpowers/specs/2026-11-20-search-design.md`.
 - **No system checks in commands that may run without PostgreSQL.** Django 6.1 runs model checks against every database, and the check of the generated `search_vector` asks the server version, so a command that runs them needs a connection. The commands `./brievie` starts in a new container (`run --no-deps`, `docker run`; restore runs some while PostgreSQL is down) set `requires_system_checks = []`; `tests/test_commands_without_database.py` reads that list from the wrapper. Kept the generated column: dropping it for a trigger or a computed query would only move the cost.
 - **`pg_trgm` is created by the owner role.** The migration (`0010_search`) runs `TrigramExtension()`; `pg_trgm` is a trusted extension, so the non-superuser owner role may create it (verified on PostgreSQL 18).
 - **Follow-ups.** Keeping the term out of the PostgreSQL log: server-side binding (psycopg `server_side_binding`) for the search queries, or `log_min_error_statement` for the search path (set by an administrator, it is superuser-only); a word list per workspace to correct typos in the letter text; iOS screens (the endpoint is the same); highlighting the hit on the document page; moving the reads listed above onto the seam.
+
+## 2026-11-20: Fixes from the security review
+
+Three read-only reviews of main at `3fa9c19` (identity, data and operations, content
+plane). One line per finding is in the pull request; the choices are here.
+
+- **AI settings are web-session only (High).** `updateAiSettings` and `previewAiSettings`
+  now take `auth=session_auth`, like `updateAiAutopilot`. Attack: with the bearer token of
+  an administrator's phone, `PUT /workspaces/{id}/ai` with an external address and the same
+  `consent_address` sent every later letter to that address; the "consent" was the
+  attacker's own echo. This narrows two released operations, which the contract test
+  otherwise forbids: `test_openapi_contract.NARROWED_TO_THE_WEB_SESSION` names them. The
+  iOS app does not call either (checked: only the bundled `openapi.json` names them), so
+  nothing in the field breaks. If the app ever adds AI settings it must use the web: the app
+  treats every 401 `not_authenticated` as a revoked device and forgets the pairing.
+- **BSN masking knows more printed forms (Medium, both reviews).** Reproduced on main:
+  `111  222  333`, `BSN: 111 222  333`, `111 222\n333`, narrow/thin spaces, `111/222/333`,
+  `111,222,333` and `BSN 12345678` came through unchanged. `privacy._SEP` is now a run of 1
+  to 3 separators: any whitespace (line breaks, no-break, thin, narrow and figure spaces),
+  `. / , _ -`, the dashes U+2010 to U+2015, the minus sign, the soft hyphen and zero-width
+  characters. Close after the word "BSN" (30 characters, as before) any grouping of 8 or 9
+  digits is masked: an old sofinummer is printed without its leading zero. Every quantifier
+  is bounded and nothing nests, and the label windows are merged and walked with one
+  pointer, so masking is linear (it was labels x numbers: review L3, a test now bounds it).
+  Masking a number too many stays the safe side: a labelled date ("BSN onbekend, geboren
+  01-02-1980") is masked too. **Stated limit:** without the word "BSN", only the layouts
+  3-3-3, 4-2-3 and 2-2-2-3 and nine plain digits are recognised, and only when they pass the
+  elfproef; "111;222;333" or "11 1222 333" without a label still pass. Search keeps its own
+  wider net (`_without_bsn_digits`). **Follow-up:** text stored before this fix keeps what
+  the old mask missed; a `remask_bsns` command per workspace (`Document.ocr_text`,
+  `DocumentPage.ocr_text`, summaries) is needed before the next release note says
+  otherwise.
+- **Pairing a phone needs a recent sign-in and leaves a notice (identity M2).** Attack: a
+  moment at a victim's open browser was enough to make a pairing code and pair a phone,
+  whose token outlives a later password change (devices are kept on purpose) and is used
+  for 180 idle days; nothing told the owner. Chosen: (1) `createPairingCode` answers 403
+  `reauthentication_required` unless the session signed in or typed the password again
+  within `sessions.REAUTHENTICATION_WINDOW` (15 minutes, longer than a code lives, so the
+  code right after accepting an invitation or after setup needs nothing extra); the new
+  session-only `reauthenticate` (`POST /auth/reauthenticate`, `{password}`) checks the
+  password through `authenticate`, so wrong ones count for the same lockouts as signing in,
+  and stamps `UserSession.reauthenticated_at`. The web asks for the password on "Apparaten"
+  and then makes the code. Part C's second factor can satisfy the same check later. (2)
+  Every pairing (code or proof) leaves the owner an `AccountNotice` `device_paired` naming
+  the device, with what to do when it was not them. There is no flow where an administrator
+  pairs a phone for a member (a code is always for the caller's own account), so nothing
+  else changed. Dropped: a `current_password` on `createPairingCode` itself (a request body
+  on a released operation that had none), and revoking devices on a password change (the
+  documented promise "je gekoppelde telefoon blijft werken"). Limits: within the window a
+  stolen fresh cookie can still pair, and the notice can be dismissed from the same browser;
+  the "Nieuwe code" on the invitation page after 15 minutes shows the sentence and the
+  person goes to Apparaten.
+- **Wrong passwords are limited per account too (identity M1).** Attack: axes locked an
+  email per client address and `LOGIN_FAILURES` counted per address, so rotating addresses
+  (an IPv6 /64 is one VPS) left guessing bounded only by the hashing speed. Chosen:
+  `apps.accounts.signin_limits`, one count per account in `SignInFailures` (a hash of the
+  normalised email; unknown addresses are counted alike, so the answer reveals nothing).
+  Ten wrong passwords are free; then each attempt waits 15 seconds after the last wrong
+  one, doubling to at most 15 minutes, which bounds guessing to roughly a hundred tries a
+  day per account. The count starts again after a sign-in or a day without wrong
+  passwords. Why a capped slow-down and not a lock: an attacker who fails once every 15
+  minutes keeps the account slowed but never locked for long, and a browser that signed in
+  to the account before carries a signed, HttpOnly cookie (`brievie_known`, 180 days, up to
+  five accounts) and is never slowed by the account count (axes still limits it per
+  address), so the owner is not locked out of their own browsers (the device-cookie scheme
+  of OWASP). The check, the password check and the count run under a transaction-level
+  advisory lock per account, so a burst of parallel requests cannot all pass before the
+  first failure is counted (one of the review's notes). The invitation path with an
+  existing account (`verify_password`) counts the same way. The address limits now count
+  an IPv6 client per /64 (`net.address_bucket`); axes keeps its exact address. Dropped: a
+  per-account notice after a slow-down (a notice per attack would train people to ignore
+  it); a fixed lock (a cheap denial of service).
+- **Uploads are limited per member and per workspace (content-plane M2, data L3).**
+  Attack: any member, or a stolen phone of one, scripted `createDocument` with fresh
+  `client_id`s; every upload stores up to 32 MB and queues a paid AI call on the one
+  `pipeline` worker that all workspaces share, so other workspaces' letters waited for
+  hours. `apps.documents.upload_limits` answers 429 `too_many_uploads` (Dutch sentence,
+  `Retry-After`) past `BRIEVIE_UPLOADS_PER_MEMBER` (60 per 10 minutes, per member per
+  workspace) or `BRIEVIE_UPLOADS_PER_WORKSPACE` (600 per hour); both are settings, so a
+  mail room can raise them. Checked after the membership check, so an outsider cannot use
+  up a workspace's count, with a fresh throttle per check (Ninja keeps state on the
+  instance). The app already retries a 429 with its back-off. **Follow-up:** fairness on
+  the worker itself (Procrastinate takes jobs first in, first out): a cap on queued
+  `process_document` jobs per workspace, or a queue lock per workspace (`queueing_lock`)
+  with a re-queue, is more than a small change and needs a measurement on the worker.
+- **The AI key is bound to its address (data M2).** Attack: anyone who can write
+  `pipeline_aisettings` (the keeper holds `brievie_app` credentials and may set the
+  workspace GUC; or a stolen app password, or an SQL injection) rewrote `base_url` and
+  `consented_base_url` together and left `api_key_sealed` alone; the worker opened the key
+  and sent it to the new host in `Authorization`. Now the key is sealed with the AAD
+  `ai-api-key-v2|<workspace id>|<base_url>`, so it opens only for that workspace at exactly
+  that address: a changed address or a blob copied from another workspace gives
+  `ai_not_configured`, never the key on the wire. `configure` keeps a stored key only when
+  it opens for the target address, and `status().has_api_key` is false for a key that does
+  not open, so the form asks for it. **Upgrade:** keys sealed before (AAD `ai-api-key`) do
+  not open any more; an administrator types the key once again. No fallback to the old
+  AAD: an attacker could replay an old blob with a new address. No re-seal in a migration:
+  the migrate container has no master key.
+- **Low findings fixed in this round.** A page image with a second frame header is refused
+  (`jpeg_size`: decoders differ in which header they use, so a small second one hid an
+  oversized first one). `linkPersonToMember` is web-session only (it decides whose post a
+  person's letters are, and later who may read them); the contract test names it with the
+  AI settings as deliberately narrowed, and no app calls it. A proposal of an AI on the own network names its
+  reader `local` instead of the host (`ProposalOut.provider` reaches every member, while
+  `status` already hid the local address); proposals stored before keep their host. A workspace holds at most 500 persons
+  and 200 labels made by hand (409 `too_many_persons` / `too_many_labels`): the AI sees only
+  the first 50 persons and 100 labels, and name matching walks every person on every letter
+  on the shared worker. Persons made for members and preset labels are not counted against
+  the moment they are made, only against the next one made by hand. Our throttles keep Ninja's per-request
+  state (`key`, `history`, `now`) per thread (`throttling._PerThreadState`), so two
+  requests on gunicorn's threads no longer write one client's history under another's key.
+  Still not atomic across the two worker processes (read, then write the database cache):
+  a burst counts lower than it is. The per-account sign-in count uses an atomic upsert
+  under a lock; the other limits guard secrets of 40 to 256 bits.
+- **CLAUDE.md drift (content-plane L7): not valid at `3fa9c19`.** The report quotes "the
+  autopilot never applies a rule's proposal"; `git show 3fa9c19:CLAUDE.md` already
+  describes `rule_labels_to_apply` and `rule_autopilot` (updated in 14a6a5c), and the code
+  and DECISIONS agree with it. CLAUDE.md now also names this round's rules (AI key binding,
+  sign-in limits, pairing, masking).
+
+### Follow-ups from the review (not built in this round)
+
+- **Hash session keys at rest (data M1).** Attack: Django's database session store and
+  `UserSession.session_key` hold the cookie value in clear; the keeper reads every table
+  (`pg_read_all_data`) and `pg_dump` copies both into each back-up. Whoever has the keeper,
+  or a back-up plus its password, sets the `sessionid` cookie of an administrator and reads
+  decrypted page images, which breaks "a stolen keeper cannot decrypt documents". Approach:
+  a `SessionStore` subclass of `django.contrib.sessions.backends.db.SessionStore` that
+  stores `sha256(session_key)` as the row key (override `_get_session_from_db`, `exists`,
+  `save`, `delete`, `create` so they hash before touching the table; the cookie keeps the
+  raw key) and `UserSession.session_key` as the same hash (`record_session`,
+  `rekey_session`, the middleware and `end_sessions` look up by hash). Migration: hash the
+  existing keys in place (sessions survive). Cheaper first step: `pg_dump
+  --exclude-table-data` for `django_session`, `accounts_usersession` and `brievie_cache`,
+  and explicit `GRANT SELECT` for the keeper instead of `pg_read_all_data`. Test: after
+  `start_session`, no `Session` row has the cookie's key.
+- **Verify a signature before `./brievie update` builds a tag (data M4).** Attack: a stolen
+  maintainer token or a hijacked `origin` pushes `v9.9.9`; every server that runs the
+  documented `./brievie update` builds it and hands over to its wrapper, as root with the
+  master key and the superuser URL. Approach: sign release tags with SSH keys, ship
+  `deploy/allowed_signers` in the repository, and before `git archive` run `git -c
+  gpg.format=ssh -c gpg.ssh.allowedSignersFile=deploy/allowed_signers verify-tag
+  "v$update_to"`, refusing on failure; also refuse when the tag's own `allowed_signers`
+  differs from the running one (a key change goes through a release signed by an old key).
+  Later: check the release workflow's provenance attestation (`gh attestation verify`) for
+  an image. Test: a fixture remote with an unsigned tag; `./brievie update` stops before
+  `docker build`.
+- **Also open:** re-masking text stored before the BSN fix (`remask_bsns` per workspace);
+  worker fairness across workspaces; rules in mode `auto` acting on unconfirmed AI facts
+  (content L1: decide `auto` on settled facts, as the autopilot does); resolving AI hosts
+  at configure time and before each call (content L2, SSRF and "local" names that resolve
+  publicly); the reads still off the visibility seam (content L3, before rights per
+  document); the invitation link that tells whether an address has an account (identity
+  L2, documented as intended); HSTS and trusting the private CA in browsers (identity L3,
+  deployment docs); `pg_restore --no-owner --no-privileges --role` and a TOC allow-list
+  (data L1); master-key rotation (data L4); `cap_drop`, `no-new-privileges`, read-only
+  roots and digest-pinned images (data L5); `CREATEDB` for the owner only in dev and CI
+  (data L6). Each touches deployment or behaviour beyond a small, safe change.
+

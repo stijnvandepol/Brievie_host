@@ -69,6 +69,10 @@ class SessionOut(Schema):
     current: bool
 
 
+class ReauthenticateIn(InputSchema):
+    password: str = Field(max_length=128)
+
+
 class PasswordChangeIn(InputSchema):
     current_password: str = Field(max_length=128)
     new_password: str = Field(max_length=128)

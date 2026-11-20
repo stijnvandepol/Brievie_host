@@ -242,6 +242,11 @@ DATA_UPLOAD_MAX_MEMORY_SIZE: int = BRIEVIE_MAX_BODY_BYTES
 # limit; Caddy enforces the same one on that route.
 BRIEVIE_MAX_UPLOAD_BYTES: int = env.int("BRIEVIE_MAX_UPLOAD_BYTES", default=33554432)
 BRIEVIE_MAX_PAGES: int = env.int("BRIEVIE_MAX_PAGES", default=30)
+# Uploads per member of a workspace and per workspace (apps.documents.upload_limits):
+# a household scans a pile at once, a mail room more; one member must not fill the
+# worker's queue for every workspace. Ninja's rate format: count/period (s, m, h, d).
+BRIEVIE_UPLOADS_PER_MEMBER: str = env.str("BRIEVIE_UPLOADS_PER_MEMBER", default="60/10m")
+BRIEVIE_UPLOADS_PER_WORKSPACE: str = env.str("BRIEVIE_UPLOADS_PER_WORKSPACE", default="600/1h")
 BRIEVIE_MAX_PAGE_TEXT_CHARS: int = env.int("BRIEVIE_MAX_PAGE_TEXT_CHARS", default=20000)
 # Uploaded files stay in memory, whatever their size: a temporary file would be an
 # unencrypted copy of a page on disk. Set globally, because the session's CSRF check
