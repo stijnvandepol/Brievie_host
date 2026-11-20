@@ -94,6 +94,63 @@ def test_variants_are_cleaned(client_a: Client, ws_a: Workspace) -> None:
     assert r.json()["name_variants"] == ["J. de Vries", "Jan de Vries"]
 
 
+def test_names_are_tidied_and_compared_as_matching_compares_them(
+    client_a: Client, ws_a: Workspace
+) -> None:
+    # The finding: "Test  Persoon" (two spaces) was accepted next to "Test Persoon".
+    assert create(client_a, ws_a.id, {"display_name": "Test Persoon"}).status_code == 201
+
+    r = create(client_a, ws_a.id, {"display_name": "Test  Persoon"})
+    assert r.status_code == 409
+    assert r.json()["code"] == "person_exists"
+
+    # Decomposed accents become one character; whitespace runs one space.
+    r = create(
+        client_a,
+        ws_a.id,
+        {"display_name": "Rene\u0301\t Jansen", "name_variants": ["R.  Jansen", "r. jansen"]},
+    )
+    assert r.status_code == 201
+    assert (r.json()["display_name"], r.json()["name_variants"]) == ("René Jansen", ["R. Jansen"])
+
+
+def test_a_name_another_active_person_has_is_refused(client_a: Client, ws_a: Workspace) -> None:
+    stijn = create(client_a, ws_a.id, {"display_name": "Stijn", "name_variants": ["S. van de Pol"]})
+    assert stijn.status_code == 201
+
+    bodies: list[dict[str, object]] = [
+        {"display_name": "Andere Stijn", "name_variants": ["s.  VAN DE POL"]},
+        {"display_name": "Andere Stijn", "name_variants": ["Stijn"]},
+        {"display_name": "S. van de Pol"},
+    ]
+    for body in bodies:
+        r = create(client_a, ws_a.id, body)
+        assert r.status_code == 409, body
+        assert r.json()["code"] == "name_variant_taken"
+        assert "hoort al bij Stijn." in r.json()["message"]
+
+    # An archived person is not matched, so its names do not count...
+    path = f"/workspaces/{ws_a.id}/persons/{stijn.json()['id']}"
+    archived = put(
+        client_a,
+        path,
+        {"display_name": "Stijn", "name_variants": ["S. van de Pol"], "archived": True},
+    )
+    assert archived.status_code == 200
+    andere = create(
+        client_a, ws_a.id, {"display_name": "Andere", "name_variants": ["S. van de Pol"]}
+    )
+    assert andere.status_code == 201
+    # ...until it comes back.
+    back = put(
+        client_a,
+        path,
+        {"display_name": "Stijn", "name_variants": ["S. van de Pol"], "archived": False},
+    )
+    assert back.status_code == 409
+    assert back.json()["message"].startswith("De naam 'S. van de Pol' hoort al bij Andere.")
+
+
 def test_too_many_variants_are_refused(client_a: Client, ws_a: Workspace) -> None:
     variants = [f"Naam {i}" for i in range(21)]
 

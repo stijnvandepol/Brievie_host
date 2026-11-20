@@ -1,3 +1,4 @@
+import unicodedata
 from collections.abc import Collection
 from uuid import UUID
 
@@ -12,6 +13,7 @@ from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
 from apps.common.privacy import holds_bsn, mask_bsns
+from apps.common.text import normalise
 from apps.documents.models import DocumentSuggestion
 from apps.people.models import Person
 from apps.rules.definition import named_ids
@@ -82,9 +84,14 @@ def _refuse_bsn(value: str, kept: Collection[str]) -> None:
         raise bsn_in_name()
 
 
+def _tidy(value: str) -> str:
+    """One form per name: Unicode NFC, whitespace runs one space, trimmed."""
+    return unicodedata.normalize("NFC", " ".join(value.split()))
+
+
 def _clean_name(display_name: str, kept: Collection[str] = ()) -> str:
     _refuse_bsn(display_name, kept)
-    name = mask_bsns(display_name).strip()
+    name = _tidy(mask_bsns(display_name))
     if not name:
         raise ApiError(422, "validation_error", _("Een persoon heeft een naam nodig."))
     if len(name) > NAME_MAX:
@@ -95,12 +102,12 @@ def _clean_name(display_name: str, kept: Collection[str] = ()) -> str:
 
 
 def _clean_variants(name_variants: list[str], kept: Collection[str] = ()) -> list[str]:
-    """Trimmed, masked and without repeats (ignoring case); in the order given."""
+    """Tidied, masked and without repeats (as name matching compares); in the order given."""
     cleaned: list[str] = []
     seen: set[str] = set()
     for raw in name_variants:
         _refuse_bsn(raw, kept)
-        variant = mask_bsns(raw).strip()
+        variant = _tidy(mask_bsns(raw))
         if not VARIANT_MIN <= len(variant) <= VARIANT_MAX:
             raise ApiError(
                 422,
@@ -108,9 +115,9 @@ def _clean_variants(name_variants: list[str], kept: Collection[str] = ()) -> lis
                 _("Een schrijfwijze van een naam is %(min)d tot %(max)d tekens.")
                 % {"min": VARIANT_MIN, "max": VARIANT_MAX},
             )
-        if variant.casefold() in seen:
+        if normalise(variant) in seen:
             continue
-        seen.add(variant.casefold())
+        seen.add(normalise(variant))
         cleaned.append(variant)
     if len(cleaned) > VARIANTS_MAX:
         raise ApiError(
@@ -119,6 +126,46 @@ def _clean_variants(name_variants: list[str], kept: Collection[str] = ()) -> lis
             _("Een persoon heeft hoogstens %(max)d schrijfwijzen.") % {"max": VARIANTS_MAX},
         )
     return cleaned
+
+
+def _refuse_taken_names(person: Person) -> None:
+    """Refuse a name of an active person that another active person has too.
+
+    Names are compared as name matching compares them (case, accents and whitespace
+    do not count): one name on two persons would propose both on the same letter.
+    Archived persons are not matched, so their names do not count.
+    """
+    if person.archived_at is not None:
+        return
+    others = Person.objects.filter(workspace_id=person.workspace_id, archived_at__isnull=True)
+    if person.pk is not None:
+        others = others.exclude(pk=person.pk)
+    display_names: dict[str, str] = {}
+    taken: dict[str, str] = {}
+    for other_name, other_variants in others.values_list("display_name", "name_variants"):
+        display_names[normalise(other_name)] = other_name
+        for name in (other_name, *other_variants):
+            # A name masked before BSNs were refused matches nothing (common.text).
+            if not holds_bsn(name):
+                taken.setdefault(normalise(name), other_name)
+    if normalise(person.display_name) in display_names:
+        raise _person_exists()
+    for name in (person.display_name, *person.name_variants):
+        owner = None if holds_bsn(name) else taken.get(normalise(name))
+        if owner is not None:
+            raise ApiError(
+                409,
+                "name_variant_taken",
+                _(
+                    "De naam '%(name)s' hoort al bij %(person)s. Twee personen kunnen niet "
+                    "dezelfde naam hebben."
+                )
+                % {"name": name, "person": owner},
+            )
+
+
+def _person_exists() -> ApiError:
+    return ApiError(409, "person_exists", _("Er is al een persoon met deze naam."))
 
 
 def _unique_violation(exc: IntegrityError) -> str | None:
@@ -136,7 +183,7 @@ def _save(person: Person) -> None:
     except IntegrityError as exc:
         constraint = _unique_violation(exc)
         if constraint == _NAME_UNIQUE:
-            raise ApiError(409, "person_exists", _("Er is al een persoon met deze naam.")) from exc
+            raise _person_exists() from exc
         if constraint == _USER_UNIQUE:
             raise _member_already_linked() from exc
         raise
@@ -156,6 +203,7 @@ def create_person(
             name_variants=_clean_variants(name_variants),
             archived_at=timezone.now() if archived else None,
         )
+        _refuse_taken_names(person)
         _save(person)
         return _annotated(workspace, person.id)
 
@@ -182,6 +230,7 @@ def update_person(
             DocumentSuggestion.objects.filter(
                 person=person, state=DocumentSuggestion.State.OPEN
             ).delete()
+        _refuse_taken_names(person)
         _save(person)
         return _annotated(workspace, person.id)
 

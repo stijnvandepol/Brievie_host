@@ -144,3 +144,30 @@ def test_a_masked_name_variant_matches_no_letter() -> None:
     letter = "Belastingdienst\nBurgerservicenummer: [BSN]\nT.a.v. de heer J. Jansen"
     assert match_addressees(letter, [p]) == []
     assert match_addressees(letter, [person("Jan [BSN]")]) == []
+
+
+def test_one_name_on_two_persons_preselects_neither() -> None:
+    # The finding: the same variant on Stijn and on "Andere Stijn" preselected both.
+    stijn = person("Stijn van de Pol")
+    andere = person("Andere Stijn", "Stijn van de Pol")
+    text = "De heer Stijn van de Pol\nDorpsstraat 1"
+    matches = match_addressees(text, [stijn, andere])
+    assert {m.person_id for m in matches} == {stijn.person_id, andere.person_id}
+    assert all(m.confidence < PRESELECT_FROM for m in matches)
+    # The same answer whatever order the persons come in.
+    assert match_addressees(text, [andere, stijn]) == [*reversed(matches)]
+
+
+def test_a_name_inside_a_longer_matched_name_is_not_preselected() -> None:
+    kort = person("Test Persoon")
+    lang = person("Test Persoon B")
+    text = "T.a.v. Test Persoon B\nDorpsstraat 1"
+    by_person = {m.person_id: m for m in match_addressees(text, [kort, lang])}
+    assert by_person[lang.person_id].confidence == Decimal("0.950")
+    assert by_person[kort.person_id].confidence < PRESELECT_FROM
+
+
+def test_two_persons_at_different_places_are_both_preselected() -> None:
+    jan, piet = person("Jan Jansen"), person("Piet Jansen")
+    text = "T.a.v. Jan Jansen en T.a.v. Piet Jansen"
+    assert all(m.confidence == Decimal("0.950") for m in match_addressees(text, [jan, piet]))
