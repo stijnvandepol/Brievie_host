@@ -3,11 +3,22 @@
 Pure functions, used by name matching and the rules engine. Both sides of a
 comparison are normalised the same way (accents removed, case folded, whitespace
 collapsed) while spans always refer to the original text.
+
+The BSN mask token is no text: it stands for any number, so it never matches. In a
+letter it becomes one opaque character that no phrase can contain; a phrase that holds
+it (a name or rule value masked before a BSN was refused there) matches nothing.
 """
 
 import unicodedata
 from collections.abc import Iterator
 from dataclasses import dataclass
+
+from apps.common.privacy import MASK
+
+# What the mask token normalises to: a noncharacter, so neither a letter nor a digit
+# (a word boundary) and never typed.
+_OPAQUE = "\uffff"
+_MASK_FOLDED = MASK.casefold()
 
 
 def _normalise_with_map(value: str) -> tuple[str, list[int]]:
@@ -15,7 +26,19 @@ def _normalise_with_map(value: str) -> tuple[str, list[int]]:
     chars: list[str] = []
     origin: list[int] = []
     pending_space = False
-    for index, original in enumerate(value):
+    index = 0
+    while index < len(value):
+        original = value[index]
+        if value[index : index + len(MASK)].casefold() == _MASK_FOLDED:
+            if pending_space and chars:
+                chars.append(" ")
+                origin.append(index - 1)
+            pending_space = False
+            chars.append(_OPAQUE)
+            origin.append(index + len(MASK) - 1)
+            index += len(MASK)
+            continue
+        index += 1
         if original.isspace():
             pending_space = True
             continue
@@ -28,12 +51,18 @@ def _normalise_with_map(value: str) -> tuple[str, list[int]]:
             continue
         if pending_space and chars:
             chars.append(" ")
-            origin.append(index - 1 if index > 0 else 0)
+            origin.append(index - 2 if index > 1 else 0)
         pending_space = False
         for c in folded:
             chars.append(c)
-            origin.append(index)
+            origin.append(index - 1)
     return "".join(chars), origin
+
+
+def searchable(phrase: str) -> str:
+    """`phrase` normalised to search for; empty (matches nothing) when it holds the mask."""
+    needle = normalise(phrase)
+    return "" if _OPAQUE in needle else needle
 
 
 def normalise(value: str) -> str:
@@ -65,7 +94,7 @@ def find_all_phrases(
 
     With `whole_words` the characters around a match may not be letters or digits.
     """
-    needle = normalise(phrase)
+    needle = searchable(phrase)
     if not needle:
         return
     prepared = haystack if isinstance(haystack, Prepared) else prepare(haystack)

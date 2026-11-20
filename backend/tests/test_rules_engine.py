@@ -321,3 +321,13 @@ def test_a_dismissed_addressee_is_never_planned_nor_built_on() -> None:
     document = facts("Zorg", dismissed_addressee_ids=frozenset({MAMA}))
 
     assert evaluate(document, [a, b]).planned == ()
+
+
+def test_a_condition_on_the_mask_token_matches_no_letter() -> None:
+    # A rule value typed as a BSN was masked to "[BSN]" before this was refused.
+    letter = facts("Burgerservicenummer: [BSN]", sender="Belastingdienst [BSN]")
+    for op in ("contains", "contains_word"):
+        assert evaluate(letter, [rule(Condition("text", op, "[BSN]"))]).matched_rule_ids == ()
+        assert evaluate(letter, [rule(Condition("sender", op, "[BSN]"))]).matched_rule_ids == ()
+    equals = rule(Condition("sender", "equals", "Belastingdienst [BSN]"))
+    assert evaluate(letter, [equals]).matched_rule_ids == ()

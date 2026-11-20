@@ -1,4 +1,10 @@
-from apps.common.text import excerpt, find_all_phrases, find_phrase, normalise, prepare
+from apps.common.text import (
+    excerpt,
+    find_all_phrases,
+    find_phrase,
+    normalise,
+    prepare,
+)
 
 
 def test_normalise_folds_case_accents_and_whitespace() -> None:
@@ -78,3 +84,33 @@ def test_a_prepared_text_gives_the_same_spans() -> None:
         find_all_phrases(text, "rene jansen", whole_words=True)
     )
     assert find_phrase(prepared, "Jansen", whole_words=True) == (12, 18)
+
+
+# A BSN is masked to "[BSN]" before a letter's text is stored, and so is a BSN typed
+# into a name or a rule (older rows). The token stands for any number, so it may never
+# match: a stored "[BSN]" would otherwise find every letter that held any BSN.
+MASKED_LETTER = "Burgerservicenummer: [BSN]\nT.a.v. J. de Vries"
+
+
+def test_a_phrase_with_the_mask_token_matches_nothing() -> None:
+    assert find_phrase(MASKED_LETTER, "[BSN]", whole_words=True) is None
+    assert find_phrase(MASKED_LETTER, "[BSN]", whole_words=False) is None
+    assert find_phrase(MASKED_LETTER, "[bsn]", whole_words=False) is None
+    assert find_phrase(MASKED_LETTER, "Burgerservicenummer: [BSN]", whole_words=True) is None
+    assert find_phrase(MASKED_LETTER, "J [BSN]", whole_words=True) is None
+
+
+def test_the_mask_token_in_a_letter_is_no_text_to_match() -> None:
+    # Neither "bsn" nor the brackets around it are words of the letter.
+    assert find_phrase("Uw nummer: [BSN]", "bsn", whole_words=True) is None
+    assert find_phrase("Uw nummer: [BSN]", "bsn]", whole_words=False) is None
+    assert find_phrase("Uw nummer: [BSN] staat", "nummer: staat", whole_words=True) is None
+    # The word BSN written in the letter still counts.
+    assert find_phrase("Uw BSN: [BSN]", "bsn", whole_words=True) == (3, 6)
+
+
+def test_text_around_the_mask_token_still_matches() -> None:
+    span = find_phrase(MASKED_LETTER, "J. de Vries", whole_words=True)
+    assert span is not None
+    assert MASKED_LETTER[span[0] : span[1]] == "J. de Vries"
+    assert find_phrase(MASKED_LETTER, "burgerservicenummer", whole_words=True) == (0, 19)

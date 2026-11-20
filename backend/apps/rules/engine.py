@@ -12,7 +12,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from uuid import UUID
 
-from apps.common.text import Prepared, excerpt, find_phrase, normalise, prepare
+from apps.common.text import Prepared, excerpt, find_phrase, prepare, searchable
 
 # The operators each condition field allows (design 9.2).
 OPERATORS: Mapping[str, frozenset[str]] = {
@@ -126,7 +126,9 @@ def _phrase(haystack: Prepared, op: str, value: str) -> tuple[bool, str]:
     """Whether a text or sender operator holds, and the quote when it found words."""
     original = haystack.original
     if op == "equals":
-        if haystack.normalised != normalise(value):
+        # A value that holds the BSN mask token equals nothing (common.text).
+        needle = searchable(value)
+        if not needle or haystack.normalised != needle:
             return False, ""
         return True, excerpt(original, (0, len(original)))
     if op not in ("contains_word", "contains", "not_contains_word"):

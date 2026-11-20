@@ -110,16 +110,48 @@ def test_blank_display_name_is_422(client_a: Client, ws_a: Workspace) -> None:
     assert r.json()["code"] == "validation_error"
 
 
-def test_bsn_in_a_name_is_masked(client_a: Client, ws_a: Workspace) -> None:
-    r = create(
-        client_a, ws_a.id, {"display_name": "Jan 111222333", "name_variants": ["J 111222333"]}
-    )
+BSN_REFUSED = "Een BSN bewaren we nooit"
 
-    assert r.status_code == 201
-    assert r.json()["display_name"] == "Jan [BSN]"
-    assert r.json()["name_variants"] == ["J [BSN]"]
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"display_name": "Jan 111222333"},
+        {"display_name": "Jan", "name_variants": ["123456782"]},
+        {"display_name": "Jan", "name_variants": ["J 111.222.333"]},
+        # The token a BSN became: it would find every letter that held any BSN.
+        {"display_name": "Jan", "name_variants": ["[BSN]"]},
+    ],
+)
+def test_a_bsn_in_a_name_is_refused(
+    client_a: Client, ws_a: Workspace, body: dict[str, object]
+) -> None:
+    r = create(client_a, ws_a.id, body)
+
+    assert r.status_code == 422
+    assert r.json()["code"] == "validation_error"
+    assert r.json()["message"].startswith(BSN_REFUSED)
     with workspace_context(ws_a.id):
-        assert Person.objects.filter(display_name="Jan [BSN]").exists()
+        assert not Person.objects.filter(display_name__startswith="Jan").exists()
+
+
+def test_a_person_with_a_masked_variant_from_before_stays_editable(
+    client_a: Client, ws_a: Workspace
+) -> None:
+    # Stored before BSNs were refused; it matches nothing now (common.text).
+    with workspace_context(ws_a.id):
+        old = Person.objects.create(
+            workspace=ws_a, display_name="Jan [BSN]", name_variants=["[BSN]", "J. Jansen"]
+        )
+    path = f"/workspaces/{ws_a.id}/persons/{old.id}"
+
+    kept = put(client_a, path, {"display_name": "Jan [BSN]", "name_variants": ["[BSN]"]})
+    assert kept.status_code == 200
+    assert kept.json()["name_variants"] == ["[BSN]"]
+
+    added = put(client_a, path, {"display_name": "Jan [BSN]", "name_variants": ["999999990"]})
+    assert added.status_code == 422
+    assert added.json()["message"].startswith(BSN_REFUSED)
 
 
 def test_update_person(client_a: Client, ws_a: Workspace) -> None:

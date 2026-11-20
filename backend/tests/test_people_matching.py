@@ -135,3 +135,12 @@ def test_many_persons_on_a_long_text_stay_fast() -> None:
 
     assert time.monotonic() - started < 2
     assert [m.confidence for m in matches] == [Decimal("0.950")]
+
+
+def test_a_masked_name_variant_matches_no_letter() -> None:
+    # A variant typed as a BSN was masked to "[BSN]" before this was refused; the letter
+    # holds another BSN, masked the same way. It must not be proposed, let alone preselected.
+    p = person("BSN-test", "[BSN]")
+    letter = "Belastingdienst\nBurgerservicenummer: [BSN]\nT.a.v. de heer J. Jansen"
+    assert match_addressees(letter, [p]) == []
+    assert match_addressees(letter, [person("Jan [BSN]")]) == []

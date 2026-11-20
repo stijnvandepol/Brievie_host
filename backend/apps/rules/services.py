@@ -88,6 +88,7 @@ def _fill(rule: Rule, workspace: Workspace, data: RuleIn) -> None:
         data.match,
         conditions,
         actions,
+        kept_values=definition.phrase_values(rule),
         label_ids=set(Label.objects.filter(workspace=workspace).values_list("id", flat=True)),
         person_ids=set(
             Person.objects.filter(workspace=workspace, archived_at__isnull=True).values_list(

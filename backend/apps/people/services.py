@@ -1,3 +1,4 @@
+from collections.abc import Collection
 from uuid import UUID
 
 from django.db import IntegrityError, models, transaction
@@ -10,7 +11,7 @@ from apps.accounts.models import User
 from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
-from apps.common.privacy import mask_bsns
+from apps.common.privacy import holds_bsn, mask_bsns
 from apps.documents.models import DocumentSuggestion
 from apps.people.models import Person
 from apps.rules.definition import named_ids
@@ -62,7 +63,27 @@ def _annotated(workspace: Workspace, person_id: UUID) -> Person:
     return _persons(workspace).get(id=person_id)
 
 
-def _clean_name(display_name: str) -> str:
+def bsn_in_name() -> ApiError:
+    return ApiError(
+        422,
+        "validation_error",
+        _(
+            "Een BSN bewaren we nooit, dus het kan niet in een naam staan. Post herkennen we "
+            "aan de naam, niet aan het BSN. Laat het nummer weg."
+        ),
+    )
+
+
+def _refuse_bsn(value: str, kept: Collection[str]) -> None:
+    """A name is matched against letters, whose BSNs are all masked alike: a BSN (or the
+    token it was masked to) would find every letter with any BSN. A value already stored
+    on this person (masked before this was refused) may stay; it matches nothing."""
+    if holds_bsn(value) and value.strip() not in kept:
+        raise bsn_in_name()
+
+
+def _clean_name(display_name: str, kept: Collection[str] = ()) -> str:
+    _refuse_bsn(display_name, kept)
     name = mask_bsns(display_name).strip()
     if not name:
         raise ApiError(422, "validation_error", _("Een persoon heeft een naam nodig."))
@@ -73,11 +94,12 @@ def _clean_name(display_name: str) -> str:
     return name
 
 
-def _clean_variants(name_variants: list[str]) -> list[str]:
+def _clean_variants(name_variants: list[str], kept: Collection[str] = ()) -> list[str]:
     """Trimmed, masked and without repeats (ignoring case); in the order given."""
     cleaned: list[str] = []
     seen: set[str] = set()
     for raw in name_variants:
+        _refuse_bsn(raw, kept)
         variant = mask_bsns(raw).strip()
         if not VARIANT_MIN <= len(variant) <= VARIANT_MAX:
             raise ApiError(
@@ -148,8 +170,9 @@ def update_person(
 ) -> Person:
     with transaction.atomic():
         person = _get_for_update(workspace, person_id)
-        person.display_name = _clean_name(display_name)
-        person.name_variants = _clean_variants(name_variants)
+        kept = {person.display_name, *person.name_variants}
+        person.display_name = _clean_name(display_name, kept)
+        person.name_variants = _clean_variants(name_variants, kept)
         if not archived:
             person.archived_at = None
         elif person.archived_at is None:
@@ -220,7 +243,10 @@ def ensure_person_for_member(*, workspace: Workspace, user: User) -> Person:
         return Person.objects.create(
             workspace=workspace,
             display_name=_free_name(workspace, name),
-            name_variants=[name] if VARIANT_MIN <= len(name) <= VARIANT_MAX else [],
+            # A name with a (masked) BSN would match every letter with one.
+            name_variants=[name]
+            if VARIANT_MIN <= len(name) <= VARIANT_MAX and not holds_bsn(name)
+            else [],
             user=user,
         )
 

@@ -11,7 +11,7 @@ from uuid import UUID
 from django.utils.translation import gettext as _
 
 from apps.common.errors import ApiError
-from apps.common.privacy import mask_bsns
+from apps.common.privacy import holds_bsn, mask_bsns
 from apps.documents.models import Document
 from apps.rules.engine import ACTIONS, OPERATORS, Action, Condition, RuleSpec
 from apps.rules.models import Rule
@@ -36,11 +36,13 @@ def validate(
     *,
     label_ids: Collection[UUID],
     person_ids: Collection[UUID],
+    kept_values: Collection[str] = (),
 ) -> None:
     """Refuse a definition that breaks a limit, with a Dutch sentence that names it.
 
     `label_ids` are the workspace's labels, `person_ids` its persons that are not
-    archived.
+    archived. `kept_values` are the text and sender values the rule already stores: one
+    masked before a BSN was refused here may stay (it matches nothing).
     """
     if match not in MATCHES:
         raise _invalid(_("Kies of alle voorwaarden moeten kloppen of een van de voorwaarden."))
@@ -55,13 +57,19 @@ def validate(
             % {"min": ACTIONS_MIN, "max": ACTIONS_MAX}
         )
     for condition in conditions:
-        _validate_condition(condition, label_ids=label_ids, person_ids=person_ids)
+        _validate_condition(
+            condition, label_ids=label_ids, person_ids=person_ids, kept_values=kept_values
+        )
     for action in actions:
         _validate_action(action, label_ids=label_ids, person_ids=person_ids)
 
 
 def _validate_condition(
-    condition: Condition, *, label_ids: Collection[UUID], person_ids: Collection[UUID]
+    condition: Condition,
+    *,
+    label_ids: Collection[UUID],
+    person_ids: Collection[UUID],
+    kept_values: Collection[str],
 ) -> None:
     field, op = condition.field, condition.op
     if field not in OPERATORS:
@@ -75,6 +83,14 @@ def _validate_condition(
             raise _invalid(
                 _("De tekst van een voorwaarde is %(min)d tot %(max)d tekens.")
                 % {"min": low, "max": high}
+            )
+        # Letters hold every BSN as the same mask, so a BSN would find any letter with one.
+        if holds_bsn(value) and value not in kept_values:
+            raise _invalid(
+                _(
+                    "Een BSN bewaren we nooit, dus je kunt het niet in een regel gebruiken. "
+                    "Laat het nummer weg."
+                )
             )
     elif field == "document_type":
         if value not in Document.Type.values:
@@ -228,6 +244,20 @@ def named_ids(rule: Rule) -> tuple[frozenset[UUID], frozenset[UUID]]:
             if target is not None:
                 found.add(target)
     return frozenset(labels), frozenset(persons)
+
+
+def phrase_values(rule: Rule) -> frozenset[str]:
+    """The text and sender values the rule stores (none for a rule not saved yet)."""
+    data: object = rule.definition
+    if not isinstance(data, dict):
+        return frozenset()
+    return frozenset(
+        str(item["value"])
+        for item in _list(data.get("conditions"))
+        if isinstance(item, dict)
+        and item.get("field") in VALUE_LENGTH
+        and isinstance(item.get("value"), str)
+    )
 
 
 def only_adds_label(rule: Rule, label_id: UUID) -> bool:
