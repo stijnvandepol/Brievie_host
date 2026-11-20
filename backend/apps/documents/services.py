@@ -285,7 +285,9 @@ def retry_processing(*, workspace: Workspace, document_id: UUID) -> Document:
             raise ApiError(
                 409,
                 "document_not_failed",
-                _("Dit document hoeft niet opnieuw verwerkt te worden."),
+                _("Dit document wordt nog verwerkt. Probeer het zo opnieuw.")
+                if document.status == Document.Status.PROCESSING
+                else _("Dit document hoeft niet opnieuw verwerkt te worden."),
             )
         document.status = Document.Status.PROCESSING
         document.failure_code = ""

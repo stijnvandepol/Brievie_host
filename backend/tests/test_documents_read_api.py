@@ -133,6 +133,21 @@ def test_retry_processing_needs_a_failed_document(client_a: Client, ws_a: Worksp
     assert ProcrastinateJob.objects.count() == 1
 
 
+def test_retry_while_processing_says_it_is_being_processed(
+    client_a: Client, ws_a: Workspace
+) -> None:
+    # The finding: "hoeft niet opnieuw verwerkt te worden" while it was being processed.
+    document_id = upload(client_a, ws_a.id, [jpeg()]).json()["id"]
+
+    r = post_json(client_a, f"/workspaces/{ws_a.id}/documents/{document_id}/retry")
+
+    assert r.status_code == 409
+    assert r.json() == {
+        "code": "document_not_failed",
+        "message": "Dit document wordt nog verwerkt. Probeer het zo opnieuw.",
+    }
+
+
 def test_member_of_another_workspace_gets_404_everywhere(
     client: Client, client_a: Client, ws_a: Workspace, ws_b: Workspace
 ) -> None:
