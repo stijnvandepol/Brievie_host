@@ -94,3 +94,9 @@ the translation. Add a line before introducing a new domain term.
 | zoeken | search (`searchDocuments`) |
 | fragment (stuk tekst bij een treffer) | snippet (`SnippetPartOut`) |
 | Geen exacte treffer. Dit lijkt erop. | approximate match (`fuzzy`) |
+| prullenbak | trash (`trashed_at`, `listTrash`) |
+| verwijderen (naar de prullenbak) | trash (`trashDocument`) |
+| terugzetten | restore (`restoreDocument`) |
+| definitief verwijderen | purge (`purgeDocument`, `purge_started_at`) |
+| prullenbak legen | empty trash (`emptyTrash`) |
+| bewaartermijn | retention term (`retention.check_removal`) |

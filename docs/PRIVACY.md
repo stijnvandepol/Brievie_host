@@ -199,6 +199,29 @@ back-up. Once downloaded it is an ordinary unencrypted file: the member decides 
 goes. An admin can switch exports off for a workspace (off by default in Zakelijk).
 Making and downloading are in the log, with the number of letters, not their names.
 
+## The trash
+
+A member (not a viewer) can move a letter to the trash ("Verwijderen"). It is then gone
+from every list, count, search, task list, export and rule run, and no text of it goes to
+an AI service, but nothing is removed yet: it can be put back for 30 days. Only members who
+may see the letter see it in the trash.
+
+- **The purge.** After 30 days, or earlier when an admin chooses "Definitief verwijderen" or
+  "Prullenbak legen", Brievie removes the letter for good: its sealed page files, its rows
+  (text, summary, proposals, links to persons and labels, suggestions, history, shares,
+  rule runs) and its tasks, also the done ones. Persons and labels stay. What remains is
+  the log: who moved it, put it back or purged it, with the letter's id only, never its
+  sender, summary or text.
+- **Back-ups keep it longer.** A back-up made before the purge still holds the letter until
+  that back-up expires: with the current retention, monthly snapshots up to a year
+  (`docs/SELFHOST.md`). Restoring such a back-up brings the letter back. The web says this
+  in the question before "Definitief verwijderen" and "Prullenbak legen".
+- **An export made before stays.** A member's export made before the purge stays on the
+  server until its 24 hours are over; a downloaded one is the member's own file.
+- Brievie does not watch a retention term yet (for example the fiscal duty to keep an
+  invoice): an admin who purges early must mind that themselves. The web says so on the
+  trash page.
+
 ## Search
 
 Searching letters (`searchDocuments`) runs in the server's own database, inside the

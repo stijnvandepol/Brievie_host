@@ -123,6 +123,17 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
   `apps/documents/export_files.py`.
 - A member-facing read of documents starts from `apps.documents.visibility.visible_documents`
   (the one place that says which letters a member may see).
+- A trashed letter (`Document.trashed_at`) is out of every read: through the seam, and off it
+  every query filters `models.LIVE` (the policies do not know the trash). The trash itself is
+  read only through `visibility.trashed_documents(membership)` (the same rights as the seam);
+  a letter the member may not see answers as a missing one (`document_not_found`). A future
+  agenda or reminder reads tasks through `apps.tasks.services` and so inherits the filter.
+- Trash, restore, purge-now and empty go through `apps.documents.trash` as the caller;
+  `apps.documents.purge` is the trash's only system caller and purges only under
+  `backup_lock`. Only `apps/documents/page_files.py` removes a letter's page files, and it
+  refuses on its own (all paths judged first, the storage root judged, no links followed);
+  its tests make and remove files only under `tmp_path`. `DocumentStorage.delete` is for the
+  upload rollback only. A retention term hooks in at `apps.documents.retention.check_removal`.
 - Brievie never logs, audits or echoes a search term, nor puts it in a URL or an error
   message (PostgreSQL's own log can hold a failing statement; see PRIVACY). A BSN, also with
   other separators, the literal `[BSN]` and the words "bsn"/"burgerservicenummer" are removed
