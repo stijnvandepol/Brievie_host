@@ -99,8 +99,10 @@ def _delete_rows(workspace_id: UUID, document_id: UUID) -> bool:
     letter; the cascade takes pages, extractions, links, events, suggestions, shares,
     reader rows and rule runs. False when it is gone or no longer marked."""
     with workspace_context(workspace_id, actor=SYSTEM), transaction.atomic():
+        # No key, as every document lock (tests/test_privacy_locks.py); the DELETE below
+        # takes the full row lock itself, in this transaction.
         document = (
-            Document.objects.select_for_update()
+            Document.objects.select_for_update(no_key=True)
             .filter(id=document_id, workspace_id=workspace_id, purge_started_at__isnull=False)
             .first()
         )
