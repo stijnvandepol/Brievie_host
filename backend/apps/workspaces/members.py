@@ -31,7 +31,7 @@ from apps.documents.member_export import remove_member_exports
 from apps.people.models import Person
 from apps.tasks.models import Task
 from apps.workspaces.access import on_member_removed
-from apps.workspaces.context import NOBODY, workspace_context
+from apps.workspaces.context import NOBODY, Actor, workspace_context
 from apps.workspaces.invitations import revoke_invitations_bound_to, revoke_invitations_made_by
 from apps.workspaces.models import Membership, Workspace
 
@@ -144,7 +144,7 @@ def _unlink_and_unassign(workspace: Workspace, user_id: UUID, actor: AuditActor)
     unlinked persons. A queryset `update()`, before the membership goes, because
     `Person.save` refuses a user who is no member."""
     now = timezone.now()
-    as_actor = actor.user_id if actor.user_id is not None else NOBODY
+    as_actor: Actor = actor.user_id if actor.user_id is not None else NOBODY
     with workspace_context(workspace.id, actor=as_actor):
         persons = list(Person.objects.filter(workspace=workspace, user_id=user_id).order_by("id"))
         Person.objects.filter(id__in=[p.id for p in persons]).update(user=None, updated_at=now)

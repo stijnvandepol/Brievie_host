@@ -39,7 +39,7 @@ ACTOR_SETTING = "brievie.actor"
 # PB T1. `CASE` casts only a well-formed id (an OR has no evaluation order); both are
 # SECURITY INVOKER with a pinned search_path, and EXECUTE stays granted to PUBLIC so the
 # app role may call them.
-ACTOR_FUNCTIONS_SQL = [
+ACTOR_FUNCTIONS_SQL: tuple[str, ...] = (
     f"""CREATE FUNCTION public.brievie_actor_id() RETURNS uuid
 LANGUAGE sql STABLE PARALLEL SAFE SET search_path = ''
 AS $$
@@ -54,7 +54,7 @@ LANGUAGE sql STABLE PARALLEL SAFE SET search_path = ''
 AS $$
   SELECT COALESCE(pg_catalog.current_setting('{ACTOR_SETTING}', true), '') = 'system'
 $$""",
-]
+)
 
 
 def actor_functions() -> migrations.RunSQL:
