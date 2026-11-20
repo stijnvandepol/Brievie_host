@@ -22,8 +22,9 @@ _LABEL = re.compile(r"bsn|burgerservicenummer", re.IGNORECASE)
 _LABEL_REACH = 30
 
 
-def _passes_elfproef(digits: str) -> bool:
-    if digits == "000000000":
+def passes_elfproef(digits: str) -> bool:
+    """Whether nine digits pass the elfproef, the check every BSN passes."""
+    if len(digits) != 9 or not digits.isdigit() or digits == "000000000":
         return False
     weights = (9, 8, 7, 6, 5, 4, 3, 2, -1)
     return sum(int(d) * w for d, w in zip(digits, weights, strict=True)) % 11 == 0
@@ -45,7 +46,7 @@ def find_bsns(text: str) -> list[tuple[int, int]]:
             end <= match.start() <= until
             for end, until in zip(label_ends, labelled_until, strict=True)
         )
-        if labelled or _passes_elfproef(digits):
+        if labelled or passes_elfproef(digits):
             spans.append(match.span())
     return spans
 

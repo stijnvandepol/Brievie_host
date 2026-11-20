@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, configure } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, expect } from "vitest";
+import { resetSearch } from "./search-term";
 import { settleApps } from "./test-apps";
 import { server } from "./test-server";
 
@@ -13,6 +14,7 @@ afterEach(async () => {
     );
   }
   cleanup();
+  resetSearch();
   server.resetHandlers();
   document.cookie = "csrftoken=; Max-Age=0; path=/";
 });

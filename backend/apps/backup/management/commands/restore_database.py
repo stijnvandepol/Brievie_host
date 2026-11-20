@@ -11,6 +11,10 @@ class Command(BaseCommand):
         "Runs in a one-off container, after restore_fetch wrote the restored .env."
     )
 
+    # ./brievie starts this in a new container (run --no-deps), PostgreSQL may be down:
+    # no system checks, they read database features (GeneratedField).
+    requires_system_checks: list[str] = []  # noqa: RUF012 - Django's own attribute
+
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument("--run", help="The run id of the back-up (default: the newest).")
         parser.add_argument("--dbname", default="brievie", help="The empty database to load.")

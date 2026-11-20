@@ -29,6 +29,10 @@ def _destination(kind: str) -> str:
 class Command(BaseCommand):
     help = "Show versions, the destination kind and the last back-up runs (no addresses or paths)."
 
+    # ./brievie starts this in a new container (run --no-deps), PostgreSQL may be down:
+    # no system checks, they read database features (GeneratedField).
+    requires_system_checks: list[str] = []  # noqa: RUF012 - Django's own attribute
+
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(
             "--list",

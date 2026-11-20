@@ -7,7 +7,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("documents", "0009_document_confirmed_by_ai_documentaddressee_automatic_and_more"),
+        ("documents", "0010_search"),
     ]
 
     operations = [

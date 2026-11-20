@@ -8,6 +8,10 @@ from apps.updates import services
 class Command(BaseCommand):
     help = "Is there room on this machine for an update? Exit 0 (silent) or 1 with a sentence."
 
+    # ./brievie starts this in a new container (run --no-deps), PostgreSQL may be down:
+    # no system checks, they read database features (GeneratedField).
+    requires_system_checks: list[str] = []  # noqa: RUF012 - Django's own attribute
+
     def handle(self, *args: object, **options: object) -> None:
         found = services.preflight()
         if found.free_bytes < found.needed_bytes:

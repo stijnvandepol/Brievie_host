@@ -23,7 +23,7 @@ from apps.pipeline.choices import ExtractionRequest
 from apps.pipeline.steps import run_pipeline
 from apps.rules.engine import Condition
 from apps.workspaces.context import workspace_context
-from apps.workspaces.models import Workspace
+from apps.workspaces.models import Membership, Workspace
 from tests.documents_support import admin_of
 from tests.rules_support import add_label, make_rule, sender_contains, text_word
 from tests.test_autopilot_organise import (
@@ -360,8 +360,9 @@ def test_a_letter_with_an_applied_rule_label_counts_as_automatic(ws_a: Workspace
     run(ws_a, document, Reading())
 
     with workspace_context(ws_a.id):
-        assert inbox_counts(ws_a)["automatic"] == 1
-        assert [d.id for d in list_documents(ws_a, automatic=True)] == [document.id]
+        membership = Membership.objects.get(workspace=ws_a, role="admin")
+        assert inbox_counts(membership)["automatic"] == 1
+        assert [d.id for d in list_documents(membership, automatic=True)] == [document.id]
 
 
 @pytestmark_unit

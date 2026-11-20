@@ -5,7 +5,13 @@ from typing import cast
 import pytest
 from django.conf import settings
 
-from apps.common.privacy import BsnMaskingFilter, find_bsns, holds_bsn, mask_bsns
+from apps.common.privacy import (
+    BsnMaskingFilter,
+    find_bsns,
+    holds_bsn,
+    mask_bsns,
+    passes_elfproef,
+)
 
 # 111222333 passes the elfproef; 123456789 and 111222334 do not.
 
@@ -131,6 +137,22 @@ def test_the_log_level_follows_brievie_log_level(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setenv("BRIEVIE_LOG_LEVEL", "WARNING")
     loaded = runpy.run_path(str(Path(brievie.settings.__file__)))
     assert loaded["LOGGING"]["root"]["level"] == "WARNING"
+
+
+@pytest.mark.parametrize(
+    ("digits", "passes"),
+    [
+        ("111222333", True),
+        ("123456789", False),
+        ("111222334", False),
+        ("000000000", False),
+        ("11122233", False),
+        ("1112223330", False),
+        ("11122233a", False),
+    ],
+)
+def test_passes_elfproef(digits: str, passes: bool) -> None:
+    assert passes_elfproef(digits) is passes
 
 
 def test_holds_bsn_finds_a_number_or_the_mask() -> None:

@@ -196,6 +196,31 @@ back-up. Once downloaded it is an ordinary unencrypted file: the member decides 
 goes. An admin can switch exports off for a workspace (off by default in Zakelijk).
 Making and downloading are in the log, with the number of letters, not their names.
 
+## Search
+
+Searching letters (`searchDocuments`) runs in the server's own database, inside the
+workspace of the member who asks and only over the letters that member may see. Nothing is
+sent to an AI service or any other party. It reads the same stored data as the rest (the
+masked text, sender, summary, label and person names), so the stored text is not encrypted
+for it; see the table above.
+
+- **The term is not kept.** It is sent in the request body (never in an address). Brievie does
+  not store it, does not write it to its log or the audit log, and does not repeat it in an
+  answer or an error. A search leaves no row. The web app keeps it in memory only (not in the
+  address or the browser's storage) and forgets it on signing out or switching workspace.
+- **PostgreSQL's own log.** PostgreSQL logs a statement that fails (its default,
+  `log_min_error_statement = error`), for example one cancelled or cut off. The database
+  driver puts the values into the statement text before sending it (client-side binding), so
+  such a log line holds the search term. The same already holds for any failing statement
+  that carries letter text. That log stays inside the database container; treat it like the
+  database itself.
+- **A BSN is taken out.** A BSN in the term, also written with other separators (a slash,
+  a comma, a dash, an invisible character), the literal `[BSN]` and the words "bsn" and
+  "burgerservicenummer" are removed before anything else; the answer says so. Stored text
+  holds no BSN, so none can be found.
+- A fragment of the letter (at most 240 characters) comes back with each hit, to the member
+  who may read that letter.
+
 ## Honest limits
 
 - The e-mail address on an invitation is not verified (above).

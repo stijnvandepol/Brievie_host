@@ -18,6 +18,7 @@ import { personsRoute } from "./routes/persons";
 import { postRoute } from "./routes/post";
 import { rootRoute } from "./routes/root";
 import { newRuleRoute, ruleRoute } from "./routes/rule-editor";
+import { searchRoute } from "./routes/search";
 import { serverAuditLogRoute } from "./routes/server-audit-log";
 import { sessionsRoute } from "./routes/sessions";
 import { settingsRoute } from "./routes/settings";
@@ -37,6 +38,7 @@ const routeTree = rootRoute.addChildren([
   workspaceRoute.addChildren([
     inboxRoute,
     postRoute,
+    searchRoute,
     documentRoute,
     personsRoute,
     membersRoute,
