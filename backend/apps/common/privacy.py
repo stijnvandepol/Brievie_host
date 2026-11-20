@@ -62,6 +62,11 @@ def mask_bsns(text: str) -> str:
     return "".join(parts)
 
 
+def holds_bsn(text: str) -> bool:
+    """Whether `text` holds a BSN, or the mask token that one became."""
+    return bool(find_bsns(text)) or MASK.casefold() in text.casefold()
+
+
 class BsnMaskingFilter(logging.Filter):
     """Masks BSNs in every log record, whatever code wrote it."""
 

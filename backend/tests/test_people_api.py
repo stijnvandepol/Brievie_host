@@ -94,6 +94,63 @@ def test_variants_are_cleaned(client_a: Client, ws_a: Workspace) -> None:
     assert r.json()["name_variants"] == ["J. de Vries", "Jan de Vries"]
 
 
+def test_names_are_tidied_and_compared_as_matching_compares_them(
+    client_a: Client, ws_a: Workspace
+) -> None:
+    # The finding: "Test  Persoon" (two spaces) was accepted next to "Test Persoon".
+    assert create(client_a, ws_a.id, {"display_name": "Test Persoon"}).status_code == 201
+
+    r = create(client_a, ws_a.id, {"display_name": "Test  Persoon"})
+    assert r.status_code == 409
+    assert r.json()["code"] == "person_exists"
+
+    # Decomposed accents become one character; whitespace runs one space.
+    r = create(
+        client_a,
+        ws_a.id,
+        {"display_name": "Rene\u0301\t Jansen", "name_variants": ["R.  Jansen", "r. jansen"]},
+    )
+    assert r.status_code == 201
+    assert (r.json()["display_name"], r.json()["name_variants"]) == ("René Jansen", ["R. Jansen"])
+
+
+def test_a_name_another_active_person_has_is_refused(client_a: Client, ws_a: Workspace) -> None:
+    stijn = create(client_a, ws_a.id, {"display_name": "Stijn", "name_variants": ["S. van de Pol"]})
+    assert stijn.status_code == 201
+
+    bodies: list[dict[str, object]] = [
+        {"display_name": "Andere Stijn", "name_variants": ["s.  VAN DE POL"]},
+        {"display_name": "Andere Stijn", "name_variants": ["Stijn"]},
+        {"display_name": "S. van de Pol"},
+    ]
+    for body in bodies:
+        r = create(client_a, ws_a.id, body)
+        assert r.status_code == 409, body
+        assert r.json()["code"] == "name_variant_taken"
+        assert "hoort al bij Stijn." in r.json()["message"]
+
+    # An archived person is not matched, so its names do not count...
+    path = f"/workspaces/{ws_a.id}/persons/{stijn.json()['id']}"
+    archived = put(
+        client_a,
+        path,
+        {"display_name": "Stijn", "name_variants": ["S. van de Pol"], "archived": True},
+    )
+    assert archived.status_code == 200
+    andere = create(
+        client_a, ws_a.id, {"display_name": "Andere", "name_variants": ["S. van de Pol"]}
+    )
+    assert andere.status_code == 201
+    # ...until it comes back.
+    back = put(
+        client_a,
+        path,
+        {"display_name": "Stijn", "name_variants": ["S. van de Pol"], "archived": False},
+    )
+    assert back.status_code == 409
+    assert back.json()["message"].startswith("De naam 'S. van de Pol' hoort al bij Andere.")
+
+
 def test_too_many_variants_are_refused(client_a: Client, ws_a: Workspace) -> None:
     variants = [f"Naam {i}" for i in range(21)]
 
@@ -110,16 +167,48 @@ def test_blank_display_name_is_422(client_a: Client, ws_a: Workspace) -> None:
     assert r.json()["code"] == "validation_error"
 
 
-def test_bsn_in_a_name_is_masked(client_a: Client, ws_a: Workspace) -> None:
-    r = create(
-        client_a, ws_a.id, {"display_name": "Jan 111222333", "name_variants": ["J 111222333"]}
-    )
+BSN_REFUSED = "Een BSN bewaren we nooit"
 
-    assert r.status_code == 201
-    assert r.json()["display_name"] == "Jan [BSN]"
-    assert r.json()["name_variants"] == ["J [BSN]"]
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"display_name": "Jan 111222333"},
+        {"display_name": "Jan", "name_variants": ["123456782"]},
+        {"display_name": "Jan", "name_variants": ["J 111.222.333"]},
+        # The token a BSN became: it would find every letter that held any BSN.
+        {"display_name": "Jan", "name_variants": ["[BSN]"]},
+    ],
+)
+def test_a_bsn_in_a_name_is_refused(
+    client_a: Client, ws_a: Workspace, body: dict[str, object]
+) -> None:
+    r = create(client_a, ws_a.id, body)
+
+    assert r.status_code == 422
+    assert r.json()["code"] == "validation_error"
+    assert r.json()["message"].startswith(BSN_REFUSED)
     with workspace_context(ws_a.id):
-        assert Person.objects.filter(display_name="Jan [BSN]").exists()
+        assert not Person.objects.filter(display_name__startswith="Jan").exists()
+
+
+def test_a_person_with_a_masked_variant_from_before_stays_editable(
+    client_a: Client, ws_a: Workspace
+) -> None:
+    # Stored before BSNs were refused; it matches nothing now (common.text).
+    with workspace_context(ws_a.id):
+        old = Person.objects.create(
+            workspace=ws_a, display_name="Jan [BSN]", name_variants=["[BSN]", "J. Jansen"]
+        )
+    path = f"/workspaces/{ws_a.id}/persons/{old.id}"
+
+    kept = put(client_a, path, {"display_name": "Jan [BSN]", "name_variants": ["[BSN]"]})
+    assert kept.status_code == 200
+    assert kept.json()["name_variants"] == ["[BSN]"]
+
+    added = put(client_a, path, {"display_name": "Jan [BSN]", "name_variants": ["999999990"]})
+    assert added.status_code == 422
+    assert added.json()["message"].startswith(BSN_REFUSED)
 
 
 def test_update_person(client_a: Client, ws_a: Workspace) -> None:
@@ -136,9 +225,43 @@ def test_update_person(client_a: Client, ws_a: Workspace) -> None:
     assert r.json()["name_variants"] == ["G. Jansen"]
     assert r.json()["archived"] is True
 
+    # Left out: the stored variants and archive state stay (a rename alone).
     r = put(client_a, f"/workspaces/{ws_a.id}/persons/{person['id']}", {"display_name": "Oma"})
+    assert r.json()["name_variants"] == ["G. Jansen"]
+    assert r.json()["archived"] is True
+
+    # Sent explicitly, an empty list and false still apply.
+    r = put(
+        client_a,
+        f"/workspaces/{ws_a.id}/persons/{person['id']}",
+        {"display_name": "Oma", "name_variants": [], "archived": False},
+    )
     assert r.json()["name_variants"] == []
     assert r.json()["archived"] is False
+
+
+def test_a_rename_keeps_what_it_leaves_out(client_a: Client, ws_a: Workspace) -> None:
+    # The finding: a rename without `archived` took the person out of the archive.
+    r = create(
+        client_a,
+        ws_a.id,
+        {"display_name": "Test Persoon", "name_variants": ["T. Persoon"], "archived": True},
+    )
+    path = f"/workspaces/{ws_a.id}/persons/{r.json()['id']}"
+
+    renamed = put(client_a, path, {"display_name": "Test Persoon B"})
+
+    assert renamed.status_code == 200
+    out = renamed.json()
+    assert (out["display_name"], out["name_variants"], out["archived"]) == (
+        "Test Persoon B",
+        ["T. Persoon"],
+        True,
+    )
+    restored = put(client_a, path, {"display_name": "Test Persoon B", "archived": False})
+    assert restored.json()["archived"] is False
+    cleared = put(client_a, path, {"display_name": "Test Persoon B", "name_variants": []})
+    assert (cleared.json()["name_variants"], cleared.json()["archived"]) == ([], False)
 
 
 def test_update_to_an_existing_name_is_409(client_a: Client, ws_a: Workspace) -> None:
@@ -299,3 +422,43 @@ def test_other_workspace_is_404_on_every_person_endpoint(
     with workspace_context(ws_b.id):
         other.refresh_from_db()
         assert other.user_id == admin_of(ws_b).id
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"display_name": "​"},
+        {"display_name": "⠀"},
+        {"display_name": "TEST ‮​"},
+        {"display_name": "Jan", "name_variants": ["​​"]},
+    ],
+)
+def test_a_name_that_shows_nothing_or_turns_text_around_is_refused(
+    client_a: Client, ws_a: Workspace, body: dict[str, object]
+) -> None:
+    r = create(client_a, ws_a.id, body)
+
+    assert r.status_code == 422
+    assert r.json()["code"] == "validation_error"
+
+
+def test_a_member_whose_name_another_person_has_gets_no_shared_variant(
+    client_a: Client, ws_a: Workspace
+) -> None:
+    # Review: the new member's person got "Anna de Vries (2)" with the variant "Anna de
+    # Vries", after which every rename or restore of either person answered 409.
+    from apps.people.services import ensure_person_for_member
+
+    existing = create(client_a, ws_a.id, {"display_name": "Anna de Vries"}).json()
+    member = join(ws_a, "member")
+    member.name = "anna  de vries"
+    member.save()
+    with workspace_context(ws_a.id):
+        person = ensure_person_for_member(workspace=ws_a, user=member)
+    assert (person.display_name, person.name_variants) == ("anna de vries (2)", [])
+
+    for path, name in (
+        (f"/workspaces/{ws_a.id}/persons/{existing['id']}", "Anna de Vries"),
+        (f"/workspaces/{ws_a.id}/persons/{person.id}", "Anna (lid)"),
+    ):
+        assert put(client_a, path, {"display_name": name}).status_code == 200

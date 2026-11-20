@@ -3,7 +3,7 @@
 import logging
 from collections import Counter
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from uuid import UUID
 
 from django.db import transaction
@@ -69,7 +69,9 @@ def confirm_document(
             raise ApiError(
                 409,
                 "document_not_reviewable",
-                _("Dit document kun je nu niet bevestigen."),
+                _("Dit document wordt nog verwerkt. Probeer het zo opnieuw.")
+                if document.status == Document.Status.PROCESSING
+                else _("Dit document kun je nu niet bevestigen."),
             )
         _validate(data, document)
         _store_confirmation(document, data, user=user, by_ai=False)
@@ -239,9 +241,18 @@ def _is_repeat(data: ConfirmIn, document: Document) -> bool:
     )
 
 
+# A typo (2062, 0001) would land in the lists and exports; an old letter may be scanned.
+LETTER_DATE_FROM = date(1900, 1, 1)
+LETTER_DATE_AHEAD = timedelta(days=366)
+
+
 def _validate(data: ConfirmIn, document: Document) -> None:
     if data.document_type and data.document_type not in Document.Type.values:
         raise _invalid(_("Dit soort document kennen we niet."))
+    if data.letter_date is not None and not (
+        LETTER_DATE_FROM <= data.letter_date <= timezone.localdate() + LETTER_DATE_AHEAD
+    ):
+        raise _invalid(_("Een briefdatum ligt tussen 1 januari 1900 en een jaar na vandaag."))
     for task in data.tasks:
         _validate_task(task, document)
 

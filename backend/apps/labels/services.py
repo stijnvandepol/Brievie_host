@@ -9,7 +9,9 @@ from psycopg import errors as pg_errors
 from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
+from apps.common.names import check_shown
 from apps.common.privacy import mask_bsns
+from apps.common.text import has_direction_control, is_visible
 from apps.labels.models import COLORS, Label
 from apps.rules.definition import named_ids, only_adds_label
 from apps.rules.models import Rule
@@ -50,8 +52,7 @@ def clean_name(name: str) -> str:
 
 def _valid_name(name: str) -> str:
     cleaned = clean_name(name)
-    if not cleaned:
-        raise ApiError(422, "validation_error", _("Een label heeft een naam nodig."))
+    check_shown(cleaned, empty=_("Een label heeft een naam nodig."))
     if len(cleaned) > NAME_MAX:
         raise ApiError(
             422,
@@ -129,6 +130,10 @@ def delete_label(*, workspace: Workspace, label_id: UUID, actor: AuditActor) -> 
             )
         for rule in own_rules:
             rule.delete()
+        # Imported here: organise imports this module (label_not_found).
+        from apps.documents import organise
+
+        organise.record_label_deleted(label, actor_id=actor.user_id)
         label.delete()
         # A label's name is the user's own words: the row carries the id only.
         record(
@@ -148,7 +153,7 @@ def create_extra_labels(*, workspace: Workspace, names: Sequence[str]) -> None:
         }
         for raw in names:
             name = clean_name(raw)[:NAME_MAX]
-            if not name or name.lower() in taken:
+            if not is_visible(name) or has_direction_control(name) or name.lower() in taken:
                 continue
             taken.add(name.lower())
             try:

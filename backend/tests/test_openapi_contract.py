@@ -367,3 +367,17 @@ def test_released_schemas_gain_no_required_properties(released_contract: Contrac
         if name in current
     }
     assert {name: props for name, props in gained.items() if props} == {}
+
+
+def test_list_row_proposals_are_optional_primitives() -> None:
+    # Additive: an app built before them reads the row as before, and the iOS generator
+    # gets plain optionals (no anyOf, no object).
+    schemas = current_contract()["components"]["schemas"]
+    for name in ("DocumentSummaryOut", "DocumentOut"):
+        properties = schema_properties(schemas[name])
+        required = schema_required(schemas[name])
+        assert properties["proposed_sender"]["type"] == "string"
+        assert properties["proposed_document_type"]["type"] == "string"
+        assert properties["proposed_letter_date"]["type"] == ["string", "null"]
+        assert properties["proposed_letter_date"]["format"] == "date"
+        assert not {"proposed_sender", "proposed_document_type", "proposed_letter_date"} & required

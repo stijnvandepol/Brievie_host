@@ -7,9 +7,9 @@ from django.test import Client
 from procrastinate.contrib.django.models import ProcrastinateJob
 
 from apps.documents import organise
-from apps.documents.models import DocumentEvent, DocumentLabel, DocumentSuggestion
+from apps.documents.models import Document, DocumentEvent, DocumentLabel, DocumentSuggestion
 from apps.labels.models import Label
-from apps.rules import engine
+from apps.rules import engine, triggers
 from apps.rules.engine import DocumentFacts, Evaluation, RuleSpec
 from apps.rules.models import Rule, RuleRun
 from apps.rules.templates import rule_templates
@@ -143,6 +143,44 @@ def test_action_with_archived_person_is_422(client_a: Client, ws_a: Workspace) -
     r = post_json(client_a, f"/workspaces/{ws_a.id}/rules", body)
 
     assert r.status_code == 422
+    assert r.json()["message"] == (
+        "Deze persoon is gearchiveerd. Zet de persoon eerst terug, of kies een ander."
+    )
+
+
+def test_a_rule_whose_person_was_archived_stays_editable(client_a: Client, ws_a: Workspace) -> None:
+    # The finding: archiving the person made every change to the rule fail with "persoon
+    # niet gevonden", even switching it off. A rule can always be switched off, edited
+    # and deleted; it cannot newly point at an archived person.
+    person = make_person(ws_a, "Wegwerppersoon")
+    other = make_person(ws_a, "Ander", archived=True)
+    body = rule_body(
+        label(ws_a, "auto").id,
+        conditions=[{"field": "addressee", "op": "is", "value": str(person.id)}],
+        actions=[{"type": "add_addressee", "person_id": str(person.id)}],
+    )
+    rule = post_json(client_a, f"/workspaces/{ws_a.id}/rules", body).json()
+    r = put_json(
+        client_a,
+        f"/api/v1/workspaces/{ws_a.id}/persons/{person.id}",
+        {"display_name": "Wegwerppersoon", "archived": True},
+    )
+    assert r.status_code == 200
+    url = f"{rules_url(ws_a.id)}/{rule['id']}"
+
+    off = put_json(client_a, url, {**body, "active": False, "name": "Andere naam"})
+    assert off.status_code == 200
+    assert (off.json()["active"], off.json()["name"]) == (False, "Andere naam")
+    # The editor tests the rule with what it stores before saving.
+    tried = post_json(client_a, f"/workspaces/{ws_a.id}/rules/test", body)
+    assert tried.status_code == 200
+
+    newly = {**body, "actions": [{"type": "add_addressee", "person_id": str(other.id)}]}
+    refused = put_json(client_a, url, newly)
+    assert refused.status_code == 422
+    assert "gearchiveerd" in refused.json()["message"]
+
+    assert client_a.delete(url).status_code == 204
 
 
 def test_label_of_another_workspace_is_422(
@@ -521,3 +559,57 @@ def test_other_workspace_is_404_on_every_rule_endpoint(
         assert r.json()["code"] == "workspace_not_found"
     with workspace_context(ws_b.id):
         assert Rule.objects.filter(id=stranger.id).exists()
+
+
+BSN_IN_RULE = "Een BSN bewaren we nooit, dus je kunt het niet in een regel gebruiken."
+
+
+@pytest.mark.parametrize(
+    ("field", "op", "value"),
+    [
+        ("text", "contains_word", "123456782"),
+        ("text", "contains", "111222333"),
+        ("sender", "equals", "Belastingdienst 111 222 333"),
+        ("text", "contains", "[BSN]"),
+    ],
+)
+def test_a_bsn_in_a_condition_is_refused_on_create_and_test(
+    client_a: Client, ws_a: Workspace, field: str, op: str, value: str
+) -> None:
+    # The finding: BSN 123456782 is in no letter, yet the test matched every letter
+    # with any BSN, because both sides were masked to "[BSN]".
+    make_document(ws_a, "Burgerservicenummer: [BSN]")
+    body = rule_body(
+        label(ws_a, "auto").id, conditions=[{"field": field, "op": op, "value": value}]
+    )
+    for url in (f"/workspaces/{ws_a.id}/rules", f"/workspaces/{ws_a.id}/rules/test"):
+        r = post_json(client_a, url, body)
+        assert r.status_code == 422, url
+        assert r.json() == {
+            "code": "validation_error",
+            "message": BSN_IN_RULE + " Laat het nummer weg.",
+        }
+
+
+def test_a_rule_masked_before_matches_nothing_and_can_be_switched_off(
+    client_a: Client, ws_a: Workspace
+) -> None:
+    remove_rules(ws_a)
+    auto = label(ws_a, "auto")
+    # Stored before BSNs were refused: to_json masked the number to "[BSN]".
+    old = make_rule(ws_a, text_word("123456782"), actions=[add_label(auto)], mode="auto")
+    document = make_document(ws_a, "Burgerservicenummer: [BSN]\nUw aanslag")
+    with workspace_context(ws_a.id):
+        assert old.definition["conditions"][0]["value"] == "[BSN]"
+        triggers.on_confirmed(Document.objects.select_for_update().get(id=document.id))
+        assert not DocumentLabel.objects.filter(document=document).exists()
+        assert not DocumentSuggestion.objects.filter(document=document).exists()
+
+    body = rule_body(
+        auto.id,
+        active=False,
+        conditions=[{"field": "text", "op": "contains_word", "value": "[BSN]"}],
+    )
+    r = put_json(client_a, f"{rules_url(ws_a.id)}/{old.id}", body)
+    assert r.status_code == 200
+    assert r.json()["active"] is False

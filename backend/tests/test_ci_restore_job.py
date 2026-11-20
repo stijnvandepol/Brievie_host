@@ -9,6 +9,8 @@ import base64
 import re
 from pathlib import Path
 
+from apps.documents.jpeg import jpeg_size
+
 ROOT = Path(__file__).resolve().parents[2]
 CI = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
 SEED_PATH = ROOT / ".github" / "scripts" / "restore-seed.py"
@@ -190,7 +192,7 @@ def test_the_seed_goes_through_the_apps_own_services() -> None:
 def test_the_seed_page_is_a_valid_jpeg_of_its_own() -> None:
     encoded = "".join(re.findall(r'^\s+"([A-Za-z0-9+/=]+)"$', SEED.split("_BASE_JPEG", 1)[1], re.M))
     data = base64.b64decode(encoded)
-    assert data.startswith(b"\xff\xd8\xff")  # what the intake checks
+    assert jpeg_size(data) == (1, 1)  # what the intake checks
     assert data.endswith(b"\xff\xd9") or data.endswith(b"?\x10")  # the 1x1 file, whole
     assert len(data) == 134
 

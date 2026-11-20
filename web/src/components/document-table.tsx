@@ -119,6 +119,48 @@ export function formatLetterDate(value: string): string {
   return date.format(new Date(`${value}T12:00:00`));
 }
 
+type Headline = Pick<
+  DocumentSummary,
+  | "sender"
+  | "document_type"
+  | "letter_date"
+  | "proposed_sender"
+  | "proposed_document_type"
+  | "proposed_letter_date"
+>;
+
+/** A value the AI proposed and nobody confirmed yet: italic, and "(voorstel)" in words,
+ * so it is never read as a fact (also not by a screen reader). */
+function Proposed({ children }: { children: string }) {
+  return (
+    <span className="proposed">
+      <em>{children}</em> <span className="muted">{t`(voorstel)`}</span>
+    </span>
+  );
+}
+
+/** The sender; before a review the AI's proposal, marked as one. */
+export function SenderText({ document }: { document: Headline }) {
+  if (document.sender) return <>{document.sender}</>;
+  if (document.proposed_sender) return <Proposed>{document.proposed_sender}</Proposed>;
+  return <>{t`Onbekende afzender`}</>;
+}
+
+/** The kind of letter; before a review the AI's proposal, marked as one. */
+export function TypeText({ document }: { document: Headline }) {
+  if (document.document_type) return <>{typeLabel(document.document_type)}</>;
+  const proposed = typeLabel(document.proposed_document_type ?? "");
+  return proposed ? <Proposed>{proposed}</Proposed> : null;
+}
+
+/** The letter's date; before a review the AI's proposal, marked as one. */
+export function LetterDateText({ document }: { document: Headline }) {
+  if (document.letter_date) return <>{formatLetterDate(document.letter_date)}</>;
+  return document.proposed_letter_date ? (
+    <Proposed>{formatLetterDate(document.proposed_letter_date)}</Proposed>
+  ) : null;
+}
+
 const PHONE = "(max-width: 639px)";
 
 /** The post of one workspace: a row per document, the sender links to the document. */
@@ -163,15 +205,17 @@ export function DocumentTable({
                   params={{ workspaceId, documentId: document.id }}
                   className="letter-card-sender"
                 >
-                  {document.sender || t`Onbekende afzender`}
+                  <SenderText document={document} />
                 </Link>
                 <StatusBadge status={document.status} inboxState={document.inbox_state} />
               </div>
               <p className="letter-card-meta">
-                <span>{typeLabel(document.document_type)}</span>
-                {document.letter_date ? (
-                  <span className="num">{formatLetterDate(document.letter_date)}</span>
-                ) : null}
+                <span>
+                  <TypeText document={document} />
+                </span>
+                <span className="num">
+                  <LetterDateText document={document} />
+                </span>
               </p>
               <Addressees persons={persons} ids={document.addressee_ids ?? []} />
               <span className="cell-badges">
@@ -208,12 +252,14 @@ export function DocumentTable({
                   to="/w/$workspaceId/post/$documentId"
                   params={{ workspaceId, documentId: document.id }}
                 >
-                  {document.sender || t`Onbekende afzender`}
+                  <SenderText document={document} />
                 </Link>
               </th>
-              <td>{typeLabel(document.document_type)}</td>
+              <td>
+                <TypeText document={document} />
+              </td>
               <td className="num">
-                {document.letter_date ? formatLetterDate(document.letter_date) : ""}
+                <LetterDateText document={document} />
               </td>
               <td>
                 <Addressees persons={persons} ids={document.addressee_ids ?? []} />

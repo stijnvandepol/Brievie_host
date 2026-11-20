@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 import { documentsQuery, inboxCountsQuery, labelsQuery, personsQuery } from "../api/queries";
 import type { components } from "../api/schema";
 import { AiStatusLine } from "../components/ai-status-line";
-import { formatLetterDate, typeLabel } from "../components/document-table";
+import { LetterDateText, SenderText, TypeText } from "../components/document-table";
 import { LabelChips } from "../components/label-chip";
 import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
 import { PersonPicker, useSetAddressees } from "../components/person-picker";
@@ -53,11 +53,15 @@ function InboxRow({
           to="/w/$workspaceId/post/$documentId"
           params={{ workspaceId, documentId: document.id }}
         >
-          {document.sender || t`Onbekende afzender`}
+          <SenderText document={document} />
         </Link>
       </th>
-      <td>{typeLabel(document.document_type)}</td>
-      <td className="num">{document.letter_date ? formatLetterDate(document.letter_date) : ""}</td>
+      <td>
+        <TypeText document={document} />
+      </td>
+      <td className="num">
+        <LetterDateText document={document} />
+      </td>
       <td>
         <span className="cell-badges">
           <LabelChips labels={labels} ids={document.label_ids ?? []} />

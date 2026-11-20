@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID
 
 from django.core.exceptions import ValidationError
@@ -17,6 +18,7 @@ from apps.documents.models import (
     DocumentLabel,
     DocumentPage,
     DocumentSuggestion,
+    Extraction,
     Folder,
 )
 from apps.documents.schemas import (
@@ -118,6 +120,54 @@ SUGGESTIONS = models.Prefetch(
 )
 
 
+_HEADLINE_FIELDS = (
+    Extraction.Field.SENDER,
+    Extraction.Field.DOCUMENT_TYPE,
+    Extraction.Field.LETTER_DATE,
+)
+# The proposals a list row shows for a letter not confirmed yet; one query for the list.
+HEADLINE_PROPOSALS = models.Prefetch(
+    "extractions",
+    queryset=Extraction.objects.filter(group=0, field__in=_HEADLINE_FIELDS).order_by(
+        "-confidence", "created_at", "id"
+    ),
+    to_attr="headline_proposals",
+)
+
+
+def _headline_proposals(document: Document) -> dict[str, str]:
+    """Per field, the strongest proposal for what a person has not confirmed yet.
+
+    A value found nowhere in the letter (confidence 0) is no proposal to show; a type or
+    date that does not parse is left out. Uses `HEADLINE_PROPOSALS` when prefetched.
+    """
+    if document.confirmed_at is not None:
+        return {}
+    rows: list[Extraction] | None = getattr(document, "headline_proposals", None)
+    if rows is None:
+        models.prefetch_related_objects([document], HEADLINE_PROPOSALS)
+        rows = getattr(document, "headline_proposals", [])
+    best: dict[str, str] = {}
+    for row in rows:
+        if row.field in best or not row.value:
+            continue
+        if row.field != Extraction.Field.DOCUMENT_TYPE and not row.confidence > 0:
+            continue
+        if row.field == Extraction.Field.DOCUMENT_TYPE and row.value not in Document.Type.values:
+            continue
+        if row.field == Extraction.Field.LETTER_DATE and _iso_date(row.value) is None:
+            continue
+        best[row.field] = row.value
+    return best
+
+
+def _iso_date(value: str) -> date | None:
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
 def _open_suggestions(document: Document) -> list[DocumentSuggestion]:
     """Preselected first, then by confidence. `.all()` so a prefetch is used.
 
@@ -187,9 +237,9 @@ def list_documents(
     if automatic:
         documents = documents.filter(_is_automatic())
     return list(
-        documents.prefetch_related("addressee_links", "label_links", SUGGESTIONS).order_by(
-            "-created_at", "-id"
-        )[:200]
+        documents.prefetch_related(
+            "addressee_links", "label_links", SUGGESTIONS, HEADLINE_PROPOSALS
+        ).order_by("-created_at", "-id")[:200]
     )
 
 
@@ -220,6 +270,7 @@ def document_summary_out(document: Document) -> DocumentSummaryOut:
 def _summary_out(
     document: Document, open_suggestions: list[DocumentSuggestion]
 ) -> DocumentSummaryOut:
+    proposed = _headline_proposals(document)
     return DocumentSummaryOut(
         id=document.id,
         client_id=document.client_id,
@@ -236,6 +287,13 @@ def _summary_out(
         confirmed_by_ai=document.confirmed_by_ai,
         auto_label_ids=_auto_label_ids(document),
         auto_addressee_ids=_auto_addressee_ids(document),
+        proposed_sender="" if document.sender else proposed.get(Extraction.Field.SENDER, ""),
+        proposed_document_type=""
+        if document.document_type
+        else proposed.get(Extraction.Field.DOCUMENT_TYPE, ""),
+        proposed_letter_date=None
+        if document.letter_date
+        else _iso_date(proposed.get(Extraction.Field.LETTER_DATE, "")),
     )
 
 
@@ -321,7 +379,9 @@ def retry_processing(*, workspace: Workspace, document_id: UUID) -> Document:
             raise ApiError(
                 409,
                 "document_not_failed",
-                _("Dit document hoeft niet opnieuw verwerkt te worden."),
+                _("Dit document wordt nog verwerkt. Probeer het zo opnieuw.")
+                if document.status == Document.Status.PROCESSING
+                else _("Dit document hoeft niet opnieuw verwerkt te worden."),
             )
         document.status = Document.Status.PROCESSING
         document.failure_code = ""

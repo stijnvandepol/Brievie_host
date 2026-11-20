@@ -537,8 +537,9 @@ Choices:
   lists in code next to the rules (two places to explain and to switch off).
 - **Only `apps.documents.organise` adds or removes a document's labels and addressees.**
   It writes the history event (`DocumentEvent`) in the same transaction, whoever made the
-  change (user, rule, accepted suggestion, undo). Deleting a whole label or person
-  cascades without events.
+  change (user, rule, accepted suggestion, undo). Deleting a whole label writes a
+  `label_removed` event on each of its documents first (since 2026-11-20, see "Fixes from
+  the exploratory API test"); a person on a document cannot be deleted.
 - **Suggestions have their own table.** A label or addressee proposal is a
   `DocumentSuggestion` (open, accepted, dismissed), not a field of the extraction.
   Dismissed is remembered: nothing automatic (AI, name matching, rules) proposes or
@@ -1117,3 +1118,24 @@ Design: `docs/superpowers/specs/2026-11-19-ai-autopilot-design.md`. Opt-in per w
    - The switches reset when AI goes off, the mode changes (external <-> local), or consent is granted for another address. Another model in the same mode at the same address keeps them.
    - `TaskItemOut.created_by_ai` (additive, default false), so a task list can show the mark.
    - Follow-ups: work out relative terms with `needs_attention`; a per-workspace prohibition for the enterprise layer; `updateAiSettings` still accepts a device token while `updateAiAutopilot` does not (session only); iOS follows. Before private post (phase 1d part B) an automatic addressee link must not by itself grant reading rights. iOS must show the mark "Automatisch door AI" (documents and tasks) before the autopilot is used in households that only use the app.
+
+## 2026-11-20: Fixes from the exploratory API test of 19 November
+
+- **A BSN is never a match value.** Text is masked before it is stored, so a BSN typed into a name, a name variant or a rule's text or sender value became `[BSN]` and found every letter with any BSN. `apps.common.text` now treats the mask token as opaque (a phrase holding it matches nothing; the token in a letter is no text), which neutralises existing rows without a migration, and persons and rules refuse a BSN or the token with a Dutch sentence. A masked value already stored on the same row may stay, so an old person or rule stays editable and can be switched off. A text or sender condition whose value holds the token never holds, for every operator (also "does not contain", which would otherwise hold for every letter). Dropped: a data migration removing masked variants or conditions (removing a condition widens a rule; the rules above already make such a condition false and such a name match nothing).
+- **One name, one person.** Names and variants are stored NFC with single spaces; a name or variant another active person has is refused (409 `name_variant_taken`, naming that person), compared as name matching compares (case, accents, whitespace). Existing duplicates stay; matching caps a person whose match overlaps an equal or longer match of another person at 0.700, below preselection. Not locked against two requests at once: a race gives a duplicate, which matching then treats as ambiguous.
+- **Omitted is not false.** `updatePerson` keeps `archived` and `name_variants` when the client leaves them out (`model_fields_set`); the fields stay plain with their defaults, because the released contract fixes their definition and nullable inputs need a default anyway.
+- **Rules and archived persons.** A rule keeps naming an archived person it already named; newly naming one is refused ("gearchiveerd"); `testRule` accepts any person. The web learns a person is archived from `listPersons`, as it already did.
+- **Password rules in Dutch.** Django 6 changed the minimum length msgid and its Dutch catalogue lags, so `AUTH_PASSWORD_VALIDATORS` now names subclasses in `apps.accounts.passwords` with their own `gettext` sentences. Dropped: a project `.po` overriding Django's catalogue (needs compiled messages in the image, and breaks again at the next msgid change).
+- **Page images.** The intake walks a JPEG's segments to the first scan header (frame size 1-20,000 px a side, at most 100 Mpx) with no image library; the picture data is not decoded. Dropped: Pillow (a new dependency and a decoder of untrusted input on the server, for a check the AI service and the app already do on the pixels).
+- **Messages.** A schema refusal (422) now gets a sentence from Pydantic's error type and limit (`apps.common.input_errors`), so a limit's own number reaches the user; a CSRF failure is 403 `csrf_failed`; a letter date lies between 1900-01-01 and a year after today; deleting a label writes `label_removed` (with its name) in each letter's history.
+- **The autopilot follows the same rules.** An AI pick of a person is applied on its own only when its quote names that person with a name that holds no (masked) BSN, and names no other active person with an equal or longer name; name matches are applied only from the preselection threshold, which an ambiguous match no longer reaches.
+- **Proposals in the list.** `DocumentSummaryOut` gains `proposed_sender`, `proposed_document_type` and `proposed_letter_date` (additive, with defaults): the strongest pipeline proposal (confidence above 0 for sender and date) while a letter is not confirmed and the field is empty, read with one prefetch per list. The web shows them italic with "(voorstel)"; the iOS app picks them up separately.
+- **Names.** A label or person name needs one character that draws something and may not hold an embedding, override or isolate (U+202A-202E, U+2066-2069); the plain marks LRM, RLM and ALM stay allowed, because Hebrew and Arabic keyboards type them in real names. A member's own person gets their name as a variant only when no other active person has it; it is never linked to an existing person by name.
+- **Open items, left for later.**
+  - `apps.common.privacy.find_bsns` does not see `/` or `_` as separators between the groups of a BSN (`123/456/789`).
+  - Folder names and device names are stored without BSN masking.
+  - 409 `name_variant_taken` names the other person; once persons can be private (1d-B), the sentence must become generic for someone who may not see that person.
+  - Finding #14: a dismissed proposal can still be accepted by its id (a stale screen on another device undoes a "no"); decide whether accept of a dismissed row is 409.
+  - Finding #15: archiving a person deletes their open proposals for good; restoring does not bring them back (intended in the code, not yet a product decision).
+  - Finding #18: the audit log keeps a deleted person's name but only the id of a deleted label or rule; choose one line.
+  - Also skipped from the same test: #12 (task events do not say which task: needs a field and a migration), #13 (rule counts after undo or "no"), #16 (an admin may archive their own linked person), #17 (folders differing only in case: needs a constraint and existing duplicates), #22 (a malformed id in a path is 422, not 404).

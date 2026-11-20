@@ -101,8 +101,9 @@ def test_testing_a_rule_over_50_documents_takes_a_fixed_number_of_queries(
         }
     )
 
-    # Validation 2, documents 2, facts 4, the shown documents' links 3.
-    with workspace_context(ws_a.id), django_assert_max_num_queries(11):
+    # Validation 2, documents 2, facts 4, the shown documents' links 3, and their headline
+    # proposals (proposed sender, type, date) 1: without that prefetch each row reads its own.
+    with workspace_context(ws_a.id), django_assert_max_num_queries(12):
         out = services.test_rule(workspace=ws_a, data=data)
 
     assert (out.checked_count, out.matched_count) == (50, 50)

@@ -23,7 +23,9 @@ class PersonOut(Schema):
 class PersonIn(InputSchema):
     display_name: str = Field(min_length=1, max_length=150)
     # How the name is written on letters; trimmed, 0-20 of 2-100 characters each.
+    # Left out on update: the stored variants stay.
     name_variants: list[str] = Field(default_factory=list)
+    # Left out on update: the person stays archived or not, as stored.
     archived: bool = False
 
 
