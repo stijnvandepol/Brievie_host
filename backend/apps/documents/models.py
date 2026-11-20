@@ -3,6 +3,8 @@ from decimal import Decimal
 from typing import ClassVar
 
 from django.conf import settings
+from django.contrib.postgres.fields import ArrayField
+from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models.base import ModelBase
@@ -96,6 +98,12 @@ class Document(WorkspaceModel):
         INFORMATION = "information", gettext_lazy("Informatie")
         OTHER = "other", gettext_lazy("Overig")
 
+    class Visibility(models.TextChoices):
+        # Who sees it follows the workspace's switches (S 4.1).
+        WORKSPACE = "workspace", gettext_lazy("Normaal")
+        # Private: only its reader rows (S 4.8).
+        RESTRICTED = "restricted", gettext_lazy("Privé")
+
     # Chosen by the uploading client: a repeated upload finds the same document.
     client_id = models.UUIDField()
     scanned_by = models.ForeignKey(
@@ -124,6 +132,14 @@ class Document(WorkspaceModel):
     # The sorted label and addressee ids as the user confirmed them in the review
     # ({"label_ids": [...], "addressee_ids": [...]}); null when confirmed without them.
     confirmed_organisation = models.JSONField(null=True, blank=True)
+    # No `db_default` (PB decision 5): Django would insert with RETURNING, which reads the
+    # new row through the SELECT policies.
+    visibility = models.CharField(
+        max_length=20, choices=Visibility.choices, default=Visibility.WORKSPACE
+    )
+    # The persons and departments the letter is on (S 4.9.2), derived from its
+    # `DocumentAddressee` rows. Written only by `documents.visibility.sync_addressee_ids`.
+    addressee_ids = ArrayField(models.UUIDField(), default=list, blank=True)
 
     class Meta:
         constraints: ClassVar[list[models.BaseConstraint]] = [
@@ -133,6 +149,14 @@ class Document(WorkspaceModel):
         ]
         indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=["workspace", "-created_at"], name="documents_document_recent"),
+            GinIndex(fields=["addressee_ids"], name="documents_document_addressees"),
+            # Post without a name ("Zonder naam"), newest first: the list and its count
+            # (measured, DECISIONS 2026-11-20).
+            models.Index(
+                fields=["workspace", "-created_at"],
+                condition=models.Q(status="done", addressee_ids=[]),
+                name="documents_document_unassigned",
+            ),
         ]
 
     def __str__(self) -> str:
@@ -290,6 +314,14 @@ class DocumentEvent(WorkspaceModel):
         TASK_REOPENED = "task_reopened"
         # The AI's standing confirmation was taken back because the letter changed.
         REOPENED = "reopened"
+        MADE_PRIVATE = "made_private"
+        MADE_PUBLIC = "made_public"
+        SHARE_ADDED = "share_added"
+        SHARE_REMOVED = "share_removed"
+        ACCESS_GRANTED = "access_granted"
+        EMERGENCY_OPENED = "emergency_opened"
+        # An automatic action was not applied because the letter is private.
+        PRIVATE_SKIPPED = "private_skipped"
 
     class Origin(models.TextChoices):
         USER = "user"
@@ -324,12 +356,69 @@ class DocumentEvent(WorkspaceModel):
     undoes = models.ForeignKey(
         "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="undone_by"
     )
+    # A short reason given with the event (emergency access), BSN-masked.
+    note = models.TextField(blank=True, default="")
 
     class Meta:
         ordering: ClassVar[list[str]] = ["-created_at", "-id"]
 
     def __str__(self) -> str:
         return f"{self.document_id} {self.kind}"
+
+
+class DocumentShare(WorkspaceModel):
+    """ "Delen met": one member may see one letter, whatever the switches (R44)."""
+
+    same_workspace_fields = ("document",)
+
+    document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="shares")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+
+    class Meta:
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["document", "user"], name="documents_documentshare_unique"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.document_id} shared with {self.user_id}"
+
+
+class DocumentReader(WorkspaceModel):
+    """Who reads a letter beyond the switches (S 4.9.4): the readers of a private letter
+    (its addressees, its departments' members, its shares), a share of any letter, and
+    emergency access until it expires. Written only by `documents.visibility`, as the
+    system; a user sees only their own rows."""
+
+    same_workspace_fields = ("document",)
+
+    class Reason(models.TextChoices):
+        ADDRESSEE = "addressee"
+        DEPARTMENT = "department"
+        SHARE = "share"
+        EMERGENCY = "emergency"
+
+    document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="readers")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    reason = models.CharField(max_length=20, choices=Reason.choices)
+    expires_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["document", "user", "reason"], name="documents_documentreader_unique"
+            ),
+        ]
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(fields=["user", "document"], name="documents_reader_user_document"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user_id} reads {self.document_id} ({self.reason})"
 
 
 class DocumentSuggestion(WorkspaceModel):

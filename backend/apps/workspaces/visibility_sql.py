@@ -1,8 +1,8 @@
 """The one source of "who may see this letter" in SQL (spec S 4.9).
 
-Strings only, no Django import: the migrations (Task 7), the measurement's scratch
-schema (tests/perf) and `documents.visibility.viewers()` (Task 8) all render the rule
-from here, so there is no second copy of it.
+Strings only, no Django import: the migrations (Task 7, through `rls`) and
+`documents.visibility.viewers()` (Task 8) render the rule from here, so there is no
+second copy of it.
 
 The four functions read the switches, roles, sorting flags, person links and
 department memberships live from their tables, for a user given as a parameter. The

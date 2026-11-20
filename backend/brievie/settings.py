@@ -27,6 +27,8 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.staticfiles",
+    # ArrayField and GinIndex for `Document.addressee_ids` (S 4.9.2); part of Django.
+    "django.contrib.postgres",
     "ninja",
     "axes",
     "procrastinate.contrib.django",

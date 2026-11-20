@@ -10,6 +10,8 @@ APPS = Path(__file__).resolve().parent.parent / "apps"
 
 # Grows to the list in the plan's Global Constraints as the tasks add their files.
 ALLOWED_SYSTEM_CALLERS = {
+    # WorkspaceModel.save: the workspace of a related letter the actor may not see.
+    "apps/common/models.py",
     "apps/pipeline/steps.py",
     "apps/pipeline/jobs.py",
     "apps/documents/export.py",

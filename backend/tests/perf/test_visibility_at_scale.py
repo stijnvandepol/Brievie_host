@@ -1,8 +1,8 @@
 """The visibility check at 100,000 letters (S 4.9.5, plan Task 1, ruling P1).
 
 Runs only with BRIEVIE_PERF=1 (CI job `visibility-perf`): building the world takes
-about a minute. On the scratch schema (tests/perf/scratch_schema.py), with the policy
-condition that ships, the lists are measured through the real service functions as a
+about a minute. On the migrated schema (the policies, functions and indexes of Task 7),
+the lists are measured through the real service functions as a
 request runs them: inside one transaction, as the non-superuser test role bound by the
 forced policies, with `brievie.workspace_id` and `brievie.actor` set transaction-local.
 
@@ -31,7 +31,7 @@ from typing import Final
 from uuid import UUID, uuid4
 
 import pytest
-from django.db import connection, transaction
+from django.db import connection
 from django.db.models import BooleanField, Q, QuerySet
 from django.db.models.expressions import RawSQL
 from django.test.utils import CaptureQueriesContext
@@ -44,7 +44,7 @@ from apps.people import services as people
 from apps.tasks import services as tasks
 from apps.workspaces.models import Workspace
 from apps.workspaces.visibility_sql import viewer_groups_sql, viewer_pairs_sql
-from tests.perf import candidates, data, scratch_schema
+from tests.perf import candidates, data
 from tests.perf.data import PerfWorld
 from tests.perf.report import (
     ACTORS,
@@ -103,8 +103,6 @@ def _explain_dir() -> Path | None:
 @pytest.fixture(scope="module")
 def perf_world(django_db_setup: None, django_db_blocker: DjangoDbBlocker) -> PerfWorld:
     with django_db_blocker.unblock():
-        with transaction.atomic(), connection.cursor() as c:
-            scratch_schema.install(c)
         return data.build(uuid4())
 
 

@@ -269,7 +269,7 @@ _TASK_TYPES: Final = ["pay", "respond", "object", "renew", "other"]
 def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfWorld:
     """Write the plan into the workspace `workspace_id` (created here), as the system.
 
-    Needs the scratch schema (tests/perf/scratch_schema.py) and a connection outside
+    Needs the migrated visibility schema (Task 7) and a connection outside
     any transaction: the data is committed, then vacuumed and analysed.
     """
     plan = make_plan(shape, seed)
