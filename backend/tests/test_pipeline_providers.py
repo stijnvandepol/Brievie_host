@@ -252,7 +252,11 @@ def test_local_accepts_addresses_on_the_own_network(ws_a: Workspace, url: str) -
         settings_service.configure(
             workspace_id=ws_a.id, mode="local", base_url=url, model="qwen", api_key=None
         )
-        assert settings_service.provider_for(ws_a.id) is not None
+        built = settings_service.provider_for(ws_a.id)
+        assert built is not None
+        # Security review 2026-11-20 (content L6): a proposal tells every member, also a
+        # viewer, who read the letter; the address on the own network is nobody's business.
+        assert built.name == "local"
 
 
 @pytest.mark.parametrize(
@@ -321,7 +325,8 @@ def test_long_realistic_host_name_is_accepted_and_named(ws_a: Workspace) -> None
         built = settings_service.provider_for(ws_a.id)
 
     assert built is not None
-    assert built.name == LONG_HOST
+    # A local reader is named "local" on proposals (security review 2026-11-20).
+    assert built.name == "local"
 
 
 @pytest.mark.parametrize(

@@ -156,6 +156,10 @@ class Preview:
 _KEY_AAD_PREFIX = b"ai-api-key-v2|"
 
 
+# What a proposal names as its reader when the AI runs on the own network.
+LOCAL_PROVIDER_NAME = "local"
+
+
 def _key_aad(workspace_id: UUID, base_url: str) -> bytes:
     return _KEY_AAD_PREFIX + str(workspace_id).encode() + b"|" + base_url.encode()
 
@@ -623,11 +627,20 @@ def provider_for(workspace_id: UUID) -> LLMProvider | None:
         api_key = _open_key(workspace_id, bytes(settings.api_key_sealed), settings.base_url)
         if api_key is None:
             raise PermanentError("ai_not_configured")
+    provider: LLMProvider
     if settings.api == AISettings.Api.ANTHROPIC:
-        return AnthropicProvider(base_url=settings.base_url, api_key=api_key, model=settings.model)
-    return OpenAICompatibleProvider(
-        base_url=settings.base_url, api_key=api_key, model=settings.model
-    )
+        provider = AnthropicProvider(
+            base_url=settings.base_url, api_key=api_key, model=settings.model
+        )
+    else:
+        provider = OpenAICompatibleProvider(
+            base_url=settings.base_url, api_key=api_key, model=settings.model
+        )
+    if settings.mode == AISettings.Mode.LOCAL:
+        # Stored on every proposal, which every member reads: the address on the own
+        # network is nobody's business (as in `status`).
+        provider.name = LOCAL_PROVIDER_NAME
+    return provider
 
 
 def _check_address(url: str) -> None:

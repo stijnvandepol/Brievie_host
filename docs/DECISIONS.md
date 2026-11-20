@@ -1373,5 +1373,7 @@ plane). One line per finding is in the pull request; the choices are here.
   (`jpeg_size`: decoders differ in which header they use, so a small second one hid an
   oversized first one). `linkPersonToMember` is web-session only (it decides whose post a
   person's letters are, and later who may read them); the contract test names it with the
-  AI settings as deliberately narrowed, and no app calls it.
+  AI settings as deliberately narrowed, and no app calls it. A proposal of an AI on the own network names its
+  reader `local` instead of the host (`ProposalOut.provider` reaches every member, while
+  `status` already hid the local address); proposals stored before keep their host.
 
