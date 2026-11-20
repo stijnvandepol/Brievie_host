@@ -1323,4 +1323,24 @@ plane). One line per finding is in the pull request; the choices are here.
   stolen fresh cookie can still pair, and the notice can be dismissed from the same browser;
   the "Nieuwe code" on the invitation page after 15 minutes shows the sentence and the
   person goes to Apparaten.
+- **Wrong passwords are limited per account too (identity M1).** Attack: axes locked an
+  email per client address and `LOGIN_FAILURES` counted per address, so rotating addresses
+  (an IPv6 /64 is one VPS) left guessing bounded only by the hashing speed. Chosen:
+  `apps.accounts.signin_limits`, one count per account in `SignInFailures` (a hash of the
+  normalised email; unknown addresses are counted alike, so the answer reveals nothing).
+  Ten wrong passwords are free; then each attempt waits 15 seconds after the last wrong
+  one, doubling to at most 15 minutes, which bounds guessing to roughly a hundred tries a
+  day per account. The count starts again after a sign-in or a day without wrong
+  passwords. Why a capped slow-down and not a lock: an attacker who fails once every 15
+  minutes keeps the account slowed but never locked for long, and a browser that signed in
+  to the account before carries a signed, HttpOnly cookie (`brievie_known`, 180 days, up to
+  five accounts) and is never slowed by the account count (axes still limits it per
+  address), so the owner is not locked out of their own browsers (the device-cookie scheme
+  of OWASP). The check, the password check and the count run under a transaction-level
+  advisory lock per account, so a burst of parallel requests cannot all pass before the
+  first failure is counted (one of the review's notes). The invitation path with an
+  existing account (`verify_password`) counts the same way. The address limits now count
+  an IPv6 client per /64 (`net.address_bucket`); axes keeps its exact address. Dropped: a
+  per-account notice after a slow-down (a notice per attack would train people to ignore
+  it); a fixed lock (a cheap denial of service).
 

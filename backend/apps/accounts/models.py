@@ -176,3 +176,16 @@ class PasswordReset(BaseModel):
 
     def __str__(self) -> str:
         return f"Password reset for {self.user_id}"
+
+
+class SignInFailures(BaseModel):
+    """Wrong passwords per account, whatever address they came from
+    (`apps.accounts.signin_limits`). Keyed on a hash of the normalised email, so an
+    address without an account is counted alike and no email is stored."""
+
+    account_key = models.CharField(max_length=64, unique=True)
+    failures = models.PositiveIntegerField()
+    last_failure_at = models.DateTimeField(db_index=True)
+
+    def __str__(self) -> str:
+        return f"{self.failures} failures"

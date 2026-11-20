@@ -3,7 +3,7 @@ import time
 from django.http import HttpRequest
 from ninja.throttling import SimpleRateThrottle
 
-from apps.common.net import client_ip
+from apps.common.net import address_bucket, client_ip
 
 
 class CallerThrottle(SimpleRateThrottle):
@@ -36,7 +36,11 @@ class ClientAddressThrottle(SimpleRateThrottle):
         super().__init__(rate)
 
     def get_cache_key(self, request: HttpRequest) -> str:
-        return self.cache_format % {"scope": self.scope, "ident": client_ip(request) or "unknown"}
+        # An IPv6 client counts per /64 (`address_bucket`).
+        return self.cache_format % {
+            "scope": self.scope,
+            "ident": address_bucket(client_ip(request)),
+        }
 
 
 class FailedAttemptThrottle(ClientAddressThrottle):

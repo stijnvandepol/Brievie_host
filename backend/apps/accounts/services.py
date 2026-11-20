@@ -21,6 +21,7 @@ from django.db import connection, transaction
 from django.http import HttpRequest
 from django.utils.translation import gettext as _
 
+from apps.accounts import signin_limits
 from apps.accounts.models import SetupToken, User, UserSession, normalise_email
 from apps.accounts.sessions import (
     end_current_session,
@@ -194,18 +195,22 @@ def other_active_server_admin_exists(user: User) -> bool:
 
 
 def login(request: HttpRequest, *, email: str, password: str) -> User:
-    """Log in with email and password, with django-axes' lockout per email + address.
+    """Log in with email and password, with django-axes' lockout per email + address and
+    the slow-down per account (`signin_limits`).
 
     The password check runs outside `transaction.atomic`: a failure must keep the
     attempt that axes recorded and the `sign_in_failed` row, and the 401 response
     commits the request transaction.
     """
     _refuse_when_locked(request, email)
+    signin_limits.refuse_when_slowed(request, email)
     user = authenticate(request, username=email, password=password)
     if not isinstance(user, User):
         LOGIN_FAILURES.record_failure(request)
+        signin_limits.record_failure(email)
         _record_sign_in_problem(AuditCode.SIGN_IN_FAILED, request, email)
         raise ApiError(401, "invalid_credentials", _("Het e-mailadres of wachtwoord klopt niet."))
+    signin_limits.clear(email)
     start_session(request, user, via=UserSession.Via.PASSWORD)
     return user
 
@@ -220,6 +225,7 @@ def verify_password(request: HttpRequest, *, email: str, password: str) -> User:
     refusing it. Runs outside a transaction: the recorded failure must survive the 401.
     """
     _refuse_when_locked(request, email)
+    signin_limits.refuse_when_slowed(request, email)
     account = User.objects.filter(email=normalise_email(email)).first()
     if account is None:
         # Hash anyway, so an unknown address takes as long as a wrong password.
@@ -230,8 +236,10 @@ def verify_password(request: HttpRequest, *, email: str, password: str) -> User:
                 sender=__name__, credentials={"username": email}, request=request
             )
         LOGIN_FAILURES.record_failure(request)
+        signin_limits.record_failure(email)
         _record_sign_in_problem(AuditCode.SIGN_IN_FAILED, request, email)
         raise ApiError(401, "invalid_credentials", _("Het e-mailadres of wachtwoord klopt niet."))
+    signin_limits.clear(email)
     return account
 
 
