@@ -220,10 +220,22 @@ def _member_already_linked() -> ApiError:
     return ApiError(409, "member_already_linked", _("Dit lid hoort al bij een andere persoon."))
 
 
+# At most this many persons per workspace, made by hand (security review 2026-11-20):
+# every letter's name matching walks them all on the shared worker, and the AI gets only
+# the first 50, so a flood of persons pushes the real ones out of its list.
+MAX_PERSONS = 500
+
+
 def create_person(
     *, workspace: Workspace, display_name: str, name_variants: list[str], archived: bool = False
 ) -> Person:
     with transaction.atomic():
+        if Person.objects.filter(workspace=workspace).count() >= MAX_PERSONS:
+            raise ApiError(
+                409,
+                "too_many_persons",
+                _("Deze werkruimte heeft het grootste aantal personen. Verwijder er eerst een."),
+            )
         person = Person(
             workspace=workspace,
             display_name=_clean_name(display_name),

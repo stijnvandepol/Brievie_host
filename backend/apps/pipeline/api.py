@@ -87,9 +87,11 @@ def list_ai_suppliers(request: HttpRequest, workspace_id: UUID) -> list[AiSuppli
         **SESSION_WRITE_ERRORS,
         **BODY_ERRORS,
     },
+    auth=session_auth,
     operation_id="previewAiSettings",
     description=(
-        "Check AI settings without saving them. When saving them needs consent, "
+        "Check AI settings without saving them. Web session only: a bearer token answers "
+        "401 not_authenticated. When saving them needs consent, "
         "`notice` is the text to show (the same `configure_ai` prints) and `address` "
         "is what to send back as `consent_address`. Administrators only."
     ),
@@ -124,10 +126,12 @@ def preview_ai_settings(
         **SESSION_WRITE_ERRORS,
         **BODY_ERRORS,
     },
+    auth=session_auth,
     throttle=CallerThrottle("ai_settings", "10/10m"),
     operation_id="updateAiSettings",
     description=(
-        "Set how the workspace's letters are read. Administrators only. Switching to an "
+        "Set how the workspace's letters are read. Web session only: a bearer token "
+        "answers 401 not_authenticated. Administrators only. Switching to an "
         "external address without consent in force answers 409 `ai_consent_required` "
         "unless `consent_address` is exactly the address these settings lead to: first "
         "show the notice of `previewAiSettings`. Without `api_key` the stored key stays, "

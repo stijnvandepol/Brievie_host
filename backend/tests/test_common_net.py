@@ -3,7 +3,7 @@ from django.http import HttpRequest
 from django.test import RequestFactory
 from pytest_django import Settings
 
-from apps.common.net import client_ip, valid_client_ip
+from apps.common.net import address_bucket, client_ip, valid_client_ip
 
 
 def request_from(remote_addr: str, forwarded: str | None = None) -> HttpRequest:
@@ -69,3 +69,19 @@ def test_behind_two_proxies_the_second_entry_from_the_right_counts(settings: Set
     settings.BRIEVIE_PROXY_COUNT = 2
     request = request_from("172.18.0.3", "1.2.3.4, 203.0.113.5, 192.168.1.10")
     assert client_ip(request) == "203.0.113.5"
+
+
+@pytest.mark.parametrize(
+    ("address", "bucket"),
+    [
+        ("203.0.113.7", "203.0.113.7"),
+        ("2001:db8:1:2:aaaa::1", "2001:db8:1:2::/64"),
+        ("2001:db8:1:2:ffff:ffff:ffff:ffff", "2001:db8:1:2::/64"),
+        ("::ffff:203.0.113.7", "203.0.113.7"),
+        ("unknown", "unknown"),
+        (None, "unknown"),
+    ],
+)
+def test_limits_count_an_ipv6_client_per_64(address: str | None, bucket: str) -> None:
+    # Security review 2026-11-20: one host holds a whole /64 and could rotate per attempt.
+    assert address_bucket(address) == bucket

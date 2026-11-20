@@ -1,7 +1,15 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { API, HttpResponse, http, loggedInHandlers, renderApp, server } from "../test-utils";
+import {
+  API,
+  errorBody,
+  HttpResponse,
+  http,
+  loggedInHandlers,
+  renderApp,
+  server,
+} from "../test-utils";
 
 const qrValues: string[] = [];
 
@@ -31,6 +39,70 @@ function pairingCode(secondsValid: number, code = "ABCD-EFGH", payload = QR_PAYL
 }
 
 describe("pair the app", () => {
+  it("asks for the password again when the session is older, then makes the code", async () => {
+    let asked = 0;
+    const sent: unknown[] = [];
+    server.use(
+      ...loggedInHandlers(),
+      http.post(`*${API}/devices/pairing-codes`, () => {
+        asked += 1;
+        if (asked === 1)
+          return HttpResponse.json(
+            errorBody("reauthentication_required", "Vul eerst je wachtwoord opnieuw in."),
+            { status: 403 },
+          );
+        return HttpResponse.json(
+          {
+            code: "ABCD-EFGH",
+            expires_at: new Date(Date.now() + 600_000).toISOString(),
+            qr_payload: QR_PAYLOAD,
+          },
+          { status: 201 },
+        );
+      }),
+      http.post(`*${API}/auth/reauthenticate`, async ({ request }) => {
+        sent.push(await request.json());
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const u = userEvent.setup();
+    renderApp("/koppel-app");
+    await u.click(await screen.findByRole("button", { name: /koppelcode maken/i }));
+
+    const field = await screen.findByLabelText(/^wachtwoord/i);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    await u.type(field, "geheim-wachtwoord");
+    await u.click(screen.getByRole("button", { name: "Bevestigen" }));
+
+    expect(await screen.findByText("ABCD-EFGH")).toBeInTheDocument();
+    expect(sent).toEqual([{ password: "geheim-wachtwoord" }]);
+    expect(screen.queryByLabelText(/^wachtwoord/i)).not.toBeInTheDocument();
+  });
+
+  it("says so when the password is wrong", async () => {
+    server.use(
+      ...loggedInHandlers(),
+      http.post(`*${API}/devices/pairing-codes`, () =>
+        HttpResponse.json(
+          errorBody("reauthentication_required", "Vul eerst je wachtwoord opnieuw in."),
+          { status: 403 },
+        ),
+      ),
+      http.post(`*${API}/auth/reauthenticate`, () =>
+        HttpResponse.json(errorBody("wrong_password", "Je wachtwoord klopt niet."), {
+          status: 400,
+        }),
+      ),
+    );
+    const u = userEvent.setup();
+    renderApp("/koppel-app");
+    await u.click(await screen.findByRole("button", { name: /koppelcode maken/i }));
+    await u.type(await screen.findByLabelText(/^wachtwoord/i), "fout");
+    await u.click(screen.getByRole("button", { name: "Bevestigen" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Je wachtwoord klopt niet.");
+  });
+
   it("renders a QR whose value is the qr_payload, the code, addresses and a countdown", async () => {
     server.use(...loggedInHandlers(), pairingCode(600));
     document.cookie = "csrftoken=tok123; path=/";

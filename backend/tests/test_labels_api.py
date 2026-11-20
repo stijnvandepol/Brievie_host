@@ -205,3 +205,23 @@ def test_a_name_that_shows_nothing_or_turns_text_around_is_refused(
 
     assert r.status_code == 422
     assert r.json() == {"code": "validation_error", "message": message}
+
+
+def test_a_workspace_holds_a_limited_number_of_labels(
+    client_a: Client, ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Security review 2026-11-20 (content L5): the AI sees only the first 100 labels.
+    from apps.labels import services
+
+    with workspace_context(ws_a.id, actor=SYSTEM):
+        present = Label.objects.filter(workspace=ws_a).count()
+    monkeypatch.setattr(services, "MAX_LABELS", present + 1)
+
+    assert create(client_a, ws_a.id, {"name": "Nog een"}).status_code == 201
+    r = create(client_a, ws_a.id, {"name": "Te veel"})
+
+    assert r.status_code == 409
+    assert r.json() == {
+        "code": "too_many_labels",
+        "message": "Deze werkruimte heeft het grootste aantal labels. Verwijder er eerst een.",
+    }

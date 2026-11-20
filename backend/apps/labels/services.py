@@ -99,8 +99,19 @@ def _save(label: Label) -> None:
         raise
 
 
+# At most this many labels per workspace, made by hand (security review 2026-11-20): the
+# AI gets only the first 100, so a flood of labels pushes the real ones out of its list.
+MAX_LABELS = 200
+
+
 def create_label(*, workspace: Workspace, name: str, color: str) -> Label:
     with transaction.atomic():
+        if Label.objects.filter(workspace=workspace).count() >= MAX_LABELS:
+            raise ApiError(
+                409,
+                "too_many_labels",
+                _("Deze werkruimte heeft het grootste aantal labels. Verwijder er eerst een."),
+            )
         label = Label(workspace=workspace, name=_valid_name(name), color=_valid_color(color))
         _save(label)
         return _labels(workspace).get(id=label.id)

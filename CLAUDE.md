@@ -43,7 +43,8 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
 - Text goes to an external AI service only with a recorded consent for that address
   (`AISettings.consented_base_url` and the history `AIConsentEvent`, both written only by
   `apps.pipeline.settings_service.configure`). An AI API key is write-only: no response
-  or log line holds it.
+  or log line holds it. It is sealed with its workspace and address in the AAD
+  (`_key_aad`) and opens nowhere else.
 - No new dependency without a line in `docs/DECISIONS.md`.
 - Apps of phase 1c: `people` (persons, name matching), `labels`, `rules` (engine, executor,
   presets) and `tasks`; `documents.organise` and `documents.suggestions` order post.
@@ -58,7 +59,8 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
   for another address; another model in the same mode at the same address keeps them.
   `BRIEVIE_AI_AUTOPILOT_ALLOWED=false` stops it server-wide, also where a switch is stored
   as on.
-- `updateAiAutopilot` is session-only (`auth=session_auth`): a device token gets 401.
+- `updateAiSettings`, `previewAiSettings` and `updateAiAutopilot` are session-only
+  (`auth=session_auth`): a device token gets 401.
 - Automatic changes have no actor and are marked: `DocumentLabel`/`DocumentAddressee`
   `automatic`, `Document.confirmed_by_ai`, `Task.created_by_ai`, history origin `ai` or
   `name_match`. Never record a user for what nobody did.
@@ -105,8 +107,15 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
 - `apps.accounts.sessions.start_session` is the only sign-in path (the only caller of
   Django's `login`); a web session without a `UserSession` row is signed out.
 - Endpoints that administer people (members, invitations, roles, accounts, sessions or
-  devices of others, workspace settings, the log, exports) use `auth=session_auth`: a device
-  token gets 401. A response that carries a secret once sets `Cache-Control: no-store`.
+  devices of others, workspace settings, the log, exports, linking a person to a member)
+  use `auth=session_auth`: a device token gets 401. A response that carries a secret once
+  sets `Cache-Control: no-store`.
+- Every password check of a sign-in path (`login`, `verify_password`) goes through
+  `apps.accounts.signin_limits` (per-account slow-down) as well as axes. `createPairingCode`
+  needs a session that signed in or called `reauthenticate` within 15 minutes, and every
+  paired device leaves the owner a `device_paired` notice.
+- Text is BSN-masked with `apps.common.privacy`; keep it linear-time (bounded quantifiers,
+  no nesting, one pass over the label windows) and add every new missed form as a test.
 - Only `apps.workspaces.members` changes a role or removes a membership (under the
   workspace's membership lock); only `apps.accounts.account_state` switches an account off or
   changes server-admin rights after setup (under `lock_active_server_admins`).

@@ -30,6 +30,7 @@ from apps.documents.schemas import (
     MyExportOut,
     UploadMetadataIn,
 )
+from apps.documents.upload_limits import check_upload_limits
 from apps.workspaces.deps import workspace_member
 from apps.workspaces.models import Membership
 
@@ -70,6 +71,7 @@ def create_folder(request: HttpRequest, workspace_id: UUID, payload: FolderIn) -
         404: ErrorOut,
         409: ErrorOut,
         411: ErrorOut,
+        429: ErrorOut,
         **SESSION_WRITE_ERRORS,
         **BODY_ERRORS,
     },
@@ -78,7 +80,9 @@ def create_folder(request: HttpRequest, workspace_id: UUID, payload: FolderIn) -
         "Upload a scanned document as multipart/form-data: `metadata` is a JSON string "
         "(schema `UploadMetadataIn`), followed by one `page` file (image/jpeg) per page "
         "in page order. Repeating an upload with the same `client_id` and pages answers "
-        "200 with the existing document."
+        "200 with the existing document. 429 `too_many_uploads` with Retry-After when the "
+        "member or the workspace uploaded too much in a short time (by default 60 per "
+        "member per 10 minutes, 600 per workspace per hour)."
     ),
 )
 def create_document(
@@ -88,6 +92,8 @@ def create_document(
     page: File[list[UploadedFile]],
 ) -> Status[DocumentOut]:
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    user = current_user(request)
+    check_upload_limits(request, workspace_id=workspace_id, user_id=user.id)
     try:
         parsed = UploadMetadataIn.model_validate_json(metadata)
     except ValidationError:
@@ -97,7 +103,7 @@ def create_document(
         ) from None
     document, created = intake.create_document_from_upload(
         workspace=membership.workspace,
-        user=current_user(request),
+        user=user,
         metadata=parsed,
         pages=[file.read() for file in page],
     )

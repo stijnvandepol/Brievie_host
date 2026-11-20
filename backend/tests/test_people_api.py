@@ -8,6 +8,7 @@ from apps.accounts.models import User
 from apps.people.models import Person
 from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
+from tests.documents_support import bearer_for
 from tests.factories import UserFactory
 from tests.helpers import SETUP_TOKEN, post_json
 
@@ -333,6 +334,23 @@ def test_link_and_unlink_member(client_a: Client, ws_a: Workspace) -> None:
     assert r.status_code == 200
 
 
+def test_a_device_token_cannot_link(client_a: Client, ws_a: Workspace) -> None:
+    # Security review 2026-11-20 (content L4): who a person is decides whose post is whose.
+    member = join(ws_a, "member")
+    person = create(client_a, ws_a.id, {"display_name": "Kind"}).json()
+
+    r = Client().put(
+        f"/api/v1/workspaces/{ws_a.id}/persons/{person['id']}/member",
+        {"user_id": str(member.id)},
+        content_type="application/json",
+        headers=bearer_for(admin_of(ws_a)),
+    )
+
+    assert (r.status_code, r.json()["code"]) == (401, "not_authenticated")
+    with workspace_context(ws_a.id, actor=SYSTEM):
+        assert Person.objects.get(id=person["id"]).user_id is None
+
+
 def test_link_to_a_non_member_is_404(client_a: Client, ws_a: Workspace, ws_b: Workspace) -> None:
     person = create(client_a, ws_a.id, {"display_name": "Kind"}).json()
     base = f"/workspaces/{ws_a.id}/persons/{person['id']}/member"
@@ -462,3 +480,23 @@ def test_a_member_whose_name_another_person_has_gets_no_shared_variant(
         (f"/workspaces/{ws_a.id}/persons/{person.id}", "Anna (lid)"),
     ):
         assert put(client_a, path, {"display_name": name}).status_code == 200
+
+
+def test_a_workspace_holds_a_limited_number_of_persons(
+    client_a: Client, ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Security review 2026-11-20 (content L5): every letter's name matching walks them all.
+    from apps.people import services
+
+    with workspace_context(ws_a.id, actor=SYSTEM):
+        present = Person.objects.filter(workspace=ws_a).count()
+    monkeypatch.setattr(services, "MAX_PERSONS", present + 1)
+
+    assert create(client_a, ws_a.id, {"display_name": "Oma"}).status_code == 201
+    r = create(client_a, ws_a.id, {"display_name": "Opa"})
+
+    assert r.status_code == 409
+    assert r.json() == {
+        "code": "too_many_persons",
+        "message": "Deze werkruimte heeft het grootste aantal personen. Verwijder er eerst een.",
+    }
