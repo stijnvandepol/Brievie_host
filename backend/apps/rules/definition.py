@@ -160,16 +160,23 @@ def to_json(
         "version": VERSION,
         "match": match,
         "conditions": [
-            {"field": c.field, "op": c.op, "value": mask_bsns(c.value.strip())}
-            if c.field in VALUE_LENGTH
-            else {"field": c.field, "op": c.op, "value": c.value.strip()}
-            for c in conditions
+            {"field": c.field, "op": c.op, "value": _stored_value(c)} for c in conditions
         ],
         "actions": [
             {"type": kind, "label_id": _str(label_id), "person_id": _str(person_id)}
             for kind, label_id, person_id in actions
         ],
     }
+
+
+def _stored_value(condition: Condition) -> str:
+    """A phrase trimmed and BSN-masked; a label or person id in its one form."""
+    value = condition.value.strip()
+    if condition.field in VALUE_LENGTH:
+        return mask_bsns(value)
+    if condition.field in ("label", "addressee") and (target := _uuid(value)) is not None:
+        return str(target)
+    return value
 
 
 def to_spec(rule: Rule) -> RuleSpec | None:

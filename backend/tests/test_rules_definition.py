@@ -249,3 +249,18 @@ def test_a_masked_phrase_the_rule_already_stores_may_stay() -> None:
     stored = Rule(definition=to_json("all", [text_word("111222333")], [("add_label", LABEL, None)]))
     assert definition.phrase_values(stored) == {"[BSN]"}
     assert definition.phrase_values(Rule()) == frozenset()
+
+
+def test_a_label_or_person_id_is_stored_in_its_one_form() -> None:
+    # The finding: "urn:uuid:…", "{…}" and upper case without hyphens were stored as typed,
+    # so a client comparing with the canonical id did not find its label.
+    for typed in (f"urn:uuid:{LABEL}", "{" + str(LABEL) + "}", LABEL.hex.upper()):
+        stored = to_json(
+            "all",
+            [Condition("label", "has", typed), Condition("addressee", "is", f" {PERSON} ")],
+            [("add_label", LABEL, None)],
+        )
+        assert stored["conditions"] == [
+            {"field": "label", "op": "has", "value": str(LABEL)},
+            {"field": "addressee", "op": "is", "value": str(PERSON)},
+        ]
