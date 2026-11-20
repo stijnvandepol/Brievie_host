@@ -177,6 +177,9 @@ if BRIEVIE_SESSION_IDLE_DAYS < 1 or BRIEVIE_SESSION_MAX_DAYS < 1:
 if BRIEVIE_SESSION_IDLE_DAYS > BRIEVIE_SESSION_MAX_DAYS:
     raise ImproperlyConfigured("BRIEVIE_SESSION_IDLE_DAYS may not exceed BRIEVIE_SESSION_MAX_DAYS.")
 SESSION_COOKIE_AGE = BRIEVIE_SESSION_IDLE_DAYS * 24 * 3600
+
+# Server switch for the AI autopilot (a workspace's own switches only count while this is on).
+BRIEVIE_AI_AUTOPILOT_ALLOWED: bool = env.bool("BRIEVIE_AI_AUTOPILOT_ALLOWED", default=True)
 CSRF_TRUSTED_ORIGINS: list[str] = env.list("CSRF_TRUSTED_ORIGINS", default=[])
 # One variable for Django and Caddy. Compose sets 0 by default: with the private CA
 # a browser must still be able to click through its certificate warning, which

@@ -14,7 +14,7 @@ from apps.accounts.models import User
 from apps.common.errors import ApiError, is_try_again
 from apps.common.privacy import mask_bsns
 from apps.documents import organise
-from apps.documents.models import Document, DocumentSuggestion
+from apps.documents.models import Document, DocumentEvent, DocumentSuggestion
 from apps.documents.schemas import ConfirmIn, TaskIn
 from apps.pipeline.validation import dates_in, quote_in_text
 from apps.rules import triggers
@@ -58,7 +58,12 @@ def confirm_document(
         )
         if document is None:
             raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
-        if document.status == Document.Status.DONE and _is_repeat(data, document):
+        # Only a person's review repeats: the AI's confirmation is taken back by reopening.
+        if (
+            document.status == Document.Status.DONE
+            and not document.confirmed_by_ai
+            and _is_repeat(data, document)
+        ):
             return document
         if document.status not in _REVIEWABLE:
             raise ApiError(
@@ -69,34 +74,68 @@ def confirm_document(
                 else _("Dit document kun je nu niet bevestigen."),
             )
         _validate(data, document)
-
-        document.sender = mask_bsns(data.sender.strip())
-        document.document_type = data.document_type
-        document.letter_date = data.letter_date
-        document.summary = mask_bsns(data.summary.strip())
-        document.summary_by_ai = data.summary_by_ai
-        document.status = Document.Status.DONE
-        document.failure_code = ""
-        document.confirmed_by = user
-        document.confirmed_at = timezone.now()
-        document.confirmed_organisation = _organisation(data) if data.sets_organisation else None
-        document.save()
-        if data.sets_organisation:
-            _set_organisation(document, data, user)
-        organise.record_confirmed(document, actor=user)
-        for task in _stored_tasks(data, document):
-            Task.objects.create(
-                workspace=workspace,
-                document=document,
-                type=task.type,
-                description=task.description,
-                deadline=task.deadline,
-                deadline_source=task.deadline_source,
-                deadline_quote=task.deadline_quote,
-            )
-        # After the user's own choices, now with the confirmed sender and type.
-        _rules_guarded(document)
+        _store_confirmation(document, data, user=user, by_ai=False)
     return document
+
+
+def confirm_automatically(document: Document, data: ConfirmIn) -> None:
+    """The autopilot's confirm: what a person's confirm writes, with no person.
+
+    The caller holds the lock on a `processing` document and the workspace's RLS context,
+    and runs this in a savepoint. `confirmed_by` stays empty, `confirmed_by_ai` is true,
+    its tasks are `created_by_ai` and the `confirmed` event has origin `ai` and no actor.
+    The same checks as a person's confirm apply; a failure raises `ApiError` (422) and the
+    caller leaves the document for review.
+    """
+    _validate(data, document)
+    _store_confirmation(document, data, user=None, by_ai=True)
+
+
+def _store_confirmation(
+    document: Document, data: ConfirmIn, *, user: User | None, by_ai: bool
+) -> None:
+    """The one place a confirmed review is written: fields, history, tasks, rules."""
+    document.sender = mask_bsns(data.sender.strip())
+    document.document_type = data.document_type
+    document.letter_date = data.letter_date
+    document.summary = mask_bsns(data.summary.strip())
+    document.summary_by_ai = data.summary_by_ai
+    document.status = Document.Status.DONE
+    document.failure_code = ""
+    document.confirmed_by = user
+    document.confirmed_by_ai = by_ai
+    document.confirmed_at = timezone.now()
+    document.confirmed_organisation = _organisation(data) if data.sets_organisation else None
+    document.save()
+    if data.sets_organisation and user is not None:
+        _set_organisation(document, data, user)
+    organise.record_confirmed(
+        document,
+        actor=user,
+        origin=DocumentEvent.Origin.AI if by_ai else DocumentEvent.Origin.USER,
+    )
+    # A task already on the document stays as it is (after a reopen a ticked-off task is
+    # still there): the same one is not made twice.
+    present = {_key_of(task) for task in document.tasks.all()}
+    for task in _stored_tasks(data, document):
+        if (task.type, task.description, task.deadline, task.deadline_source) in present:
+            continue
+        Task.objects.create(
+            workspace_id=document.workspace_id,
+            document=document,
+            type=task.type,
+            description=task.description,
+            deadline=task.deadline,
+            deadline_source=task.deadline_source,
+            deadline_quote=task.deadline_quote,
+            created_by_ai=by_ai,
+        )
+    # After the confirmed choices, now with the confirmed sender and type.
+    _rules_guarded(document)
+
+
+def _key_of(task: Task) -> tuple[str, str, date | None, str]:
+    return (task.type, task.description, task.deadline, task.deadline_source)
 
 
 def _rules_guarded(document: Document) -> None:
@@ -128,7 +167,8 @@ def _organisation(data: ConfirmIn) -> dict[str, list[str]]:
 
 def _set_organisation(document: Document, data: ConfirmIn, user: User) -> None:
     """Labels and addressees become the confirmed lists; the proposals not taken are
-    dismissed. A change the user took from an open proposal gets origin `suggestion`."""
+    dismissed. A change the user took from an open proposal gets origin `suggestion`.
+    Every link that stays loses its `automatic` mark: the person confirmed it."""
     open_rows = DocumentSuggestion.objects.filter(
         document=document, state=DocumentSuggestion.State.OPEN
     )
@@ -144,6 +184,8 @@ def _set_organisation(document: Document, data: ConfirmIn, user: User) -> None:
         suggested_ids=proposed_persons,
     )
     open_rows.update(state=DocumentSuggestion.State.DISMISSED)
+    # The person confirmed what stays: it is no longer the autopilot's.
+    organise.confirm_automatic_links(document)
 
 
 def _stored_tasks(data: ConfirmIn, document: Document) -> list[_StoredTask]:

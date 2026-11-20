@@ -29,7 +29,13 @@ const info: Info = {
   role: "member",
   email_fixed: false,
   person_name: "",
-  ai: { mode: "off", has_api_key: false },
+  ai: {
+    mode: "off",
+    has_api_key: false,
+    auto_confirm: false,
+    auto_organise: false,
+    autopilot_allowed: true,
+  },
 };
 
 function lookup(result: Info = info, seen?: (request: Request, body: { token: string }) => void) {
@@ -149,6 +155,9 @@ describe("accept an invitation", () => {
         ...info,
         ai: {
           has_api_key: false,
+          auto_confirm: false,
+          auto_organise: false,
+          autopilot_allowed: true,
           mode: "external",
           supplier: "mistral",
           host: "api.mistral.ai",

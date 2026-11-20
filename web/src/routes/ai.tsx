@@ -21,6 +21,7 @@ import { ApiFailure, api } from "../api/client";
 import { aiStatusQuery, aiSuppliersQuery } from "../api/queries";
 import type { components } from "../api/schema";
 import { AiStatusLine } from "../components/ai-status-line";
+import { AutopilotPanel } from "../components/autopilot-panel";
 import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
 import { Loading, MessageBar } from "../components/ui";
 import { workspaceRoute } from "./workspace";
@@ -389,6 +390,7 @@ function AiPage() {
       ) : (
         <p className="muted">{t`Alleen de beheerder van deze werkruimte kan dit veranderen.`}</p>
       )}
+      <AutopilotPanel workspaceId={workspace.id} admin={admin} />
     </Shell>
   );
 }

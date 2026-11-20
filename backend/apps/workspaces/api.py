@@ -301,7 +301,7 @@ def get_invitation(request: HttpRequest, payload: InvitationTokenIn) -> Invitati
         role=info.role,
         email_fixed=info.email_fixed,
         person_name=info.person_name,
-        ai=AiStatusOut.from_status(info.ai, with_model=False),
+        ai=AiStatusOut.from_status(info.ai, with_model=False, autopilot=info.autopilot),
     )
 
 

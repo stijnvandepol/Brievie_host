@@ -18,6 +18,7 @@ export function ConfirmDialog({
   confirmLabel,
   onConfirm,
   closeOnSuccess = true,
+  tone = "danger",
 }: {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
@@ -27,6 +28,8 @@ export function ConfirmDialog({
   onConfirm: () => Promise<unknown>;
   /** False when the caller closes the question itself (to show what it led to). */
   closeOnSuccess?: boolean;
+  /** `danger` is a red button for something that cannot be taken back; `primary` for a plain yes. */
+  tone?: "danger" | "primary";
 }) {
   const run = useMutation({
     mutationFn: onConfirm,
@@ -48,11 +51,11 @@ export function ConfirmDialog({
           {children}
           <ErrorAlert error={run.error} />
           <div className="dialog-actions">
-            <Button className="button secondary" onPress={() => onOpenChange(false)}>
+            <Button autoFocus className="button secondary" onPress={() => onOpenChange(false)}>
               {t`Annuleren`}
             </Button>
             <Button
-              className="button danger-solid"
+              className={tone === "danger" ? "button danger-solid" : "button"}
               isPending={run.isPending}
               onPress={() => run.mutate()}
             >
@@ -80,11 +83,16 @@ export function ConfirmAction({
   children: ReactNode;
   confirmLabel: string;
   onConfirm: () => Promise<unknown>;
+  tone?: "danger" | "primary";
 }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button className="button-text danger" aria-label={ariaLabel} onPress={() => setOpen(true)}>
+      <Button
+        className={dialog.tone === "primary" ? "button-text" : "button-text danger"}
+        aria-label={ariaLabel}
+        onPress={() => setOpen(true)}
+      >
         <Icon name={icon} />
         {label}
       </Button>

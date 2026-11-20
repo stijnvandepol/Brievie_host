@@ -25,6 +25,22 @@ function sentence(
         : event.actor_name || t`Iemand`;
   const person = event.person_name;
   const label = event.label_name;
+  // What Brievie did itself has no person behind it.
+  if (event.origin === "ai" || event.origin === "name_match") {
+    if (event.kind === "label_added") {
+      return event.origin === "ai"
+        ? t`Automatisch door AI toegevoegd: label ${label}`
+        : t`Automatisch toegevoegd: label ${label}`;
+    }
+    if (event.kind === "addressee_added") {
+      return event.origin === "ai"
+        ? t`Automatisch door AI toegevoegd: ${person}`
+        : t`Automatisch toegevoegd: naam herkend (${person})`;
+    }
+    if (event.kind === "confirmed" && event.origin === "ai") {
+      return t`Automatisch bevestigd door AI`;
+    }
+  }
   switch (event.kind) {
     case "label_added":
       return t`${who} zette het label ${label} erop`;
@@ -36,6 +52,8 @@ function sentence(
       return t`${who} haalde ${person} weg`;
     case "confirmed":
       return t`${who} bevestigde deze brief`;
+    case "reopened":
+      return t`${who} zette de brief terug op Te doen om te controleren`;
     case "task_completed":
       return t`${who} rondde een taak af`;
     case "task_reopened":
@@ -85,7 +103,7 @@ function useUndoEvent(workspaceId: string, documentId: string) {
   });
 }
 
-/** What happened to a letter, newest first; a member can undo what a rule did. */
+/** What happened to a letter, newest first; a member can undo what a rule or the AI did. */
 export function DocumentHistory({
   workspaceId,
   documentId,

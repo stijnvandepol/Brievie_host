@@ -7,7 +7,7 @@ from pydantic import Field
 from apps.common.schemas import InputSchema
 
 if TYPE_CHECKING:
-    from apps.pipeline.settings_service import AiStatus
+    from apps.pipeline.settings_service import AiStatus, Autopilot
 
 
 class AiStatusOut(Schema):
@@ -24,10 +24,32 @@ class AiStatusOut(Schema):
     has_api_key: bool = False
     # The model in use, for an administrator only, so a form can keep it.
     model: str | None = None
+    # The AI autopilot as stored (see `AiAutopilotOut`); `autopilot_allowed` is the server switch.
+    auto_organise: bool = False
+    auto_confirm: bool = False
+    autopilot_allowed: bool = True
 
     @classmethod
-    def from_status(cls, status: "AiStatus", *, with_model: bool) -> "AiStatusOut":
-        """What every member sees; `with_model` only for an administrator's form."""
+    def from_status(
+        cls,
+        status: "AiStatus",
+        *,
+        with_model: bool,
+        autopilot: "Autopilot | None" = None,
+    ) -> "AiStatusOut":
+        """What every member sees; `with_model` only for an administrator's form.
+
+        Without `autopilot` the autopilot fields keep their defaults.
+        """
+        extra = (
+            {}
+            if autopilot is None
+            else {
+                "auto_organise": autopilot.organise,
+                "auto_confirm": autopilot.confirm,
+                "autopilot_allowed": autopilot.allowed,
+            }
+        )
         return cls(
             mode=status.mode,
             supplier=status.supplier,
@@ -35,6 +57,7 @@ class AiStatusOut(Schema):
             since=status.since,
             has_api_key=status.has_api_key,
             model=status.model if with_model else None,
+            **extra,
         )
 
 
@@ -69,3 +92,20 @@ class AiSettingsPreviewOut(Schema):
     notice: str
     # The external address the consent is about; send it back as `consent_address`.
     address: str
+
+
+class AiAutopilotOut(Schema):
+    # The stored switches: put letters under persons and labels itself, and confirm them itself.
+    auto_organise: bool
+    auto_confirm: bool
+    # The server switch: false means the autopilot cannot be switched on here.
+    allowed: bool
+    # The text to agree to before a switch goes on.
+    notice: str
+
+
+class AiAutopilotIn(InputSchema):
+    auto_organise: bool
+    auto_confirm: bool
+    # Whether the administrator read `notice`; needed when a switch goes from off to on.
+    acknowledged: bool = False

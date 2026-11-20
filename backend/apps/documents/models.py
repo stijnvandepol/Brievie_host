@@ -119,6 +119,8 @@ class Document(WorkspaceModel):
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
     )
     confirmed_at = models.DateTimeField(null=True, blank=True)
+    # The standing confirmation is the AI's (autopilot), not a person's.
+    confirmed_by_ai = models.BooleanField(default=False)
     # The sorted label and addressee ids as the user confirmed them in the review
     # ({"label_ids": [...], "addressee_ids": [...]}); null when confirmed without them.
     confirmed_organisation = models.JSONField(null=True, blank=True)
@@ -235,6 +237,8 @@ class DocumentAddressee(WorkspaceModel):
     person = models.ForeignKey(
         "people.Person", on_delete=models.PROTECT, related_name="document_links"
     )
+    # Brievie put this link there itself (autopilot).
+    automatic = models.BooleanField(default=False)
 
     class Meta:
         constraints: ClassVar[list[models.BaseConstraint]] = [
@@ -257,6 +261,8 @@ class DocumentLabel(WorkspaceModel):
     label = models.ForeignKey(
         "labels.Label", on_delete=models.CASCADE, related_name="document_links"
     )
+    # Brievie put this link there itself (autopilot).
+    automatic = models.BooleanField(default=False)
 
     class Meta:
         constraints: ClassVar[list[models.BaseConstraint]] = [
@@ -282,6 +288,8 @@ class DocumentEvent(WorkspaceModel):
         CONFIRMED = "confirmed"
         TASK_COMPLETED = "task_completed"
         TASK_REOPENED = "task_reopened"
+        # The AI's standing confirmation was taken back because the letter changed.
+        REOPENED = "reopened"
 
     class Origin(models.TextChoices):
         USER = "user"
@@ -289,6 +297,9 @@ class DocumentEvent(WorkspaceModel):
         # The user accepted a proposal.
         SUGGESTION = "suggestion"
         UNDO = "undo"
+        # The autopilot did it: an AI proposal applied, or a name match applied.
+        AI = "ai"
+        NAME_MATCH = "name_match"
 
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="events")
     kind = models.CharField(max_length=30, choices=Kind.choices)
