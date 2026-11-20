@@ -881,7 +881,11 @@ DELETE" that "AI settings in the web interface" left open is done for the consen
    longer allowed) gets the same sentence. Completing a reset ends every session of the
    account, **revokes every paired device** (a reset is what one does after a suspected
    break-in; the member pairs the phone again) and every other open link, and leaves a
-   notice. The same holds for `manage.py reset_password`. What the log cannot prove: the
+   notice. The same holds for `manage.py reset_password`. **Binding for private post
+   (1d-B), decided by the owner on 2026-11-19:** once a member can have private letters,
+   only the server admin makes a reset link for that member; a workspace admin gets 403.
+   A reset link is a way into the account, so whoever makes one could read that member's
+   private post. What the log cannot prove: the
    completion row has no asserted actor (nobody proved it was the member) and carries the
    maker's id as `reset_by`. Said plainly: after an admin's reset the admin can sign in
    with the new password and dismiss the notice from that later session. Only the session
