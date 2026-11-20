@@ -1,13 +1,14 @@
 """The visibility schema of S 4.9 on top of today's tables, for the measurement only (P2).
 
-`install` adds to the migrated test database what Tasks 3, 6 and 7 will add as
-migrations: the switches, the sorting flag, `Person.kind`, `Document.visibility` and
-`addressee_ids` (GIN), `Task.created_by`, the department-member and reader tables
-(forced RLS through the real `enable_rls`), the actor helpers of PB T1, the four
-visibility functions and the policy condition from `apps.workspaces.visibility_sql`
-(the SQL that ships), the reader policy, the three restrictive document policies, the
-child policies and the task CASE policy. A failing measurement therefore costs no
-product migration. Removed in Task 11, when the measurement runs on the real schema.
+`install` adds to the migrated test database what Tasks 6 and 7 will add as migrations:
+the switches, the sorting flag, `Person.kind`, `Document.visibility` and `addressee_ids`
+(GIN), `Task.created_by`, the department-member and reader tables (forced RLS through the
+real `enable_rls`), the four visibility functions and the policy condition from
+`apps.workspaces.visibility_sql` (the SQL that ships), the reader policy, the three
+restrictive document policies, the child policies and the task CASE policy. The actor
+helpers already come from migration `workspaces/0005` (Task 3). A failing measurement
+therefore costs no product migration. Removed in Task 11, when the measurement runs on the
+real schema.
 
 Run as the schema owner (the test role): it owns the tables and, being neither superuser
 nor BYPASSRLS, is bound by the forced policies exactly as the app role is.
@@ -19,24 +20,6 @@ from django.db.backends.utils import CursorWrapper
 
 from apps.workspaces.rls import enable_rls
 from apps.workspaces.visibility_sql import POLICY_CONDITION, visibility_functions_sql
-
-# PB T1, verbatim (Task 3 moves them to rls.actor_functions()).
-ACTOR_FUNCTIONS: Final = [
-    """CREATE FUNCTION public.brievie_actor_id() RETURNS uuid
-LANGUAGE sql STABLE PARALLEL SAFE SET search_path = ''
-AS $$
-  SELECT CASE
-    WHEN pg_catalog.current_setting('brievie.actor', true)
-         ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-    THEN pg_catalog.current_setting('brievie.actor', true)::uuid
-  END
-$$""",
-    """CREATE FUNCTION public.brievie_is_system() RETURNS boolean
-LANGUAGE sql STABLE PARALLEL SAFE SET search_path = ''
-AS $$
-  SELECT COALESCE(pg_catalog.current_setting('brievie.actor', true), '') = 'system'
-$$""",
-]
 
 COLUMNS: Final = [
     "ALTER TABLE workspaces_workspace"
@@ -147,7 +130,6 @@ def statements() -> list[str]:
         operation = enable_rls(table).sql
         assert isinstance(operation, list)
         sql += [str(s) for s in operation]
-    sql += ACTOR_FUNCTIONS
     sql += visibility_functions_sql()
     sql.append(READER_POLICY)
     sql += _restrictive("documents_document", POLICY_CONDITION)
