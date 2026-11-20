@@ -10,7 +10,7 @@ from apps.accounts.notices import notify
 from apps.audit.models import WorkspaceAuditEvent
 from apps.documents.jobs import build_member_export
 from apps.documents.models import MemberExport
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Invitation, Membership, Workspace
 from tests.factories import TEST_PASSWORD
 from tests.helpers import post_json
@@ -66,12 +66,12 @@ def test_leaving_a_workspace_one_is_not_in_answers_not_found(
 
 
 def _audit_count(ws: Workspace) -> int:
-    with workspace_context(ws.id):
+    with workspace_context(ws.id, actor=SYSTEM):
         return WorkspaceAuditEvent.objects.count()
 
 
 def _exports(ws: Workspace) -> int:
-    with workspace_context(ws.id):
+    with workspace_context(ws.id, actor=SYSTEM):
         return MemberExport.objects.count()
 
 
@@ -84,7 +84,7 @@ def test_a_member_removed_from_one_workspace_is_a_stranger_to_its_endpoints(
     client = as_user(member)
     r = post_json(client, f"/workspaces/{ws_a.id}/my-export")
     assert r.status_code == 202
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         row = MemberExport.objects.get(user=member)
     build_member_export(workspace_id=str(ws_a.id), export_id=str(row.id))
     other = join(ws_a)

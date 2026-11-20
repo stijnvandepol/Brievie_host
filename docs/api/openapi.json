@@ -663,6 +663,11 @@
             "title": "Auto Rule Label Ids",
             "type": "array"
           },
+          "can_read": {
+            "default": true,
+            "title": "Can Read",
+            "type": "boolean"
+          },
           "client_id": {
             "format": "uuid",
             "title": "Client Id",
@@ -6578,6 +6583,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}/confirm": {
       "post": {
+        "description": "Store the review; the document becomes done. When the confirm hands the letter to someone else (the caller no longer sees it), the answer has `can_read` false and holds the id and status only. A repeat of the same review answers the same.",
         "operationId": "confirmDocument",
         "parameters": [
           {
@@ -9433,6 +9439,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/persons/{person_id}": {
       "delete": {
+        "description": "Admins only (403 `forbidden` for others): `person_in_use` also counts letters the caller cannot see, so only an admin learns that a person is in use.",
         "operationId": "deletePerson",
         "parameters": [
           {

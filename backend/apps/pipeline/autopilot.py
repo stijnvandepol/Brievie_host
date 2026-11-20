@@ -19,7 +19,7 @@ from uuid import UUID
 from django.db.models import Case, IntegerField, Value, When
 
 from apps.common.privacy import holds_bsn
-from apps.documents import organise, suggestions
+from apps.documents import organise, suggestions, visibility
 from apps.documents.models import (
     NEEDS_ATTENTION_BELOW,
     Document,
@@ -61,8 +61,14 @@ def apply_open_proposals(document: Document) -> int:
     its quote names that person (`quote_names`); otherwise it stays open. A rule's label
     proposal is applied only when `rule_labels_to_apply` names it, decided after the
     addressees are applied (they are settled then) and only when the administrator
-    agreed to the notice that says so (`Autopilot.rule_labels`).
+    agreed to the notice that says so (`Autopilot.rule_labels`). Inside the pipeline's
+    addressee scope its own scope is a no-op; called alone, it syncs.
     """
+    with visibility.addressee_scope(document):
+        return _apply_open_proposals(document)
+
+
+def _apply_open_proposals(document: Document) -> int:
     room: dict[str, int] = {
         _ADD_ADDRESSEE: ADDRESSEES_MAX
         - DocumentAddressee.objects.filter(document=document).count(),

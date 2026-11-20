@@ -31,7 +31,7 @@ from apps.documents.member_export import remove_member_exports
 from apps.people.models import Person
 from apps.tasks.models import Task
 from apps.workspaces.access import on_member_removed
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import NOBODY, Actor, workspace_context
 from apps.workspaces.invitations import revoke_invitations_bound_to, revoke_invitations_made_by
 from apps.workspaces.models import Membership, Workspace
 
@@ -76,7 +76,7 @@ def _require_admin(locked: list[Membership], actor: AuditActor) -> None:
 def _member_target(workspace: Workspace, member: Membership) -> AuditTarget:
     """The member as audit target, named after their person (needs the workspace's
     context); the account's name when no person is linked."""
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=NOBODY):
         name = (
             Person.objects.filter(workspace=workspace, user_id=member.user_id)
             .values_list("display_name", flat=True)
@@ -138,13 +138,14 @@ def _server_admin_only() -> ApiError:
     )
 
 
-def _unlink_and_unassign(workspace: Workspace, user_id: UUID) -> list[Person]:
+def _unlink_and_unassign(workspace: Workspace, user_id: UUID, actor: AuditActor) -> list[Person]:
     """Inside the workspace's context: the member's person stays without its account
     link, their tasks here lose their assignee, and part B's seam runs. Returns the
     unlinked persons. A queryset `update()`, before the membership goes, because
     `Person.save` refuses a user who is no member."""
     now = timezone.now()
-    with workspace_context(workspace.id):
+    as_actor: Actor = actor.user_id if actor.user_id is not None else NOBODY
+    with workspace_context(workspace.id, actor=as_actor):
         persons = list(Person.objects.filter(workspace=workspace, user_id=user_id).order_by("id"))
         Person.objects.filter(id__in=[p.id for p in persons]).update(user=None, updated_at=now)
         Task.objects.filter(workspace=workspace, assigned_to_id=user_id).update(
@@ -203,7 +204,7 @@ def remove_member(
             if not any(admin.id != user.id for admin in server_admins):
                 raise last_server_admin_error()
         target = _member_target(workspace, member)
-        persons = _unlink_and_unassign(workspace, user_id)
+        persons = _unlink_and_unassign(workspace, user_id, actor)
         member.delete()
         if last_membership:
             deactivate_account(user, actor=actor, current=request)

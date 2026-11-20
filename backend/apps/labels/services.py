@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from uuid import UUID
 
-from django.db import IntegrityError, models, transaction
+from django.db import IntegrityError, connection, models, transaction
 from django.db.models.functions import Lower
 from django.utils.translation import gettext as _
 from psycopg import errors as pg_errors
@@ -15,6 +15,7 @@ from apps.common.text import has_direction_control, is_visible
 from apps.labels.models import COLORS, Label
 from apps.rules.definition import named_ids, only_adds_label
 from apps.rules.models import Rule
+from apps.workspaces.context import system_actor
 from apps.workspaces.models import Workspace
 
 _NAME_UNIQUE = "labels_label_name_unique"
@@ -30,8 +31,23 @@ def _labels(workspace: Workspace) -> "models.QuerySet[Label]":
 
 
 def list_labels(workspace: Workspace) -> list[Label]:
-    """Labels by name; needs the workspace's RLS context."""
-    return list(_labels(workspace).order_by(Lower("name"), "id"))
+    """Labels by name; needs the workspace's RLS context.
+
+    `document_count` from one grouped count over the label links (each through its
+    policy, the visible letters hashed once), not a join of every label to every link
+    (measured, DECISIONS 2026-11-20). Same count: the links the policy shows.
+    """
+    labels = list(Label.objects.filter(workspace=workspace).order_by(Lower("name"), "id"))
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT l.label_id, pg_catalog.count(*) FROM public.documents_documentlabel l"
+            " WHERE l.workspace_id = %s GROUP BY l.label_id",
+            [workspace.id],
+        )
+        counts: dict[UUID, int] = {row[0]: int(row[1]) for row in cursor.fetchall()}
+    for label in labels:
+        label.document_count = counts.get(label.id, 0)  # type: ignore[attr-defined]
+    return labels
 
 
 def _get_for_update(workspace: Workspace, label_id: UUID) -> Label:
@@ -139,13 +155,16 @@ def delete_label(*, workspace: Workspace, label_id: UUID, actor: AuditActor) -> 
                 _("De regel '%(rule)s' gebruikt dit label. Pas die regel eerst aan.")
                 % {"rule": rule.name},
             )
-        for rule in own_rules:
-            rule.delete()
         # Imported here: organise imports this module (label_not_found).
         from apps.documents import organise
 
-        organise.record_label_deleted(label, actor_id=actor.user_id)
-        label.delete()
+        # Checked as the caller above; the label leaves every letter, also those the
+        # caller cannot see (a hidden link would otherwise fail the commit).
+        with system_actor():
+            for rule in own_rules:
+                rule.delete()
+            organise.record_label_deleted(label, actor_id=actor.user_id)
+            label.delete()
         # A label's name is the user's own words: the row carries the id only.
         record(
             AuditCode.LABEL_DELETED,

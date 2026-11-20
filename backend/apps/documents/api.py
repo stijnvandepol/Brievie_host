@@ -253,6 +253,11 @@ def retry_document_processing(
         **BODY_ERRORS,
     },
     operation_id="confirmDocument",
+    description=(
+        "Store the review; the document becomes done. When the confirm hands the letter to"
+        " someone else (the caller no longer sees it), the answer has `can_read` false and"
+        " holds the id and status only. A repeat of the same review answers the same."
+    ),
 )
 def confirm_document(
     request: HttpRequest, workspace_id: UUID, document_id: UUID, payload: ConfirmIn
@@ -264,7 +269,7 @@ def confirm_document(
         document_id=document_id,
         data=payload,
     )
-    return services.document_out(document)
+    return services.document_out_for(document)
 
 
 @router.post(
@@ -280,7 +285,7 @@ def reopen_document(request: HttpRequest, workspace_id: UUID, document_id: UUID)
     document = services.reopen_document(
         workspace=membership.workspace, user=current_user(request), document_id=document_id
     )
-    return services.document_out(document)
+    return services.document_out_for(document)
 
 
 @router.put(
@@ -304,7 +309,7 @@ def set_document_addressees(
         document_id=document_id,
         person_ids=payload.person_ids,
     )
-    return services.document_out(document)
+    return services.document_out_for(document)
 
 
 @router.put(
@@ -328,7 +333,7 @@ def set_document_labels(
         document_id=document_id,
         label_ids=payload.label_ids,
     )
-    return services.document_out(document)
+    return services.document_out_for(document)
 
 
 @router.post(
@@ -353,7 +358,7 @@ def accept_suggestion(
         document_id=document_id,
         suggestion_id=suggestion_id,
     )
-    return services.document_out(document)
+    return services.document_out_for(document)
 
 
 @router.post(
@@ -372,7 +377,7 @@ def dismiss_suggestion(
     document = services.dismiss_suggestion(
         workspace=membership.workspace, document_id=document_id, suggestion_id=suggestion_id
     )
-    return services.document_out(document)
+    return services.document_out_for(document)
 
 
 @router.get(
@@ -408,7 +413,7 @@ def undo_document_event(
         document_id=document_id,
         event_id=event_id,
     )
-    return services.document_out(document)
+    return services.document_out_for(document)
 
 
 def _my_export_out(membership: Membership, export: MemberExport | None) -> MyExportOut:

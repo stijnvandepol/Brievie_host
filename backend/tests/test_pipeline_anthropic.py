@@ -16,7 +16,7 @@ from apps.pipeline.providers import (
     ProviderUnavailable,
 )
 from apps.pipeline.schema import json_schema
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 
 API_KEY = "nep-sleutel-voor-tests"
@@ -181,7 +181,7 @@ def test_key_and_letter_never_reach_an_exception_or_the_log(
 
 
 def test_configure_claude_stores_the_preset_and_builds_the_provider(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         settings_service.configure(
             workspace_id=ws_a.id, mode="external", supplier="claude", base_url="", model="",
             consent=True, api_key=API_KEY,
@@ -197,7 +197,7 @@ def test_configure_claude_stores_the_preset_and_builds_the_provider(ws_a: Worksp
 
 
 def test_claude_model_can_be_overridden(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         settings_service.configure(
             workspace_id=ws_a.id, mode="external", consent=True, supplier="claude", base_url="",
             model="claude-haiku-5-5", api_key=API_KEY,
@@ -208,7 +208,7 @@ def test_claude_model_can_be_overridden(ws_a: Workspace) -> None:
 
 
 def test_claude_still_needs_https_and_a_key(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         with pytest.raises(ValueError, match="https"):
             settings_service.configure(
                 workspace_id=ws_a.id, mode="external", consent=True, supplier="claude",
@@ -223,7 +223,7 @@ def test_claude_still_needs_https_and_a_key(ws_a: Workspace) -> None:
 
 
 def test_openai_needs_a_model_name(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         with pytest.raises(ValueError, match="needs a model name"):
             settings_service.configure(
                 workspace_id=ws_a.id, mode="external", consent=True, supplier="openai", base_url="",
@@ -243,7 +243,7 @@ def test_openai_needs_a_model_name(ws_a: Workspace) -> None:
 
 
 def test_custom_url_with_mistral_stays_openai_compatible(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         settings_service.configure(
             workspace_id=ws_a.id, mode="external", consent=True, supplier="mistral",
             base_url="https://llm.example.com/v1", model="m", api_key=API_KEY,
@@ -254,7 +254,7 @@ def test_custom_url_with_mistral_stays_openai_compatible(ws_a: Workspace) -> Non
 
 
 def test_unknown_supplier_is_refused(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id), pytest.raises(ValueError, match="supplier"):
+    with workspace_context(ws_a.id, actor=SYSTEM), pytest.raises(ValueError, match="supplier"):
         settings_service.configure(
             workspace_id=ws_a.id, mode="external", supplier="gemini", base_url="", model="",
             consent=True, api_key=API_KEY,
@@ -262,7 +262,7 @@ def test_unknown_supplier_is_refused(ws_a: Workspace) -> None:
 
 
 def test_mode_off_and_local_reset_the_api(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         settings_service.configure(
             workspace_id=ws_a.id, mode="external", supplier="claude", base_url="", model="",
             consent=True, api_key=API_KEY,
@@ -283,7 +283,7 @@ def test_mode_off_and_local_reset_the_api(ws_a: Workspace) -> None:
 
 
 def test_default_supplier_is_still_mistral(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         settings_service.configure(
             workspace_id=ws_a.id,
             mode="external",

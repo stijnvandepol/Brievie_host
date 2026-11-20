@@ -5,7 +5,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 
 from apps.pipeline.models import AISettings
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 
 API_KEY = "sk-geheime-sleutel-123"
@@ -25,7 +25,7 @@ def test_external_reads_the_key_from_the_environment(
 
     output = run("--workspace", str(ws_a.id), "--mode", "external", ACCEPT)
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         stored = AISettings.objects.get()
     assert stored.mode == "external"
     assert stored.base_url == "https://api.mistral.ai/v1"
@@ -43,7 +43,7 @@ def test_key_cannot_be_given_on_the_command_line(ws_a: Workspace) -> None:
 def test_off_needs_no_key(ws_a: Workspace) -> None:
     run("--workspace", str(ws_a.id), "--mode", "off")
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert AISettings.objects.get().mode == "off"
 
 
@@ -65,7 +65,7 @@ def test_supplier_claude_reads_the_key_from_the_environment(
 
     output = run("--workspace", str(ws_a.id), "--mode", "external", "--supplier", "claude", ACCEPT)
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         stored = AISettings.objects.get()
     assert (stored.api, stored.base_url, stored.model) == (
         "anthropic", "https://api.anthropic.com", "claude-opus-5-5",

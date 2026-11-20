@@ -11,7 +11,7 @@ from apps.pipeline.errors import PermanentError
 from apps.pipeline.steps import run_pipeline
 from apps.rules.engine import Condition
 from apps.rules.models import RuleRun
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 from tests.documents_support import admin_of
 from tests.helpers import post_json
@@ -37,7 +37,7 @@ def client_a(client: Client, ws_a: Workspace) -> Client:
 
 
 def label(workspace: Workspace, key: str) -> Label:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Label.objects.get(workspace=workspace, system_key=key)
 
 
@@ -61,14 +61,14 @@ def confirm(client: Client, document: Document, **changes: object) -> "Response"
 
 
 def label_ids(workspace: Workspace, document: Document) -> set[object]:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return set(
             DocumentLabel.objects.filter(document=document).values_list("label_id", flat=True)
         )
 
 
 def open_label_ids(workspace: Workspace, document: Document) -> set[object]:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return set(
             DocumentSuggestion.objects.filter(document=document, state="open").values_list(
                 "label_id", flat=True
@@ -84,7 +84,7 @@ def test_processed_trigger_runs_with_ai_off(ws_a: Workspace) -> None:
 
     process(ws_a, document)
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         row = DocumentSuggestion.objects.get(document=document)
         assert Document.objects.get(id=document.id).status == "needs_review"
         [run] = RuleRun.objects.all()
@@ -99,7 +99,7 @@ def test_preset_rule_proposes_on_processing(ws_a: Workspace) -> None:
 
     process(ws_a, document)
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         [row] = DocumentSuggestion.objects.filter(document=document)
     assert row.label_id == label(ws_a, "belastingdienst").id
     assert (row.origin, row.rule_name) == ("rule", "Label Belastingdienst")
@@ -114,7 +114,7 @@ def test_failed_processing_still_runs_the_rules(ws_a: Workspace) -> None:
     jobs.run_job(ws_a.id, document.id, attempts=0, run=failing_run)
 
     assert label_ids(ws_a, document) == {auto.id}
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert Document.objects.get(id=document.id).status == "failed"
 
 
@@ -130,7 +130,7 @@ def test_confirmed_trigger_uses_the_confirmed_sender(client_a: Client, ws_a: Wor
 
     assert r.status_code == 200
     assert r.json()["label_ids"] == [str(bank.id)]
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         [run] = RuleRun.objects.all()
     assert (run.trigger, run.outcome) == ("confirmed", "applied")
 
@@ -164,7 +164,7 @@ def test_dismissed_change_is_never_reapplied(client_a: Client, ws_a: Workspace) 
     assert r.json()["label_ids"] == []
     assert r.json()["suggestions"] == []
     assert label_ids(ws_a, document) == set()
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert DocumentSuggestion.objects.get(document=document).state == "dismissed"
         assert [e.kind for e in DocumentEvent.objects.filter(kind__startswith="label")] == [
             "label_removed",
@@ -204,7 +204,7 @@ def test_repeated_confirm_after_auto_rule_is_200(client_a: Client, ws_a: Workspa
     assert first.status_code == 200
     assert again.status_code == 200
     assert again.json()["label_ids"] == [str(bank.id)]
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         # The repeat ran no rules and wrote nothing.
         assert RuleRun.objects.count() == 1
         assert DocumentEvent.objects.filter(kind="confirmed").count() == 1
@@ -222,7 +222,7 @@ def test_old_app_confirm_keeps_auto_applied_labels(client_a: Client, ws_a: Works
 
     assert r.status_code == 200
     assert r.json()["label_ids"] == [str(auto.id)]
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert Document.objects.get(id=document.id).confirmed_organisation is None
 
 
@@ -235,7 +235,7 @@ def test_job_with_another_workspaces_id_changes_nothing(ws_a: Workspace, ws_b: W
     jobs.run_job(ws_b.id, document.id, attempts=0, run=process_without_ai)
     jobs.run_job(ws_b.id, document.id, attempts=0, run=failing_run)
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert Document.objects.get(id=document.id).status == "processing"
         assert not RuleRun.objects.exists()
         assert not DocumentSuggestion.objects.exists()

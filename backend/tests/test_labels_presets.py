@@ -2,7 +2,7 @@ from apps.documents.models import Document
 from apps.labels.models import COLORS, Label
 from apps.labels.presets import PRESETS, apply_preset
 from apps.rules.engine import OPERATORS
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 
 # Length limits of a condition value per field (design 9.2).
@@ -10,12 +10,12 @@ _VALUE_LENGTH = {"text": (2, 100), "sender": (2, 200)}
 
 
 def names(workspace: Workspace) -> list[str]:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return sorted(Label.objects.filter(workspace=workspace).values_list("name", flat=True))
 
 
 def test_apply_preset_is_idempotent_and_restores_only_missing(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Label.objects.get(workspace=ws_a, system_key="zorg").delete()
         auto = Label.objects.get(workspace=ws_a, system_key="auto")
         auto.name = "Onze auto"
@@ -33,7 +33,7 @@ def test_apply_preset_is_idempotent_and_restores_only_missing(ws_a: Workspace) -
 
 
 def test_apply_preset_skips_a_taken_name(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Label.objects.get(workspace=ws_a, system_key="bank").delete()
         own = Label.objects.create(workspace=ws_a, name="bank", color="red")
 

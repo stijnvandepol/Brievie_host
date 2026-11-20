@@ -23,7 +23,7 @@ from apps.common.errors import ApiError
 from apps.people.models import Person
 from apps.pipeline.settings_service import Actor, configure, configure_autopilot
 from apps.workspaces import invitations
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.invitations import accept_invitation
 from apps.workspaces.members import remove_member
 from apps.workspaces.models import Invitation, Membership, Workspace
@@ -87,12 +87,12 @@ def accept(
 
 
 def person(ws: Workspace, name: str) -> Person:
-    with workspace_context(ws.id):
+    with workspace_context(ws.id, actor=SYSTEM):
         return Person.objects.create(workspace=ws, display_name=name)
 
 
 def workspace_rows(ws: Workspace, code: str) -> list[WorkspaceAuditEvent]:
-    with workspace_context(ws.id):
+    with workspace_context(ws.id, actor=SYSTEM):
         return list(WorkspaceAuditEvent.objects.filter(code=code).order_by("created_at", "id"))
 
 
@@ -132,7 +132,7 @@ def test_lookup_names_the_person_from_inside_the_workspace_context(ws_a: Workspa
 
 def test_lookup_shows_the_real_autopilot_switches(ws_a: Workspace) -> None:
     token = invite(ws_a)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         configure(
             workspace_id=ws_a.id,
             mode="external",
@@ -161,7 +161,7 @@ def test_lookup_shows_the_ai_line_when_ai_is_on(ws_a: Workspace) -> None:
         "mode": "off", "supplier": None, "host": None, "since": None, "has_api_key": False,
         "model": None, "auto_organise": False, "auto_confirm": False, "autopilot_allowed": True,
     }  # fmt: skip
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         configure(
             workspace_id=ws_a.id,
             mode="external",
@@ -258,7 +258,7 @@ def test_accept_with_a_new_account_signs_in_and_links_the_person(ws_a: Workspace
     assert isinstance(workspace, dict)
     assert (workspace["id"], workspace["role"]) == (str(ws_a.id), "member")
     assert Membership.objects.get(workspace=ws_a, user=user).role == "member"
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert Person.objects.get(pk=papa.pk).user_id == user.id
         assert Person.objects.filter(workspace=ws_a, user=user).count() == 1
     me = browser.get("/api/v1/me")
@@ -281,7 +281,7 @@ def test_accept_without_person_creates_one(ws_a: Workspace) -> None:
     assert accept(Client(), token, name="Anne de Vries")[0] == 200
 
     user = User.objects.get(email="nieuw@example.nl")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert Person.objects.get(workspace=ws_a, user=user).display_name == "Anne de Vries"
     assert not workspace_rows(ws_a, "person_linked")
 
@@ -332,7 +332,7 @@ def test_a_failure_anywhere_leaves_nothing_behind(
     assert not User.objects.filter(email="nieuw@example.nl").exists()
     assert Membership.objects.count() == members_before
     assert unused(token)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert Person.objects.get(pk=papa.pk).user_id is None
     assert not workspace_rows(ws_a, "person_linked")
     assert not workspace_rows(ws_a, "invitation_accepted")
@@ -564,7 +564,7 @@ def test_person_linked_meanwhile_is_409(ws_a: Workspace) -> None:
     token = invite(ws_a, person_id=str(papa.id))
     other = UserFactory.create()
     Membership.objects.create(user=other, workspace=ws_a, role="member")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Person.objects.filter(pk=papa.pk).update(user=other)
 
     status, body = accept(Client(), token)
@@ -577,7 +577,7 @@ def test_person_linked_meanwhile_is_409(ws_a: Workspace) -> None:
 def test_person_archived_meanwhile_is_409(ws_a: Workspace) -> None:
     papa = person(ws_a, "Papa")
     token = invite(ws_a, person_id=str(papa.id))
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Person.objects.filter(pk=papa.pk).update(archived_at=timezone.now())
 
     status, body = accept(Client(), token)
@@ -585,7 +585,7 @@ def test_person_archived_meanwhile_is_409(ws_a: Workspace) -> None:
     assert (status, body["code"]) == (409, "invitation_person_taken")
     assert unused(token)
     assert not User.objects.filter(email="nieuw@example.nl").exists()
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert Person.objects.get(pk=papa.pk).user_id is None
 
 
@@ -607,7 +607,7 @@ def test_a_person_link_left_from_before_answers_409_and_keeps_nothing(ws_a: Work
     former = UserFactory.create()
     old = person(ws_a, "Oud")
     papa = person(ws_a, "Papa")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Person.objects.filter(pk=old.pk).update(user=former)
     token = invite(ws_a, person_id=str(papa.id))
 
@@ -618,7 +618,7 @@ def test_a_person_link_left_from_before_answers_409_and_keeps_nothing(ws_a: Work
     assert (status, body["code"]) == (409, "invitation_person_taken")
     assert unused(token)
     assert not Membership.objects.filter(user=former).exists()
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert Person.objects.get(pk=papa.pk).user_id is None
     assert workspace_rows(ws_a, "invitation_accepted") == []
 
@@ -774,7 +774,7 @@ def test_invitation_token_never_logged(ws_a: Workspace, caplog: pytest.LogCaptur
         assert secret not in listed
         assert all(secret not in str(row.values) for row in ServerAuditEvent.objects.all())
         assert all(secret not in row.target_name for row in ServerAuditEvent.objects.all())
-        with workspace_context(ws_a.id):
+        with workspace_context(ws_a.id, actor=SYSTEM):
             rows = list(WorkspaceAuditEvent.objects.all())
         assert all(secret not in str(row.values) + row.target_name for row in rows)
 

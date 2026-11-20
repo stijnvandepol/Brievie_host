@@ -8,7 +8,7 @@ from django.db import ProgrammingError, connection, transaction
 from psycopg import errors as pg_errors
 
 from apps.documents.models import Folder
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 
 DEPLOY = Path(__file__).resolve().parents[2] / "deploy"
@@ -20,7 +20,7 @@ def test_backup_role_reads_rows_of_two_workspaces(
     ws_a: Workspace, ws_b: Workspace, backup_conninfo: str
 ) -> None:
     for workspace in (ws_a, ws_b):
-        with workspace_context(workspace.id):
+        with workspace_context(workspace.id, actor=SYSTEM):
             Folder.objects.create(workspace=workspace, name="Back-up")
 
     with psycopg.connect(backup_conninfo) as conn:
@@ -38,7 +38,7 @@ def _count_workspaces_without_row_security() -> None:
 
 @pytest.mark.django_db(transaction=True)
 def test_owner_cannot_read_with_row_security_off(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Folder.objects.create(workspace=ws_a, name="Back-up")
 
     with pytest.raises(ProgrammingError) as raised:

@@ -130,6 +130,9 @@ class DocumentOut(DocumentSummaryOut):
     tasks: list[TaskOut]
     # Open proposals only, preselected first, then by confidence.
     suggestions: list[SuggestionOut] = Field(default_factory=list)
+    # False after a change that handed the letter to someone else: the caller no longer
+    # sees it, and this answer holds its id and status only (S 4.13).
+    can_read: bool = True
 
 
 class TaskIn(InputSchema):

@@ -34,7 +34,7 @@ from apps.pipeline.choices import ExtractionRequest
 from apps.pipeline.models import AISettings
 from apps.pipeline.steps import run_pipeline
 from apps.rules.engine import Condition
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.documents_support import admin_of, make_person
 from tests.rules_support import add_addressee, add_label, make_rule, sender_contains, text_word
@@ -119,7 +119,7 @@ def run(workspace: Workspace, document: Document, provider: Reading) -> None:
 
 
 def label_event(workspace: Workspace, document: Document) -> DocumentEvent:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return DocumentEvent.objects.get(document=document, kind="label_added")
 
 
@@ -144,7 +144,7 @@ def test_a_hit_in_the_letterhead_is_applied(ws_a: Workspace) -> None:
         rule.id,
         "Water",
     )
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert DocumentLabel.objects.get(document=document).automatic is True
 
 
@@ -204,7 +204,7 @@ def test_a_rule_without_a_word_condition_is_applied(ws_a: Workspace) -> None:
     label = new_label(ws_a, "Scans")
     make_rule(ws_a, Condition("source", "is", "scan"), actions=[add_label(label)])
     document = new_document(ws_a, LETTER)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert Document.objects.get(id=document.id).source == "scan"
 
     run(ws_a, document, Reading())
@@ -268,7 +268,7 @@ def test_a_dismissed_rule_label_is_never_applied(ws_a: Workspace) -> None:
     label = new_label(ws_a, "Waterschap")
     make_rule(ws_a, text_word("waterschap"), actions=[add_label(label)])
     document = new_document(ws_a, LETTER)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         suggestions.mark_dismissed(document, DocumentSuggestion.Action.ADD_LABEL, label.id)
 
     run(ws_a, document, Reading(labels={"Waterschap": 0.9}))
@@ -287,7 +287,7 @@ def test_when_another_matching_rule_was_said_no_to_no_rule_label_is_applied(
     make_rule(ws_a, text_word("waterschap"), actions=[add_label(water)])
     make_rule(ws_a, text_word("Belastingen"), actions=[add_label(gemeente)])
     document = new_document(ws_a, LETTER)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         suggestions.mark_dismissed(document, DocumentSuggestion.Action.ADD_LABEL, gemeente.id)
 
     # Even with the AI agreeing: the rules disagree on this letter, a person decides.
@@ -354,7 +354,7 @@ def test_a_rule_set_to_apply_applies_by_itself_and_is_not_marked_automatic(
     run(ws_a, document, Reading())
 
     assert on_document(ws_a, document) == ({"Waterschap"}, set())
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert DocumentLabel.objects.get(document=document).automatic is False
 
 
@@ -367,7 +367,7 @@ def test_the_applied_rule_label_can_be_undone_and_does_not_come_back(ws_a: Works
     run(ws_a, document, Reading())
     event = label_event(ws_a, document)
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=admin_of(ws_a).id):
         listed = {
             e.id: e
             for e in list_document_events(
@@ -395,7 +395,7 @@ def test_a_letter_with_an_applied_rule_label_counts_as_automatic(ws_a: Workspace
     new_document(ws_a, "Een andere brief")
     run(ws_a, document, Reading())
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=admin_of(ws_a).id):
         membership = Membership.objects.get(workspace=ws_a, role="admin")
         assert inbox_counts(membership)["automatic"] == 1
         assert [d.id for d in list_documents(membership, automatic=True)] == [document.id]
@@ -409,7 +409,7 @@ def test_apply_open_proposals_applies_the_rule_label_once(ws_a: Workspace) -> No
     document = new_document(ws_a, LETTER)
     run(ws_a, document, Reading())
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         locked = Document.objects.select_for_update().get(id=document.id)
         assert autopilot.apply_open_proposals(locked) == 0
         assert autopilot.RULE_LABELS_MAX == 3
@@ -419,7 +419,7 @@ def test_apply_open_proposals_applies_the_rule_label_once(ws_a: Workspace) -> No
 def test_the_ai_mark_survives_a_rule_taking_the_proposal_over(ws_a: Workspace) -> None:
     label = new_label(ws_a, "Waterschap")
     document = new_document(ws_a, LETTER)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         locked = Document.objects.select_for_update().get(id=document.id)
         suggestions.propose(
             locked,
@@ -539,7 +539,7 @@ def test_a_rule_on_the_absence_of_a_word_stays_a_proposal(ws_a: Workspace) -> No
 
 
 def _agreed_to_version(workspace: Workspace, version: int) -> None:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         AISettings.objects.filter(workspace=workspace).update(autopilot_notice_version=version)
 
 
@@ -565,7 +565,7 @@ def test_an_old_notice_is_reported_and_agreeing_again_stores_the_new_version(
 ) -> None:
     switch_on(ws_a)
     _agreed_to_version(ws_a, 1)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert settings_service.autopilot(ws_a.id).notice_outdated is True
         assert _autopilot_out(ws_a.id).notice_outdated is True
         # Saving the same switches without agreeing changes nothing.
@@ -591,7 +591,7 @@ def test_an_old_notice_is_reported_and_agreeing_again_stores_the_new_version(
 def test_switches_off_are_never_outdated(ws_a: Workspace) -> None:
     switch_on(ws_a, organise_on=False)
     _agreed_to_version(ws_a, 1)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert settings_service.autopilot(ws_a.id).notice_outdated is False
 
 
@@ -608,7 +608,7 @@ def test_a_rule_label_is_listed_as_done_by_a_rule(ws_a: Workspace) -> None:
 
     run(ws_a, document, Reading(labels={"Gezondheid": 0.9}))
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         stored = Document.objects.get(id=document.id)
         summary = document_summary_out(stored)
     assert set(summary.auto_label_ids) == {label.id, ai_label.id}
@@ -625,7 +625,7 @@ def test_a_persons_confirm_takes_a_rule_label_over_and_ends_its_undo(ws_a: Works
     event = label_event(ws_a, document)
     admin = admin_of(ws_a)
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         review.confirm_document(
             workspace=ws_a,
             user=admin,
@@ -643,6 +643,8 @@ def test_a_persons_confirm_takes_a_rule_label_over_and_ends_its_undo(ws_a: Works
             ),
         )
         assert DocumentLabel.objects.get(document=document).automatic is False
+    # The history is a member-facing read: as the member (the visibility seam).
+    with workspace_context(ws_a.id, actor=admin.id):
         listed = {
             e.id: e
             for e in list_document_events(

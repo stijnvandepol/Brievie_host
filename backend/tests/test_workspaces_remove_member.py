@@ -36,7 +36,7 @@ from apps.people.models import Person
 from apps.pipeline.jobs import defer_processing
 from apps.tasks.models import Task
 from apps.workspaces import members
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Invitation, Membership, Workspace
 from tests.documents_support import jpeg, upload
 from tests.factories import TEST_PASSWORD, UserFactory
@@ -84,7 +84,7 @@ def leave(client: Client, ws: Workspace) -> "tuple[int, dict[str, object]]":
 
 
 def person_of(ws: Workspace, user: User, name: str = "Papa") -> Person:
-    with workspace_context(ws.id):
+    with workspace_context(ws.id, actor=SYSTEM):
         person = Person.objects.filter(workspace=ws, user=user).first()
         if person is None:
             person = Person.objects.create(workspace=ws, display_name=name, user=user)
@@ -92,19 +92,19 @@ def person_of(ws: Workspace, user: User, name: str = "Papa") -> Person:
 
 
 def linked_user(ws: Workspace, person: Person) -> uuid.UUID | None:
-    with workspace_context(ws.id):
+    with workspace_context(ws.id, actor=SYSTEM):
         return Person.objects.get(id=person.id).user_id
 
 
 def task_for(ws: Workspace, user: User) -> Task:
-    with workspace_context(ws.id):
+    with workspace_context(ws.id, actor=SYSTEM):
         return Task.objects.create(
             workspace=ws, type=Task.Type.PAY, description="Betalen", assigned_to=user
         )
 
 
 def assignee(ws: Workspace, task: Task) -> uuid.UUID | None:
-    with workspace_context(ws.id):
+    with workspace_context(ws.id, actor=SYSTEM):
         return Task.objects.get(id=task.id).assigned_to_id
 
 
@@ -155,7 +155,7 @@ def test_removal_unlinks_the_person_and_keeps_it(ws_a: Workspace, ws_b: Workspac
 
     assert role_of(ws_a, member) is None
     assert linked_user(ws_a, person) is None
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert Person.objects.filter(id=person.id).exists()
     rows = workspace_rows(ws_a, AuditCode.PERSON_UNLINKED)
     assert [(r.target_kind, r.target_id, r.target_name) for r in rows] == [
@@ -237,7 +237,7 @@ def test_removed_member_cannot_upload_or_confirm(client: Client, ws_a: Workspace
     assert r.status_code == 401
     r = post_json(member_client, f"/workspaces/{ws_a.id}/documents/{uuid.uuid4()}/confirm", {})
     assert r.status_code == 401
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert not Document.objects.exists()
 
 
@@ -578,7 +578,7 @@ def test_an_upload_running_during_the_removal_commits_whole(
 
     assert removal_finished_first  # no lock was added for the race
     assert results == {"upload": 201, "removal": 204}
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         document = Document.objects.get()
         paths = list(document.pages.order_by("index").values_list("storage_path", flat=True))
     assert document.scanned_by_id == member.id

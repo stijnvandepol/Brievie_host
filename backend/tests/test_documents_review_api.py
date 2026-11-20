@@ -15,7 +15,7 @@ from apps.rules.engine import Evaluation
 from apps.rules.executor import execute
 from apps.rules.models import RuleRun
 from apps.tasks.models import Task
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.documents_support import admin_of, documents_url, jpeg, make_person, upload
 from tests.factories import UserFactory
@@ -39,7 +39,7 @@ def client_a(client: Client, ws_a: Workspace) -> Client:
 
 def reviewable(client: Client, workspace: Workspace, status: str = "needs_review") -> str:
     document_id = str(upload(client, workspace.id, [jpeg()], texts=[TEXT]).json()["id"])
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         Document.objects.filter(id=document_id).update(status=status)
     return document_id
 
@@ -76,7 +76,7 @@ def confirm(
 
 
 def task_count(workspace: Workspace) -> int:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Task.objects.count()
 
 
@@ -99,7 +99,7 @@ def test_confirm_stores_the_review_and_creates_the_task(client_a: Client, ws_a: 
     assert created["deadline_source"] == "in_document"
     assert created["deadline_quote"] == "vóór 1 december 2026"
     assert created["status"] == "open"
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         document = Document.objects.get()
         assert document.confirmed_by == admin_of(ws_a)
         assert document.confirmed_at is not None
@@ -300,7 +300,7 @@ def test_invalid_task_is_refused(client_a: Client, ws_a: Workspace, bad: dict[st
     assert r.status_code == 422
     assert set(r.json()) == {"code", "message"}
     assert task_count(ws_a) == 0
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert Document.objects.get().status == "needs_review"
 
 
@@ -374,7 +374,7 @@ def organised_document(client: Client, workspace: Workspace) -> tuple[str, Label
     """A reviewable document with the label "Zorg" on it and open suggestions for
     "Bank" and "Auto"."""
     document_id = reviewable(client, workspace)
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         zorg, bank, auto = (
             Label.objects.get(workspace=workspace, system_key=key)
             for key in ("zorg", "bank", "auto")
@@ -393,7 +393,7 @@ def organised_document(client: Client, workspace: Workspace) -> tuple[str, Label
 
 
 def suggestion_states(workspace: Workspace, document_id: str) -> dict[uuid.UUID | None, str]:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return {
             s.label_id or s.person_id: s.state
             for s in DocumentSuggestion.objects.filter(document_id=document_id)
@@ -401,7 +401,7 @@ def suggestion_states(workspace: Workspace, document_id: str) -> dict[uuid.UUID 
 
 
 def label_events(workspace: Workspace, document_id: str) -> list[tuple[str, str, str]]:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return [
             (e.kind, e.origin, e.label_name)
             for e in DocumentEvent.objects.filter(
@@ -434,7 +434,7 @@ def test_confirm_with_flag_sets_exact_lists_and_closes_suggestions(
         ("label_removed", "user", "Zorg"),
         ("label_added", "suggestion", "Bank"),
     ]
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         stored = Document.objects.get(id=document_id).confirmed_organisation
     assert stored == {"label_ids": [str(bank.id)], "addressee_ids": [str(anna.id)]}
 
@@ -450,7 +450,7 @@ def test_confirm_with_flag_and_unknown_label_changes_nothing(
     assert r.status_code == 404
     assert r.json()["code"] == "label_not_found"
     assert task_count(ws_a) == 0
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert Document.objects.get(id=document_id).status == "needs_review"
     assert suggestion_states(ws_a, document_id)[bank.id] == "open"
 
@@ -467,7 +467,7 @@ def test_confirm_without_flag_leaves_labels_and_suggestions(
     assert r.json()["label_ids"] == [str(zorg.id)]
     assert r.json()["open_suggestion_count"] == 2
     assert suggestion_states(ws_a, document_id) == {bank.id: "open", auto.id: "open"}
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert Document.objects.get(id=document_id).confirmed_organisation is None
     # Repeating it is still the same confirm.
     assert confirm(client_a, ws_a.id, document_id, review()).status_code == 200
@@ -479,7 +479,7 @@ def test_repeated_confirm_with_same_lists_is_200(client_a: Client, ws_a: Workspa
     confirm(client_a, ws_a.id, document_id, first)
     # A rule run after the confirm may add a label; the repeat is compared with the
     # snapshot, not with the current labels.
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         organise.add_label(Document.objects.get(id=document_id), auto, actor=None, origin="rule")
 
     again = review(sets_organisation=True, label_ids=[str(zorg.id), str(bank.id), str(bank.id)])
@@ -530,7 +530,7 @@ def test_a_failure_in_the_rules_keeps_the_confirm(
     assert r.status_code == 200
     assert r.json()["status"] == "done"
     assert r.json()["label_ids"] == [str(bank.id)]
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         document = Document.objects.get(id=document_id)
         assert document.status == "done"
         assert Task.objects.filter(document=document).count() == 1
@@ -540,7 +540,7 @@ def test_a_failure_in_the_rules_keeps_the_confirm(
 
 
 def _labels_on(workspace: Workspace, document_id: str) -> set[uuid.UUID]:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return set(
             DocumentLabel.objects.filter(document_id=document_id).values_list("label_id", flat=True)
         )
@@ -550,7 +550,7 @@ def test_a_rule_failing_after_it_wrote_leaves_none_of_its_writes(
     client_a: Client, ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     document_id, _, bank, _ = organised_document(client_a, ws_a)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         wonen = Label.objects.get(workspace=ws_a, system_key="wonen")
     make_rule(ws_a, text_word("Belastingdienst"), actions=[add_label(wonen)], mode="auto")
     written: list[bool] = []
@@ -569,7 +569,7 @@ def test_a_rule_failing_after_it_wrote_leaves_none_of_its_writes(
     assert r.status_code == 200
     assert r.json()["label_ids"] == [str(bank.id)]
     assert _labels_on(ws_a, document_id) == {bank.id}
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert Document.objects.get(id=document_id).status == "done"
         assert Task.objects.filter(document_id=document_id).count() == 1
         assert not RuleRun.objects.filter(document_id=document_id).exists()
@@ -599,6 +599,6 @@ def test_a_deadlock_in_the_rules_fails_the_whole_confirm_with_try_again(
     assert r.status_code == 409
     assert r.json()["code"] == "try_again"
     assert _labels_on(ws_a, document_id) == {zorg.id}
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert Document.objects.get(id=document_id).status == "needs_review"
         assert not Task.objects.filter(document_id=document_id).exists()

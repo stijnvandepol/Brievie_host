@@ -2,7 +2,7 @@ import unicodedata
 from collections.abc import Collection
 from uuid import UUID
 
-from django.db import IntegrityError, models, transaction
+from django.db import IntegrityError, connection, models, transaction
 from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -19,6 +19,7 @@ from apps.documents.models import DocumentSuggestion
 from apps.people.models import Person
 from apps.rules.definition import named_ids
 from apps.rules.models import Rule
+from apps.workspaces.context import system_actor
 from apps.workspaces.models import Membership, Workspace
 
 _NAME_UNIQUE = "people_person_name_unique"
@@ -38,14 +39,22 @@ def _persons(workspace: Workspace) -> "models.QuerySet[Person]":
 
 
 def _in_use(person: Person) -> bool:
-    """Whether deleting would lose information; archiving is the alternative."""
+    """Whether deleting would lose information; archiving is the alternative.
+
+    Counts letters the caller cannot see too: the caller runs it as the system.
+    """
     return person.user_id is not None or person.document_links.exists()
 
 
 def list_persons(workspace: Workspace) -> list[Person]:
-    """Active persons by name, then archived ones; needs the workspace's RLS context."""
-    return list(
-        _persons(workspace).order_by(
+    """Active persons by name, then archived ones; needs the workspace's RLS context.
+
+    `document_count` from one grouped count over the letters the policy shows, not a
+    link-by-link join (measured, DECISIONS 2026-11-20). The same number: a link is
+    visible exactly when its letter is, and `addressee_ids` mirrors the links.
+    """
+    persons = list(
+        Person.objects.filter(workspace=workspace).order_by(
             models.ExpressionWrapper(
                 models.Q(archived_at__isnull=False), output_field=models.BooleanField()
             ).asc(),
@@ -53,10 +62,25 @@ def list_persons(workspace: Workspace) -> list[Person]:
             "id",
         )
     )
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT a.id, pg_catalog.count(*) FROM public.documents_document d,"
+            " LATERAL pg_catalog.unnest(d.addressee_ids) AS a(id)"
+            " WHERE d.workspace_id = %s GROUP BY a.id",
+            [workspace.id],
+        )
+        counts: dict[UUID, int] = {row[0]: int(row[1]) for row in cursor.fetchall()}
+    for person in persons:
+        person.document_count = counts.get(person.id, 0)  # type: ignore[attr-defined]
+    return persons
 
 
 def _get_for_update(workspace: Workspace, person_id: UUID) -> Person:
-    person = Person.objects.select_for_update().filter(workspace=workspace, id=person_id).first()
+    person = (
+        Person.objects.select_for_update(no_key=True)
+        .filter(workspace=workspace, id=person_id)
+        .first()
+    )
     if person is None:
         raise ApiError(404, "person_not_found", _("We kunnen deze persoon niet vinden."))
     return person
@@ -244,9 +268,11 @@ def update_person(
             person.archived_at = timezone.now()
             # An archived person cannot be added to a document, so their open proposals
             # could be neither accepted nor confirmed. Accepted and dismissed rows stay.
-            DocumentSuggestion.objects.filter(
-                person=person, state=DocumentSuggestion.State.OPEN
-            ).delete()
+            # As the system: proposals on letters the caller cannot see go too.
+            with system_actor():
+                DocumentSuggestion.objects.filter(
+                    person=person, state=DocumentSuggestion.State.OPEN
+                ).delete()
         _refuse_taken_names(person)
         _save(person)
         return _annotated(workspace, person.id)
@@ -257,7 +283,12 @@ def delete_person(*, workspace: Workspace, person_id: UUID, actor: AuditActor) -
         # Rules first, in id order: a running rule holds its rules and then needs the person.
         rules = list(Rule.objects.select_for_update().filter(workspace=workspace).order_by("id"))
         person = _get_for_update(workspace, person_id)
-        if _in_use(person):
+        # The caller is authorised above; the use and the delete reach letters the caller
+        # cannot see (a hidden link would otherwise fail the commit). The message never
+        # says what the use is.
+        with system_actor():
+            in_use = _in_use(person)
+        if in_use:
             raise ApiError(
                 409,
                 "person_in_use",
@@ -271,7 +302,8 @@ def delete_person(*, workspace: Workspace, person_id: UUID, actor: AuditActor) -
                     _("De regel '%(rule)s' gebruikt deze persoon. Pas die regel eerst aan.")
                     % {"rule": rule.name},
                 )
-        person.delete()
+        with system_actor():
+            person.delete()
         record(
             AuditCode.PERSON_DELETED,
             actor=actor,

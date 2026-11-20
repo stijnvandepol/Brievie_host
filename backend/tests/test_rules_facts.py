@@ -3,13 +3,13 @@ from decimal import Decimal
 from django.utils import timezone
 from pytest_django import DjangoAssertNumQueries
 
-from apps.documents import organise, suggestions
+from apps.documents import organise, suggestions, visibility
 from apps.documents.models import Document, Extraction
 from apps.labels.models import Label
 from apps.rules import services
 from apps.rules.facts import facts_for, facts_for_many
 from apps.rules.schemas import RuleIn
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 from tests.documents_support import make_person
 from tests.rules_support import make_document
@@ -34,7 +34,7 @@ def _documents(workspace: Workspace) -> list[Document]:
     proposed = make_document(workspace, "Een brief van de bank.")
     confirmed = make_document(workspace, "Een bevestigde brief.", status="done")
     organised = make_document(workspace, "Uw APK verloopt.")
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         zorg, bank, auto = (
             Label.objects.get(workspace=workspace, system_key=key)
             for key in ("zorg", "bank", "auto")
@@ -51,7 +51,8 @@ def _documents(workspace: Workspace) -> list[Document]:
         _extraction(organised, "document_type", "notice", "0.7")
         locked = Document.objects.select_for_update().get(id=organised.id)
         organise.add_label(locked, zorg, actor=None, origin="user")
-        organise.add_addressee(locked, anna, actor=None, origin="user")
+        with visibility.addressee_scope(locked):
+            organise.add_addressee(locked, anna, actor=None, origin="user")
         for action, label, person in (
             ("add_label", bank, None),
             ("add_label", auto, None),
@@ -74,7 +75,7 @@ def _documents(workspace: Workspace) -> list[Document]:
 def test_bulk_facts_equal_the_single_document_facts(ws_a: Workspace) -> None:
     documents = _documents(ws_a)
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         single = {document.id: facts_for(document) for document in documents}
         bulk = facts_for_many(documents)
 
@@ -91,7 +92,7 @@ def test_testing_a_rule_over_50_documents_takes_a_fixed_number_of_queries(
 ) -> None:
     for _ in range(50):
         make_document(ws_a, "Uw APK verloopt.")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         auto = Label.objects.get(workspace=ws_a, system_key="auto")
     data = RuleIn.model_validate(
         {
@@ -103,7 +104,7 @@ def test_testing_a_rule_over_50_documents_takes_a_fixed_number_of_queries(
 
     # Validation 2, documents 2, facts 4, the shown documents' links 3, and their headline
     # proposals (proposed sender, type, date) 1: without that prefetch each row reads its own.
-    with workspace_context(ws_a.id), django_assert_max_num_queries(12):
+    with workspace_context(ws_a.id, actor=SYSTEM), django_assert_max_num_queries(12):
         out = services.test_rule(workspace=ws_a, data=data)
 
     assert (out.checked_count, out.matched_count) == (50, 50)

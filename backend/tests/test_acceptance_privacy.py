@@ -14,7 +14,7 @@ from apps.pipeline.choices import ExtractionRequest, choices_block
 from apps.pipeline.providers import OpenAICompatibleProvider
 from apps.pipeline.schema import json_schema
 from apps.pipeline.steps import run_pipeline
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 from tests.documents_support import admin_of, jpeg, upload
 
@@ -71,7 +71,7 @@ def test_ai_off_never_calls_a_provider(
 
     jobs.run_job(ws_a.id, document_id, attempts=0)
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert Document.objects.get().status == "needs_review"
 
 
@@ -96,7 +96,7 @@ def test_bsn_nowhere_in_storage(
         run_pipeline(ws_a.id, document_id, provider_factory=lambda _: QuotingProvider())
         body = client.get(f"/api/v1/workspaces/{ws_a.id}/documents/{document_id}").content
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         stored = [Document.objects.get().ocr_text]
         stored += [page.ocr_text for page in DocumentPage.objects.all()]
         proposals = list(Extraction.objects.all())
@@ -117,7 +117,7 @@ NAMED_LETTER = "T.a.v. J. de Vries\nBelastingdienst\nU moet betalen vóór 1 dec
 
 
 def add_person(workspace: Workspace) -> Person:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Person.objects.create(
             workspace=workspace, display_name="Jan de Vries", name_variants=["J. de Vries"]
         )
@@ -167,7 +167,7 @@ def test_request_carries_names_but_no_ids(client: Client, ws_a: Workspace) -> No
 
     [request] = provider.requests
     sent = choices_block(request) + json.dumps(json_schema(request))
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         ids = [str(i) for i in Label.objects.values_list("id", flat=True)]
         ids += [str(i) for i in Person.objects.values_list("id", flat=True)]
         label_names = list(Label.objects.values_list("name", flat=True))
@@ -205,7 +205,7 @@ def test_ai_off_sends_nothing(
 
     jobs.run_job(ws_a.id, document_id, attempts=0)
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         rows = {
             (row.person_id or row.label_id, row.origin) for row in DocumentSuggestion.objects.all()
         }
@@ -220,7 +220,7 @@ def test_no_person_or_label_name_in_logs(
     add_person(ws_a)
     client.force_login(admin_of(ws_a))
     document_id = upload(client, ws_a.id, [jpeg()], texts=[NAMED_LETTER]).json()["id"]
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         label_names = list(Label.objects.values_list("name", flat=True))
 
     with caplog.at_level("DEBUG"):

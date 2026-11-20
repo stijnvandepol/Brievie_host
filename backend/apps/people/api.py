@@ -76,9 +76,13 @@ def update_person(
     _PERSON,
     response={204: None, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS},
     operation_id="deletePerson",
+    description=(
+        "Admins only (403 `forbidden` for others): `person_in_use` also counts letters the "
+        "caller cannot see, so only an admin learns that a person is in use."
+    ),
 )
 def delete_person(request: HttpRequest, workspace_id: UUID, person_id: UUID) -> Status[None]:
-    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
     services.delete_person(
         workspace=membership.workspace, person_id=person_id, actor=actor_from_request(request)
     )

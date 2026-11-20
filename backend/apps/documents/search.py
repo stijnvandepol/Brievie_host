@@ -40,7 +40,6 @@ from apps.documents.services import (
     HEADLINE_PROPOSALS,
     INBOX_STATES,
     SUGGESTIONS,
-    _has_addressee,
     _in_state,
     document_summary_out,
 )
@@ -211,7 +210,6 @@ def _filtered(membership: Membership, filters: SearchFilters) -> "models.QuerySe
         visibility.visible_documents(membership)
         .defer("ocr_text")
         .annotate(
-            has_addressee=_has_addressee(),
             # Enough of the text for a fragment when the hit is not in the text.
             text_head=Left("ocr_text", SUMMARY_HEAD),
         )
