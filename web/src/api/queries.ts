@@ -93,6 +93,19 @@ export const documentQuery = (workspaceId: string, documentId: string) =>
     },
   });
 
+/** The letters in the trash the caller sees, the most recently trashed first. */
+export const trashQuery = (workspaceId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "trash"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/trash", {
+        params: { path: { workspace_id: workspaceId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
 export const personsQuery = (workspaceId: string) =>
   queryOptions({
     queryKey: ["workspaces", workspaceId, "persons"],

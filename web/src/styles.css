@@ -2955,6 +2955,8 @@ a.menu-item:hover {
 
 .panel-actions {
   display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-s);
   padding: var(--s-s) var(--s-l) var(--s-m);
 }
 

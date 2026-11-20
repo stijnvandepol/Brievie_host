@@ -24,7 +24,7 @@ export const SERVER_CODES = [
   "sso_settings_changed",
 ] as const;
 
-/** What a workspace log holds: members, settings, rules, labels, people and exports. */
+/** What a workspace log holds: members, settings, rules, labels, people, exports and the trash. */
 export const WORKSPACE_CODES = [
   "invitation_created",
   "invitation_revoked",
@@ -49,6 +49,9 @@ export const WORKSPACE_CODES = [
   "emergency_access_used",
   "export_created",
   "export_downloaded",
+  "document_trashed",
+  "document_restored",
+  "document_purged",
 ] as const;
 
 export const AUDIT_CODES = [...SERVER_CODES, ...WORKSPACE_CODES] as const;
@@ -137,6 +140,12 @@ function knownLabel(code: AuditCodeName): string {
       return t`Export gemaakt`;
     case "export_downloaded":
       return t`Export gedownload`;
+    case "document_trashed":
+      return t`Brief naar de prullenbak`;
+    case "document_restored":
+      return t`Brief teruggezet`;
+    case "document_purged":
+      return t`Brief definitief verwijderd`;
   }
 }
 
