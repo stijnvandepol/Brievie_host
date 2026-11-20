@@ -20,6 +20,8 @@ from apps.workspaces.models import Workspace
 from tests.documents_support import make_person
 from tests.rules_support import add_label, make_rule, text_word
 
+ROW_LOCKS = ("FOR UPDATE", "FOR NO KEY UPDATE")
+
 
 def locks(workspace: Workspace, call: Callable[[], object]) -> list[str]:
     """The SQL of every locking query `call` runs."""
@@ -28,7 +30,9 @@ def locks(workspace: Workspace, call: Callable[[], object]) -> list[str]:
         CaptureQueriesContext(connection) as queries,
     ):
         call()
-    return [q["sql"] for q in queries if "FOR UPDATE" in q["sql"]]
+    return [
+        q["sql"] for q in queries if "FOR UPDATE" in q["sql"] or "FOR NO KEY UPDATE" in q["sql"]
+    ]
 
 
 def rule_lock_index(sql: list[str]) -> int:

@@ -71,7 +71,7 @@ def _invitable_person(workspace: Workspace, person_id: UUID) -> Person:
     """The person, locked; needs the workspace's context. Another workspace's person and
     an archived one answer as an unknown one."""
     person = (
-        Person.objects.select_for_update()
+        Person.objects.select_for_update(no_key=True)
         .filter(workspace=workspace, id=person_id, archived_at__isnull=True)
         .first()
     )
@@ -511,7 +511,7 @@ def _link_person(invitation: Invitation, user: User) -> Person:
     if invitation.person_id is None:
         return ensure_person_for_member(workspace=invitation.workspace, user=user)
     person = (
-        Person.objects.select_for_update()
+        Person.objects.select_for_update(no_key=True)
         .filter(
             workspace_id=invitation.workspace_id,
             id=invitation.person_id,

@@ -19,6 +19,7 @@ from apps.documents.schemas import ConfirmIn, TaskIn
 from apps.pipeline.validation import dates_in, quote_in_text
 from apps.rules import triggers
 from apps.tasks.models import Task
+from apps.workspaces.locks import lock_own_membership
 from apps.workspaces.models import Workspace
 
 logger = logging.getLogger(__name__)
@@ -53,8 +54,11 @@ def confirm_document(
     context.
     """
     with transaction.atomic():
+        lock_own_membership(workspace.id, user.id)
         document = (
-            Document.objects.select_for_update().filter(workspace=workspace, id=document_id).first()
+            Document.objects.select_for_update(no_key=True)
+            .filter(workspace=workspace, id=document_id)
+            .first()
         )
         if document is None:
             raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))

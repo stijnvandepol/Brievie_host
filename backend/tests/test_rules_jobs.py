@@ -222,7 +222,7 @@ def test_job_waits_for_a_locked_document_instead_of_skipping_it(ws_a: Workspace)
     with CaptureQueriesContext(connection) as queries:
         run(ws_a, rule)
 
-    locking = [q["sql"] for q in queries if "FOR UPDATE" in q["sql"]]
+    locking = [q["sql"] for q in queries if "FOR NO KEY UPDATE" in q["sql"]]
     assert locking
     assert not any("SKIP LOCKED" in sql for sql in locking)
 

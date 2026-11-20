@@ -349,7 +349,7 @@ def _confirm_guarded(
 def _lock_processing(document_id: UUID) -> Document | None:
     """The document, locked, when it exists in this workspace and is still processing."""
     return (
-        Document.objects.select_for_update()
+        Document.objects.select_for_update(no_key=True)
         .filter(id=document_id, status=Document.Status.PROCESSING)
         .first()
     )

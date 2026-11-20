@@ -56,7 +56,11 @@ def list_persons(workspace: Workspace) -> list[Person]:
 
 
 def _get_for_update(workspace: Workspace, person_id: UUID) -> Person:
-    person = Person.objects.select_for_update().filter(workspace=workspace, id=person_id).first()
+    person = (
+        Person.objects.select_for_update(no_key=True)
+        .filter(workspace=workspace, id=person_id)
+        .first()
+    )
     if person is None:
         raise ApiError(404, "person_not_found", _("We kunnen deze persoon niet vinden."))
     return person

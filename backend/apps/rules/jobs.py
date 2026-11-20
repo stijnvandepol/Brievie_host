@@ -100,7 +100,7 @@ def apply_rule_batch(
         locked = (
             Document.objects.filter(id__in=ids)
             .exclude(status=Document.Status.PROCESSING)
-            .select_for_update()
+            .select_for_update(no_key=True)
             .order_by("id")
         )
         for document in locked:

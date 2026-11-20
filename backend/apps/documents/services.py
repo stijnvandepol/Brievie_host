@@ -32,7 +32,9 @@ from apps.documents.schemas import (
 from apps.documents.storage import default_storage
 from apps.pipeline.jobs import defer_processing
 from apps.tasks.models import Task
+from apps.workspaces.context import current_actor
 from apps.workspaces.keys import workspace_key
+from apps.workspaces.locks import lock_own_membership
 from apps.workspaces.models import Workspace
 
 _PATH_UNIQUE = "documents_folder_workspace_path_unique"
@@ -370,8 +372,11 @@ def read_page(*, workspace: Workspace, document_id: UUID, index: int) -> tuple[b
 def retry_processing(*, workspace: Workspace, document_id: UUID) -> Document:
     """Queue a failed document for processing again."""
     with transaction.atomic():
+        _lock_own_membership(workspace)
         document = (
-            Document.objects.select_for_update().filter(workspace=workspace, id=document_id).first()
+            Document.objects.select_for_update(no_key=True)
+            .filter(workspace=workspace, id=document_id)
+            .first()
         )
         if document is None:
             raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
@@ -398,8 +403,11 @@ def reopen_document(*, workspace: Workspace, user: User, document_id: UUID) -> D
     Labels, addressees, proposals and suggestions stay, so the normal review follows.
     """
     with transaction.atomic():
+        lock_own_membership(workspace.id, user.id)
         document = (
-            Document.objects.select_for_update().filter(workspace=workspace, id=document_id).first()
+            Document.objects.select_for_update(no_key=True)
+            .filter(workspace=workspace, id=document_id)
+            .first()
         )
         if document is None:
             raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
@@ -493,10 +501,21 @@ def _suggestion(document: Document, suggestion_id: UUID) -> DocumentSuggestion:
     return suggestion
 
 
+def _lock_own_membership(workspace: Workspace) -> None:
+    """The request's membership first (`apps.workspaces.locks`); the system has none."""
+    actor = current_actor()
+    if isinstance(actor, UUID):
+        lock_own_membership(workspace.id, actor)
+
+
 def _lock_for_organising(workspace: Workspace, document_id: UUID) -> Document:
-    """The document, locked; refused while it is still being processed."""
+    """The document, locked after the caller's membership (the lock order); refused while
+    it is still being processed."""
+    _lock_own_membership(workspace)
     document = (
-        Document.objects.select_for_update().filter(workspace=workspace, id=document_id).first()
+        Document.objects.select_for_update(no_key=True)
+        .filter(workspace=workspace, id=document_id)
+        .first()
     )
     if document is None:
         raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
