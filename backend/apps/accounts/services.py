@@ -22,7 +22,13 @@ from django.http import HttpRequest
 from django.utils.translation import gettext as _
 
 from apps.accounts.models import SetupToken, User, UserSession, normalise_email
-from apps.accounts.sessions import end_current_session, end_sessions, rekey_session, start_session
+from apps.accounts.sessions import (
+    end_current_session,
+    end_sessions,
+    mark_reauthenticated,
+    rekey_session,
+    start_session,
+)
 from apps.audit.codes import ActorKind, AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, actor_from_request, record
 from apps.common.errors import ApiError
@@ -343,6 +349,22 @@ def end_my_session(request: HttpRequest, *, session_id: UUID) -> None:
             return
         Session.objects.filter(session_key=row.session_key).delete()
         row.delete()
+
+
+def reauthenticate(request: HttpRequest, *, password: str) -> None:
+    """Check the caller's password again and note it on this web session, for what needs
+    a recent proof of who is at the browser (`sessions.recently_authenticated`).
+
+    Checked through `authenticate` like `change_password`, so wrong passwords count for
+    the same lockouts as signing in.
+    """
+    user = current_user(request)
+    _refuse_when_locked(request, user.email)
+    with _checking_password_for("reauthenticate"):
+        checked = authenticate(request, username=user.email, password=password)
+    if not isinstance(checked, User) or checked.pk != user.pk:
+        raise ApiError(400, "wrong_password", _("Je wachtwoord klopt niet."))
+    mark_reauthenticated(request)
 
 
 def change_password(request: HttpRequest, *, current_password: str, new_password: str) -> None:

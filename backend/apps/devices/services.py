@@ -20,6 +20,7 @@ from apps.accounts.authority import account_authority
 from apps.accounts.models import AccountNotice, User, UserSession
 from apps.accounts.notices import notify
 from apps.accounts.services import current_user
+from apps.accounts.sessions import recently_authenticated
 from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, actor_from_request, record
 from apps.common.crypto import DecryptionError
@@ -104,8 +105,19 @@ class IssuedPairingCode:
 
 def issue_pairing_code(request: HttpRequest) -> IssuedPairingCode:
     """A new pairing code for the signed-in caller, with the QR payload that carries it
-    and the link (without the code) that opens the app."""
+    and the link (without the code) that opens the app.
+
+    Only a session that signed in or typed the password again within the last minutes
+    (`recently_authenticated`): a browser left open must not become a phone that keeps
+    access after the owner changes the password.
+    """
     user = current_user(request)
+    if not recently_authenticated(request):
+        raise ApiError(
+            403,
+            "reauthentication_required",
+            _("Vul eerst je wachtwoord opnieuw in."),
+        )
     method = (
         UserSession.objects.filter(session_key=request.session.session_key)
         .values_list("method", flat=True)
@@ -208,6 +220,13 @@ def _create_device(
         actor=AuditActor.for_user(pairing_code.user, client_ip=client_ip),
         target=AuditTarget(kind=TargetKind.DEVICE, id=device.id, name=device.name),
         values={"via": via},
+    )
+    # The owner learns of every new device, also one paired from a browser they left open.
+    notify(
+        pairing_code.user,
+        AccountNotice.Code.DEVICE_PAIRED,
+        actor_name=pairing_code.user.name,
+        values={"device": device.name},
     )
     return device, token
 

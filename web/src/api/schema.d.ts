@@ -61,6 +61,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/reauthenticate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reauthenticate
+         * @description Web session only: a bearer token answers 401 not_authenticated. Type the password again before an action that needs a recent sign-in (creating a pairing code answers 403 reauthentication_required otherwise). 400 wrong_password; wrong passwords count for the same lockout as signing in (429).
+         */
+        post: operations["reauthenticate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/devices": {
         parameters: {
             query?: never;
@@ -146,7 +166,7 @@ export interface paths {
         put?: never;
         /**
          * Create Pairing Code
-         * @description Web session only. A bearer token (even a valid one) is not accepted here and answers 401 not_authenticated; a session without a valid CSRF token answers 403. The response carries the code once and is not stored (Cache-Control: no-store). server_link opens the app without the code: it pairs with a proof.
+         * @description Web session only. A bearer token (even a valid one) is not accepted here and answers 401 not_authenticated; a session without a valid CSRF token answers 403. A session that signed in more than 15 minutes ago answers 403 reauthentication_required: call reauthenticate first. The response carries the code once and is not stored (Cache-Control: no-store). server_link opens the app without the code: it pairs with a proof.
          */
         post: operations["createPairingCode"];
         delete?: never;
@@ -2517,6 +2537,11 @@ export interface components {
             /** Value */
             value: string;
         };
+        /** ReauthenticateIn */
+        ReauthenticateIn: {
+            /** Password */
+            password: string;
+        };
         /** RuleActionSchema */
         RuleActionSchema: {
             /**
@@ -3076,6 +3101,91 @@ export interface operations {
             };
             /** @description Bad Request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    reauthenticate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReauthenticateIn"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

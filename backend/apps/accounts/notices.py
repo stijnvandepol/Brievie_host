@@ -1,4 +1,5 @@
-"""Account notices: what somebody else did to your account, shown until you dismiss it."""
+"""Account notices: what somebody else did to your account, or a device paired with it,
+shown until you dismiss it."""
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -34,6 +35,10 @@ MESSAGES: dict[str, Promise] = {
     Code.SESSIONS_ENDED: _("%(name)s heeft op %(date)s je sessies beëindigd."),
     Code.DEVICE_REVOKED: _(
         "%(name)s heeft op %(date)s je apparaat \u2018%(device)s\u2019 ingetrokken."
+    ),
+    Code.DEVICE_PAIRED: _(
+        "Op %(date)s is het apparaat \u2018%(device)s\u2019 aan je account gekoppeld. Was jij "
+        "dat niet? Trek het in bij Apparaten en wijzig je wachtwoord."
     ),
     Code.SERVER_ADMIN_GRANTED: _("Je bent op %(date)s serverbeheerder gemaakt op de server."),
     Code.SERVER_ADMIN_REVOKED: _(

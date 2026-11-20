@@ -476,7 +476,7 @@ def test_a_device_token_cannot_make_a_link(ws_a: Workspace) -> None:
     assert r.status_code == 401
     assert r.json()["code"] == "not_authenticated"
     assert not PasswordReset.objects.exists()
-    assert not AccountNotice.objects.exists()
+    assert not AccountNotice.objects.exclude(code="device_paired").exists()
     assert not ServerAuditEvent.objects.filter(code="password_reset_created").exists()
 
 

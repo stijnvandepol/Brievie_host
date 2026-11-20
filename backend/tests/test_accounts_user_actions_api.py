@@ -72,7 +72,8 @@ def workspace_events(ws: Workspace, code: AuditCode) -> list[WorkspaceAuditEvent
 
 
 def notices_of(user: User) -> list[AccountNotice]:
-    return list(AccountNotice.objects.filter(user=user))
+    """What another person did to the account (pairing one's own phone leaves its own)."""
+    return list(AccountNotice.objects.filter(user=user).exclude(code="device_paired"))
 
 
 class World:

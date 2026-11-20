@@ -109,13 +109,17 @@ class UserSession(BaseModel):
     client_ip = models.GenericIPAddressField(null=True, blank=True)
     # A short description such as "Firefox op Windows", never the raw user agent.
     browser = models.CharField(max_length=100, blank=True)
+    # When the password was last typed again in this session (`reauthenticate`); with
+    # `created_at` it says how recently the person at this browser proved who they are.
+    reauthenticated_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self) -> str:
         return f"Session of {self.user_id}"
 
 
 class AccountNotice(BaseModel):
-    """Something another person did to this account, shown once in the web app (D 6.3)."""
+    """Something another person did to this account, or a new device on it, shown once in
+    the web app (D 6.3)."""
 
     class Code(models.TextChoices):
         PASSWORD_RESET_CREATED = "password_reset_created", _("Herstellink gemaakt")
@@ -126,6 +130,7 @@ class AccountNotice(BaseModel):
         )
         SESSIONS_ENDED = "sessions_ended", _("Sessies beëindigd")
         DEVICE_REVOKED = "device_revoked", _("Apparaat ingetrokken")
+        DEVICE_PAIRED = "device_paired", _("Apparaat gekoppeld")
         SECOND_FACTOR_CLEARED = "second_factor_cleared", _("Tweestapsverificatie gewist")
         SERVER_ADMIN_GRANTED = "server_admin_granted", _("Serverbeheerder gemaakt")
         SERVER_ADMIN_REVOKED = "server_admin_revoked", _("Geen serverbeheerder meer")

@@ -1303,4 +1303,24 @@ plane). One line per finding is in the pull request; the choices are here.
   the old mask missed; a `remask_bsns` command per workspace (`Document.ocr_text`,
   `DocumentPage.ocr_text`, summaries) is needed before the next release note says
   otherwise.
+- **Pairing a phone needs a recent sign-in and leaves a notice (identity M2).** Attack: a
+  moment at a victim's open browser was enough to make a pairing code and pair a phone,
+  whose token outlives a later password change (devices are kept on purpose) and is used
+  for 180 idle days; nothing told the owner. Chosen: (1) `createPairingCode` answers 403
+  `reauthentication_required` unless the session signed in or typed the password again
+  within `sessions.REAUTHENTICATION_WINDOW` (15 minutes, longer than a code lives, so the
+  code right after accepting an invitation or after setup needs nothing extra); the new
+  session-only `reauthenticate` (`POST /auth/reauthenticate`, `{password}`) checks the
+  password through `authenticate`, so wrong ones count for the same lockouts as signing in,
+  and stamps `UserSession.reauthenticated_at`. The web asks for the password on "Apparaten"
+  and then makes the code. Part C's second factor can satisfy the same check later. (2)
+  Every pairing (code or proof) leaves the owner an `AccountNotice` `device_paired` naming
+  the device, with what to do when it was not them. There is no flow where an administrator
+  pairs a phone for a member (a code is always for the caller's own account), so nothing
+  else changed. Dropped: a `current_password` on `createPairingCode` itself (a request body
+  on a released operation that had none), and revoking devices on a password change (the
+  documented promise "je gekoppelde telefoon blijft werken"). Limits: within the window a
+  stolen fresh cookie can still pair, and the notice can be dismissed from the same browser;
+  the "Nieuwe code" on the invitation page after 15 minutes shows the sentence and the
+  person goes to Apparaten.
 

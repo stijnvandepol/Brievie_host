@@ -201,7 +201,8 @@ def test_the_private_post_hook_reserves_the_action_for_the_server_admin(
 
 def nothing_happened(target: User) -> None:
     assert not PasswordReset.objects.filter(user=target).exists()
-    assert not AccountNotice.objects.filter(user=target).exists()
+    # A device of the target's own leaves its own notice; nothing else may be there.
+    assert not AccountNotice.objects.filter(user=target).exclude(code="device_paired").exists()
     assert not ServerAuditEvent.objects.filter(code="password_reset_created").exists()
 
 

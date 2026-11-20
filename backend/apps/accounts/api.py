@@ -15,6 +15,7 @@ from apps.accounts.schemas import (
     PasswordChangeIn,
     PasswordResetIn,
     PasswordResetOut,
+    ReauthenticateIn,
     SessionOut,
     SetupIn,
     SetupOut,
@@ -123,6 +124,22 @@ def change_password(request: HttpRequest, payload: PasswordChangeIn) -> Status[N
     services.change_password(
         request, current_password=payload.current_password, new_password=payload.new_password
     )
+    return Status(204, None)
+
+
+@router.post(
+    "/auth/reauthenticate",
+    response={204: None, 400: ErrorOut, 429: ErrorOut, **SESSION_WRITE_ERRORS, **BODY_ERRORS},
+    auth=session_auth,
+    throttle=CallerThrottle("reauthenticate", "10/10m"),
+    description=WEB_SESSION_ONLY
+    + " Type the password again before an action that needs a recent sign-in (creating a"
+    " pairing code answers 403 reauthentication_required otherwise). 400 wrong_password;"
+    " wrong passwords count for the same lockout as signing in (429).",
+    operation_id="reauthenticate",
+)
+def reauthenticate(request: HttpRequest, payload: ReauthenticateIn) -> Status[None]:
+    services.reauthenticate(request, password=payload.password)
     return Status(204, None)
 
 
