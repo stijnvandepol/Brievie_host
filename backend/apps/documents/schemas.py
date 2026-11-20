@@ -71,6 +71,25 @@ class DocumentSummaryOut(Schema):
     proposed_letter_date: date | None = None
 
 
+class TrashedDocumentOut(DocumentSummaryOut):
+    """A letter in the trash: its summary row, when and by whom it was trashed, and when
+    it is purged (clients never compute the retention themselves)."""
+
+    trashed_at: datetime
+    # Empty when Brievie did it.
+    trashed_by_name: str = ""
+    # `trashed_at` plus the retention (30 days); purged within the hour after.
+    purge_after: datetime
+
+
+class TrashListOut(Schema):
+    """The caller's trash, the most recently trashed first (at most 500)."""
+
+    items: list[TrashedDocumentOut] = Field(default_factory=list)
+    # How many days a letter stays in the trash.
+    retention_days: int = 30
+
+
 class PageOut(Schema):
     index: int
     ocr_text: str

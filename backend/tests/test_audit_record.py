@@ -229,6 +229,9 @@ def test_the_list_of_codes_is_the_closed_list_of_d11() -> None:
         "emergency_access_used",
         "export_created",
         "export_downloaded",
+        "document_trashed",
+        "document_restored",
+        "document_purged",
     }
 
 
