@@ -20,7 +20,6 @@ from tests.members_support import join
 migration = importlib.import_module("apps.workspaces.migrations.0006_visibility_switches")
 
 
-
 def _switches(workspace: Workspace) -> tuple[bool, bool, bool]:
     workspace.refresh_from_db()
     return (workspace.everyone_sees_all, workspace.departments_enabled, workspace.admins_read_all)
