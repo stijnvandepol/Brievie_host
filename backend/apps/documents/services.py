@@ -299,6 +299,35 @@ def _summary_out(
     )
 
 
+def document_out_for(document: Document) -> DocumentOut:
+    """The answer of an organising endpoint: the full document while the caller still
+    sees it, else only its id and status with `can_read` false (S 4.9.3: `can_read` is
+    computed last, as the caller; nothing of the letter is read as the caller after)."""
+    if visibility.can_read(document.id):
+        return document_out(document)
+    return DocumentOut(
+        id=document.id,
+        client_id=document.client_id,
+        status=visibility.status_of(document.id) or document.status,
+        page_count=0,
+        created_at=document.created_at,
+        sender="",
+        document_type="",
+        letter_date=None,
+        failure_code="",
+        summary="",
+        summary_by_ai=False,
+        pages=[],
+        proposals=[],
+        tasks=[],
+        suggestions=[],
+        addressee_ids=[],
+        label_ids=[],
+        inbox_state="",
+        can_read=False,
+    )
+
+
 def document_out(document: Document) -> DocumentOut:
     """The document with its pages, proposals and tasks, as the API shows it."""
     models.prefetch_related_objects([document], SUGGESTIONS)

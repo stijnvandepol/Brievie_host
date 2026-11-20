@@ -19,6 +19,7 @@ from apps.documents.schemas import ConfirmIn, TaskIn
 from apps.pipeline.validation import dates_in, quote_in_text
 from apps.rules import triggers
 from apps.tasks.models import Task
+from apps.workspaces.context import system_actor
 from apps.workspaces.locks import lock_own_membership
 from apps.workspaces.models import Workspace
 
@@ -50,25 +51,34 @@ def confirm_document(
     another review is a conflict. With `sets_organisation` the review also makes the
     document's labels and addressees exactly the given lists (design 8). Then the rules
     run (trigger `confirmed`); a repeat does not run them, and a failure in them leaves
-    the confirm standing. Needs the workspace's RLS
-    context.
+    the confirm standing. Needs the workspace's RLS context.
+
+    The write order of S 4.9.3: the caller's own writes first, while the letter is still
+    theirs to see; then, as the system, the addressee list, the readers and last the
+    status. A confirm that hands the letter to someone else therefore never fails on the
+    policies, and a repeat of it is recognised as the system (the caller may no longer
+    see the letter) and answers the same.
     """
     with transaction.atomic():
         lock_own_membership(workspace.id, user.id)
-        document = (
-            Document.objects.select_for_update(no_key=True)
-            .filter(workspace=workspace, id=document_id)
-            .first()
-        )
+        with system_actor():
+            seen = (
+                Document.objects.select_for_update(no_key=True)
+                .filter(workspace=workspace, id=document_id)
+                .first()
+            )
+            # Only a person's review repeats: the AI's confirmation is taken back by
+            # reopening.
+            if (
+                seen is not None
+                and seen.status == Document.Status.DONE
+                and not seen.confirmed_by_ai
+                and _is_repeat(data, seen)
+            ):
+                return seen
+        document = Document.objects.filter(workspace=workspace, id=document_id).first()
         if document is None:
             raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
-        # Only a person's review repeats: the AI's confirmation is taken back by reopening.
-        if (
-            document.status == Document.Status.DONE
-            and not document.confirmed_by_ai
-            and _is_repeat(data, document)
-        ):
-            return document
         if document.status not in _REVIEWABLE:
             raise ApiError(
                 409,
@@ -98,26 +108,44 @@ def confirm_automatically(document: Document, data: ConfirmIn) -> None:
 def _store_confirmation(
     document: Document, data: ConfirmIn, *, user: User | None, by_ai: bool
 ) -> None:
-    """The one place a confirmed review is written: fields, history, tasks, rules."""
+    """The one place a confirmed review is written: fields, history, tasks, rules (as
+    the caller), then the addressee list and readers (the scope's end) and the status (as
+    the system)."""
     with visibility.addressee_scope(document):
         _write_confirmation(document, data, user=user, by_ai=by_ai)
+    with system_actor():
+        document.status = Document.Status.DONE
+        document.confirmed_by = user
+        document.confirmed_at = timezone.now()
+        document.save(update_fields=["status", "confirmed_by", "confirmed_at", "updated_at"])
+
+
+_CONFIRMED_FIELDS = [
+    "sender",
+    "document_type",
+    "letter_date",
+    "summary",
+    "summary_by_ai",
+    "failure_code",
+    "confirmed_by_ai",
+    "confirmed_organisation",
+    "updated_at",
+]
 
 
 def _write_confirmation(
     document: Document, data: ConfirmIn, *, user: User | None, by_ai: bool
 ) -> None:
+    """Step 1 of the write order, as the caller: everything but the status."""
     document.sender = mask_bsns(data.sender.strip())
     document.document_type = data.document_type
     document.letter_date = data.letter_date
     document.summary = mask_bsns(data.summary.strip())
     document.summary_by_ai = data.summary_by_ai
-    document.status = Document.Status.DONE
     document.failure_code = ""
-    document.confirmed_by = user
     document.confirmed_by_ai = by_ai
-    document.confirmed_at = timezone.now()
     document.confirmed_organisation = _organisation(data) if data.sets_organisation else None
-    document.save()
+    document.save(update_fields=_CONFIRMED_FIELDS)
     if data.sets_organisation and user is not None:
         _set_organisation(document, data, user)
     organise.record_confirmed(

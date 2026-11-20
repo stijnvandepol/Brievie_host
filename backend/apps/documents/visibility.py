@@ -182,6 +182,14 @@ def can_read(document_id: UUID) -> bool:
     return Document.objects.filter(id=document_id).exists()
 
 
+def status_of(document_id: UUID) -> str:
+    """A letter's status, also when the caller no longer sees it (the answer of a
+    hand-over, `can_read` false: the id and status only). As the system."""
+    with system_actor():
+        status = Document.objects.filter(id=document_id).values_list("status", flat=True).first()
+    return status or ""
+
+
 def reader_names(documents: Sequence[Document]) -> dict[UUID, list[str]]:
     """The names of the readers of the private letters among `documents` the current
     actor may read, sorted without regard to case."""

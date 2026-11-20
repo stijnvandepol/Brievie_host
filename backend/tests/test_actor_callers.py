@@ -18,6 +18,8 @@ ALLOWED_SYSTEM_CALLERS = {
     "apps/documents/export.py",
     # The one writer of addressee_ids and reader rows, and the nightly check.
     "apps/documents/visibility.py",
+    # Confirm: the repeat is recognised and the status written as the system (S 4.9.3).
+    "apps/documents/review.py",
 }
 
 

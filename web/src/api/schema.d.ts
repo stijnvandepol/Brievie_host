@@ -713,7 +713,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Confirm Document */
+        /**
+         * Confirm Document
+         * @description Store the review; the document becomes done. When the confirm hands the letter to someone else (the caller no longer sees it), the answer has `can_read` false and holds the id and status only. A repeat of the same review answers the same.
+         */
         post: operations["confirmDocument"];
         delete?: never;
         options?: never;
@@ -1737,6 +1740,11 @@ export interface components {
             auto_addressee_ids?: string[];
             /** Auto Label Ids */
             auto_label_ids?: string[];
+            /**
+             * Can Read
+             * @default true
+             */
+            can_read: boolean;
             /**
              * Client Id
              * Format: uuid
