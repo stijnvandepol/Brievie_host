@@ -213,7 +213,7 @@ destination, or an emergency copy on this machine), then updates the database an
 the new version. If that fails it prints the way back: `git checkout` of the old version
 and `./brievie restore pre-update-<version>`. Nothing updates by itself. An installation
 from before versions moves once by hand (`git fetch --tags`, `git checkout v0.2.0`,
-`./brievie start`). Details: [docs/SELFHOST.md](docs/SELFHOST.md), section 20.
+`./brievie start`). Details: [docs/SELFHOST.md](docs/SELFHOST.md), section 21.
 
 ## Development
 

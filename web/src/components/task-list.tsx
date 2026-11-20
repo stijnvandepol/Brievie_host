@@ -26,7 +26,8 @@ function useTick(workspaceId: string) {
   });
 }
 
-/** The tasks of one document, each with a checkbox named after its description. */
+/** The tasks of one document, each with a checkbox named after its description; a task the
+ * AI made while confirming the letter says so. */
 export function TaskList({
   workspaceId,
   tasks,
@@ -63,6 +64,9 @@ export function TaskList({
                 <span className="muted small">
                   {t`Uiterlijk ${formatLetterDate(task.deadline)}`}
                 </span>
+              ) : null}
+              {task.created_by_ai ? (
+                <span className="muted small">{t`Automatisch door AI`}</span>
               ) : null}
             </li>
           );

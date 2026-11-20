@@ -6,6 +6,7 @@ from pydantic import Field
 
 from apps.common.schemas import InputSchema
 from apps.documents.models import DocumentEvent
+from apps.documents.organise import AUTOMATIC_ORIGINS, UNDOABLE_ORIGINS
 
 
 class FolderOut(Schema):
@@ -54,6 +55,11 @@ class DocumentSummaryOut(Schema):
     inbox_state: str = ""
     # Proposals (labels, addressees) waiting for the user.
     open_suggestion_count: int = 0
+    # The AI confirmed this letter itself (the autopilot); `reopenDocument` takes it back.
+    confirmed_by_ai: bool = False
+    # Of `label_ids` and `addressee_ids`: the ones Brievie put there itself (the autopilot).
+    auto_label_ids: list[UUID] = Field(default_factory=list)
+    auto_addressee_ids: list[UUID] = Field(default_factory=list)
 
 
 class PageOut(Schema):
@@ -83,6 +89,8 @@ class TaskOut(Schema):
     deadline_quote: str
     status: str
     completed_at: datetime | None = None
+    # Made by the AI when it confirmed the letter itself.
+    created_by_ai: bool = False
 
 
 class SuggestionOut(Schema):
@@ -159,12 +167,16 @@ class InboxCountsOut(Schema):
     new: int
     review: int
     unassigned: int
+    # Documents the autopilot confirmed or put a label or addressee on.
+    automatic: int = 0
 
 
 class DocumentEventOut(Schema):
     id: UUID
     created_at: datetime
+    # "label_added", "label_removed", "addressee_added", "addressee_removed", "reopened", ...
     kind: str
+    # "user", "rule", "suggestion", "undo", or "ai" and "name_match" (the autopilot).
     origin: str
     # The user who made the change; null for a rule, the system, or a deleted user.
     actor_id: UUID | None = None
@@ -182,14 +194,18 @@ class DocumentEventOut(Schema):
 
     @staticmethod
     def resolve_can_undo(obj: DocumentEvent) -> bool:
-        # A change a rule made, not undone yet, whose label or person is still there and
-        # had nothing happen to it since (annotations of `list_document_events`).
+        # A change a rule or the autopilot made, not undone yet, whose label or person is
+        # still there and had nothing happen to it since (annotations of `list_document_events`).
+        # The autopilot's change only while its link is still automatic (no person confirmed it).
         return (
-            obj.origin == DocumentEvent.Origin.RULE
+            obj.origin in UNDOABLE_ORIGINS
             and obj.kind in (DocumentEvent.Kind.LABEL_ADDED, DocumentEvent.Kind.ADDRESSEE_ADDED)
             and not getattr(obj, "undone", False)
             and bool(getattr(obj, "still_linked", False))
             and not getattr(obj, "superseded", True)
+            and (
+                obj.origin not in AUTOMATIC_ORIGINS or bool(getattr(obj, "still_automatic", False))
+            )
         )
 
 

@@ -4,7 +4,8 @@ For a home user with Brievie on a NAS or a Mac, and for the admin of a small com
 Simple things come first, advanced things last. Run every command in the folder where
 you installed Brievie. Sections 1 to 12 are about back-ups, 13 about pairing a phone from
 a link, 14 to 19 about people: inviting, roles, removing, sessions, the log and the
-export. Section 20 is about updating Brievie, 21 about Docker itself when it is slow.
+export. Section 20 is about the AI autopilot, 21 about updating Brievie, 22 about Docker
+itself when it is slow.
 
 ## 1. In one minute
 
@@ -464,7 +465,23 @@ by default in a business workspace). The export needs the document volume at
 `/data/documents`, which is the default; an install with another storage folder cannot
 export.
 
-## 20. Updating
+## 20. The AI autopilot
+
+An administrator of a workspace can let the AI put letters under persons and labels, and
+confirm them, without a person checking first (the page **AI**, "Automatisch verwerken").
+It is off by default in every workspace. `BRIEVIE_AI_AUTOPILOT_ALLOWED` in `deploy/.env`
+is the server's permission; its default is `true`. Set it to `false` to forbid the autopilot on this
+server: no workspace can switch it on (the API answers 409 `ai_autopilot_forbidden`), and
+the pipeline applies nothing automatically, also where a switch is stored as on. Letters
+then wait for a person, as before. Run `./brievie start` again after changing it.
+It is a setting for the whole server: a single workspace cannot be forbidden yet.
+
+While it is `false`, an administrator still sees a switch that is stored as on and can
+switch it off (not on). When you set it back to `true`, switches that were stored as on
+work again at once, without a new agreement. If that is not what you want, switch them off
+in each workspace first (page **AI**), while the server still forbids the autopilot.
+
+## 21. Updating
 
 ### Versions
 
@@ -614,7 +631,7 @@ an update on a real NAS or Raspberry Pi (building takes long there, and needs ab
 4 GB free), an update interrupted by a power cut on real hardware, an update with a
 remote destination, and two releases in a row over months.
 
-## 21. When Docker is slow or seems stuck
+## 22. When Docker is slow or seems stuck
 
 **`./brievie start` (or `update`, or `restore`) prints "Docker is al 10 minuten bezig
 zonder klaar te zijn" and nothing else happens.** `./brievie` waits for Docker and never

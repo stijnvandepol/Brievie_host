@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 import pytest
 from django.test import Client
 
+from apps.documents import organise
 from apps.documents.models import Document, DocumentEvent, DocumentLabel, DocumentSuggestion
 from apps.labels.models import Label
 from apps.pipeline.steps import run_pipeline
@@ -215,3 +216,53 @@ def test_undo_after_the_label_was_put_back_by_hand_is_409(
     assert r.json()["code"] == "event_not_undoable"
     with workspace_context(ws_a.id):
         assert DocumentLabel.objects.filter(document=document, label=label).exists()
+
+
+def automatic_event(
+    workspace: Workspace, document: Document, origin: str, *, person: bool = False
+) -> uuid.UUID:
+    """A label or addressee the autopilot put on the document, with its history line."""
+    with workspace_context(workspace.id):
+        locked = Document.objects.select_for_update().get(id=document.id)
+        if person:
+            target = make_person(workspace, "Emma")
+            organise.add_addressee(locked, target, actor=None, origin=origin)
+            kind = "addressee_added"
+        else:
+            organise.add_label(locked, auto_label(workspace), actor=None, origin=origin)
+            kind = "label_added"
+        return DocumentEvent.objects.get(document=document, kind=kind).id
+
+
+@pytest.mark.parametrize(("origin", "person"), [("ai", False), ("name_match", True)])
+def test_an_automatic_add_can_be_undone(
+    client_a: Client, ws_a: Workspace, origin: str, person: bool
+) -> None:
+    document = make_document(ws_a, LETTER)
+    event_id = automatic_event(ws_a, document, origin, person=person)
+    [added] = events(client_a, document)
+    assert added["can_undo"] is True
+
+    r = undo(client_a, document, event_id)
+
+    assert r.status_code == 200
+    assert r.json()["label_ids" if not person else "addressee_ids"] == []
+    with workspace_context(ws_a.id):
+        undone = DocumentEvent.objects.get(document=document, origin="undo")
+        assert undone.actor == admin_of(ws_a)
+        assert undone.undoes_id == event_id
+        assert DocumentSuggestion.objects.get(document=document).state == "dismissed"
+
+
+@pytest.mark.parametrize("origin", ["user", "suggestion"])
+def test_a_user_or_suggestion_event_is_still_not_undoable(
+    client_a: Client, ws_a: Workspace, origin: str
+) -> None:
+    document = make_document(ws_a, LETTER)
+    event_id = automatic_event(ws_a, document, origin)
+    assert events(client_a, document)[0]["can_undo"] is False
+
+    r = undo(client_a, document, event_id)
+
+    assert r.status_code == 409
+    assert r.json()["code"] == "event_not_undoable"

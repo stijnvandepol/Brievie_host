@@ -14,17 +14,19 @@ from django.db import transaction
 from django.utils import timezone
 from pydantic import ValidationError
 
+from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
-from apps.documents import suggestions
+from apps.documents import review, suggestions
 from apps.documents.models import Document, DocumentSuggestion, Extraction
 from apps.labels.models import Label
 from apps.people.matching import PRESELECT_FROM, PersonNames, match_addressees
 from apps.people.models import Person
+from apps.pipeline.autopilot import apply_open_proposals, decide_confirmation
 from apps.pipeline.choices import ExtractionRequest, aliased
 from apps.pipeline.errors import PermanentError
 from apps.pipeline.providers import LLMProvider
 from apps.pipeline.schema import ExtractionPayload
-from apps.pipeline.settings_service import provider_for
+from apps.pipeline.settings_service import autopilot_in_force, provider_for
 from apps.pipeline.validation import ValidatedChoice, ValidatedValue, validate, validate_choices
 from apps.rules import triggers
 from apps.workspaces.context import workspace_context
@@ -61,10 +63,12 @@ def run_pipeline(
 
     values: list[ValidatedValue] = []
     choices: list[ValidatedChoice] = []
+    payload: ExtractionPayload | None = None
     dropped = 0
+    day = today()
     if provider is not None and request is not None:
         payload = extract(provider, request)
-        values = validate(payload, text, today=today())
+        values = validate(payload, text, today=day)
         choices, dropped = validate_choices(payload, text, request)
 
     with workspace_context(workspace_id):
@@ -74,16 +78,31 @@ def run_pipeline(
             logger.info("Document %s changed during processing; result dropped", document_id)
             return
         store_proposals(document, values, provider)
-        _organise_guarded(document, text, persons, choices)
-        document.status = Document.Status.NEEDS_REVIEW
-        document.save(update_fields=["status", "updated_at"])
+        organised = _organise_guarded(document, text, persons, choices)
+        # When proposing failed, nothing automatic happens: whatever is open is not this
+        # run's proposals, and nothing says the persons are right. A person looks.
+        in_force = autopilot_in_force(workspace_id) if provider is not None and organised else None
+        applied_ok = True
+        if in_force is not None and in_force.organise:
+            applied_ok = _autopilot_guarded(document)
+        confirmed = False
+        # When applying failed, nothing says the persons are right either.
+        if in_force is not None and in_force.confirm and payload is not None and applied_ok:
+            confirmed = _confirm_guarded(
+                document, payload, values, text, day, organised=in_force.organise
+            )
+        if not confirmed:
+            document.status = Document.Status.NEEDS_REVIEW
+            document.save(update_fields=["status", "updated_at"])
         suggestion_count = _open_suggestion_count(document)
     logger.info(
-        "Processed document %s: %d proposals, %d suggestions, %d AI picks dropped in %.1f s",
+        "Processed document %s: %d proposals, %d suggestions, %d AI picks dropped, "
+        "confirmed by AI: %s, in %.1f s",
         document_id,
         len(values),
         suggestion_count,
         dropped,
+        confirmed,
         time.monotonic() - started,
     )
 
@@ -178,6 +197,14 @@ def _labels() -> list[tuple[UUID, str]]:
     return list(Label.objects.values_list("id", "name"))
 
 
+def _has_open_addressee_proposal(document: Document) -> bool:
+    return DocumentSuggestion.objects.filter(
+        document=document,
+        state=DocumentSuggestion.State.OPEN,
+        action=DocumentSuggestion.Action.ADD_ADDRESSEE,
+    ).exists()
+
+
 def _open_suggestion_count(document: Document) -> int:
     return DocumentSuggestion.objects.filter(
         document=document, state=DocumentSuggestion.State.OPEN
@@ -242,10 +269,10 @@ def _organise_guarded(
     text: str,
     persons: Sequence[PersonNames],
     ai_choices: Sequence[ValidatedChoice],
-) -> None:
-    """`organise_processed` in a savepoint: when proposing fails, its writes are rolled
-    back and the caller still stores what it has (the AI's proposals, a failure) and
-    moves the document on, so it never stays `processing`."""
+) -> bool:
+    """`organise_processed` in a savepoint; whether it succeeded. When proposing fails,
+    its writes are rolled back and the caller still stores what it has (the AI's
+    proposals, a failure) and moves the document on, so it never stays `processing`."""
     try:
         with transaction.atomic():
             organise_processed(document, text, persons, ai_choices)
@@ -254,6 +281,66 @@ def _organise_guarded(
         logger.error(
             "Unexpected %s while proposing for document %s", type(exc).__name__, document.id
         )
+        return False
+    return True
+
+
+def _autopilot_guarded(document: Document) -> bool:
+    """`apply_open_proposals` in a savepoint; whether it ran. When it fails, its writes
+    are rolled back and the document still moves on to review with its proposals open."""
+    try:
+        with transaction.atomic():
+            apply_open_proposals(document)
+    except Exception as exc:  # noqa: BLE001 - the document must not stay processing
+        # The type only: an exception message may quote the document.
+        logger.error(
+            "Unexpected %s while applying proposals for document %s",
+            type(exc).__name__,
+            document.id,
+        )
+        return False
+    return True
+
+
+def _confirm_guarded(
+    document: Document,
+    payload: ExtractionPayload,
+    values: Sequence[ValidatedValue],
+    text: str,
+    today: date,
+    *,
+    organised: bool,
+) -> bool:
+    """Confirm the document when every guard rail holds; whether it was confirmed.
+
+    An addressee proposal still open after the organise step also stops it when
+    `organised`: whose letter it is, is then still a question. An open label proposal
+    does not: it says nothing about the sender, the date or the tasks, and it stays
+    visible as a proposal on the confirmed letter. The decision and the confirmation run
+    in a savepoint:
+    when either fails (validation of the built review included), its writes are rolled back
+    and the document is reloaded, so the caller moves it on to review with its proposals.
+    """
+    try:
+        with transaction.atomic():
+            data = decide_confirmation(payload=payload, values=values, text=text, today=today)
+            if data is None or (organised and _has_open_addressee_proposal(document)):
+                return False
+            review.confirm_automatically(document, data)
+    except ApiError:
+        # Expected: the built review did not pass the confirm's own checks (a quote that
+        # is not literally in the text). The message may quote the document.
+        logger.info(
+            "Document %s not confirmed by AI: the review did not pass validation", document.id
+        )
+        document.refresh_from_db()
+        return False
+    except Exception as exc:  # noqa: BLE001 - the document must not stay processing
+        # The type only: an exception message may quote the document.
+        logger.error("Unexpected %s while confirming document %s", type(exc).__name__, document.id)
+        document.refresh_from_db()
+        return False
+    return True
 
 
 def _lock_processing(document_id: UUID) -> Document | None:

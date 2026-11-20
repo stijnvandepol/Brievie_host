@@ -74,6 +74,57 @@
         "title": "AddresseesIn",
         "type": "object"
       },
+      "AiAutopilotIn": {
+        "properties": {
+          "acknowledged": {
+            "default": false,
+            "title": "Acknowledged",
+            "type": "boolean"
+          },
+          "auto_confirm": {
+            "title": "Auto Confirm",
+            "type": "boolean"
+          },
+          "auto_organise": {
+            "title": "Auto Organise",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "auto_organise",
+          "auto_confirm"
+        ],
+        "title": "AiAutopilotIn",
+        "type": "object"
+      },
+      "AiAutopilotOut": {
+        "properties": {
+          "allowed": {
+            "title": "Allowed",
+            "type": "boolean"
+          },
+          "auto_confirm": {
+            "title": "Auto Confirm",
+            "type": "boolean"
+          },
+          "auto_organise": {
+            "title": "Auto Organise",
+            "type": "boolean"
+          },
+          "notice": {
+            "title": "Notice",
+            "type": "string"
+          }
+        },
+        "required": [
+          "auto_organise",
+          "auto_confirm",
+          "allowed",
+          "notice"
+        ],
+        "title": "AiAutopilotOut",
+        "type": "object"
+      },
       "AiSettingsIn": {
         "properties": {
           "api_key": {
@@ -175,6 +226,21 @@
       },
       "AiStatusOut": {
         "properties": {
+          "auto_confirm": {
+            "default": false,
+            "title": "Auto Confirm",
+            "type": "boolean"
+          },
+          "auto_organise": {
+            "default": false,
+            "title": "Auto Organise",
+            "type": "boolean"
+          },
+          "autopilot_allowed": {
+            "default": true,
+            "title": "Autopilot Allowed",
+            "type": "boolean"
+          },
           "has_api_key": {
             "default": false,
             "title": "Has Api Key",
@@ -568,10 +634,31 @@
             "title": "Addressee Ids",
             "type": "array"
           },
+          "auto_addressee_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Auto Addressee Ids",
+            "type": "array"
+          },
+          "auto_label_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Auto Label Ids",
+            "type": "array"
+          },
           "client_id": {
             "format": "uuid",
             "title": "Client Id",
             "type": "string"
+          },
+          "confirmed_by_ai": {
+            "default": false,
+            "title": "Confirmed By Ai",
+            "type": "boolean"
           },
           "created_at": {
             "format": "date-time",
@@ -695,10 +782,31 @@
             "title": "Addressee Ids",
             "type": "array"
           },
+          "auto_addressee_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Auto Addressee Ids",
+            "type": "array"
+          },
+          "auto_label_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Auto Label Ids",
+            "type": "array"
+          },
           "client_id": {
             "format": "uuid",
             "title": "Client Id",
             "type": "string"
+          },
+          "confirmed_by_ai": {
+            "default": false,
+            "title": "Confirmed By Ai",
+            "type": "boolean"
           },
           "created_at": {
             "format": "date-time",
@@ -865,6 +973,11 @@
       },
       "InboxCountsOut": {
         "properties": {
+          "automatic": {
+            "default": 0,
+            "title": "Automatic",
+            "type": "integer"
+          },
           "new": {
             "title": "New",
             "type": "integer"
@@ -2310,6 +2423,11 @@
               "null"
             ]
           },
+          "created_by_ai": {
+            "default": false,
+            "title": "Created By Ai",
+            "type": "boolean"
+          },
           "deadline": {
             "format": "date",
             "title": "Deadline",
@@ -2381,6 +2499,11 @@
               "string",
               "null"
             ]
+          },
+          "created_by_ai": {
+            "default": false,
+            "title": "Created By Ai",
+            "type": "boolean"
           },
           "deadline": {
             "format": "date",
@@ -4700,6 +4823,205 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/ai/autopilot": {
+      "get": {
+        "description": "The AI autopilot of the workspace: whether letters are put under persons and labels (`auto_organise`) and confirmed (`auto_confirm`) without anybody checking first, whether the server `allowed` it, and the `notice` to agree to. Any member.",
+        "operationId": "getAiAutopilot",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAutopilotOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Get Ai Autopilot",
+        "tags": [
+          "ai"
+        ]
+      },
+      "put": {
+        "description": "Switch the AI autopilot on or off. Web session only: a bearer token answers 401 not_authenticated. Administrators only. A switch that goes on needs `acknowledged` (409 `ai_autopilot_ack_required`), AI on for the workspace (409 `ai_autopilot_needs_ai`) and the server's permission (409 `ai_autopilot_forbidden`). Switching off always works. Switching AI off or agreeing to another AI address also switches both off.",
+        "operationId": "updateAiAutopilot",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiAutopilotIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAutopilotOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Update Ai Autopilot",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/ai/preview": {
       "post": {
         "description": "Check AI settings without saving them. When saving them needs consent, `notice` is the text to show (the same `configure_ai` prints) and `address` is what to send back as `consent_address`. Administrators only.",
@@ -5186,7 +5508,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/documents": {
       "get": {
-        "description": "The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id` and `label_id` narrow the list; together they all apply.",
+        "description": "The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`).",
         "operationId": "listDocuments",
         "parameters": [
           {
@@ -5233,6 +5555,16 @@
                 "string",
                 "null"
               ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "automatic",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Automatic",
+              "type": "boolean"
             }
           }
         ],
@@ -5895,7 +6227,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}/events/{event_id}/undo": {
       "post": {
-        "description": "Reverse a change a rule made (`can_undo`); the rule does not make it again on this document. 409 `event_not_undoable` when the change is not a rule's, was undone already or is gone anyway.",
+        "description": "Reverse a label or addressee a rule or the autopilot added (`can_undo`; origin `rule`, `ai` or `name_match`); it is not made again on this document. 409 `event_not_undoable` when the change is not one of those, was undone already or is gone anyway.",
         "operationId": "undoDocumentEvent",
         "parameters": [
           {
@@ -6212,6 +6544,98 @@
           }
         ],
         "summary": "Get Document Page",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/reopen": {
+      "post": {
+        "description": "Takes back the AI's confirmation: the document returns to review, the confirmed fields are emptied and the tasks the AI made that are still open are removed. 409 document_not_reopenable unless the AI confirmed the document.",
+        "operationId": "reopenDocument",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Reopen Document",
         "tags": [
           "documents"
         ]

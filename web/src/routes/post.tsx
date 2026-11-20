@@ -20,13 +20,17 @@ function withCurrent(options: FilterOption[], value: string | undefined): Filter
 function PostPage() {
   usePageTitle(t`Alle post`);
   const { workspace } = postRoute.useRouteContext();
-  const { persoon, label } = postRoute.useSearch();
+  const { persoon, label, automatisch } = postRoute.useSearch();
   const navigate = useNavigate();
   const persons = useQuery(personsQuery(workspace.id));
   const labels = useQuery(labelsQuery(workspace.id));
-  const filtered = Boolean(persoon || label);
+  const filtered = Boolean(persoon || label || automatisch);
   const { data, error, isPending } = useQuery(
-    documentsQuery(workspace.id, { person_id: persoon, label_id: label }),
+    documentsQuery(workspace.id, {
+      person_id: persoon,
+      label_id: label,
+      automatic: automatisch,
+    }),
   );
 
   // A value in the URL that the list no longer holds stays visible, so the filter is not a lie.
@@ -59,6 +63,7 @@ function PostPage() {
                 search: {
                   ...(event.target.value ? { persoon: event.target.value } : {}),
                   ...(label ? { label } : {}),
+                  ...(automatisch ? { automatisch } : {}),
                 },
               })
             }
@@ -83,6 +88,7 @@ function PostPage() {
                 search: {
                   ...(persoon ? { persoon } : {}),
                   ...(event.target.value ? { label: event.target.value } : {}),
+                  ...(automatisch ? { automatisch } : {}),
                 },
               })
             }
@@ -94,6 +100,25 @@ function PostPage() {
               </option>
             ))}
           </select>
+        </div>
+        <div className="check filter-check">
+          <input
+            id="filter-automatic"
+            type="checkbox"
+            checked={automatisch === true}
+            onChange={(event) =>
+              void navigate({
+                to: "/w/$workspaceId/post",
+                params: { workspaceId: workspace.id },
+                search: {
+                  ...(persoon ? { persoon } : {}),
+                  ...(label ? { label } : {}),
+                  ...(event.target.checked ? { automatisch: true } : {}),
+                },
+              })
+            }
+          />
+          <label htmlFor="filter-automatic">{t`Automatisch door AI`}</label>
         </div>
       </div>
       {isPending ? <Loading /> : null}
@@ -120,9 +145,14 @@ export const postRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   // The path stays "post" (bookmarks); the page is called "Alle post".
   path: "post",
-  validateSearch: (search: Record<string, unknown>): { persoon?: string; label?: string } => ({
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { persoon?: string; label?: string; automatisch?: true } => ({
     ...(typeof search.persoon === "string" && search.persoon ? { persoon: search.persoon } : {}),
     ...(typeof search.label === "string" && search.label ? { label: search.label } : {}),
+    ...(search.automatisch === true || search.automatisch === "true"
+      ? { automatisch: true as const }
+      : {}),
   }),
   component: PostPage,
 });

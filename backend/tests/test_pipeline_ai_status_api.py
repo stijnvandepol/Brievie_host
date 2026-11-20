@@ -20,7 +20,7 @@ def test_ai_status_is_off_without_settings(client: Client, ws_a: Workspace) -> N
     assert r.status_code == 200
     assert r.json() == {
         "mode": "off", "supplier": None, "host": None, "since": None, "has_api_key": False,
-        "model": None,
+        "model": None, "auto_organise": False, "auto_confirm": False, "autopilot_allowed": True,
     }  # fmt: skip
 
 
@@ -44,7 +44,10 @@ def test_ai_status_has_no_address_model_or_key(client: Client, ws_a: Workspace, 
     r = client.get(ai_url(ws_a))
 
     assert r.status_code == 200
-    assert set(r.json()) == {"mode", "supplier", "host", "since", "has_api_key", "model"}
+    assert set(r.json()) == {
+        "mode", "supplier", "host", "since", "has_api_key", "model",
+        "auto_organise", "auto_confirm", "autopilot_allowed",
+    }  # fmt: skip
     assert (r.json()["mode"], r.json()["host"]) == ("external", "api.mistral.ai")
     for hidden in ("/v1", "sk-geheim"):
         assert hidden not in r.content.decode()

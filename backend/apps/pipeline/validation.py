@@ -283,12 +283,12 @@ _MONTHS = {
     "augustus": 8, "sep": 9, "sept": 9, "september": 9, "okt": 10, "oktober": 10,
     "nov": 11, "november": 11, "dec": 12, "december": 12,
 }  # fmt: skip
+# The written month names `dates_in` reads, longest first, as a regex alternation.
+MONTH_NAMES_PATTERN = "|".join(sorted(_MONTHS, key=len, reverse=True))
 _ISO_DATE = re.compile(r"(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)")
 _NUMERIC_DATE = re.compile(r"(?<!\d)(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})(?!\d)")
 _NAMED_DATE = re.compile(
-    r"(?<!\d)(\d{1,2})\s+("
-    + "|".join(sorted(_MONTHS, key=len, reverse=True))
-    + r")\.?\s+(\d{4})(?!\d)",
+    r"(?<!\d)(\d{1,2})\s+(" + MONTH_NAMES_PATTERN + r")\.?\s+(\d{4})(?!\d)",
     re.IGNORECASE,
 )
 

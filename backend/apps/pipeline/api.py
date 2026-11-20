@@ -5,6 +5,7 @@ from django.http import HttpRequest
 from django.utils.translation import gettext as _
 from ninja import Router
 
+from apps.accounts.auth import session_auth
 from apps.accounts.services import current_user
 from apps.common.errors import ApiError
 from apps.common.net import valid_client_ip
@@ -12,6 +13,8 @@ from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, 
 from apps.common.throttling import CallerThrottle
 from apps.pipeline import settings_service
 from apps.pipeline.schemas import (
+    AiAutopilotIn,
+    AiAutopilotOut,
     AiSettingsIn,
     AiSettingsPreviewIn,
     AiSettingsPreviewOut,
@@ -21,6 +24,7 @@ from apps.pipeline.schemas import (
 from apps.pipeline.settings_service import (
     Actor,
     AiSettingsError,
+    AutopilotError,
     ConsentRequiredError,
 )
 from apps.workspaces.deps import workspace_member
@@ -48,7 +52,11 @@ def get_ai_status(request: HttpRequest, workspace_id: UUID) -> AiStatusOut:
     membership = workspace_member(request, workspace_id)
     status = settings_service.status(workspace_id)
     # The model is for the form of an administrator only.
-    return AiStatusOut.from_status(status, with_model=membership.has_role(Membership.Role.ADMIN))
+    return AiStatusOut.from_status(
+        status,
+        with_model=membership.has_role(Membership.Role.ADMIN),
+        autopilot=settings_service.autopilot(workspace_id),
+    )
 
 
 @router.get(
@@ -151,7 +159,86 @@ def update_ai_settings(
         ) from exc
     except AiSettingsError as exc:
         raise _invalid(exc) from exc
-    return AiStatusOut.from_status(settings_service.status(workspace_id), with_model=True)
+    return AiStatusOut.from_status(
+        settings_service.status(workspace_id),
+        with_model=True,
+        autopilot=settings_service.autopilot(workspace_id),
+    )
+
+
+def _autopilot_out(workspace_id: UUID) -> AiAutopilotOut:
+    state = settings_service.autopilot(workspace_id)
+    return AiAutopilotOut(
+        auto_organise=state.organise,
+        auto_confirm=state.confirm,
+        allowed=state.allowed,
+        notice=settings_service.autopilot_notice(),
+    )
+
+
+@router.get(
+    f"{_AI}/autopilot",
+    response={200: AiAutopilotOut, 404: ErrorOut, **AUTH_ERRORS},
+    operation_id="getAiAutopilot",
+    description=(
+        "The AI autopilot of the workspace: whether letters are put under persons and "
+        "labels (`auto_organise`) and confirmed (`auto_confirm`) without anybody checking "
+        "first, whether the server `allowed` it, and the `notice` to agree to. Any member."
+    ),
+)
+def get_ai_autopilot(request: HttpRequest, workspace_id: UUID) -> AiAutopilotOut:
+    workspace_member(request, workspace_id)
+    return _autopilot_out(workspace_id)
+
+
+@router.put(
+    f"{_AI}/autopilot",
+    response={
+        200: AiAutopilotOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        429: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    auth=session_auth,
+    throttle=CallerThrottle("ai_autopilot", "10/10m"),
+    operation_id="updateAiAutopilot",
+    description=(
+        "Switch the AI autopilot on or off. Web session only: a bearer token answers 401 "
+        "not_authenticated. Administrators only. A switch that goes on needs "
+        "`acknowledged` (409 `ai_autopilot_ack_required`), AI on for the workspace "
+        "(409 `ai_autopilot_needs_ai`) and the server's permission (409 "
+        "`ai_autopilot_forbidden`). Switching off always works. Switching AI off or "
+        "agreeing to another AI address also switches both off."
+    ),
+)
+def update_ai_autopilot(
+    request: HttpRequest, workspace_id: UUID, payload: AiAutopilotIn
+) -> AiAutopilotOut:
+    workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
+    try:
+        settings_service.configure_autopilot(
+            workspace_id=workspace_id,
+            organise=payload.auto_organise,
+            confirm=payload.auto_confirm,
+            acknowledged=payload.acknowledged,
+            actor=Actor(
+                user_id=current_user(request).id, label=API, client_ip=valid_client_ip(request)
+            ),
+        )
+    except AutopilotError as exc:
+        messages = {
+            "ack_required": _("Lees eerst wat de autopilot doet en geef akkoord."),
+            "needs_ai": _("Zet eerst AI aan voor deze werkruimte."),
+            "forbidden": _("De beheerder van deze server staat de autopilot niet toe."),
+        }
+        raise ApiError(
+            409,
+            f"ai_autopilot_{exc.reason}",
+            messages.get(exc.reason, _("De autopilot kan nu niet worden aangezet.")),
+        ) from exc
+    return _autopilot_out(workspace_id)
 
 
 def _invalid(error: AiSettingsError) -> ApiError:

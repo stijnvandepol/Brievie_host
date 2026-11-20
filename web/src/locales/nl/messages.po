@@ -165,6 +165,10 @@ msgid "{who} wordt overal uitgelogd en krijgt daar een melding van. Gekoppelde t
 msgstr "{who} wordt overal uitgelogd en krijgt daar een melding van. Gekoppelde telefoons blijven werken."
 
 #: src/components/document-history.tsx
+msgid "{who} zette de brief terug op Te doen om te controleren"
+msgstr "{who} zette de brief terug op Te doen om te controleren"
+
+#: src/components/document-history.tsx
 msgid "{who} zette deze brief op naam van {person}"
 msgstr "{who} zette deze brief op naam van {person}"
 
@@ -204,6 +208,10 @@ msgstr "Aanslag"
 #: src/routes/persons.tsx
 msgid "Aantal brieven"
 msgstr "Aantal brieven"
+
+#: src/components/autopilot-panel.tsx
+msgid "Aanzetten"
+msgstr "Aanzetten"
 
 #: src/components/page.tsx
 #: src/routes/members.tsx
@@ -442,6 +450,36 @@ msgstr "Archiveren: {0}"
 msgid "Automatisch"
 msgstr "Automatisch"
 
+#: src/components/document-history.tsx
+msgid "Automatisch bevestigd door AI"
+msgstr "Automatisch bevestigd door AI"
+
+#: src/components/document-table.tsx
+#: src/components/task-list.tsx
+#: src/routes/post.tsx
+msgid "Automatisch door AI"
+msgstr "Automatisch door AI"
+
+#: src/components/document-history.tsx
+msgid "Automatisch door AI toegevoegd: {person}"
+msgstr "Automatisch door AI toegevoegd: {person}"
+
+#: src/components/document-history.tsx
+msgid "Automatisch door AI toegevoegd: label {label}"
+msgstr "Automatisch door AI toegevoegd: label {label}"
+
+#: src/routes/document.tsx
+msgid "Automatisch toegevoegd: {list}"
+msgstr "Automatisch toegevoegd: {list}"
+
+#: src/components/document-history.tsx
+msgid "Automatisch toegevoegd: label {label}"
+msgstr "Automatisch toegevoegd: label {label}"
+
+#: src/components/document-history.tsx
+msgid "Automatisch toegevoegd: naam herkend ({person})"
+msgstr "Automatisch toegevoegd: naam herkend ({person})"
+
 #: src/routes/automations.tsx
 #: src/routes/rule-editor.tsx
 msgid "Automatisch toepassen"
@@ -450,6 +488,14 @@ msgstr "Automatisch toepassen"
 #: src/routes/automations.tsx
 msgid "Automatisch toepassen: {name}"
 msgstr "Automatisch toepassen: {name}"
+
+#: src/components/autopilot-panel.tsx
+msgid "Automatisch verwerken"
+msgstr "Automatisch verwerken"
+
+#: src/components/autopilot-panel.tsx
+msgid "Automatisch verwerken aanzetten?"
+msgstr "Automatisch verwerken aanzetten?"
 
 #: src/components/page.tsx
 #: src/routes/automations.tsx
@@ -545,6 +591,26 @@ msgstr "Brief"
 msgid "Brieven waar jij nog iets mee moet doen. Al je brieven, ook de afgehandelde, staan bij Alle post."
 msgstr "Brieven waar jij nog iets mee moet doen. Al je brieven, ook de afgehandelde, staan bij Alle post."
 
+#: src/components/autopilot-panel.tsx
+msgid "Brieven worden niet automatisch verwerkt."
+msgstr "Brieven worden niet automatisch verwerkt."
+
+#: src/components/autopilot-panel.tsx
+msgid "Brieven zelf bevestigen"
+msgstr "Brieven zelf bevestigen"
+
+#: src/components/autopilot-panel.tsx
+msgid "Brieven zelf onder personen en labels zetten"
+msgstr "Brieven zelf onder personen en labels zetten"
+
+#: src/components/autopilot-panel.tsx
+msgid "Brievie bevestigt brieven zelf."
+msgstr "Brievie bevestigt brieven zelf."
+
+#: src/components/autopilot-panel.tsx
+msgid "Brievie bevestigt een brief zelf als alles in de brief duidelijk te lezen is. Anders blijft hij staan om te controleren."
+msgstr "Brievie bevestigt een brief zelf als alles in de brief duidelijk te lezen is. Anders blijft hij staan om te controleren."
+
 #: src/routes/setup.tsx
 msgid "Brievie instellen"
 msgstr "Brievie instellen"
@@ -556,6 +622,14 @@ msgstr "Brievie kon deze brief niet goed lezen. Controleer hem in de app."
 #: src/routes/inbox.tsx
 msgid "Brievie leest deze brief nog. Je hoeft niets te doen."
 msgstr "Brievie leest deze brief nog. Je hoeft niets te doen."
+
+#: src/components/autopilot-panel.tsx
+msgid "Brievie zet brieven zelf onder personen en labels."
+msgstr "Brievie zet brieven zelf onder personen en labels."
+
+#: src/components/autopilot-panel.tsx
+msgid "Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is."
+msgstr "Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is."
 
 #: src/routes/sessions.tsx
 msgid "Browser"
@@ -623,6 +697,10 @@ msgstr "de afzender"
 msgid "De afzender"
 msgstr "De afzender"
 
+#: src/components/autopilot-panel.tsx
+msgid "De beheerder van de server heeft automatisch verwerken uitgezet. Hier kun je het niet aanzetten."
+msgstr "De beheerder van de server heeft automatisch verwerken uitgezet. Hier kun je het niet aanzetten."
+
 #: src/components/rule-sentence.ts
 msgid "de brief het label {name} heeft"
 msgstr "de brief het label {name} heeft"
@@ -630,6 +708,10 @@ msgstr "de brief het label {name} heeft"
 #: src/components/rule-sentence.ts
 msgid "de brief het label {name} niet heeft"
 msgstr "de brief het label {name} niet heeft"
+
+#: src/routes/document.tsx
+msgid "De brief komt terug op Te doen, bij Controleren. De taken die de AI maakte en die nog open staan, verdwijnen. Je controleert de brief daarna in de app."
+msgstr "De brief komt terug op Te doen, bij Controleren. De taken die de AI maakte en die nog open staan, verdwijnen. Je controleert de brief daarna in de app."
 
 #: src/components/rule-sentence.ts
 msgid "de brief op naam van {name} staat"
@@ -2461,6 +2543,14 @@ msgstr "Wordt gemaakt…"
 #: src/routes/setup.tsx
 msgid "Zakelijk"
 msgstr "Zakelijk"
+
+#: src/routes/document.tsx
+msgid "Zelf controleren"
+msgstr "Zelf controleren"
+
+#: src/routes/document.tsx
+msgid "Zelf controleren?"
+msgstr "Zelf controleren?"
 
 #: src/components/export-panel.tsx
 msgid "Zet het aan bij Instellingen."

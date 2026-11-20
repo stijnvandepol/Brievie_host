@@ -398,6 +398,9 @@ def test_status_names_the_service_and_the_day_of_consent(client: Client, ws_a: W
         "since": api_time(granted.created_at),
         "has_api_key": True,
         "model": "mistral-large-latest",
+        "auto_organise": False,
+        "auto_confirm": False,
+        "autopilot_allowed": True,
     }
 
 
@@ -408,7 +411,7 @@ def test_status_after_switching_off_names_nothing(client: Client, ws_a: Workspac
 
     assert ai_status(client, ws_a) == {
         "mode": "off", "supplier": None, "host": None, "since": None, "has_api_key": False,
-        "model": None,
+        "model": None, "auto_organise": False, "auto_confirm": False, "autopilot_allowed": True,
     }  # fmt: skip
 
 
@@ -435,7 +438,7 @@ def test_status_without_recorded_consent_has_no_date(client: Client, ws_a: Works
     assert ai_status(client, ws_a) == {
         "mode": "external", "supplier": None, "host": "api.mistral.ai", "since": None,
         "has_api_key": False,
-        "model": "m",
+        "model": "m", "auto_organise": False, "auto_confirm": False, "autopilot_allowed": True,
     }  # fmt: skip
 
 
@@ -452,6 +455,9 @@ def test_status_fields_are_optional_in_the_contract() -> None:
         "since",
         "has_api_key",
         "model",
+        "auto_organise",
+        "auto_confirm",
+        "autopilot_allowed",
     }
 
 

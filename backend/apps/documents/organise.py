@@ -11,6 +11,7 @@ from uuid import UUID
 
 from django.db import transaction
 from django.db.models import QuerySet
+from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from apps.accounts.models import User
@@ -30,6 +31,16 @@ from apps.rules.models import Rule
 
 ADDRESSEES_MAX = 10
 LABELS_MAX = 30
+
+# Changes the system made on its own (a rule, the autopilot): the user may undo them.
+UNDOABLE_ORIGINS = (
+    DocumentEvent.Origin.RULE,
+    DocumentEvent.Origin.AI,
+    DocumentEvent.Origin.NAME_MATCH,
+)
+# Origins whose links are marked `automatic`: the autopilot put them there. Such a change
+# is undoable only while its link is still `automatic` (a person's confirm takes it over).
+AUTOMATIC_ORIGINS = (DocumentEvent.Origin.AI, DocumentEvent.Origin.NAME_MATCH)
 
 _ADD_LABEL = DocumentSuggestion.Action.ADD_LABEL
 _ADD_ADDRESSEE = DocumentSuggestion.Action.ADD_ADDRESSEE
@@ -113,7 +124,10 @@ def add_addressee(
         if DocumentAddressee.objects.filter(document=document, person=person).exists():
             return False
         DocumentAddressee.objects.create(
-            workspace_id=document.workspace_id, document=document, person=person
+            workspace_id=document.workspace_id,
+            document=document,
+            person=person,
+            automatic=origin in AUTOMATIC_ORIGINS,
         )
         _write_event(
             document, DocumentEvent.Kind.ADDRESSEE_ADDED, actor, origin, person=person, rule=rule
@@ -181,7 +195,10 @@ def add_label(
         if DocumentLabel.objects.filter(document=document, label=label).exists():
             return False
         DocumentLabel.objects.create(
-            workspace_id=document.workspace_id, document=document, label=label
+            workspace_id=document.workspace_id,
+            document=document,
+            label=label,
+            automatic=origin in AUTOMATIC_ORIGINS,
         )
         _write_event(
             document, DocumentEvent.Kind.LABEL_ADDED, actor, origin, label=label, rule=rule
@@ -198,10 +215,12 @@ _UNDOABLE = (DocumentEvent.Kind.LABEL_ADDED, DocumentEvent.Kind.ADDRESSEE_ADDED)
 
 
 def undo_event(*, document: Document, event_id: UUID, actor: User) -> None:
-    """Reverse a change a rule made (design 13), and remember the user's "no".
+    """Reverse a change a rule or the autopilot made (design 13), and remember the user's "no".
 
-    Only a `label_added` or `addressee_added` event with origin `rule` that was not
-    undone yet, while its label or person is still on the document.
+    Only a `label_added` or `addressee_added` event with origin `rule`, `ai` or
+    `name_match` that was not undone yet, while its label or person is still on the
+    document. An `ai` or `name_match` change also only while its link is still
+    `automatic`: once a person confirmed the organisation, the link is theirs.
     """
     with transaction.atomic():
         event = (
@@ -210,7 +229,7 @@ def undo_event(*, document: Document, event_id: UUID, actor: User) -> None:
         if event is None:
             raise ApiError(404, "event_not_found", _("We kunnen deze gebeurtenis niet vinden."))
         if (
-            event.origin != DocumentEvent.Origin.RULE
+            event.origin not in UNDOABLE_ORIGINS
             or event.kind not in _UNDOABLE
             or DocumentEvent.objects.filter(undoes=event).exists()
             or _target_of(event) is None
@@ -226,7 +245,7 @@ def undo_event(*, document: Document, event_id: UUID, actor: User) -> None:
                 .select_related("label")
                 .first()
             )
-            if label_id is None or label_link is None:
+            if label_id is None or label_link is None or _taken_over(event, label_link.automatic):
                 raise _not_undoable()
             label_link.delete()
             _write_event(
@@ -247,7 +266,7 @@ def undo_event(*, document: Document, event_id: UUID, actor: User) -> None:
             .select_related("person")
             .first()
         )
-        if person_id is None or person_link is None:
+        if person_id is None or person_link is None or _taken_over(event, person_link.automatic):
             raise _not_undoable()
         person_link.delete()
         _write_event(
@@ -259,6 +278,25 @@ def undo_event(*, document: Document, event_id: UUID, actor: User) -> None:
             undoes=event,
         )
         suggestions.mark_dismissed(document, _ADD_ADDRESSEE, person_id)
+
+
+def _taken_over(event: DocumentEvent, automatic: bool) -> bool:
+    """Whether a person confirmed the link an automatic change made: not undoable then."""
+    return event.origin in AUTOMATIC_ORIGINS and not automatic
+
+
+def confirm_automatic_links(document: Document) -> None:
+    """A person confirmed the document's labels and addressees: none is automatic any more.
+
+    Only for a person's confirm that sets the organisation; a hand edit leaves the flag.
+    """
+    now = timezone.now()
+    DocumentLabel.objects.filter(document=document, automatic=True).update(
+        automatic=False, updated_at=now
+    )
+    DocumentAddressee.objects.filter(document=document, automatic=True).update(
+        automatic=False, updated_at=now
+    )
 
 
 def _target_of(event: DocumentEvent) -> UUID | None:
@@ -282,12 +320,25 @@ def _not_undoable() -> ApiError:
     return ApiError(409, "event_not_undoable", _("Deze wijziging kun je niet meer terugdraaien."))
 
 
-def record_confirmed(document: Document, *, actor: User) -> None:
-    """The history line for a confirmed review."""
+def record_confirmed(
+    document: Document, *, actor: User | None, origin: str = DocumentEvent.Origin.USER
+) -> None:
+    """The history line for a confirmed review (the AI's has origin `ai` and no actor)."""
     DocumentEvent.objects.create(
         workspace_id=document.workspace_id,
         document=document,
         kind=DocumentEvent.Kind.CONFIRMED,
+        origin=origin,
+        actor=actor,
+    )
+
+
+def record_reopened(document: Document, *, actor: User) -> None:
+    """The history line for taking the AI's confirmation back."""
+    DocumentEvent.objects.create(
+        workspace_id=document.workspace_id,
+        document=document,
+        kind=DocumentEvent.Kind.REOPENED,
         origin=DocumentEvent.Origin.USER,
         actor=actor,
     )
