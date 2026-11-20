@@ -95,18 +95,23 @@ def document_condition(
 
     Every argument is a fixed SQL fragment chosen by the caller in code, never user
     input: the policy passes the helper calls, `viewer_pairs_sql` the member columns.
+
+    The reader-row arm comes last, unlike in the spec's text: PostgreSQL evaluates the
+    arms of an OR in the order written, and this is the only arm that probes another
+    table for every row. Last, it runs only for letters the cheap arms leave out (the
+    private ones, and the ones the user does not see otherwise). Same truth table.
     """
     return (
-        "(EXISTS ("  # noqa: S608 - fixed fragments from code, no input
-        'SELECT 1 FROM "documents_documentreader" r'
-        f" WHERE r.document_id = {table}.id"
-        f" AND r.user_id = {user}"
-        " AND (r.expires_at IS NULL OR r.expires_at > pg_catalog.now()))"
-        f" OR ({table}.visibility = 'workspace' AND ("
+        f"(({table}.visibility = 'workspace' AND ("  # noqa: S608 - fixed fragments, no input
         f"{sees_all}"
         f" OR {table}.addressee_ids OPERATOR(pg_catalog.&&) {my_ids}"
         f" OR ({table}.scanned_by_id = {user} AND {table}.status <> 'done')"
-        f" OR ({sorts} AND NOT {table}.addressee_ids OPERATOR(pg_catalog.&&) {covered}))))"
+        f" OR ({sorts} AND NOT {table}.addressee_ids OPERATOR(pg_catalog.&&) {covered})))"
+        " OR EXISTS ("
+        'SELECT 1 FROM "documents_documentreader" r'
+        f" WHERE r.document_id = {table}.id"
+        f" AND r.user_id = {user}"
+        " AND (r.expires_at IS NULL OR r.expires_at > pg_catalog.now())))"
     )
 
 

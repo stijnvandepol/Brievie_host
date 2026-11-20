@@ -99,6 +99,14 @@ def test_every_function_has_a_drop() -> None:
     ]
 
 
+def test_the_reader_probe_is_the_last_arm() -> None:
+    # OR arms run in the order written: the per-row probe of the reader table only
+    # for letters the cheap arms leave out.
+    condition = document_condition(**MARKERS)
+    assert condition.index("EXISTS (") > condition.index("<<SORTS>>")
+    assert condition.rstrip(")").endswith("r.expires_at > pg_catalog.now(")
+
+
 def test_condition_has_no_system_arm() -> None:
     assert "brievie_is_system" not in document_condition(**MARKERS)
     assert "brievie_is_system" not in viewer_pairs_sql("true")
