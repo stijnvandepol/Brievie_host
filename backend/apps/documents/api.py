@@ -23,6 +23,8 @@ from apps.documents.schemas import (
     DocumentSearchIn,
     DocumentSearchOut,
     DocumentSummaryOut,
+    EmptyTrashIn,
+    EmptyTrashOut,
     FolderIn,
     FolderOut,
     InboxCountsOut,
@@ -480,6 +482,46 @@ def list_trash(request: HttpRequest, workspace_id: UUID) -> TrashListOut:
         items=[trash.trashed_out(document) for document in trash.list_trash(membership)],
         retention_days=trash.TRASH_RETENTION.days,
     )
+
+
+# Before `trash/{document_id}`: the router matches paths in order.
+@router.post(
+    "/workspaces/{workspace_id}/trash/empty",
+    response={200: EmptyTrashOut, 404: ErrorOut, **SESSION_WRITE_ERRORS, **BODY_ERRORS},
+    auth=session_auth,
+    operation_id="emptyTrash",
+    description=WEB_SESSION_ONLY
+    + " Purge every letter in the caller's trash for good (role admin), up to `up_to`: the"
+    " newest `trashed_at` the caller showed (all when absent). Letters the caller does not"
+    " see stay. Answers how many letters are now being purged; a job removes them. Written"
+    " to the log, one `document_purged` row per letter.",
+)
+def empty_trash(request: HttpRequest, workspace_id: UUID, payload: EmptyTrashIn) -> EmptyTrashOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
+    count = trash.empty_trash(
+        membership=membership, actor=actor_from_request(request), up_to=payload.up_to
+    )
+    return EmptyTrashOut(document_count=count)
+
+
+@router.delete(
+    "/workspaces/{workspace_id}/trash/{document_id}",
+    response={204: None, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS},
+    auth=session_auth,
+    operation_id="purgeDocument",
+    description=WEB_SESSION_ONLY
+    + " Purge a letter from the trash now, for good (role admin). Only a letter in the"
+    " caller's trash: a live letter, one whose purge started, or one the caller does not"
+    " see answers 404 `document_not_found`. From this answer on it cannot be restored; a"
+    " job removes its scanned pages and its rows. A back-up made earlier still holds it."
+    " Written to the log (`document_purged`).",
+)
+def purge_document(request: HttpRequest, workspace_id: UUID, document_id: UUID) -> Status[None]:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
+    trash.purge_now(
+        membership=membership, actor=actor_from_request(request), document_id=document_id
+    )
+    return Status(204, None)
 
 
 def _my_export_out(membership: Membership, export: MemberExport | None) -> MyExportOut:

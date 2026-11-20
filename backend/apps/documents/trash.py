@@ -7,7 +7,7 @@ a member trashes, restores or lists starts from `visible_documents` or
 `trashed_documents`, so a letter they may not see answers as a missing one.
 """
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Final
 from uuid import UUID
 
@@ -20,6 +20,7 @@ from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
 from apps.documents import organise, retention, visibility
+from apps.documents.jobs import defer_purge
 from apps.documents.models import Document
 from apps.documents.schemas import TrashedDocumentOut
 from apps.documents.services import HEADLINE_PROPOSALS, SUGGESTIONS, document_summary_out
@@ -149,3 +150,63 @@ def trashed_out(document: Document) -> TrashedDocumentOut:
         trashed_by_name=by.name if by is not None else "",
         purge_after=trashed_at + TRASH_RETENTION,
     )
+
+
+def mark_for_purge(document: Document, *, actor: AuditActor, reason: str) -> bool:
+    """Take the purge decision on a locked letter in the trash: `purge_started_at` and an
+    audit row with `reason`. From then on it cannot be restored and is listed nowhere; the
+    purge job removes its files and rows. False (nothing changes) when the retention hook
+    refuses it."""
+    with transaction.atomic():
+        if not retention.check_removal(document, step="purge").allowed:
+            return False
+        document.purge_started_at = timezone.now()
+        document.save(update_fields=["purge_started_at", "updated_at"])
+        record(
+            AuditCode.DOCUMENT_PURGED,
+            actor=actor,
+            target=AuditTarget(TargetKind.DOCUMENT, document.id),
+            workspace_id=document.workspace_id,
+            values={"reason": reason},
+        )
+    return True
+
+
+def purge_now(*, membership: Membership, actor: AuditActor, document_id: UUID) -> None:
+    """Purge one letter of the admin's trash now (the role is checked by the endpoint).
+    Only from the trash, and only a letter the admin sees: anything else is not found. The
+    job is queued in this transaction, so a rollback takes it back too."""
+    with transaction.atomic():
+        lock_own_membership(membership.workspace_id, membership.user_id)
+        document = (
+            visibility.trashed_documents(membership)
+            .select_for_update(no_key=True)
+            .filter(id=document_id)
+            .first()
+        )
+        if document is None:
+            raise _not_found()
+        verdict = retention.check_removal(document, step="purge")
+        if not verdict.allowed:
+            raise retention.retained_error(verdict)
+        mark_for_purge(document, actor=actor, reason="admin")
+        defer_purge(membership.workspace_id)
+
+
+def empty_trash(*, membership: Membership, actor: AuditActor, up_to: datetime | None) -> int:
+    """Purge every letter of the admin's trash trashed at or before `up_to` (all when
+    None): what the admin was shown, never a letter trashed meanwhile and never one the
+    admin may not see. A letter the retention hook keeps is skipped. Returns how many."""
+    with transaction.atomic():
+        lock_own_membership(membership.workspace_id, membership.user_id)
+        documents = visibility.trashed_documents(membership).select_for_update(no_key=True)
+        if up_to is not None:
+            documents = documents.filter(trashed_at__lte=up_to)
+        marked = sum(
+            1
+            for document in documents.order_by("trashed_at", "id")
+            if mark_for_purge(document, actor=actor, reason="emptied")
+        )
+        if marked:
+            defer_purge(membership.workspace_id)
+    return marked

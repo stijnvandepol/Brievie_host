@@ -90,6 +90,18 @@ class TrashListOut(Schema):
     retention_days: int = 30
 
 
+class EmptyTrashIn(InputSchema):
+    """Empty the trash up to the newest `trashed_at` the caller showed (all when absent):
+    a letter trashed while the admin read the question is not emptied."""
+
+    up_to: datetime | None = None
+
+
+class EmptyTrashOut(Schema):
+    # How many letters are now being purged.
+    document_count: int
+
+
 class PageOut(Schema):
     index: int
     ocr_text: str
