@@ -176,8 +176,8 @@ def test_a_foreign_key_check_does_not_wait_for_a_document_lock(ws_a: Workspace) 
             c.execute(
                 "INSERT INTO documents_documentevent"
                 " (id, created_at, updated_at, workspace_id, document_id, kind, origin,"
-                " person_name, label_name, rule_name)"
-                " VALUES (%s, now(), now(), %s, %s, 'confirmed', 'user', '', '', '')",
+                " person_name, label_name, rule_name, note)"
+                " VALUES (%s, now(), now(), %s, %s, 'confirmed', 'user', '', '', '', '')",
                 [uuid.uuid4(), ws_a.id, document.id],
             )
             other.rollback()

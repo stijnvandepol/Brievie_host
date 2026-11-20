@@ -178,7 +178,9 @@ def test_migrated_database_shows_every_member_what_it_showed(o: Office) -> None:
         everyone_sees_all=False, departments_enabled=True, admins_read_all=False
     )
     switches.visibility_defaults(global_apps, connection.schema_editor())
-    fill.fill_addressee_ids(global_apps, connection.schema_editor())
+    # In the migration the document policies do not exist yet; here they do.
+    with as_actor(o.workspace, SYSTEM):
+        fill.fill_addressee_ids(global_apps, connection.schema_editor())
 
     for name, user in o.users.items():
         expected = NOT_PRIVATE | ({"private_femke"} if name == "finance" else set())
@@ -188,7 +190,7 @@ def test_migrated_database_shows_every_member_what_it_showed(o: Office) -> None:
 def test_fill_addressee_ids_matches_the_links(o: Office) -> None:
     with as_actor(o.workspace, SYSTEM):
         Document.objects.update(addressee_ids=[])
-    fill.fill_addressee_ids(global_apps, connection.schema_editor())
+        fill.fill_addressee_ids(global_apps, connection.schema_editor())
     with as_actor(o.workspace, SYSTEM):
         for name, letter in o.letters.items():
             links = sorted(

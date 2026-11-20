@@ -62,6 +62,12 @@ def _body(o: Office, *, addressees: list[str], sender: str = "Gemeente") -> dict
     }
 
 
+def _without_tasks(o: Office, letter: str) -> None:
+    """The office's letters carry a task; a repeat compares all tasks of the letter."""
+    with as_actor(o.workspace, SYSTEM):
+        Task.objects.filter(document=o.letters[letter]).delete()
+
+
 def _confirm(client: Client, o: Office, letter: str, body: dict[str, object]) -> "Response":
     return post_json(
         client, f"/workspaces/{o.workspace.id}/documents/{o.letters[letter].id}/confirm", body
@@ -120,6 +126,7 @@ def test_confirm_never_raises_42501(o: Office) -> None:
 
 
 def test_repeat_confirm_after_hand_over(o: Office) -> None:
+    _without_tasks(o, "scanned_in_review")
     client = _as(o, "plain")
     body = _body(o, addressees=["Femke"])
     first = _confirm(client, o, "scanned_in_review", body)
@@ -147,6 +154,7 @@ def test_other_review_after_hand_over_is_404(o: Office) -> None:
 
 def test_repeat_by_someone_who_never_saw_the_letter_is_404(o: Office) -> None:
     # Not an oracle: only the member who confirmed it gets the repeat's answer.
+    _without_tasks(o, "scanned_in_review")
     body = _body(o, addressees=["Femke"])
     _confirm(_as(o, "plain"), o, "scanned_in_review", body)
 

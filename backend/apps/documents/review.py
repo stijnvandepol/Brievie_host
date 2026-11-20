@@ -118,7 +118,6 @@ def _store_confirmation(
     with system_actor():
         document.status = Document.Status.DONE
         document.confirmed_by = user
-        document.confirmed_at = timezone.now()
         document.save(update_fields=["status", "confirmed_by", "confirmed_at", "updated_at"])
 
 
@@ -148,6 +147,9 @@ def _write_confirmation(
     document.confirmed_by_ai = by_ai
     document.confirmed_organisation = _organisation(data) if data.sets_organisation else None
     document.save(update_fields=_CONFIRMED_FIELDS)
+    # The rules at confirm read the confirmed values once `confirmed_at` is set
+    # (`rules.facts`); it is stored with the status, as the system, in step 2.
+    document.confirmed_at = timezone.now()
     if data.sets_organisation and user is not None:
         _set_organisation(document, data, user)
     organise.record_confirmed(
