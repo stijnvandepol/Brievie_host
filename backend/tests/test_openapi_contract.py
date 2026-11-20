@@ -14,7 +14,7 @@ from brievie.api import api
 ERROR_REF = "#/components/schemas/ErrorOut"
 CAMEL_CASE = re.compile(r"^[a-z][a-zA-Z0-9]*$")
 # No failure mode besides a server error (ruling); every other operation documents its errors.
-NO_ERROR_RESPONSES = {"getHealth", "getSetupStatus"}
+NO_ERROR_RESPONSES = {"getSetupStatus"}
 BODY_ERRORS = {"400", "413", "415", "422"}
 HTTP_METHODS = {"get", "put", "post", "delete", "patch", "options", "head", "trace"}
 
@@ -70,6 +70,15 @@ def test_no_operation_documents_a_500() -> None:
         responses = op["responses"]
         assert isinstance(responses, dict)
         assert "500" not in {str(status) for status in responses}, op["operationId"]
+
+
+def test_health_documents_503_and_server_version_is_optional() -> None:
+    contract = json.loads(export_openapi.OUTPUT.read_text(encoding="utf-8"))
+    health = contract["paths"]["/api/v1/health"]["get"]
+    assert "503" in health["responses"]
+    out = contract["components"]["schemas"]["HealthOut"]
+    assert "server_version" in out["properties"]
+    assert "server_version" not in out.get("required", [])
 
 
 def test_version_is_1_0_0() -> None:

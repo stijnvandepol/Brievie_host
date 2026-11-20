@@ -2,7 +2,6 @@
 
 import json
 import re
-import tomllib
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -17,6 +16,7 @@ from django.utils import timezone
 from psycopg.rows import TupleRow
 
 from apps.backup.errors import BackupError
+from apps.common.version import server_version
 from apps.devices.pki import certificate_sha256
 
 MANIFEST_FORMAT = 1
@@ -52,8 +52,8 @@ class Manifest:
 
 
 def brievie_version() -> str:
-    with (Path(settings.BASE_DIR) / "pyproject.toml").open("rb") as handle:
-        return str(tomllib.load(handle)["project"]["version"])
+    """The server's version (kept as a name: B1's callers use it)."""
+    return server_version()
 
 
 def host_name() -> str:

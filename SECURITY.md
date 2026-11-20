@@ -21,7 +21,9 @@ a fix is released. There is no bug bounty.
 ## Supported versions
 
 Fixes go into the latest release (until the first release: the `main` branch). Older
-versions get no separate fixes: update to the latest one.
+versions get no separate fixes: update to the latest one with `./brievie update`.
+Releases are git tags `vX.Y.Z`, listed in `CHANGELOG.md`; a release that fixes a
+vulnerability says so under **Beveiliging**.
 
 ## Scope
 

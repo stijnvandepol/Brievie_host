@@ -140,12 +140,45 @@ def test_pg_client_major_matches_the_server() -> None:
     assert len(set(compose + ci + client)) == 1, (compose, ci, client)
 
 
-def test_every_service_takes_the_backend_image_from_one_variable() -> None:
-    # A second stack (another worktree) builds and runs its own image tag.
+IMAGE = "image: ${BRIEVIE_IMAGE:-brievie/backend:${BRIEVIE_VERSION:-local}}"
+
+
+def test_every_service_takes_the_backend_image_from_the_version() -> None:
+    # ./brievie always sets BRIEVIE_IMAGE (from the version, or the user's own); the
+    # default only serves a hand `docker compose`, make dev and CI.
     for name in ("api", "migrate", "worker", "keeper", "admin"):
-        assert "image: ${BRIEVIE_IMAGE:-brievie/backend:local}" in service(name), name
-    hard_coded = COMPOSE.replace("${BRIEVIE_IMAGE:-brievie/backend:local}", "")
-    assert "brievie/backend:local" not in hard_coded
+        assert IMAGE in service(name), name
+    assert "brievie/backend:" not in COMPOSE.replace(IMAGE, "")
+
+
+def test_worker_and_keeper_get_a_minute_to_stop() -> None:
+    # An update stops them: a job cut off is picked up again by the retry of stalled jobs.
+    for name in ("worker", "keeper"):
+        assert "stop_grace_period: 1m" in service(name), name
+
+
+def test_the_update_fallback_is_a_volume_no_service_mounts() -> None:
+    # ./brievie mounts it at /backup of the one-off admin container for one call only
+    # (BRIEVIE_BACKUP_DIR=update-backup): the keeper can never reach it, so no retention
+    # but the update's own prunes it.
+    volumes = COMPOSE.split("\nvolumes:\n", 1)[1]
+    assert "  update-backup:" in volumes.splitlines()
+    for name in ("api", "migrate", "worker", "keeper", "admin", "caddy", "postgres"):
+        assert "update-backup" not in service(name), name
+
+
+def test_postgres_is_not_published_by_the_installation() -> None:
+    # The stack reaches PostgreSQL inside its own network; on a NAS a published 5432
+    # collides with the NAS's own database. Only the development override publishes it.
+    assert "ports:" not in service("postgres")
+    dev = (ROOT / "deploy" / "docker-compose.dev.yml").read_text()
+    assert '"127.0.0.1:${POSTGRES_PORT:-5432}:5432"' in dev
+    assert "brievie/backend" not in dev
+
+
+def test_make_uses_the_development_override() -> None:
+    makefile = (ROOT / "Makefile").read_text()
+    assert "-f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml" in makefile
 
 
 def test_keeper_has_no_master_key_and_no_superuser_password() -> None:
@@ -379,3 +412,17 @@ def test_the_worker_that_builds_member_exports_mounts_the_documents() -> None:
     # writes the sealed export under the storage root, which the api reads for the
     # download. Without the volume the worker would use its own container's disk.
     assert re.search(r"^\s+- documents:/data/documents$", service("worker"), re.MULTILINE)
+
+
+def test_api_healthcheck_calls_the_health_endpoint() -> None:
+    # urlopen raises on a 503, so the check fails when the database does, and an
+    # `up --wait` (./brievie start and update) waits for a server that really works.
+    healthcheck = service("api").split("healthcheck:", 1)[1].split("volumes:", 1)[0]
+    assert "/api/v1/health" in healthcheck
+    assert "urlopen" in healthcheck
+
+
+def test_ci_checks_the_server_version_through_caddy() -> None:
+    stack = CI.split("\n  stack:\n", 1)[1].split("\n  dast:\n", 1)[0]
+    assert '["server_version"]' in stack
+    assert "backend/pyproject.toml" in stack

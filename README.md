@@ -199,6 +199,22 @@ of Brievie. There is no nightly schedule yet: run `./brievie backup` yourself or
 NAS's task scheduler. Destinations, restoring over a running server, what has not been
 verified yet and advice for organisations are in [docs/SELFHOST.md](docs/SELFHOST.md).
 
+## Updating
+
+```sh
+./brievie update          # to the newest version (asks you to type BIJWERKEN)
+./brievie update 0.3.0    # to that version
+```
+
+Versions are tags `vX.Y.Z`; what changed is in [CHANGELOG.md](CHANGELOG.md), with
+**Voor je bijwerkt** first when a release asks something of you. The update checks the
+jump, builds the new version while Brievie runs, stops it, backs up (to your
+destination, or an emergency copy on this machine), then updates the database and starts
+the new version. If that fails it prints the way back: `git checkout` of the old version
+and `./brievie restore pre-update-<version>`. Nothing updates by itself. An installation
+from before versions moves once by hand (`git fetch --tags`, `git checkout v0.2.0`,
+`./brievie start`). Details: [docs/SELFHOST.md](docs/SELFHOST.md), section 21.
+
 ## Development
 
 Requirements: Docker with Compose v2, [uv](https://docs.astral.sh/uv/) (installs Python

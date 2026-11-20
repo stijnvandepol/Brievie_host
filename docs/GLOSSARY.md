@@ -58,6 +58,10 @@ the translation. Add a line before introducing a new domain term.
 | opruimen | sweep |
 | hoofdsleutel | master key |
 | back-updienst | keeper |
+| bijwerken | update |
+| versie | version |
+| noodback-up | update fallback back-up (`update-backup` volume) |
+| wijzigingslog | change log (`CHANGELOG.md`) |
 | bestemming | destination |
 | serverbeheerder | server admin (`User.is_server_admin`) |
 | uitnodiging | invitation (`Invitation`) |

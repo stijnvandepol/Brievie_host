@@ -25,6 +25,11 @@ HOST = "brievie"
 # days, counted from now, by services._apply_retention).
 SAFETY_TAG = "kind:safety"
 DB_FILENAME = "brievie.pgdump"
+# The name of an update's emergency back-up (`./brievie restore pre-update-0.3.0`), on
+# both snapshots as the tag `label:<name>`. ASCII digits only, nothing around it.
+LABEL_PATTERN = re.compile(
+    r"pre-update-(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})"
+)
 TMP_EXCLUDE = ".tmp-*"
 # Every snapshot of the last two days (counted from the newest) stays; older ones
 # thin out to one a day for a week, one a week for a month, one a month for a year.
@@ -90,9 +95,19 @@ def tags(run_id: UUID, kind: Literal["db", "files"]) -> list[str]:
     return ["--tag", f"run:{run_id}", "--tag", f"kind:{kind}"]
 
 
-def _run_marks(at: datetime | None, safety: bool) -> list[str]:
-    """The safety tag, and the run's own time (UTC; restic reads --time in TZ=UTC)."""
+def check_label(label: str) -> None:
+    """Refuse (`label_invalid`) anything but `pre-update-X.Y.Z`."""
+    if LABEL_PATTERN.fullmatch(label) is None:
+        raise BackupError("label_invalid")
+
+
+def _run_marks(at: datetime | None, safety: bool, label: str = "") -> list[str]:
+    """The safety tag, the label, and the run's own time (UTC; restic reads --time in
+    TZ=UTC)."""
     marks = ["--tag", SAFETY_TAG] if safety else []
+    if label:
+        check_label(label)
+        marks += ["--tag", f"label:{label}"]
     if at is not None:
         marks += ["--time", at.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S")]
     return marks
@@ -127,6 +142,7 @@ def backup_stdin_argv(
     host: str = HOST,
     at: datetime | None = None,
     safety: bool = False,
+    label: str = "",
 ) -> list[str]:
     return [
         "backup",
@@ -134,7 +150,7 @@ def backup_stdin_argv(
         "--host",
         host,
         *tags(run_id, "db"),
-        *_run_marks(at, safety),
+        *_run_marks(at, safety, label),
         "--stdin-from-command",
         "--stdin-filename",
         DB_FILENAME,
@@ -151,6 +167,7 @@ def backup_files_argv(
     at: datetime | None = None,
     safety: bool = False,
     excludes: Sequence[str] = (),
+    label: str = "",
 ) -> list[str]:
     return [
         "backup",
@@ -158,7 +175,7 @@ def backup_files_argv(
         "--host",
         host,
         *tags(run_id, "files"),
-        *_run_marks(at, safety),
+        *_run_marks(at, safety, label),
         "--exclude",
         TMP_EXCLUDE,
         *(argument for path in excludes for argument in ("--exclude", path)),
@@ -183,6 +200,12 @@ def forget_argv(host: str = HOST) -> list[str]:
         SAFETY_TAG,
         *RETENTION,
     ]
+
+
+def fallback_forget_argv(host: str = HOST) -> list[str]:
+    """Retention of an update's fallback repository: only the newest run stays (its two
+    snapshots carry the same time, one per group of host and paths)."""
+    return ["forget", "--prune", "--host", host, "--group-by", "host,paths", "--keep-last", "1"]
 
 
 def snapshots_host_argv(host: str) -> list[str]:
