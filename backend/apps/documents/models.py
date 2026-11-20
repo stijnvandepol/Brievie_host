@@ -322,6 +322,8 @@ class DocumentEvent(WorkspaceModel):
         # The autopilot did it: an AI proposal applied, or a name match applied.
         AI = "ai"
         NAME_MATCH = "name_match"
+        # The autopilot applied a rule's label proposal (`rule` names the rule).
+        RULE_AUTOPILOT = "rule_autopilot"
 
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="events")
     kind = models.CharField(max_length=30, choices=Kind.choices)

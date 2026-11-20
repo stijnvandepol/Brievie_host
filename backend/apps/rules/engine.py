@@ -8,6 +8,7 @@ every planned `propose` action). A rule matches on the hoped state; its actions 
 the user dismissed on the document is never planned, so no later rule builds on it.
 """
 
+import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from uuid import UUID
@@ -241,14 +242,24 @@ def evaluate(facts: DocumentFacts, rules: Sequence[RuleSpec]) -> Evaluation:
     return Evaluation(matched_rule_ids=tuple(matched), planned=tuple(planned))
 
 
-# The letterhead: the start of the text up to the first blank line, at most this many
-# non-empty lines and characters. Scanned letters seldom keep their blank lines, so the
-# caps usually decide: sender, address, date, reference and subject line fit in eight.
+# The letterhead: the start of the text up to the first blank line or the salutation,
+# at most this many non-empty lines and characters. Scanned letters seldom keep their
+# blank lines, so the salutation and the caps usually decide: sender, address, date,
+# reference and subject line ("Betreft", "Aan") fit in eight.
 LETTERHEAD_LINES = 8
 LETTERHEAD_CHARS = 400
+# A line that opens the letter itself; it and what follows are running text.
+_SALUTATION = re.compile(r"(?:geachte|beste|hallo|dear|l\.\s?s\.)(?!\w)", re.IGNORECASE)
 
-# The operators that find words; `not_contains_word` finds none, so it is no hit.
-_FINDING = frozenset({"contains_word", "contains", "equals"})
+# Conditions that hold because something is there (not because something is absent).
+_POSITIVE: Mapping[str, frozenset[str]] = {
+    "text": frozenset({"contains_word", "contains"}),
+    "sender": frozenset({"contains_word", "contains", "equals"}),
+    "document_type": frozenset({"is"}),
+    "label": frozenset({"has"}),
+    "addressee": frozenset({"is"}),
+    "source": frozenset({"is"}),
+}
 
 
 def letterhead(text: str) -> str:
@@ -264,7 +275,7 @@ def letterhead(text: str) -> str:
         head = head[: cut + 1] if cut >= 0 else ""
     lines: list[str] = []
     for line in head.splitlines():
-        if not line.strip():
+        if not line.strip() or _SALUTATION.match(line.strip()):
             break
         lines.append(line)
         if len(lines) == LETTERHEAD_LINES:
@@ -272,49 +283,47 @@ def letterhead(text: str) -> str:
     return "\n".join(lines).rstrip()
 
 
-@dataclass(frozen=True)
-class PhraseHit:
-    """A text or sender condition of a rule that holds, and where its words are."""
+def holds_on_settled(rule: RuleSpec, facts: DocumentFacts) -> bool:
+    """Whether the rule matches on settled facts alone and not on a keyword in the
+    running text, with at least one condition that holds because something is there.
 
-    condition: Condition
-    on_sender: bool
-    in_letterhead: bool
-
-
-def phrase_hits(rule: RuleSpec, facts: DocumentFacts) -> tuple[PhraseHit, ...]:
-    """The rule's text and sender conditions that hold on the document by finding words,
-    each with whether the words are on the sender and whether in the letterhead.
-
-    A sender condition is on the sender. A text condition is on the sender when the
-    sender holds the same words, and in the letterhead when the letterhead does. A
-    condition that does not hold, or holds by the absence of a word, is left out.
+    `facts` holds only what is settled: the caller passes the sender and the type a
+    person confirmed (else empty) and no hoped ids. A word condition holds in the
+    letterhead; a sender condition on the (confirmed) sender or with its words in the
+    letterhead; a negated word is looked for in the whole text. A rule that holds only
+    by absences ("does not contain") does not count.
     """
-    phrases = _Phrases(prepare(facts.text), prepare(facts.sender))
-    head: Prepared | None = None
-    hits: list[PhraseHit] = []
+    combine = _COMBINE.get(rule.match)
+    if combine is None:
+        return False
+    head_text = letterhead(facts.text)
+    head = prepare(head_text)
+    sender = prepare(facts.sender)
+    whole: Prepared | None = None
+    held: list[bool] = []
+    present = False
     for condition in rule.conditions:
-        if condition.field not in ("text", "sender") or condition.op not in _FINDING:
-            continue
-        if condition.op not in OPERATORS[condition.field] or not phrases.holds(condition)[0]:
-            continue
-        if condition.field == "sender":
-            hits.append(PhraseHit(condition, on_sender=True, in_letterhead=False))
-            continue
-        if head is None:
-            head = prepare(letterhead(facts.text))
-        hits.append(
-            PhraseHit(
-                condition,
-                on_sender=_phrase(phrases.sender, condition.op, condition.value)[0],
-                in_letterhead=_phrase(head, condition.op, condition.value)[0],
+        field_, op, value = condition.field, condition.op, condition.value
+        if op not in OPERATORS.get(field_, frozenset()):
+            holds = False
+        elif field_ == "text" and op == "not_contains_word":
+            whole = whole or prepare(facts.text)
+            holds = _phrase(whole, op, value)[0]
+        elif field_ == "text":
+            holds = _phrase(head, op, value)[0]
+        elif field_ == "sender" and op == "equals":
+            holds = _phrase(sender, op, value)[0] or any(
+                _phrase(prepare(line), op, value)[0] for line in head_text.splitlines()
             )
-        )
-    return tuple(hits)
-
-
-def rests_on_letterhead(rule: RuleSpec, facts: DocumentFacts) -> bool:
-    """Whether the rule's hit is not only a keyword in the running text: every text or
-    sender condition that holds, holds on the sender or in the letterhead. A rule without
-    such a condition (only the type, a person, a label or the source) rests on no keyword.
-    """
-    return all(hit.on_sender or hit.in_letterhead for hit in phrase_hits(rule, facts))
+        elif field_ == "sender":
+            holds = _phrase(sender, op, value)[0] or _phrase(head, op, value)[0]
+        elif field_ == "label":
+            holds = _id_condition(set(facts.label_ids), op, value)
+        elif field_ == "addressee":
+            holds = _id_condition(set(facts.addressee_ids), op, value)
+        else:
+            actual = facts.document_type if field_ == "document_type" else facts.source
+            holds = bool(actual) and (actual == value) == (op != "is_not")
+        held.append(holds)
+        present = present or (holds and op in _POSITIVE.get(field_, frozenset()))
+    return combine(held) and present

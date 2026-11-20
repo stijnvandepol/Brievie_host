@@ -11,6 +11,7 @@ The caller holds the document's row lock and the workspace's RLS context.
 import re
 import unicodedata
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 from uuid import UUID
@@ -32,13 +33,14 @@ from apps.documents.schemas import ConfirmIn, TaskIn
 from apps.people.matching import PRESELECT_FROM
 from apps.people.models import Person
 from apps.pipeline.schema import ExtractionPayload
+from apps.pipeline.settings_service import autopilot_in_force
 from apps.pipeline.validation import (
     ACTION_TYPES,
     DOCUMENT_TYPES,
     MONTH_NAMES_PATTERN,
     ValidatedValue,
 )
-from apps.rules.engine import evaluate, rests_on_letterhead
+from apps.rules.engine import evaluate, holds_on_settled
 from apps.rules.facts import active_specs, facts_for
 from apps.tasks.models import Task
 
@@ -57,7 +59,9 @@ def apply_open_proposals(document: Document) -> int:
     A target that is gone or an archived person is skipped, and so is anything that
     would take the document over its limit. An AI pick of a person is applied only when
     its quote names that person (`quote_names`); otherwise it stays open. A rule's label
-    proposal is applied only when `rule_labels_to_apply` names it.
+    proposal is applied only when `rule_labels_to_apply` names it, decided after the
+    addressees are applied (they are settled then) and only when the administrator
+    agreed to the notice that says so (`Autopilot.rule_labels`).
     """
     room: dict[str, int] = {
         _ADD_ADDRESSEE: ADDRESSEES_MAX
@@ -79,10 +83,13 @@ def apply_open_proposals(document: Document) -> int:
     active_persons = list(
         Person.objects.filter(workspace_id=document.workspace_id, archived_at__isnull=True)
     )
-    rule_labels = rule_labels_to_apply(document, rows)
+    rule_labels: frozenset[UUID] | None = None
     applied = 0
     for row in rows:
-        event_origin = _event_origin(row, rule_labels)
+        if row.action == _ADD_LABEL and rule_labels is None:
+            allowed = autopilot_in_force(document.workspace_id).rule_labels
+            rule_labels = rule_labels_to_apply(document, rows) if allowed else frozenset()
+        event_origin = _event_origin(row, rule_labels or frozenset())
         if event_origin is None or room[row.action] <= 0:
             continue
         if row.action == _ADD_LABEL:
@@ -93,8 +100,7 @@ def apply_open_proposals(document: Document) -> int:
                 row.label,
                 actor=None,
                 origin=event_origin,
-                rule=row.rule if event_origin == DocumentEvent.Origin.RULE else None,
-                automatic=True,
+                rule=row.rule if event_origin == DocumentEvent.Origin.RULE_AUTOPILOT else None,
             )
         else:
             if row.person is None or row.person.archived_at is not None:
@@ -151,14 +157,14 @@ def _normalised(text: str) -> str:
 def rule_labels_to_apply(document: Document, rows: Sequence[DocumentSuggestion]) -> frozenset[UUID]:
     """The labels of the open rule proposals in `rows` that the autopilot applies.
 
-    A rule's label qualifies when (a) the rule rests on the sender or the letterhead, not
-    on a keyword in the running text (`rests_on_letterhead`), or (b) the AI proposed the
-    same label with a confidence of `AUTO_APPLY_FROM` or more (`ai_confidence`; a weaker
-    echo of a word in the running text is no agreement; the document carries no other
-    signal that a letter instructs the AI). None qualifies when the rules disagree on
-    this letter (a matching rule adds a label that was said no to here) or more than
-    `RULE_LABELS_MAX` qualify: then a person decides. Only a rule that matches the
-    document now counts.
+    A rule's label qualifies when (a) the rule holds on settled facts alone
+    (`holds_on_settled`): the labels and persons on the letter, the sender and type a
+    person confirmed, and the letterhead; not on an open proposal, the AI's guess of the
+    sender or type, or a word in the running text. Or (b) the AI's own pick of the same
+    label reaches `AUTO_APPLY_FROM` (`ai_confidence`). None qualifies when the rules
+    disagree on this letter (a rule that matches it adds a label that was said no to here)
+    or more than `RULE_LABELS_MAX` qualify: then a person decides. Only a rule that
+    matches the document now counts.
     """
     candidates = [
         row
@@ -181,13 +187,21 @@ def rule_labels_to_apply(document: Document, rows: Sequence[DocumentSuggestion])
         for action in spec.actions
     ):
         return frozenset()
+    confirmed = document.confirmed_at is not None
+    settled = replace(
+        facts,
+        sender=document.sender if confirmed else "",
+        document_type=document.document_type if confirmed else "",
+        hoped_label_ids=frozenset(),
+        hoped_addressee_ids=frozenset(),
+    )
     qualifying = frozenset(
         row.label_id
         for row in candidates
         if row.label_id is not None
         and row.rule_id is not None
         and (spec := by_id.get(row.rule_id)) is not None
-        and (row.ai_confidence >= AUTO_APPLY_FROM or rests_on_letterhead(spec, facts))
+        and (row.ai_confidence >= AUTO_APPLY_FROM or holds_on_settled(spec, settled))
     )
     return qualifying if len(qualifying) <= RULE_LABELS_MAX else frozenset()
 
@@ -196,7 +210,7 @@ def _event_origin(row: DocumentSuggestion, rule_labels: frozenset[UUID]) -> str 
     """The history origin when this proposal may be applied on its own, else None."""
     if row.origin == DocumentSuggestion.Origin.RULE:
         if row.action == _ADD_LABEL and row.label_id in rule_labels:
-            return DocumentEvent.Origin.RULE
+            return DocumentEvent.Origin.RULE_AUTOPILOT
         return None
     if row.origin == DocumentSuggestion.Origin.AI and row.confidence >= AUTO_APPLY_FROM:
         return DocumentEvent.Origin.AI

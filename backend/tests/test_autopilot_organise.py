@@ -280,7 +280,7 @@ def test_a_strong_ai_agreement_applies_a_keyword_rule_label(ws_a: Workspace) -> 
     assert on_document(ws_a, document) == ({"Belastingdienst"}, set())
     with workspace_context(ws_a.id):
         event = DocumentEvent.objects.get(document=document, kind="label_added")
-        assert (event.origin, event.actor) == ("rule", None)
+        assert (event.origin, event.actor) == ("rule_autopilot", None)
         assert DocumentLabel.objects.get(document=document).automatic is True
 
 

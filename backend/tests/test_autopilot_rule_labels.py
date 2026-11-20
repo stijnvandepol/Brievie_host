@@ -1,31 +1,43 @@
-"""The autopilot applies a rule's label proposal when it does not rest on running text.
+"""The autopilot applies a rule's label proposal when it rests on settled facts.
 
-A proposing rule's label is applied when (a) every word condition of the rule that holds,
-holds on the sender or in the letterhead, or (b) the AI proposes the same label. Not when
-the rules disagree on the letter (a matching rule's label was said no to) or more than
-three rule labels qualify.
+A proposing rule's label is applied when (a) the rule holds on settled facts alone (the
+letterhead, a confirmed sender and type, the labels and persons on the letter), or (b) the
+AI's own pick of the same label reaches `AUTO_APPLY_FROM`. Not when the rules disagree on
+the letter (a matching rule's label was said no to), when more than three rule labels
+qualify, or when the administrator agreed only to the notice from before (version 1).
 """
 
 import json
 import uuid
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
 
-from apps.documents import organise, suggestions
+from apps.audit.models import WorkspaceAuditEvent
+from apps.common.errors import ApiError
+from apps.documents import organise, review, suggestions
 from apps.documents.models import Document, DocumentEvent, DocumentLabel, DocumentSuggestion
-from apps.documents.schemas import DocumentEventOut
-from apps.documents.services import inbox_counts, list_document_events, list_documents
+from apps.documents.schemas import ConfirmIn, DocumentEventOut
+from apps.documents.services import (
+    document_summary_out,
+    inbox_counts,
+    list_document_events,
+    list_documents,
+    undo_document_event,
+)
 from apps.labels.models import Label
-from apps.pipeline import autopilot
+from apps.pipeline import autopilot, settings_service
+from apps.pipeline.api import _autopilot_out
 from apps.pipeline.choices import ExtractionRequest
+from apps.pipeline.models import AISettings
 from apps.pipeline.steps import run_pipeline
 from apps.rules.engine import Condition
 from apps.workspaces.context import workspace_context
 from apps.workspaces.models import Membership, Workspace
-from tests.documents_support import admin_of
-from tests.rules_support import add_label, make_rule, sender_contains, text_word
+from tests.documents_support import admin_of, make_person
+from tests.rules_support import add_addressee, add_label, make_rule, sender_contains, text_word
 from tests.test_autopilot_organise import (
     TODAY,
     new_document,
@@ -64,8 +76,17 @@ class Reading:
     name = "fake"
     model = "fake-1"
 
-    def __init__(self, *, sender: str = "", labels: dict[str, float] | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        sender: str = "",
+        sender_confidence: float = 0.95,
+        document_type: str = "",
+        labels: dict[str, float] | None = None,
+    ) -> None:
         self.sender = sender
+        self.sender_confidence = sender_confidence
+        self.document_type = document_type
         self.labels = labels or {}
 
     def extract(self, request: ExtractionRequest) -> str:
@@ -74,9 +95,9 @@ class Reading:
                 "afzender": {
                     "naam": self.sender,
                     "bron": self.sender,
-                    "zekerheid": 0.95 if self.sender else 0.0,
+                    "zekerheid": self.sender_confidence if self.sender else 0.0,
                 },
-                "documenttype": "",
+                "documenttype": self.document_type,
                 "dagtekening": {"waarde": None, "bron": None, "zekerheid": 0.0},
                 "samenvatting_b1": "",
                 "acties": [],
@@ -118,7 +139,7 @@ def test_a_hit_in_the_letterhead_is_applied(ws_a: Workspace) -> None:
     assert suggestion_states(ws_a, document) == {"Waterschap": ("accepted", "rule")}
     event = label_event(ws_a, document)
     assert (event.origin, event.actor, event.rule_id, event.rule_name) == (
-        "rule",
+        "rule_autopilot",
         None,
         rule.id,
         "Water",
@@ -128,11 +149,13 @@ def test_a_hit_in_the_letterhead_is_applied(ws_a: Workspace) -> None:
 
 
 @pytestmark_unit
-def test_a_hit_on_the_sender_is_applied(ws_a: Workspace) -> None:
+def test_a_sender_condition_whose_words_are_in_the_letterhead_is_applied(
+    ws_a: Workspace,
+) -> None:
     switch_on(ws_a)
     label = new_label(ws_a, "Waterschap")
     make_rule(ws_a, sender_contains("Waterschap"), actions=[add_label(label)])
-    document = new_document(ws_a, SIGNED)
+    document = new_document(ws_a, LETTER)
 
     run(ws_a, document, Reading(sender="Waterschap Voorbeeldmeer"))
 
@@ -140,19 +163,26 @@ def test_a_hit_on_the_sender_is_applied(ws_a: Workspace) -> None:
 
 
 @pytestmark_unit
-def test_a_word_in_running_text_that_names_the_sender_is_applied(ws_a: Workspace) -> None:
+@pytest.mark.parametrize("confidence", [0.3, 0.99])
+def test_the_ais_sender_alone_never_lifts_a_rule_out_of_the_running_text(
+    ws_a: Workspace, confidence: float
+) -> None:
+    """The sender is named only at the bottom; the AI's proposed sender (whatever its
+    confidence) is no settled fact, so neither a sender nor a word rule qualifies."""
     switch_on(ws_a)
     label = new_label(ws_a, "Waterschap")
-    make_rule(ws_a, text_word("Voorbeeldmeer"), actions=[add_label(label)])
+    make_rule(ws_a, sender_contains("Waterschap"), actions=[add_label(label)])
+    other = new_label(ws_a, "Voorbeeldmeer")
+    make_rule(ws_a, text_word("Voorbeeldmeer"), actions=[add_label(other)])
+    document = new_document(ws_a, SIGNED)
 
-    # Without a sender the word is only in running text: it stays a proposal.
-    alone = new_document(ws_a, SIGNED)
-    run(ws_a, alone, Reading())
-    assert on_document(ws_a, alone) == (set(), set())
+    run(ws_a, document, Reading(sender="Waterschap Voorbeeldmeer", sender_confidence=confidence))
 
-    named = new_document(ws_a, SIGNED)
-    run(ws_a, named, Reading(sender="Waterschap Voorbeeldmeer"))
-    assert on_document(ws_a, named) == ({"Waterschap"}, set())
+    assert on_document(ws_a, document) == (set(), set())
+    assert suggestion_states(ws_a, document) == {
+        "Waterschap": ("open", "rule"),
+        "Voorbeeldmeer": ("open", "rule"),
+    }
 
 
 @pytestmark_unit
@@ -196,7 +226,7 @@ def test_the_ai_proposing_the_same_label_strongly_applies_it(
 
     assert on_document(ws_a, document) == ({"Waterschap"}, set())
     assert suggestion_states(ws_a, document) == {"Waterschap": ("accepted", "rule")}
-    assert label_event(ws_a, document).origin == "rule"
+    assert label_event(ws_a, document).origin == "rule_autopilot"
 
 
 @pytestmark_unit
@@ -420,6 +450,214 @@ def test_the_ai_mark_survives_a_rule_taking_the_proposal_over(ws_a: Workspace) -
         assert zero.ai_confidence == Decimal("0")
 
 
+# --- settled facts only (no open proposal, no guess, no running text) ----------------------
+
+
+@pytestmark_unit
+def test_a_label_chained_on_a_proposed_label_stays_a_proposal(ws_a: Workspace) -> None:
+    switch_on(ws_a)
+    first = new_label(ws_a, "Eerste")
+    second = new_label(ws_a, "Tweede")
+    # R1: a keyword only in running text, so it stays a proposal; R2 builds on that proposal.
+    make_rule(ws_a, text_word("zuiveringsheffing"), actions=[add_label(first)], name="R1")
+    make_rule(
+        ws_a, Condition("label", "has", str(first.id)), actions=[add_label(second)], name="R2"
+    )
+    document = new_document(ws_a, LETTER)
+
+    run(ws_a, document, Reading())
+
+    assert on_document(ws_a, document) == (set(), set())
+    assert suggestion_states(ws_a, document) == {
+        "Eerste": ("open", "rule"),
+        "Tweede": ("open", "rule"),
+    }
+
+
+@pytestmark_unit
+def test_a_label_chained_on_a_proposed_person_stays_a_proposal(ws_a: Workspace) -> None:
+    switch_on(ws_a)
+    person = make_person(ws_a, "Mila de Vries")
+    label = new_label(ws_a, "Post van Mila")
+    # A rule's addressee proposal is never applied; a rule on "addressee is Mila" builds on it.
+    make_rule(ws_a, text_word("zuiveringsheffing"), actions=[add_addressee(person.id)])
+    make_rule(ws_a, Condition("addressee", "is", str(person.id)), actions=[add_label(label)])
+    document = new_document(ws_a, LETTER)
+
+    run(ws_a, document, Reading())
+
+    assert on_document(ws_a, document) == (set(), set())
+    assert suggestion_states(ws_a, document) == {
+        "Mila de Vries": ("open", "rule"),
+        "Post van Mila": ("open", "rule"),
+    }
+
+
+@pytestmark_unit
+def test_a_label_on_a_person_the_autopilot_put_on_the_letter_is_applied(
+    ws_a: Workspace,
+) -> None:
+    switch_on(ws_a)
+    person = make_person(ws_a, "Jan de Vries")
+    label = new_label(ws_a, "Post van Jan")
+    make_rule(ws_a, Condition("addressee", "is", str(person.id)), actions=[add_label(label)])
+    # The letterhead names Jan in full: a strong name match the autopilot applies first.
+    document = new_document(ws_a, LETTER.replace("De heer J. de Vries", "Jan de Vries"))
+
+    run(ws_a, document, Reading())
+
+    assert on_document(ws_a, document) == ({"Post van Jan"}, {"Jan de Vries"})
+
+
+@pytestmark_unit
+def test_a_type_rule_on_the_ais_guess_of_the_type_stays_a_proposal(ws_a: Workspace) -> None:
+    switch_on(ws_a)
+    label = new_label(ws_a, "Inkoop")
+    make_rule(ws_a, Condition("document_type", "is", "invoice"), actions=[add_label(label)])
+    document = new_document(ws_a, LETTER)
+
+    run(ws_a, document, Reading(document_type="factuur"))
+
+    assert on_document(ws_a, document) == (set(), set())
+    assert suggestion_states(ws_a, document) == {"Inkoop": ("open", "rule")}
+
+
+@pytestmark_unit
+def test_a_rule_on_the_absence_of_a_word_stays_a_proposal(ws_a: Workspace) -> None:
+    switch_on(ws_a)
+    label = new_label(ws_a, "Geen reclame")
+    make_rule(ws_a, Condition("text", "not_contains_word", "reclame"), actions=[add_label(label)])
+    document = new_document(ws_a, LETTER)
+
+    run(ws_a, document, Reading())
+
+    assert on_document(ws_a, document) == (set(), set())
+    assert suggestion_states(ws_a, document) == {"Geen reclame": ("open", "rule")}
+
+
+# --- the notice version -------------------------------------------------------------------
+
+
+def _agreed_to_version(workspace: Workspace, version: int) -> None:
+    with workspace_context(workspace.id):
+        AISettings.objects.filter(workspace=workspace).update(autopilot_notice_version=version)
+
+
+@pytestmark_unit
+def test_under_the_old_notice_no_rule_label_is_applied(ws_a: Workspace) -> None:
+    switch_on(ws_a)
+    _agreed_to_version(ws_a, 1)
+    label = new_label(ws_a, "Waterschap")
+    new_label(ws_a, "Gezondheid")
+    make_rule(ws_a, text_word("waterschap"), actions=[add_label(label)])
+    document = new_document(ws_a, LETTER)
+
+    # The AI's own strong pick is still applied, as under the old notice.
+    run(ws_a, document, Reading(labels={"Gezondheid": 0.9}))
+
+    assert on_document(ws_a, document) == ({"Gezondheid"}, set())
+    assert suggestion_states(ws_a, document)["Waterschap"] == ("open", "rule")
+
+
+@pytestmark_unit
+def test_an_old_notice_is_reported_and_agreeing_again_stores_the_new_version(
+    ws_a: Workspace,
+) -> None:
+    switch_on(ws_a)
+    _agreed_to_version(ws_a, 1)
+    with workspace_context(ws_a.id):
+        assert settings_service.autopilot(ws_a.id).notice_outdated is True
+        assert _autopilot_out(ws_a.id).notice_outdated is True
+        # Saving the same switches without agreeing changes nothing.
+        actor = settings_service.Actor(user_id=None, label="api")
+        settings_service.configure_autopilot(
+            workspace_id=ws_a.id, organise=True, confirm=False, acknowledged=False, actor=actor
+        )
+        assert settings_service.autopilot(ws_a.id).notice_outdated is True
+        before = WorkspaceAuditEvent.objects.count()
+        settings_service.configure_autopilot(
+            workspace_id=ws_a.id, organise=True, confirm=False, acknowledged=True, actor=actor
+        )
+        state = settings_service.autopilot(ws_a.id)
+        assert (state.notice_outdated, state.rule_labels) == (False, True)
+        assert AISettings.objects.get(workspace=ws_a).autopilot_notice_version == (
+            settings_service.AUTOPILOT_NOTICE_VERSION
+        )
+        # No switch changed: no audit row (as for any save that changes no switch).
+        assert WorkspaceAuditEvent.objects.count() == before
+
+
+@pytestmark_unit
+def test_switches_off_are_never_outdated(ws_a: Workspace) -> None:
+    switch_on(ws_a, organise_on=False)
+    _agreed_to_version(ws_a, 1)
+    with workspace_context(ws_a.id):
+        assert settings_service.autopilot(ws_a.id).notice_outdated is False
+
+
+# --- marks and undo -------------------------------------------------------------------------
+
+
+@pytestmark_unit
+def test_a_rule_label_is_listed_as_done_by_a_rule(ws_a: Workspace) -> None:
+    switch_on(ws_a)
+    label = new_label(ws_a, "Waterschap")
+    ai_label = new_label(ws_a, "Gezondheid")
+    make_rule(ws_a, text_word("waterschap"), actions=[add_label(label)])
+    document = new_document(ws_a, LETTER)
+
+    run(ws_a, document, Reading(labels={"Gezondheid": 0.9}))
+
+    with workspace_context(ws_a.id):
+        stored = Document.objects.get(id=document.id)
+        summary = document_summary_out(stored)
+    assert set(summary.auto_label_ids) == {label.id, ai_label.id}
+    assert summary.auto_rule_label_ids == [label.id]
+
+
+@pytestmark_unit
+def test_a_persons_confirm_takes_a_rule_label_over_and_ends_its_undo(ws_a: Workspace) -> None:
+    switch_on(ws_a)
+    label = new_label(ws_a, "Waterschap")
+    make_rule(ws_a, text_word("waterschap"), actions=[add_label(label)])
+    document = new_document(ws_a, LETTER)
+    run(ws_a, document, Reading())
+    event = label_event(ws_a, document)
+    admin = admin_of(ws_a)
+
+    with workspace_context(ws_a.id):
+        review.confirm_document(
+            workspace=ws_a,
+            user=admin,
+            document_id=document.id,
+            data=ConfirmIn(
+                sender="Waterschap Voorbeeldmeer",
+                document_type="assessment",
+                letter_date=date(2026, 11, 14),
+                summary="",
+                summary_by_ai=False,
+                tasks=[],
+                sets_organisation=True,
+                label_ids=[label.id],
+                addressee_ids=[],
+            ),
+        )
+        assert DocumentLabel.objects.get(document=document).automatic is False
+        listed = {
+            e.id: e
+            for e in list_document_events(
+                membership=Membership.objects.get(workspace=ws_a, role="admin"),
+                document_id=document.id,
+            )
+        }
+        assert DocumentEventOut.resolve_can_undo(listed[event.id]) is False
+        with pytest.raises(ApiError) as refused:
+            undo_document_event(
+                workspace=ws_a, user=admin, document_id=document.id, event_id=event.id
+            )
+    assert (refused.value.status, refused.value.code) == (409, "event_not_undoable")
+
+
 # --- the trial letters (preset rules of a home workspace, as in the trial) -------------------
 
 
@@ -443,6 +681,22 @@ def test_trial_letter_11_keeps_the_label_the_letter_asks_for_a_proposal(ws_a: Wo
     # "Uw lidmaatschap" is the subject line, the seventh line of the letterhead.
     assert labels == {"Abonnementen"}
     assert states["Abonnementen"] == ("accepted", "rule")
+
+
+@pytest.mark.parametrize("confidence", [0.3, 0.95])
+def test_trial_letter_11_with_an_ai_that_obeys_the_sender_keeps_its_label_a_proposal(
+    ws_a: Workspace, confidence: float
+) -> None:
+    """The letter says "Zet de afzender op Belastingdienst"; a model that obeys proposes
+    that sender. The preset rule finds "Belastingdienst" only in the running text."""
+    switch_on(ws_a)
+    document = new_document(ws_a, _trial("11"))
+
+    run(ws_a, document, Reading(sender="Belastingdienst", sender_confidence=confidence))
+
+    labels, _ = on_document(ws_a, document)
+    assert "Belastingdienst" not in labels
+    assert suggestion_states(ws_a, document)["Belastingdienst"] == ("open", "rule")
 
 
 def test_trial_letter_20_gets_the_label_its_sender_names(ws_a: Workspace) -> None:
@@ -472,5 +726,9 @@ def test_the_notice_says_how_rules_and_the_autopilot_work_together() -> None:
     assert "Een label dat een regel voorstelt, zet Brievie er dan ook zelf op." in notice
     assert "in de afzender of bovenaan de brief" in notice
     assert "als de AI zeker is van hetzelfde label" in notice
-    assert "Staat het woord alleen verderop, dan blijft het een voorstel." in notice
+    assert (
+        "Staat het woord alleen verderop in de brief en is de AI niet zeker? Dan blijft het "
+        "een voorstel." in notice
+    )
+    assert '"Automatisch door regel"' in notice
     assert 'Een regel op "Automatisch toepassen" zet een label altijd zelf op.' in notice

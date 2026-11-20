@@ -1170,21 +1170,86 @@ Design: `docs/superpowers/specs/2026-11-19-ai-autopilot-design.md`. Opt-in per w
   - Finding #18: the audit log keeps a deleted person's name but only the id of a deleted label or rule; choose one line.
   - Also skipped from the same test: #12 (task events do not say which task: needs a field and a migration), #13 (rule counts after undo or "no"), #16 (an admin may archive their own linked person), #17 (folders differing only in case: needs a constraint and existing duplicates), #22 (a malformed id in a path is 422, not 404).
 
-## 2026-11-20: The autopilot applies a rule's label when it does not rest on running text
+## 2026-11-20: The autopilot applies a rule's label when it rests on settled facts
 
-Stijn wants labels applied automatically too. In the trial with a real Claude key (20 made-up letters) the autopilot put letters under persons well, but every label stayed a proposal: a rule's proposal was never applied (2026-11-19), and the AI's own label picks seldom reach `AUTO_APPLY_FROM`.
+Stijn wants labels applied automatically too. In the trial with a real Claude key (20
+made-up letters) the autopilot put letters under persons well, but every label stayed a
+proposal: a rule's proposal was never applied (2026-11-19), and the AI's own label picks
+seldom reach `AUTO_APPLY_FROM`.
 
-- **The ruling.** With `auto_organise` in force, `apply_open_proposals` also applies an open label proposal of origin `rule` when (a) every text or sender condition of that rule that holds, holds on the sender (confirmed, or the pipeline's proposed sender while unconfirmed) or in the letterhead, or the rule has no such condition (type, person, label or source only: it rests on no keyword); or (b) the AI's own pick of the same label has a confidence of `AUTO_APPLY_FROM` (0.800) or more (`DocumentSuggestion.ai_confidence`). A rule label resting only on running text plus a weaker AI echo stays a proposal. `apps.pipeline.autopilot.rule_labels_to_apply` decides; `apps.rules.engine.phrase_hits` / `rests_on_letterhead` say where a rule's words are, pure (no Django). A rule's addressee proposal is still never applied.
-- **Not applied, all stay proposals:** when the rules disagree on the letter, that is a rule that matches the letter now adds a label that was dismissed on it (also a dismissal by hand or of the same rule's other label: any "no" to a matching rule's label is a person's judgement on what the rules make of this letter); or when more than `RULE_LABELS_MAX` (3) rule labels qualify. A dismissed proposal is never applied (it is not open). Only a rule that matches the document at that moment counts.
-- **The letterhead.** The start of the masked text up to the first blank line after a non-empty line, at most 8 non-empty lines and 400 characters; a word cut by the character cap is left out, so a part of a longer word is no hit. A negated condition (`not_contains_word`) finds no words and is no hit. Scanned text seldom keeps blank lines (none of the 20 trial letters has one), so the caps decide; 8 lines hold sender, address, date, reference and subject line in the trial letters. With 6 lines, three correct subject-line labels (letters 2, 4, 10) would have stayed proposals.
-- **Trial, replayed against the preset rules** (engine only, ruling (a)): applied 11 rule labels, all of them a label the answer sheet accepts (1, 2, 3, 4 Zorg, 9, 10, 11 Abonnementen, 13, 15, 18, 20 Gemeente). Stays a proposal: 5 Abonnementen ("contributie" in the text of a debt collector's letter: a wrong label), 11 Belastingdienst (the letter's instruction to the AI), 4 Verzekering, 6 Auto, 7 Zorg, 12 Wonen, 17 Wonen (right labels whose word stands only in the running text).
-- **Letters 11 and 20 against the brief.** The brief expected both to stay proposals as running-text hits. The trial data says otherwise for two of their three rule labels: letter 20's "Label Gemeente" rests on "Waterschap", the sender and the first line, and letter 11's "Label Abonnementen" on its subject line "Uw lidmaatschap" (line 7). Under ruling (a) both are applied; the answer sheet accepts both labels ("Belasting of Gemeente", "Geen of Abonnementen"). Only letter 11's "Label Belastingdienst" is a running-text hit, and it stays. `tests/test_autopilot_rule_labels.py` pins exactly this; a stricter letterhead would cost the subject-line labels above. To be confirmed by Stijn.
-- **(b) needs a strong AI pick (coordinator's ruling).** A letter that tells the AI to give label X, plus a keyword rule on X in the running text, gets X only when the AI's own pick of X reaches `AUTO_APPLY_FROM`; a low-confidence echo stays a proposal (`test_a_weak_ai_echo_of_the_letter_does_not_apply_a_keyword_rule_label`). The document carries no signal that a letter instructs the AI or is suspect, so the threshold is the only guard; a letter that makes the AI obey at 0.800 or more still gets the label, marked and undoable (`test_a_strong_ai_agreement_applies_a_keyword_rule_label`). Such a signal, once it exists, should block (b).
-- **Known limit: short letters are all letterhead.** A text of at most 8 lines and 400 characters has no running text, so every keyword hit in it counts as (a).
-- **History and undo.** Origin `rule` (it existed), with the rule that proposed it, no actor, and an `automatic` link (`organise.add_label(..., automatic=True)`): the badge and the filter "Automatisch door AI" include it. Undo works as for any rule change and dismisses the label, so nothing applies it again. Unlike an `ai` change it stays undoable after a person's confirm with `sets_organisation` (that confirm clears `automatic`, and the history cannot tell this event from a rule's own change); the ruling kept origin `rule` rather than adding a value.
-- **AI agreement is kept on the proposal row.** One row per change, and a rule's proposal takes the AI's row over (origin and confidence), so `DocumentSuggestion.ai_confidence` (migration `documents 0010`, default 0) keeps the highest confidence of the AI's own picks. Not in the API.
-- **A rule set to apply** (mode `auto`) is unchanged: it applies always, autopilot or not, and its link is not `automatic`. The rule editor's switch, the autopilot switch on the AI page and the server's notice say how the two work together.
-- **The `automatic` counter of `getInboxCounts`** counts what the list filter `automatic=true` keeps, with the same predicate (`_is_automatic`): confirmed by the AI, or a label or addressee link still marked automatic. The trial's 19 was right: 12 confirmed letters and 19 with an automatic person are 19 letters together. Unchanged; the web shows no number, only the filter "Automatisch door AI", which matches it. A test pins that an applied rule label counts.
+- **The ruling.** With `auto_organise` in force, `apply_open_proposals` also applies an
+  open label proposal of origin `rule` when (a) the rule holds on settled facts alone
+  (`apps.rules.engine.holds_on_settled`, pure): a word condition in the letterhead; a
+  sender condition on a sender a person confirmed, or with its words in the letterhead; a
+  type only when confirmed; labels and persons only when on the letter; at least one
+  condition that holds because something is there. Or (b) the AI's own pick of that label
+  reaches `AUTO_APPLY_FROM` (`DocumentSuggestion.ai_confidence`). `rule_labels_to_apply`
+  decides, after the addressees are applied (an applied person is settled). A rule's
+  addressee proposal is still never applied.
+- **Never a guess or a proposal (review C1, I1).** The pipeline's proposed sender lifts
+  nothing out of the running text, whatever its confidence: a letter that tells the AI
+  "zet de afzender op Belastingdienst" would otherwise turn a running-text keyword into a
+  sender hit (trial letter 11). A rule that matches only through an open proposal (a label
+  or person proposed, also by another rule), the AI's guessed type or proposed sender
+  stays a proposal. A rule that holds only by absences ("does not contain X", "nobody")
+  does not qualify: the letter controls what is absent.
+- **(b) needs a strong AI pick.** A rule label resting only on running text plus a weaker
+  AI echo stays a proposal. The document carries no signal that a letter instructs the
+  AI, so the threshold is the only guard; a letter that makes the AI obey at 0.800 or more
+  still gets the label, marked and undoable. Such a signal, once it exists, should block (b).
+- **Not applied, all stay proposals:** when a rule that matches the letter now adds a label
+  that was dismissed on it (any "no" to a matching rule's label: a person judged what the
+  rules make of this letter), or when more than `RULE_LABELS_MAX` (3) rule labels qualify.
+- **The letterhead.** The start of the masked text up to the first blank line or the
+  salutation line ("Geachte", "Beste", "Hallo", "Dear", "L.S."), at most 8 non-empty lines
+  and 400 characters; a word cut by the character cap is left out. "Aan" and "Betreft"
+  stay in the head: the subject line is the strongest hint of what a letter is about, and
+  "Aan" opens an address block. None of the 20 trial letters has a blank line, so the
+  salutation and the caps decide. Known limit: a short letter without a salutation (at
+  most 8 lines and 400 characters) has no running text, so every word in it counts.
+- **Trial, replayed against the preset rules** (engine only, (a)): applied 1, 2, 3, 4 Zorg,
+  9, 10, 11 Abonnementen, 13, 15, 20 Gemeente, each a label the answer sheet accepts. Stays
+  a proposal: 5 Abonnementen ("contributie" in a debt collector's text: a wrong label),
+  11 Belastingdienst (the letter's instruction), 18 Abonnementen (now after the
+  salutation), and 4 Verzekering, 6 Auto, 7 Zorg, 12 Wonen, 17 Wonen (right labels whose
+  word stands only in the running text).
+- **Letters 11 and 20 against the brief.** The brief expected both to stay proposals.
+  Letter 20's "Label Gemeente" rests on "Waterschap", the sender and the first line;
+  letter 11's "Label Abonnementen" on its subject line. Both are applied, and the answer
+  sheet accepts both; only letter 11's "Belastingdienst" (running text) stays, also when
+  the AI obeys the letter's sender instruction. Kept on the coordinator's ruling; reported
+  to Stijn.
+- **History, mark and undo.** History origin `rule_autopilot` (new, additive; `rule`
+  names the rule), no actor, an `automatic` link. Undo works as for the AI's changes and
+  dismisses the label; a person's confirm with `sets_organisation` takes it over and ends
+  the undo, as CLAUDE.md requires. This replaces the brief's "reuse `rule`": with `rule`
+  the history could not tell it from a rule's own change. `DocumentSummaryOut.
+  auto_rule_label_ids` (additive) names these labels, read from the accepted rule
+  proposals: the badge says "Automatisch door regel" when only a rule's label was put on,
+  "Automatisch door AI" when the AI chose something. The list filter, which counts both,
+  is now "Automatisch door Brievie".
+- **Notice version (review I3).** The notice now says rule labels are applied, which the
+  administrators who switched the autopilot on before did not agree to.
+  `AISettings.autopilot_notice_version` (rows that existed: 1; new rows: 0) records the
+  version agreed to; `AUTOPILOT_NOTICE_VERSION` is 2. Rule labels are applied only from
+  version 2 (`RULE_LABELS_FROM_NOTICE`); below that the autopilot does what the old notice
+  said. `getAiAutopilot.notice_outdated` (additive) is true while a switch is on under an
+  older version; the web then shows the new notice to agree to, and `updateAiAutopilot`
+  with the same switches and `acknowledged` stores the version. `configure_autopilot`
+  stays the only writer; agreeing again changes no switch, so it writes no audit row (the
+  closed list has no code for it). Dropped: switching every workspace off in a data
+  migration (it would undo a choice to fix a wording).
+- **AI agreement is kept on the proposal row.** One row per change, and a rule's proposal
+  takes the AI's row over, so `DocumentSuggestion.ai_confidence` (default 0) keeps the
+  highest confidence of the AI's own picks. Not in the API. Migration `documents 0011`
+  (after main's `0010_search`) with the new history origin; `pipeline 0005`.
+- **A rule set to apply** (mode `auto`) is unchanged: it applies always, autopilot or not,
+  with origin `rule`, and its link is not `automatic`. The rule editor's switch, the
+  autopilot switch and the server notice say how the two work together.
+- **The `automatic` counter of `getInboxCounts`** counts what the list filter
+  `automatic=true` keeps, with the same predicate: confirmed by the AI, or a link still
+  marked automatic. The trial's 19 was right (12 confirmed and 19 with an automatic person
+  are 19 letters together). Unchanged; rule labels the autopilot applied count too.
 
 ## 2026-11-20: Search for letters
 
