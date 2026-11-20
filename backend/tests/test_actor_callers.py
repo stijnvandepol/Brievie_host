@@ -4,6 +4,7 @@
 decision: it is added here in the same commit, with the reason in its own code.
 """
 
+import re
 from pathlib import Path
 
 APPS = Path(__file__).resolve().parent.parent / "apps"
@@ -25,12 +26,27 @@ def _sources() -> dict[str, str]:
     return {str(p.relative_to(root)): p.read_text() for p in sorted(APPS.rglob("*.py"))}
 
 
+# Running as the system needs `system_actor` or `SYSTEM` from the context module.
+_CALLS = re.compile(r"system_actor\(|actor=SYSTEM")
+_IMPORTS = re.compile(r"from apps\.workspaces\.context import (\([^)]*\)|[^\n]*)")
+
+
+def _uses_system(text: str) -> bool:
+    if _CALLS.search(text):
+        return True
+    names = {
+        name.strip()
+        for found in _IMPORTS.finditer(text)
+        for name in found.group(1).strip("()").replace("\n", " ").split(",")
+    }
+    return bool(names & {"SYSTEM", "system_actor"})
+
+
 def test_system_callers_are_the_known_list() -> None:
     callers = {
         name
         for name, text in _sources().items()
-        if name != "apps/workspaces/context.py"
-        and ("system_actor(" in text or "actor=SYSTEM" in text)
+        if name != "apps/workspaces/context.py" and _uses_system(text)
     }
     assert callers == ALLOWED_SYSTEM_CALLERS
 
