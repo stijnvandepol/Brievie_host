@@ -464,4 +464,6 @@ def test_the_notice_says_how_rules_and_the_autopilot_work_together() -> None:
     notice = autopilot_notice()
     assert "Een label dat een regel voorstelt, zet Brievie er dan ook zelf op." in notice
     assert "in de afzender of bovenaan de brief" in notice
-    assert 'Een regel op "Automatisch toepassen" doet dat altijd.' in notice
+    assert "als de AI zeker is van hetzelfde label" in notice
+    assert "Staat het woord alleen verderop, dan blijft het een voorstel." in notice
+    assert 'Een regel op "Automatisch toepassen" zet een label altijd zelf op.' in notice

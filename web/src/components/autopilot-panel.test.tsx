@@ -95,7 +95,7 @@ describe("automatisch verwerken", () => {
       name: "Brieven zelf onder personen en labels zetten",
     });
     expect(organise).toHaveAccessibleDescription(
-      "Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is. Een label dat een regel voorstelt, zet Brievie er ook op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI hetzelfde label voorstelt. Een regel die op 'Automatisch toepassen' staat, doet dat altijd.",
+      "Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is. Een label dat een regel voorstelt, zet Brievie er ook op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is van hetzelfde label. Staat het woord alleen verderop in de brief, dan blijft het een voorstel. Een regel die op 'Automatisch toepassen' staat, doet dat altijd.",
     );
   });
 

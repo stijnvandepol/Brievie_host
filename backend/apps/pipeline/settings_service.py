@@ -347,8 +347,10 @@ def autopilot_notice() -> str:
         "zonder dat iemand eerst kijkt.\n"
         "\n"
         "Een label dat een regel voorstelt, zet Brievie er dan ook zelf op. Maar alleen als "
-        "de regel het woord in de afzender of bovenaan de brief vond, of als de AI hetzelfde "
-        'label voorstelt. Een regel op "Automatisch toepassen" doet dat altijd.\n'
+        "de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is "
+        "van hetzelfde label. Staat het woord alleen verderop, dan blijft het een voorstel.\n"
+        "\n"
+        'Een regel op "Automatisch toepassen" zet een label altijd zelf op.\n'
         "\n"
         "De AI leest wat er in de brief staat en gelooft dat. Maar een brief kan fout zijn, "
         "of je misleiden. Dan klopt ook de afzender, de datum of de taak niet.\n"
