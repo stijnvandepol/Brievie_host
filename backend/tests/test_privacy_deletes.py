@@ -25,7 +25,6 @@ from apps.people.models import Person
 from apps.rules.models import Rule, RuleRun
 from apps.workspaces.context import SYSTEM
 from tests.documents_support import jpeg, upload
-from tests.helpers import put
 from tests.visibility_support import Office, as_actor, office
 
 
@@ -144,10 +143,10 @@ def test_archiving_a_person_closes_suggestions_on_hidden_letters(o: Office) -> N
             person=jan,
         )
 
-    r = put(
-        _as(o, "admin"),
-        f"/workspaces/{o.workspace.id}/persons/{jan.id}",
+    r = _as(o, "admin").put(
+        f"/api/v1/workspaces/{o.workspace.id}/persons/{jan.id}",
         {"display_name": "Jan", "archived": True},
+        content_type="application/json",
     )
 
     assert r.status_code == 200
