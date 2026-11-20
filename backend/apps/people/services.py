@@ -213,17 +213,19 @@ def update_person(
     workspace: Workspace,
     person_id: UUID,
     display_name: str,
-    name_variants: list[str],
-    archived: bool,
+    name_variants: list[str] | None,
+    archived: bool | None,
 ) -> Person:
+    """`name_variants` or `archived` None keeps the stored value."""
     with transaction.atomic():
         person = _get_for_update(workspace, person_id)
         kept = {person.display_name, *person.name_variants}
         person.display_name = _clean_name(display_name, kept)
-        person.name_variants = _clean_variants(name_variants, kept)
-        if not archived:
+        if name_variants is not None:
+            person.name_variants = _clean_variants(name_variants, kept)
+        if archived is False:
             person.archived_at = None
-        elif person.archived_at is None:
+        elif archived and person.archived_at is None:
             person.archived_at = timezone.now()
             # An archived person cannot be added to a document, so their open proposals
             # could be neither accepted nor confirmed. Accepted and dismissed rows stay.

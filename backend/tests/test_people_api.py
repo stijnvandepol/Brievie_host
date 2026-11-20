@@ -230,6 +230,30 @@ def test_update_person(client_a: Client, ws_a: Workspace) -> None:
     assert r.json()["archived"] is False
 
 
+def test_a_rename_keeps_what_it_leaves_out(client_a: Client, ws_a: Workspace) -> None:
+    # The finding: a rename without `archived` took the person out of the archive.
+    r = create(
+        client_a,
+        ws_a.id,
+        {"display_name": "Test Persoon", "name_variants": ["T. Persoon"], "archived": True},
+    )
+    path = f"/workspaces/{ws_a.id}/persons/{r.json()['id']}"
+
+    renamed = put(client_a, path, {"display_name": "Test Persoon B"})
+
+    assert renamed.status_code == 200
+    out = renamed.json()
+    assert (out["display_name"], out["name_variants"], out["archived"]) == (
+        "Test Persoon B",
+        ["T. Persoon"],
+        True,
+    )
+    restored = put(client_a, path, {"display_name": "Test Persoon B", "archived": False})
+    assert restored.json()["archived"] is False
+    cleared = put(client_a, path, {"display_name": "Test Persoon B", "name_variants": []})
+    assert (cleared.json()["name_variants"], cleared.json()["archived"]) == ([], False)
+
+
 def test_update_to_an_existing_name_is_409(client_a: Client, ws_a: Workspace) -> None:
     create(client_a, ws_a.id, {"display_name": "Papa"})
     mama = create(client_a, ws_a.id, {"display_name": "Mama"}).json()
