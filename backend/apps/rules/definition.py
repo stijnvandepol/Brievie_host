@@ -37,11 +37,13 @@ def validate(
     label_ids: Collection[UUID],
     person_ids: Collection[UUID],
     kept_values: Collection[str] = (),
+    archived_person_ids: Collection[UUID] = (),
 ) -> None:
     """Refuse a definition that breaks a limit, with a Dutch sentence that names it.
 
-    `label_ids` are the workspace's labels, `person_ids` its persons that are not
-    archived. `kept_values` are the text and sender values the rule already stores: one
+    `label_ids` are the workspace's labels, `person_ids` the persons the rule may name
+    (see rules.services), `archived_person_ids` the archived ones it may not, only to
+    say so. `kept_values` are the text and sender values the rule already stores: one
     masked before a BSN was refused here may stay (it matches nothing).
     """
     if match not in MATCHES:
@@ -58,10 +60,19 @@ def validate(
         )
     for condition in conditions:
         _validate_condition(
-            condition, label_ids=label_ids, person_ids=person_ids, kept_values=kept_values
+            condition,
+            label_ids=label_ids,
+            person_ids=person_ids,
+            kept_values=kept_values,
+            archived_person_ids=archived_person_ids,
         )
     for action in actions:
-        _validate_action(action, label_ids=label_ids, person_ids=person_ids)
+        _validate_action(
+            action,
+            label_ids=label_ids,
+            person_ids=person_ids,
+            archived_person_ids=archived_person_ids,
+        )
 
 
 def _validate_condition(
@@ -70,6 +81,7 @@ def _validate_condition(
     label_ids: Collection[UUID],
     person_ids: Collection[UUID],
     kept_values: Collection[str],
+    archived_person_ids: Collection[UUID],
 ) -> None:
     field, op = condition.field, condition.op
     if field not in OPERATORS:
@@ -105,11 +117,17 @@ def _validate_condition(
         if value:
             raise _invalid(_("Bij 'op naam van niemand' hoort geen persoon."))
     elif _uuid(value) not in person_ids:
+        if _uuid(value) in archived_person_ids:
+            raise _archived_person()
         raise _invalid(_("Een voorwaarde noemt een persoon die we niet kunnen vinden."))
 
 
 def _validate_action(
-    action: ActionIn, *, label_ids: Collection[UUID], person_ids: Collection[UUID]
+    action: ActionIn,
+    *,
+    label_ids: Collection[UUID],
+    person_ids: Collection[UUID],
+    archived_person_ids: Collection[UUID],
 ) -> None:
     kind, label_id, person_id = action
     if kind not in ACTIONS:
@@ -123,7 +141,15 @@ def _validate_action(
     if label_id is not None or person_id is None:
         raise _invalid(_("Een actie 'op naam zetten' noemt alleen een persoon."))
     if person_id not in person_ids:
+        if person_id in archived_person_ids:
+            raise _archived_person()
         raise _invalid(_("Een actie noemt een persoon die we niet kunnen vinden."))
+
+
+def _archived_person() -> ApiError:
+    return _invalid(
+        _("Deze persoon is gearchiveerd. Zet de persoon eerst terug, of kies een ander.")
+    )
 
 
 def to_json(

@@ -143,6 +143,44 @@ def test_action_with_archived_person_is_422(client_a: Client, ws_a: Workspace) -
     r = post_json(client_a, f"/workspaces/{ws_a.id}/rules", body)
 
     assert r.status_code == 422
+    assert r.json()["message"] == (
+        "Deze persoon is gearchiveerd. Zet de persoon eerst terug, of kies een ander."
+    )
+
+
+def test_a_rule_whose_person_was_archived_stays_editable(client_a: Client, ws_a: Workspace) -> None:
+    # The finding: archiving the person made every change to the rule fail with "persoon
+    # niet gevonden", even switching it off. A rule can always be switched off, edited
+    # and deleted; it cannot newly point at an archived person.
+    person = make_person(ws_a, "Wegwerppersoon")
+    other = make_person(ws_a, "Ander", archived=True)
+    body = rule_body(
+        label(ws_a, "auto").id,
+        conditions=[{"field": "addressee", "op": "is", "value": str(person.id)}],
+        actions=[{"type": "add_addressee", "person_id": str(person.id)}],
+    )
+    rule = post_json(client_a, f"/workspaces/{ws_a.id}/rules", body).json()
+    r = put_json(
+        client_a,
+        f"/api/v1/workspaces/{ws_a.id}/persons/{person.id}",
+        {"display_name": "Wegwerppersoon", "archived": True},
+    )
+    assert r.status_code == 200
+    url = f"{rules_url(ws_a.id)}/{rule['id']}"
+
+    off = put_json(client_a, url, {**body, "active": False, "name": "Andere naam"})
+    assert off.status_code == 200
+    assert (off.json()["active"], off.json()["name"]) == (False, "Andere naam")
+    # The editor tests the rule with what it stores before saving.
+    tried = post_json(client_a, f"/workspaces/{ws_a.id}/rules/test", body)
+    assert tried.status_code == 200
+
+    newly = {**body, "actions": [{"type": "add_addressee", "person_id": str(other.id)}]}
+    refused = put_json(client_a, url, newly)
+    assert refused.status_code == 422
+    assert "gearchiveerd" in refused.json()["message"]
+
+    assert client_a.delete(url).status_code == 204
 
 
 def test_label_of_another_workspace_is_422(
