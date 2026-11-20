@@ -68,11 +68,13 @@ def confirm_document(
                 .first()
             )
             # Only a person's review repeats: the AI's confirmation is taken back by
-            # reopening.
+            # reopening. Only the member who confirmed it gets the repeat's answer, so
+            # the lookup as the system tells nobody else anything.
             if (
                 seen is not None
                 and seen.status == Document.Status.DONE
                 and not seen.confirmed_by_ai
+                and seen.confirmed_by_id == user.id
                 and _is_repeat(data, seen)
             ):
                 return seen
