@@ -88,6 +88,29 @@ describe("automatisch verwerken", () => {
     expect(confirm).toHaveAccessibleDescription(/\.$/);
   });
 
+  it("asks to agree again to a newer notice and keeps the switches as they are", async () => {
+    const state = autopilotServer("external", { auto_organise: true, notice_outdated: true });
+    const user = userEvent.setup();
+    renderApp(path);
+    await user.click(await screen.findByRole("button", { name: "Nieuwe uitleg lezen" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText("Fouten zijn mogelijk.", { exact: false })).toBeVisible();
+    await user.click(within(dialog).getByRole("button", { name: "Akkoord" }));
+    await waitFor(() => expect(state.puts).toHaveLength(1));
+    expect(state.puts[0]).toEqual({
+      auto_organise: true,
+      auto_confirm: false,
+      acknowledged: true,
+    });
+  });
+
+  it("does not ask again while the notice is current", async () => {
+    autopilotServer("external", { auto_organise: true });
+    renderApp(path);
+    await screen.findByRole("switch", { name: "Brieven zelf onder personen en labels zetten" });
+    expect(screen.queryByRole("button", { name: "Nieuwe uitleg lezen" })).not.toBeInTheDocument();
+  });
+
   it("says when a rule's proposed label is put on by itself", async () => {
     autopilotServer("external");
     renderApp(path);
@@ -95,7 +118,7 @@ describe("automatisch verwerken", () => {
       name: "Brieven zelf onder personen en labels zetten",
     });
     expect(organise).toHaveAccessibleDescription(
-      "Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is. Een label dat een regel voorstelt, zet Brievie er ook op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is van hetzelfde label. Staat het woord alleen verderop in de brief, dan blijft het een voorstel. Een regel die op 'Automatisch toepassen' staat, doet dat altijd.",
+      "Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is. Een label dat een regel voorstelt, zet Brievie er ook op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is van hetzelfde label. Staat het woord alleen verderop in de brief en is de AI niet zeker? Dan blijft het een voorstel. Een regel die op 'Automatisch toepassen' staat, doet dat altijd.",
     );
   });
 

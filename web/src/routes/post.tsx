@@ -118,7 +118,7 @@ function PostPage() {
               })
             }
           />
-          <label htmlFor="filter-automatic">{t`Automatisch door AI`}</label>
+          <label htmlFor="filter-automatic">{t`Automatisch door Brievie`}</label>
         </div>
       </div>
       {isPending ? <Loading /> : null}

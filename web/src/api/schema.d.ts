@@ -556,7 +556,7 @@ export interface paths {
         get: operations["getAiAutopilot"];
         /**
          * Update Ai Autopilot
-         * @description Switch the AI autopilot on or off. Web session only: a bearer token answers 401 not_authenticated. Administrators only. A switch that goes on needs `acknowledged` (409 `ai_autopilot_ack_required`), AI on for the workspace (409 `ai_autopilot_needs_ai`) and the server's permission (409 `ai_autopilot_forbidden`). Switching off always works. Switching AI off or agreeing to another AI address also switches both off.
+         * @description Switch the AI autopilot on or off. Web session only: a bearer token answers 401 not_authenticated. Administrators only. A switch that goes on needs `acknowledged` (409 `ai_autopilot_ack_required`), AI on for the workspace (409 `ai_autopilot_needs_ai`) and the server's permission (409 `ai_autopilot_forbidden`). Switching off always works. Switching AI off or agreeing to another AI address also switches both off. `acknowledged` with a switch on records that the current `notice` was agreed to (clears `notice_outdated`), also when no switch changes.
          */
         put: operations["updateAiAutopilot"];
         post?: never;
@@ -1489,6 +1489,11 @@ export interface components {
             auto_organise: boolean;
             /** Notice */
             notice: string;
+            /**
+             * Notice Outdated
+             * @default false
+             */
+            notice_outdated: boolean;
         };
         /** AiSettingsIn */
         AiSettingsIn: {
@@ -1757,6 +1762,8 @@ export interface components {
             auto_addressee_ids?: string[];
             /** Auto Label Ids */
             auto_label_ids?: string[];
+            /** Auto Rule Label Ids */
+            auto_rule_label_ids?: string[];
             /**
              * Client Id
              * Format: uuid
@@ -1840,6 +1847,8 @@ export interface components {
             auto_addressee_ids?: string[];
             /** Auto Label Ids */
             auto_label_ids?: string[];
+            /** Auto Rule Label Ids */
+            auto_rule_label_ids?: string[];
             /**
              * Client Id
              * Format: uuid
@@ -1976,6 +1985,8 @@ export interface components {
             auto_addressee_ids?: string[];
             /** Auto Label Ids */
             auto_label_ids?: string[];
+            /** Auto Rule Label Ids */
+            auto_rule_label_ids?: string[];
             /**
              * Client Id
              * Format: uuid

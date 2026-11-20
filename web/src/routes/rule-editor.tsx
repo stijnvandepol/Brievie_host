@@ -666,13 +666,16 @@ function RuleForm({
           className="switch"
           isSelected={mode === "auto"}
           onChange={(on) => setMode(on ? "auto" : "propose")}
-          aria-describedby={`${formId}-mode-hint`}
+          aria-describedby={`${formId}-mode-hint ${formId}-mode-autopilot`}
         >
           <span className="switch-track" aria-hidden="true" />
           {t`Automatisch toepassen`}
         </Switch>
         <p id={`${formId}-mode-hint`} className="switch-hint">
-          {t`Aan: de regel zet het label of de naam er altijd zelf op. Uit: de regel doet een voorstel dat jij bevestigt. Staat bij AI 'Brieven zelf onder personen en labels zetten' aan? Dan zet Brievie een voorgesteld label er toch zelf op, als de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is van hetzelfde label. Staat het woord alleen verderop in de brief, dan blijft het een voorstel.`}
+          {t`Aan: de regel zet het label of de naam er altijd zelf op. Uit: de regel doet een voorstel dat jij bevestigt.`}
+        </p>
+        <p id={`${formId}-mode-autopilot`} className="switch-hint">
+          {t`Staat bij AI 'Brieven zelf onder personen en labels zetten' aan? Dan zet Brievie een voorgesteld label er toch zelf op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is van hetzelfde label. Staat het woord alleen verderop en is de AI niet zeker? Dan blijft het een voorstel.`}
         </p>
         <Switch className="switch" isSelected={stop} onChange={setStop}>
           <span className="switch-track" aria-hidden="true" />
