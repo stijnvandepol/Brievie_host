@@ -65,6 +65,11 @@ if argv[:1] == ["compose"]:
 with open(os.environ["FAKE_DOCKER_LOG"], "a") as log:
     log.write(json.dumps(entry) + "\\n")
 
+if os.environ.get("FAKE_COPY_LOCK") and "backup_status" in argv:
+    # What ./brievie holds while it runs: its lock, copied for the test to read.
+    import shutil
+    lock = os.path.join(os.environ["FAKE_ROOT"], "deploy", ".brievie-lock")
+    shutil.copytree(lock, os.path.join(os.path.dirname(os.environ["FAKE_DOCKER_LOG"]), "lock-copy"))
 sleep_at = os.environ.get("FAKE_SLEEP_AT", "")
 if sleep_at and sleep_at in joined:
     # A Docker that hangs for a while (a credential helper that does not answer).
@@ -191,6 +196,7 @@ class UpdateInstall:
             "PATH": f"{self.bin}:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin",
             "HOME": str(self.home),
             "FAKE_DOCKER_LOG": str(self.log),
+            "FAKE_ROOT": str(self.root),
             "FAKE_RESTORED_ENV": str(self.restored),
             "GIT_CONFIG_GLOBAL": str(self.tmp / "gitconfig"),
             "GIT_CONFIG_NOSYSTEM": "1",

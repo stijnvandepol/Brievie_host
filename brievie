@@ -142,12 +142,14 @@ on_exit() {
 				say "Er is niets bijgewerkt, maar Brievie kon niet opnieuw worden gestart. Typ ./brievie start."
 			fi
 		else
+			update_exit=3
 			say "Het bijwerken naar versie $update_to is niet afgemaakt. Brievie is gestopt."
 			say "$(print_way_back)"
 		fi
 	fi
 	if [ -n "$finish_live" ]; then
 		finish_live=""
+		update_exit=3
 		say "Het bijwerken naar versie $(update_marker_value to) is niet afgemaakt. Brievie draait misschien niet."
 		say "$(print_way_back)"
 	fi
@@ -236,9 +238,8 @@ take_lock() {
 	l_made=""
 	if mkdir "${here:?}/deploy/.brievie-lock" 2>/dev/null; then
 		l_made=yes
-	elif lock_is_stale; then
+	elif lock_is_stale && take_over_stale_lock; then
 		echo "Er stond nog een slot van een ./brievie die niet meer draait (deploy/.brievie-lock); dat is weggehaald." >&2
-		remove_lock
 	fi
 	if [ -z "$l_made" ] && ! mkdir "${here:?}/deploy/.brievie-lock" 2>/dev/null; then
 		started=$(cat "${here:?}/deploy/.brievie-lock/started" 2>/dev/null) || started=""
@@ -264,7 +265,10 @@ take_lock() {
 	# Who holds it, on which boot: exec keeps the process id through the update's
 	# hand-overs, so a lock whose process is gone is surely left behind.
 	printf '%s\n' "$$" >"${here:?}/deploy/.brievie-lock/pid"
-	boot_id >"${here:?}/deploy/.brievie-lock/boot"
+	l_boot=$(boot_id)
+	if [ -n "$l_boot" ]; then
+		printf '%s\n' "$l_boot" >"${here:?}/deploy/.brievie-lock/boot"
+	fi
 	BRIEVIE_LOCK_HELD=1
 	export BRIEVIE_LOCK_HELD
 }
@@ -276,23 +280,38 @@ remove_lock() {
 	rmdir "${here:?}/deploy/.brievie-lock" 2>/dev/null || true
 }
 
-# Something that changes when the machine starts again, or nothing: Linux's boot id,
-# macOS's boot time.
+# Takes a lock judged stale (process id $l_pid) over without racing another ./brievie
+# that judged it a moment earlier: the lock is moved aside to a name of this process
+# (a rename either happens once or not at all) and judged again there. When it then holds
+# another process id, another ./brievie got there first: its lock is put back.
+take_over_stale_lock() {
+	mv "${here:?}/deploy/.brievie-lock" "${here:?}/deploy/.brievie-lock.stale.$$" 2>/dev/null || return 1
+	s_pid=$(cat "${here:?}/deploy/.brievie-lock.stale.$$/pid" 2>/dev/null) || s_pid=""
+	if [ "$s_pid" != "$l_pid" ]; then
+		if [ ! -e "${here:?}/deploy/.brievie-lock" ]; then
+			mv "${here:?}/deploy/.brievie-lock.stale.$$" "${here:?}/deploy/.brievie-lock" 2>/dev/null || true
+		fi
+		return 1
+	fi
+	rm -f "${here:?}/deploy/.brievie-lock.stale.$$/started" "${here:?}/deploy/.brievie-lock.stale.$$/pid" \
+		"${here:?}/deploy/.brievie-lock.stale.$$/boot"
+	rmdir "${here:?}/deploy/.brievie-lock.stale.$$" 2>/dev/null || true
+	return 0
+}
+
+# Linux's boot id (fixed for one boot), or nothing. Nothing else counts as a boot id:
+# macOS's kern.boottime is recomputed when the clock is stepped (after sleep), and a
+# "new boot" that is not one would hand a running ./brievie's lock to another.
 boot_id() {
 	if [ -r /proc/sys/kernel/random/boot_id ]; then
 		cat /proc/sys/kernel/random/boot_id 2>/dev/null || true
-		return 0
 	fi
-	for b_sysctl in sysctl /usr/sbin/sysctl /sbin/sysctl; do
-		if command -v "$b_sysctl" >/dev/null 2>&1; then
-			"$b_sysctl" -n kern.boottime 2>/dev/null || true
-			return 0
-		fi
-	done
 }
 
 # Whether process $1 surely does not exist. Unsure (no /proc and no working ps) counts
-# as alive: a lock wrongly taken over is as bad as one stuck.
+# as alive: a lock wrongly taken over is as bad as one stuck. With Linux's hidepid, another
+# user's live process looks gone; in that case (a lock made through sudo) removing its
+# root-owned files fails, and under set -e this ./brievie stops: the safe direction.
 process_gone() {
 	if [ -d /proc/self ]; then
 		[ ! -e "/proc/$1" ]
@@ -312,6 +331,7 @@ lock_is_stale() {
 	esac
 	l_boot=$(cat "${here:?}/deploy/.brievie-lock/boot" 2>/dev/null) || l_boot=""
 	l_now=$(boot_id)
+	# Only two Linux boot ids are compared; anywhere else the process alone decides.
 	if [ -n "$l_boot" ] && [ -n "$l_now" ] && [ "$l_boot" != "$l_now" ]; then
 		return 0
 	fi
@@ -990,7 +1010,14 @@ cmd_start() {
 		confirm_adopt
 	fi
 	# Code older than its database (a newer version migrated it) never starts on it.
-	newer=$(unknown_migrations)
+	# PostgreSQL is started for the check (a first start then creates its empty database,
+	# which has nothing to compare); a database that cannot be read refuses the start.
+	if ! running postgres; then
+		quietly compose_raw up -d --wait postgres ||
+			fail "PostgreSQL is niet gestart. Lees de melding hierboven en typ daarna opnieuw ./brievie start."
+	fi
+	newer=$(unknown_migrations) ||
+		fail "De database kon niet worden gecontroleerd (past de code in deze map bij de database?). Typ opnieuw ./brievie start; lukt het weer niet, lees dan deploy/.brievie-last.log. Er is niets veranderd."
 	if [ -n "$newer" ]; then
 		fail "De database is al bijgewerkt door een nieuwere versie van Brievie; de code in deze map kent deze stappen niet: $(printf '%s' "$newer" | head -n 3 | tr '\n' ',' | sed 's/,$//; s/,/, /g'). Zet de map op die nieuwere versie (./brievie update) of zet de back-up van vóór de update terug. Er is niets veranderd."
 	fi
@@ -1529,9 +1556,12 @@ installation_is_empty() {
 # "app name" per line; only Brievie's own apps (backend/apps/<app>/migrations). Read-only,
 # over the socket; nothing when postgres does not run or has no such table yet.
 unknown_migrations() {
-	running postgres || return 0
-	applied=$(printf '%s\n' "SELECT app || '|' || name FROM django_migrations;" |
-		compose exec -T postgres psql -U postgres -d brievie -q -t -A 2>/dev/null) || return 0
+	applied=$({
+		printf '%s\n' "SELECT to_regclass('public.django_migrations') IS NOT NULL AS have_table \\gset"
+		printf '%s\n' '\if :have_table'
+		printf '%s\n' "SELECT app || '|' || name FROM django_migrations;"
+		printf '%s\n' '\endif'
+	} | compose exec -T postgres psql -U postgres -d brievie -q -t -A 2>/dev/null) || return 1
 	printf '%s\n' "$applied" | while IFS='|' read -r m_app m_name; do
 		case $m_app in
 		'' | *[!a-z0-9_]*) continue ;;
@@ -1639,6 +1669,13 @@ cmd_restore() {
 		if { [ "$run" = "pre-update-$(update_marker_value to)" ] || { [ -n "$u_run" ] && [ "$run" = "$u_run" ]; }; } &&
 			[ -n "$u_head" ] && [ "$u_head" = "$(update_marker_value previous_ref)" ]; then
 			update_restore=yes
+			# The back-up of before the update is the safety here; a new one cannot be made
+			# while the update is unfinished, so the way back skips it.
+			if [ -z "$skip_safety" ] || [ -z "$replace" ]; then
+				echo "Op de weg terug na een update typ je: ./brievie restore pre-update-$(update_marker_value to) --replace --skip-safety-backup"
+				echo "De back-up van vóór de update is dan je veiligheid; een nieuwe back-up kan pas na het herstel."
+				exit 1
+			fi
 		else
 			report_unfinished_update
 			exit 1

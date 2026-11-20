@@ -2,6 +2,7 @@ import sys
 from typing import IO
 
 from django.core.management.base import BaseCommand, CommandError, CommandParser
+from django.utils.translation import gettext as _
 
 from apps.updates.release import (
     REASONS,
@@ -50,9 +51,12 @@ class Command(BaseCommand):
             for version in sorted(releases):
                 if version > target and isinstance(releases[version], ReleaseError):
                     self.stderr.write(
-                        f"Versie {version} is overgeslagen: de gegevens van die versie "
-                        "(deploy/release.json) kloppen niet. Typ ./brievie update met een "
-                        "versie als je die toch wilt proberen."
+                        _(
+                            "Versie %(version)s is overgeslagen: de gegevens van die versie "
+                            "(deploy/release.json) kloppen niet. Typ ./brievie update met "
+                            "een versie als je die toch wilt proberen."
+                        )
+                        % {"version": version}
                     )
         decision = decide(
             installed=installed,

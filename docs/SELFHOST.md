@@ -575,15 +575,19 @@ takes that update's own back-up, after `git checkout` of the old version. When f
 were half switched, the way back says `git checkout --force`: the update only starts on
 a folder without changes of your own, so that discards nothing of yours. As a second
 guard, `./brievie start` refuses code that is older than its database (the database has
-steps the code does not know).
+steps the code does not know). On a development machine this also happens when you switch
+to an older branch after a newer one migrated the database: switch back, or start that
+branch on a database of its own (another `COMPOSE_PROJECT_NAME`).
 
 If the terminal closes during an update (an SSH connection that drops), the update goes
 on as far as it can and writes the rest to `deploy/.brievie-last.log`; read that file,
 or `./brievie status`, when you are back. Over SSH, run a long update inside `tmux` or
 `screen` so a dropped connection does not interrupt it. If the machine stops or
 `./brievie` is killed, the next `./brievie` sees that the one holding the lock no longer
-runs and takes it over (it says so); an older lock without that information still needs
-the twelve hours or `JA`.
+runs and takes it over (it says so). On Linux a restart of the machine counts too; on a
+Mac only a process that is gone does (after a restart the old process number may belong to
+another program: then the lock waits for the twelve hours or `JA`, as an older lock
+without that information always does).
 
 After the way back, the folder is on a tag, not on a branch (git calls it a "detached
 HEAD"). That is fine: `./brievie update` works from there.

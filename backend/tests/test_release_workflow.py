@@ -170,6 +170,10 @@ def test_what_gets_the_version_is_what_was_scanned() -> None:
         assert scan < tagging, platform
     assert publish.count("image-ref: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}") == 2
     assert publish.index("imagetools create") < publish.index("attest-build-provenance")
+    # What :VERSION points at is checked against the digest that gets the attestation.
+    assert 'imagetools inspect "$IMAGE:$VERSION"' in publish
+    assert 'test "$tagged" = "$DIGEST"' in publish
+    assert publish.index('test "$tagged" = "$DIGEST"') < publish.index("attest-build-provenance")
 
 
 def test_no_expression_reaches_a_shell_directly() -> None:

@@ -636,7 +636,7 @@ def test_a_copy_outside_its_folder_is_not_trusted(update_install: UpdateInstall)
 def test_ctrl_c_during_the_migration_prints_the_way_back(update_install: UpdateInstall) -> None:
     result = update_install.run("update", FAKE_KILL_AT="run --rm migrate")
 
-    assert result.returncode != 0
+    assert result.returncode == 3
     # Printed by the exit trap (stderr) or, when the shell sees the failed step before
     # the signal, by the failure path (stdout): the way back either way.
     way_back_lines(result.stdout + result.stderr)
@@ -905,7 +905,7 @@ def test_ctrl_c_right_after_the_checkout_keeps_the_update_resumable(
 
     result = update_install.run("update")
 
-    assert result.returncode != 0
+    assert result.returncode == 3
     assert update_install.head() == update_install.tag_commit("v0.3.0")
     keeper = update_install.index("stop keeper")
     assert not any("up -d" in c for c in update_install.commands()[keeper:])
@@ -967,7 +967,32 @@ def test_start_refuses_code_older_than_the_database(update_install: UpdateInstal
     assert result.returncode == 1
     assert "nieuwere versie" in result.stderr
     assert "updates 0099_from_the_future" in result.stderr
-    assert not update_install.has(" up ")
+    assert not update_install.has("up -d --build")
+
+
+def test_the_schema_check_starts_postgres_first(update_install: UpdateInstall) -> None:
+    known_migrations(update_install)
+    result = update_install.run(
+        "start",
+        FAKE_RUNNING="",
+        FAKE_APPLIED_MIGRATIONS="updates|0099_from_the_future\n",
+    )
+    assert result.returncode == 1
+    assert "nieuwere versie" in result.stderr
+    check = next(
+        i
+        for i, c in enumerate(update_install.calls())
+        if "django_migrations" in str(c.get("stdin", ""))
+    )
+    assert update_install.index("up -d --wait postgres") < check
+
+
+def test_a_schema_that_cannot_be_read_refuses(update_install: UpdateInstall) -> None:
+    known_migrations(update_install)
+    result = update_install.run("start", FAKE_FAIL="psql -U postgres -d brievie -q -t -A=2")
+    assert result.returncode == 1
+    assert "kon niet worden gecontroleerd" in result.stderr
+    assert not update_install.has("up -d --build")
 
 
 def test_start_accepts_a_database_the_code_knows(update_install: UpdateInstall) -> None:
@@ -1056,13 +1081,58 @@ def test_a_lock_of_a_running_process_is_respected(
     assert (update_install.root / "deploy" / ".brievie-lock").exists()
 
 
-def test_a_lock_from_before_a_restart_of_the_machine_is_taken_over(
-    update_install: UpdateInstall,
+PROC_BOOT_ID = Path("/proc/sys/kernel/random/boot_id").exists()
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_another_boot_counts_only_with_linux_boot_id(
+    update_install: UpdateInstall, shell: str
 ) -> None:
-    # The PID may live again after a reboot (another program): the boot decides.
+    # Linux's boot id is fixed per boot: another one means the machine restarted and the
+    # process id may belong to another program now. Elsewhere (macOS: kern.boottime moves
+    # when the clock is stepped after sleep) a live process always holds its lock.
     write_lock(update_install, pid=os.getpid(), boot="an earlier boot")
-    result = update_install.run("status")
+    result = update_install.run("status", shell=shell)
+    if PROC_BOOT_ID:
+        assert result.returncode == 0, result.stderr
+    else:
+        assert result.returncode == 1
+        assert "al een ./brievie bezig" in result.stderr
+        assert (update_install.root / "deploy" / ".brievie-lock").exists()
+
+
+def test_without_linux_boot_id_no_boot_is_recorded(update_install: UpdateInstall) -> None:
+    result = update_install.run(
+        "status", FAKE_SLEEP_AT="backup_status", FAKE_SLEEP_SECONDS="0", FAKE_COPY_LOCK="1"
+    )
     assert result.returncode == 0, result.stderr
+    copied = update_install.tmp / "lock-copy"
+    assert (copied / "pid").read_text().strip().isdigit()
+    assert (copied / "boot").exists() == PROC_BOOT_ID
+
+
+def test_two_wrappers_never_both_take_over_a_stale_lock(update_install: UpdateInstall) -> None:
+    # Another ./brievie judged the same lock stale a moment earlier and made its own: by
+    # the time this one moves the lock aside, it holds a live process id. It must put that
+    # lock back and wait, not remove it.
+    write_lock(update_install, pid=gone_pid(), boot=None)
+    fake_mv = update_install.bin / "mv"
+    fake_mv.write_text(
+        "#!/bin/sh\n"
+        "case $1 in\n"
+        '*/.brievie-lock) printf "%s\\n" "$FAKE_LIVE_PID" >"$1/pid" ;;\n'
+        "esac\n"
+        'exec /bin/mv "$@"\n'
+    )
+    fake_mv.chmod(0o755)
+
+    result = update_install.run("status", FAKE_LIVE_PID=str(os.getpid()))
+
+    assert result.returncode == 1
+    assert "al een ./brievie bezig" in result.stderr
+    lock = update_install.root / "deploy" / ".brievie-lock"
+    assert (lock / "pid").read_text().strip() == str(os.getpid())
+    assert not list((update_install.root / "deploy").glob(".brievie-lock.stale.*"))
 
 
 def test_a_lock_without_a_pid_keeps_the_twelve_hour_rule(update_install: UpdateInstall) -> None:
@@ -1082,3 +1152,20 @@ def test_the_watchdog_leaves_no_sleep_behind(update_install: UpdateInstall) -> N
     # Neither the watchdog's subshell (it shows as ./brievie itself) nor a long sleep.
     assert str(update_install.root / "brievie") not in processes
     assert "sleep 4171" not in processes
+
+
+def test_the_way_back_without_skip_safety_names_the_real_command(
+    update_install: UpdateInstall,
+) -> None:
+    failed_update(update_install)
+    update_install.git("checkout", "-q", "v0.2.0")
+    first = len(update_install.calls())
+
+    result = update_install.run("restore", "pre-update-0.3.0", "--replace", **restore_env())
+
+    assert result.returncode == 1
+    assert (
+        "./brievie restore pre-update-0.3.0 --replace --skip-safety-backup"
+        in result.stdout + result.stderr
+    )
+    assert not any("restore_fetch" in c["argv"] for c in update_install.calls()[first:])
