@@ -5,6 +5,7 @@ copies of the release files in tmp_path and read the workflow as text: what trig
 which job may write what, and that a run by hand publishes nothing.
 """
 
+import json
 import re
 import shutil
 import subprocess
@@ -155,8 +156,20 @@ def test_no_checkout_keeps_credentials() -> None:
 
 def test_a_version_is_a_fixed_tag_never_latest() -> None:
     assert ":latest" not in WORKFLOW
-    assert "tags: ${{ env.IMAGE }}:${{ env.VERSION }}" in job("publish")
-    assert "linux/amd64,linux/arm64" in job("publish")
+    publish = job("publish")
+    assert 'imagetools create --tag "$IMAGE:$VERSION" "$IMAGE@$DIGEST"' in publish
+    assert "linux/amd64,linux/arm64" in publish
+    assert "push-by-digest=true" in publish
+
+
+def test_what_gets_the_version_is_what_was_scanned() -> None:
+    publish = job("publish")
+    tagging = publish.index("imagetools create")
+    for platform in ("linux/amd64", "linux/arm64"):
+        scan = publish.index(f"TRIVY_PLATFORM: {platform}")
+        assert scan < tagging, platform
+    assert publish.count("image-ref: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}") == 2
+    assert publish.index("imagetools create") < publish.index("attest-build-provenance")
 
 
 def test_no_expression_reaches_a_shell_directly() -> None:
@@ -181,3 +194,40 @@ def test_local_builds_have_no_default_attestation_but_releases_keep_theirs() -> 
     assert "provenance:" not in compose
     assert "BUILDX_NO_DEFAULT_ATTESTATIONS" not in WORKFLOW
     assert "actions/attest-build-provenance@" in job("publish")
+
+
+GOOD = {"format": 1, "version": "0.2.0", "min_upgrade_from": "0.2.0", "postgres_major": 18}
+BAD_RELEASES = [
+    {**GOOD, "format": 2},
+    {**GOOD, "format": True},
+    {**GOOD, "postgres_major": "18"},
+    {**GOOD, "postgres_major": 9},
+    {**GOOD, "postgres_major": True},
+    {**GOOD, "min_upgrade_from": "0.3.0"},
+    {**GOOD, "min_upgrade_from": "0.2"},
+    {**GOOD, "extra": 1},
+    {k: v for k, v in GOOD.items() if k != "postgres_major"},
+]
+
+
+@pytest.mark.parametrize("data", BAD_RELEASES)
+def test_the_check_refuses_what_an_updater_would_refuse(
+    release: Path, data: dict[str, object]
+) -> None:
+    from apps.updates.release import ReleaseError, parse_release
+
+    text = json.dumps({**data, "version": version()} if "version" in data else data)
+    with pytest.raises(ReleaseError):
+        parse_release(text)
+    (release / "deploy/release.json").write_text(text)
+    done = check(release)
+    assert done.returncode == 1, text
+    assert "release.json" in done.stderr
+
+
+def test_what_the_check_accepts_an_updater_reads(release: Path) -> None:
+    from apps.updates.release import parse_release
+
+    text = (release / "deploy/release.json").read_text()
+    assert check(release).returncode == 0
+    assert str(parse_release(text).version) == version()

@@ -3,8 +3,8 @@ name: Release
 # A release is a tag vX.Y.Z on a commit whose backend/pyproject.toml, deploy/release.json
 # and newest CHANGELOG.md entry all say X.Y.Z (.github/scripts/release-check.py). The
 # tag is the owner's step; nothing here creates one. On such a tag this workflow builds
-# the backend image for amd64 and arm64, scans it, pushes it to the GitHub Container
-# Registry with a build provenance attestation, and makes the GitHub release from the
+# the backend image for amd64 and arm64, pushes it by digest, scans both images, tags
+# that digest with the version, attests it, and makes the GitHub release from the
 # CHANGELOG section. A run by hand (workflow_dispatch) checks, builds and scans without
 # publishing anything: the proof before the first tag.
 #
@@ -101,8 +101,10 @@ jobs:
           exit-code: "1"
           trivyignores: .trivyignore.yaml
 
-  # Only on a tag: build both architectures again and push them under the version (a
-  # fixed tag, never `latest`), with a provenance attestation.
+  # Only on a tag: build both architectures and push them by digest only (no tag yet),
+  # scan exactly those two images from the registry, and only then give that digest the
+  # version tag (a fixed tag, never `latest`) and a provenance attestation. What carries
+  # the version is what was scanned.
   publish:
     if: ${{ github.event_name == 'push' }}
     needs: [check, scan]
@@ -127,16 +129,43 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push both architectures
+      - name: Build both architectures and push them by digest
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: deploy/Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: true
           provenance: false
-          tags: ${{ env.IMAGE }}:${{ env.VERSION }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+      - name: Scan the pushed amd64 image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_PLATFORM: linux/amd64
+        with:
+          version: v0.76.2
+          image-ref: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          trivyignores: .trivyignore.yaml
+      - name: Scan the pushed arm64 image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_PLATFORM: linux/arm64
+        with:
+          version: v0.76.2
+          image-ref: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          trivyignores: .trivyignore.yaml
+      - name: Tag the scanned digest with the version
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: docker buildx imagetools create --tag "$IMAGE:$VERSION" "$IMAGE@$DIGEST"
       - name: Attest the build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:

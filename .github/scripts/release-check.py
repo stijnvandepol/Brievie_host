@@ -34,13 +34,41 @@ def project_version(root: Path) -> str:
     return version
 
 
+RELEASE_KEYS = {"format", "version", "min_upgrade_from", "postgres_major"}
+
+
+def _plain_int(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _version_key(text: object) -> tuple[int, int, int]:
+    if not isinstance(text, str) or not VERSION.fullmatch(text):
+        raise ReleaseCheckError(f"deploy/release.json: {text!r} is not a version X.Y.Z")
+    major, minor, patch = (int(part) for part in text.split("."))
+    return major, minor, patch
+
+
 def check_release_json(root: Path, version: str) -> None:
-    data = json.loads((root / "deploy" / "release.json").read_text(encoding="utf-8"))
-    if not isinstance(data, dict) or data.get("format") != 1:
+    """The rules of apps.updates.release.parse_release (held equal by a test): every
+    updater must be able to read what this release publishes."""
+    try:
+        data = json.loads((root / "deploy" / "release.json").read_text(encoding="utf-8"))
+    except ValueError:
+        raise ReleaseCheckError("deploy/release.json is not JSON") from None
+    if not isinstance(data, dict) or not _plain_int(data.get("format")) or data["format"] != 1:
         raise ReleaseCheckError("deploy/release.json: format must be 1")
-    if data.get("version") != version:
+    if set(data) != RELEASE_KEYS:
+        raise ReleaseCheckError(f"deploy/release.json: keys must be {sorted(RELEASE_KEYS)}")
+    current = _version_key(data["version"])
+    minimum = _version_key(data["min_upgrade_from"])
+    major = data["postgres_major"]
+    if not _plain_int(major) or not 10 <= major <= 99:
+        raise ReleaseCheckError("deploy/release.json: postgres_major must be a number 10-99")
+    if minimum > current:
+        raise ReleaseCheckError("deploy/release.json: min_upgrade_from is above version")
+    if data["version"] != version:
         raise ReleaseCheckError(
-            f"deploy/release.json says {data.get('version')!r}, pyproject says {version!r}"
+            f"deploy/release.json says {data['version']!r}, pyproject says {version!r}"
         )
 
 
