@@ -6,7 +6,7 @@ from apps.common.errors import ApiError
 from apps.documents import organise, services
 from apps.documents.models import Document, DocumentAddressee, DocumentEvent
 from apps.workspaces.context import workspace_context
-from apps.workspaces.models import Workspace
+from apps.workspaces.models import Membership, Workspace
 from tests.documents_support import admin_of, make_document, make_person
 
 
@@ -135,12 +135,15 @@ def test_list_filters_and_counts(ws_a: Workspace) -> None:
     review = make_document(ws_a, "needs_review")
     unassigned = make_document(ws_a, "done")
     sorted_ = make_document(ws_a, "done")
+    membership = Membership.objects.get(workspace=ws_a, role="admin")
     with workspace_context(ws_a.id):
         DocumentAddressee.objects.create(workspace=ws_a, document=sorted_, person=papa)
         DocumentAddressee.objects.create(workspace=ws_a, document=review, person=papa)
 
         def ids(inbox_state: str = "", person_id: uuid.UUID | None = None) -> set[uuid.UUID]:
-            found = services.list_documents(ws_a, inbox_state=inbox_state, person_id=person_id)
+            found = services.list_documents(
+                membership, inbox_state=inbox_state, person_id=person_id
+            )
             return {d.id for d in found}
 
         assert ids() == {new.id, review.id, unassigned.id, sorted_.id}
@@ -149,7 +152,7 @@ def test_list_filters_and_counts(ws_a: Workspace) -> None:
         assert ids(inbox_state="unassigned") == {unassigned.id}
         assert ids(person_id=papa.id) == {review.id, sorted_.id}
         assert ids(inbox_state="review", person_id=papa.id) == {review.id}
-        assert services.inbox_counts(ws_a) == {
+        assert services.inbox_counts(membership) == {
             "new": 1,
             "review": 1,
             "unassigned": 1,

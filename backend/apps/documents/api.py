@@ -123,7 +123,7 @@ def list_documents(
 ) -> list[DocumentSummaryOut]:
     membership = workspace_member(request, workspace_id)
     documents = services.list_documents(
-        membership.workspace,
+        membership,
         inbox_state=inbox_state,
         person_id=person_id,
         label_id=label_id,
@@ -139,7 +139,7 @@ def list_documents(
 )
 def get_inbox_counts(request: HttpRequest, workspace_id: UUID) -> InboxCountsOut:
     membership = workspace_member(request, workspace_id)
-    return InboxCountsOut(**services.inbox_counts(membership.workspace))
+    return InboxCountsOut(**services.inbox_counts(membership))
 
 
 @router.get(
@@ -149,7 +149,7 @@ def get_inbox_counts(request: HttpRequest, workspace_id: UUID) -> InboxCountsOut
 )
 def get_document(request: HttpRequest, workspace_id: UUID, document_id: UUID) -> DocumentOut:
     membership = workspace_member(request, workspace_id)
-    document = services.get_document(workspace=membership.workspace, document_id=document_id)
+    document = services.get_document(membership=membership, document_id=document_id)
     return services.document_out(document)
 
 
@@ -171,7 +171,7 @@ def get_document_page(
 ) -> HttpResponse:
     membership = workspace_member(request, workspace_id)
     data, content_type = services.read_page(
-        workspace=membership.workspace, document_id=document_id, index=index
+        membership=membership, document_id=document_id, index=index
     )
     response = HttpResponse(data, content_type=content_type)
     response["Cache-Control"] = "private, no-store"
@@ -332,7 +332,7 @@ def list_document_events(
     request: HttpRequest, workspace_id: UUID, document_id: UUID
 ) -> list[DocumentEvent]:
     membership = workspace_member(request, workspace_id)
-    return services.list_document_events(workspace=membership.workspace, document_id=document_id)
+    return services.list_document_events(membership=membership, document_id=document_id)
 
 
 @router.post(
