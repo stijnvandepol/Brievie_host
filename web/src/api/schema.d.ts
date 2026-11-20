@@ -1130,7 +1130,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Update Person */
+        /**
+         * Update Person
+         * @description `name_variants` and `archived` left out keep the person's current value (a rename never archives, restores or clears the variants); sent, they replace it.
+         */
         put: operations["updatePerson"];
         post?: never;
         /** Delete Person */
