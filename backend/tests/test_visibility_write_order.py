@@ -145,6 +145,18 @@ def test_other_review_after_hand_over_is_404(o: Office) -> None:
     assert other.json()["code"] == "document_not_found"
 
 
+def test_repeat_by_someone_who_never_saw_the_letter_is_404(o: Office) -> None:
+    # Not an oracle: only the member who confirmed it gets the repeat's answer.
+    body = _body(o, addressees=["Femke"])
+    _confirm(_as(o, "plain"), o, "scanned_in_review", body)
+
+    guess = _confirm(_as(o, "hr"), o, "scanned_in_review", body)
+
+    assert guess.status_code == 404
+    assert guess.json()["code"] == "document_not_found"
+    assert str(o.letters["scanned_in_review"].client_id) not in guess.content.decode()
+
+
 def test_set_addressees_handing_over_answers_can_read_false(o: Office) -> None:
     letter = o.letters["own_piet"]
     response = _as(o, "plain").put(
