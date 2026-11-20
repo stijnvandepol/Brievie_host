@@ -293,14 +293,28 @@ def ensure_person_for_member(*, workspace: Workspace, user: User) -> Person:
         person = Person.objects.filter(workspace=workspace, user=user).first()
         if person is not None:
             return person
-        name = mask_bsns(user.name).strip()
+        name = _tidy(mask_bsns(user.name))
+        # Not linked to a person of the same name: a name does not prove who it is (an
+        # admin links by hand, or invites with a person). The variant is left out when it
+        # would hold a (masked) BSN, which matches every letter with one, or when another
+        # active person has that name: both would be proposed, and neither could be
+        # renamed or restored while the other has it.
+        taken = {
+            normalise(other)
+            for other_name, variants in Person.objects.filter(
+                workspace=workspace, archived_at__isnull=True
+            ).values_list("display_name", "name_variants")
+            for other in (other_name, *variants)
+        }
+        usable = (
+            VARIANT_MIN <= len(name) <= VARIANT_MAX
+            and not holds_bsn(name)
+            and normalise(name) not in taken
+        )
         return Person.objects.create(
             workspace=workspace,
             display_name=_free_name(workspace, name),
-            # A name with a (masked) BSN would match every letter with one.
-            name_variants=[name]
-            if VARIANT_MIN <= len(name) <= VARIANT_MAX and not holds_bsn(name)
-            else [],
+            name_variants=[name] if usable else [],
             user=user,
         )
 

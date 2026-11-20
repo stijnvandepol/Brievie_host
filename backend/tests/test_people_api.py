@@ -440,3 +440,25 @@ def test_a_name_that_shows_nothing_or_turns_text_around_is_refused(
 
     assert r.status_code == 422
     assert r.json()["code"] == "validation_error"
+
+
+def test_a_member_whose_name_another_person_has_gets_no_shared_variant(
+    client_a: Client, ws_a: Workspace
+) -> None:
+    # Review: the new member's person got "Anna de Vries (2)" with the variant "Anna de
+    # Vries", after which every rename or restore of either person answered 409.
+    from apps.people.services import ensure_person_for_member
+
+    existing = create(client_a, ws_a.id, {"display_name": "Anna de Vries"}).json()
+    member = join(ws_a, "member")
+    member.name = "anna  de vries"
+    member.save()
+    with workspace_context(ws_a.id):
+        person = ensure_person_for_member(workspace=ws_a, user=member)
+    assert (person.display_name, person.name_variants) == ("anna de vries (2)", [])
+
+    for path, name in (
+        (f"/workspaces/{ws_a.id}/persons/{existing['id']}", "Anna de Vries"),
+        (f"/workspaces/{ws_a.id}/persons/{person.id}", "Anna (lid)"),
+    ):
+        assert put(client_a, path, {"display_name": name}).status_code == 200
