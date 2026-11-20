@@ -34,8 +34,8 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from pytest_django import DjangoDbBlocker
 
+from apps.documents import search, visibility
 from apps.documents import services as documents
-from apps.documents import visibility
 from apps.documents.models import Document
 from apps.labels import services as labels
 from apps.people import services as people
@@ -64,6 +64,8 @@ pytestmark = pytest.mark.skipif(
 
 # The lists the member filter applies to (S 4.9.5).
 FILTERED: Final = (
+    "search_sender",
+    "search_common_word",
     "list_documents",
     "list_documents_unassigned",
     "list_documents_own_person",
@@ -134,6 +136,13 @@ def _list(name: str, workspace: Workspace, world: PerfWorld, actor: UUID) -> Cal
 
     # The document lists take the member (the one visibility seam); fetched before timing.
     member = Membership.objects.get(workspace=workspace, user_id=actor)
+
+    def found(q: str) -> list[Document]:
+        result = search.search_documents(
+            member, q=q, filters=search.SearchFilters(), limit=30, offset=0
+        )
+        return [hit.document for hit in result.hits]
+
     calls: dict[str, Callable[[], str]] = {
         "list_documents": lambda: ids(documents.list_documents(member)),
         "list_documents_unassigned": lambda: ids(
@@ -146,6 +155,10 @@ def _list(name: str, workspace: Workspace, world: PerfWorld, actor: UUID) -> Cal
         "list_persons": lambda: counted(people.list_persons(workspace)),
         "list_labels": lambda: counted(labels.list_labels(workspace)),
         "list_tasks_all": lambda: f"{len(tasks.list_tasks(workspace, status='all'))} rows",
+        # A sender (one in 200 letters), and a word in every summary (ranks the newest
+        # MAX_CANDIDATES). Both match exactly, so the typo fallback does not run.
+        "search_sender": lambda: ids(found("afzender 042")),
+        "search_common_word": lambda: ids(found("samenvatting")),
     }
     return calls[name]
 

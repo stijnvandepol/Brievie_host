@@ -28,6 +28,9 @@ LISTS: Final = (
     "list_persons",
     "list_labels",
     "list_tasks_all",
+    # Search (merged with M1): through the same seam, so measured on the same world.
+    "search_sender",
+    "search_common_word",
 )
 
 
