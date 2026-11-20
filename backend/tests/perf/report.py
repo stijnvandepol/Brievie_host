@@ -217,5 +217,7 @@ def render(report: Report) -> tuple[str, list[str]]:
         lines.append(f"**VERDICT: FAIL** ({len(failures)} of the checks above):")
         lines += [f"- {reason}" for reason in failures]
     else:
-        lines.append("**VERDICT: PASS**: every gated list and the preview count within the threshold.")
+        lines.append(
+            "**VERDICT: PASS**: every gated list and the preview count within the threshold."
+        )
     return "\n".join(lines) + "\n", failures
