@@ -13,7 +13,7 @@ from procrastinate.contrib.django.models import ProcrastinateJob
 from apps.documents.models import Document
 from apps.pipeline.errors import PermanentError, RetryableError
 from apps.pipeline.steps import mark_failed, run_pipeline
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 
 logger = logging.getLogger(__name__)
@@ -85,7 +85,7 @@ def requeue_abandoned_documents() -> int:
     stale_before = timezone.now() - ABANDONED_AFTER
     queued = 0
     for workspace_id in Workspace.objects.values_list("id", flat=True):
-        with workspace_context(workspace_id):
+        with workspace_context(workspace_id, actor=SYSTEM):
             stale = Document.objects.filter(
                 status=Document.Status.PROCESSING, updated_at__lt=stale_before
             ).values_list("id", flat=True)

@@ -34,6 +34,8 @@ router = Router(tags=["devices"])
     description=(
         "Web session only. A bearer token (even a valid one) is not accepted here and "
         "answers 401 not_authenticated; a session without a valid CSRF token answers 403. "
+        "A session that signed in more than 15 minutes ago answers 403 "
+        "reauthentication_required: call reauthenticate first. "
         "The response carries the code once and is not stored (Cache-Control: no-store). "
         "server_link opens the app without the code: it pairs with a proof."
     ),

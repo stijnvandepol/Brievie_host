@@ -11,7 +11,7 @@ from pytest_django import Settings
 from apps.accounts.models import User
 from apps.devices.models import Device
 from apps.documents.models import Folder
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.factories import TEST_PASSWORD, UserFactory
 from tests.helpers import SETUP_TOKEN, post_json
@@ -103,7 +103,7 @@ def test_session_create_folder_needs_csrf(csrf_client: Client, ws_a: Workspace) 
 
     assert r.status_code == 403
     assert set(r.json()) == {"code", "message"}
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert Folder.objects.count() == 0
 
 

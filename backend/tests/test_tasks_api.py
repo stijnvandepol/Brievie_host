@@ -7,7 +7,7 @@ from django.test import Client
 
 from apps.documents.models import Document, DocumentEvent
 from apps.tasks.models import Task
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.documents_support import admin_of
 from tests.factories import UserFactory
@@ -30,7 +30,7 @@ def make_task(
     document: Document | None = None,
     status: str = "open",
 ) -> Task:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Task.objects.create(
             workspace=workspace,
             document=document,
@@ -46,7 +46,7 @@ def tick(client: Client, workspace_id: object, task: Task, action: str = "comple
 
 
 def events(workspace: Workspace) -> list[DocumentEvent]:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return list(DocumentEvent.objects.order_by("created_at", "id"))
 
 
@@ -170,7 +170,7 @@ def test_task_of_another_workspace_is_404(
 
 def test_task_item_names_the_documents_sender(client_a: Client, ws_a: Workspace) -> None:
     document = make_document(ws_a, "Brief")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Document.objects.filter(id=document.id).update(sender="Gemeente Utrecht")
     with_document = make_task(ws_a, "Met brief", document=document)
     without = make_task(ws_a, "Los")
@@ -185,7 +185,7 @@ def test_task_item_names_the_documents_sender(client_a: Client, ws_a: Workspace)
 def test_a_task_says_whether_the_ai_made_it(client_a: Client, ws_a: Workspace) -> None:
     by_hand = make_task(ws_a, "Zelf gemaakt")
     by_ai = make_task(ws_a, "Door de AI")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Task.objects.filter(id=by_ai.id).update(created_by_ai=True)
 
     r = client_a.get(tasks_url(ws_a.id))

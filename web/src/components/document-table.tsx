@@ -87,9 +87,12 @@ export function StatusBadge({ status, inboxState }: { status: string; inboxState
 }
 
 /** Whether Brievie handled (part of) this letter itself: confirmed it, or put a label or person on it. */
-export function isAutomatic(
-  document: Pick<DocumentSummary, "confirmed_by_ai" | "auto_label_ids" | "auto_addressee_ids">,
-): boolean {
+type AutomaticFields = Pick<
+  DocumentSummary,
+  "confirmed_by_ai" | "auto_label_ids" | "auto_addressee_ids" | "auto_rule_label_ids"
+>;
+
+export function isAutomatic(document: AutomaticFields): boolean {
   return (
     document.confirmed_by_ai === true ||
     (document.auto_label_ids ?? []).length > 0 ||
@@ -97,13 +100,25 @@ export function isAutomatic(
   );
 }
 
-/** The mark of a letter the AI handled: text in the same tag as the status, never colour alone. */
-export function AutomaticBadge({
-  document,
-}: {
-  document: Pick<DocumentSummary, "confirmed_by_ai" | "auto_label_ids" | "auto_addressee_ids">;
-}) {
-  return isAutomatic(document) ? <Badge icon="info">{t`Automatisch door AI`}</Badge> : null;
+/** Whether the AI itself chose something on this letter (not only a rule's label). */
+function byAi(document: AutomaticFields): boolean {
+  const byRule = document.auto_rule_label_ids ?? [];
+  return (
+    document.confirmed_by_ai === true ||
+    (document.auto_addressee_ids ?? []).length > 0 ||
+    (document.auto_label_ids ?? []).some((id) => !byRule.includes(id))
+  );
+}
+
+/**
+ * The mark of a letter Brievie handled itself: text in the same tag as the status, never
+ * colour alone. "door regel" when only a rule's label was put on (the AI chose nothing).
+ */
+export function AutomaticBadge({ document }: { document: AutomaticFields }) {
+  if (!isAutomatic(document)) return null;
+  return (
+    <Badge icon="info">{byAi(document) ? t`Automatisch door AI` : t`Automatisch door regel`}</Badge>
+  );
 }
 
 /** The persons a letter is addressed to, each with initials; ids nobody knows are skipped. */

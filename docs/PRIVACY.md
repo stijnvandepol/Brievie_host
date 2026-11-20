@@ -122,8 +122,14 @@ confirm them by itself. That is automated processing without a person in between
 - **What the guard rails check.** A letter is confirmed only when the sender, the date
   and every deadline the AI gives are literally in the letter (with enough certainty), and
   a letter that names a term (or an invoice due date) is left for a person unless every
-  action (every payment) has a date. A rule's proposal is never applied, and an AI pick of
-  a person only when the letter's quote names that person.
+  action (every payment) has a date. A rule's proposal to put a person on a letter is
+  never applied. A rule's label only when the rule holds on what is settled (its words
+  in the letterhead, a sender or type a person confirmed, labels and persons already on
+  the letter), or when the AI picked the same label with a confidence of 0.800 or more;
+  not when the rules disagree on the letter, when more than three rule labels qualify,
+  or when the administrator agreed only to the notice from before this rule (they are
+  asked to agree again). An AI pick of a person only when the letter's quote names that
+  person.
 - **Limits.** It reduces checking; it does not make the AI right. The rails check that a
   value is in the letter, not that the letter is true: whoever writes a letter decides what
   is in it, so a wrong or misleading letter can still be confirmed with a wrong sender,

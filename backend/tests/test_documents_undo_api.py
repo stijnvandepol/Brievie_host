@@ -4,11 +4,11 @@ from typing import TYPE_CHECKING
 import pytest
 from django.test import Client
 
-from apps.documents import organise
+from apps.documents import organise, visibility
 from apps.documents.models import Document, DocumentEvent, DocumentLabel, DocumentSuggestion
 from apps.labels.models import Label
 from apps.pipeline.steps import run_pipeline
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.documents_support import admin_of, make_person
 from tests.factories import UserFactory
@@ -28,7 +28,7 @@ def client_a(client: Client, ws_a: Workspace) -> Client:
 
 
 def auto_label(workspace: Workspace) -> Label:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Label.objects.get(workspace=workspace, system_key="auto")
 
 
@@ -56,7 +56,7 @@ def undo(client: Client, document: Document, event_id: object) -> "Response":
 
 
 def rule_event_id(document: Document) -> uuid.UUID:
-    with workspace_context(document.workspace_id):
+    with workspace_context(document.workspace_id, actor=SYSTEM):
         return DocumentEvent.objects.get(document=document, origin="rule").id
 
 
@@ -83,7 +83,7 @@ def test_undo_removes_the_label_and_blocks_the_rule(client_a: Client, ws_a: Work
     )
     assert reversed_["can_undo"] is False
     assert (original["can_undo"], original["undone"]) == (False, True)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         undo_event = DocumentEvent.objects.get(origin="undo")
         assert str(undo_event.undoes_id) == original["id"]
         assert DocumentSuggestion.objects.get(document=document).state == "dismissed"
@@ -155,7 +155,7 @@ def test_undo_of_a_hand_event_is_409(client_a: Client, ws_a: Workspace) -> None:
 
     assert r.status_code == 409
     assert r.json()["code"] == "event_not_undoable"
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert DocumentLabel.objects.filter(document=document).exists()
 
 
@@ -178,7 +178,7 @@ def test_viewer_cannot_undo(client: Client, ws_a: Workspace) -> None:
     r = undo(client, document, rule_event_id(document))
 
     assert r.status_code == 403
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert DocumentLabel.objects.filter(document=document).exists()
 
 
@@ -214,7 +214,7 @@ def test_undo_after_the_label_was_put_back_by_hand_is_409(
 
     assert r.status_code == 409
     assert r.json()["code"] == "event_not_undoable"
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert DocumentLabel.objects.filter(document=document, label=label).exists()
 
 
@@ -222,11 +222,12 @@ def automatic_event(
     workspace: Workspace, document: Document, origin: str, *, person: bool = False
 ) -> uuid.UUID:
     """A label or addressee the autopilot put on the document, with its history line."""
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         locked = Document.objects.select_for_update().get(id=document.id)
         if person:
             target = make_person(workspace, "Emma")
-            organise.add_addressee(locked, target, actor=None, origin=origin)
+            with visibility.addressee_scope(locked):
+                organise.add_addressee(locked, target, actor=None, origin=origin)
             kind = "addressee_added"
         else:
             organise.add_label(locked, auto_label(workspace), actor=None, origin=origin)
@@ -247,7 +248,7 @@ def test_an_automatic_add_can_be_undone(
 
     assert r.status_code == 200
     assert r.json()["label_ids" if not person else "addressee_ids"] == []
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         undone = DocumentEvent.objects.get(document=document, origin="undo")
         assert undone.actor == admin_of(ws_a)
         assert undone.undoes_id == event_id

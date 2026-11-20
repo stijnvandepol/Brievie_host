@@ -205,6 +205,10 @@ msgid "7 dagen"
 msgstr "7 dagen"
 
 #: src/routes/rule-editor.tsx
+msgid "Aan: de regel zet het label of de naam er altijd zelf op. Uit: de regel doet een voorstel dat jij bevestigt."
+msgstr "Aan: de regel zet het label of de naam er altijd zelf op. Uit: de regel doet een voorstel dat jij bevestigt."
+
+#: src/routes/rule-editor.tsx
 msgid "Aan: de regels hieronder slaan een brief over die bij deze past."
 msgstr "Aan: de regels hieronder slaan een brief over die bij deze past."
 
@@ -336,6 +340,10 @@ msgstr "AI op je eigen netwerk"
 #: src/components/ai-status-line.tsx
 msgid "AI uit: de tekst van brieven gaat naar geen enkele AI-dienst."
 msgstr "AI uit: de tekst van brieven gaat naar geen enkele AI-dienst."
+
+#: src/components/autopilot-panel.tsx
+msgid "Akkoord"
+msgstr "Akkoord"
 
 #: src/routes/post.tsx
 msgid "Al je brieven, ook de afgehandelde. Zoek op persoon of label. Wat nog op jou wacht, staat bij Te doen."
@@ -477,7 +485,6 @@ msgstr "Automatisch bevestigd door AI"
 
 #: src/components/document-table.tsx
 #: src/components/task-list.tsx
-#: src/routes/post.tsx
 msgid "Automatisch door AI"
 msgstr "Automatisch door AI"
 
@@ -488,6 +495,22 @@ msgstr "Automatisch door AI toegevoegd: {person}"
 #: src/components/document-history.tsx
 msgid "Automatisch door AI toegevoegd: label {label}"
 msgstr "Automatisch door AI toegevoegd: label {label}"
+
+#: src/routes/post.tsx
+msgid "Automatisch door Brievie"
+msgstr "Automatisch door Brievie"
+
+#: src/components/document-table.tsx
+msgid "Automatisch door regel"
+msgstr "Automatisch door regel"
+
+#: src/components/document-history.tsx
+msgid "Automatisch toegevoegd door een regel: label {label}"
+msgstr "Automatisch toegevoegd door een regel: label {label}"
+
+#: src/components/document-history.tsx
+msgid "Automatisch toegevoegd door regel {ruleName}: label {label}"
+msgstr "Automatisch toegevoegd door regel {ruleName}: label {label}"
 
 #: src/routes/document.tsx
 msgid "Automatisch toegevoegd: {list}"
@@ -564,6 +587,10 @@ msgstr "bevat het woord"
 #: src/components/rule-sentence.ts
 msgid "bevat niet het woord"
 msgstr "bevat niet het woord"
+
+#: src/routes/pair-app.tsx
+msgid "Bevestigen"
+msgstr "Bevestigen"
 
 #: src/components/rule-sentence.ts
 msgid "Bewaakte map"
@@ -657,8 +684,8 @@ msgid "Brievie zet brieven zelf onder personen en labels."
 msgstr "Brievie zet brieven zelf onder personen en labels."
 
 #: src/components/autopilot-panel.tsx
-msgid "Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is."
-msgstr "Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is."
+msgid "Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is. Een label dat een regel voorstelt, zet Brievie er ook op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is van hetzelfde label. Staat het woord alleen verderop in de brief en is de AI niet zeker? Dan blijft het een voorstel. Een regel die op 'Automatisch toepassen' staat, doet dat altijd."
+msgstr "Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is. Een label dat een regel voorstelt, zet Brievie er ook op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is van hetzelfde label. Staat het woord alleen verderop in de brief en is de AI niet zeker? Dan blijft het een voorstel. Een regel die op 'Automatisch toepassen' staat, doet dat altijd."
 
 #: src/routes/sessions.tsx
 msgid "Browser"
@@ -802,6 +829,10 @@ msgstr "De twee nieuwe wachtwoorden zijn niet hetzelfde."
 #: src/routes/password-reset.tsx
 msgid "De twee wachtwoorden zijn niet hetzelfde."
 msgstr "De twee wachtwoorden zijn niet hetzelfde."
+
+#: src/components/autopilot-panel.tsx
+msgid "De uitleg over automatisch verwerken is veranderd. Lees hem en geef opnieuw akkoord. Tot dan zet Brievie geen label van een regel zelf op."
+msgstr "De uitleg over automatisch verwerken is veranderd. Lees hem en geef opnieuw akkoord. Tot dan zet Brievie geen label van een regel zelf op."
 
 #: src/components/invite-dialog.tsx
 msgid "De uitnodiging is klaar"
@@ -1794,6 +1825,14 @@ msgstr "Nieuwe link: {name}"
 msgid "Nieuwe regel"
 msgstr "Nieuwe regel"
 
+#: src/components/autopilot-panel.tsx
+msgid "Nieuwe uitleg lezen"
+msgstr "Nieuwe uitleg lezen"
+
+#: src/components/autopilot-panel.tsx
+msgid "Nieuwe uitleg over automatisch verwerken"
+msgstr "Nieuwe uitleg over automatisch verwerken"
+
 #: src/components/audit-codes.ts
 msgid "Noodtoegang aangezet"
 msgstr "Noodtoegang aangezet"
@@ -2141,6 +2180,10 @@ msgstr "Soort"
 msgid "Soort taak"
 msgstr "Soort taak"
 
+#: src/routes/rule-editor.tsx
+msgid "Staat bij AI 'Brieven zelf onder personen en labels zetten' aan? Dan zet Brievie een voorgesteld label er toch zelf op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is van hetzelfde label. Staat het woord alleen verderop en is de AI niet zeker? Dan blijft het een voorstel."
+msgstr "Staat bij AI 'Brieven zelf onder personen en labels zetten' aan? Dan zet Brievie een voorgesteld label er toch zelf op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is van hetzelfde label. Staat het woord alleen verderop en is de AI niet zeker? Dan blijft het een voorstel."
+
 #: src/routes/setup.tsx
 msgid "Start Brievie"
 msgstr "Start Brievie"
@@ -2278,10 +2321,6 @@ msgstr "Typ minstens twee tekens."
 #: src/routes/automations.tsx
 msgid "Uit"
 msgstr "Uit"
-
-#: src/routes/rule-editor.tsx
-msgid "Uit: de regel doet een voorstel dat jij bevestigt."
-msgstr "Uit: de regel doet een voorstel dat jij bevestigt."
 
 #: src/routes/rule-editor.tsx
 msgid "Uit: de regel doet niets, maar blijft bewaard."
@@ -2466,6 +2505,10 @@ msgstr "Vul de naam van het model in, zoals de dienst die noemt."
 msgid "Vul in"
 msgstr "Vul in"
 
+#: src/routes/pair-app.tsx
+msgid "Vul je wachtwoord in voordat je een telefoon koppelt. Zo weten we dat jij het bent."
+msgstr "Vul je wachtwoord in voordat je een telefoon koppelt. Zo weten we dat jij het bent."
+
 #: src/routes/setup.tsx
 msgid "Waar gebruik je Brievie voor?"
 msgstr "Waar gebruik je Brievie voor?"
@@ -2485,6 +2528,7 @@ msgstr "Waarde"
 
 #: src/routes/invitation.tsx
 #: src/routes/login.tsx
+#: src/routes/pair-app.tsx
 #: src/routes/sessions.tsx
 #: src/routes/setup.tsx
 msgid "Wachtwoord"

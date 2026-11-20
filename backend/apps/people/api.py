@@ -3,6 +3,7 @@ from uuid import UUID
 from django.http import HttpRequest
 from ninja import Router, Status
 
+from apps.accounts.auth import session_auth
 from apps.audit.services import actor_from_request
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.people import services
@@ -75,9 +76,13 @@ def update_person(
     _PERSON,
     response={204: None, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS},
     operation_id="deletePerson",
+    description=(
+        "Admins only (403 `forbidden` for others): `person_in_use` also counts letters the "
+        "caller cannot see, so only an admin learns that a person is in use."
+    ),
 )
 def delete_person(request: HttpRequest, workspace_id: UUID, person_id: UUID) -> Status[None]:
-    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
     services.delete_person(
         workspace=membership.workspace, person_id=person_id, actor=actor_from_request(request)
     )
@@ -87,6 +92,11 @@ def delete_person(request: HttpRequest, workspace_id: UUID, person_id: UUID) -> 
 @router.put(
     f"{_PERSON}/member",
     response={200: PersonOut, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS, **BODY_ERRORS},
+    auth=session_auth,
+    description=(
+        "Web session only: a bearer token answers 401 not_authenticated. Link the person "
+        "to a member of the workspace (`user_id`), or unlink it (null). Administrators only."
+    ),
     operation_id="linkPersonToMember",
 )
 def link_person_to_member(

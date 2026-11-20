@@ -9,11 +9,12 @@ from django.test.utils import CaptureQueriesContext
 
 from apps.common.errors import ApiError
 from apps.documents import search as search_module
+from apps.documents import visibility
 from apps.documents.models import Document, DocumentAddressee, DocumentLabel
 from apps.documents.search import SearchFilters, SearchResult, search_documents, search_out
 from apps.labels.models import Label
 from apps.people.models import Person
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.documents_support import make_person
 
@@ -35,7 +36,7 @@ def letter(
     document_type: str = "",
     letter_date: date | None = None,
 ) -> Document:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Document.objects.create(
             workspace=workspace,
             client_id=uuid.uuid4(),
@@ -50,15 +51,17 @@ def letter(
 
 
 def label_on(workspace: Workspace, document: Document, name: str) -> Label:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         label = Label.objects.create(workspace=workspace, name=name)
         DocumentLabel.objects.create(workspace=workspace, document=document, label=label)
     return label
 
 
 def addressee(workspace: Workspace, document: Document, person: Person) -> None:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         DocumentAddressee.objects.create(workspace=workspace, document=document, person=person)
+        # Links made by hand: `addressee_ids` follows them as the services keep it.
+        visibility.sync_addressee_ids(document)
 
 
 def search(
@@ -69,9 +72,10 @@ def search(
     limit: int = 30,
     offset: int = 0,
 ) -> SearchResult:
-    with workspace_context(workspace.id):
+    membership = membership_of(workspace)
+    with workspace_context(workspace.id, actor=membership.user_id):
         return search_documents(
-            membership_of(workspace),
+            membership,
             q=q,
             filters=filters or SearchFilters(),
             limit=limit,
@@ -142,7 +146,7 @@ def test_a_person_name_and_a_name_variant_find_their_letters(ws_a: Workspace) ->
     for_jan = letter(ws_a, "Een brief.")
     letter(ws_a, "Een andere brief.")
     jan = make_person(ws_a, "Jan de Vries")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Person.objects.filter(id=jan.id).update(name_variants=["J. Devriesje"])
     addressee(ws_a, for_jan, jan)
 
@@ -178,7 +182,7 @@ def test_words_combine_across_a_label_and_the_text(ws_a: Workspace) -> None:
     letter(ws_a, "De jaarafrekening van uw water.")
     other = letter(ws_a, "Een herinnering.")
     label = label_on(ws_a, labelled, "Belasting")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         DocumentLabel.objects.create(workspace=ws_a, document=other, label=label)
 
     assert ids(search(ws_a, "belasting jaarafrekening")) == [labelled.id]
@@ -189,7 +193,7 @@ def test_all_words_in_names(ws_a: Workspace) -> None:
     both = letter(ws_a, "Een brief.")
     only_label = letter(ws_a, "Een andere brief.")
     label = label_on(ws_a, both, "Huurwoning")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         DocumentLabel.objects.create(workspace=ws_a, document=only_label, label=label)
     papa = make_person(ws_a, "Papa")
     addressee(ws_a, both, papa)
@@ -565,14 +569,14 @@ def test_a_letter_of_another_workspace_is_never_found(ws_a: Workspace, ws_b: Wor
 
 
 def test_without_workspace_context_nothing_is_found(ws_a: Workspace) -> None:
-    """The test role is not a superuser and is bound by forced RLS, as the app role is."""
+    """Without a context there is no actor: the seam refuses (fails closed) rather than
+    answer for nobody. Forced RLS would also hide every letter from the test role."""
     letter(ws_a, "Geheime brief over de fusie.")
 
-    result = search_documents(
-        membership_of(ws_a), q="fusie", filters=SearchFilters(), limit=30, offset=0
-    )
-
-    assert result.hits == []
+    with pytest.raises(RuntimeError):
+        search_documents(
+            membership_of(ws_a), q="fusie", filters=SearchFilters(), limit=30, offset=0
+        )
 
 
 @pytest.fixture
@@ -587,9 +591,13 @@ def many_letters(ws_a: Workspace) -> None:
 @pytest.mark.usefixtures("many_letters")
 def test_the_number_of_queries_does_not_grow_with_the_page(ws_a: Workspace) -> None:
     def count(limit: int) -> int:
-        with workspace_context(ws_a.id), CaptureQueriesContext(connection) as queries:
+        membership = membership_of(ws_a)
+        with (
+            workspace_context(ws_a.id, actor=membership.user_id),
+            CaptureQueriesContext(connection) as queries,
+        ):
             result = search_documents(
-                membership_of(ws_a), q="huur", filters=SearchFilters(), limit=limit, offset=0
+                membership, q="huur", filters=SearchFilters(), limit=limit, offset=0
             )
             answer = search_out(result)
         assert len(answer.items) == limit

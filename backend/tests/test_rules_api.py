@@ -13,7 +13,7 @@ from apps.rules import engine, triggers
 from apps.rules.engine import DocumentFacts, Evaluation, RuleSpec
 from apps.rules.models import Rule, RuleRun
 from apps.rules.templates import rule_templates
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.documents_support import admin_of, make_person
 from tests.factories import UserFactory
@@ -35,7 +35,7 @@ def put_json(client: Client, url: str, body: dict[str, object]) -> "Response":
 
 
 def label(workspace: Workspace, key: str) -> Label:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Label.objects.get(workspace=workspace, system_key=key)
 
 
@@ -98,7 +98,7 @@ def test_list_counts_runs(client_a: Client, ws_a: Workspace) -> None:
     auto = label(ws_a, "auto")
     rule = make_rule(ws_a, text_word("APK"), actions=[add_label(auto)])
     document = make_document(ws_a, LETTER)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         for outcome in ("applied", "applied", "proposed"):
             RuleRun.objects.create(
                 workspace=ws_a, rule=rule, document=document, trigger="manual", outcome=outcome
@@ -202,7 +202,7 @@ def test_name_is_masked(client_a: Client, ws_a: Workspace) -> None:
 def test_at_most_200_rules(client_a: Client, ws_a: Workspace) -> None:
     remove_rules(ws_a)
     auto = label(ws_a, "auto")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Rule.objects.bulk_create(
             Rule(workspace=ws_a, position=i, name=f"R{i}", definition={}) for i in range(1, 201)
         )
@@ -226,7 +226,7 @@ def test_update_and_delete_a_rule(client_a: Client, ws_a: Workspace) -> None:
     assert updated["position"] == created["position"]
 
     assert client_a.delete(url).status_code == 204
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert not Rule.objects.filter(id=created["id"]).exists()
 
 
@@ -375,7 +375,7 @@ def test_test_rule_counts_condition_matches_and_stores_nothing(
     assert (out["total_count"], out["checked_count"], out["matched_count"]) == (3, 3, 2)
     assert {d["id"] for d in out["documents"]} == {str(d.id) for d in hits}
     assert len(client_a.get(rules_url(ws_a.id)).json()) == rules_before
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert not RuleRun.objects.exists()
         assert not DocumentLabel.objects.exists()
         assert not DocumentSuggestion.objects.exists()
@@ -387,7 +387,7 @@ def test_test_rule_counts_a_document_that_already_has_the_label(
 ) -> None:
     auto = label(ws_a, "auto")
     document = make_document(ws_a, LETTER)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         DocumentLabel.objects.create(workspace=ws_a, document=document, label=auto)
 
     out = post_json(client_a, f"/workspaces/{ws_a.id}/rules/test", rule_body(auto.id)).json()
@@ -490,7 +490,11 @@ def test_run_rule_queues_job_with_ids_only(client_a: Client, ws_a: Workspace) ->
     assert r.json() == {"queued": True}
     job = ProcrastinateJob.objects.get(task_name="apply_rule_to_existing")
     assert job.queue_name == "pipeline"
-    assert job.args == {"workspace_id": str(ws_a.id), "rule_id": str(rule.id)}
+    assert job.args == {
+        "workspace_id": str(ws_a.id),
+        "rule_id": str(rule.id),
+        "user_id": str(admin_of(ws_a).id),
+    }
 
 
 def test_running_a_rule_twice_queues_one_job(client_a: Client, ws_a: Workspace) -> None:
@@ -519,12 +523,12 @@ def test_delete_rule_keeps_history_names(client_a: Client, ws_a: Workspace) -> N
     auto = label(ws_a, "auto")
     rule = make_rule(ws_a, text_word("APK"), actions=[add_label(auto)], name="APK-regel")
     document = make_document(ws_a, LETTER)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         organise.add_label(document, auto, actor=None, origin="rule", rule=rule)
 
     assert client_a.delete(f"{rules_url(ws_a.id)}/{rule.id}").status_code == 204
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         event = DocumentEvent.objects.get(document=document)
     assert (event.rule_id, event.rule_name) == (None, "APK-regel")
 
@@ -557,7 +561,7 @@ def test_other_workspace_is_404_on_every_rule_endpoint(
     ):
         assert r.status_code == 404
         assert r.json()["code"] == "workspace_not_found"
-    with workspace_context(ws_b.id):
+    with workspace_context(ws_b.id, actor=SYSTEM):
         assert Rule.objects.filter(id=stranger.id).exists()
 
 
@@ -599,7 +603,7 @@ def test_a_rule_masked_before_matches_nothing_and_can_be_switched_off(
     # Stored before BSNs were refused: to_json masked the number to "[BSN]".
     old = make_rule(ws_a, text_word("123456782"), actions=[add_label(auto)], mode="auto")
     document = make_document(ws_a, "Burgerservicenummer: [BSN]\nUw aanslag")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert old.definition["conditions"][0]["value"] == "[BSN]"
         triggers.on_confirmed(Document.objects.select_for_update().get(id=document.id))
         assert not DocumentLabel.objects.filter(document=document).exists()

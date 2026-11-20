@@ -9,7 +9,7 @@ from django.test import Client
 
 from apps.audit.models import ServerAuditEvent, WorkspaceAuditEvent
 from apps.documents.models import Document
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.documents_support import admin_of, bearer_for, documents_url
 from tests.factories import UserFactory
@@ -22,7 +22,7 @@ def search_url(workspace_id: object) -> str:
 
 
 def letter(workspace: Workspace, text: str, *, sender: str = "") -> Document:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Document.objects.create(
             workspace=workspace,
             client_id=uuid.uuid4(),
@@ -148,7 +148,7 @@ def test_the_term_is_in_no_log_line_and_no_audit_row(
     client_a: Client, ws_a: Workspace, caplog: pytest.LogCaptureFixture
 ) -> None:
     letter(ws_a, f"Brief over {TERM}.")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         audit_before = WorkspaceAuditEvent.objects.count()
     server_before = ServerAuditEvent.objects.count()
 
@@ -164,7 +164,7 @@ def test_the_term_is_in_no_log_line_and_no_audit_row(
     logged = "\n".join(record.getMessage() for record in caplog.records)
     assert TERM not in logged
     assert "Brief over" not in logged
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert WorkspaceAuditEvent.objects.count() == audit_before
         rows = list(WorkspaceAuditEvent.objects.values())
     server_rows = list(ServerAuditEvent.objects.values())

@@ -40,7 +40,6 @@ from apps.documents.services import (
     HEADLINE_PROPOSALS,
     INBOX_STATES,
     SUGGESTIONS,
-    _has_addressee,
     _in_state,
     document_summary_out,
 )
@@ -129,9 +128,10 @@ def clean_term(q: str) -> tuple[str, bool]:
 
 def _without_bsn_digits(words: list[str]) -> tuple[list[str], bool]:
     """`words` without every run of adjacent digit groups that holds exactly nine digits
-    and passes the elfproef: a BSN written with a separator `mask_bsns` does not know
-    ("111/222/333"). Groups inside a word count too ("111-222"); a word that loses a
-    group keeps its other parts as words. And whether a run was removed."""
+    and passes the elfproef: a BSN written in a form `mask_bsns` does not know
+    (a semicolon, "111;222;333", or an unusual grouping without the word "BSN"). Groups
+    inside a word count too ("111-222"); a word that loses a group keeps its other parts
+    as words. And whether a run was removed."""
     # (word index, group) for every group of every word, split on - ' and .
     parts = [(index, part) for index, word in enumerate(words) for part in _WORD_PARTS.split(word)]
     parts = [(index, part) for index, part in parts if part]
@@ -210,7 +210,6 @@ def _filtered(membership: Membership, filters: SearchFilters) -> "models.QuerySe
         visibility.visible_documents(membership)
         .defer("ocr_text")
         .annotate(
-            has_addressee=_has_addressee(),
             # Enough of the text for a fragment when the hit is not in the text.
             text_head=Left("ocr_text", SUMMARY_HEAD),
         )

@@ -225,7 +225,8 @@ function PersonRow({
                   {t`Archiveren`}
                 </Button>
               )}
-              <DeleteButton person={person} onConfirm={() => remove.mutate()} />
+              {/* Only an admin may delete: "in use" can come from post the member cannot see. */}
+              {isAdmin ? <DeleteButton person={person} onConfirm={() => remove.mutate()} /> : null}
             </>
           ) : null}
           {canLink ? (

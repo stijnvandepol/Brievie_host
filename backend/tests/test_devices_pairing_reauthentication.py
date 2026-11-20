@@ -1,0 +1,107 @@
+"""Security review 2026-11-20 (identity M2): a browser left open must not quietly become a
+phone with access. A pairing code needs a recent sign-in, and every paired device leaves
+the owner a notice."""
+
+from datetime import timedelta
+
+import pytest
+from django.test import Client
+from django.utils import timezone
+
+from apps.accounts.models import AccountNotice, User, UserSession
+from apps.devices.models import PairingCode
+from tests.factories import TEST_PASSWORD, UserFactory
+from tests.helpers import post_json
+
+
+@pytest.fixture
+def user() -> User:
+    return UserFactory.create(name="Kees")
+
+
+def signed_in(user: User) -> Client:
+    client = Client()
+    r = post_json(client, "/auth/login", {"email": user.email, "password": TEST_PASSWORD})
+    assert r.status_code == 200
+    return client
+
+
+def signed_in_long_ago(user: User) -> Client:
+    client = signed_in(user)
+    UserSession.objects.filter(user=user).update(created_at=timezone.now() - timedelta(minutes=16))
+    return client
+
+
+def test_a_fresh_session_makes_a_code(user: User) -> None:
+    assert post_json(signed_in(user), "/devices/pairing-codes").status_code == 201
+
+
+def test_an_old_session_must_type_the_password_again(user: User) -> None:
+    client = signed_in_long_ago(user)
+
+    r = post_json(client, "/devices/pairing-codes")
+
+    assert r.status_code == 403
+    assert r.json() == {
+        "code": "reauthentication_required",
+        "message": "Vul eerst je wachtwoord opnieuw in.",
+    }
+    assert not PairingCode.objects.exists()
+
+
+def test_after_typing_the_password_again_a_code_is_made(user: User) -> None:
+    client = signed_in_long_ago(user)
+
+    r = post_json(client, "/auth/reauthenticate", {"password": TEST_PASSWORD})
+
+    assert r.status_code == 204
+    assert post_json(client, "/devices/pairing-codes").status_code == 201
+
+
+def test_a_wrong_password_does_not_count_as_recent(user: User) -> None:
+    client = signed_in_long_ago(user)
+
+    r = post_json(client, "/auth/reauthenticate", {"password": "fout-wachtwoord"})
+
+    assert (r.status_code, r.json()["code"]) == (400, "wrong_password")
+    assert post_json(client, "/devices/pairing-codes").status_code == 403
+
+
+def test_wrong_passwords_lock_like_signing_in(user: User) -> None:
+    client = signed_in_long_ago(user)
+    for _ in range(5):
+        post_json(client, "/auth/reauthenticate", {"password": "fout-wachtwoord"})
+
+    r = post_json(client, "/auth/reauthenticate", {"password": TEST_PASSWORD})
+
+    assert (r.status_code, r.json()["code"]) == (429, "too_many_attempts")
+
+
+def test_reauthenticate_needs_a_session_not_a_device_token(user: User) -> None:
+    code = post_json(signed_in(user), "/devices/pairing-codes").json()["code"]
+    token = post_json(Client(), "/devices/pair", {"code": code, "device_name": "A"}).json()["token"]
+
+    r = post_json(
+        Client(),
+        "/auth/reauthenticate",
+        {"password": TEST_PASSWORD},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert (r.status_code, r.json()["code"]) == (401, "not_authenticated")
+
+
+def test_pairing_leaves_the_owner_a_notice(user: User) -> None:
+    browser = signed_in(user)
+    code = post_json(browser, "/devices/pairing-codes").json()["code"]
+
+    r = post_json(Client(), "/devices/pair", {"code": code, "device_name": "Telefoon van X"})
+
+    assert r.status_code == 201
+    (notice,) = AccountNotice.objects.filter(user=user)
+    assert notice.code == "device_paired"
+    assert notice.values == {"device": "Telefoon van X"}
+    (shown,) = browser.get("/api/v1/me/notices").json()
+    assert shown["code"] == "device_paired"
+    assert "\u2018Telefoon van X\u2019 aan je account gekoppeld" in shown["message"]
+    assert "Trek het in bij Apparaten" in shown["message"]

@@ -47,7 +47,8 @@ def jpeg_size(data: bytes) -> tuple[int, int] | None:
         if length < 2 or position + length > len(data):
             return None
         if marker in _FRAMES:
-            if length < 8:
+            # One frame per picture: with a second, decoders differ in which they use.
+            if length < 8 or size is not None:
                 return None
             height = int.from_bytes(data[position + 3 : position + 5], "big")
             width = int.from_bytes(data[position + 5 : position + 7], "big")

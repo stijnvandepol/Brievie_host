@@ -1,7 +1,7 @@
 import { t } from "@lingui/core/macro";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState } from "react";
-import { Switch } from "react-aria-components";
+import { Button, Switch } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import { aiAutopilotQuery, aiStatusQuery } from "../api/queries";
 import type { components } from "../api/schema";
@@ -68,7 +68,8 @@ function AutopilotSwitch({
  */
 function Switches({ workspaceId, autopilot }: { workspaceId: string; autopilot: Autopilot }) {
   const queryClient = useQueryClient();
-  const [asking, setAsking] = useState<Which | null>(null);
+  // A switch to turn on, or "again": agree to a newer notice with the switches as they are.
+  const [asking, setAsking] = useState<Which | "again" | null>(null);
   const save = useMutation({
     mutationFn: async (change: { which: Which; on: boolean; acknowledged: boolean }) => {
       const { data, error } = await api.PUT("/api/v1/workspaces/{workspace_id}/ai/autopilot", {
@@ -96,12 +97,21 @@ function Switches({ workspaceId, autopilot }: { workspaceId: string; autopilot: 
   }
 
   const shown = (on: boolean) => autopilot.allowed || on;
+  const outdated = autopilot.allowed && (autopilot.notice_outdated ?? false);
   return (
     <>
+      {outdated ? (
+        <div className="notice-outdated">
+          <p>{t`De uitleg over automatisch verwerken is veranderd. Lees hem en geef opnieuw akkoord. Tot dan zet Brievie geen label van een regel zelf op.`}</p>
+          <Button className="button" isDisabled={save.isPending} onPress={() => setAsking("again")}>
+            {t`Nieuwe uitleg lezen`}
+          </Button>
+        </div>
+      ) : null}
       {shown(autopilot.auto_organise) ? (
         <AutopilotSwitch
           label={t`Brieven zelf onder personen en labels zetten`}
-          description={t`Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is.`}
+          description={t`Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is. Een label dat een regel voorstelt, zet Brievie er ook op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is van hetzelfde label. Staat het woord alleen verderop in de brief en is de AI niet zeker? Dan blijft het een voorstel. Een regel die op 'Automatisch toepassen' staat, doet dat altijd.`}
           isSelected={autopilot.auto_organise}
           isDisabled={save.isPending}
           onChange={(on) => change("auto_organise", on)}
@@ -126,11 +136,24 @@ function Switches({ workspaceId, autopilot }: { workspaceId: string; autopilot: 
             save.reset();
           }
         }}
-        title={t`Automatisch verwerken aanzetten?`}
-        confirmLabel={t`Aanzetten`}
+        title={
+          asking === "again"
+            ? t`Nieuwe uitleg over automatisch verwerken`
+            : t`Automatisch verwerken aanzetten?`
+        }
+        confirmLabel={asking === "again" ? t`Akkoord` : t`Aanzetten`}
         tone="primary"
         onConfirm={async () => {
           if (asking === null) return;
+          if (asking === "again") {
+            // The switches stay as they are; only the agreement is new.
+            await save.mutateAsync({
+              which: "auto_organise",
+              on: autopilot.auto_organise,
+              acknowledged: true,
+            });
+            return;
+          }
           await save.mutateAsync({ which: asking, on: true, acknowledged: true });
         }}
       >

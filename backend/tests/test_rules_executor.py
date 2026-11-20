@@ -17,7 +17,7 @@ from apps.rules.engine import Condition, evaluate
 from apps.rules.executor import execute
 from apps.rules.facts import active_specs, facts_for
 from apps.rules.models import Rule, RuleRun
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 from tests.documents_support import make_person
 from tests.rules_support import (
@@ -33,18 +33,18 @@ LETTER = "Uitnodiging voor de APK van uw auto met kenteken AB-12-CD."
 
 
 def label(workspace: Workspace, key: str) -> Label:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Label.objects.get(workspace=workspace, system_key=key)
 
 
 def run_rules(workspace: Workspace, document: Document, trigger: str = "processed") -> None:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         locked = Document.objects.select_for_update().get(id=document.id)
         execute(locked, evaluate(facts_for(locked), active_specs(workspace.id)), trigger=trigger)
 
 
 def runs(workspace: Workspace) -> list[tuple[str, str, str]]:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return [
             (run.rule.name, run.trigger, run.outcome)
             for run in RuleRun.objects.select_related("rule").order_by("created_at", "id")
@@ -52,7 +52,7 @@ def runs(workspace: Workspace) -> list[tuple[str, str, str]]:
 
 
 def open_rows(workspace: Workspace, document: Document) -> list[DocumentSuggestion]:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return list(DocumentSuggestion.objects.filter(document=document, state="open"))
 
 
@@ -64,7 +64,7 @@ def test_auto_rule_applies_and_writes_rule_event_and_run(ws_a: Workspace) -> Non
 
     run_rules(ws_a, document)
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert DocumentLabel.objects.filter(document=document, label=auto).exists()
         [event] = DocumentEvent.objects.filter(document=document)
     assert (event.kind, event.origin, event.actor_id) == ("label_added", "rule", None)
@@ -78,7 +78,7 @@ def test_auto_rule_accepts_an_open_proposal_of_the_same_change(ws_a: Workspace) 
     auto = label(ws_a, "auto")
     make_rule(ws_a, text_word("APK"), actions=[add_label(auto)], mode="auto")
     document = make_document(ws_a, LETTER)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         suggestions.propose(
             document,
             action="add_label",
@@ -89,7 +89,7 @@ def test_auto_rule_accepts_an_open_proposal_of_the_same_change(ws_a: Workspace) 
 
     run_rules(ws_a, document)
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert DocumentSuggestion.objects.get(document=document).state == "accepted"
         assert DocumentLabel.objects.filter(document=document, label=auto).exists()
 
@@ -108,7 +108,7 @@ def test_propose_rule_creates_suggestion_with_rule_name(ws_a: Workspace) -> None
     assert row.quote == "Uitnodiging voor de APK"
     assert not row.preselected
     assert runs(ws_a) == [("Label Auto", "processed", "proposed")]
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert not DocumentLabel.objects.filter(document=document).exists()
         assert not DocumentEvent.objects.filter(document=document).exists()
 
@@ -132,7 +132,7 @@ def test_reprocessing_after_clearing_proposals_leaves_one_proposed_run(ws_a: Wor
     make_rule(ws_a, text_word("APK"), actions=[add_label(auto)], name="Label Auto")
     document = make_document(ws_a, LETTER)
     run_rules(ws_a, document)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         suggestions.clear_open(document, ["rule"])
 
     run_rules(ws_a, document)
@@ -146,7 +146,7 @@ def test_rule_that_takes_over_an_ai_suggestion_gets_a_run(ws_a: Workspace) -> No
     auto = label(ws_a, "auto")
     rule = make_rule(ws_a, text_word("APK"), actions=[add_label(auto)], name="Label Auto")
     document = make_document(ws_a, LETTER)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         suggestions.propose(
             document, action="add_label", label=auto, origin="ai", confidence=Decimal("0.8")
         )
@@ -168,7 +168,7 @@ def test_proposed_and_applied_in_one_run_is_only_applied(ws_a: Workspace) -> Non
     run_rules(ws_a, document)
 
     assert open_rows(ws_a, document) == []
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert DocumentLabel.objects.filter(document=document, label=auto).exists()
     assert runs(ws_a) == [("Auto", "processed", "applied")]
 
@@ -179,12 +179,12 @@ def test_dismissed_change_is_skipped_and_leaves_no_run(ws_a: Workspace) -> None:
     make_rule(ws_a, text_word("APK"), actions=[add_label(auto)], mode="auto")
     make_rule(ws_a, text_word("APK"), actions=[add_label(auto)])
     document = make_document(ws_a, LETTER)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         suggestions.mark_dismissed(document, "add_label", auto.id)
 
     run_rules(ws_a, document)
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert not DocumentLabel.objects.filter(document=document).exists()
         assert DocumentSuggestion.objects.get(document=document).state == "dismissed"
     assert runs(ws_a) == []
@@ -200,14 +200,14 @@ def test_archived_person_target_is_skipped(ws_a: Workspace) -> None:
         actions=[add_addressee(oud.id), add_addressee(emma.id)],
         mode="auto",
     )
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         oud.archived_at = oud.created_at
         oud.save()
     document = make_document(ws_a, LETTER)
 
     run_rules(ws_a, document)
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert list(
             DocumentAddressee.objects.filter(document=document).values_list("person_id", flat=True)
         ) == [emma.id]
@@ -219,7 +219,7 @@ def test_archived_person_target_is_not_built_on(ws_a: Workspace) -> None:
     auto = label(ws_a, "auto")
     make_rule(ws_a, text_word("APK"), actions=[add_addressee(oud.id)], mode="auto")
     make_rule(ws_a, Condition("addressee", "is", str(oud.id)), actions=[add_label(auto)])
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         oud.archived_at = oud.created_at
         oud.save()
     document = make_document(ws_a, LETTER)
@@ -235,7 +235,7 @@ def test_deleted_target_is_skipped(ws_a: Workspace) -> None:
     auto = label(ws_a, "auto")
     make_rule(ws_a, text_word("APK"), actions=[add_label(auto)], mode="auto")
     document = make_document(ws_a, LETTER)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         # Behind the service's back: the service refuses to delete a label a rule uses.
         Label.objects.filter(id=auto.id).delete()
 
@@ -264,7 +264,7 @@ def test_inactive_rule_does_nothing(ws_a: Workspace) -> None:
     run_rules(ws_a, document)
 
     assert open_rows(ws_a, document) == []
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert not Rule.objects.get().runs.exists()
 
 
@@ -279,14 +279,14 @@ def test_label_of_another_workspace_in_a_stored_rule_is_skipped(
 
     run_rules(ws_a, document)
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert not DocumentLabel.objects.filter(document=document).exists()
         assert not DocumentSuggestion.objects.filter(document=document).exists()
     assert runs(ws_a) == []
 
 
 def fill_labels(workspace: Workspace, document: Document, count: int) -> None:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         for n in range(count):
             own = Label.objects.create(workspace=workspace, name=f"Eigen {n}")
             DocumentLabel.objects.create(workspace=workspace, document=document, label=own)
@@ -304,7 +304,7 @@ def test_rules_never_take_a_document_over_the_label_limit(ws_a: Workspace) -> No
 
     run_rules(ws_a, document)
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert DocumentLabel.objects.filter(document=document).count() == LABELS_MAX
         assert DocumentLabel.objects.filter(document=document, label=auto).exists()
     assert open_rows(ws_a, document) == []
@@ -318,13 +318,13 @@ def test_rules_never_take_a_document_over_the_addressee_limit(ws_a: Workspace) -
     make_rule(ws_a, text_word("APK"), actions=[add_addressee(auto.id)], mode="auto")
     make_rule(ws_a, text_word("APK"), actions=[add_addressee(proposed.id)])
     document = make_document(ws_a, LETTER)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         for person in on_document:
             DocumentAddressee.objects.create(workspace=ws_a, document=document, person=person)
 
     run_rules(ws_a, document)
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert DocumentAddressee.objects.filter(document=document).count() == ADDRESSEES_MAX
     assert open_rows(ws_a, document) == []
     assert runs(ws_a) == []
@@ -335,7 +335,7 @@ def test_a_rule_deleted_before_execution_is_skipped(ws_a: Workspace) -> None:
     auto = label(ws_a, "auto")
     rule = make_rule(ws_a, text_word("APK"), actions=[add_label(auto)], mode="auto")
     document = make_document(ws_a, LETTER)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         locked = Document.objects.select_for_update().get(id=document.id)
         evaluation = evaluate(facts_for(locked), active_specs(ws_a.id))
         Rule.objects.filter(id=rule.id).delete()

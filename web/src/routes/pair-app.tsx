@@ -2,8 +2,8 @@ import { plural, t } from "@lingui/core/macro";
 import { useMutation } from "@tanstack/react-query";
 import { createRoute, useNavigate } from "@tanstack/react-router";
 import { QRCodeSVG } from "qrcode.react";
-import { useEffect, useRef, useState } from "react";
-import { Button, Label, TextArea, TextField } from "react-aria-components";
+import { type FormEvent, useEffect, useRef, useState } from "react";
+import { Button, Form, Input, Label, Text, TextArea, TextField } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import { formatTimeLeft, useSecondsLeft } from "../components/countdown";
 import { DeviceTable } from "../components/device-table";
@@ -69,6 +69,30 @@ function PairAppPage() {
       }
     },
   });
+  // An older session first types the password again: an open browser alone must not
+  // be enough to add a phone to the account.
+  const needsPassword =
+    create.error instanceof ApiFailure && create.error.code === "reauthentication_required";
+  const [password, setPassword] = useState("");
+  const confirm = useMutation({
+    gcTime: 0,
+    mutationFn: async () => {
+      const { error, response } = await api.POST("/api/v1/auth/reauthenticate", {
+        body: { password },
+      });
+      if (!response.ok) throw new ApiFailure(error);
+    },
+    onSuccess: () => {
+      setPassword("");
+      create.mutate();
+    },
+  });
+
+  function submitPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    confirm.mutate();
+  }
+
   const pairing = create.data;
   const secondsLeft = useSecondsLeft(pairing?.expires_at);
   const expired = pairing !== undefined && secondsLeft === 0;
@@ -133,7 +157,29 @@ function PairAppPage() {
         }
       />
 
-      <ErrorAlert error={create.error} />
+      {needsPassword ? (
+        <Form onSubmit={submitPassword} className="form form-narrow">
+          <TextField
+            type="password"
+            className="field"
+            value={password}
+            onChange={setPassword}
+            isRequired
+          >
+            <Label>{t`Wachtwoord`}</Label>
+            <Text slot="description">{t`Vul je wachtwoord in voordat je een telefoon koppelt. Zo weten we dat jij het bent.`}</Text>
+            <Input autoComplete="current-password" />
+          </TextField>
+          <ErrorAlert error={confirm.error} />
+          <div>
+            <Button type="submit" className="button" isPending={confirm.isPending}>
+              {t`Bevestigen`}
+            </Button>
+          </div>
+        </Form>
+      ) : (
+        <ErrorAlert error={create.error} />
+      )}
 
       {pairing !== undefined && onlyReachableOnTheServer(pairing.qr_payload) ? (
         <MessageBar intent="warning" role="alert">

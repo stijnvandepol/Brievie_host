@@ -12,7 +12,7 @@ from apps.rules.definition import to_json, to_spec, validate
 from apps.rules.engine import Condition
 from apps.rules.facts import active_specs
 from apps.rules.models import Rule
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 from tests.documents_support import make_person
 from tests.rules_support import add_label, make_rule, remove_rules, text_word
@@ -54,9 +54,9 @@ def test_definition_rejects_unknown_operator_with_dutch_sentence() -> None:
 def test_definition_rejects_a_label_id_outside_the_given_set(
     ws_a: Workspace, ws_b: Workspace
 ) -> None:
-    with workspace_context(ws_b.id):
+    with workspace_context(ws_b.id, actor=SYSTEM):
         foreign = Label.objects.filter(workspace=ws_b).first()
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         own = set(Label.objects.filter(workspace=ws_a).values_list("id", flat=True))
     assert foreign is not None
 
@@ -118,7 +118,7 @@ def test_valid_definition_passes() -> None:
 
 def test_archived_person_is_refused(ws_a: Workspace) -> None:
     archived = make_person(ws_a, "Oud", archived=True)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         active = set(Person.objects.filter(archived_at__isnull=True).values_list("id", flat=True))
     refusal(
         conditions=[text_word("APK")],
@@ -146,7 +146,7 @@ def test_definition_masks_bsn_in_values() -> None:
 
 def test_to_spec_reads_back_what_to_json_wrote(ws_a: Workspace) -> None:
     remove_rules(ws_a)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         label = Label.objects.get(system_key="auto")
     rule = make_rule(ws_a, text_word("APK"), actions=[add_label(label)], name="APK", mode="auto")
 
@@ -188,11 +188,11 @@ def test_broken_definition_is_skipped_not_fatal(
     ws_a: Workspace, stored: object, caplog: pytest.LogCaptureFixture
 ) -> None:
     remove_rules(ws_a)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         label = Label.objects.get(system_key="auto")
     broken = make_rule(ws_a, text_word("APK"), actions=[add_label(label)], name="Kapot")
     good = make_rule(ws_a, text_word("APK"), actions=[add_label(label)], name="Goed")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Rule.objects.filter(id=broken.id).update(definition=stored)
         broken.refresh_from_db()
 
@@ -209,12 +209,12 @@ def test_broken_definition_is_skipped_not_fatal(
 
 def test_active_specs_are_active_rules_in_position_order(ws_a: Workspace) -> None:
     remove_rules(ws_a)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         label = Label.objects.get(system_key="auto")
     first = make_rule(ws_a, text_word("APK"), actions=[add_label(label)])
     make_rule(ws_a, text_word("APK"), actions=[add_label(label)], active=False)
     third = make_rule(ws_a, text_word("APK"), actions=[add_label(label)])
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         # Swap positions inside one transaction: the unique position is deferred.
         Rule.objects.filter(id=first.id).update(position=3)
         Rule.objects.filter(id=third.id).update(position=1)

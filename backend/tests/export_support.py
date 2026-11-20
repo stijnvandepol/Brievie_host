@@ -7,13 +7,14 @@ import zipfile
 from datetime import date
 
 from apps.accounts.models import User
+from apps.documents import visibility
 from apps.documents.intake import create_document_from_upload
 from apps.documents.models import Document, DocumentAddressee, DocumentLabel
 from apps.documents.schemas import UploadMetadataIn
 from apps.labels.models import Label
 from apps.people.models import Person
 from apps.tasks.models import Task
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 from tests.documents_support import jpeg, metadata_for
 
@@ -34,7 +35,7 @@ def sealed_document(
     seed = seed or uuid.uuid4().hex
     data = [jpeg(f"{seed}-{n}") for n in range(pages)]
     metadata = UploadMetadataIn.model_validate(metadata_for(data))
-    with workspace_context(ws.id):
+    with workspace_context(ws.id, actor=SYSTEM):
         document, _created = create_document_from_upload(
             workspace=ws, user=user, metadata=metadata, pages=data
         )
@@ -44,6 +45,7 @@ def sealed_document(
         document.save()
         for person in persons or []:
             DocumentAddressee.objects.create(workspace=ws, document=document, person=person)
+        visibility.sync_addressee_ids(document)
         for name in labels or []:
             label, _made = Label.objects.get_or_create(workspace=ws, name=name)
             DocumentLabel.objects.create(workspace=ws, document=document, label=label)

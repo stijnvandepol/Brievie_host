@@ -43,3 +43,20 @@ def usable_ip(address: str | None) -> str | None:
     if isinstance(parsed, ipaddress.IPv6Address) and parsed.scope_id:
         return None
     return str(parsed)
+
+
+def address_bucket(address: str | None) -> str:
+    """What a limit per client address counts on: an IPv4 address itself, an IPv6
+    address's /64 network (one host or customer usually holds a whole /64, so counting
+    single addresses would let it rotate past every limit), else the raw value."""
+    if not address:
+        return "unknown"
+    try:
+        parsed = ipaddress.ip_address(address)
+    except ValueError:
+        return address
+    if isinstance(parsed, ipaddress.IPv6Address):
+        if parsed.ipv4_mapped is not None:
+            return str(parsed.ipv4_mapped)
+        return str(ipaddress.IPv6Network(f"{parsed.exploded}/64", strict=False))
+    return str(parsed)

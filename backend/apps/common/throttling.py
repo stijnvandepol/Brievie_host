@@ -1,12 +1,54 @@
+import threading
 import time
 
 from django.http import HttpRequest
 from ninja.throttling import SimpleRateThrottle
 
-from apps.common.net import client_ip
+from apps.common.net import address_bucket, client_ip
 
 
-class CallerThrottle(SimpleRateThrottle):
+class _PerThreadState(SimpleRateThrottle):
+    """Ninja keeps the request's `key`, `history` and `now` on the throttle instance
+    between `allow_request`, `throttle_success` and `wait`. Ours are module-level and
+    gunicorn runs several threads, so one request could write another's history under
+    its key. Here they live per thread.
+
+    Not atomic across processes: two workers can still read the same count at once.
+    """
+
+    def __init__(self, rate: str | None = None) -> None:
+        self._state = threading.local()
+        super().__init__(rate)
+
+    @property
+    def key(self) -> str | None:
+        value: str | None = getattr(self._state, "key", None)
+        return value
+
+    @key.setter
+    def key(self, value: str | None) -> None:
+        self._state.key = value
+
+    @property
+    def history(self) -> list[float]:
+        value: list[float] = getattr(self._state, "history", [])
+        return value
+
+    @history.setter
+    def history(self, value: list[float]) -> None:
+        self._state.history = value
+
+    @property
+    def now(self) -> float:
+        value: float = getattr(self._state, "now", 0.0)
+        return value
+
+    @now.setter
+    def now(self, value: float) -> None:
+        self._state.now = value
+
+
+class CallerThrottle(_PerThreadState):
     """Limits attempts per authenticated caller and path, e.g. per administrator and
     workspace. Somebody else, at the same address or not, cannot use up the attempts.
 
@@ -24,7 +66,7 @@ class CallerThrottle(SimpleRateThrottle):
         return self.cache_format % {"scope": self.scope, "ident": ident}
 
 
-class ClientAddressThrottle(SimpleRateThrottle):
+class ClientAddressThrottle(_PerThreadState):
     """Limits attempts per client address, e.g. `ClientAddressThrottle("pairing", "10/10m")`.
 
     Counts live in Django's default cache, the database cache, so all gunicorn
@@ -36,7 +78,11 @@ class ClientAddressThrottle(SimpleRateThrottle):
         super().__init__(rate)
 
     def get_cache_key(self, request: HttpRequest) -> str:
-        return self.cache_format % {"scope": self.scope, "ident": client_ip(request) or "unknown"}
+        # An IPv6 client counts per /64 (`address_bucket`).
+        return self.cache_format % {
+            "scope": self.scope,
+            "ident": address_bucket(client_ip(request)),
+        }
 
 
 class FailedAttemptThrottle(ClientAddressThrottle):

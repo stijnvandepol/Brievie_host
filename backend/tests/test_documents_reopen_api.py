@@ -10,7 +10,7 @@ from django.test import Client
 from apps.documents.models import Document, DocumentEvent, DocumentLabel, DocumentSuggestion
 from apps.labels.models import Label
 from apps.tasks.models import Task
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 from tests.documents_support import admin_of
 from tests.factories import UserFactory
@@ -29,7 +29,7 @@ def client_a(client: Client, ws_a: Workspace) -> Client:
 
 
 def ai_confirmed(workspace: Workspace, *, by_ai: bool = True, status: str = "done") -> Document:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         document = Document.objects.create(
             workspace=workspace,
             client_id=uuid.uuid4(),
@@ -56,7 +56,7 @@ def test_reopen_empties_the_confirmed_fields_and_removes_open_ai_tasks(
     client_a: Client, ws_a: Workspace
 ) -> None:
     document = ai_confirmed(ws_a)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         label = Label.objects.create(workspace=ws_a, name="Belasting")
         DocumentLabel.objects.create(workspace=ws_a, document=document, label=label)
         DocumentSuggestion.objects.create(
@@ -92,7 +92,7 @@ def test_reopen_empties_the_confirmed_fields_and_removes_open_ai_tasks(
         None,
     )
     assert body["summary_by_ai"] is False
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         after = Document.objects.get(id=document.id)
         assert (after.confirmed_at, after.confirmed_organisation, after.confirmed_by_ai) == (
             None,
@@ -175,7 +175,7 @@ def test_after_a_reopen_the_normal_confirm_works(client_a: Client, ws_a: Workspa
     )
 
     assert r.status_code == 200
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         done = Document.objects.get(id=document.id)
         assert (done.status, done.confirmed_by_ai) == ("done", False)
         assert done.confirmed_by == admin_of(ws_a)

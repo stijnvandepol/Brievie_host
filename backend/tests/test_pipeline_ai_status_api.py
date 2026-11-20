@@ -2,7 +2,7 @@ import pytest
 from django.test import Client
 
 from apps.pipeline.settings_service import configure
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.documents_support import admin_of
 from tests.factories import UserFactory
@@ -26,7 +26,7 @@ def test_ai_status_is_off_without_settings(client: Client, ws_a: Workspace) -> N
 
 @pytest.mark.parametrize("role", ["viewer", "admin"])
 def test_ai_status_has_no_address_model_or_key(client: Client, ws_a: Workspace, role: str) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         configure(
             workspace_id=ws_a.id,
             mode="external",

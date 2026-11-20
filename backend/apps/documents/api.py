@@ -30,6 +30,7 @@ from apps.documents.schemas import (
     MyExportOut,
     UploadMetadataIn,
 )
+from apps.documents.upload_limits import check_upload_limits
 from apps.workspaces.deps import workspace_member
 from apps.workspaces.models import Membership
 
@@ -70,6 +71,7 @@ def create_folder(request: HttpRequest, workspace_id: UUID, payload: FolderIn) -
         404: ErrorOut,
         409: ErrorOut,
         411: ErrorOut,
+        429: ErrorOut,
         **SESSION_WRITE_ERRORS,
         **BODY_ERRORS,
     },
@@ -78,7 +80,9 @@ def create_folder(request: HttpRequest, workspace_id: UUID, payload: FolderIn) -
         "Upload a scanned document as multipart/form-data: `metadata` is a JSON string "
         "(schema `UploadMetadataIn`), followed by one `page` file (image/jpeg) per page "
         "in page order. Repeating an upload with the same `client_id` and pages answers "
-        "200 with the existing document."
+        "200 with the existing document. 429 `too_many_uploads` with Retry-After when the "
+        "member or the workspace uploaded too much in a short time (by default 60 per "
+        "member per 10 minutes, 600 per workspace per hour)."
     ),
 )
 def create_document(
@@ -88,6 +92,8 @@ def create_document(
     page: File[list[UploadedFile]],
 ) -> Status[DocumentOut]:
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    user = current_user(request)
+    check_upload_limits(request, workspace_id=workspace_id, user_id=user.id)
     try:
         parsed = UploadMetadataIn.model_validate_json(metadata)
     except ValidationError:
@@ -97,7 +103,7 @@ def create_document(
         ) from None
     document, created = intake.create_document_from_upload(
         workspace=membership.workspace,
-        user=current_user(request),
+        user=user,
         metadata=parsed,
         pages=[file.read() for file in page],
     )
@@ -247,6 +253,11 @@ def retry_document_processing(
         **BODY_ERRORS,
     },
     operation_id="confirmDocument",
+    description=(
+        "Store the review; the document becomes done. When the confirm hands the letter to"
+        " someone else (the caller no longer sees it), the answer has `can_read` false and"
+        " holds the id and status only. A repeat of the same review answers the same."
+    ),
 )
 def confirm_document(
     request: HttpRequest, workspace_id: UUID, document_id: UUID, payload: ConfirmIn
@@ -258,7 +269,7 @@ def confirm_document(
         document_id=document_id,
         data=payload,
     )
-    return services.document_out(document)
+    return services.document_out_for(document)
 
 
 @router.post(
@@ -274,7 +285,7 @@ def reopen_document(request: HttpRequest, workspace_id: UUID, document_id: UUID)
     document = services.reopen_document(
         workspace=membership.workspace, user=current_user(request), document_id=document_id
     )
-    return services.document_out(document)
+    return services.document_out_for(document)
 
 
 @router.put(
@@ -298,7 +309,7 @@ def set_document_addressees(
         document_id=document_id,
         person_ids=payload.person_ids,
     )
-    return services.document_out(document)
+    return services.document_out_for(document)
 
 
 @router.put(
@@ -322,7 +333,7 @@ def set_document_labels(
         document_id=document_id,
         label_ids=payload.label_ids,
     )
-    return services.document_out(document)
+    return services.document_out_for(document)
 
 
 @router.post(
@@ -347,7 +358,7 @@ def accept_suggestion(
         document_id=document_id,
         suggestion_id=suggestion_id,
     )
-    return services.document_out(document)
+    return services.document_out_for(document)
 
 
 @router.post(
@@ -366,7 +377,7 @@ def dismiss_suggestion(
     document = services.dismiss_suggestion(
         workspace=membership.workspace, document_id=document_id, suggestion_id=suggestion_id
     )
-    return services.document_out(document)
+    return services.document_out_for(document)
 
 
 @router.get(
@@ -402,7 +413,7 @@ def undo_document_event(
         document_id=document_id,
         event_id=event_id,
     )
-    return services.document_out(document)
+    return services.document_out_for(document)
 
 
 def _my_export_out(membership: Membership, export: MemberExport | None) -> MyExportOut:

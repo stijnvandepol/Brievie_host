@@ -134,6 +134,7 @@ export const documentDetail: components["schemas"]["DocumentOut"] = {
     },
   ],
   suggestions: [],
+  can_read: true,
 };
 
 type Person = components["schemas"]["PersonOut"];

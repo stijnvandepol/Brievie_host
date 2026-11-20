@@ -20,7 +20,7 @@ from apps.audit.codes import ALLOWED_VALUES, NAMED_TARGETS, ActorKind, AuditCode
 from apps.audit.models import ServerAuditEvent, WorkspaceAuditEvent
 from apps.common.net import usable_ip, valid_client_ip
 from apps.common.privacy import mask_bsns
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import NOBODY, workspace_context
 
 if TYPE_CHECKING:
     from apps.accounts.models import User
@@ -123,7 +123,7 @@ def record(
     if workspace_id is None:
         ServerAuditEvent.objects.create(**fields)
         return
-    with workspace_context(workspace_id):
+    with workspace_context(workspace_id, actor=NOBODY):
         WorkspaceAuditEvent.objects.create(workspace_id=workspace_id, **fields)
 
 

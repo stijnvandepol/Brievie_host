@@ -14,7 +14,7 @@ from apps.common import crypto
 from apps.documents import export
 from apps.documents.models import Document
 from apps.documents.storage import default_storage
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 from tests.documents_support import admin_of, make_person
 from tests.export_support import export_documents, export_json, read_zip, sealed_document
@@ -176,7 +176,7 @@ def test_a_document_deleted_meanwhile_is_skipped(ws_a: Workspace) -> None:
     admin = admin_of(ws_a)
     kept, kept_pages = sealed_document(ws_a, admin, pages=1)
     gone, _pages = sealed_document(ws_a, admin, pages=1)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Document.objects.filter(id=gone.id).delete()
 
     archive = read_zip(run_export(ws_a, [gone.id, kept.id]))
@@ -198,7 +198,7 @@ def test_a_document_whose_page_file_vanished_while_reading_is_skipped(
         document_id = args[1] if len(args) > 1 else kwargs["document_id"]
         if document_id == gone.id:
             # Deleted between reading its rows and reading its file.
-            with workspace_context(ws_a.id):
+            with workspace_context(ws_a.id, actor=SYSTEM):
                 Document.objects.filter(id=gone.id).delete()
             raise FileNotFoundError("gone")
         return real(*args, **kwargs)  # type: ignore[arg-type]
@@ -212,7 +212,7 @@ def test_a_document_whose_page_file_vanished_while_reading_is_skipped(
 
 def test_a_missing_file_of_a_document_that_still_exists_is_an_error(ws_a: Workspace) -> None:
     document, _pages = sealed_document(ws_a, admin_of(ws_a), pages=1)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         path = document.pages.get().storage_path
     default_storage().delete(path)
 
@@ -222,7 +222,7 @@ def test_a_missing_file_of_a_document_that_still_exists_is_an_error(ws_a: Worksp
 
 def test_a_page_that_does_not_open_is_an_error_not_a_blank(ws_a: Workspace) -> None:
     document, _pages = sealed_document(ws_a, admin_of(ws_a), pages=1)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         path = document.pages.get().storage_path
     default_storage().write(path, crypto.seal(bytes(32), b"other key", aad=b"x"))
 

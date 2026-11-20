@@ -217,6 +217,18 @@ describe("persons", () => {
     await screen.findByRole("rowheader", { name: /Papa/ });
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
+
+  it("offers deleting a person only to an admin", async () => {
+    server.use(
+      http.get(`*${API}/workspaces`, () => HttpResponse.json([{ ...workspace, role: "member" }])),
+      ...loggedInHandlers(),
+      ...personHandlers(),
+    );
+    renderApp(path);
+    await screen.findByRole("rowheader", { name: /Papa/ });
+    expect(screen.getByRole("button", { name: /Wijzigen: Papa/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Verwijderen: Papa/ })).not.toBeInTheDocument();
+  });
 });
 
 describe("persons: roles and errors", () => {
