@@ -88,6 +88,17 @@ describe("automatisch verwerken", () => {
     expect(confirm).toHaveAccessibleDescription(/\.$/);
   });
 
+  it("says when a rule's proposed label is put on by itself", async () => {
+    autopilotServer("external");
+    renderApp(path);
+    const organise = await screen.findByRole("switch", {
+      name: "Brieven zelf onder personen en labels zetten",
+    });
+    expect(organise).toHaveAccessibleDescription(
+      "Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is. Een label dat een regel voorstelt, zet Brievie er ook op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI hetzelfde label voorstelt. Een regel die op 'Automatisch toepassen' staat, doet dat altijd.",
+    );
+  });
+
   it("shows the notice as paragraphs and sends nothing until 'Aanzetten'", async () => {
     const state = autopilotServer("external");
     const user = userEvent.setup();

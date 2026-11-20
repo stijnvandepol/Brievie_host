@@ -197,6 +197,10 @@ msgid "7 dagen"
 msgstr "7 dagen"
 
 #: src/routes/rule-editor.tsx
+msgid "Aan: de regel zet het label of de naam er altijd zelf op. Uit: de regel doet een voorstel dat jij bevestigt. Staat bij AI 'Brieven zelf onder personen en labels zetten' aan? Dan zet Brievie een voorgesteld label er toch zelf op, als de regel het woord in de afzender of bovenaan de brief vond, of als de AI hetzelfde label voorstelt."
+msgstr "Aan: de regel zet het label of de naam er altijd zelf op. Uit: de regel doet een voorstel dat jij bevestigt. Staat bij AI 'Brieven zelf onder personen en labels zetten' aan? Dan zet Brievie een voorgesteld label er toch zelf op, als de regel het woord in de afzender of bovenaan de brief vond, of als de AI hetzelfde label voorstelt."
+
+#: src/routes/rule-editor.tsx
 msgid "Aan: de regels hieronder slaan een brief over die bij deze past."
 msgstr "Aan: de regels hieronder slaan een brief over die bij deze past."
 
@@ -632,8 +636,8 @@ msgid "Brievie zet brieven zelf onder personen en labels."
 msgstr "Brievie zet brieven zelf onder personen en labels."
 
 #: src/components/autopilot-panel.tsx
-msgid "Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is."
-msgstr "Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is."
+msgid "Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is. Een label dat een regel voorstelt, zet Brievie er ook op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI hetzelfde label voorstelt. Een regel die op 'Automatisch toepassen' staat, doet dat altijd."
+msgstr "Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is. Een label dat een regel voorstelt, zet Brievie er ook op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI hetzelfde label voorstelt. Een regel die op 'Automatisch toepassen' staat, doet dat altijd."
 
 #: src/routes/sessions.tsx
 msgid "Browser"
@@ -2219,10 +2223,6 @@ msgstr "Tweestapsverificatie uitgezet"
 #: src/routes/automations.tsx
 msgid "Uit"
 msgstr "Uit"
-
-#: src/routes/rule-editor.tsx
-msgid "Uit: de regel doet een voorstel dat jij bevestigt."
-msgstr "Uit: de regel doet een voorstel dat jij bevestigt."
 
 #: src/routes/rule-editor.tsx
 msgid "Uit: de regel doet niets, maar blijft bewaard."

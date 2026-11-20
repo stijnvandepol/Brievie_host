@@ -63,6 +63,15 @@ describe("rule editor", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Regel wijzigen" })).toBeVisible();
   });
 
+  it("explains how the switch works together with the AI's autopilot", async () => {
+    server.use(...loggedInHandlers(), ...ruleHandlers([]));
+    renderApp(newPath);
+    const mode = await screen.findByRole("switch", { name: "Automatisch toepassen" });
+    expect(mode).toHaveAccessibleDescription(
+      "Aan: de regel zet het label of de naam er altijd zelf op. Uit: de regel doet een voorstel dat jij bevestigt. Staat bij AI 'Brieven zelf onder personen en labels zetten' aan? Dan zet Brievie een voorgesteld label er toch zelf op, als de regel het woord in de afzender of bovenaan de brief vond, of als de AI hetzelfde label voorstelt.",
+    );
+  });
+
   it("resets the operator and value when the field changes", async () => {
     server.use(...loggedInHandlers(), ...ruleHandlers([]));
     const user = userEvent.setup();
