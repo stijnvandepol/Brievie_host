@@ -2,7 +2,10 @@ import uuid
 from decimal import Decimal
 
 import pytest
+from django.db import connection
 from django.test import Client
+from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 from procrastinate.contrib.django.models import ProcrastinateJob
 
 from apps.common.management.commands.export_openapi import render_schema
@@ -38,7 +41,8 @@ def test_list_is_newest_first_with_summary_fields(client_a: Client, ws_a: Worksp
     assert set(rows[0]) == {
         "id", "client_id", "status", "page_count", "created_at", "sender", "document_type",
         "letter_date", "addressee_ids", "label_ids", "inbox_state", "open_suggestion_count",
-        "confirmed_by_ai", "auto_label_ids", "auto_addressee_ids",
+        "confirmed_by_ai", "auto_label_ids", "auto_addressee_ids", "proposed_sender",
+        "proposed_document_type", "proposed_letter_date",
     }  # fmt: skip
     assert rows[0]["page_count"] == 2
     assert rows[0]["status"] == "processing"
@@ -196,3 +200,83 @@ def test_contract_describes_the_upload_metadata() -> None:
     assert metadata["client_id"]["format"] == "uuid"
     assert metadata["pages"]["items"] == {"$ref": "#/components/schemas/PageMetaIn"}
     assert set(schemas["PageMetaIn"]["properties"]) == {"sha256", "text"}
+
+
+def propose(
+    workspace: Workspace, document_id: str, field: str, value: str, confidence: str
+) -> None:
+    with workspace_context(workspace.id):
+        Extraction.objects.create(
+            workspace=workspace, document_id=document_id, field=field, value=value,
+            quote=value, confidence=Decimal(confidence),
+        )  # fmt: skip
+
+
+def test_a_letter_waiting_for_review_shows_the_proposed_sender_date_and_type(
+    client_a: Client, ws_a: Workspace
+) -> None:
+    # From the app test: every letter in "Te doen" read "Onbekende afzender".
+    document_id = upload(client_a, ws_a.id, [jpeg()]).json()["id"]
+    set_status(ws_a, document_id, "needs_review")
+    propose(ws_a, document_id, "sender", "Gemeente", "0.4")
+    propose(ws_a, document_id, "sender", "Belastingdienst", "0.9")
+    propose(ws_a, document_id, "document_type", "assessment", "0.5")
+    propose(ws_a, document_id, "letter_date", "2026-11-03", "0.9")
+    # A value that was not found in the letter (confidence 0) is no proposal to show.
+    other_id = upload(client_a, ws_a.id, [jpeg("ander")]).json()["id"]
+    set_status(ws_a, other_id, "needs_review")
+    propose(ws_a, other_id, "sender", "Verzonnen BV", "0")
+    propose(ws_a, other_id, "letter_date", "2026-11-31", "0.9")
+
+    rows = {row["id"]: row for row in client_a.get(documents_url(ws_a.id)).json()}
+
+    shown = rows[document_id]
+    assert (shown["sender"], shown["document_type"], shown["letter_date"]) == ("", "", None)
+    assert (
+        shown["proposed_sender"],
+        shown["proposed_document_type"],
+        shown["proposed_letter_date"],
+    ) == ("Belastingdienst", "assessment", "2026-11-03")
+    detail = client_a.get(f"{documents_url(ws_a.id)}/{document_id}").json()
+    assert {(p["field"], p["value"]) for p in detail["proposals"]} >= {
+        ("sender", "Belastingdienst"),
+        ("document_type", "assessment"),
+        ("letter_date", "2026-11-03"),
+    }
+    assert detail["proposed_sender"] == "Belastingdienst"
+    other = rows[other_id]
+    assert (other["proposed_sender"], other["proposed_letter_date"]) == ("", None)
+
+
+def test_a_confirmed_letter_shows_no_proposal(client_a: Client, ws_a: Workspace) -> None:
+    document_id = upload(client_a, ws_a.id, [jpeg()]).json()["id"]
+    propose(ws_a, document_id, "sender", "Belastingdienst", "0.9")
+    with workspace_context(ws_a.id):
+        Document.objects.filter(id=document_id).update(
+            status="done", confirmed_at=timezone.now(), sender=""
+        )
+
+    (row,) = client_a.get(documents_url(ws_a.id)).json()
+
+    assert (row["sender"], row["proposed_sender"]) == ("", "")
+
+
+def test_the_list_reads_the_proposals_in_a_fixed_number_of_queries(
+    client_a: Client, ws_a: Workspace
+) -> None:
+    def add(n: int) -> None:
+        for i in range(n):
+            document_id = upload(client_a, ws_a.id, [jpeg(f"{n}-{i}")]).json()["id"]
+            set_status(ws_a, document_id, "needs_review")
+            propose(ws_a, document_id, "sender", f"Afzender {n}-{i}", "0.9")
+
+    add(2)
+    with CaptureQueriesContext(connection) as few:
+        client_a.get(documents_url(ws_a.id))
+    add(5)
+    with CaptureQueriesContext(connection) as more:
+        rows = client_a.get(documents_url(ws_a.id)).json()
+
+    assert len(rows) == 7
+    assert all(row["proposed_sender"] for row in rows)
+    assert len(more.captured_queries) == len(few.captured_queries)

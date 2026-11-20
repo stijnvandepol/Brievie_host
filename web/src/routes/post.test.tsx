@@ -37,6 +37,33 @@ describe("post", () => {
     expect(await screen.findByRole("link", { name: "Onbekende afzender" })).toBeInTheDocument();
   });
 
+  it("shows the AI's proposed sender, type and date as a proposal, not as fact", async () => {
+    server.use(
+      ...loggedInHandlers(),
+      http.get(`*${API}/workspaces/${workspace.id}/documents`, () =>
+        HttpResponse.json([
+          {
+            ...documentSummary,
+            status: "needs_review",
+            sender: "",
+            document_type: "",
+            letter_date: null,
+            proposed_sender: "Gemeente Utrecht",
+            proposed_document_type: "invoice",
+            proposed_letter_date: "2026-11-03",
+          },
+        ]),
+      ),
+    );
+    renderApp(`/w/${workspace.id}/post`);
+    const link = await screen.findByRole("link", { name: "Gemeente Utrecht (voorstel)" });
+    expect(within(link).getByText("Gemeente Utrecht").tagName).toBe("EM");
+    const row = link.closest("tr") as HTMLElement;
+    expect(within(row).getByText("Factuur").tagName).toBe("EM");
+    expect(within(row).getByText("3 nov 2026").tagName).toBe("EM");
+    expect(screen.queryByText("Onbekende afzender")).not.toBeInTheDocument();
+  });
+
   it("is named Alle post and says how it differs from Te doen", async () => {
     server.use(...loggedInHandlers(), ...documentHandlers());
     renderApp(`/w/${workspace.id}/post`);

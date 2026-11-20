@@ -15,7 +15,7 @@ from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
 from apps.documents.models import Document
-from apps.documents.services import SUGGESTIONS, document_summary_out
+from apps.documents.services import HEADLINE_PROPOSALS, SUGGESTIONS, document_summary_out
 from apps.labels.models import Label
 from apps.people.models import Person
 from apps.rules import definition, jobs
@@ -194,7 +194,9 @@ def test_rule(*, workspace: Workspace, data: RuleIn) -> RuleTestOut:
     facts = facts_for_many(checked)
     matched = [d for d in checked if spec.id in evaluate(facts[d.id], [spec]).matched_rule_ids]
     shown = matched[:TEST_SHOWN]
-    prefetch_related_objects(shown, "addressee_links", "label_links", SUGGESTIONS)
+    prefetch_related_objects(
+        shown, "addressee_links", "label_links", SUGGESTIONS, HEADLINE_PROPOSALS
+    )
     return RuleTestOut(
         total_count=total,
         checked_count=len(checked),
