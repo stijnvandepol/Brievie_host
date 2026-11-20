@@ -1343,4 +1343,17 @@ plane). One line per finding is in the pull request; the choices are here.
   an IPv6 client per /64 (`net.address_bucket`); axes keeps its exact address. Dropped: a
   per-account notice after a slow-down (a notice per attack would train people to ignore
   it); a fixed lock (a cheap denial of service).
+- **Uploads are limited per member and per workspace (content-plane M2, data L3).**
+  Attack: any member, or a stolen phone of one, scripted `createDocument` with fresh
+  `client_id`s; every upload stores up to 32 MB and queues a paid AI call on the one
+  `pipeline` worker that all workspaces share, so other workspaces' letters waited for
+  hours. `apps.documents.upload_limits` answers 429 `too_many_uploads` (Dutch sentence,
+  `Retry-After`) past `BRIEVIE_UPLOADS_PER_MEMBER` (60 per 10 minutes, per member per
+  workspace) or `BRIEVIE_UPLOADS_PER_WORKSPACE` (600 per hour); both are settings, so a
+  mail room can raise them. Checked after the membership check, so an outsider cannot use
+  up a workspace's count, with a fresh throttle per check (Ninja keeps state on the
+  instance). The app already retries a 429 with its back-off. **Follow-up:** fairness on
+  the worker itself (Procrastinate takes jobs first in, first out): a cap on queued
+  `process_document` jobs per workspace, or a queue lock per workspace (`queueing_lock`)
+  with a re-queue, is more than a small change and needs a measurement on the worker.
 

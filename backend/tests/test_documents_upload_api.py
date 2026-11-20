@@ -379,3 +379,62 @@ def test_failure_after_the_pages_are_written_leaves_no_files(
     assert len(written) == 2
     assert stored_files() == []
     assert counts(ws_a) == (0, 0)
+
+
+# --- Security review 2026-11-20: limits per member and per workspace ---
+
+
+def upload_one(client: Client, workspace: Workspace) -> int:
+    return upload(client, workspace.id, [jpeg(str(uuid.uuid4()))]).status_code
+
+
+def test_a_member_uploading_too_much_is_asked_to_wait(
+    client_a: Client, ws_a: Workspace, settings: Settings
+) -> None:
+    settings.BRIEVIE_UPLOADS_PER_MEMBER = "3/10m"
+
+    assert [upload_one(client_a, ws_a) for _ in range(3)] == [201, 201, 201]
+    r = upload(client_a, ws_a.id, [jpeg("vier")])
+
+    assert r.status_code == 429
+    assert r.json() == {
+        "code": "too_many_uploads",
+        "message": "Er zijn net heel veel brieven verstuurd. Wacht even, dan gaat het vanzelf "
+        "verder.",
+    }
+    assert int(r["Retry-After"]) >= 1
+    assert counts(ws_a) == (3, 3)
+    # Another member of the workspace still uploads.
+    other = UserFactory.create()
+    Membership.objects.create(user=other, workspace=ws_a, role=Membership.Role.MEMBER)
+    assert upload_one(Client(headers=bearer_for(other)), ws_a) == 201
+
+
+def test_a_workspace_has_a_limit_of_its_own(
+    client_a: Client, ws_a: Workspace, ws_b: Workspace, settings: Settings
+) -> None:
+    settings.BRIEVIE_UPLOADS_PER_WORKSPACE = "2/1h"
+    other = UserFactory.create()
+    Membership.objects.create(user=other, workspace=ws_a, role=Membership.Role.MEMBER)
+    phone = Client(headers=bearer_for(other))
+
+    assert [upload_one(client_a, ws_a), upload_one(phone, ws_a)] == [201, 201]
+
+    assert upload_one(phone, ws_a) == 429
+    assert upload_one(client_a, ws_a) == 429
+    # Another workspace is not affected.
+    client_b = Client()
+    client_b.force_login(admin_of(ws_b))
+    assert upload_one(client_b, ws_b) == 201
+
+
+def test_somebody_outside_the_workspace_does_not_use_up_its_limit(
+    client_a: Client, ws_a: Workspace, settings: Settings
+) -> None:
+    settings.BRIEVIE_UPLOADS_PER_WORKSPACE = "1/1h"
+    stranger = Client(headers=bearer_for(UserFactory.create()))
+
+    for _ in range(3):
+        assert upload_one(stranger, ws_a) == 404
+
+    assert upload_one(client_a, ws_a) == 201
