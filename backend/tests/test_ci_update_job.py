@@ -143,6 +143,9 @@ def test_the_way_back_is_typed_as_printed() -> None:
     assert 'checkout -q "v$GOOD"' in UPDATE
     assert './brievie restore "pre-update-$BAD" --replace --skip-safety-backup' in UPDATE
     assert 'test "$rc" = 3' in UPDATE
+    # The runner runs bash with -e: a failing command ends the step unless it is caught.
+    failing = next(line for line in UPDATE.splitlines() if './brievie update "$BAD"' in line)
+    assert failing.rstrip().endswith("|| rc=$?"), failing
 
 
 def test_the_master_key_never_is_an_argument() -> None:

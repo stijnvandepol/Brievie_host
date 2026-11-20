@@ -35,12 +35,23 @@ class _BrokenCursor:
         return None
 
 
+class _BrokenConnection:
+    def cursor(self) -> _BrokenCursor:
+        return _BrokenCursor()
+
+
 def test_database_reachable_is_false_on_a_database_error(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    monkeypatch.setattr(connection, "cursor", lambda: _BrokenCursor())
-    with caplog.at_level(logging.WARNING, logger="apps.common.health"):
+    # Only the health module's own name, and only around the call: the test database's
+    # set-up and teardown keep the real connection.
+    with (
+        monkeypatch.context() as patch,
+        caplog.at_level(logging.WARNING, logger="apps.common.health"),
+    ):
+        patch.setattr(health, "connection", _BrokenConnection())
         assert health.database_reachable() is False
+    assert vars(health)["connection"] is connection
     assert "OperationalError" in caplog.text
     assert "db.secret" not in caplog.text
 

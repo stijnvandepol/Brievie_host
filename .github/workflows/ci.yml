@@ -506,12 +506,13 @@ jobs:
           GOOD: ${{ steps.releases.outputs.good }}
           BAD: ${{ steps.releases.outputs.bad }}
         run: |
-          set -uo pipefail
+          set -euo pipefail
           cd "$RUNNER_TEMP/install"
-          BRIEVIE_UPDATE_CONFIRM=BIJWERKEN ./brievie update "$BAD" > "$RUNNER_TEMP/failed.log" 2>&1
-          rc=$?
+          # Exit 3 is the expected outcome (failed after the switch, way back printed).
+          # The runner's shell has -e: the status is caught here, not by `set +e`.
+          rc=0
+          BRIEVIE_UPDATE_CONFIRM=BIJWERKEN ./brievie update "$BAD" > "$RUNNER_TEMP/failed.log" 2>&1 || rc=$?
           cat "$RUNNER_TEMP/failed.log"
-          set -e
           test "$rc" = 3
           grep -qx "  git checkout v$GOOD" "$RUNNER_TEMP/failed.log"
           grep -qx "  ./brievie restore pre-update-$BAD --replace --skip-safety-backup" "$RUNNER_TEMP/failed.log"
