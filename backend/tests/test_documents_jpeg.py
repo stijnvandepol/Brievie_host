@@ -49,3 +49,23 @@ def test_what_is_no_usable_jpeg_has_no_size(data: bytes) -> None:
 def test_limits() -> None:
     assert MAX_SIDE == 20_000
     assert MAX_PIXELS == 100_000_000
+
+
+def _frame(width: int, height: int) -> bytes:
+    # SOF0: length 11, precision 8, height, width, one component.
+    return (
+        b"\xff\xc0\x00\x0b\x08"
+        + height.to_bytes(2, "big")
+        + width.to_bytes(2, "big")
+        + b"\x01\x01\x11\x00"
+    )
+
+
+def test_a_second_frame_header_is_refused() -> None:
+    # Security review 2026-11-20 (data L2): a decoder that reads the first header would
+    # allocate for 65000 x 65000 while the check saw only the last one.
+    scan = b"\xff\xda\x00\x08\x01\x01\x00\x00\x3f\x00"
+    data = b"\xff\xd8" + _frame(65000, 65000) + _frame(100, 100) + scan
+
+    assert jpeg_size(data) is None
+    assert jpeg_size(b"\xff\xd8" + _frame(100, 100) + scan) == (100, 100)
