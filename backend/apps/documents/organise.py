@@ -10,7 +10,7 @@ from collections.abc import Collection, Sequence
 from uuid import UUID
 
 from django.db import transaction
-from django.db.models import QuerySet
+from django.db.models import Case, Exists, OuterRef, Q, QuerySet, Value, When
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
@@ -105,6 +105,8 @@ def set_addressees(
                     person=link.person,
                 )
                 suggestions.mark_dismissed(document, _ADD_ADDRESSEE, link.person_id)
+        if any(link.automatic and link.person_id not in persons for link in links):
+            sync_automatic([document.id])
         for person_id in wanted:
             add_addressee(
                 document,
@@ -137,6 +139,8 @@ def add_addressee(
             person=person,
             automatic=origin in AUTOMATIC_ORIGINS,
         )
+        if origin in AUTOMATIC_ORIGINS:
+            sync_automatic([document.id])
         _write_event(
             document, DocumentEvent.Kind.ADDRESSEE_ADDED, actor, origin, person=person, rule=rule
         )
@@ -170,13 +174,17 @@ def set_labels(
         if len(labels) != len(wanted):
             raise label_not_found()
         links = DocumentLabel.objects.filter(document=document).select_related("label")
+        removed_automatic = False
         for link in links.order_by("created_at", "id"):
             if link.label_id not in labels:
                 link.delete()
+                removed_automatic = removed_automatic or link.automatic
                 _write_event(
                     document, DocumentEvent.Kind.LABEL_REMOVED, actor, origin, label=link.label
                 )
                 suggestions.mark_dismissed(document, _ADD_LABEL, link.label_id)
+        if removed_automatic:
+            sync_automatic([document.id])
         for label_id in wanted:
             add_label(
                 document,
@@ -208,6 +216,8 @@ def add_label(
             label=label,
             automatic=origin in AUTOMATIC_ORIGINS,
         )
+        if origin in AUTOMATIC_ORIGINS:
+            sync_automatic([document.id])
         _write_event(
             document, DocumentEvent.Kind.LABEL_ADDED, actor, origin, label=label, rule=rule
         )
@@ -215,8 +225,9 @@ def add_label(
 
 
 def record_label_deleted(label: Label, *, actor_id: UUID | None) -> None:
-    """Before a label is deleted (its links go with it): a `label_removed` line, with the
-    label's name, in the history of every document that has it.
+    """Before a label is deleted: a `label_removed` line, with the label's name, in the
+    history of every document that has it; then its links go, and the automatic flag of
+    the letters that had it as an automatic link follows.
 
     The documents are not locked: nothing else is changed on them, and a rule that runs
     holds the label's row, which the caller has locked. One INSERT for all of them; the
@@ -242,6 +253,10 @@ def record_label_deleted(label: Label, *, actor_id: UUID | None) -> None:
                 .values_list("document_id", flat=True)
             ]
         )
+        links = DocumentLabel.objects.filter(label=label, workspace_id=label.workspace_id)
+        automatic = list(links.filter(automatic=True).values_list("document_id", flat=True))
+        links.delete()
+        sync_automatic(automatic)
 
 
 def record_task_event(document: Document, kind: str, actor: User) -> None:
@@ -286,6 +301,7 @@ def undo_event(*, document: Document, event_id: UUID, actor: User) -> None:
             if label_id is None or label_link is None or _taken_over(event, label_link.automatic):
                 raise _not_undoable()
             label_link.delete()
+            sync_automatic([document.id])
             _write_event(
                 document,
                 DocumentEvent.Kind.LABEL_REMOVED,
@@ -308,6 +324,7 @@ def undo_event(*, document: Document, event_id: UUID, actor: User) -> None:
             raise _not_undoable()
         _require_scope(document)
         person_link.delete()
+        sync_automatic([document.id])
         _write_event(
             document,
             DocumentEvent.Kind.ADDRESSEE_REMOVED,
@@ -342,6 +359,21 @@ def confirm_automatic_links(document: Document) -> None:
     )
     DocumentAddressee.objects.filter(document=document, automatic=True).update(
         automatic=False, updated_at=now
+    )
+    sync_automatic([document.id])
+
+
+def sync_automatic(document_ids: Collection[UUID]) -> None:
+    """`Document.has_automatic_link` := whether an automatic label or addressee link is on
+    the letter. The only writer of the flag; every change of a link's `automatic` or of an
+    automatic link's existence calls it, in the same transaction."""
+    if not document_ids:
+        return
+    automatic = Q(
+        Exists(DocumentLabel.objects.filter(document_id=OuterRef("pk"), automatic=True))
+    ) | Q(Exists(DocumentAddressee.objects.filter(document_id=OuterRef("pk"), automatic=True)))
+    Document.objects.filter(id__in=list(document_ids)).update(
+        has_automatic_link=Case(When(automatic, then=Value(True)), default=Value(False))
     )
 
 

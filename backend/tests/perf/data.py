@@ -354,7 +354,8 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
             "INSERT INTO documents_document (id, created_at, updated_at, workspace_id, client_id,"
             " scanned_by_id, source, status, failure_code, page_count, ocr_text, sender,"
             " document_type, letter_date, summary, summary_by_ai, confirmed_by_id, confirmed_at,"
-            " confirmed_by_ai, confirmed_organisation, visibility, addressee_ids)"
+            " confirmed_by_ai, confirmed_organisation, visibility, addressee_ids,"
+            " has_automatic_link)"
             " SELECT id, %s - make_interval(secs => age), %s - make_interval(secs => age), %s,"
             " gen_random_uuid(), scanner, 'scan', status,"
             " CASE WHEN status = 'failed' THEN 'ocr_failed' ELSE '' END, (1 + n %% 3)::int,"
@@ -365,7 +366,7 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
             " CASE WHEN status = 'done' THEN scanner END,"
             " CASE WHEN status = 'done' THEN %s - make_interval(secs => age) END,"
             " by_ai, NULL, CASE WHEN is_private THEN 'restricted' ELSE 'workspace' END,"
-            " addressees::uuid[]"
+            " addressees::uuid[], false"
             " FROM unnest(%s::uuid[], %s::uuid[], %s::text[], %s::int[], %s::boolean[],"
             "             %s::text[], %s::text[], %s::boolean[], %s::text[])"
             "   WITH ORDINALITY AS t(id, scanner, status, age, is_private, sender, kind, by_ai,"
@@ -423,6 +424,14 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
                 [labels[label] for _, label in plan.label_links],
                 [j in plan.automatic_labels for j in range(len(plan.label_links))],
             ],
+        )
+        # What `organise.sync_automatic` keeps for every letter.
+        c.execute(
+            "UPDATE documents_document d SET has_automatic_link = true"
+            " WHERE d.workspace_id = %s AND (EXISTS (SELECT 1 FROM documents_documentlabel l"
+            " WHERE l.document_id = d.id AND l.automatic) OR EXISTS (SELECT 1"
+            " FROM documents_documentaddressee a WHERE a.document_id = d.id AND a.automatic))",
+            [workspace_id],
         )
         c.execute(
             "INSERT INTO tasks_task (id, created_at, updated_at, workspace_id, document_id, type,"

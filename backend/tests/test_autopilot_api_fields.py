@@ -8,7 +8,7 @@ from django.db import connection
 from django.test import Client
 from django.test.utils import CaptureQueriesContext
 
-from apps.documents import visibility
+from apps.documents import organise, visibility
 from apps.documents.models import Document, DocumentAddressee, DocumentLabel
 from apps.labels.models import Label
 from apps.tasks.models import Task
@@ -42,6 +42,8 @@ def link_label(workspace: Workspace, document: Document, name: str, *, automatic
         DocumentLabel.objects.create(
             workspace=workspace, document=document, label=label, automatic=automatic
         )
+        # Links made by hand: the stored flag follows them as organise keeps it.
+        organise.sync_automatic([document.id])
         return label
 
 
@@ -53,6 +55,7 @@ def link_person(
             workspace=workspace, document=document, person=person, automatic=automatic
         )
         visibility.sync_addressee_ids(document)
+        organise.sync_automatic([document.id])
 
 
 def ids_of(client: Client, workspace: Workspace, **query: str) -> set[str]:

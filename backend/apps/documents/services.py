@@ -199,14 +199,9 @@ def _open_suggestions(document: Document) -> list[DocumentSuggestion]:
 
 
 def _is_automatic() -> models.Q:
-    """The AI confirmed the document or put a label or addressee on it itself.
-
-    The links as two uncorrelated subqueries, each hashed once, instead of a probe per
-    letter (measured, DECISIONS 2026-11-20).
-    """
-    labels = DocumentLabel.objects.filter(automatic=True).values("document_id")
-    addressees = DocumentAddressee.objects.filter(automatic=True).values("document_id")
-    return models.Q(confirmed_by_ai=True) | models.Q(id__in=labels) | models.Q(id__in=addressees)
+    """The AI confirmed the document or put a label or addressee on it itself (the stored
+    `has_automatic_link`, kept by `organise.sync_automatic`; DECISIONS 2026-11-20)."""
+    return models.Q(confirmed_by_ai=True) | models.Q(has_automatic_link=True)
 
 
 def _in_state(state: str) -> models.Q:

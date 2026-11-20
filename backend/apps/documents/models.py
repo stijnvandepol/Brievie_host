@@ -130,6 +130,10 @@ class Document(WorkspaceModel):
     confirmed_at = models.DateTimeField(null=True, blank=True)
     # The standing confirmation is the AI's (autopilot), not a person's.
     confirmed_by_ai = models.BooleanField(default=False)
+    # An automatic label or addressee link (the autopilot's, not taken over by a person)
+    # is on the letter. Derived from the links, written only by `documents.organise`, so
+    # the inbox counts need no lookup in the link tables per letter (DECISIONS 2026-11-20).
+    has_automatic_link = models.BooleanField(default=False)
     # The sorted label and addressee ids as the user confirmed them in the review
     # ({"label_ids": [...], "addressee_ids": [...]}); null when confirmed without them.
     confirmed_organisation = models.JSONField(null=True, blank=True)
