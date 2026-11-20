@@ -181,16 +181,16 @@ class DocumentSearch(WorkspaceModel):
     `documents_document_search_insert`/`_update` (migration `documents/0014`) builds it from the
     letter's stored, already BSN-masked fields when the letter is stored and when its
     sender, summary or text changes. It follows its letter's visibility and is deleted
-    with it (in the database, whoever deletes the letter)."""
+    with it, like the letter's other rows."""
 
     same_workspace_fields = ("document",)
 
-    document = models.OneToOneField(Document, on_delete=models.DB_CASCADE, related_name="search")
+    document = models.OneToOneField(Document, on_delete=models.CASCADE, related_name="search")
     search_vector = SearchVectorField()
 
     class Meta:
         indexes: ClassVar[list[models.Index]] = [
-            GinIndex(fields=["search_vector"], name="documents_documentsearch_vector"),
+            GinIndex(fields=["search_vector"], name="documents_docsearch_vector"),
         ]
 
 
