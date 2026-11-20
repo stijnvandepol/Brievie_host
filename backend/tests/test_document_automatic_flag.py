@@ -41,7 +41,7 @@ def test_a_new_letter_has_no_automatic_link(ws_a: Workspace) -> None:
 
 def test_an_automatic_label_sets_it_and_a_hand_label_does_not(ws_a: Workspace) -> None:
     by_hand, by_ai = make_document(ws_a), make_document(ws_a)
-    label = _label(ws_a, "Zorg")
+    label = _label(ws_a, "Kwitantiemap")
     with workspace_context(ws_a.id, actor=SYSTEM):
         organise.add_label(by_hand, label, actor=None, origin=USER)
         organise.add_label(by_ai, label, actor=None, origin=AI)
@@ -61,7 +61,7 @@ def test_an_automatic_addressee_sets_it(ws_a: Workspace) -> None:
 
 def test_undo_clears_it(ws_a: Workspace) -> None:
     document = make_document(ws_a)
-    label = _label(ws_a, "Zorg")
+    label = _label(ws_a, "Kwitantiemap")
     with workspace_context(ws_a.id, actor=SYSTEM):
         organise.add_label(document, label, actor=None, origin=AI)
         event = DocumentEvent.objects.get(document=document, kind="label_added")
@@ -75,7 +75,7 @@ def test_undo_clears_it(ws_a: Workspace) -> None:
 
 def test_removing_the_label_by_hand_clears_it(ws_a: Workspace) -> None:
     document = make_document(ws_a)
-    label = _label(ws_a, "Zorg")
+    label = _label(ws_a, "Kwitantiemap")
     with workspace_context(ws_a.id, actor=SYSTEM):
         organise.add_label(document, label, actor=None, origin=AI)
         organise.set_labels(document=document, label_ids=[], actor=None)
@@ -85,7 +85,7 @@ def test_removing_the_label_by_hand_clears_it(ws_a: Workspace) -> None:
 
 def test_a_persons_confirm_takes_the_links_over(ws_a: Workspace) -> None:
     document = make_document(ws_a)
-    label = _label(ws_a, "Zorg")
+    label = _label(ws_a, "Kwitantiemap")
     with workspace_context(ws_a.id, actor=SYSTEM):
         organise.add_label(document, label, actor=None, origin=AI)
         organise.confirm_automatic_links(document)
@@ -95,7 +95,7 @@ def test_a_persons_confirm_takes_the_links_over(ws_a: Workspace) -> None:
 
 def test_deleting_the_label_clears_it_on_every_letter(ws_a: Workspace) -> None:
     only_this, also_other = make_document(ws_a), make_document(ws_a)
-    label, other = _label(ws_a, "Zorg"), _label(ws_a, "Werk")
+    label, other = _label(ws_a, "Kwitantiemap"), _label(ws_a, "Garantiebewijs")
     with workspace_context(ws_a.id, actor=SYSTEM):
         organise.add_label(only_this, label, actor=None, origin=AI)
         organise.add_label(also_other, label, actor=None, origin=AI)

@@ -26,6 +26,8 @@ ALLOWED_SYSTEM_CALLERS = {
     "apps/labels/services.py",
     "apps/rules/services.py",
     "apps/documents/intake.py",
+    # Fills the derived automatic flag of every letter (documents/0014).
+    "apps/documents/migrations/0014_document_has_automatic_link.py",
 }
 
 

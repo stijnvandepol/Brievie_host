@@ -9,7 +9,7 @@ from django.apps.registry import Apps
 from django.db import migrations, models
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
 
-from apps.workspaces.rls import ACTOR_SETTING, SETTING_NAME
+from apps.workspaces.context import SYSTEM, workspace_context
 
 FILL: Final = (
     "UPDATE documents_document d SET has_automatic_link = true"
@@ -20,14 +20,14 @@ FILL: Final = (
 
 
 def fill(apps: Apps, schema_editor: BaseDatabaseSchemaEditor) -> None:
+    """As the system: the document policies bind the migrating owner too."""
     workspaces = apps.get_model("workspaces", "Workspace")
-    with schema_editor.connection.cursor() as cursor:
-        cursor.execute("SELECT set_config(%s, 'system', true)", [ACTOR_SETTING])
-        for workspace_id in workspaces.objects.values_list("id", flat=True):
-            cursor.execute("SELECT set_config(%s, %s, true)", [SETTING_NAME, str(workspace_id)])
+    for workspace_id in list(workspaces.objects.values_list("id", flat=True)):
+        with (
+            workspace_context(workspace_id, actor=SYSTEM),
+            schema_editor.connection.cursor() as cursor,
+        ):
             cursor.execute(FILL, [workspace_id])
-        cursor.execute("SELECT set_config(%s, '', true)", [SETTING_NAME])
-        cursor.execute("SELECT set_config(%s, '', true)", [ACTOR_SETTING])
 
 
 class Migration(migrations.Migration):
