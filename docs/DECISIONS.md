@@ -537,8 +537,9 @@ Choices:
   lists in code next to the rules (two places to explain and to switch off).
 - **Only `apps.documents.organise` adds or removes a document's labels and addressees.**
   It writes the history event (`DocumentEvent`) in the same transaction, whoever made the
-  change (user, rule, accepted suggestion, undo). Deleting a whole label or person
-  cascades without events.
+  change (user, rule, accepted suggestion, undo). Deleting a whole label writes a
+  `label_removed` event on each of its documents first (since 2026-11-20, see "Fixes from
+  the exploratory API test"); a person on a document cannot be deleted.
 - **Suggestions have their own table.** A label or addressee proposal is a
   `DocumentSuggestion` (open, accepted, dismissed), not a field of the extraction.
   Dismissed is remembered: nothing automatic (AI, name matching, rules) proposes or

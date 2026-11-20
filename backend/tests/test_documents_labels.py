@@ -130,10 +130,11 @@ def test_delete_label_removes_it_from_documents_and_keeps_event_names(
     assert r.status_code == 204
     body = client_a.get(f"{documents_url(ws_a.id)}/{document.id}").json()
     assert body["label_ids"] == [str(bank.id)]
-    # No event per document for the delete; the old event keeps the name.
+    # A removed line per document for the delete; the events keep the name.
     assert events(ws_a, document) == [
         ("label_added", "Zorg", None),
         ("label_added", "Bank", bank.id),
+        ("label_removed", "Zorg", None),
     ]
 
 
