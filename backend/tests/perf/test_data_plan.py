@@ -89,11 +89,15 @@ def test_every_private_letter_has_an_addressee_and_a_share_reader(plan: Plan) ->
     for reader in plan.readers:
         by_letter.setdefault(reader.letter, []).append(reader.reason)
     private = {i for i, x in enumerate(plan.letters) if x.private}
-    assert set(by_letter) == private
-    assert all(sorted(reasons) == ["addressee", "share"] for reasons in by_letter.values())
+    assert private <= set(by_letter)
+    assert all(sorted(by_letter[i]) == ["addressee", "share"] for i in private)
+    # About 1 % of the other letters is shared with one member (shares on every letter).
+    public = {i: r for i, r in by_letter.items() if i not in private}
+    assert all(reasons == ["share"] for reasons in public.values())
+    assert 800 < len(public) < 1000
     shares = [r for r in plan.readers if r.reason == "share"]
     first = {r.letter: r.member for r in plan.readers if r.reason == "addressee"}
-    assert all(r.member != first[r.letter] for r in shares)
+    assert all(r.member != first[r.letter] for r in shares if r.letter in first)
     # The plain member reads some private letters, as anyone would.
     assert any(r.member == PLAIN for r in plan.readers)
 
@@ -106,3 +110,31 @@ def test_a_mix_must_add_up_to_100() -> None:
 def test_departments_must_fit_the_members() -> None:
     with pytest.raises(ValueError, match="departments"):
         make_plan(Shape(letters=100, department_size=6))
+
+
+def test_the_autopilot_left_its_marks(plan: Plan) -> None:
+    assert 9_000 < len(plan.automatic_addressees) < 11_000
+    assert 9_000 < len(plan.automatic_labels) < 11_000
+    assert max(plan.automatic_labels) < len(plan.label_links)
+    assert all(plan.letters[i].status == "done" for i in plan.by_ai)
+    assert 3_800 < len(plan.by_ai) < 4_700
+
+
+def test_the_extras_leave_the_rest_of_the_world_as_it_was() -> None:
+    # The autopilot marks come from their own generator: the letters, links and
+    # private reader rows are the ones measured before they were added.
+    plan = make_plan(Shape(letters=1_000, label_links=1_000, tasks=200, letterless_tasks=2))
+    plain = make_plan(
+        Shape(
+            letters=1_000,
+            label_links=1_000,
+            tasks=200,
+            letterless_tasks=2,
+            automatic_percent=0,
+            by_ai_percent=0,
+            public_share_percent=0,
+        )
+    )
+    assert plan.letters == plain.letters
+    assert plan.label_links == plain.label_links
+    assert plan.readers[: len(plain.readers)] == plain.readers

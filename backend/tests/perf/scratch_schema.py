@@ -49,6 +49,10 @@ COLUMNS: Final = [
     " ADD COLUMN visibility varchar(20) NOT NULL DEFAULT 'workspace',"
     " ADD COLUMN addressee_ids uuid[] NOT NULL DEFAULT '{}'",
     "CREATE INDEX documents_document_addressees ON documents_document USING gin (addressee_ids)",
+    # Proposed with the candidates (Task 7 if the measurement bears it out): the letters
+    # without an addressee, newest first, for the "Zonder naam" list and its count.
+    "CREATE INDEX documents_document_unassigned ON documents_document"
+    " (workspace_id, created_at DESC) WHERE status = 'done' AND addressee_ids = '{}'",
     # The R39 arm of the task policy reads the maker (Task 6 adds it as a field).
     "ALTER TABLE tasks_task ADD COLUMN created_by_id uuid NULL"
     " REFERENCES accounts_user (id) DEFERRABLE INITIALLY DEFERRED",

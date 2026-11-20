@@ -5,6 +5,7 @@ from django.apps import apps
 from apps.documents.models import Document
 from apps.workspaces.visibility_sql import POLICY_CONDITION, visibility_functions_sql
 from tests.perf import scratch_schema
+from tests.perf.candidates import NO_ADDRESSEE
 
 
 def test_the_document_policies_use_the_shipping_condition() -> None:
@@ -44,3 +45,9 @@ def test_every_table_with_a_document_key_follows_its_document() -> None:
         policies = [s for s in statements if f'ON "{table}" AS RESTRICTIVE' in s]
         assert len(policies) == 3, table
     assert "created_by_id = (SELECT public.brievie_actor_id())" in scratch_schema.TASK_CONDITION
+
+
+def test_the_unassigned_index_matches_the_candidate_filter() -> None:
+    (index,) = [s for s in scratch_schema.statements() if "documents_document_unassigned" in s]
+    assert index.endswith("WHERE status = 'done' AND addressee_ids = '{}'")
+    assert NO_ADDRESSEE.endswith("\"addressee_ids\" = '{}'::uuid[]")

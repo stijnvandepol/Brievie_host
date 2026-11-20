@@ -157,3 +157,54 @@ def viewer_pairs_sql(document_filter: str) -> str:
         " CROSS JOIN m CROSS JOIN c"
         f" WHERE ({document_filter}) AND {condition}"
     )
+
+
+def viewer_groups_sql(document_filter: str) -> str:
+    """Who sees each group of alike letters: the preview's question, without a letter x member pass.
+
+    Without reader rows, the switches decide a non-private letter's viewers from two
+    things only: its `addressee_ids`, and its scanner while it is not done. Letters
+    alike in both get the same viewers, so the condition runs once per group and member
+    (a few thousand groups instead of every letter times every member). Rows:
+    (addressee_ids, scanned_by_id, status, letters, sorted viewer ids); `scanned_by_id`
+    is set only while not done, and `status` is "open" or "done" (the condition asks no
+    more). A private letter's viewers come from its
+    reader rows alone and do not depend on the switches, and a letter with an unexpired
+    reader row is left out: ask `viewer_pairs_sql` about those one by one.
+
+    `document_filter`: as `viewer_pairs_sql`. Run as the system.
+    """
+    if ";" in document_filter or "--" in document_filter or "/*" in document_filter:
+        raise ValueError("document_filter must be one SQL fragment without comments.")
+    condition = document_condition(
+        user="m.user_id",
+        sees_all="m.sees_all",
+        my_ids="m.my_ids",
+        sorts="m.sorts",
+        covered="c.covered",
+        table="g",
+    )
+    return (
+        "WITH m AS ("  # noqa: S608 - fixed fragments from code, no input
+        "SELECT user_id,"
+        " public.brievie_sees_all_post(user_id) AS sees_all,"
+        " public.brievie_my_post_ids(user_id) AS my_ids,"
+        " public.brievie_actor_sorts_post(user_id) AS sorts"
+        f" FROM public.workspaces_membership WHERE workspace_id = {_WORKSPACE}),"
+        " c AS (SELECT public.brievie_covered_post_ids() AS covered),"
+        " g AS (SELECT d.addressee_ids,"
+        " CASE WHEN d.status <> 'done' THEN d.scanned_by_id END AS scanned_by_id,"
+        " CASE WHEN d.status <> 'done' THEN 'open' ELSE 'done' END AS status,"
+        " 'workspace'::text AS visibility, NULL::uuid AS id, pg_catalog.count(*) AS letters"
+        " FROM public.documents_document d"
+        f" WHERE ({document_filter}) AND d.visibility = 'workspace'"
+        " AND NOT EXISTS (SELECT 1 FROM public.documents_documentreader r"
+        " WHERE r.document_id = d.id"
+        " AND (r.expires_at IS NULL OR r.expires_at > pg_catalog.now()))"
+        " GROUP BY 1, 2, 3)"
+        " SELECT g.addressee_ids, g.scanned_by_id, g.status, g.letters,"
+        " COALESCE(pg_catalog.array_agg(m.user_id ORDER BY m.user_id)"
+        f" FILTER (WHERE {condition}), '{{}}')"
+        " FROM g CROSS JOIN m CROSS JOIN c"
+        " GROUP BY g.addressee_ids, g.scanned_by_id, g.status, g.letters"
+    )

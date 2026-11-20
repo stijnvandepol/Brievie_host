@@ -60,6 +60,10 @@ class Shape:
         ("failed", 2),
     )
     sorter_scans_percent: int = 70
+    # An autopilot workspace: links the AI made, letters it confirmed.
+    automatic_percent: int = 10  # of letters (their addressee links) and of label links
+    by_ai_percent: int = 5  # of done letters
+    public_share_percent: int = 1  # non-private letters shared with one more member
     ocr_words: int = 45  # 45 hex words of 33 characters: about 1,500 characters a letter
     years: int = 5
 
@@ -99,6 +103,9 @@ class Plan:
     label_links: list[tuple[int, int]]  # (letter, label)
     tasks: list[TaskRow]
     readers: list[Reader]
+    automatic_addressees: frozenset[int]  # letters whose addressee links are automatic
+    automatic_labels: frozenset[int]  # indexes into label_links
+    by_ai: frozenset[int]  # letters the AI confirmed
 
     @property
     def department_member(self) -> int:
@@ -208,6 +215,23 @@ def make_plan(shape: Shape = DEFAULT, seed: int = SEED) -> Plan:
         readers.append(Reader(i, first, "addressee"))
         readers.append(Reader(i, rng.choice(others), "share"))
 
+    # Drawn from their own generator, so the rest of the world stays as it was.
+    extra = random.Random(seed + 2)  # noqa: S311 - test data, not a secret
+    automatic_addressees = frozenset(
+        i for i in range(shape.letters) if extra.randrange(100) < shape.automatic_percent
+    )
+    automatic_labels = frozenset(
+        j for j in range(len(label_links)) if extra.randrange(100) < shape.automatic_percent
+    )
+    by_ai = frozenset(
+        i
+        for i, x in enumerate(letters)
+        if x.status == "done" and extra.randrange(100) < shape.by_ai_percent
+    )
+    for i, letter in enumerate(letters):
+        if not letter.private and extra.randrange(100) < shape.public_share_percent:
+            readers.append(Reader(i, extra.randrange(shape.members), "share"))
+
     return Plan(
         shape=shape,
         roles=["admin" if m in ADMINS else "member" for m in range(shape.members)],
@@ -216,6 +240,9 @@ def make_plan(shape: Shape = DEFAULT, seed: int = SEED) -> Plan:
         label_links=label_links,
         tasks=tasks,
         readers=readers,
+        automatic_addressees=automatic_addressees,
+        automatic_labels=automatic_labels,
+        by_ai=by_ai,
     )
 
 
@@ -254,6 +281,10 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
     letters = _ids(rng, shape.letters)
     now = datetime.now(UTC)
     today = now.date()
+
+    def addressee_ids(plan: Plan, i: int) -> list[UUID]:
+        letter = plan.letters[i]
+        return [persons[p] for p in letter.persons] + [departments[d] for d in letter.departments]
 
     with transaction.atomic(), connection.cursor() as c:
         c.execute("SELECT set_config('brievie.workspace_id', %s, true)", [str(workspace_id)])
@@ -331,10 +362,12 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
             " 'Samenvatting van brief ' || n, false,"
             " CASE WHEN status = 'done' THEN scanner END,"
             " CASE WHEN status = 'done' THEN %s - make_interval(secs => age) END,"
-            " false, NULL, CASE WHEN is_private THEN 'restricted' ELSE 'workspace' END, '{}'"
+            " by_ai, NULL, CASE WHEN is_private THEN 'restricted' ELSE 'workspace' END,"
+            " addressees::uuid[]"
             " FROM unnest(%s::uuid[], %s::uuid[], %s::text[], %s::int[], %s::boolean[],"
-            "             %s::text[], %s::text[])"
-            "   WITH ORDINALITY AS t(id, scanner, status, age, is_private, sender, kind, n)",
+            "             %s::text[], %s::text[], %s::boolean[], %s::text[])"
+            "   WITH ORDINALITY AS t(id, scanner, status, age, is_private, sender, kind, by_ai,"
+            "                        addressees, n)",
             [
                 now,
                 now,
@@ -349,6 +382,14 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
                 [x.private for x in plan.letters],
                 [_SENDERS[i % len(_SENDERS)] for i in range(shape.letters)],
                 [_TYPES[i % len(_TYPES)] for i in range(shape.letters)],
+                [i in plan.by_ai for i in range(shape.letters)],
+                # Written with the letter, sorted as the sync will (ORDER BY id), so the
+                # table is not rewritten by an UPDATE of every row: a bulk rewrite leaves
+                # it twice its size, which a server that grew letter by letter is not.
+                [
+                    "{" + ",".join(str(a) for a in sorted(addressee_ids(plan, i))) + "}"
+                    for i in range(shape.letters)
+                ],
             ],
         )
         links = [(i, persons[p]) for i, x in enumerate(plan.letters) for p in x.persons]
@@ -356,21 +397,29 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
         c.execute(
             "INSERT INTO documents_documentaddressee (id, created_at, updated_at, workspace_id,"
             " document_id, person_id, automatic)"
-            " SELECT gen_random_uuid(), %s, %s, %s, d, p, false"
-            " FROM unnest(%s::uuid[], %s::uuid[]) AS t(d, p)",
-            [now, now, workspace_id, [letters[i] for i, _ in links], [p for _, p in links]],
+            " SELECT gen_random_uuid(), %s, %s, %s, d, p, a"
+            " FROM unnest(%s::uuid[], %s::uuid[], %s::boolean[]) AS t(d, p, a)",
+            [
+                now,
+                now,
+                workspace_id,
+                [letters[i] for i, _ in links],
+                [p for _, p in links],
+                [i in plan.automatic_addressees for i, _ in links],
+            ],
         )
         c.execute(
             "INSERT INTO documents_documentlabel (id, created_at, updated_at, workspace_id,"
             " document_id, label_id, automatic)"
-            " SELECT gen_random_uuid(), %s, %s, %s, d, l, false"
-            " FROM unnest(%s::uuid[], %s::uuid[]) AS t(d, l)",
+            " SELECT gen_random_uuid(), %s, %s, %s, d, l, a"
+            " FROM unnest(%s::uuid[], %s::uuid[], %s::boolean[]) AS t(d, l, a)",
             [
                 now,
                 now,
                 workspace_id,
                 [letters[i] for i, _ in plan.label_links],
                 [labels[label] for _, label in plan.label_links],
+                [j in plan.automatic_labels for j in range(len(plan.label_links))],
             ],
         )
         c.execute(
@@ -422,12 +471,6 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
                 [users[r.member] for r in plan.readers],
                 [r.reason for r in plan.readers],
             ],
-        )
-        c.execute(
-            "UPDATE documents_document d SET addressee_ids = s.ids"
-            " FROM (SELECT document_id, array_agg(person_id ORDER BY person_id) ids"
-            "       FROM documents_documentaddressee GROUP BY document_id) s"
-            " WHERE s.document_id = d.id"
         )
 
     with connection.cursor() as c:

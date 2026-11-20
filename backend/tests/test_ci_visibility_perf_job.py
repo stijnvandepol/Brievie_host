@@ -17,6 +17,7 @@ CI = (WORKFLOWS / "ci.yml").read_text()
 
 # Everything the measurement imports or runs on: a change here can change its result.
 WATCHED = [
+    "backend/brievie/settings.py",  # the connection settings (jit=off)
     "backend/apps/workspaces/visibility_sql.py",
     "backend/apps/workspaces/rls.py",
     "backend/apps/workspaces/context.py",

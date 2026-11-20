@@ -34,6 +34,7 @@ def test_everything_within_the_threshold_passes() -> None:
     assert failures == []
     assert "**VERDICT: PASS**" in text
     assert text.count("| PASS |") == len(STATES) * len(ACTORS) * len(LISTS)
+    assert f"Lists: {len(STATES) * len(ACTORS) * len(LISTS)} PASS." in text
     assert "1234 letters change viewers" in text
 
 
@@ -42,7 +43,7 @@ def test_a_slow_list_fails_with_how_much_and_the_dominant_node() -> None:
     _replace(report, ("own", "plain_member", "list_documents"), [0.4, 0.41, 0.39, 0.42, 0.5])
     text, failures = render(report)
     assert failures == [
-        "own plain_member list_documents: 410 ms, 160 ms over (1.64x);"
+        "own plain_member list_documents: 410 ms at best, 160 ms over (1.64x);"
         " query 1 (400 ms): Seq Scan relation=documents_document 380 ms"
     ]
     assert "**VERDICT: FAIL**" in text
@@ -62,7 +63,27 @@ def test_a_list_passes_when_its_member_filter_does() -> None:
     report.measurements.append(Measurement(*key, "member filter", 0.1, [0.05] * 5, "{}"))
     text, failures = render(report)
     assert failures == []
-    assert "| own | plain_member | inbox_counts | 300 | 600 | 600 | 50 |" in text
+    assert "| own | plain_member | inbox_counts | 300 | 600 | 600 |  | 50 |" in text
+    assert "PASS with member filter" in text
+
+
+def test_a_list_passes_with_its_candidate_and_shows_jit_on_beside_it() -> None:
+    report = _report()
+    key = ("E", "admin", "list_persons")
+    _replace(report, key, [0.8] * 5)
+    report.measurements.append(Measurement(*key, "candidate", 0.1, [0.09] * 5, "55 rows"))
+    report.measurements.append(Measurement(*key, "jit on", 0.1, [1.1] * 5, "55 rows"))
+    text, failures = render(report)
+    assert failures == []
+    assert "| E | admin | list_persons | 300 | 800 | 800 | 90 |  | 1100 |" in text
+    assert "PASS with candidate" in text
+
+
+def test_a_candidate_with_another_result_fails() -> None:
+    report = _report()
+    report.mismatches.append("candidate own admin list_persons: a != b")
+    _, failures = render(report)
+    assert failures == ["different result: candidate own admin list_persons: a != b"]
 
 
 def test_a_missing_measurement_fails() -> None:
@@ -77,14 +98,17 @@ def test_a_slow_preview_fails() -> None:
     assert failures == ["preview count: 2500 ms, 500 ms over"]
 
 
-def test_a_member_filter_that_misses_the_index_or_changes_the_result_fails() -> None:
-    report = _report(gin=False)
-    report.mismatches.append("own plain_member inbox_counts: a != b")
-    _, failures = render(report)
-    assert failures == [
-        "the member filter does not use the GIN index",
-        "member filter changed the result: own plain_member inbox_counts: a != b",
-    ]
+def test_the_gin_index_is_recorded_not_required() -> None:
+    text, failures = render(_report(gin=False))
+    assert failures == []
+    assert "GIN index (EXPLAIN of inbox_counts, own, plain member): no" in text
+
+
+def test_the_first_preview_design_is_reported_beside_the_grouped_one() -> None:
+    report = _report()
+    report.preview_per_letter = (97.6, 90_000)
+    text, _ = render(report)
+    assert "first design (a row per letter and member, once): 90000 letters, 97600 ms" in text
 
 
 def test_dominant_node_is_the_one_with_most_time_of_its_own() -> None:

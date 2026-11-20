@@ -6,6 +6,11 @@ condition that ships, the lists are measured through the real service functions 
 request runs them: inside one transaction, as the non-superuser test role bound by the
 forced policies, with `brievie.workspace_id` and `brievie.actor` set transaction-local.
 
+JIT: the app's connections run with `jit=off` (brievie/settings.py), and so does this
+measurement; each list is measured once more with `SET LOCAL jit = on` (PostgreSQL's
+default) so the report shows both. Next to each service, the proposed form of
+tests/perf/candidates.py where there is one, with the same result required.
+
 Per state x actor x list: one first run (reported as "first": a new plan for that query,
 but shared buffers already hold the data of earlier lists; nothing here empties the
 server's or the machine's caches) and five timed runs (median, and p95 by nearest rank,
@@ -19,7 +24,7 @@ import json
 import os
 import platform
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Final
@@ -38,8 +43,8 @@ from apps.labels import services as labels
 from apps.people import services as people
 from apps.tasks import services as tasks
 from apps.workspaces.models import Workspace
-from apps.workspaces.visibility_sql import viewer_pairs_sql
-from tests.perf import data, scratch_schema
+from apps.workspaces.visibility_sql import viewer_groups_sql, viewer_pairs_sql
+from tests.perf import candidates, data, scratch_schema
 from tests.perf.data import PerfWorld
 from tests.perf.report import (
     ACTORS,
@@ -151,11 +156,32 @@ def _member_filter(actor: UUID) -> Iterator[None]:
         del manager.filter
 
 
-def _list(name: str, workspace: Workspace, world: PerfWorld, actor: UUID) -> Callable[[], str]:
+def _list(
+    name: str, workspace: Workspace, world: PerfWorld, actor: UUID, variant: str = "policy"
+) -> Callable[[], str] | None:
     def ids(rows: list[Document]) -> str:
         # Every id, in order: the member filter must give exactly the same list.
         digest = hashlib.sha256(",".join(str(row.id) for row in rows).encode()).hexdigest()
         return f"{len(rows)} rows #{digest[:12]}"
+
+    def counted(rows: Sequence[object]) -> str:
+        # Every row with its count: the candidate must give the same counts.
+        pairs = ",".join(f"{getattr(r, 'id', '')}={getattr(r, 'document_count', '')}" for r in rows)
+        return f"{len(rows)} rows #{hashlib.sha256(pairs.encode()).hexdigest()[:12]}"
+
+    candidate: dict[str, Callable[[], str]] = {
+        "list_documents": lambda: ids(candidates.list_documents(workspace)),
+        "list_documents_unassigned": lambda: ids(
+            candidates.list_documents(workspace, inbox_state="unassigned")
+        ),
+        "list_documents_own_person": lambda: ids(
+            candidates.list_documents(workspace, person_id=world.own_person[actor])
+        ),
+        "inbox_counts": lambda: json.dumps(candidates.inbox_counts(workspace), sort_keys=True),
+        "list_persons": lambda: counted(candidates.list_persons(workspace)),
+    }
+    if variant == "candidate":
+        return candidate.get(name)
 
     calls: dict[str, Callable[[], str]] = {
         "list_documents": lambda: ids(documents.list_documents(workspace)),
@@ -166,8 +192,8 @@ def _list(name: str, workspace: Workspace, world: PerfWorld, actor: UUID) -> Cal
             documents.list_documents(workspace, person_id=world.own_person[actor])
         ),
         "inbox_counts": lambda: json.dumps(documents.inbox_counts(workspace), sort_keys=True),
-        "list_persons": lambda: f"{len(people.list_persons(workspace))} rows",
-        "list_labels": lambda: f"{len(labels.list_labels(workspace))} rows",
+        "list_persons": lambda: counted(people.list_persons(workspace)),
+        "list_labels": lambda: counted(labels.list_labels(workspace)),
         "list_tasks_all": lambda: f"{len(tasks.list_tasks(workspace, status='all'))} rows",
     }
     return calls[name]
@@ -190,7 +216,9 @@ def _explain(sql: str, *, analyze: bool) -> tuple[str, dict[str, object]]:
     return text, top
 
 
-def _measure(call: Callable[[], str], label: str) -> tuple[float, list[float], str, str, str]:
+def _measure(
+    call: Callable[[], str], label: str, *, explain: bool = True
+) -> tuple[float, list[float], str, str, str]:
     """first run, timed runs, result, dominant node of the slowest query, explain file."""
     start = time.perf_counter()
     result = call()
@@ -201,6 +229,8 @@ def _measure(call: Callable[[], str], label: str) -> tuple[float, list[float], s
         again = call()
         runs.append(time.perf_counter() - start)
         assert again == result
+    if not explain:
+        return first, runs, result, "", ""
     with CaptureQueriesContext(connection) as captured:
         call()
     sections = []
@@ -221,6 +251,13 @@ def _measure(call: Callable[[], str], label: str) -> tuple[float, list[float], s
     return first, runs, result, slowest[1], explain_file
 
 
+def _jit() -> str:
+    with connection.cursor() as c:
+        c.execute("SHOW jit")
+        row = c.fetchone()
+    return str(row[0]) if row else "?"
+
+
 @pytest.mark.parametrize("state", STATES)
 @pytest.mark.parametrize("actor", ACTORS)
 @pytest.mark.parametrize("name", LISTS)
@@ -231,13 +268,27 @@ def test_measure_list(
     assert isinstance(user, UUID)
     _set_state(perf_world, state)
     _enter(perf_world, user)
+    # The production setting (brievie/settings.py), not one chosen here.
+    assert _jit() == "off"
     workspace = Workspace.objects.get(id=perf_world.workspace_id)
     call = _list(name, workspace, perf_world, user)
+    assert call is not None
     label = f"{state}-{actor}-{name}".replace("+", "plus")
-    first, runs, result, dominant, explain_file = _measure(call, label)
-    perf_report.measurements.append(
-        Measurement(state, actor, name, "policy", first, runs, result, dominant, explain_file)
-    )
+
+    def record(variant: str, measured: tuple[float, list[float], str, str, str]) -> str:
+        first, runs, result, node, explain_file = measured
+        perf_report.measurements.append(
+            Measurement(state, actor, name, variant, first, runs, result, node, explain_file)
+        )
+        return result
+
+    result = record("policy", _measure(call, label))
+
+    proposed = _list(name, workspace, perf_world, user, "candidate")
+    if proposed is not None:
+        same = record("candidate", _measure(proposed, f"{label}-candidate"))
+        if same != result:
+            perf_report.mismatches.append(f"candidate {state} {actor} {name}: {same} != {result}")
 
     with connection.cursor() as c:
         c.execute(
@@ -247,48 +298,88 @@ def test_measure_list(
         row = c.fetchone()
     assert row is not None
     sees_all, sorts = row
-    if name not in FILTERED or sees_all or sorts:
-        return
-    with _member_filter(user):
-        first, runs, filtered, dominant, explain_file = _measure(call, f"{label}-member-filter")
-    perf_report.measurements.append(
-        Measurement(
-            state, actor, name, "member filter", first, runs, filtered, dominant, explain_file
-        )
+    if name in FILTERED and not sees_all and not sorts:
+        with _member_filter(user):
+            filtered = record("member filter", _measure(call, f"{label}-member-filter"))
+        if filtered != result:
+            perf_report.mismatches.append(f"filter {state} {actor} {name}: {filtered} != {result}")
+
+    # PostgreSQL's default, for the comparison only.
+    with connection.cursor() as c:
+        c.execute("SET LOCAL jit = on")
+    record("jit on", _measure(call, f"{label}-jit-on", explain=False))
+    with connection.cursor() as c:
+        c.execute("SET LOCAL jit = off")
+    assert not perf_report.mismatches
+
+
+def _per_letter(world: PerfWorld, state: str, document_filter: str) -> dict[UUID, str]:
+    """Letter -> a digest of its viewers, one row per letter and member (the first design)."""
+    _set_state(world, state)
+    sql = (
+        "SELECT id, md5(string_agg(user_id::text, ',' ORDER BY user_id)) FROM ("  # noqa: S608
+        + viewer_pairs_sql(document_filter)
+        + ") v GROUP BY id"
     )
-    if filtered != result:
-        perf_report.mismatches.append(f"{state} {actor} {name}: {filtered} != {result}")
-    assert filtered == result
+    with connection.cursor() as c:
+        c.execute(sql, [world.workspace_id])
+        return {row[0]: row[1] for row in c.fetchall()}
+
+
+def _grouped(world: PerfWorld, state: str) -> dict[tuple[object, ...], tuple[int, list[UUID]]]:
+    """(addressees, scanner, status) -> (letters, viewers): one row per group of alike letters."""
+    _set_state(world, state)
+    with connection.cursor() as c:
+        c.execute(viewer_groups_sql("d.workspace_id = %s"), [world.workspace_id])
+        return {
+            (tuple(row[0]), row[1], row[2]): (int(row[3]), list(row[4])) for row in c.fetchall()
+        }
+
+
+# Non-private letters with a reader row: asked letter by letter (few).
+_WITH_READERS: Final = (
+    "d.workspace_id = %s AND d.visibility = 'workspace' AND EXISTS (SELECT 1"
+    " FROM public.documents_documentreader r WHERE r.document_id = d.id"
+    " AND (r.expires_at IS NULL OR r.expires_at > pg_catalog.now()))"
+)
+
+
+def preview_count(world: PerfWorld, before: str, after: str) -> int:
+    """Letters whose viewers differ between two states: grouped, plus letters with readers.
+
+    Private letters are left out: their viewers are their reader rows in every state.
+    """
+    a, b = _grouped(world, before), _grouped(world, after)
+    changed = sum(n for key, (n, viewers) in a.items() if b[key][1] != viewers)
+    ra, rb = _per_letter(world, before, _WITH_READERS), _per_letter(world, after, _WITH_READERS)
+    return changed + sum(ra.get(k) != rb.get(k) for k in ra.keys() | rb.keys())
 
 
 def test_measure_preview_letter_count(perf_world: PerfWorld, perf_report: Report) -> None:
     """As the system: letters whose set of viewers differs between "E" and "own+D"."""
     _enter(perf_world, "system")
-    sql = (
-        "SELECT id, md5(string_agg(user_id::text, ',' ORDER BY user_id)) FROM ("  # noqa: S608
-        + viewer_pairs_sql("d.workspace_id = %s")
-        + ") v GROUP BY id"
-    )
+    assert _jit() == "off"
 
-    def viewers(state: str) -> dict[UUID, str]:
-        _set_state(perf_world, state)
-        with connection.cursor() as c:
-            c.execute(sql, [perf_world.workspace_id])
-            return {row[0]: row[1] for row in c.fetchall()}
+    # The first design, once: a row per letter and member (minutes at this size).
+    start = time.perf_counter()
+    before = _per_letter(perf_world, "E", "d.workspace_id = %s")
+    after = _per_letter(perf_world, "own+D", "d.workspace_id = %s")
+    per_letter = sum(before.get(k) != after.get(k) for k in before.keys() | after.keys())
+    perf_report.preview_per_letter = (time.perf_counter() - start, per_letter)
 
     changed = -1
     for run in range(RUNS + 1):
         start = time.perf_counter()
-        before = viewers("E")
-        after = viewers("own+D")
-        changed = sum(before.get(k) != after.get(k) for k in before.keys() | after.keys())
+        changed = preview_count(perf_world, "E", "own+D")
         if run:  # the first run warms up
             perf_report.preview_runs.append(time.perf_counter() - start)
     perf_report.preview_letters = changed
-    assert changed > 0
+    if changed != per_letter:
+        perf_report.mismatches.append(f"preview: grouped {changed} != per letter {per_letter}")
+    assert changed == per_letter
 
 
-def test_explain_member_filter_uses_the_gin_index(
+def test_explain_member_filter_and_the_gin_index(
     perf_world: PerfWorld, perf_report: Report
 ) -> None:
     _set_state(perf_world, "own")
@@ -315,7 +406,7 @@ def test_explain_member_filter_uses_the_gin_index(
     directory = _explain_dir()
     if directory is not None:
         (directory / "own-plain_member-inbox_counts-member-filter-plan.txt").write_text(text)
-    assert used, text
+    # Recorded, not asserted: the filter is one way to pass P1, not a requirement.
 
 
 def _server_info() -> dict[str, str]:

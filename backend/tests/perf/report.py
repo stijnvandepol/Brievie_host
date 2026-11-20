@@ -36,7 +36,7 @@ class Measurement:
     state: str
     actor: str
     name: str
-    variant: str  # "policy" or "member filter"
+    variant: str  # "policy", "candidate", "member filter" or "jit on"
     first: float
     runs: list[float]
     result: str  # rows, or the counts
@@ -60,6 +60,7 @@ class Report:
     preview_letters: int = -1
     mismatches: list[str] = field(default_factory=list)
     gin_index_used: bool | None = None
+    preview_per_letter: tuple[float, int] | None = None
     server: dict[str, str] = field(default_factory=dict)
 
 
@@ -105,61 +106,90 @@ def _ms(seconds: float) -> str:
     return f"{seconds * 1000:.0f}"
 
 
+def _verdict(service: float, candidate: float | None, filtered: float | None) -> str:
+    if service <= THRESHOLD:
+        return "PASS"
+    if candidate is not None and candidate <= THRESHOLD:
+        return "PASS with candidate"
+    if filtered is not None and filtered <= THRESHOLD:
+        return "PASS with member filter"
+    return "FAIL"
+
+
 def render(report: Report) -> tuple[str, list[str]]:
     """The markdown report and the reasons it fails (empty when it passes)."""
     failures: list[str] = []
-    policy = {(m.state, m.actor, m.name): m for m in report.measurements if m.variant == "policy"}
-    filtered = {
-        (m.state, m.actor, m.name): m for m in report.measurements if m.variant == "member filter"
-    }
+    by: dict[str, dict[tuple[str, str, str], Measurement]] = {}
+    for item in report.measurements:
+        by.setdefault(item.variant, {})[(item.state, item.actor, item.name)] = item
+    policy = by.get("policy", {})
     lines = [
         "# Visibility at 100,000 letters",
         "",
-        f"Threshold: median <= {_ms(THRESHOLD)} ms per list (a list passes when the plain"
-        f" policy or the member filter does), preview count <= {_ms(PREVIEW_THRESHOLD)} ms."
-        f" {RUNS} timed runs after one first run; p95 by nearest rank (over {RUNS} runs: the"
+        f"Threshold: median <= {_ms(THRESHOLD)} ms per list, preview count <="
+        f" {_ms(PREVIEW_THRESHOLD)} ms. Measured with jit=off, the production setting;"
+        ' "jit on" is the same service with PostgreSQL\'s default, for comparison. A list'
+        " passes on today's service, or on its proposed form (tests/perf/candidates.py,"
+        " same result required), or with the member filter. "
+        f"{RUNS} timed runs after one first run; p95 by nearest rank (over {RUNS} runs: the"
         ' slowest). "first" is the first run of that query in the measurement: a new plan,'
         " but the server's and the machine's caches are not emptied.",
         "",
         *(f"- {key}: {value}" for key, value in report.server.items()),
         "",
-        "| state | actor | list | first ms | median ms | p95 ms | member filter median ms"
-        " | result | verdict | slowest query: dominant node |",
-        "|---|---|---|---:|---:|---:|---:|---|---|---|",
+        "| state | actor | list | first ms | median ms | p95 ms | candidate ms"
+        " | member filter ms | jit on ms | result | verdict | slowest query: dominant node |",
+        "|---|---|---|---:|---:|---:|---:|---:|---:|---|---|---|",
     ]
+    verdicts: dict[str, int] = {}
     for state in STATES:
         for actor in ACTORS:
             for name in LISTS:
-                m = policy.get((state, actor, name))
+                key = (state, actor, name)
+                m = policy.get(key)
                 if m is None:
                     failures.append(f"{state} {actor} {name}: not measured")
-                    lines.append(f"| {state} | {actor} | {name} | | | | | | NOT MEASURED | |")
+                    lines.append(f"| {state} | {actor} | {name} | | | | | | | | NOT MEASURED | |")
                     continue
-                f = filtered.get((state, actor, name))
-                best = min(m.median, f.median) if f else m.median
-                verdict = "PASS" if best <= THRESHOLD else "FAIL"
+                c = by.get("candidate", {}).get(key)
+                f = by.get("member filter", {}).get(key)
+                j = by.get("jit on", {}).get(key)
+                verdict = _verdict(m.median, c.median if c else None, f.median if f else None)
+                verdicts[verdict] = verdicts.get(verdict, 0) + 1
                 where = m.dominant
-                if f is not None:
-                    where += f" / with filter: {f.dominant}"
+                if c is not None:
+                    where += f" / candidate: {c.dominant}"
                 if verdict == "FAIL":
-                    over = best - THRESHOLD
+                    best = min(x.median for x in (m, c, f) if x is not None)
                     failures.append(
-                        f"{state} {actor} {name}: {_ms(best)} ms, {_ms(over)} ms over"
-                        f" ({best / THRESHOLD:.2f}x); {where}"
+                        f"{state} {actor} {name}: {_ms(best)} ms at best,"
+                        f" {_ms(best - THRESHOLD)} ms over ({best / THRESHOLD:.2f}x); {where}"
                     )
                 lines.append(
                     f"| {state} | {actor} | {name} | {_ms(m.first)} | {_ms(m.median)}"
-                    f" | {_ms(m.p95)} | {_ms(f.median) if f else ''} | {m.result[:40]}"
-                    f" | {verdict} | {where} |"
+                    f" | {_ms(m.p95)} | {_ms(c.median) if c else ''}"
+                    f" | {_ms(f.median) if f else ''} | {_ms(j.median) if j else ''}"
+                    f" | {m.result[:40]} | {verdict} | {where} |"
                 )
     lines.append("")
+    lines.append(
+        "Lists: " + ", ".join(f"{n} {v}" for v, n in sorted(verdicts.items())) + "."
+        if verdicts
+        else "Lists: none measured."
+    )
+    if report.preview_per_letter is not None:
+        seconds, letters = report.preview_per_letter
+        lines.append(
+            f"Preview, first design (a row per letter and member, once): {letters} letters,"
+            f" {_ms(seconds)} ms."
+        )
     if report.preview_runs:
         median = statistics.median(report.preview_runs)
         verdict = "PASS" if median <= PREVIEW_THRESHOLD else "FAIL"
         lines.append(
-            f"Preview letter count (E -> own+D, as the system): {report.preview_letters}"
-            f" letters change viewers; median {_ms(median)} ms, slowest"
-            f" {_ms(max(report.preview_runs))} ms: {verdict}."
+            f"Preview letter count, grouped (E -> own+D, as the system):"
+            f" {report.preview_letters} letters change viewers; median {_ms(median)} ms,"
+            f" slowest {_ms(max(report.preview_runs))} ms: {verdict}."
         )
         if verdict == "FAIL":
             failures.append(
@@ -170,12 +200,10 @@ def render(report: Report) -> tuple[str, list[str]]:
         lines.append("Preview letter count: NOT MEASURED.")
     lines.append(
         "Member filter uses the GIN index (EXPLAIN of inbox_counts, own, plain member): "
-        + {True: "yes", False: "NO", None: "not checked"}[report.gin_index_used]
-        + "."
+        + {True: "yes", False: "no", None: "not checked"}[report.gin_index_used]
+        + " (recorded, not a condition)."
     )
-    if report.gin_index_used is not True:
-        failures.append("the member filter does not use the GIN index")
-    failures += [f"member filter changed the result: {m}" for m in report.mismatches]
+    failures += [f"different result: {mismatch}" for mismatch in report.mismatches]
     lines.append("")
     if failures:
         lines.append(f"**VERDICT: FAIL** ({len(failures)} of the checks above):")

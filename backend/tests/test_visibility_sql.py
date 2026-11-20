@@ -14,6 +14,7 @@ from apps.workspaces.visibility_sql import (
     DROP_VISIBILITY_FUNCTIONS,
     POLICY_CONDITION,
     document_condition,
+    viewer_groups_sql,
     viewer_pairs_sql,
     visibility_functions_sql,
 )
@@ -139,3 +140,15 @@ def test_module_imports_no_django_model() -> None:
         text = handle.read()
     assert "from django" not in text
     assert "import django" not in text
+
+
+def test_viewer_groups_use_the_same_condition() -> None:
+    template = document_condition(**MARKERS)
+    groups = viewer_groups_sql("d.workspace_id = %s")
+    assert _substitute(template, {**VIEWER_ARGS, "table": "g"}) in groups
+    # Grouped on exactly what the arms read besides the member.
+    assert "GROUP BY 1, 2, 3" in groups
+    assert "d.visibility = 'workspace'" in groups
+    assert "NOT EXISTS (SELECT 1 FROM public.documents_documentreader r" in groups
+    with pytest.raises(ValueError, match="fragment"):
+        viewer_groups_sql("true; x")

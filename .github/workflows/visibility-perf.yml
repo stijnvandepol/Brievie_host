@@ -3,14 +3,16 @@ name: Visibility performance
 # The visibility check measured at 100,000 letters (plan "wie ziet wat", Task 2, ruling
 # P1): every list per state and actor, median <= 250 ms on this runner, the preview's
 # count <= 2 s. It takes minutes, so it runs only when what it measures changes (the
-# visibility SQL, the policies, the list services, a migration, the measurement or this
-# file), on demand, and once a week (a new postgres:18 image can change a plan). It is
-# its own workflow and no required check: a pull request that touches none of these
-# files does not start it. The report goes to the run's summary, the EXPLAIN (ANALYZE,
-# BUFFERS) of every measured query to the artifact `visibility-perf`.
+# visibility SQL, the policies, the list services, a migration, the database settings,
+# the measurement or this file), on demand, and once a week (a new postgres:18 image
+# can change a plan). It is its own workflow and no required check: a pull request
+# that touches none of these files does not start it. The report goes to the run's
+# summary, the EXPLAIN (ANALYZE, BUFFERS) of every measured query to the artifact
+# `visibility-perf`.
 on:
   pull_request:
     paths:
+      - "backend/brievie/settings.py"
       - "backend/apps/workspaces/visibility_sql.py"
       - "backend/apps/workspaces/rls.py"
       - "backend/apps/workspaces/context.py"
@@ -26,6 +28,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "backend/brievie/settings.py"
       - "backend/apps/workspaces/visibility_sql.py"
       - "backend/apps/workspaces/rls.py"
       - "backend/apps/workspaces/context.py"
