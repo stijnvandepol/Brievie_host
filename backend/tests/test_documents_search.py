@@ -569,14 +569,12 @@ def test_a_letter_of_another_workspace_is_never_found(ws_a: Workspace, ws_b: Wor
 
 
 def test_without_workspace_context_nothing_is_found(ws_a: Workspace) -> None:
-    """The test role is not a superuser and is bound by forced RLS, as the app role is."""
+    """Without a context there is no actor: the seam refuses (fails closed) rather than
+    answer for nobody. Forced RLS would also hide every letter from the test role."""
     letter(ws_a, "Geheime brief over de fusie.")
 
-    result = search_documents(
-        membership_of(ws_a), q="fusie", filters=SearchFilters(), limit=30, offset=0
-    )
-
-    assert result.hits == []
+    with pytest.raises(RuntimeError):
+        search_documents(membership_of(ws_a), q="fusie", filters=SearchFilters(), limit=30, offset=0)
 
 
 @pytest.fixture

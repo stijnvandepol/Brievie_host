@@ -643,6 +643,8 @@ def test_a_persons_confirm_takes_a_rule_label_over_and_ends_its_undo(ws_a: Works
             ),
         )
         assert DocumentLabel.objects.get(document=document).automatic is False
+    # The history is a member-facing read: as the member (the visibility seam).
+    with workspace_context(ws_a.id, actor=admin.id):
         listed = {
             e.id: e
             for e in list_document_events(
