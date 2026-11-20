@@ -2,6 +2,8 @@
 
 Date: 2026-11-20. Branch `feat/trash` (host). iOS follows separately (fields at the end).
 Assignment: `.superpowers/sdd/2026-11-20-trash/assignment.md` (frame 3, safety rules, rulings).
+Aligned (20-11) with main after PR #26 "wie ziet wat", #29 and #30 (merge `d53ac24`): the
+policies decide who sees a letter, `visible_documents` is the seam, jobs run as the system.
 
 ## Intent
 
@@ -33,10 +35,14 @@ it is gone for good, its sealed page files included. Duplicates come later and e
 
 1. **A field on `Document` plus the seam, with explicit live filters on the off-seam paths
    (chosen).** `trashed_at` is set; `visible_documents` excludes it, `trashed_documents`
-   returns it. The paths DECISIONS lists as "not on the seam yet" (locked lookups behind
-   changes, pipeline, rules, export, intake, tasks) each get the filter, and one
-   parametrised test proves every mutating endpoint refuses a trashed letter. Small,
-   explicit, and restore is clearing two fields.
+   returns it, both on the same rights. The paths off the seam (locked lookups behind
+   changes, the confirm's lookup as the system, pipeline, rules, export, intake, tasks,
+   the person and label counts) run under the forced policies with an explicit actor
+   (DECISIONS 2026-11-20), but the policies know nothing of the trash, so each gets the
+   filter, and one parametrised test proves every mutating endpoint refuses a trashed
+   letter. Small, explicit, and restore is clearing two fields. The trash is not put in
+   the policies: they say who sees a letter, not its state, they are measured (S 4.9.5),
+   and a policy that hid trashed rows would hide them from the trash view too.
 2. A default manager that hides trashed rows (`Document.objects` = live only). Catches
    future code by default, but hides rows from code that must see them: the upload dedupe
    would miss a trashed `client_id`, hit the unique constraint, and its winner lookup would
@@ -49,7 +55,7 @@ it is gone for good, its sealed page files included. Duplicates come later and e
 
 ## Design
 
-### Model (`apps/documents/models.py`, migration `0011_trash`)
+### Model (`apps/documents/models.py`, migration `0015_trash` after `0014_document_has_automatic_link`)
 
 - `Document.trashed_at: DateTimeField(null=True, blank=True)`: moved to the trash then.
 - `Document.trashed_by: ForeignKey(User, null=True, blank=True, on_delete=PROTECT,
@@ -72,20 +78,37 @@ it is gone for good, its sealed page files included. Duplicates come later and e
 ### Seam (`apps/documents/visibility.py`)
 
 ```
-def _readable(membership) -> QuerySet[Document]        # the rights model, one place
-def visible_documents(membership) -> QuerySet[Document]  # _readable(...).filter(trashed_at__isnull=True)
+def _readable(membership) -> QuerySet[Document]          # today's body of visible_documents
+def visible_documents(membership) -> QuerySet[Document]  # _readable(...).filter(LIVE)
 def trashed_documents(membership) -> QuerySet[Document]  # _readable(...).filter(trashed_at__isnull=False, purge_started_at__isnull=True)
 ```
 
-Private post later changes `_readable` only, so the trash never shows a letter the viewer
-may not see (frame 4). List, counts, detail, search and the events read lose trashed
-letters through `visible_documents` without further change.
+`_readable` is exactly what `visible_documents` is on main: the `RuntimeError` when the
+actor is not that member (fail closed, never as the system), the workspace filter,
+`defer("search_vector")` and `member_filter()` (an index hint, no result change); the
+document policies decide with the request's actor. So a member sees, restores or deletes
+in the trash only letters they may see (frame 4: private letters, departments, the
+switches, the sorter), and a letter they may not see answers exactly as a missing one:
+404 `document_not_found`, never `document_in_trash`, not listed, not counted.
+
+Callers of the seam today, which lose trashed letters without further change:
+`documents.services.list_documents`, `inbox_counts` (also its "automatic" arm on
+`has_automatic_link`) and `get_document` (detail, pages, history), and
+`documents.search` (the exact step, the typo fallback, the fragments; the search data,
+`search_vector`, lives on the row). Everything else that reads letters is off the seam
+and listed under Effects.
 
 ### Services (`apps/documents/trash.py`, new)
 
 All mutating functions are `transaction.atomic` and lock the row (`select_for_update`).
 `move_to_trash`, `purge_now`, `empty_trash` and `purge.mark_expired` first ask
-`retention.check_removal` (ruling 18), which allows everything today.
+`retention.check_removal` (ruling 18), which allows everything today. The request paths
+run as the caller (`workspace_member` enters the context); their writes are on the
+letter's own row, which the UPDATE policy allows exactly when the caller sees it, and the
+trash fields change nothing the policy reads. Rights: who may change a letter is role
+`member` or `admin` (`Membership.has_role(MEMBER)`, `workspace_member(min_role=MEMBER)`)
+and sees it; a `viewer` gets 403. Purge-now and empty need role `admin`; an admin sees all
+post that is not private, a private letter only as its reader.
 
 - `move_to_trash(document: Document, *, user: User | None, actor: AuditActor, reason: str = "user") -> None`:
   the building block on a locked live document (the duplicate merge will call it with
@@ -104,35 +127,50 @@ All mutating functions are `transaction.atomic` and lock the row (`select_for_up
   again (`defer_processing`).
 - `list_trash(membership) -> list[Document]`: `trashed_documents`, newest `trashed_at`
   first, at most 500, with `trashed_by` selected and the summary prefetches.
-- `purge_now(*, membership, actor, document_id) -> None`: admin. The letter must be in
-  `trashed_documents` (no skipping the trash; else 404). Sets `purge_started_at`, audit
+- `purge_now(*, membership, actor, document_id) -> None`: admin. The letter must be in the
+  admin's `trashed_documents` (no skipping the trash; a letter the admin may not see is
+  404 like a missing one; it goes after 30 days). Sets `purge_started_at`, audit
   `document_purged` `{reason: "admin"}`, defers the workspace's purge job (in the request
   transaction, so a rollback takes the job back too).
 - `empty_trash(*, membership, actor, up_to: datetime | None) -> int`: admin. Marks every
-  letter of `trashed_documents` with `trashed_at <= up_to` (all when `up_to` is None): a
+  letter of the admin's `trashed_documents` (what the admin sees, nothing else) with `trashed_at <= up_to` (all when `up_to` is None): a
   letter trashed while the admin read the dialog is not emptied. One `document_purged`
   `{reason: "emptied"}` row per letter; defers the purge job; returns the count.
 
 ### Purge (`apps/documents/purge.py`, new) and its jobs
 
-- `mark_expired(workspace_id: UUID, *, now: datetime) -> int`: one short transaction in
-  `workspace_context`: rows with `trashed_at <= now - TRASH_RETENTION` and no
-  `purge_started_at` get `purge_started_at=now`; audit `document_purged`
-  `{reason: "expired"}`, actor system.
+The job acts as the system, as main's jobs do (`pipeline.steps`, `visibility.verify_all`):
+every transaction below is `workspace_context(workspace_id, actor=SYSTEM)`, so the
+policies show it every letter of that workspace, private ones included, and let it delete
+the reader rows (only the system writes them). `apps/documents/purge.py` joins
+`ALLOWED_SYSTEM_CALLERS` in `tests/test_actor_callers.py`; `trash.py` does not (its paths
+run as the caller).
+
+- `mark_expired(workspace_id: UUID, *, now: datetime) -> int`: one short transaction as
+  the system: rows with `trashed_at <= now - TRASH_RETENTION` and no `purge_started_at`
+  get `purge_started_at=now`; audit `document_purged` `{reason: "expired"}`, actor system.
 - `purge_marked(workspace_id: UUID, *, limit: int = 100) -> PurgeResult`: for every marked
   letter, in this order:
-  1. short transaction: lock the row, still marked; read its pages' `storage_path`s;
+  1. short transaction as the system: lock the row, still marked; read its pages'
+     `storage_path`s;
   2. no transaction: `page_files.remove_document_files(workspace_id, document_id, paths)`;
-  3. short transaction: lock the row, still marked; delete its `Task` rows (the foreign key
-     is `SET_NULL`, they would outlive it), then the document (cascade: pages, extractions,
-     addressees, labels, events, suggestions, rule runs).
+  3. short transaction as the system: lock the row, still marked; delete its `Task` rows
+     (the foreign key is `SET_NULL`, they would outlive it), then the document. The
+     cascade takes everything that hangs off it: pages, extractions, addressee and label
+     links (automatic ones included), events, suggestions, shares (`DocumentShare`), reader
+     rows (`DocumentReader`), rule runs. What lives on the row goes with it:
+     `addressee_ids`, `has_automatic_link`, `search_vector` and the text. The flag is
+     derived only from the letter's own links, so no other row changes and
+     `organise.sync_automatic` has nothing to do; nothing in the purge writes another row
+     directly (persons and labels stay, their counts drop).
   A refusal or `OSError` in step 2 logs the error type and the ids only, skips step 3 and
   leaves the row marked: the letter stays hidden and the next run tries again. Files go
   before rows, so a crash in between never leaves a restorable letter without pages; a
   marked row is never restorable.
 - `purge_all(*, now: datetime) -> None`: under `backup_lock()` (a back-up or restore never
   sees half a purge; `BackupError("busy")` means "skip this run", logged at info), for every
-  workspace: `mark_expired`, then `purge_marked` until nothing is left.
+  workspace (`Workspace.objects.order_by("id")`, as `verify_all`): `mark_expired`, then
+  `purge_marked` until nothing is left.
 - Jobs in `apps/documents/jobs.py` (queue `pipeline`, priority `EXPORT_PRIORITY`):
   `purge_trash` periodic `cron="41 * * * *"`, `queueing_lock="purge_trash"`, calls
   `purge_all`; `purge_workspace_trash(workspace_id)` deferred by `purge_now`/`empty_trash`
@@ -173,17 +211,19 @@ upload rollback only; the purge never calls it.
 
 | Where | While in the trash | On restore | On purge |
 |---|---|---|---|
-| Lists, counts, detail, search, events, persons and labels counts | gone (seam; counts get `LIVE` through the relation) | back | gone |
-| `getDocument`, `getDocumentPage`, `listDocumentEvents` | 404 `document_in_trash` when it is in `trashed_documents`, else `document_not_found` | normal | 404 `document_not_found` |
-| Changes (confirm, reopen, retry, labels, addressees, suggestions, undo) | 404 `document_not_found` (lock queries filter `LIVE`) | normal | 404 |
-| Tasks (`listTasks`, complete, reopen) | hidden: `list_tasks` takes the membership and keeps tasks without a letter or with a visible letter; complete/reopen 404 `task_not_found` | back, as they were | deleted with the letter |
+| Lists, inbox counts (also "Automatisch"), detail, search, events | gone (seam) | back | gone |
+| Person and label counts (`list_persons`, `list_labels`: raw grouped SQL under the policies) | not counted: `AND d.trashed_at IS NULL`; the label count joins its letter for that | back | gone |
+| `getDocument`, `getDocumentPage`, `listDocumentEvents` | 404 `document_in_trash` when it is in the caller's `trashed_documents`, else `document_not_found` | normal | 404 `document_not_found` |
+| Changes (confirm, reopen, retry, labels, addressees, suggestions, undo) | 404 `document_not_found` (lock queries filter `LIVE`, also the confirm's lookup as the system in `review.py`) | normal | 404 |
+| Tasks (`listTasks`, complete, reopen) | hidden: the task policy already follows the letter (`tasks/0004`); `list_tasks(workspace)` adds `Q(document__isnull=True) \| Q(document__trashed_at__isnull=True)`; complete/reopen 404 `task_not_found` | back, as they were | deleted with the letter |
+| Shares, reader rows, `addressee_ids` | kept as they are (the nightly `verify_visibility` keeps them right, as the system); no change through the API (the letter is 404 for changes) | the same readers see it again | gone (cascade, on the row) |
 | Agenda, reminders | none exist yet; they read tasks through `tasks.services` and inherit the filter (CLAUDE.md rule) | | |
 | Member export | left out (`member_document_ids` and the reads in `export.py` filter `LIVE`); a ZIP made before lives at most 24 h | in the next export | gone |
 | Back-up | stays in the back-up as it is | | stays in older back-ups until they age out (monthly snapshots up to a year); a restore of an older back-up brings it back. Said in PRIVACY and SELFHOST |
 | Archive ("Alle post", the folder of kept letters) | gone from it (seam) | back | gone |
 | Queued AI job | skipped: `_lock_processing` filters `LIVE`, so no text goes to an AI service and a result in flight is dropped; `requeue_abandoned_documents` skips trashed letters | re-queued when still `processing` without a live job | the job finds nothing |
 | Rules (preview, run on existing letters) | left out | not re-run | gone |
-| Upload dedupe on `client_id` | 409 `document_trashed` (same pages) or `document_conflict` (other pages) | normal 200 | the `client_id` is free: a new upload is a new letter |
+| Upload dedupe on `client_id` (found as the system) | 409 `document_trashed` when the pages are the same and the uploader may read it (`can_read`); otherwise `document_conflict`, as today, so it tells nothing | normal 200 | the `client_id` is free: a new upload is a new letter |
 | Person delete | a person on a trashed letter is still in use (PROTECT); message names the trash | | free after purge |
 
 ### Audit (closed list, `apps/audit/codes.py`)
@@ -209,11 +249,11 @@ restore; on purge it goes with the letter (cascade). The audit row is what remai
 
 | Method and path | `operation_id` | Auth, role | In | Out |
 |---|---|---|---|---|
-| `POST /workspaces/{workspace_id}/documents/{document_id}/trash` | `trashDocument` | session or device, `member` | none | 200 `TrashedDocumentOut`; 404 |
-| `POST /workspaces/{workspace_id}/documents/{document_id}/restore` | `restoreDocument` | session or device, `member` | none | 200 `DocumentOut`; 404 |
-| `GET /workspaces/{workspace_id}/trash` | `listTrash` | session or device, any member | none | 200 `TrashListOut` |
-| `DELETE /workspaces/{workspace_id}/trash/{document_id}` | `purgeDocument` | `auth=session_auth`, `admin` | none | 204; 404; 401 for a device token |
-| `POST /workspaces/{workspace_id}/trash/empty` | `emptyTrash` | `auth=session_auth`, `admin` | `EmptyTrashIn` | 200 `EmptyTrashOut` |
+| `POST /workspaces/{workspace_id}/documents/{document_id}/trash` | `trashDocument` | session or device, `member`, sees the letter | none | 200 `TrashedDocumentOut`; 404 |
+| `POST /workspaces/{workspace_id}/documents/{document_id}/restore` | `restoreDocument` | session or device, `member`, sees the letter | none | 200 `DocumentOut`; 404 |
+| `GET /workspaces/{workspace_id}/trash` | `listTrash` | session or device, any member; only letters they see | none | 200 `TrashListOut` |
+| `DELETE /workspaces/{workspace_id}/trash/{document_id}` | `purgeDocument` | `auth=session_auth` (description starts with `WEB_SESSION_ONLY`), `admin`, sees the letter | none | 204; 404; 401 for a device token |
+| `POST /workspaces/{workspace_id}/trash/empty` | `emptyTrash` | `auth=session_auth` (`WEB_SESSION_ONLY`), `admin` | `EmptyTrashIn` | 200 `EmptyTrashOut` |
 
 - `TrashedDocumentOut(DocumentSummaryOut)`: `trashed_at: datetime`,
   `trashed_by_name: str = ""` (empty when Brievie did it), `purge_after: datetime`
@@ -291,9 +331,9 @@ Added:
    default.
 10. **Mutations of a trashed letter answer 404 `document_not_found`; only the reads give
     `document_in_trash`, through `trashed_documents(membership)`.** Reason: the write paths
-    take the workspace, not the membership, and are off the seam; a 404 reveals nothing when
-    private post arrives. Cost if wrong: a stale tab gets "not found" instead of "in the
-    trash".
+    take the workspace, not the membership, and are off the seam (under the policies with
+    the caller as actor); one answer for "trashed" and "not yours to see" reveals nothing.
+    Cost if wrong: a stale tab gets "not found" instead of "in the trash".
 11. **Upload dedupe on a trashed letter: 409 `document_trashed`, never an automatic
     restore.** Reason: an app queue resending an old scan must not undo a deliberate delete,
     and a 409 stops its retries. It reveals only that the uploader's own `client_id` exists,
@@ -329,6 +369,17 @@ Added:
     has to be found again.
 19. **The back-up sentence is in the confirm questions, not only in PRIVACY.** "Definitief"
     is only honest with it. Cost if wrong: a longer dialog.
+20. **The trash reads through the seam, also for an admin.** List, count, restore,
+    purge-now and empty start from `trashed_documents(membership)`, built on `_readable`
+    (policies plus `member_filter()`). An admin who is not a reader of a private trashed
+    letter cannot see, purge or empty it; it goes after 30 days. Reason: one rule for who
+    sees a letter, and "Prullenbak legen" must not wipe post the admin was never shown.
+    Cost if wrong: a private letter waits up to 30 days, hidden from everyone but its
+    readers.
+21. **The purge runs as the system, the request paths never do.** The expiry and the purge
+    job use `workspace_context(workspace_id, actor=SYSTEM)` (they must reach every letter
+    and its reader rows); `purge_now` and `empty_trash` only mark, as the admin. Cost if
+    wrong: one more file in `ALLOWED_SYSTEM_CALLERS`.
 
 ## Left to the builder
 
@@ -337,7 +388,8 @@ Added:
   getoond." (a full trash of a large workspace is unlikely; the cap must exist).
 - Moving `_has_live_job` to a public name in `apps.pipeline.jobs` without changing it.
 - Test helpers: a `trashed(document, by=user, days_ago=n)` helper in
-  `tests/documents_support.py`.
+  `tests/documents_support.py` (writes as the system through `as_actor`); visibility cases
+  use `tests/visibility_support.office()` and `Office.visible`.
 - When S3 storage arrives, the guarded removal moves behind the storage interface with the
   same refusal (only the letter's own keys).
 
