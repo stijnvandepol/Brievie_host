@@ -183,8 +183,10 @@ def test_a_rule_without_a_word_condition_is_applied(ws_a: Workspace) -> None:
 
 
 @pytestmark_unit
-@pytest.mark.parametrize("confidence", [0.05, 0.5, 0.9])
-def test_the_ai_proposing_the_same_label_applies_it(ws_a: Workspace, confidence: float) -> None:
+@pytest.mark.parametrize("confidence", [0.8, 0.9])
+def test_the_ai_proposing_the_same_label_strongly_applies_it(
+    ws_a: Workspace, confidence: float
+) -> None:
     switch_on(ws_a)
     label = new_label(ws_a, "Waterschap")
     make_rule(ws_a, text_word("zuiveringsheffing"), actions=[add_label(label)])
@@ -195,6 +197,22 @@ def test_the_ai_proposing_the_same_label_applies_it(ws_a: Workspace, confidence:
     assert on_document(ws_a, document) == ({"Waterschap"}, set())
     assert suggestion_states(ws_a, document) == {"Waterschap": ("accepted", "rule")}
     assert label_event(ws_a, document).origin == "rule"
+
+
+@pytestmark_unit
+@pytest.mark.parametrize("confidence", [0.05, 0.5, 0.799])
+def test_a_weak_ai_echo_of_a_running_text_hit_stays_a_proposal(
+    ws_a: Workspace, confidence: float
+) -> None:
+    switch_on(ws_a)
+    label = new_label(ws_a, "Waterschap")
+    make_rule(ws_a, text_word("zuiveringsheffing"), actions=[add_label(label)])
+    document = new_document(ws_a, LETTER)
+
+    run(ws_a, document, Reading(labels={"Waterschap": confidence}))
+
+    assert on_document(ws_a, document) == (set(), set())
+    assert suggestion_states(ws_a, document) == {"Waterschap": ("open", "rule")}
 
 
 @pytestmark_unit
@@ -381,7 +399,7 @@ def test_the_ai_mark_survives_a_rule_taking_the_proposal_over(ws_a: Workspace) -
             confidence=Decimal("1"),
         )
         assert row is not None
-        assert (row.origin, row.proposed_by_ai) == ("rule", True)
+        assert (row.origin, row.ai_confidence) == ("rule", Decimal("0.300"))
 
         other = Label.objects.create(workspace=ws_a, name=f"Ander {uuid.uuid4()}")
         zero = suggestions.propose(
@@ -392,7 +410,7 @@ def test_the_ai_mark_survives_a_rule_taking_the_proposal_over(ws_a: Workspace) -
             confidence=Decimal("0"),
         )
         assert zero is not None
-        assert zero.proposed_by_ai is False
+        assert zero.ai_confidence == Decimal("0")
 
 
 # --- the trial letters (preset rules of a home workspace, as in the trial) -------------------

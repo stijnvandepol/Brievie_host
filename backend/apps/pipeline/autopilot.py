@@ -153,8 +153,10 @@ def rule_labels_to_apply(document: Document, rows: Sequence[DocumentSuggestion])
 
     A rule's label qualifies when (a) the rule rests on the sender or the letterhead, not
     on a keyword in the running text (`rests_on_letterhead`), or (b) the AI proposed the
-    same label too (`proposed_by_ai`). None qualifies when the rules disagree on this
-    letter (a matching rule adds a label that was said no to here) or more than
+    same label with a confidence of `AUTO_APPLY_FROM` or more (`ai_confidence`; a weaker
+    echo of a word in the running text is no agreement; the document carries no other
+    signal that a letter instructs the AI). None qualifies when the rules disagree on
+    this letter (a matching rule adds a label that was said no to here) or more than
     `RULE_LABELS_MAX` qualify: then a person decides. Only a rule that matches the
     document now counts.
     """
@@ -185,7 +187,7 @@ def rule_labels_to_apply(document: Document, rows: Sequence[DocumentSuggestion])
         if row.label_id is not None
         and row.rule_id is not None
         and (spec := by_id.get(row.rule_id)) is not None
-        and (row.proposed_by_ai or rests_on_letterhead(spec, facts))
+        and (row.ai_confidence >= AUTO_APPLY_FROM or rests_on_letterhead(spec, facts))
     )
     return qualifying if len(qualifying) <= RULE_LABELS_MAX else frozenset()
 

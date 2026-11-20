@@ -73,8 +73,8 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
 - The autopilot applies `ai` picks from `AUTO_APPLY_FROM`, `name_match` picks from
   `PRESELECT_FROM`, and a rule's label proposal (origin `rule`) only when
   `rule_labels_to_apply` names it: the rule rests on the sender or the letterhead
-  (`apps.rules.engine.rests_on_letterhead`), or the AI proposed the same label
-  (`proposed_by_ai`); none when a matching rule's label was dismissed on the letter or more
+  (`apps.rules.engine.rests_on_letterhead`), or the AI's own pick of the same label has
+  `ai_confidence` >= `AUTO_APPLY_FROM`; none when a matching rule's label was dismissed on the letter or more
   than `RULE_LABELS_MAX` qualify. Never a rule's addressee proposal. An `ai` pick of a
   person only when its quote names that person (`quote_names`).
 - A person's confirm with `sets_organisation` clears `automatic` on the links that stay; the

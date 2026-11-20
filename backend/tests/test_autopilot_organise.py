@@ -250,17 +250,32 @@ def test_a_letter_that_instructs_the_ai_does_not_get_its_label(ws_a: Workspace) 
         assert not DocumentEvent.objects.filter(document=document).exists()
 
 
-def test_an_ai_that_follows_the_letter_and_a_keyword_rule_together_apply_its_label(
+def test_a_weak_ai_echo_of_the_letter_does_not_apply_a_keyword_rule_label(
     ws_a: Workspace,
 ) -> None:
-    """The price of ruling (b), on purpose (DECISIONS 2026-11-20): a rule's label the AI
-    proposes too is applied, also when both only read the running text. Undo stays."""
+    """A rule hit only in the running text plus an AI pick below `AUTO_APPLY_FROM`, as when
+    the AI half follows the letter's instruction: it stays a proposal."""
     switch_on(ws_a)
     label = new_label(ws_a, "Belastingdienst")
     make_rule(ws_a, text_word("Belastingdienst"), actions=[add_label(label)])
     document = new_document(ws_a, INJECTION)
 
-    run(ws_a, document, Picking(labels={"Belastingdienst": 0.3}))
+    run(ws_a, document, Picking(labels={"Belastingdienst": 0.799}))
+
+    assert on_document(ws_a, document) == (set(), set())
+    assert suggestion_states(ws_a, document) == {"Belastingdienst": ("open", "rule")}
+
+
+def test_a_strong_ai_agreement_applies_a_keyword_rule_label(ws_a: Workspace) -> None:
+    """Ruling (b): the AI's own pick of the rule's label at `AUTO_APPLY_FROM` or more. A
+    letter that makes the AI obey with that certainty still gets it; it is marked and
+    can be undone."""
+    switch_on(ws_a)
+    label = new_label(ws_a, "Belastingdienst")
+    make_rule(ws_a, text_word("Belastingdienst"), actions=[add_label(label)])
+    document = new_document(ws_a, INJECTION)
+
+    run(ws_a, document, Picking(labels={"Belastingdienst": 0.8}))
 
     assert on_document(ws_a, document) == ({"Belastingdienst"}, set())
     with workspace_context(ws_a.id):
