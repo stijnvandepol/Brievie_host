@@ -27,6 +27,8 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.staticfiles",
+    # Search: the tsvector field and GIN indexes (part of Django, no new dependency).
+    "django.contrib.postgres",
     "ninja",
     "axes",
     "procrastinate.contrib.django",

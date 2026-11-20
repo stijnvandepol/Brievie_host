@@ -16,6 +16,7 @@ def visible_documents(membership: Membership) -> QuerySet[Document]:
     """The documents `membership` may see. Today: all documents of its workspace.
 
     Row-level security still binds the workspace the request entered; this filter is
-    the rights model on top of it.
+    the rights model on top of it. The generated search vector is not loaded: no reader
+    needs it, and it is about as large as the text.
     """
-    return Document.objects.filter(workspace_id=membership.workspace_id)
+    return Document.objects.filter(workspace_id=membership.workspace_id).defer("search_vector")
