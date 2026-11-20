@@ -41,7 +41,8 @@ def test_list_is_newest_first_with_summary_fields(client_a: Client, ws_a: Worksp
     assert set(rows[0]) == {
         "id", "client_id", "status", "page_count", "created_at", "sender", "document_type",
         "letter_date", "addressee_ids", "label_ids", "inbox_state", "open_suggestion_count",
-        "confirmed_by_ai", "auto_label_ids", "auto_addressee_ids", "proposed_sender",
+        "confirmed_by_ai", "auto_label_ids", "auto_addressee_ids", "auto_rule_label_ids",
+        "proposed_sender",
         "proposed_document_type", "proposed_letter_date",
     }  # fmt: skip
     assert rows[0]["page_count"] == 2

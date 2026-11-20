@@ -70,11 +70,20 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
   `mentions_term` blocks rather than guesses (linear-time regexes): a letter that names a term
   stays a proposal unless it has actions and every one has a deadline. An invoice due date
   needs a payment action, and every payment a deadline.
-- The autopilot never applies a rule's proposal (origin `rule`); it applies only `ai` picks
-  from `AUTO_APPLY_FROM` and `name_match` picks from `PRESELECT_FROM`. An `ai` pick of a
-  person only when its quote names that person (`quote_names`).
+- The autopilot applies `ai` picks from `AUTO_APPLY_FROM`, `name_match` picks from
+  `PRESELECT_FROM`, and a rule's label proposal (history origin `rule_autopilot`) only
+  when `rule_labels_to_apply` names it: the rule holds on settled facts alone
+  (`apps.rules.engine.holds_on_settled`: letterhead, confirmed sender and type, labels and
+  persons on the letter; never an open proposal or the AI's guess), or the AI's own pick
+  of that label has `ai_confidence` >= `AUTO_APPLY_FROM`. None when a matching rule's
+  label was dismissed on the letter, more than `RULE_LABELS_MAX` qualify, or the admin
+  agreed to a notice older than `RULE_LABELS_FROM_NOTICE`. Never a rule's addressee
+  proposal. An `ai` pick of a person only when its quote names that person (`quote_names`).
 - A person's confirm with `sets_organisation` clears `automatic` on the links that stay; the
-  autopilot's change is then no longer undoable. Hand edits leave the flag alone.
+  autopilot's change (`ai`, `name_match`, `rule_autopilot`) is then no longer undoable.
+  Hand edits leave the flag alone.
+- Raise `AUTOPILOT_NOTICE_VERSION` when the autopilot notice promises more; a switch
+  agreed to under an older version reports `notice_outdated` and keeps the older scope.
 - The rules engine (`apps.rules.engine`) stays pure: no Django import.
 - No Redis, no Celery, no Node runtime container. Background jobs: Procrastinate, in an
   app's `jobs.py`; a job takes ids only and enters `workspace_context` itself, in short

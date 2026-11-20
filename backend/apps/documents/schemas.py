@@ -60,6 +60,9 @@ class DocumentSummaryOut(Schema):
     # Of `label_ids` and `addressee_ids`: the ones Brievie put there itself (the autopilot).
     auto_label_ids: list[UUID] = Field(default_factory=list)
     auto_addressee_ids: list[UUID] = Field(default_factory=list)
+    # Of `auto_label_ids`: the ones the autopilot put there because a rule proposed them
+    # (not the AI's own choice): show them as done by a rule.
+    auto_rule_label_ids: list[UUID] = Field(default_factory=list)
     # Before a person confirmed the letter: the pipeline's strongest proposal for an empty
     # `sender`, `document_type` and `letter_date`, as the detail's `proposals` show it. A
     # proposal, never a fact: show it as one. Empty (null) once confirmed or without one.
@@ -185,7 +188,8 @@ class DocumentEventOut(Schema):
     created_at: datetime
     # "label_added", "label_removed", "addressee_added", "addressee_removed", "reopened", ...
     kind: str
-    # "user", "rule", "suggestion", "undo", or "ai" and "name_match" (the autopilot).
+    # "user", "rule", "suggestion", "undo", or "ai", "name_match" and "rule_autopilot"
+    # (the autopilot; "rule_autopilot" applied a rule's label, `rule_name` names it).
     origin: str
     # The user who made the change; null for a rule, the system, or a deleted user.
     actor_id: UUID | None = None

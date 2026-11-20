@@ -26,6 +26,11 @@ function sentence(
   const person = event.person_name;
   const label = event.label_name;
   // What Brievie did itself has no person behind it.
+  if (event.origin === "rule_autopilot" && event.kind === "label_added") {
+    return ruleName
+      ? t`Automatisch toegevoegd door regel ${ruleName}: label ${label}`
+      : t`Automatisch toegevoegd door een regel: label ${label}`;
+  }
   if (event.origin === "ai" || event.origin === "name_match") {
     if (event.kind === "label_added") {
       return event.origin === "ai"

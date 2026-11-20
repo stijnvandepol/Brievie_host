@@ -110,7 +110,9 @@ def test_switching_on_with_acknowledgement_audits_the_user(ws_a: Workspace) -> N
     with workspace_context(ws_a.id, actor=SYSTEM):
         external(ws_a)
         result = set_autopilot(ws_a, organise=True, confirm=False, user_id=admin.id)
-        assert result == settings_service.Autopilot(organise=True, confirm=False, allowed=True)
+        assert result == settings_service.Autopilot(
+            organise=True, confirm=False, allowed=True, rule_labels=True
+        )
         (row,) = rows(ws_a)
     assert row.values == {"setting": "ai_auto_organise", "value": True}
     assert (row.actor_id, row.actor_name) == (admin.id, admin.name)
@@ -246,7 +248,7 @@ def test_in_force_is_off_when_the_server_forbids_it_even_if_stored_on(ws_a: Work
         external(ws_a)
         set_autopilot(ws_a, organise=True, confirm=True)
         assert settings_service.autopilot_in_force(ws_a.id) == settings_service.Autopilot(
-            organise=True, confirm=True, allowed=True
+            organise=True, confirm=True, allowed=True, rule_labels=True
         )
         with override_settings(BRIEVIE_AI_AUTOPILOT_ALLOWED=False):
             assert settings_service.autopilot_in_force(ws_a.id) == settings_service.Autopilot(

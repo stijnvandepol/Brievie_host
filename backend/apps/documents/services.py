@@ -115,6 +115,19 @@ def _auto_label_ids(document: Document) -> list[UUID]:
     return [link.label_id for link in document.label_links.all() if link.automatic]
 
 
+def _auto_rule_label_ids(document: Document) -> list[UUID]:
+    """The automatic labels whose accepted proposal came from a rule (the autopilot applied
+    a rule's label). Read from the suggestions, so a list's prefetch is used."""
+    by_rule = {
+        s.label_id
+        for s in document.suggestions.all()
+        if s.label_id is not None
+        and s.state == DocumentSuggestion.State.ACCEPTED
+        and s.origin == DocumentSuggestion.Origin.RULE
+    }
+    return [label_id for label_id in _auto_label_ids(document) if label_id in by_rule]
+
+
 # The prefetch of a document's suggestions wherever several documents are shown: with
 # their persons, so `_open_suggestions` can leave out archived ones without a query each.
 SUGGESTIONS = models.Prefetch(
@@ -279,6 +292,7 @@ def _summary_out(
         open_suggestion_count=len(open_suggestions),
         confirmed_by_ai=document.confirmed_by_ai,
         auto_label_ids=_auto_label_ids(document),
+        auto_rule_label_ids=_auto_rule_label_ids(document),
         auto_addressee_ids=_auto_addressee_ids(document),
         proposed_sender="" if document.sender else proposed.get(Extraction.Field.SENDER, ""),
         proposed_document_type=""

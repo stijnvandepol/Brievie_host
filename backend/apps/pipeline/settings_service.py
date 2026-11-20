@@ -92,11 +92,15 @@ class AutopilotError(ValueError):
 
 @dataclass(frozen=True)
 class Autopilot:
-    """The autopilot switches. `allowed` is the server switch."""
+    """The autopilot switches. `allowed` is the server switch. `notice_outdated`: a switch
+    is on but was agreed to under an older notice. `rule_labels`: the autopilot may apply a
+    rule's label proposal (the notice that says so was agreed to)."""
 
     organise: bool
     confirm: bool
     allowed: bool
+    notice_outdated: bool = False
+    rule_labels: bool = False
 
 
 @dataclass(frozen=True)
@@ -306,13 +310,25 @@ def _record_switch(workspace_id: UUID, actor: Actor, name: str, value: bool) -> 
     )
 
 
+# The version of `autopilot_notice`. Raise it when the notice says the autopilot does
+# more: a switch agreed to under an older version asks again (`notice_outdated`).
+AUTOPILOT_NOTICE_VERSION = 2
+# From this notice version on, the autopilot may apply a rule's label proposal.
+RULE_LABELS_FROM_NOTICE = 2
+
+
 def autopilot(workspace_id: UUID) -> Autopilot:
     """The stored switches (off without a settings row). Needs the workspace's RLS context."""
     row = AISettings.objects.filter(workspace_id=workspace_id).first()
+    organise = row is not None and row.auto_organise
+    confirm = row is not None and row.auto_confirm
+    version = row.autopilot_notice_version if row is not None else 0
     return Autopilot(
-        organise=row is not None and row.auto_organise,
-        confirm=row is not None and row.auto_confirm,
+        organise=organise,
+        confirm=confirm,
         allowed=_autopilot_allowed(),
+        notice_outdated=(organise or confirm) and version < AUTOPILOT_NOTICE_VERSION,
+        rule_labels=organise and version >= RULE_LABELS_FROM_NOTICE,
     )
 
 
@@ -326,7 +342,11 @@ def autopilot_in_force(workspace_id: UUID) -> Autopilot:
     row = AISettings.objects.filter(workspace_id=workspace_id).first()
     on = stored.allowed and row is not None and row.mode != AISettings.Mode.OFF
     return Autopilot(
-        organise=on and stored.organise, confirm=on and stored.confirm, allowed=stored.allowed
+        organise=on and stored.organise,
+        confirm=on and stored.confirm,
+        allowed=stored.allowed,
+        notice_outdated=stored.notice_outdated,
+        rule_labels=on and stored.rule_labels,
     )
 
 
@@ -346,6 +366,13 @@ def autopilot_notice() -> str:
         '"Brieven zelf bevestigen" aan? Dan bevestigt Brievie brieven ook zelf, '
         "zonder dat iemand eerst kijkt.\n"
         "\n"
+        "Een label dat een regel voorstelt, zet Brievie er dan ook zelf op. Maar alleen als "
+        "de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is "
+        "van hetzelfde label. Staat het woord alleen verderop in de brief en is de AI niet "
+        "zeker? Dan blijft het een voorstel.\n"
+        "\n"
+        'Een regel op "Automatisch toepassen" zet een label altijd zelf op.\n'
+        "\n"
         "De AI leest wat er in de brief staat en gelooft dat. Maar een brief kan fout zijn, "
         "of je misleiden. Dan klopt ook de afzender, de datum of de taak niet.\n"
         "\n"
@@ -355,8 +382,9 @@ def autopilot_notice() -> str:
         "\n"
         "Toch kan Brievie iets missen. Is een brief belangrijk? Lees dan zelf de brief.\n"
         "\n"
-        'Alles wat Brievie zelf doet, krijgt het kenmerk "Automatisch door AI". Je kunt '
-        'het terugdraaien. Of je controleert de brief zelf met "Zelf controleren".\n'
+        'Alles wat Brievie zelf doet, krijgt het kenmerk "Automatisch door AI" (een label '
+        'van een regel: "Automatisch door regel"). Je kunt het terugdraaien. Of je '
+        'controleert de brief zelf met "Zelf controleren".\n'
     )
 
 
@@ -367,7 +395,9 @@ def configure_autopilot(
 
     Raises `AutopilotError`: `forbidden` or `needs_ai` when a switch would go on while the
     server forbids it or the workspace's AI is off, `ack_required` when a switch goes
-    from off to on without `acknowledged`. Switching off always works. Needs the RLS context.
+    from off to on without `acknowledged`. Switching off always works. Agreeing
+    (`acknowledged`) with a switch on stores the current notice version, also when no
+    switch changes (agreeing again to a newer notice). Needs the RLS context.
     """
     with transaction.atomic():
         row = AISettings.objects.select_for_update().filter(workspace_id=workspace_id).first()
@@ -387,7 +417,11 @@ def configure_autopilot(
         if row is not None:
             row.auto_organise = organise
             row.auto_confirm = confirm
-            row.save(update_fields=["auto_organise", "auto_confirm", "updated_at"])
+            fields = ["auto_organise", "auto_confirm", "updated_at"]
+            if acknowledged and (organise or confirm):
+                row.autopilot_notice_version = AUTOPILOT_NOTICE_VERSION
+                fields.append("autopilot_notice_version")
+            row.save(update_fields=fields)
             for name, value in now.items():
                 if value != before[name]:
                     _record_switch(workspace_id, actor, name, value)
