@@ -14,16 +14,15 @@ from uuid import UUID
 from django.conf import settings
 from django.http import HttpRequest
 from django.utils.translation import gettext as _
-from ninja.throttling import SimpleRateThrottle
 
 from apps.common.errors import ApiError
+from apps.common.throttling import CallerThrottle
 
 
-class _CountedThrottle(SimpleRateThrottle):
+class _CountedThrottle(CallerThrottle):
     def __init__(self, scope: str, rate: str, ident: str) -> None:
-        self.scope = scope
         self._ident = ident
-        super().__init__(rate)
+        super().__init__(scope, rate)
 
     def get_cache_key(self, request: HttpRequest) -> str:
         return self.cache_format % {"scope": self.scope, "ident": self._ident}

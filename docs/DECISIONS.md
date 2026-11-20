@@ -1379,5 +1379,10 @@ plane). One line per finding is in the pull request; the choices are here.
   and 200 labels made by hand (409 `too_many_persons` / `too_many_labels`): the AI sees only
   the first 50 persons and 100 labels, and name matching walks every person on every letter
   on the shared worker. Persons made for members and preset labels are not counted against
-  the moment they are made, only against the next one made by hand.
+  the moment they are made, only against the next one made by hand. Our throttles keep Ninja's per-request
+  state (`key`, `history`, `now`) per thread (`throttling._PerThreadState`), so two
+  requests on gunicorn's threads no longer write one client's history under another's key.
+  Still not atomic across the two worker processes (read, then write the database cache):
+  a burst counts lower than it is. The per-account sign-in count uses an atomic upsert
+  under a lock; the other limits guard secrets of 40 to 256 bits.
 
