@@ -57,7 +57,9 @@ class Migration(migrations.Migration):
         migrations.AddIndex(
             model_name="document",
             index=django.contrib.postgres.indexes.GinIndex(
-                fields=["ocr_text"], name="documents_document_text_trgm", opclasses=["gin_trgm_ops"]
+                fields=["summary"],
+                name="documents_doc_summary_trgm",
+                opclasses=["gin_trgm_ops"],
             ),
         ),
     ]

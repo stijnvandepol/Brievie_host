@@ -8,6 +8,7 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
 from apps.common.errors import ApiError
+from apps.documents import search as search_module
 from apps.documents.models import Document, DocumentAddressee, DocumentLabel
 from apps.documents.search import SearchFilters, SearchResult, search_documents, search_out
 from apps.labels.models import Label
@@ -398,12 +399,36 @@ def test_a_hit_outside_the_text_shows_the_start_of_the_summary(ws_a: Workspace) 
 
 
 def test_the_fallback_fragment_marks_similar_words(ws_a: Workspace) -> None:
-    letter(ws_a, "Brief van de belastingdienst over uw aanslag.")
+    letter(ws_a, "Uw aanslag.", summary="Brief van de belastingdienst over uw aanslag.")
 
     result = search(ws_a, "belastingdeinst")
 
     (hit,) = result.hits
     assert [p.text for p in hit.snippet if p.hit] == ["belastingdienst"]
+
+
+def test_a_typo_in_a_word_that_is_only_in_the_text_finds_nothing(ws_a: Workspace) -> None:
+    # Measured: word similarity over whole letters is too slow (DECISIONS 2026-11-20).
+    letter(ws_a, "Brief van de belastingdienst over uw aanslag.")
+
+    result = search(ws_a, "belastingdeinst")
+
+    assert result.hits == []
+    assert result.fuzzy is False
+
+
+def test_a_very_common_word_ranks_only_the_newest_candidates(
+    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(search_module, "MAX_CANDIDATES", 2)
+    old = letter(ws_a, "rekening", sender="Rekening BV")
+    newer = [letter(ws_a, "een rekening") for _ in range(2)]
+
+    hits = search(ws_a, "rekening").hits
+
+    # The old letter would rank first (sender), but it is outside the newest two.
+    assert {hit.document.id for hit in hits} == {d.id for d in newer}
+    assert old.id not in {hit.document.id for hit in hits}
 
 
 def test_a_long_text_gives_a_short_fragment(ws_a: Workspace) -> None:

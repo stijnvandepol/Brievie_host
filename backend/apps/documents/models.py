@@ -151,7 +151,9 @@ class Document(WorkspaceModel):
                 fields=["sender"], opclasses=["gin_trgm_ops"], name="documents_document_sender_trgm"
             ),
             GinIndex(
-                fields=["ocr_text"], opclasses=["gin_trgm_ops"], name="documents_document_text_trgm"
+                fields=["summary"],
+                opclasses=["gin_trgm_ops"],
+                name="documents_doc_summary_trgm",
             ),
         ]
 

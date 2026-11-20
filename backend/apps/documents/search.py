@@ -5,8 +5,9 @@ Design: docs/superpowers/specs/2026-11-20-search-design.md.
 Two steps. The exact step uses PostgreSQL full-text search in Dutch (`search_vector`:
 sender, summary, text), every word as a word beginning, or the names of the letter's
 labels and persons. Only when that finds nothing does the fallback run: `pg_trgm` word
-similarity over sender, summary and text, for typos. Every query starts from
-`visibility.visible_documents`, so a hit is always a letter the member may see.
+similarity over sender and summary, for typos (not the text: measured too slow). Every
+query starts from `visibility.visible_documents`, so a hit is always a letter the member
+may see.
 
 The term is a name or a number somebody looks for: nothing here logs it, audits it or
 puts it in an error message, and it only ever reaches SQL as a bound parameter.
@@ -41,6 +42,8 @@ from apps.documents.services import (
     _in_state,
     document_summary_out,
 )
+from apps.labels.models import Label
+from apps.people.models import Person
 from apps.workspaces.models import Membership
 
 MAX_TERM = 200
@@ -49,8 +52,12 @@ MIN_TERM = 2
 MAX_OFFSET = 1000
 # Added to the full-text rank when every word is in a label or person name.
 NAME_BOOST = 1.0
-# pg_trgm word similarity a word needs with the sender, summary or text in the fallback.
+# pg_trgm word similarity a word needs with the sender or the summary in the fallback.
 FUZZY_THRESHOLD = 0.45
+# The exact step ranks at most this many matches (the newest): ranking reads every
+# match's whole vector, which on a word in most letters costs far more than finding them
+# (measured on 10,000 letters, DECISIONS 2026-11-20).
+MAX_CANDIDATES = 1000
 _THRESHOLD_SETTING = "pg_trgm.word_similarity_threshold"
 # Python's similarity a word of the fragment needs to be marked in the fallback.
 FUZZY_MARK_RATIO = 0.7
@@ -180,22 +187,34 @@ def _filtered(membership: Membership, filters: SearchFilters) -> "models.QuerySe
     return documents
 
 
-def _name_match(words: list[str]) -> models.Q:
-    """Every word is part of the name of one of the letter's labels, or of the name or a
-    name variant of one of its persons (archived ones too)."""
+def _name_match(membership: Membership, words: list[str]) -> models.Q | None:
+    """The letters where every word is part of the name of one of the letter's labels, or
+    of the name or a name variant of one of its persons (archived ones too).
+
+    The few labels and persons are looked up first, so the letters follow from their link
+    tables by index. None when some word is in no name at all.
+    """
+    workspace_id = membership.workspace_id
     match = models.Q()
     for word in words:
-        label = DocumentLabel.objects.filter(
-            document=models.OuterRef("pk"), label__name__icontains=word
-        )
-        person = (
-            DocumentAddressee.objects.filter(document=models.OuterRef("pk"))
-            .annotate(variants=Cast("person__name_variants", models.TextField()))
-            .filter(
-                models.Q(person__display_name__icontains=word) | models.Q(variants__icontains=word)
+        labels = list(
+            Label.objects.filter(workspace_id=workspace_id, name__icontains=word).values_list(
+                "id", flat=True
             )
         )
-        match &= models.Exists(label) | models.Exists(person)
+        persons = list(
+            Person.objects.filter(workspace_id=workspace_id)
+            .annotate(variants=Cast("name_variants", models.TextField()))
+            .filter(models.Q(display_name__icontains=word) | models.Q(variants__icontains=word))
+            .values_list("id", flat=True)
+        )
+        if not labels and not persons:
+            return None
+        match &= models.Q(
+            pk__in=DocumentLabel.objects.filter(label_id__in=labels).values("document_id")
+        ) | models.Q(
+            pk__in=DocumentAddressee.objects.filter(person_id__in=persons).values("document_id")
+        )
     return match
 
 
@@ -212,39 +231,63 @@ def _page(
 
 
 def _exact(
-    documents: "models.QuerySet[Document]", words: list[str], query: SearchQuery
-) -> "models.QuerySet[Document]":
-    names = _name_match(words)
+    membership: Membership,
+    documents: "models.QuerySet[Document]",
+    words: list[str],
+    query: SearchQuery,
+) -> "models.QuerySet[Document] | None":
+    """The exact matches, best first; None when there are none.
+
+    Two indexed lookups of ids (the text index; the names), each the newest
+    MAX_CANDIDATES, and then one ranking of only those letters. One query with an OR of
+    both could not use the text index and read every letter of the workspace.
+    """
+    newest = ("-created_at", "-id")
+    ids = set(
+        documents.filter(search_vector=query)
+        .order_by(*newest)
+        .values_list("pk", flat=True)[:MAX_CANDIDATES]
+    )
+    named: set[UUID] = set()
+    names = _name_match(membership, words)
+    if names is not None:
+        named = set(
+            documents.filter(names).order_by(*newest).values_list("pk", flat=True)[:MAX_CANDIDATES]
+        )
+    if not ids and not named:
+        return None
     return (
-        documents.filter(models.Q(search_vector=query) | names)
+        documents.filter(pk__in=ids | named)
         .annotate(
             rank=SearchRank(models.F("search_vector"), query, cover_density=True)
             + models.Case(
-                models.When(names, then=models.Value(NAME_BOOST)),
+                models.When(pk__in=named, then=models.Value(NAME_BOOST)),
                 default=models.Value(0.0),
                 output_field=models.FloatField(),
             )
         )
-        .order_by("-rank", "-created_at", "-id")
+        .order_by("-rank", *newest)
     )
 
 
 def _fuzzy(documents: "models.QuerySet[Document]", words: list[str]) -> "models.QuerySet[Document]":
-    """Every word word-similar to the sender, summary or text (`%>` uses the trigram
-    indexes; the threshold is set for the query by `_similarity_threshold`)."""
+    """Every word word-similar to the sender or the summary (`%>` uses the trigram
+    indexes; the threshold is set for the query by `_fuzzy_page`).
+
+    Not the letter's text: word similarity over whole letters took 6 to 10 seconds on
+    10,000 letters (DECISIONS 2026-11-20). A typo in a word that is only in the text
+    finds nothing, and the answer's next step is another spelling.
+    """
     match = models.Q()
     score: models.Expression = models.Value(0.0)
     for word in words:
         value = models.Value(word, output_field=models.TextField())
-        match &= (
-            models.Q(TrigramWordSimilar(models.F("sender"), value))
-            | models.Q(TrigramWordSimilar(models.F("summary"), value))
-            | models.Q(TrigramWordSimilar(models.F("ocr_text"), value))
+        match &= models.Q(TrigramWordSimilar(models.F("sender"), value)) | models.Q(
+            TrigramWordSimilar(models.F("summary"), value)
         )
         score = score + Greatest(
             TrigramWordSimilarity(word, "sender"),
             TrigramWordSimilarity(word, "summary"),
-            TrigramWordSimilarity(word, "ocr_text"),
         )
     return (
         documents.filter(match)
@@ -280,9 +323,10 @@ def search_documents(
         return SearchResult(bsn_removed=bsn_removed)
     query = _tsquery(words)
     documents = _filtered(membership, filters)
-    exact = _exact(documents, words, query)
-    rows, next_offset = _page(exact, limit, offset)
-    fuzzy = not rows and (offset == 0 or not exact.exists())
+    exact = _exact(membership, documents, words, query)
+    rows, next_offset = _page(exact, limit, offset) if exact is not None else ([], None)
+    # Only when nothing matched exactly, also on a later page of an approximate result.
+    fuzzy = exact is None
     if fuzzy:
         rows, next_offset = _fuzzy_page(documents, words, limit, offset)
     snippets = _snippets(membership, rows, words, query, fuzzy=fuzzy)
