@@ -1369,4 +1369,9 @@ plane). One line per finding is in the pull request; the choices are here.
   not open any more; an administrator types the key once again. No fallback to the old
   AAD: an attacker could replay an old blob with a new address. No re-seal in a migration:
   the migrate container has no master key.
+- **Low findings fixed in this round.** A page image with a second frame header is refused
+  (`jpeg_size`: decoders differ in which header they use, so a small second one hid an
+  oversized first one). `linkPersonToMember` is web-session only (it decides whose post a
+  person's letters are, and later who may read them); the contract test names it with the
+  AI settings as deliberately narrowed, and no app calls it.
 

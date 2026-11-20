@@ -245,9 +245,11 @@ def success_codes(operation: dict[str, object]) -> set[str]:
 
 
 # Released operations narrowed to the web session on purpose (DECISIONS.md, 2026-11-20
-# security review): a device token could send a workspace's letters to any address. No
-# released app calls them.
-NARROWED_TO_THE_WEB_SESSION = frozenset({"updateAiSettings", "previewAiSettings"})
+# security review): with a device token one could send a workspace's letters to any
+# address, or decide whose post a person's letters are. No released app calls them.
+NARROWED_TO_THE_WEB_SESSION = frozenset(
+    {"updateAiSettings", "previewAiSettings", "linkPersonToMember"}
+)
 
 
 def test_released_operations_keep_their_auth_and_success_codes(

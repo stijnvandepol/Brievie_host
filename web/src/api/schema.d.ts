@@ -1238,7 +1238,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Link Person To Member */
+        /**
+         * Link Person To Member
+         * @description Web session only: a bearer token answers 401 not_authenticated. Link the person to a member of the workspace (`user_id`), or unlink it (null). Administrators only.
+         */
         put: operations["linkPersonToMember"];
         post?: never;
         delete?: never;

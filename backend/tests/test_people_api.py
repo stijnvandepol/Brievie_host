@@ -8,6 +8,7 @@ from apps.accounts.models import User
 from apps.people.models import Person
 from apps.workspaces.context import workspace_context
 from apps.workspaces.models import Membership, Workspace
+from tests.documents_support import bearer_for
 from tests.factories import UserFactory
 from tests.helpers import SETUP_TOKEN, post_json
 
@@ -331,6 +332,23 @@ def test_link_and_unlink_member(client_a: Client, ws_a: Workspace) -> None:
 
     r = put(client_a, f"{base}/{second['id']}/member", {"user_id": str(member.id)})
     assert r.status_code == 200
+
+
+def test_a_device_token_cannot_link(client_a: Client, ws_a: Workspace) -> None:
+    # Security review 2026-11-20 (content L4): who a person is decides whose post is whose.
+    member = join(ws_a, "member")
+    person = create(client_a, ws_a.id, {"display_name": "Kind"}).json()
+
+    r = Client().put(
+        f"/api/v1/workspaces/{ws_a.id}/persons/{person['id']}/member",
+        {"user_id": str(member.id)},
+        content_type="application/json",
+        headers=bearer_for(admin_of(ws_a)),
+    )
+
+    assert (r.status_code, r.json()["code"]) == (401, "not_authenticated")
+    with workspace_context(ws_a.id):
+        assert Person.objects.get(id=person["id"]).user_id is None
 
 
 def test_link_to_a_non_member_is_404(client_a: Client, ws_a: Workspace, ws_b: Workspace) -> None:

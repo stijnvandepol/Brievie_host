@@ -3,6 +3,7 @@ from uuid import UUID
 from django.http import HttpRequest
 from ninja import Router, Status
 
+from apps.accounts.auth import session_auth
 from apps.audit.services import actor_from_request
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.people import services
@@ -87,6 +88,11 @@ def delete_person(request: HttpRequest, workspace_id: UUID, person_id: UUID) -> 
 @router.put(
     f"{_PERSON}/member",
     response={200: PersonOut, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS, **BODY_ERRORS},
+    auth=session_auth,
+    description=(
+        "Web session only: a bearer token answers 401 not_authenticated. Link the person "
+        "to a member of the workspace (`user_id`), or unlink it (null). Administrators only."
+    ),
     operation_id="linkPersonToMember",
 )
 def link_person_to_member(

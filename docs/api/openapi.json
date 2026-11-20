@@ -9657,6 +9657,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/persons/{person_id}/member": {
       "put": {
+        "description": "Web session only: a bearer token answers 401 not_authenticated. Link the person to a member of the workspace (`user_id`), or unlink it (null). Administrators only.",
         "operationId": "linkPersonToMember",
         "parameters": [
           {
@@ -9783,9 +9784,6 @@
           }
         },
         "security": [
-          {
-            "DeviceTokenAuth": []
-          },
           {
             "SessionAuth": []
           }
