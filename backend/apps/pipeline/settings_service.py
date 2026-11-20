@@ -148,7 +148,29 @@ class Preview:
     address: str
 
 
-_KEY_AAD = b"ai-api-key"
+# The sealed API key is bound to its workspace and to the one address it may be sent to
+# (security review 2026-11-20): whoever changes `base_url` in the table behind our back
+# gets a key that no longer opens, instead of the key arriving at their server. Keys
+# sealed before (`b"ai-api-key"`) no longer open either; the administrator types the key
+# again.
+_KEY_AAD_PREFIX = b"ai-api-key-v2|"
+
+
+def _key_aad(workspace_id: UUID, base_url: str) -> bytes:
+    return _KEY_AAD_PREFIX + str(workspace_id).encode() + b"|" + base_url.encode()
+
+
+def _open_key(workspace_id: UUID, sealed: bytes, base_url: str) -> str | None:
+    """The API key when it was sealed for this workspace and exactly this address."""
+    try:
+        opened = crypto.open_sealed(
+            workspace_key(workspace_id), sealed, aad=_key_aad(workspace_id, base_url)
+        )
+    except crypto.DecryptionError:
+        return None
+    return opened.decode()
+
+
 # A DNS name is at most 253 characters, each label at most 63.
 _MAX_HOST = 253
 _HOST_LABEL = re.compile(r"[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?", re.IGNORECASE)
@@ -238,12 +260,19 @@ def configure(
             event = AIConsentEvent.Event.SWITCHED_OFF if was_on else None
         sealed: bytes | None = None
         if api_key and target.mode != AISettings.Mode.OFF:
-            sealed = crypto.seal(workspace_key(workspace_id), api_key.encode(), aad=_KEY_AAD)
+            sealed = crypto.seal(
+                workspace_key(workspace_id),
+                api_key.encode(),
+                aad=_key_aad(workspace_id, target.base_url),
+            )
         elif target.mode == AISettings.Mode.EXTERNAL:
             # Only a key that is already at this very address may stay.
             kept = None
             if api_key is None and current is not None and current.base_url == target.base_url:
                 kept = current.api_key_sealed if current.mode == target.mode else None
+            # A key sealed for another address (or before keys were bound) is no key.
+            if kept is not None and _open_key(workspace_id, bytes(kept), target.base_url) is None:
+                kept = None
             if kept is None:
                 raise AiSettingsError("key_required", "An external AI service needs an API key.")
             sealed = bytes(kept)
@@ -459,7 +488,11 @@ def status(workspace_id: UUID) -> AiStatus:
     if settings is None or settings.mode == AISettings.Mode.OFF:
         return AiStatus(mode=AISettings.Mode.OFF)
     events = AIConsentEvent.objects.filter(workspace_id=workspace_id).order_by("-created_at")
-    has_key = settings.api_key_sealed is not None
+    # A key that does not open for this address is as good as none: the form asks for it.
+    has_key = (
+        settings.api_key_sealed is not None
+        and _open_key(workspace_id, bytes(settings.api_key_sealed), settings.base_url) is not None
+    )
     if settings.mode == AISettings.Mode.LOCAL:
         latest = events.first()
         since = latest.created_at if latest and latest.mode == AISettings.Mode.LOCAL else None
@@ -586,9 +619,10 @@ def provider_for(workspace_id: UUID) -> LLMProvider | None:
         raise PermanentError("ai_not_configured")
     api_key = None
     if settings.api_key_sealed is not None:
-        api_key = crypto.open_sealed(
-            workspace_key(workspace_id), bytes(settings.api_key_sealed), aad=_KEY_AAD
-        ).decode()
+        # Opens only for the address it was stored for: never sent anywhere else.
+        api_key = _open_key(workspace_id, bytes(settings.api_key_sealed), settings.base_url)
+        if api_key is None:
+            raise PermanentError("ai_not_configured")
     if settings.api == AISettings.Api.ANTHROPIC:
         return AnthropicProvider(base_url=settings.base_url, api_key=api_key, model=settings.model)
     return OpenAICompatibleProvider(

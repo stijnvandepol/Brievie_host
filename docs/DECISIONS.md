@@ -1356,4 +1356,17 @@ plane). One line per finding is in the pull request; the choices are here.
   the worker itself (Procrastinate takes jobs first in, first out): a cap on queued
   `process_document` jobs per workspace, or a queue lock per workspace (`queueing_lock`)
   with a re-queue, is more than a small change and needs a measurement on the worker.
+- **The AI key is bound to its address (data M2).** Attack: anyone who can write
+  `pipeline_aisettings` (the keeper holds `brievie_app` credentials and may set the
+  workspace GUC; or a stolen app password, or an SQL injection) rewrote `base_url` and
+  `consented_base_url` together and left `api_key_sealed` alone; the worker opened the key
+  and sent it to the new host in `Authorization`. Now the key is sealed with the AAD
+  `ai-api-key-v2|<workspace id>|<base_url>`, so it opens only for that workspace at exactly
+  that address: a changed address or a blob copied from another workspace gives
+  `ai_not_configured`, never the key on the wire. `configure` keeps a stored key only when
+  it opens for the target address, and `status().has_api_key` is false for a key that does
+  not open, so the form asks for it. **Upgrade:** keys sealed before (AAD `ai-api-key`) do
+  not open any more; an administrator types the key once again. No fallback to the old
+  AAD: an attacker could replay an old blob with a new address. No re-seal in a migration:
+  the migrate container has no master key.
 
