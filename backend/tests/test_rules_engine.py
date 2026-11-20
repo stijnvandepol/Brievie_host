@@ -331,3 +331,19 @@ def test_a_condition_on_the_mask_token_matches_no_letter() -> None:
         assert evaluate(letter, [rule(Condition("sender", op, "[BSN]"))]).matched_rule_ids == ()
     equals = rule(Condition("sender", "equals", "Belastingdienst [BSN]"))
     assert evaluate(letter, [equals]).matched_rule_ids == ()
+
+
+def test_a_condition_on_the_mask_token_never_holds_also_negated() -> None:
+    # Review: "does not contain [BSN]" was true for every letter, so an automatic rule
+    # or one with match "any" labelled every new letter. A value holding the mask says
+    # nothing, so the condition is false for every operator.
+    for text in ("Burgerservicenummer: [BSN]", "Een brief zonder nummer"):
+        letter = facts(text)
+        negated = rule(Condition("text", "not_contains_word", "[BSN]"))
+        assert evaluate(letter, [negated]).matched_rule_ids == ()
+        either = rule(
+            Condition("text", "not_contains_word", "J [BSN]"),
+            Condition("text", "contains_word", "nergens"),
+            match="any",
+        )
+        assert evaluate(letter, [either]).matched_rule_ids == ()
