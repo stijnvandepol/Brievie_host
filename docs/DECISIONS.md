@@ -1147,7 +1147,7 @@ Design: `docs/superpowers/specs/2026-11-19-ai-autopilot-design.md`. Opt-in per w
    - A person's confirm with `sets_organisation` clears `automatic` on the links that stay, and the autopilot's change is then no longer undoable (`can_undo` and `undo_event` both check the link's flag). A hand edit leaves the flag. A person's review of an AI-confirmed letter is never a repeat (409 `document_not_reviewable`).
    - The switches reset when AI goes off, the mode changes (external <-> local), or consent is granted for another address. Another model in the same mode at the same address keeps them.
    - `TaskItemOut.created_by_ai` (additive, default false), so a task list can show the mark.
-   - Follow-ups: work out relative terms with `needs_attention`; a per-workspace prohibition for the enterprise layer; `updateAiSettings` still accepts a device token while `updateAiAutopilot` does not (session only); iOS follows. Before private post (phase 1d part B) an automatic addressee link must not by itself grant reading rights. iOS must show the mark "Automatisch door AI" (documents and tasks) before the autopilot is used in households that only use the app.
+   - Follow-ups: work out relative terms with `needs_attention`; a per-workspace prohibition for the enterprise layer; ~~`updateAiSettings` still accepts a device token~~ (closed 2026-11-20, security review: session only). Before private post (phase 1d part B) an automatic addressee link must not by itself grant reading rights. iOS must show the mark "Automatisch door AI" (documents and tasks) before the autopilot is used in households that only use the app.
 
 ## 2026-11-20: Fixes from the exploratory API test of 19 November
 
@@ -1271,3 +1271,19 @@ Design: `docs/superpowers/specs/2026-11-20-search-design.md`.
 - **No system checks in commands that may run without PostgreSQL.** Django 6.1 runs model checks against every database, and the check of the generated `search_vector` asks the server version, so a command that runs them needs a connection. The commands `./brievie` starts in a new container (`run --no-deps`, `docker run`; restore runs some while PostgreSQL is down) set `requires_system_checks = []`; `tests/test_commands_without_database.py` reads that list from the wrapper. Kept the generated column: dropping it for a trigger or a computed query would only move the cost.
 - **`pg_trgm` is created by the owner role.** The migration (`0010_search`) runs `TrigramExtension()`; `pg_trgm` is a trusted extension, so the non-superuser owner role may create it (verified on PostgreSQL 18).
 - **Follow-ups.** Keeping the term out of the PostgreSQL log: server-side binding (psycopg `server_side_binding`) for the search queries, or `log_min_error_statement` for the search path (set by an administrator, it is superuser-only); a word list per workspace to correct typos in the letter text; iOS screens (the endpoint is the same); highlighting the hit on the document page; moving the reads listed above onto the seam.
+
+## 2026-11-20: Fixes from the security review
+
+Three read-only reviews of main at `3fa9c19` (identity, data and operations, content
+plane). One line per finding is in the pull request; the choices are here.
+
+- **AI settings are web-session only (High).** `updateAiSettings` and `previewAiSettings`
+  now take `auth=session_auth`, like `updateAiAutopilot`. Attack: with the bearer token of
+  an administrator's phone, `PUT /workspaces/{id}/ai` with an external address and the same
+  `consent_address` sent every later letter to that address; the "consent" was the
+  attacker's own echo. This narrows two released operations, which the contract test
+  otherwise forbids: `test_openapi_contract.NARROWED_TO_THE_WEB_SESSION` names them. The
+  iOS app does not call either (checked: only the bundled `openapi.json` names them), so
+  nothing in the field breaks. If the app ever adds AI settings it must use the web: the app
+  treats every 401 `not_authenticated` as a revoked device and forgets the pairing.
+

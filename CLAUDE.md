@@ -58,7 +58,8 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
   for another address; another model in the same mode at the same address keeps them.
   `BRIEVIE_AI_AUTOPILOT_ALLOWED=false` stops it server-wide, also where a switch is stored
   as on.
-- `updateAiAutopilot` is session-only (`auth=session_auth`): a device token gets 401.
+- `updateAiSettings`, `previewAiSettings` and `updateAiAutopilot` are session-only
+  (`auth=session_auth`): a device token gets 401.
 - Automatic changes have no actor and are marked: `DocumentLabel`/`DocumentAddressee`
   `automatic`, `Document.confirmed_by_ai`, `Task.created_by_ai`, history origin `ai` or
   `name_match`. Never record a user for what nobody did.

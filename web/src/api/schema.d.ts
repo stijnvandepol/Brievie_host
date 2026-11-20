@@ -532,7 +532,7 @@ export interface paths {
         get: operations["getAiStatus"];
         /**
          * Update Ai Settings
-         * @description Set how the workspace's letters are read. Administrators only. Switching to an external address without consent in force answers 409 `ai_consent_required` unless `consent_address` is exactly the address these settings lead to: first show the notice of `previewAiSettings`. Without `api_key` the stored key stays, at the same address only. The key is never returned.
+         * @description Set how the workspace's letters are read. Web session only: a bearer token answers 401 not_authenticated. Administrators only. Switching to an external address without consent in force answers 409 `ai_consent_required` unless `consent_address` is exactly the address these settings lead to: first show the notice of `previewAiSettings`. Without `api_key` the stored key stays, at the same address only. The key is never returned.
          */
         put: operations["updateAiSettings"];
         post?: never;
@@ -577,7 +577,7 @@ export interface paths {
         put?: never;
         /**
          * Preview Ai Settings
-         * @description Check AI settings without saving them. When saving them needs consent, `notice` is the text to show (the same `configure_ai` prints) and `address` is what to send back as `consent_address`. Administrators only.
+         * @description Check AI settings without saving them. Web session only: a bearer token answers 401 not_authenticated. When saving them needs consent, `notice` is the text to show (the same `configure_ai` prints) and `address` is what to send back as `consent_address`. Administrators only.
          */
         post: operations["previewAiSettings"];
         delete?: never;

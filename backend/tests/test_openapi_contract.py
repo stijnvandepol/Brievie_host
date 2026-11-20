@@ -244,6 +244,12 @@ def success_codes(operation: dict[str, object]) -> set[str]:
     return {code for code in responses if code.startswith("2")}
 
 
+# Released operations narrowed to the web session on purpose (DECISIONS.md, 2026-11-20
+# security review): a device token could send a workspace's letters to any address. No
+# released app calls them.
+NARROWED_TO_THE_WEB_SESSION = frozenset({"updateAiSettings", "previewAiSettings"})
+
+
 def test_released_operations_keep_their_auth_and_success_codes(
     released_contract: Contract,
 ) -> None:
@@ -253,7 +259,10 @@ def test_released_operations_keep_their_auth_and_success_codes(
     for key, operation in contract_operations(released_contract).items():
         now = current[key]
         operation_id = operation["operationId"]
-        assert now.get("security") == operation.get("security"), operation_id
+        if operation_id in NARROWED_TO_THE_WEB_SESSION:
+            assert now.get("security") == [{"SessionAuth": []}], operation_id
+        else:
+            assert now.get("security") == operation.get("security"), operation_id
         assert success_codes(operation) <= success_codes(now), operation_id
 
 
