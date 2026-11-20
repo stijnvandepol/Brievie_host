@@ -106,7 +106,9 @@ def test_an_unreleased_section_is_skipped(release: Path) -> None:
     path = release / "CHANGELOG.md"
     text = path.read_text()
     first = text.index("## [")
-    path.write_text(text[:first] + "## [Onuitgebracht]\n\n- regel-van-onuitgebracht\n\n" + text[first:])
+    path.write_text(
+        text[:first] + "## [Onuitgebracht]\n\n- regel-van-onuitgebracht\n\n" + text[first:]
+    )
     notes = release / "notes.md"
     assert check(release, "--notes", str(notes)).returncode == 0
     assert "regel-van-onuitgebracht" not in notes.read_text()
