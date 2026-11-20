@@ -16,6 +16,9 @@ type Hit = components["schemas"]["DocumentSearchHitOut"];
 type Part = components["schemas"]["SnippetPartOut"];
 
 const MIN_LENGTH = 2;
+// Filter changes come in bursts (paging through dates with the arrow keys): one search
+// after they stop, not one per change (the endpoint allows 30 a minute).
+const FILTER_DELAY_MS = 300;
 
 const DOCUMENT_TYPES = [
   "invoice",
@@ -78,6 +81,12 @@ function SearchFragment({ parts }: { parts: Part[] }) {
   );
 }
 
+/** A new page per workspace: filters and results of another workspace never carry over. */
+function SearchRoute() {
+  const { workspace } = searchRoute.useRouteContext();
+  return <SearchPage key={workspace.id} />;
+}
+
 function SearchPage() {
   usePageTitle(t`Zoeken`);
   const { workspace } = searchRoute.useRouteContext();
@@ -85,6 +94,8 @@ function SearchPage() {
   const persons = useQuery(personsQuery(workspace.id));
   const labels = useQuery(labelsQuery(workspace.id));
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  // The filters the results are for: `filters` once it has not changed for a moment.
+  const [applied, setApplied] = useState<Filters>(NO_FILTERS);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [searching, setSearching] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -96,6 +107,11 @@ function SearchPage() {
   const trimmed = term.trim();
   const tooShort = trimmed.length > 0 && trimmed.length < MIN_LENGTH;
   const filtered = Object.values(filters).some((value) => value !== "");
+
+  useEffect(() => {
+    const timer = setTimeout(() => setApplied(filters), FILTER_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [filters]);
 
   // A new term, a repeated search or a changed filter searches again from the start.
   // biome-ignore lint/correctness/useExhaustiveDependencies: `run` repeats the same term on purpose.
@@ -110,7 +126,7 @@ function SearchPage() {
       last.current = null;
       return;
     }
-    const request: DocumentSearch = { q: trimmed, ...filters };
+    const request: DocumentSearch = { q: trimmed, ...applied };
     last.current = request;
     setSearching(true);
     searchDocuments(workspace.id, request).then(
@@ -130,7 +146,7 @@ function SearchPage() {
         setSearching(false);
       },
     );
-  }, [workspace.id, trimmed, run, filters]);
+  }, [workspace.id, trimmed, run, applied]);
 
   async function loadMore() {
     const request = last.current;
@@ -282,7 +298,7 @@ function SearchPage() {
           <div className="empty-state">
             <Icon name="search" className="empty-icon" />
             <h2 className="empty-title">{t`Zoek een brief`}</h2>
-            <p className="empty-hint">{t`Zoek op afzender, onderwerp, een woord uit de brief, een label of een naam. Een deel van een woord is genoeg.`}</p>
+            <p className="empty-hint">{t`Zoek op afzender, onderwerp, een woord uit de brief, een label of een naam. Het begin van een woord is genoeg.`}</p>
           </div>
         </section>
       ) : null}
@@ -299,7 +315,7 @@ function SearchPage() {
             <h2 className="empty-title">{t`Niets gevonden`}</h2>
             <ul className="empty-steps">
               <li>{t`Gebruik minder woorden.`}</li>
-              <li>{t`Probeer een andere spelling of een deel van het woord.`}</li>
+              <li>{t`Probeer een andere spelling of het begin van het woord.`}</li>
             </ul>
             <p>
               <Link to="/w/$workspaceId/post" params={{ workspaceId: workspace.id }}>
@@ -341,5 +357,5 @@ export const searchRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   // No search params: the term lives in memory only (see search-term.ts).
   path: "zoeken",
-  component: SearchPage,
+  component: SearchRoute,
 });

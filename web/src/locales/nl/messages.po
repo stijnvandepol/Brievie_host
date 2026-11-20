@@ -1982,8 +1982,8 @@ msgid "Polis"
 msgstr "Polis"
 
 #: src/routes/search.tsx
-msgid "Probeer een andere spelling of een deel van het woord."
-msgstr "Probeer een andere spelling of een deel van het woord."
+msgid "Probeer een andere spelling of het begin van het woord."
+msgstr "Probeer een andere spelling of het begin van het woord."
 
 #: src/routes/root.tsx
 msgid "Probeer opnieuw"
@@ -2121,6 +2121,7 @@ msgstr "Sessies"
 msgid "Sleutel van de dienst (API-sleutel)"
 msgstr "Sleutel van de dienst (API-sleutel)"
 
+#: src/components/search-field.tsx
 #: src/routes/labels.tsx
 msgid "Sluiten"
 msgstr "Sluiten"
@@ -2644,8 +2645,8 @@ msgid "Zoek op afzender, onderwerp of tekst"
 msgstr "Zoek op afzender, onderwerp of tekst"
 
 #: src/routes/search.tsx
-msgid "Zoek op afzender, onderwerp, een woord uit de brief, een label of een naam. Een deel van een woord is genoeg."
-msgstr "Zoek op afzender, onderwerp, een woord uit de brief, een label of een naam. Een deel van een woord is genoeg."
+msgid "Zoek op afzender, onderwerp, een woord uit de brief, een label of een naam. Het begin van een woord is genoeg."
+msgstr "Zoek op afzender, onderwerp, een woord uit de brief, een label of een naam. Het begin van een woord is genoeg."
 
 #: src/components/search-field.tsx
 #: src/routes/search.tsx

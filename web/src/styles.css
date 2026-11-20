@@ -3008,6 +3008,11 @@ a.menu-item:hover {
   padding-left: 36px;
 }
 
+.search-close {
+  flex: none;
+  margin-left: var(--s-xs);
+}
+
 .search-status {
   margin: var(--s-m) 0 var(--s-xs);
   color: var(--neutral-fg2);

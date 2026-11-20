@@ -22,7 +22,8 @@ function isTyping(target: EventTarget | null): boolean {
 /**
  * The search field of the app bar. "/" focuses it from anywhere (not while typing in a field),
  * Enter shows the results, Escape clears it and gives focus back to where it was. On a phone
- * it is an icon button that opens the field over the bar.
+ * it is an icon button that opens the field over the bar, with a close button; a search
+ * closes it too.
  */
 export function SearchField({ workspaceId }: { workspaceId: string }) {
   const navigate = useNavigate();
@@ -37,6 +38,9 @@ export function SearchField({ workspaceId }: { workspaceId: string }) {
   // The last element outside the field that had focus: Escape returns there.
   const before = useRef<HTMLElement | null>(null);
   const wantFocus = useRef(false);
+  // After the close button the focus goes back to the button that opened the field.
+  const opener = useRef<HTMLButtonElement>(null);
+  const backToOpener = useRef(false);
 
   useEffect(() => {
     function onFocusIn(event: FocusEvent) {
@@ -68,11 +72,17 @@ export function SearchField({ workspaceId }: { workspaceId: string }) {
       wantFocus.current = false;
       input.current?.focus();
     }
+    if (!showField && backToOpener.current) {
+      backToOpener.current = false;
+      opener.current?.focus();
+    }
   });
 
   function submit(event: FormEvent) {
     event.preventDefault();
     requestSearch(value.trim());
+    // On a phone the field covers the bar: the results are what the user wants to see.
+    if (phone) setOpen(false);
     void navigate({ to: "/w/$workspaceId/zoeken", params: { workspaceId } });
   }
 
@@ -89,6 +99,7 @@ export function SearchField({ workspaceId }: { workspaceId: string }) {
   if (!showField) {
     return (
       <Button
+        ref={opener}
         className="topbar-button"
         aria-label={t`Zoeken`}
         onPress={() => {
@@ -117,10 +128,30 @@ export function SearchField({ workspaceId }: { workspaceId: string }) {
           value={value}
           onChange={(event) => setValue(event.target.value)}
           onKeyDown={onKeyDown}
-          onBlur={() => {
-            if (phone && value === "") setOpen(false);
+          onBlur={(event) => {
+            // Not when the focus goes to the close button: its press closes the field.
+            const to = event.relatedTarget;
+            if (
+              phone &&
+              value === "" &&
+              !(to instanceof Node && event.currentTarget.form?.contains(to))
+            )
+              setOpen(false);
           }}
         />
+        {phone ? (
+          <Button
+            className="topbar-button search-close"
+            aria-label={t`Sluiten`}
+            onPress={() => {
+              setValue("");
+              backToOpener.current = true;
+              setOpen(false);
+            }}
+          >
+            <Icon name="dismiss" />
+          </Button>
+        ) : null}
       </form>
     </search>
   );

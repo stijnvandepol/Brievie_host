@@ -1,6 +1,6 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { components } from "../api/schema";
 import {
   API,
@@ -14,7 +14,9 @@ import {
   loggedInHandlers,
   papa,
   renderApp,
+  secondWorkspace,
   server,
+  twoWorkspaces,
   workspace,
 } from "../test-utils";
 
@@ -62,6 +64,24 @@ async function searchFor(term: string) {
   await screen.findByRole("heading", { level: 1, name: "Zoeken" });
   return u;
 }
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+
+/** A phone: every `max-width` query matches, every `min-width` query does not. */
+function phoneScreen() {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: query.includes("max-width"),
+    media: query,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }));
+}
+
+const notLoggedIn = () =>
+  HttpResponse.json(errorBody("not_authenticated", "Je bent niet ingelogd."), { status: 401 });
 
 describe("search field", () => {
   it("is in the app bar with its name and placeholder", async () => {
@@ -124,6 +144,99 @@ describe("search field", () => {
   });
 });
 
+describe("forgetting the term", () => {
+  it("forgets the term and the results after signing out", async () => {
+    const { bodies, handler } = searchHandler(() => answer());
+    server.use(
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+      handler,
+      http.post(`*${API}/auth/logout`, () => {
+        server.use(http.get(`*${API}/me`, notLoggedIn));
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const { router } = renderApp(`/w/${workspace.id}/post`);
+    const u = await searchFor("belasting");
+    await screen.findByRole("link", { name: "Belastingdienst" });
+    await u.click(screen.getByRole("button", { name: "Account" }));
+    await u.click(await screen.findByRole("button", { name: /uitloggen/i }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
+
+    // Somebody else signs in on the same computer and goes back to the results page.
+    server.use(...loggedInHandlers());
+    await router.navigate({ to: "/w/$workspaceId/zoeken", params: { workspaceId: workspace.id } });
+    expect(await screen.findByRole("heading", { name: "Zoek een brief" })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Zoeken in je post" })).toHaveValue("");
+    expect(bodies).toHaveLength(1);
+  });
+
+  it("forgets the term when switching to another workspace", async () => {
+    const { bodies, handler } = searchHandler(() => answer());
+    const other: Record<string, unknown>[] = [];
+    server.use(
+      twoWorkspaces(),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+      handler,
+      http.get(`*${API}/workspaces/${secondWorkspace.id}/inbox/counts`, () =>
+        HttpResponse.json({ new: 0, review: 0, unassigned: 0 }),
+      ),
+      http.get(`*${API}/workspaces/${secondWorkspace.id}/labels`, () => HttpResponse.json([])),
+      http.get(`*${API}/workspaces/${secondWorkspace.id}/persons`, () => HttpResponse.json([])),
+      http.post(
+        `*${API}/workspaces/${secondWorkspace.id}/documents/search`,
+        async ({ request }) => {
+          other.push((await request.json()) as Record<string, unknown>);
+          return HttpResponse.json(answer());
+        },
+      ),
+    );
+    const { router } = renderApp(`/w/${workspace.id}/post`);
+    await searchFor("belasting");
+    await screen.findByRole("link", { name: "Belastingdienst" });
+
+    await router.navigate({
+      to: "/w/$workspaceId/zoeken",
+      params: { workspaceId: secondWorkspace.id },
+    });
+    expect(await screen.findByRole("heading", { name: "Zoek een brief" })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Zoeken in je post" })).toHaveValue("");
+    expect(bodies).toHaveLength(1);
+    expect(other).toHaveLength(0);
+  });
+});
+
+describe("search field on a phone", () => {
+  it("opens over the bar with a close button", async () => {
+    phoneScreen();
+    server.use(...loggedInHandlers(), ...documentHandlers());
+    const u = userEvent.setup();
+    renderApp(`/w/${workspace.id}/post`);
+    await u.click(await screen.findByRole("button", { name: "Zoeken" }));
+    expect(screen.getByRole("searchbox", { name: "Zoeken in je post" })).toHaveFocus();
+    await u.type(screen.getByRole("searchbox", { name: "Zoeken in je post" }), "abc");
+    await u.click(screen.getByRole("button", { name: "Sluiten" }));
+    expect(screen.queryByRole("searchbox", { name: "Zoeken in je post" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Zoeken" })).toBeInTheDocument();
+  });
+
+  it("closes after a search, also on the results page", async () => {
+    phoneScreen();
+    const { bodies, handler } = searchHandler(() => answer());
+    server.use(...loggedInHandlers(), ...documentHandlers(), handler);
+    const u = userEvent.setup();
+    // On the results page a search draws no new page, so the field must close itself.
+    renderApp(`/w/${workspace.id}/zoeken`);
+    await u.click(await screen.findByRole("button", { name: "Zoeken" }));
+    await u.type(screen.getByRole("searchbox", { name: "Zoeken in je post" }), "belasting{Enter}");
+    await screen.findByRole("heading", { level: 1, name: "Zoeken" });
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(screen.queryByRole("searchbox", { name: "Zoeken in je post" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Zoeken" })).toBeInTheDocument();
+  });
+});
+
 describe("results page", () => {
   it("shows the start state after a reload", async () => {
     server.use(...loggedInHandlers(), ...documentHandlers());
@@ -131,7 +244,7 @@ describe("results page", () => {
     expect(await screen.findByRole("heading", { name: "Zoek een brief" })).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Zoek op afzender, onderwerp, een woord uit de brief, een label of een naam. Een deel van een woord is genoeg.",
+        "Zoek op afzender, onderwerp, een woord uit de brief, een label of een naam. Het begin van een woord is genoeg.",
       ),
     ).toBeInTheDocument();
     await waitFor(() => expect(document.title).toBe("Zoeken - Brievie"));
@@ -231,7 +344,7 @@ describe("results page", () => {
     expect(await screen.findByRole("heading", { name: "Niets gevonden" })).toBeInTheDocument();
     expect(screen.getByText("Gebruik minder woorden.")).toBeInTheDocument();
     expect(
-      screen.getByText("Probeer een andere spelling of een deel van het woord."),
+      screen.getByText("Probeer een andere spelling of het begin van het woord."),
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Bekijk alle post" })).toHaveAttribute(
       "href",
@@ -302,6 +415,33 @@ describe("filters and paging", () => {
     await waitFor(() => expect(bodies.length).toBeGreaterThan(count));
     expect(bodies.at(-1)).toMatchObject({ document_type: "", inbox_state: "", label_id: null });
     expect(screen.queryByRole("button", { name: "Wis filters" })).not.toBeInTheDocument();
+  });
+
+  it("waits until the filters stop changing and then searches once", async () => {
+    const { bodies, handler } = searchHandler(() => answer({ items: [] }));
+    server.use(...loggedInHandlers(), ...documentHandlers(), handler);
+    renderApp(`/w/${workspace.id}/post`);
+    await searchFor("belasting");
+    await screen.findByRole("heading", { name: "Niets gevonden" });
+    expect(bodies).toHaveLength(1);
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const from = screen.getByLabelText("Van");
+    // Paging through days with the arrow keys: a change every few milliseconds.
+    for (const day of ["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04"]) {
+      fireEvent.change(from, { target: { value: day } });
+      vi.advanceTimersByTime(100);
+    }
+    fireEvent.change(screen.getByLabelText("Soort"), { target: { value: "assessment" } });
+    vi.advanceTimersByTime(299);
+    expect(bodies).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    vi.useRealTimers();
+
+    await waitFor(() => expect(bodies).toHaveLength(2));
+    expect(bodies[1]).toMatchObject({ date_from: "2026-01-04", document_type: "assessment" });
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(bodies).toHaveLength(2);
   });
 
   it("loads more, appends, and stops when there is no next page", async () => {
