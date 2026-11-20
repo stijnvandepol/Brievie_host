@@ -1385,4 +1385,48 @@ plane). One line per finding is in the pull request; the choices are here.
   Still not atomic across the two worker processes (read, then write the database cache):
   a burst counts lower than it is. The per-account sign-in count uses an atomic upsert
   under a lock; the other limits guard secrets of 40 to 256 bits.
+- **CLAUDE.md drift (content-plane L7): not valid at `3fa9c19`.** The report quotes "the
+  autopilot never applies a rule's proposal"; `git show 3fa9c19:CLAUDE.md` already
+  describes `rule_labels_to_apply` and `rule_autopilot` (updated in 14a6a5c), and the code
+  and DECISIONS agree with it. CLAUDE.md now also names this round's rules (AI key binding,
+  sign-in limits, pairing, masking).
+
+### Follow-ups from the review (not built in this round)
+
+- **Hash session keys at rest (data M1).** Attack: Django's database session store and
+  `UserSession.session_key` hold the cookie value in clear; the keeper reads every table
+  (`pg_read_all_data`) and `pg_dump` copies both into each back-up. Whoever has the keeper,
+  or a back-up plus its password, sets the `sessionid` cookie of an administrator and reads
+  decrypted page images, which breaks "a stolen keeper cannot decrypt documents". Approach:
+  a `SessionStore` subclass of `django.contrib.sessions.backends.db.SessionStore` that
+  stores `sha256(session_key)` as the row key (override `_get_session_from_db`, `exists`,
+  `save`, `delete`, `create` so they hash before touching the table; the cookie keeps the
+  raw key) and `UserSession.session_key` as the same hash (`record_session`,
+  `rekey_session`, the middleware and `end_sessions` look up by hash). Migration: hash the
+  existing keys in place (sessions survive). Cheaper first step: `pg_dump
+  --exclude-table-data` for `django_session`, `accounts_usersession` and `brievie_cache`,
+  and explicit `GRANT SELECT` for the keeper instead of `pg_read_all_data`. Test: after
+  `start_session`, no `Session` row has the cookie's key.
+- **Verify a signature before `./brievie update` builds a tag (data M4).** Attack: a stolen
+  maintainer token or a hijacked `origin` pushes `v9.9.9`; every server that runs the
+  documented `./brievie update` builds it and hands over to its wrapper, as root with the
+  master key and the superuser URL. Approach: sign release tags with SSH keys, ship
+  `deploy/allowed_signers` in the repository, and before `git archive` run `git -c
+  gpg.format=ssh -c gpg.ssh.allowedSignersFile=deploy/allowed_signers verify-tag
+  "v$update_to"`, refusing on failure; also refuse when the tag's own `allowed_signers`
+  differs from the running one (a key change goes through a release signed by an old key).
+  Later: check the release workflow's provenance attestation (`gh attestation verify`) for
+  an image. Test: a fixture remote with an unsigned tag; `./brievie update` stops before
+  `docker build`.
+- **Also open:** re-masking text stored before the BSN fix (`remask_bsns` per workspace);
+  worker fairness across workspaces; rules in mode `auto` acting on unconfirmed AI facts
+  (content L1: decide `auto` on settled facts, as the autopilot does); resolving AI hosts
+  at configure time and before each call (content L2, SSRF and "local" names that resolve
+  publicly); the reads still off the visibility seam (content L3, before rights per
+  document); the invitation link that tells whether an address has an account (identity
+  L2, documented as intended); HSTS and trusting the private CA in browsers (identity L3,
+  deployment docs); `pg_restore --no-owner --no-privileges --role` and a TOC allow-list
+  (data L1); master-key rotation (data L4); `cap_drop`, `no-new-privileges`, read-only
+  roots and digest-pinned images (data L5); `CREATEDB` for the owner only in dev and CI
+  (data L6). Each touches deployment or behaviour beyond a small, safe change.
 
