@@ -105,7 +105,8 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
   `apps/documents/export_files.py`.
 - A member-facing read of documents starts from `apps.documents.visibility.visible_documents`
   (the one place that says which letters a member may see).
-- A search term is never logged, audited, put in a URL or in an error message, and reaches SQL
-  only as a bound parameter. A BSN (and the literal `[BSN]`) is removed from the term before
-  use. Search is `POST searchDocuments`, never a `q` on a `GET`.
+- Brievie never logs, audits or echoes a search term, nor puts it in a URL or an error
+  message (PostgreSQL's own log can hold a failing statement; see PRIVACY). A BSN, also with
+  other separators, the literal `[BSN]` and the words "bsn"/"burgerservicenummer" are removed
+  from the term before use. Search is `POST searchDocuments`, never a `q` on a `GET`.
 - Tests first for logic. Conventional commits.

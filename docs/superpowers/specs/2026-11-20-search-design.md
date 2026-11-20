@@ -62,20 +62,28 @@ ever be a visible document.
 
 `apps/documents/search.py`, `search_documents(membership, *, q, filters, limit, offset) -> SearchResult`.
 
-1. Clean the term: strip, collapse spaces, at most 200 characters; `mask_bsns(q)` and then
-   remove every `[BSN]` it produced. `bsn_removed` says that happened. A term with nothing
+1. Clean the term: NFKC, soft hyphens and zero-width characters removed, collapse spaces, at
+   most 200 characters; `mask_bsns(q)` and then remove every `[BSN]` it produced (and the
+   literal `[BSN]`). `bsn_removed` says that happened. A term with nothing
    left (or shorter than 2 characters) finds nothing: `items=[]`.
-2. Words: split on whitespace, at most 8, each stripped of tsquery syntax (letters, digits,
-   `-`, `'`, `.` kept; the rest dropped). Query: every word must match, each as a prefix
-   (`word:*`), built with bound parameters only (never string-built SQL).
-3. The exact step is two indexed lookups of document ids, each the newest `MAX_CANDIDATES`
-   (1000) matches: one on `search_vector` (every word as a prefix), one on label and person
-   names (every word is part of the name of one of the letter's labels, or of the name or a
-   name variant of one of its persons; case-insensitive substring; the few labels and
-   persons are looked up first and the letters follow from their link tables). Then one
-   ranking of only those letters: `ts_rank_cd` plus a fixed boost (`NAME_BOOST`) for a
-   name match; then newest first. A word in most letters therefore ranks the newest 1000
-   matches, not all of them.
+2. Words: every character that is not a letter, digit, `-`, `'` or `.` becomes a space; at
+   most 8 words. A run of adjacent digit groups with exactly nine digits that passes the
+   elfproef is removed (a BSN with a separator `mask_bsns` does not know: "111/222/333"),
+   and so are the words "bsn" and "burgerservicenummer" (they would only find the stored
+   mask); both set `bsn_removed`. Each word is a quoted prefix lexeme (`'word':*`), passed
+   to `to_tsquery` as a query parameter (never string-built SQL).
+3. The exact step: every word must be found, each in its own place: in `search_vector` (a
+   word beginning, Dutch stems), or in the name of one of the letter's labels, or the name
+   or a name variant of one of its persons (case-insensitive substring). Per word the
+   matching labels and persons are looked up first (small tables). The words in no name at
+   all must be in the text: they drive one lookup on the text index. When every word is in
+   some name, the first word drives two lookups (the text index; the letters linked to its
+   labels and persons). Each lookup applies the other words as row filters (text match OR
+   linked to that word's labels/persons), orders newest first and keeps `MAX_CANDIDATES`
+   (1000). Then one ranking of only those letters: `ts_rank_cd` against all words joined
+   with OR (more words in the text rank higher) plus `NAME_BOOST` for every word the letter
+   matches through a name; then newest first. A word in most letters therefore ranks the
+   newest 1000 matches, not all of them.
 4. Filters (all optional, all narrow): `document_type`, `label_id`, `person_id`,
    `inbox_state`, `date_from` / `date_to` on the letter date (a letter without one falls
    under its upload date).
@@ -88,7 +96,8 @@ ever be a visible document.
    a label or a person, or in the fallback, the fragment is the start of the summary (else of
    the text, 160 characters) with the matching words marked in Python (word beginnings; in the
    fallback, similar words). At most 240 characters. Never HTML.
-7. Nothing of the term is logged, audited or put in an error message.
+7. Brievie logs, audits or echoes nothing of the term. PostgreSQL logs a failing statement
+   (its default), and with client-side binding that statement holds the term (see PRIVACY).
 
 ### API (additive)
 
@@ -109,7 +118,9 @@ history.
 
 - A search field in the app bar, on every page. `/` focuses it (not while typing in a
   field), Enter searches, Escape clears and returns focus.
-- Results page `Zoeken`: the term stays in memory (router state), not in the URL. Rows like
+- Results page `Zoeken`: the term stays in memory (a small store, `web/src/search-term.ts`),
+  not in the URL or router/history state; signing out and switching workspace forget it.
+  Filter changes search once, 300 ms after the last change. Rows like
   "Alle post" with the fragment under them, hits in `<mark>`. Filters: soort, label, persoon,
   periode, status. "Meer laden" for the next page.
 - States: empty (what you can search for, with examples), searching, no result (with a next
@@ -122,8 +133,10 @@ history.
 1. A search endpoint instead of `q` on the list: the list has no paging and its answer has
    no fragment; POST keeps the term out of URLs. Paging is offset-based with a ceiling
    (offset <= 1000): search results are for finding, not for walking the archive.
-2. The BSN rule: a BSN in the term is removed before anything else, and the answer says so.
-   Stored text holds `[BSN]`, so the literal mask is removed too and can never be searched.
+2. The BSN rule: a BSN in the term is removed before anything else (also with other
+   separators, see step 2), and the answer says so. Stored text holds `[BSN]`, whose lexeme is
+   `bsn`, so the literal mask and the words "bsn" and "burgerservicenummer" are removed too and
+   can never be searched.
 3. Label and person names are matched by substring per word, not by full-text: they are
    short, few, and people type parts of names.
 4. The fallback runs only on an empty exact result, so an exact search never pays for it
@@ -142,7 +155,9 @@ the first version (one query, text index OR name subqueries, ranking every match
 550 ms for any term, and its typo fallback with word similarity over the whole text took 6 to
 10 seconds. As built, an exact search takes 33 to 50 ms (a rare word, a word in most letters, a
 stem, a word beginning, two words, a sender) and the typo fallback 230 to 300 ms (it only runs
-when nothing matched exactly). Sizes: table 32 MB; full-text GIN index 6.4 MB; trigram index on
+when nothing matched exactly). With words combining across text and names (one label and one
+person on 2,000 letters each): exact 35 to 60 ms, cross cases 34 to 95 ms (three words over
+text, person and label). Sizes: table 32 MB; full-text GIN index 6.4 MB; trigram index on
 sender 4.4 MB, on summary 2.3 MB; the dropped trigram index on the text was 17 MB.
 
 ## Plan
