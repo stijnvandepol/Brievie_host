@@ -1286,4 +1286,21 @@ plane). One line per finding is in the pull request; the choices are here.
   iOS app does not call either (checked: only the bundled `openapi.json` names them), so
   nothing in the field breaks. If the app ever adds AI settings it must use the web: the app
   treats every 401 `not_authenticated` as a revoked device and forgets the pairing.
+- **BSN masking knows more printed forms (Medium, both reviews).** Reproduced on main:
+  `111  222  333`, `BSN: 111 222  333`, `111 222\n333`, narrow/thin spaces, `111/222/333`,
+  `111,222,333` and `BSN 12345678` came through unchanged. `privacy._SEP` is now a run of 1
+  to 3 separators: any whitespace (line breaks, no-break, thin, narrow and figure spaces),
+  `. / , _ -`, the dashes U+2010 to U+2015, the minus sign, the soft hyphen and zero-width
+  characters. Close after the word "BSN" (30 characters, as before) any grouping of 8 or 9
+  digits is masked: an old sofinummer is printed without its leading zero. Every quantifier
+  is bounded and nothing nests, and the label windows are merged and walked with one
+  pointer, so masking is linear (it was labels x numbers: review L3, a test now bounds it).
+  Masking a number too many stays the safe side: a labelled date ("BSN onbekend, geboren
+  01-02-1980") is masked too. **Stated limit:** without the word "BSN", only the layouts
+  3-3-3, 4-2-3 and 2-2-2-3 and nine plain digits are recognised, and only when they pass the
+  elfproef; "111;222;333" or "11 1222 333" without a label still pass. Search keeps its own
+  wider net (`_without_bsn_digits`). **Follow-up:** text stored before this fix keeps what
+  the old mask missed; a `remask_bsns` command per workspace (`Document.ocr_text`,
+  `DocumentPage.ocr_text`, summaries) is needed before the next release note says
+  otherwise.
 
