@@ -17,6 +17,8 @@ class TaskItemOut(Schema):
     # The document's confirmed sender; empty without a document.
     sender: str
     updated_at: datetime
+    # True when the autopilot made it while confirming the letter ("Automatisch door AI").
+    created_by_ai: bool = False
 
     @staticmethod
     def resolve_sender(obj: object) -> str:

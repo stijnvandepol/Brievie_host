@@ -30,6 +30,10 @@ class AISettings(WorkspaceModel):
     # The external address somebody agreed to send letters to; "" = no consent in force.
     # Text only goes out while this equals `base_url`. The history is `AIConsentEvent`.
     consented_base_url = models.CharField(max_length=300, blank=True, default="")
+    # The AI autopilot, both opt-in: put a letter under persons and labels itself, and
+    # confirm it itself. Only in force while the mode is not `off` and the server allows it.
+    auto_organise = models.BooleanField(default=False)
+    auto_confirm = models.BooleanField(default=False)
 
     class Meta:
         constraints: ClassVar[list[models.BaseConstraint]] = [

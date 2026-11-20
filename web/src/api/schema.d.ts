@@ -542,6 +542,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/ai/autopilot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Ai Autopilot
+         * @description The AI autopilot of the workspace: whether letters are put under persons and labels (`auto_organise`) and confirmed (`auto_confirm`) without anybody checking first, whether the server `allowed` it, and the `notice` to agree to. Any member.
+         */
+        get: operations["getAiAutopilot"];
+        /**
+         * Update Ai Autopilot
+         * @description Switch the AI autopilot on or off. Web session only: a bearer token answers 401 not_authenticated. Administrators only. A switch that goes on needs `acknowledged` (409 `ai_autopilot_ack_required`), AI on for the workspace (409 `ai_autopilot_needs_ai`) and the server's permission (409 `ai_autopilot_forbidden`). Switching off always works. Switching AI off or agreeing to another AI address also switches both off.
+         */
+        put: operations["updateAiAutopilot"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/ai/preview": {
         parameters: {
             query?: never;
@@ -631,7 +655,7 @@ export interface paths {
         };
         /**
          * List Documents
-         * @description The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id` and `label_id` narrow the list; together they all apply.
+         * @description The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`).
          */
         get: operations["listDocuments"];
         put?: never;
@@ -725,7 +749,7 @@ export interface paths {
         put?: never;
         /**
          * Undo Document Event
-         * @description Reverse a change a rule made (`can_undo`); the rule does not make it again on this document. 409 `event_not_undoable` when the change is not a rule's, was undone already or is gone anyway.
+         * @description Reverse a label or addressee a rule or the autopilot added (`can_undo`; origin `rule`, `ai` or `name_match`); it is not made again on this document. 409 `event_not_undoable` when the change is not one of those, was undone already or is gone anyway.
          */
         post: operations["undoDocumentEvent"];
         delete?: never;
@@ -762,6 +786,26 @@ export interface paths {
         get: operations["getDocumentPage"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen Document
+         * @description Takes back the AI's confirmation: the document returns to review, the confirmed fields are emptied and the tasks the AI made that are still open are removed. 409 document_not_reopenable unless the AI confirmed the document.
+         */
+        post: operations["reopenDocument"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1400,6 +1444,29 @@ export interface components {
             /** Person Ids */
             person_ids: string[];
         };
+        /** AiAutopilotIn */
+        AiAutopilotIn: {
+            /**
+             * Acknowledged
+             * @default false
+             */
+            acknowledged: boolean;
+            /** Auto Confirm */
+            auto_confirm: boolean;
+            /** Auto Organise */
+            auto_organise: boolean;
+        };
+        /** AiAutopilotOut */
+        AiAutopilotOut: {
+            /** Allowed */
+            allowed: boolean;
+            /** Auto Confirm */
+            auto_confirm: boolean;
+            /** Auto Organise */
+            auto_organise: boolean;
+            /** Notice */
+            notice: string;
+        };
         /** AiSettingsIn */
         AiSettingsIn: {
             /** Api Key */
@@ -1455,6 +1522,21 @@ export interface components {
         };
         /** AiStatusOut */
         AiStatusOut: {
+            /**
+             * Auto Confirm
+             * @default false
+             */
+            auto_confirm: boolean;
+            /**
+             * Auto Organise
+             * @default false
+             */
+            auto_organise: boolean;
+            /**
+             * Autopilot Allowed
+             * @default true
+             */
+            autopilot_allowed: boolean;
             /**
              * Has Api Key
              * @default false
@@ -1648,11 +1730,20 @@ export interface components {
         DocumentOut: {
             /** Addressee Ids */
             addressee_ids?: string[];
+            /** Auto Addressee Ids */
+            auto_addressee_ids?: string[];
+            /** Auto Label Ids */
+            auto_label_ids?: string[];
             /**
              * Client Id
              * Format: uuid
              */
             client_id: string;
+            /**
+             * Confirmed By Ai
+             * @default false
+             */
+            confirmed_by_ai: boolean;
             /**
              * Created At
              * Format: date-time
@@ -1707,11 +1798,20 @@ export interface components {
         DocumentSummaryOut: {
             /** Addressee Ids */
             addressee_ids?: string[];
+            /** Auto Addressee Ids */
+            auto_addressee_ids?: string[];
+            /** Auto Label Ids */
+            auto_label_ids?: string[];
             /**
              * Client Id
              * Format: uuid
              */
             client_id: string;
+            /**
+             * Confirmed By Ai
+             * @default false
+             */
+            confirmed_by_ai: boolean;
             /**
              * Created At
              * Format: date-time
@@ -1794,6 +1894,11 @@ export interface components {
         };
         /** InboxCountsOut */
         InboxCountsOut: {
+            /**
+             * Automatic
+             * @default 0
+             */
+            automatic: number;
             /** New */
             new: number;
             /** Review */
@@ -2483,6 +2588,11 @@ export interface components {
              */
             completed_at: string | null;
             /**
+             * Created By Ai
+             * @default false
+             */
+            created_by_ai: boolean;
+            /**
              * Deadline
              * Format: date
              */
@@ -2520,6 +2630,11 @@ export interface components {
              * Format: date-time
              */
             completed_at?: string | null;
+            /**
+             * Created By Ai
+             * @default false
+             */
+            created_by_ai: boolean;
             /**
              * Deadline
              * Format: date
@@ -4191,6 +4306,153 @@ export interface operations {
             };
         };
     };
+    getAiAutopilot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiAutopilotOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    updateAiAutopilot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiAutopilotIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiAutopilotOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     previewAiSettings: {
         parameters: {
             query?: never;
@@ -4455,6 +4717,7 @@ export interface operations {
                 inbox_state?: string;
                 person_id?: string | null;
                 label_id?: string | null;
+                automatic?: boolean;
             };
             header?: never;
             path: {
@@ -5095,6 +5358,65 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    reopenDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

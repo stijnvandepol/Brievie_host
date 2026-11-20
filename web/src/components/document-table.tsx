@@ -85,6 +85,26 @@ export function StatusBadge({ status, inboxState }: { status: string; inboxState
   return <Badge intent={statusIntent(status)}>{statusLabel(status)}</Badge>;
 }
 
+/** Whether Brievie handled (part of) this letter itself: confirmed it, or put a label or person on it. */
+export function isAutomatic(
+  document: Pick<DocumentSummary, "confirmed_by_ai" | "auto_label_ids" | "auto_addressee_ids">,
+): boolean {
+  return (
+    document.confirmed_by_ai === true ||
+    (document.auto_label_ids ?? []).length > 0 ||
+    (document.auto_addressee_ids ?? []).length > 0
+  );
+}
+
+/** The mark of a letter the AI handled: text in the same tag as the status, never colour alone. */
+export function AutomaticBadge({
+  document,
+}: {
+  document: Pick<DocumentSummary, "confirmed_by_ai" | "auto_label_ids" | "auto_addressee_ids">;
+}) {
+  return isAutomatic(document) ? <Badge icon="info">{t`Automatisch door AI`}</Badge> : null;
+}
+
 /** The persons a letter is addressed to, each with initials; ids nobody knows are skipped. */
 export function Addressees({ persons, ids }: { persons: Person[]; ids: string[] }) {
   const people = ids.flatMap((id) => {
@@ -157,6 +177,7 @@ export function DocumentTable({
               <span className="cell-badges">
                 <LabelChips labels={labels} ids={document.label_ids ?? []} />
                 <SuggestionMark count={document.open_suggestion_count} />
+                <AutomaticBadge document={document} />
               </span>
             </li>
           ))}
@@ -204,6 +225,7 @@ export function DocumentTable({
                 <span className="cell-badges">
                   <StatusBadge status={document.status} inboxState={document.inbox_state} />
                   <SuggestionMark count={document.open_suggestion_count} />
+                  <AutomaticBadge document={document} />
                 </span>
               </td>
               <td className="num">

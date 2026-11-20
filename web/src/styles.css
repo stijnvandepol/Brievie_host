@@ -2950,3 +2950,16 @@ a.menu-item:hover {
   justify-content: space-between;
   gap: var(--s-s);
 }
+
+/* Autopilot: the reopen button under the details, and the checkbox filter in the filter bar */
+
+.panel-actions {
+  display: flex;
+  padding: var(--s-s) var(--s-l) var(--s-m);
+}
+
+.filter-check {
+  margin-top: 0;
+  align-items: center;
+  min-height: var(--control-height);
+}

@@ -76,3 +76,6 @@ the translation. Add a line before introducing a new domain term.
 | app-versie | app version |
 | apparaat | device |
 | uitgelogd, beëindigen (sessie) | end (a session) |
+| Automatisch verwerken (de autopilot) | AI autopilot (`AISettings.auto_organise`, `auto_confirm`) |
+| Automatisch door AI (kenmerk) | automatic (`automatic`, `confirmed_by_ai`, `created_by_ai`) |
+| Zelf controleren | reopen (`reopenDocument`) |

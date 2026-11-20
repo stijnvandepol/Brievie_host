@@ -463,3 +463,19 @@ photos. An admin can switch exporting off for the whole workspace (**Instellinge
 by default in a business workspace). The export needs the document volume at
 `/data/documents`, which is the default; an install with another storage folder cannot
 export.
+
+## 20. The AI autopilot
+
+An administrator of a workspace can let the AI put letters under persons and labels, and
+confirm them, without a person checking first (the page **AI**, "Automatisch verwerken").
+It is off by default in every workspace. `BRIEVIE_AI_AUTOPILOT_ALLOWED` in `deploy/.env`
+is the server's permission; its default is `true`. Set it to `false` to forbid the autopilot on this
+server: no workspace can switch it on (the API answers 409 `ai_autopilot_forbidden`), and
+the pipeline applies nothing automatically, also where a switch is stored as on. Letters
+then wait for a person, as before. Run `docker compose ... up -d` again after changing it.
+It is a setting for the whole server: a single workspace cannot be forbidden yet.
+
+While it is `false`, an administrator still sees a switch that is stored as on and can
+switch it off (not on). When you set it back to `true`, switches that were stored as on
+work again at once, without a new agreement. If that is not what you want, switch them off
+in each workspace first (page **AI**), while the server still forbids the autopilot.

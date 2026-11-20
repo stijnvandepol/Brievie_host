@@ -133,7 +133,7 @@ def test_inbox_counts(client_a: Client, ws_a: Workspace) -> None:
     r = client_a.get(counts_url(ws_a.id))
 
     assert r.status_code == 200
-    assert r.json() == {"new": 1, "review": 2, "unassigned": 1}
+    assert r.json() == {"new": 1, "review": 2, "unassigned": 1, "automatic": 0}
 
 
 @pytest.mark.parametrize("query", [{"inbox_state": "done"}, {"person_id": "geen-uuid"}])
@@ -149,7 +149,7 @@ def test_exported_query_parameters_have_no_anyof() -> None:
     operation = schema["paths"]["/api/v1/workspaces/{workspace_id}/documents"]["get"]
     parameters = {p["name"]: p for p in operation["parameters"] if p["in"] == "query"}
 
-    assert set(parameters) == {"inbox_state", "person_id", "label_id"}
+    assert set(parameters) == {"inbox_state", "person_id", "label_id", "automatic"}
     assert not any(p["required"] for p in parameters.values())
     assert "anyOf" not in json.dumps(parameters)
     assert parameters["person_id"]["schema"]["format"] == "uuid"
@@ -178,4 +178,9 @@ def test_other_workspace_is_404_on_every_new_endpoint(
     assert own.json()["code"] == "document_not_found"
     assert client.get(f"{documents_url(ws_b.id)}/{document.id}/events").status_code == 404
     assert client.get(documents_url(ws_b.id), {"person_id": str(papa.id)}).json() == []
-    assert client.get(counts_url(ws_b.id)).json() == {"new": 0, "review": 0, "unassigned": 0}
+    assert client.get(counts_url(ws_b.id)).json() == {
+        "new": 0,
+        "review": 0,
+        "unassigned": 0,
+        "automatic": 0,
+    }

@@ -101,6 +101,9 @@ export const documentSummary = {
   label_ids: [],
   inbox_state: "unassigned",
   open_suggestion_count: 0,
+  confirmed_by_ai: false,
+  auto_label_ids: [],
+  auto_addressee_ids: [],
 };
 
 export const documentDetail: components["schemas"]["DocumentOut"] = {
@@ -124,6 +127,7 @@ export const documentDetail: components["schemas"]["DocumentOut"] = {
       deadline_source: "letter",
       status: "open",
       completed_at: null,
+      created_by_ai: false,
     },
   ],
   suggestions: [],

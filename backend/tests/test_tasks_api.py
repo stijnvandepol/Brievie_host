@@ -77,6 +77,7 @@ def test_list_open_tasks_by_deadline_nulls_last(client_a: Client, ws_a: Workspac
         "document_id",
         "sender",
         "updated_at",
+        "created_by_ai",
     }
 
 
@@ -179,3 +180,18 @@ def test_task_item_names_the_documents_sender(client_a: Client, ws_a: Workspace)
     assert rows[str(with_document.id)]["sender"] == "Gemeente Utrecht"
     assert rows[str(with_document.id)]["document_id"] == str(document.id)
     assert (rows[str(without.id)]["sender"], rows[str(without.id)]["document_id"]) == ("", None)
+
+
+def test_a_task_says_whether_the_ai_made_it(client_a: Client, ws_a: Workspace) -> None:
+    by_hand = make_task(ws_a, "Zelf gemaakt")
+    by_ai = make_task(ws_a, "Door de AI")
+    with workspace_context(ws_a.id):
+        Task.objects.filter(id=by_ai.id).update(created_by_ai=True)
+
+    r = client_a.get(tasks_url(ws_a.id))
+
+    assert r.status_code == 200
+    flags = {row["id"]: row["created_by_ai"] for row in r.json()}
+    assert flags == {str(by_hand.id): False, str(by_ai.id): True}
+    done = tick(client_a, ws_a.id, by_ai)
+    assert done.json()["created_by_ai"] is True

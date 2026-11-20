@@ -89,6 +89,9 @@ describe("AiStatusSentence", () => {
           host: "api.openai.com",
           since: "2026-11-17T14:39:59.238Z",
           has_api_key: false,
+          auto_confirm: false,
+          auto_organise: false,
+          autopilot_allowed: true,
         }}
       />,
     );
@@ -101,13 +104,32 @@ describe("AiStatusSentence", () => {
 
   it("warns when nobody agreed", () => {
     render(
-      <AiStatusSentence status={{ mode: "external", host: "x.example", has_api_key: false }} />,
+      <AiStatusSentence
+        status={{
+          mode: "external",
+          host: "x.example",
+          has_api_key: false,
+          auto_confirm: false,
+          auto_organise: false,
+          autopilot_allowed: true,
+        }}
+      />,
     );
     expect(screen.getByText(/niemand heeft daar akkoord voor gegeven/)).toBeInTheDocument();
   });
 
   it("says that the AI is off", () => {
-    render(<AiStatusSentence status={{ mode: "off", has_api_key: false }} />);
+    render(
+      <AiStatusSentence
+        status={{
+          mode: "off",
+          has_api_key: false,
+          auto_confirm: false,
+          auto_organise: false,
+          autopilot_allowed: true,
+        }}
+      />,
+    );
     expect(screen.getByText(/AI uit/)).toBeInTheDocument();
   });
 });
