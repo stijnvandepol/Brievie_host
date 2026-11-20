@@ -25,7 +25,7 @@ what it is about, its labels and the persons it is for.
    (chosen).** A generated `tsvector` column on the document (sender weight A, summary B,
    text C) with a GIN index answers whole words, Dutch stems and word beginnings
    (`belast:*`) fast. Only when that finds nothing does a second query run with `pg_trgm`
-   word similarity over sender, summary and text: a typo ("belastingdeinst") still finds
+   word similarity over sender and summary: a typo ("belastingdeinst") still finds
    the letter, and the answer says it is an approximate match. Two cheap, explainable
    steps instead of one blended score.
 2. Trigram only (`ILIKE`/similarity on everything). Finds parts of words anywhere, but no
@@ -33,8 +33,8 @@ what it is about, its labels and the persons it is for.
    text used for every query.
 3. Full-text only. No typo tolerance at all: a misspelt sender finds nothing.
 
-The choice is measured on 10,000 generated letters before it is final (task 3); the numbers
-go into DECISIONS.
+The choice was measured on 10,000 generated letters (see "Measured"); the numbers and what
+they changed are in DECISIONS.
 
 ## Design
 
@@ -53,8 +53,10 @@ ever be a visible document.
 - `Document.search_vector`: a generated column
   `setweight(to_tsvector('dutch', sender), 'A') || setweight(to_tsvector('dutch', summary), 'B') || setweight(to_tsvector('dutch', ocr_text), 'C')`,
   GIN index. The text is already BSN-masked when stored.
-- Trigram GIN indexes (`gin_trgm_ops`) on `sender` and `ocr_text` for the fallback; whether
-  the one on `ocr_text` earns its size is part of the measurement.
+- Trigram GIN indexes (`gin_trgm_ops`) on `sender` and `summary` for the fallback. There is
+  none on `ocr_text`: it was 17 MB and the fallback over the whole text was too slow (see
+  "Measured"), so typos are only found in the sender and the summary.
+- `django.contrib.postgres` is in `INSTALLED_APPS` (part of Django, no new dependency).
 
 ### The query
 
@@ -66,20 +68,26 @@ ever be a visible document.
 2. Words: split on whitespace, at most 8, each stripped of tsquery syntax (letters, digits,
    `-`, `'`, `.` kept; the rest dropped). Query: every word must match, each as a prefix
    (`word:*`), built with bound parameters only (never string-built SQL).
-3. A document matches when its `search_vector` matches the query, **or** every word matches
-   (case-insensitive substring) the name of one of its labels or the name or a name variant
-   of one of its persons. Rank: `ts_rank_cd` plus a fixed boost for a label/person name
-   match; then newest first.
+3. The exact step is two indexed lookups of document ids, each the newest `MAX_CANDIDATES`
+   (1000) matches: one on `search_vector` (every word as a prefix), one on label and person
+   names (every word is part of the name of one of the letter's labels, or of the name or a
+   name variant of one of its persons; case-insensitive substring; the few labels and
+   persons are looked up first and the letters follow from their link tables). Then one
+   ranking of only those letters: `ts_rank_cd` plus a fixed boost (`NAME_BOOST`) for a
+   name match; then newest first. A word in most letters therefore ranks the newest 1000
+   matches, not all of them.
 4. Filters (all optional, all narrow): `document_type`, `label_id`, `person_id`,
    `inbox_state`, `date_from` / `date_to` on the letter date (a letter without one falls
    under its upload date).
-5. Only when step 3 finds nothing on the first page: the fallback. A document matches when
-   every word is word-similar (`pg_trgm`, `word_similarity >= 0.45`) to its sender, summary
-   or text. `fuzzy=True` on the answer.
+5. Only when step 3 finds nothing (also for a later page of an approximate result): the
+   fallback. A document matches when every word is word-similar (`pg_trgm`,
+   `word_similarity >= 0.45`, `FUZZY_THRESHOLD`) to its sender or its summary, not its text.
+   `fuzzy=True` on the answer when there are hits.
 6. Fragment, for the page's rows only: `ts_headline('dutch', ocr_text, query)` with control
    characters as markers, split into parts in Python; when the hit is in the sender, summary,
    a label or a person, or in the fallback, the fragment is the start of the summary (else of
-   the text) with the similar words marked in Python. Never HTML.
+   the text, 160 characters) with the matching words marked in Python (word beginnings; in the
+   fallback, similar words). At most 240 characters. Never HTML.
 7. Nothing of the term is logged, audited or put in an error message.
 
 ### API (additive)
@@ -119,8 +127,23 @@ history.
 3. Label and person names are matched by substring per word, not by full-text: they are
    short, few, and people type parts of names.
 4. The fallback runs only on an empty exact result, so an exact search never pays for it
-   and never gets vague hits mixed in.
+   and never gets vague hits mixed in. It looks in the sender and the summary only: a typo
+   in a word that is only in the letter's text finds nothing (a follow-up: a word list per
+   workspace to correct such a typo).
 5. No audit row for a search: a term in the audit log would be the leak the rule forbids.
+6. The exact step is two indexed id lookups and one ranking of at most the newest 1000 matches
+   of each, not one query with an OR: that read every letter (see "Measured").
+
+## Measured
+
+On a throw-away database with 10,000 generated Dutch letters of 180 to 420 words (PostgreSQL
+18 on a Mac, warm, median of 7 runs of the service function, fragment and prefetch included):
+the first version (one query, text index OR name subqueries, ranking every match) took about
+550 ms for any term, and its typo fallback with word similarity over the whole text took 6 to
+10 seconds. As built, an exact search takes 33 to 50 ms (a rare word, a word in most letters, a
+stem, a word beginning, two words, a sender) and the typo fallback 230 to 300 ms (it only runs
+when nothing matched exactly). Sizes: table 32 MB; full-text GIN index 6.4 MB; trigram index on
+sender 4.4 MB, on summary 2.3 MB; the dropped trigram index on the text was 17 MB.
 
 ## Plan
 

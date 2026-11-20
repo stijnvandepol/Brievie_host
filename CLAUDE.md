@@ -103,4 +103,9 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
   changes server-admin rights after setup (under `lock_active_server_admins`).
 - Export files are made, read and removed only through the guarded functions in
   `apps/documents/export_files.py`.
+- A member-facing read of documents starts from `apps.documents.visibility.visible_documents`
+  (the one place that says which letters a member may see).
+- A search term is never logged, audited, put in a URL or in an error message, and reaches SQL
+  only as a bound parameter. A BSN (and the literal `[BSN]`) is removed from the term before
+  use. Search is `POST searchDocuments`, never a `q` on a `GET`.
 - Tests first for logic. Conventional commits.

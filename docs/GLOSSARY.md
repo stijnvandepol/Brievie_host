@@ -79,3 +79,6 @@ the translation. Add a line before introducing a new domain term.
 | Automatisch verwerken (de autopilot) | AI autopilot (`AISettings.auto_organise`, `auto_confirm`) |
 | Automatisch door AI (kenmerk) | automatic (`automatic`, `confirmed_by_ai`, `created_by_ai`) |
 | Zelf controleren | reopen (`reopenDocument`) |
+| zoeken | search (`searchDocuments`) |
+| fragment (stuk tekst bij een treffer) | snippet (`SnippetPartOut`) |
+| Geen exacte treffer. Dit lijkt erop. | approximate match (`fuzzy`) |
