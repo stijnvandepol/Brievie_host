@@ -32,6 +32,9 @@ LISTS: Final = (
     "search_sender",
     "search_common_word",
 )
+# Measured and shown, not part of P1's verdict (search is not a list of S 4.9.5); their
+# results must still match without the member filter.
+NOT_GATED: Final = frozenset({"search_sender", "search_common_word"})
 
 
 @dataclass
@@ -158,6 +161,8 @@ def render(report: Report) -> tuple[str, list[str]]:
                 f = by.get("member filter", {}).get(key)
                 j = by.get("jit on", {}).get(key)
                 verdict = _verdict(m.median, c.median if c else None, f.median if f else None)
+                if name in NOT_GATED and verdict == "FAIL":
+                    verdict = "over, not gated"
                 verdicts[verdict] = verdicts.get(verdict, 0) + 1
                 where = m.dominant
                 if c is not None:
@@ -212,5 +217,5 @@ def render(report: Report) -> tuple[str, list[str]]:
         lines.append(f"**VERDICT: FAIL** ({len(failures)} of the checks above):")
         lines += [f"- {reason}" for reason in failures]
     else:
-        lines.append("**VERDICT: PASS**: every list and the preview count within the threshold.")
+        lines.append("**VERDICT: PASS**: every gated list and the preview count within the threshold.")
     return "\n".join(lines) + "\n", failures

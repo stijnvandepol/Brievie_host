@@ -90,7 +90,19 @@ def test_a_missing_measurement_fails() -> None:
     report = _report()
     report.measurements.pop()
     _, failures = render(report)
-    assert failures == ["own admin list_tasks_all: not measured"]
+    assert failures == [f"own admin {LISTS[-1]}: not measured"]
+
+
+def test_a_slow_search_is_reported_but_does_not_fail() -> None:
+    """Search is measured on the same world (it reads through the same seam) but is not
+    one of the lists of P1: over the threshold it is shown, not failed."""
+    report = _report()
+    _replace(report, ("E", "admin", "search_sender"), [0.4] * 5)
+    text, failures = render(report)
+    assert failures == []
+    assert "| E | admin | search_sender | 300 | 400 | 400 |" in text
+    assert "over, not gated" in text
+    assert "**VERDICT: PASS**" in text
 
 
 def test_a_slow_preview_fails() -> None:
