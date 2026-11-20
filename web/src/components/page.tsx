@@ -17,6 +17,7 @@ import { ApiFailure, api, errorMessage } from "../api/client";
 import { inboxCountsQuery, meQuery, workspacesQuery } from "../api/queries";
 import { Icon, type IconName } from "./icons";
 import { NoticeBar } from "./notice-bar";
+import { SearchField } from "./search-field";
 import { initials, MessageBar } from "./ui";
 
 /** Every page gets its own title (WCAG 2.4.2). */
@@ -423,6 +424,7 @@ export function Shell({ children, workspace }: { children: ReactNode; workspace?
           <BrandMark />
           <span>Brievie</span>
         </Link>
+        {workspace ? <SearchField workspaceId={workspace.id} /> : null}
         <div className="topbar-end">
           <AccountMenu me={me} onLogout={() => logout.mutate()} />
         </div>

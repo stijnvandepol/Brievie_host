@@ -90,6 +90,14 @@ msgstr "{0} wordt verwijderd. Dit kun je niet ongedaan maken."
 msgid "{applied} keer toegepast, {proposed} keer voorgesteld"
 msgstr "{applied} keer toegepast, {proposed} keer voorgesteld"
 
+#: src/routes/search.tsx
+msgid "{count, plural, one {# brief geladen, er zijn er meer} other {# brieven geladen, er zijn er meer}}"
+msgstr "{count, plural, one {# brief geladen, er zijn er meer} other {# brieven geladen, er zijn er meer}}"
+
+#: src/routes/search.tsx
+msgid "{count, plural, one {# brief gevonden} other {# brieven gevonden}}"
+msgstr "{count, plural, one {# brief gevonden} other {# brieven gevonden}}"
+
 #: src/routes/rule-editor.tsx
 msgid "{matched, plural, one {# van de nieuwste {checked} brieven past} other {# van de nieuwste {checked} brieven passen}}"
 msgstr "{matched, plural, one {# van de nieuwste {checked} brieven past} other {# van de nieuwste {checked} brieven passen}}"
@@ -333,11 +341,16 @@ msgstr "Al je brieven, ook de afgehandelde. Zoek op persoon of label. Wat nog op
 msgid "alle"
 msgstr "alle"
 
+#: src/routes/search.tsx
+msgid "Alle"
+msgstr "Alle"
+
 #: src/components/audit-table.tsx
 msgid "Alle gebeurtenissen"
 msgstr "Alle gebeurtenissen"
 
 #: src/routes/post.tsx
+#: src/routes/search.tsx
 msgid "Alle labels"
 msgstr "Alle labels"
 
@@ -356,6 +369,10 @@ msgstr "Alle sessies beëindigen"
 #: src/routes/member-devices.tsx
 msgid "Alle sessies beëindigen?"
 msgstr "Alle sessies beëindigen?"
+
+#: src/routes/search.tsx
+msgid "Alle soorten"
+msgstr "Alle soorten"
 
 #: src/routes/ai.tsx
 msgid "Alleen de beheerder van deze werkruimte kan dit veranderen."
@@ -524,6 +541,10 @@ msgstr "Begin met een voorbeeld hieronder, met de startset, of maak zelf een reg
 msgid "Beheerder"
 msgstr "Beheerder"
 
+#: src/routes/search.tsx
+msgid "Bekijk alle post"
+msgstr "Bekijk alle post"
+
 #: src/components/document-table.tsx
 msgid "Beschikking"
 msgstr "Beschikking"
@@ -543,6 +564,10 @@ msgstr "bevat niet het woord"
 #: src/components/rule-sentence.ts
 msgid "Bewaakte map"
 msgstr "Bewaakte map"
+
+#: src/routes/search.tsx
+msgid "Bezig met zoeken…"
+msgstr "Bezig met zoeken…"
 
 #. placeholder {0}: counts.new
 #: src/routes/inbox.tsx
@@ -662,6 +687,7 @@ msgstr "Controleer deze brief in de app."
 
 #: src/components/document-table.tsx
 #: src/routes/inbox.tsx
+#: src/routes/search.tsx
 msgid "Controleren"
 msgstr "Controleren"
 
@@ -988,6 +1014,10 @@ msgstr "Gebruik dit voorbeeld: {title}"
 msgid "Gebruik het account van deze server."
 msgstr "Gebruik het account van deze server."
 
+#: src/routes/search.tsx
+msgid "Gebruik minder woorden."
+msgstr "Gebruik minder woorden."
+
 #: src/components/audit-codes.ts
 msgid "Gebruiker"
 msgstr "Gebruiker"
@@ -1019,6 +1049,10 @@ msgstr "Geen brieven passen."
 #: src/routes/pair-app.tsx
 msgid "Geen eigen CA"
 msgstr "Geen eigen CA"
+
+#: src/routes/search.tsx
+msgid "Geen exacte treffer. Dit lijkt erop."
+msgstr "Geen exacte treffer. Dit lijkt erop."
 
 #: src/components/audit-table.tsx
 msgid "Geen gebeurtenissen gevonden."
@@ -1153,6 +1187,7 @@ msgstr "Huidig wachtwoord"
 
 #: src/components/audit-table.tsx
 #: src/routes/post.tsx
+#: src/routes/search.tsx
 msgid "Iedereen"
 msgstr "Iedereen"
 
@@ -1484,6 +1519,7 @@ msgstr "Laatst gebruikt"
 #: src/routes/labels.tsx
 #: src/routes/post.tsx
 #: src/routes/rule-editor.tsx
+#: src/routes/search.tsx
 msgid "Label"
 msgstr "Label"
 
@@ -1607,6 +1643,7 @@ msgid "Meekijker"
 msgstr "Meekijker"
 
 #: src/components/audit-table.tsx
+#: src/routes/search.tsx
 msgid "Meer laden"
 msgstr "Meer laden"
 
@@ -1677,6 +1714,7 @@ msgstr "Naam"
 
 #: src/components/document-table.tsx
 #: src/routes/inbox.tsx
+#: src/routes/search.tsx
 msgid "Naam kiezen"
 msgstr "Naam kiezen"
 
@@ -1716,6 +1754,10 @@ msgstr "Negeren: {text}"
 #: src/components/person-picker.tsx
 msgid "Niemand"
 msgstr "Niemand"
+
+#: src/routes/search.tsx
+msgid "Niets gevonden"
+msgstr "Niets gevonden"
 
 #: src/routes/invitation.tsx
 msgid "Nieuw account"
@@ -1894,6 +1936,10 @@ msgstr "Pagina niet gevonden"
 msgid "Pas de filters aan om andere gebeurtenissen te zien."
 msgstr "Pas de filters aan om andere gebeurtenissen te zien."
 
+#: src/routes/search.tsx
+msgid "Periode"
+msgstr "Periode"
+
 #: src/components/page.tsx
 #: src/routes/persons.tsx
 msgid "Personen"
@@ -1903,6 +1949,7 @@ msgstr "Personen"
 #: src/components/audit-table.tsx
 #: src/routes/post.tsx
 #: src/routes/rule-editor.tsx
+#: src/routes/search.tsx
 msgid "Persoon"
 msgstr "Persoon"
 
@@ -1933,6 +1980,10 @@ msgstr "Persoon wijzigen"
 #: src/components/document-table.tsx
 msgid "Polis"
 msgstr "Polis"
+
+#: src/routes/search.tsx
+msgid "Probeer een andere spelling of een deel van het woord."
+msgstr "Probeer een andere spelling of een deel van het woord."
 
 #: src/routes/root.tsx
 msgid "Probeer opnieuw"
@@ -2078,6 +2129,7 @@ msgstr "Sluiten"
 #: src/routes/document.tsx
 #: src/routes/home.tsx
 #: src/routes/inbox.tsx
+#: src/routes/search.tsx
 msgid "Soort"
 msgstr "Soort"
 
@@ -2097,6 +2149,7 @@ msgstr "Startset toevoegen"
 #: src/components/device-table.tsx
 #: src/components/document-table.tsx
 #: src/routes/document.tsx
+#: src/routes/search.tsx
 msgid "Status"
 msgstr "Status"
 
@@ -2198,6 +2251,7 @@ msgid "Toevoegen: {text}"
 msgstr "Toevoegen: {text}"
 
 #: src/components/audit-table.tsx
+#: src/routes/search.tsx
 msgid "Tot"
 msgstr "Tot"
 
@@ -2212,6 +2266,10 @@ msgstr "Tweestapsverificatie gewist door beheerder"
 #: src/components/audit-codes.ts
 msgid "Tweestapsverificatie uitgezet"
 msgstr "Tweestapsverificatie uitgezet"
+
+#: src/routes/search.tsx
+msgid "Typ minstens twee tekens."
+msgstr "Typ minstens twee tekens."
 
 #: src/routes/automations.tsx
 msgid "Uit"
@@ -2287,6 +2345,7 @@ msgid "Upload"
 msgstr "Upload"
 
 #: src/components/audit-table.tsx
+#: src/routes/search.tsx
 msgid "Van"
 msgstr "Van"
 
@@ -2534,6 +2593,10 @@ msgstr "Wijzigen: {0}"
 msgid "Wijzigen: {name}"
 msgstr "Wijzigen: {name}"
 
+#: src/routes/search.tsx
+msgid "Wis filters"
+msgstr "Wis filters"
+
 #: src/components/export-panel.tsx
 msgid "Wordt gemaakt…"
 msgstr "Wordt gemaakt…"
@@ -2571,3 +2634,32 @@ msgstr "Zo staat de naam op brieven, bijvoorbeeld J. de Vries. Zet elke variant 
 #: src/components/rule-templates.tsx
 msgid "Zo werkt een regel"
 msgstr "Zo werkt een regel"
+
+#: src/routes/search.tsx
+msgid "Zoek een brief"
+msgstr "Zoek een brief"
+
+#: src/components/search-field.tsx
+msgid "Zoek op afzender, onderwerp of tekst"
+msgstr "Zoek op afzender, onderwerp of tekst"
+
+#: src/routes/search.tsx
+msgid "Zoek op afzender, onderwerp, een woord uit de brief, een label of een naam. Een deel van een woord is genoeg."
+msgstr "Zoek op afzender, onderwerp, een woord uit de brief, een label of een naam. Een deel van een woord is genoeg."
+
+#: src/components/search-field.tsx
+#: src/routes/search.tsx
+msgid "Zoeken"
+msgstr "Zoeken"
+
+#: src/components/search-field.tsx
+msgid "Zoeken in je post"
+msgstr "Zoeken in je post"
+
+#: src/routes/search.tsx
+msgid "Zoeken op een BSN kan niet: Brievie bewaart geen BSN's. We hebben het nummer uit je zoekopdracht gehaald."
+msgstr "Zoeken op een BSN kan niet: Brievie bewaart geen BSN's. We hebben het nummer uit je zoekopdracht gehaald."
+
+#: src/routes/search.tsx
+msgid "Zoekresultaten"
+msgstr "Zoekresultaten"

@@ -1,5 +1,6 @@
 import { t } from "@lingui/core/macro";
 import { Link } from "@tanstack/react-router";
+import type { ReactNode } from "react";
 import type { components } from "../api/schema";
 import { LabelChips } from "./label-chip";
 import { SuggestionMark } from "./suggestion-list";
@@ -122,29 +123,36 @@ export function formatLetterDate(value: string): string {
 const PHONE = "(max-width: 639px)";
 
 /** The post of one workspace: a row per document, the sender links to the document. */
-export function DocumentTable({
+export function DocumentTable<D extends DocumentSummary = DocumentSummary>({
   workspaceId,
   documents,
   persons,
   labels,
   empty,
   hint,
+  fragment,
+  caption,
 }: {
   workspaceId: string;
-  documents: DocumentSummary[];
+  documents: D[];
   persons: Person[];
   labels: LabelOut[];
   /** What to say when there are no letters. */
   empty: string;
   /** What to do about an empty list, in a sentence. */
   hint?: string;
+  /** Something under the sender of a row, for example the part of the letter that was found. */
+  fragment?: (document: D) => ReactNode;
+  /** The name of the list for screen readers. */
+  caption?: string;
 }) {
+  const name = caption ?? t`Alle post`;
   // A phone shows a card per letter: seven columns do not fit, and a sideways scroll hides
   // the status. Tests (no media queries) and wider screens get the table.
   const phone = useMediaQuery(PHONE);
   if (documents.length === 0) {
     return (
-      <section className="panel" aria-label={t`Alle post`}>
+      <section className="panel" aria-label={name}>
         <EmptyState icon="mail" hint={hint}>
           {empty}
         </EmptyState>
@@ -153,7 +161,7 @@ export function DocumentTable({
   }
   if (phone) {
     return (
-      <section className="panel" aria-label={t`Alle post`}>
+      <section className="panel" aria-label={name}>
         <ul className="letter-cards">
           {documents.map((document) => (
             <li key={document.id} className="letter-card">
@@ -167,6 +175,7 @@ export function DocumentTable({
                 </Link>
                 <StatusBadge status={document.status} inboxState={document.inbox_state} />
               </div>
+              {fragment?.(document)}
               <p className="letter-card-meta">
                 <span>{typeLabel(document.document_type)}</span>
                 {document.letter_date ? (
@@ -187,7 +196,7 @@ export function DocumentTable({
   }
   return (
     // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrolling box must be reachable by keyboard (WCAG 2.1.1).
-    <section className="panel table-scroll" aria-label={t`Alle post`} tabIndex={0}>
+    <section className="panel table-scroll" aria-label={name} tabIndex={0}>
       <table className="table table-wide">
         <thead>
           <tr>
@@ -210,6 +219,7 @@ export function DocumentTable({
                 >
                   {document.sender || t`Onbekende afzender`}
                 </Link>
+                {fragment?.(document)}
               </th>
               <td>{typeLabel(document.document_type)}</td>
               <td className="num">
