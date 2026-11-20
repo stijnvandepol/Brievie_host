@@ -179,6 +179,7 @@ def _list(
         ),
         "inbox_counts": lambda: json.dumps(candidates.inbox_counts(workspace), sort_keys=True),
         "list_persons": lambda: counted(candidates.list_persons(workspace)),
+        "list_labels": lambda: counted(candidates.list_labels(workspace)),
     }
     if variant == "candidate":
         return candidate.get(name)
@@ -374,6 +375,13 @@ def test_measure_preview_letter_count(perf_world: PerfWorld, perf_report: Report
         if run:  # the first run warms up
             perf_report.preview_runs.append(time.perf_counter() - start)
     perf_report.preview_letters = changed
+    directory = _explain_dir()
+    if directory is not None:
+        # The grouped query of one state, explained: where the preview's time goes.
+        _set_state(perf_world, "E")
+        sql = viewer_groups_sql("d.workspace_id = %s").replace("%s", f"'{perf_world.workspace_id}'")
+        text, _top = _explain(sql, analyze=True)
+        (directory / "preview-grouped-E.txt").write_text(f"{sql}\n\n{text}\n")
     if changed != per_letter:
         perf_report.mismatches.append(f"preview: grouped {changed} != per letter {per_letter}")
     assert changed == per_letter

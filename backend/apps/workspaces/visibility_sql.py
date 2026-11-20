@@ -134,6 +134,10 @@ def viewer_pairs_sql(document_filter: str) -> str:
     `document_filter` is a fixed SQL fragment over `d` with `%s` placeholders for its
     values (never user text). Run as the system: the document policy then lets every
     row through and this condition alone decides, with each member's id as the user.
+
+    `m` and `c` are MATERIALIZED: referenced once, PostgreSQL would otherwise inline
+    them and call the helper functions (not inlinable: they `SET search_path`) once per
+    letter and member instead of once per member.
     """
     if ";" in document_filter or "--" in document_filter or "/*" in document_filter:
         raise ValueError("document_filter must be one SQL fragment without comments.")
@@ -146,13 +150,13 @@ def viewer_pairs_sql(document_filter: str) -> str:
         table="d",
     )
     return (
-        "WITH m AS ("  # noqa: S608 - fixed fragments from code, no input
+        "WITH m AS MATERIALIZED ("  # noqa: S608 - fixed fragments from code, no input
         "SELECT user_id,"
         " public.brievie_sees_all_post(user_id) AS sees_all,"
         " public.brievie_my_post_ids(user_id) AS my_ids,"
         " public.brievie_actor_sorts_post(user_id) AS sorts"
         f" FROM public.workspaces_membership WHERE workspace_id = {_WORKSPACE}),"
-        " c AS (SELECT public.brievie_covered_post_ids() AS covered)"
+        " c AS MATERIALIZED (SELECT public.brievie_covered_post_ids() AS covered)"
         " SELECT d.id, m.user_id FROM public.documents_document d"
         " CROSS JOIN m CROSS JOIN c"
         f" WHERE ({document_filter}) AND {condition}"
@@ -185,13 +189,13 @@ def viewer_groups_sql(document_filter: str) -> str:
         table="g",
     )
     return (
-        "WITH m AS ("  # noqa: S608 - fixed fragments from code, no input
+        "WITH m AS MATERIALIZED ("  # noqa: S608 - fixed fragments from code, no input
         "SELECT user_id,"
         " public.brievie_sees_all_post(user_id) AS sees_all,"
         " public.brievie_my_post_ids(user_id) AS my_ids,"
         " public.brievie_actor_sorts_post(user_id) AS sorts"
         f" FROM public.workspaces_membership WHERE workspace_id = {_WORKSPACE}),"
-        " c AS (SELECT public.brievie_covered_post_ids() AS covered),"
+        " c AS MATERIALIZED (SELECT public.brievie_covered_post_ids() AS covered),"
         " g AS (SELECT d.addressee_ids,"
         " CASE WHEN d.status <> 'done' THEN d.scanned_by_id END AS scanned_by_id,"
         " CASE WHEN d.status <> 'done' THEN 'open' ELSE 'done' END AS status,"

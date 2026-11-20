@@ -18,6 +18,11 @@ Task 11 (lists, counts) and Task 37 (the preview) if the measurement bears them 
   the letters the policy shows (`unnest(addressee_ids)`), instead of joining every
   addressee link and checking its letter's policy link by link. The count is the
   same: a link is visible exactly when its letter is.
+- `list_labels`: the labels without the per-link count, then one grouped count over
+  the label links (each link through its policy, the visible letters hashed once).
+  Today's `Count("document_links")` joins every label to every link; with the policy's
+  low row estimate PostgreSQL picks a nested loop over the materialized links (labels
+  x links). Same count: the links the policy shows, per label, 0 when none.
 """
 
 from typing import Final
@@ -29,6 +34,7 @@ from django.db.models.functions import Lower
 
 from apps.documents.models import Document
 from apps.documents.services import SUGGESTIONS
+from apps.labels.models import Label
 from apps.people.models import Person
 from apps.workspaces.models import Workspace
 
@@ -103,3 +109,17 @@ def list_persons(workspace: Workspace) -> list[Person]:
     for person in persons:
         person.document_count = counts.get(person.id, 0)  # type: ignore[attr-defined]
     return persons
+
+
+def list_labels(workspace: Workspace) -> list[Label]:
+    labels = list(Label.objects.filter(workspace=workspace).order_by(Lower("name"), "id"))
+    with connection.cursor() as c:
+        c.execute(
+            "SELECT l.label_id, pg_catalog.count(*) FROM public.documents_documentlabel l"
+            " WHERE l.workspace_id = %s GROUP BY l.label_id",
+            [workspace.id],
+        )
+        counts = {row[0]: int(row[1]) for row in c.fetchall()}
+    for label in labels:
+        label.document_count = counts.get(label.id, 0)  # type: ignore[attr-defined]
+    return labels
