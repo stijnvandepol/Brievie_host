@@ -66,6 +66,7 @@ def _get_for_update(workspace: Workspace, task_id: UUID) -> Task:
         Task.objects.select_for_update(of=("self",))
         .select_related("document")
         .filter(workspace=workspace, id=task_id)
+        .filter(Q(document__isnull=True) | Q(document__trashed_at__isnull=True))
         .first()
     )
     if task is None:

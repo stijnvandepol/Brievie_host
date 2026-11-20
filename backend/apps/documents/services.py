@@ -12,6 +12,7 @@ from apps.common.errors import ApiError
 from apps.documents import organise, suggestions, visibility
 from apps.documents.intake import page_aad
 from apps.documents.models import (
+    LIVE,
     Document,
     DocumentAddressee,
     DocumentEvent,
@@ -411,7 +412,7 @@ def retry_processing(*, workspace: Workspace, document_id: UUID) -> Document:
         _lock_own_membership(workspace)
         document = (
             Document.objects.select_for_update(no_key=True)
-            .filter(workspace=workspace, id=document_id)
+            .filter(LIVE, workspace=workspace, id=document_id)
             .first()
         )
         if document is None:
@@ -442,7 +443,7 @@ def reopen_document(*, workspace: Workspace, user: User, document_id: UUID) -> D
         lock_own_membership(workspace.id, user.id)
         document = (
             Document.objects.select_for_update(no_key=True)
-            .filter(workspace=workspace, id=document_id)
+            .filter(LIVE, workspace=workspace, id=document_id)
             .first()
         )
         if document is None:
@@ -552,7 +553,7 @@ def _lock_for_organising(workspace: Workspace, document_id: UUID) -> Document:
     _lock_own_membership(workspace)
     document = (
         Document.objects.select_for_update(no_key=True)
-        .filter(workspace=workspace, id=document_id)
+        .filter(LIVE, workspace=workspace, id=document_id)
         .first()
     )
     if document is None:

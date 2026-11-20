@@ -14,7 +14,7 @@ from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
-from apps.documents.models import Document
+from apps.documents.models import LIVE, Document
 from apps.documents.services import HEADLINE_PROPOSALS, SUGGESTIONS, document_summary_out
 from apps.labels.models import Label
 from apps.people.models import Person
@@ -189,7 +189,7 @@ def test_rule(*, workspace: Workspace, data: RuleIn) -> RuleTestOut:
     spec = definition.to_spec(rule)
     if spec is None:
         raise _invalid(_("Deze regel kunnen we niet lezen."))
-    documents = Document.objects.filter(workspace=workspace).exclude(
+    documents = Document.objects.filter(LIVE, workspace=workspace).exclude(
         status=Document.Status.PROCESSING
     )
     total = documents.count()
