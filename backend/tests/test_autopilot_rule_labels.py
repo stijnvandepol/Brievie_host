@@ -338,7 +338,13 @@ def test_the_applied_rule_label_can_be_undone_and_does_not_come_back(ws_a: Works
     event = label_event(ws_a, document)
 
     with workspace_context(ws_a.id):
-        listed = {e.id: e for e in list_document_events(workspace=ws_a, document_id=document.id)}
+        listed = {
+            e.id: e
+            for e in list_document_events(
+                membership=Membership.objects.get(workspace=ws_a, role="admin"),
+                document_id=document.id,
+            )
+        }
         assert DocumentEventOut.resolve_can_undo(listed[event.id]) is True
         locked = Document.objects.select_for_update().get(id=document.id)
         organise.undo_event(document=locked, event_id=event.id, actor=admin_of(ws_a))
