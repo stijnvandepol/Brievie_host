@@ -16,7 +16,7 @@ from decimal import Decimal
 from django.db.models import Case, IntegerField, Value, When
 
 from apps.common.privacy import holds_bsn
-from apps.documents import organise, suggestions
+from apps.documents import organise, suggestions, visibility
 from apps.documents.models import (
     NEEDS_ATTENTION_BELOW,
     Document,
@@ -50,8 +50,14 @@ def apply_open_proposals(document: Document) -> int:
     Addressees first, then labels, each by confidence (highest first) and id.
     A target that is gone or an archived person is skipped, and so is anything that
     would take the document over its limit. An AI pick of a person is applied only when
-    its quote names that person (`quote_names`); otherwise it stays open.
+    its quote names that person (`quote_names`); otherwise it stays open. Inside the
+    pipeline's addressee scope its own scope is a no-op; called alone, it syncs.
     """
+    with visibility.addressee_scope(document):
+        return _apply_open_proposals(document)
+
+
+def _apply_open_proposals(document: Document) -> int:
     room: dict[str, int] = {
         _ADD_ADDRESSEE: ADDRESSEES_MAX
         - DocumentAddressee.objects.filter(document=document).count(),

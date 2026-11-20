@@ -9,7 +9,7 @@ from uuid import UUID
 
 from django.db import transaction
 
-from apps.documents import organise, suggestions
+from apps.documents import organise, suggestions, visibility
 from apps.documents.models import (
     Document,
     DocumentAddressee,
@@ -42,7 +42,7 @@ def execute(document: Document, evaluation: Evaluation, *, trigger: str) -> None
     planned = evaluation.planned
     if not planned:
         return
-    with transaction.atomic():
+    with transaction.atomic(), visibility.addressee_scope(document):
         # Locked: a rule deleted meanwhile is skipped here, and cannot be deleted before
         # its run and events are written (that would break the commit). `no_key` blocks a
         # delete but not another run's foreign-key checks; id order avoids a deadlock

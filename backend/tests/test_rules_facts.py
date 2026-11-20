@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.utils import timezone
 from pytest_django import DjangoAssertNumQueries
 
-from apps.documents import organise, suggestions
+from apps.documents import organise, suggestions, visibility
 from apps.documents.models import Document, Extraction
 from apps.labels.models import Label
 from apps.rules import services
@@ -51,7 +51,8 @@ def _documents(workspace: Workspace) -> list[Document]:
         _extraction(organised, "document_type", "notice", "0.7")
         locked = Document.objects.select_for_update().get(id=organised.id)
         organise.add_label(locked, zorg, actor=None, origin="user")
-        organise.add_addressee(locked, anna, actor=None, origin="user")
+        with visibility.addressee_scope(locked):
+            organise.add_addressee(locked, anna, actor=None, origin="user")
         for action, label, person in (
             ("add_label", bank, None),
             ("add_label", auto, None),

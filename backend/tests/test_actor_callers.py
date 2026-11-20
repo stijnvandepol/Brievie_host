@@ -15,6 +15,8 @@ ALLOWED_SYSTEM_CALLERS = {
     "apps/pipeline/steps.py",
     "apps/pipeline/jobs.py",
     "apps/documents/export.py",
+    # The one writer of addressee_ids and reader rows, and the nightly check.
+    "apps/documents/visibility.py",
 }
 
 

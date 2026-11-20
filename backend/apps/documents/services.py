@@ -9,7 +9,7 @@ from psycopg import errors as pg_errors
 from apps.accounts.models import User
 from apps.common import crypto
 from apps.common.errors import ApiError
-from apps.documents import organise, suggestions
+from apps.documents import organise, suggestions, visibility
 from apps.documents.intake import page_aad
 from apps.documents.models import (
     Document,
@@ -438,7 +438,8 @@ def set_document_addressees(
     """The document's addressees become exactly `person_ids`."""
     with transaction.atomic():
         document = _lock_for_organising(workspace, document_id)
-        organise.set_addressees(document=document, person_ids=person_ids, actor=user)
+        with visibility.addressee_scope(document):
+            organise.set_addressees(document=document, person_ids=person_ids, actor=user)
     return document
 
 
@@ -471,7 +472,8 @@ def accept_suggestion(
                     "validation_error",
                     _("Een gearchiveerde persoon kun je niet aan een document toevoegen."),
                 )
-            organise.add_addressee(document, suggestion.person, actor=user, origin=origin)
+            with visibility.addressee_scope(document):
+                organise.add_addressee(document, suggestion.person, actor=user, origin=origin)
         suggestion.state = DocumentSuggestion.State.ACCEPTED
         suggestion.save(update_fields=["state", "updated_at"])
     return document
@@ -567,5 +569,6 @@ def undo_document_event(
     """Reverse a change a rule made; the rule will not make it again on this document."""
     with transaction.atomic():
         document = _lock_for_organising(workspace, document_id)
-        organise.undo_event(document=document, event_id=event_id, actor=user)
+        with visibility.addressee_scope(document):
+            organise.undo_event(document=document, event_id=event_id, actor=user)
     return document

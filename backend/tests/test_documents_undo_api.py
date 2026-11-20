@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 import pytest
 from django.test import Client
 
-from apps.documents import organise
+from apps.documents import organise, visibility
 from apps.documents.models import Document, DocumentEvent, DocumentLabel, DocumentSuggestion
 from apps.labels.models import Label
 from apps.pipeline.steps import run_pipeline
@@ -226,7 +226,8 @@ def automatic_event(
         locked = Document.objects.select_for_update().get(id=document.id)
         if person:
             target = make_person(workspace, "Emma")
-            organise.add_addressee(locked, target, actor=None, origin=origin)
+            with visibility.addressee_scope(locked):
+                organise.add_addressee(locked, target, actor=None, origin=origin)
             kind = "addressee_added"
         else:
             organise.add_label(locked, auto_label(workspace), actor=None, origin=origin)

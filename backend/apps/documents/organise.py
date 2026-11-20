@@ -16,7 +16,7 @@ from django.utils.translation import gettext as _
 
 from apps.accounts.models import User
 from apps.common.errors import ApiError
-from apps.documents import suggestions
+from apps.documents import suggestions, visibility
 from apps.documents.models import (
     Document,
     DocumentAddressee,
@@ -60,6 +60,7 @@ def set_addressees(
     archived person cannot be newly added. Persons in `suggested_ids` are added with
     origin `suggestion` (the user took a proposal).
     """
+    _require_scope(document)
     wanted = list(dict.fromkeys(person_ids))
     if len(wanted) > ADDRESSEES_MAX:
         raise ApiError(
@@ -120,6 +121,7 @@ def add_addressee(
 
     `rule` is the rule that made the change (origin `rule`).
     """
+    _require_scope(document)
     with transaction.atomic():
         if DocumentAddressee.objects.filter(document=document, person=person).exists():
             return False
@@ -298,6 +300,7 @@ def undo_event(*, document: Document, event_id: UUID, actor: User) -> None:
         )
         if person_id is None or person_link is None or _taken_over(event, person_link.automatic):
             raise _not_undoable()
+        _require_scope(document)
         person_link.delete()
         _write_event(
             document,
@@ -308,6 +311,13 @@ def undo_event(*, document: Document, event_id: UUID, actor: User) -> None:
             undoes=event,
         )
         suggestions.mark_dismissed(document, _ADD_ADDRESSEE, person_id)
+
+
+def _require_scope(document: Document) -> None:
+    """Addressees change only inside `visibility.addressee_scope`, whose end syncs
+    `addressee_ids` and the readers (P3): no caller can forget it."""
+    if not visibility.in_addressee_scope(document.id):
+        raise RuntimeError("addressee change outside addressee_scope")
 
 
 def _taken_over(event: DocumentEvent, automatic: bool) -> bool:

@@ -3,7 +3,7 @@ import uuid
 import pytest
 
 from apps.common.errors import ApiError
-from apps.documents import organise, services
+from apps.documents import organise, services, visibility
 from apps.documents.models import Document, DocumentAddressee, DocumentEvent
 from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
@@ -29,7 +29,8 @@ def events(workspace: Workspace, document: Document) -> list[tuple[str, str]]:
 def set_addressees(workspace: Workspace, document: Document, ids: list[uuid.UUID]) -> None:
     with workspace_context(workspace.id, actor=SYSTEM):
         locked = Document.objects.select_for_update().get(id=document.id)
-        organise.set_addressees(document=locked, person_ids=ids, actor=admin_of(workspace))
+        with visibility.addressee_scope(locked):
+            organise.set_addressees(document=locked, person_ids=ids, actor=admin_of(workspace))
 
 
 def test_set_addressees_makes_the_set_exact_and_writes_events(ws_a: Workspace) -> None:
@@ -99,7 +100,7 @@ def test_archived_person_cannot_be_added_but_stays(ws_a: Workspace) -> None:
 def test_add_addressee_reports_whether_it_added(ws_a: Workspace) -> None:
     document = make_document(ws_a)
     a = make_person(ws_a, "Anna")
-    with workspace_context(ws_a.id, actor=SYSTEM):
+    with workspace_context(ws_a.id, actor=SYSTEM), visibility.addressee_scope(document):
         assert organise.add_addressee(document, a, actor=None, origin="rule") is True
         assert organise.add_addressee(document, a, actor=None, origin="rule") is False
         (event,) = DocumentEvent.objects.filter(document=document)

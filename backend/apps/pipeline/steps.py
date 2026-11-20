@@ -16,7 +16,7 @@ from pydantic import ValidationError
 
 from apps.common.errors import ApiError
 from apps.common.privacy import holds_bsn, mask_bsns
-from apps.documents import review, suggestions
+from apps.documents import review, suggestions, visibility
 from apps.documents.models import Document, DocumentSuggestion, Extraction
 from apps.labels.models import Label
 from apps.people.matching import PRESELECT_FROM, PersonNames, match_addressees
@@ -78,19 +78,24 @@ def run_pipeline(
             logger.info("Document %s changed during processing; result dropped", document_id)
             return
         store_proposals(document, values, provider)
-        organised = _organise_guarded(document, text, persons, choices)
-        # When proposing failed, nothing automatic happens: whatever is open is not this
-        # run's proposals, and nothing says the persons are right. A person looks.
-        in_force = autopilot_in_force(workspace_id) if provider is not None and organised else None
-        applied_ok = True
-        if in_force is not None and in_force.organise:
-            applied_ok = _autopilot_guarded(document)
-        confirmed = False
-        # When applying failed, nothing says the persons are right either.
-        if in_force is not None and in_force.confirm and payload is not None and applied_ok:
-            confirmed = _confirm_guarded(
-                document, payload, values, text, day, organised=in_force.organise
+        # One addressee scope around proposing, applying and confirming: the letter's
+        # addressee list and readers are synced once, after all of it.
+        with visibility.addressee_scope(document):
+            organised = _organise_guarded(document, text, persons, choices)
+            # When proposing failed, nothing automatic happens: whatever is open is not
+            # this run's proposals, and nothing says the persons are right. A person looks.
+            in_force = (
+                autopilot_in_force(workspace_id) if provider is not None and organised else None
             )
+            applied_ok = True
+            if in_force is not None and in_force.organise:
+                applied_ok = _autopilot_guarded(document)
+            confirmed = False
+            # When applying failed, nothing says the persons are right either.
+            if in_force is not None and in_force.confirm and payload is not None and applied_ok:
+                confirmed = _confirm_guarded(
+                    document, payload, values, text, day, organised=in_force.organise
+                )
         if not confirmed:
             document.status = Document.Status.NEEDS_REVIEW
             document.save(update_fields=["status", "updated_at"])
@@ -260,7 +265,8 @@ def mark_failed(workspace_id: UUID, document_id: UUID, code: str) -> None:
         document = _lock_processing(document_id)
         if document is None:
             return
-        _organise_guarded(document, load_text(document), active_persons(), [])
+        with visibility.addressee_scope(document):
+            _organise_guarded(document, load_text(document), active_persons(), [])
         document.status = Document.Status.FAILED
         document.failure_code = code
         document.save(update_fields=["status", "failure_code", "updated_at"])

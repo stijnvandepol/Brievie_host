@@ -8,7 +8,7 @@ from django.test import Client
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from apps.documents import organise, suggestions
+from apps.documents import organise, suggestions, visibility
 from apps.documents.models import (
     Document,
     DocumentEvent,
@@ -316,7 +316,7 @@ def test_removing_by_hand_marks_dismissed(client_a: Client, ws_a: Workspace) -> 
 def test_removing_an_addressee_by_hand_marks_dismissed(ws_a: Workspace) -> None:
     document = make_document(ws_a, "needs_review")
     anna = make_person(ws_a, "Anna")
-    with workspace_context(ws_a.id, actor=SYSTEM):
+    with workspace_context(ws_a.id, actor=SYSTEM), visibility.addressee_scope(document):
         organise.set_addressees(document=document, person_ids=[anna.id], actor=None)
         organise.set_addressees(document=document, person_ids=[], actor=None)
         assert suggestions.is_dismissed(document, ADD_ADDRESSEE, anna.id)

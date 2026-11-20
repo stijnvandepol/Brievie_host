@@ -13,7 +13,7 @@ from django.utils.translation import gettext as _
 from apps.accounts.models import User
 from apps.common.errors import ApiError, is_try_again
 from apps.common.privacy import mask_bsns
-from apps.documents import organise
+from apps.documents import organise, visibility
 from apps.documents.models import Document, DocumentEvent, DocumentSuggestion
 from apps.documents.schemas import ConfirmIn, TaskIn
 from apps.pipeline.validation import dates_in, quote_in_text
@@ -99,6 +99,13 @@ def _store_confirmation(
     document: Document, data: ConfirmIn, *, user: User | None, by_ai: bool
 ) -> None:
     """The one place a confirmed review is written: fields, history, tasks, rules."""
+    with visibility.addressee_scope(document):
+        _write_confirmation(document, data, user=user, by_ai=by_ai)
+
+
+def _write_confirmation(
+    document: Document, data: ConfirmIn, *, user: User | None, by_ai: bool
+) -> None:
     document.sender = mask_bsns(data.sender.strip())
     document.document_type = data.document_type
     document.letter_date = data.letter_date
