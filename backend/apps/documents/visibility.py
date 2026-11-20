@@ -8,6 +8,11 @@ the caller's own authorisation; the nightly check repairs whatever went astray.
 `addressee_scope` makes the sync impossible to forget: `organise` refuses to change a
 letter's addressees outside one, and the outermost scope syncs once, at its end, in the
 same transaction (P3).
+
+`visible_documents` is the one seam of every member-facing read: the list, the inbox
+counts, a letter's detail, pages and history, and search all start from it. The
+policies decide what a member sees; the seam adds the member filter so PostgreSQL can use
+the indexes, and refuses to run as anyone but the member it is asked for.
 """
 
 import logging
@@ -18,7 +23,7 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from django.db import connection, transaction
-from django.db.models import Q
+from django.db.models import Q, QuerySet
 from django.utils import timezone
 
 from apps.documents.models import Document, DocumentReader, DocumentShare
@@ -309,3 +314,20 @@ def verify_all() -> VisibilityCheck:
         fixed_ids += check.addressee_ids_fixed
         fixed_readers += check.reader_rows_fixed
     return VisibilityCheck(addressee_ids_fixed=fixed_ids, reader_rows_fixed=fixed_readers)
+
+
+def visible_documents(membership: Membership) -> QuerySet[Document]:
+    """The letters `membership`'s user may see in its workspace: the seam of every
+    member-facing read (list, inbox counts, detail, pages, history, search).
+
+    The document policies decide (S 4.1), with the request's actor; the member filter
+    (S 4.9.5) only lets PostgreSQL use the indexes and changes no result. Runs only as
+    that member: as the system or another user the policies would show other letters,
+    so that is a programming error (fail closed). The generated search vector is not
+    loaded: no reader needs it, and it is about as large as the text.
+    """
+    if current_actor() != membership.user_id:
+        raise RuntimeError("visible_documents() runs only as the member it is asked for.")
+    documents = Document.objects.filter(workspace_id=membership.workspace_id).defer("search_vector")
+    member = member_filter()
+    return documents if member is None else documents.filter(member)

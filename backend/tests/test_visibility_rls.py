@@ -31,7 +31,7 @@ from tests.documents_support import make_document
 from tests.factories import UserFactory
 from tests.visibility_support import ALL_16_STATES, LETTERS, Office, as_actor, office
 
-fill = importlib.import_module("apps.documents.migrations.0010_visibility")
+fill = importlib.import_module("apps.documents.migrations.0011_visibility")
 switches = importlib.import_module("apps.workspaces.migrations.0006_visibility_switches")
 
 NOT_PRIVATE = set(LETTERS) - {"private_femke"}

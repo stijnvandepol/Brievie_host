@@ -91,3 +91,6 @@ the translation. Add a line before introducing a new domain term.
 | verdeelt post | sorter (`Membership.sorts_post`) |
 | organisatie (soort werkruimte) | workspace kind `business` |
 | alleen lezen (rol) | viewer |
+| zoeken | search (`searchDocuments`) |
+| fragment (stuk tekst bij een treffer) | snippet (`SnippetPartOut`) |
+| Geen exacte treffer. Dit lijkt erop. | approximate match (`fuzzy`) |

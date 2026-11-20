@@ -27,7 +27,8 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.staticfiles",
-    # ArrayField and GinIndex for `Document.addressee_ids` (S 4.9.2); part of Django.
+    # ArrayField and GinIndex for `Document.addressee_ids` (S 4.9.2); the tsvector field
+    # and GIN indexes of search. Part of Django, no new dependency.
     "django.contrib.postgres",
     "ninja",
     "axes",

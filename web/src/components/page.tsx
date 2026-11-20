@@ -15,8 +15,10 @@ import {
 } from "react-aria-components";
 import { ApiFailure, api, errorMessage } from "../api/client";
 import { inboxCountsQuery, meQuery, workspacesQuery } from "../api/queries";
+import { resetSearch } from "../search-term";
 import { Icon, type IconName } from "./icons";
 import { NoticeBar } from "./notice-bar";
+import { SearchField } from "./search-field";
 import { initials, MessageBar } from "./ui";
 
 /** Every page gets its own title (WCAG 2.4.2). */
@@ -388,6 +390,7 @@ export function Shell({ children, workspace }: { children: ReactNode; workspace?
     },
     onSuccess: async () => {
       queryClient.clear();
+      resetSearch();
       await navigate({ to: "/login" });
     },
   });
@@ -423,6 +426,7 @@ export function Shell({ children, workspace }: { children: ReactNode; workspace?
           <BrandMark />
           <span>Brievie</span>
         </Link>
+        {workspace ? <SearchField key={workspace.id} workspaceId={workspace.id} /> : null}
         <div className="topbar-end">
           <AccountMenu me={me} onLogout={() => logout.mutate()} />
         </div>

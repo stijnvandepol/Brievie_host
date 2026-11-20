@@ -40,7 +40,7 @@ from apps.documents.models import Document
 from apps.labels import services as labels
 from apps.people import services as people
 from apps.tasks import services as tasks
-from apps.workspaces.models import Workspace
+from apps.workspaces.models import Membership, Workspace
 from apps.workspaces.visibility_sql import viewer_groups_sql, viewer_pairs_sql
 from tests.perf import data
 from tests.perf.data import PerfWorld
@@ -132,15 +132,17 @@ def _list(name: str, workspace: Workspace, world: PerfWorld, actor: UUID) -> Cal
         pairs = ",".join(f"{getattr(r, 'id', '')}={getattr(r, 'document_count', '')}" for r in rows)
         return f"{len(rows)} rows #{hashlib.sha256(pairs.encode()).hexdigest()[:12]}"
 
+    # The document lists take the member (the one visibility seam); fetched before timing.
+    member = Membership.objects.get(workspace=workspace, user_id=actor)
     calls: dict[str, Callable[[], str]] = {
-        "list_documents": lambda: ids(documents.list_documents(workspace)),
+        "list_documents": lambda: ids(documents.list_documents(member)),
         "list_documents_unassigned": lambda: ids(
-            documents.list_documents(workspace, inbox_state="unassigned")
+            documents.list_documents(member, inbox_state="unassigned")
         ),
         "list_documents_own_person": lambda: ids(
-            documents.list_documents(workspace, person_id=world.own_person[actor])
+            documents.list_documents(member, person_id=world.own_person[actor])
         ),
-        "inbox_counts": lambda: json.dumps(documents.inbox_counts(workspace), sort_keys=True),
+        "inbox_counts": lambda: json.dumps(documents.inbox_counts(member), sort_keys=True),
         "list_persons": lambda: counted(people.list_persons(workspace)),
         "list_labels": lambda: counted(labels.list_labels(workspace)),
         "list_tasks_all": lambda: f"{len(tasks.list_tasks(workspace, status='all'))} rows",
@@ -338,9 +340,11 @@ def test_explain_member_filter_and_the_gin_index(
 ) -> None:
     _set_state(perf_world, "own")
     _enter(perf_world, perf_world.plain_member)
-    workspace = Workspace.objects.get(id=perf_world.workspace_id)
+    member = Membership.objects.get(
+        workspace_id=perf_world.workspace_id, user_id=perf_world.plain_member
+    )
     with CaptureQueriesContext(connection) as captured:
-        documents.inbox_counts(workspace)
+        documents.inbox_counts(member)
     # The member filter's own lookup first, then the count.
     query = captured.captured_queries[-1]
     text, top = _explain(query["sql"], analyze=False)

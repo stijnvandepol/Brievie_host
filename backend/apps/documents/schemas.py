@@ -231,3 +231,43 @@ class MyExportOut(Schema):
     document_count: int = 0
     # Bytes of the sealed file.
     size: int = 0
+
+
+class DocumentSearchIn(InputSchema):
+    """A search in the letters of the workspace. POST, so the term is never in a URL."""
+
+    # Words to find; a BSN in it is removed (`bsn_removed`), and so is the literal [BSN].
+    q: str = Field(max_length=200)
+    # A document type code; empty for all.
+    document_type: str = ""
+    label_id: UUID | None = None
+    person_id: UUID | None = None
+    # "new", "review" or "unassigned"; empty for all.
+    inbox_state: str = ""
+    # On the letter date; a letter without one falls under its upload date.
+    date_from: date | None = None
+    date_to: date | None = None
+    limit: int = Field(default=30, ge=1, le=100)
+    offset: int = Field(default=0, ge=0, le=1000)
+
+
+class SnippetPartOut(Schema):
+    """A piece of the fragment; `hit` pieces are what matched. Plain text, never HTML."""
+
+    text: str
+    hit: bool
+
+
+class DocumentSearchHitOut(DocumentSummaryOut):
+    # A short fragment (at most 240 characters) with the hit marked.
+    snippet: list[SnippetPartOut] = Field(default_factory=list)
+
+
+class DocumentSearchOut(Schema):
+    items: list[DocumentSearchHitOut]
+    # The `offset` of the next page; null when there is none.
+    next_offset: int | None = None
+    # No exact hit: these letters only look like the term (a typo, another spelling).
+    fuzzy: bool = False
+    # A BSN was taken out of the term before searching.
+    bsn_removed: bool = False

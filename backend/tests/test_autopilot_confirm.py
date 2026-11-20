@@ -26,7 +26,7 @@ from apps.pipeline.choices import ExtractionRequest
 from apps.pipeline.steps import run_pipeline
 from apps.tasks.models import Task
 from apps.workspaces.context import SYSTEM, workspace_context
-from apps.workspaces.models import Workspace
+from apps.workspaces.models import Membership, Workspace
 from tests.documents_support import admin_of, make_person
 from tests.rules_support import add_label, make_rule, sender_contains
 
@@ -625,8 +625,9 @@ def _undoable(workspace: Workspace, document: Document) -> dict[str, bool]:
     from apps.documents import services
     from apps.documents.schemas import DocumentEventOut
 
-    with workspace_context(workspace.id, actor=SYSTEM):
-        events = services.list_document_events(workspace=workspace, document_id=document.id)
+    membership = Membership.objects.get(workspace=workspace, role="admin")
+    with workspace_context(workspace.id, actor=membership.user_id):
+        events = services.list_document_events(membership=membership, document_id=document.id)
     return {
         e.kind: DocumentEventOut.resolve_can_undo(e)
         for e in events

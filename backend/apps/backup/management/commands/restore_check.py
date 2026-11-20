@@ -11,6 +11,10 @@ class Command(BaseCommand):
         "(read with --no-lock; changes nothing). Exit 0: it can be restored, 1: not."
     )
 
+    # ./brievie starts this in a new container (run --no-deps), PostgreSQL may be down:
+    # no system checks, they read database features (GeneratedField).
+    requires_system_checks: list[str] = []  # noqa: RUF012 - Django's own attribute
+
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument("--run", required=True, help="The run id of the back-up.")
 

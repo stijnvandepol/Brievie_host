@@ -48,7 +48,7 @@ def fill_addressee_ids(apps: Apps, schema_editor: BaseDatabaseSchemaEditor) -> N
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("documents", "0009_document_confirmed_by_ai_documentaddressee_automatic_and_more"),
+        ("documents", "0010_search"),
         ("workspaces", "0007_visibility_functions"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]

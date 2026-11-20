@@ -11,6 +11,10 @@ class Command(BaseCommand):
         "Runs in the container, so the master key is never a process argument on the host."
     )
 
+    # ./brievie starts this in a new container (run --no-deps), PostgreSQL may be down:
+    # no system checks, they read database features (GeneratedField).
+    requires_system_checks: list[str] = []  # noqa: RUF012 - Django's own attribute
+
     def handle(self, *args: object, **options: object) -> None:
         try:
             key = crypto.master_key()

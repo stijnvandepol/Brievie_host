@@ -103,4 +103,10 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
   changes server-admin rights after setup (under `lock_active_server_admins`).
 - Export files are made, read and removed only through the guarded functions in
   `apps/documents/export_files.py`.
+- A member-facing read of documents starts from `apps.documents.visibility.visible_documents`
+  (the one place that says which letters a member may see).
+- Brievie never logs, audits or echoes a search term, nor puts it in a URL or an error
+  message (PostgreSQL's own log can hold a failing statement; see PRIVACY). A BSN, also with
+  other separators, the literal `[BSN]` and the words "bsn"/"burgerservicenummer" are removed
+  from the term before use. Search is `POST searchDocuments`, never a `q` on a `GET`.
 - Tests first for logic. Conventional commits.

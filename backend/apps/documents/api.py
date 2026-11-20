@@ -13,13 +13,15 @@ from apps.audit.services import actor_from_request
 from apps.common.errors import ApiError
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.common.throttling import CallerThrottle
-from apps.documents import intake, member_export, review, services
+from apps.documents import intake, member_export, review, search, services
 from apps.documents.models import DocumentEvent, Folder, MemberExport
 from apps.documents.schemas import (
     AddresseesIn,
     ConfirmIn,
     DocumentEventOut,
     DocumentOut,
+    DocumentSearchIn,
+    DocumentSearchOut,
     DocumentSummaryOut,
     FolderIn,
     FolderOut,
@@ -123,13 +125,57 @@ def list_documents(
 ) -> list[DocumentSummaryOut]:
     membership = workspace_member(request, workspace_id)
     documents = services.list_documents(
-        membership.workspace,
+        membership,
         inbox_state=inbox_state,
         person_id=person_id,
         label_id=label_id,
         automatic=automatic,
     )
     return [services.document_summary_out(document) for document in documents]
+
+
+@router.post(
+    "/workspaces/{workspace_id}/documents/search",
+    response={
+        200: DocumentSearchOut,
+        404: ErrorOut,
+        429: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    throttle=CallerThrottle("document_search", "30/1m"),
+    operation_id="searchDocuments",
+    description=(
+        "Search the letters of the workspace by their text, sender, summary, label names "
+        "and person names; every word must match, as a word beginning (Dutch stems too). "
+        "Best first, then newest. The filters narrow the search; together they all apply. "
+        "When nothing matches exactly, letters with similar words are answered with "
+        "`fuzzy=true`. A BSN in `q` is removed before searching (`bsn_removed`). "
+        "`next_offset` is null on the last page (offset at most 1000). Each hit has a "
+        "fragment (`snippet`) with the matched words marked. The term is never logged. "
+        "422 `validation_error` for a term over 200 characters, an unknown `inbox_state` "
+        "or `document_type`, or `date_from` after `date_to`; 429 after 30 searches a minute."
+    ),
+)
+def search_documents(
+    request: HttpRequest, workspace_id: UUID, payload: DocumentSearchIn
+) -> DocumentSearchOut:
+    membership = workspace_member(request, workspace_id)
+    result = search.search_documents(
+        membership,
+        q=payload.q,
+        filters=search.SearchFilters(
+            document_type=payload.document_type,
+            label_id=payload.label_id,
+            person_id=payload.person_id,
+            inbox_state=payload.inbox_state,
+            date_from=payload.date_from,
+            date_to=payload.date_to,
+        ),
+        limit=payload.limit,
+        offset=payload.offset,
+    )
+    return search.search_out(result)
 
 
 @router.get(
@@ -139,7 +185,7 @@ def list_documents(
 )
 def get_inbox_counts(request: HttpRequest, workspace_id: UUID) -> InboxCountsOut:
     membership = workspace_member(request, workspace_id)
-    return InboxCountsOut(**services.inbox_counts(membership.workspace))
+    return InboxCountsOut(**services.inbox_counts(membership))
 
 
 @router.get(
@@ -149,7 +195,7 @@ def get_inbox_counts(request: HttpRequest, workspace_id: UUID) -> InboxCountsOut
 )
 def get_document(request: HttpRequest, workspace_id: UUID, document_id: UUID) -> DocumentOut:
     membership = workspace_member(request, workspace_id)
-    document = services.get_document(workspace=membership.workspace, document_id=document_id)
+    document = services.get_document(membership=membership, document_id=document_id)
     return services.document_out(document)
 
 
@@ -171,7 +217,7 @@ def get_document_page(
 ) -> HttpResponse:
     membership = workspace_member(request, workspace_id)
     data, content_type = services.read_page(
-        workspace=membership.workspace, document_id=document_id, index=index
+        membership=membership, document_id=document_id, index=index
     )
     response = HttpResponse(data, content_type=content_type)
     response["Cache-Control"] = "private, no-store"
@@ -337,7 +383,7 @@ def list_document_events(
     request: HttpRequest, workspace_id: UUID, document_id: UUID
 ) -> list[DocumentEvent]:
     membership = workspace_member(request, workspace_id)
-    return services.list_document_events(workspace=membership.workspace, document_id=document_id)
+    return services.list_document_events(membership=membership, document_id=document_id)
 
 
 @router.post(

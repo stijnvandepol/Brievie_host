@@ -670,6 +670,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/documents/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Search Documents
+         * @description Search the letters of the workspace by their text, sender, summary, label names and person names; every word must match, as a word beginning (Dutch stems too). Best first, then newest. The filters narrow the search; together they all apply. When nothing matches exactly, letters with similar words are answered with `fuzzy=true`. A BSN in `q` is removed before searching (`bsn_removed`). `next_offset` is null on the last page (offset at most 1000). Each hit has a fragment (`snippet`) with the matched words marked. The term is never logged. 422 `validation_error` for a term over 200 characters, an unknown `inbox_state` or `document_type`, or `date_from` after `date_to`; 429 after 30 searches a minute.
+         */
+        post: operations["searchDocuments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}": {
         parameters: {
             query?: never;
@@ -1823,6 +1843,142 @@ export interface components {
             /** Tasks */
             tasks: components["schemas"]["TaskOut"][];
         };
+        /** DocumentSearchHitOut */
+        DocumentSearchHitOut: {
+            /** Addressee Ids */
+            addressee_ids?: string[];
+            /** Auto Addressee Ids */
+            auto_addressee_ids?: string[];
+            /** Auto Label Ids */
+            auto_label_ids?: string[];
+            /**
+             * Client Id
+             * Format: uuid
+             */
+            client_id: string;
+            /**
+             * Confirmed By Ai
+             * @default false
+             */
+            confirmed_by_ai: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Document Type */
+            document_type: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Inbox State
+             * @default
+             */
+            inbox_state: string;
+            /** Label Ids */
+            label_ids?: string[];
+            /**
+             * Letter Date
+             * Format: date
+             */
+            letter_date: string | null;
+            /**
+             * Open Suggestion Count
+             * @default 0
+             */
+            open_suggestion_count: number;
+            /** Page Count */
+            page_count: number;
+            /**
+             * Proposed Document Type
+             * @default
+             */
+            proposed_document_type: string;
+            /**
+             * Proposed Letter Date
+             * Format: date
+             */
+            proposed_letter_date?: string | null;
+            /**
+             * Proposed Sender
+             * @default
+             */
+            proposed_sender: string;
+            /** Sender */
+            sender: string;
+            /** Snippet */
+            snippet?: components["schemas"]["SnippetPartOut"][];
+            /** Status */
+            status: string;
+        };
+        /**
+         * DocumentSearchIn
+         * @description A search in the letters of the workspace. POST, so the term is never in a URL.
+         */
+        DocumentSearchIn: {
+            /**
+             * Date From
+             * Format: date
+             */
+            date_from?: string | null;
+            /**
+             * Date To
+             * Format: date
+             */
+            date_to?: string | null;
+            /**
+             * Document Type
+             * @default
+             */
+            document_type: string;
+            /**
+             * Inbox State
+             * @default
+             */
+            inbox_state: string;
+            /**
+             * Label Id
+             * Format: uuid
+             */
+            label_id?: string | null;
+            /**
+             * Limit
+             * @default 30
+             */
+            limit: number;
+            /**
+             * Offset
+             * @default 0
+             */
+            offset: number;
+            /**
+             * Person Id
+             * Format: uuid
+             */
+            person_id?: string | null;
+            /** Q */
+            q: string;
+        };
+        /** DocumentSearchOut */
+        DocumentSearchOut: {
+            /**
+             * Bsn Removed
+             * @default false
+             */
+            bsn_removed: boolean;
+            /**
+             * Fuzzy
+             * @default false
+             */
+            fuzzy: boolean;
+            /** Items */
+            items: components["schemas"]["DocumentSearchHitOut"][];
+            /** Next Offset */
+            next_offset?: number | null;
+        };
         /** DocumentSummaryOut */
         DocumentSummaryOut: {
             /** Addressee Ids */
@@ -2579,6 +2735,16 @@ export interface components {
         SetupStatusOut: {
             /** Needs Setup */
             needs_setup: boolean;
+        };
+        /**
+         * SnippetPartOut
+         * @description A piece of the fragment; `hit` pieces are what matched. Plain text, never HTML.
+         */
+        SnippetPartOut: {
+            /** Hit */
+            hit: boolean;
+            /** Text */
+            text: string;
         };
         /** SuggestionOut */
         SuggestionOut: {
@@ -4935,6 +5101,104 @@ export interface operations {
             };
             /** @description Unprocessable Content */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    searchDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentSearchIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSearchOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
