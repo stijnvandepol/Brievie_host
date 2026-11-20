@@ -12,21 +12,19 @@ reeks beveiligingsverbeteringen.
 
 ### Voor je bijwerkt
 
-- Werk bij met `./brievie update`. Lees hieronder **Na het bijwerken** voordat je het
-  AI-gedeelte van je werkruimtes weer gebruikt.
-
-### Na het bijwerken
-
-- **Voer de API-sleutel van de AI één keer opnieuw in**, in elke werkruimte die een externe
-  AI gebruikt (pagina **AI**). De opgeslagen sleutel hoort nu bij één werkruimte en één
-  adres; een sleutel die zo niet opent, geldt als ontbrekend. Typ hem dus opnieuw in.
-- **Tekst die vóór deze versie is opgeslagen, kan nog een BSN bevatten** in een van de
-  schrijfwijzen die de oude maskering miste (zie Beveiliging). Alleen nieuwe tekst wordt met
-  de sterkere maskering verwerkt. Opnieuw maskeren van bestaande tekst is een vervolgstap
-  en zit niet in deze versie.
-- Stond de autopilot in een werkruimte aan? Een beheerder moet die werkruimte dan akkoord
-  laten gaan met de nieuwe tekst (zie Gewijzigd) voordat de autopilot het label van een
-  regel toepast.
+- Werk bij met `./brievie update`. Doe daarna onderstaande, in elke werkruimte die het
+  raakt.
+- **Na het bijwerken: voer de API-sleutel van de AI één keer opnieuw in**, in elke
+  werkruimte die een externe AI gebruikt (pagina **AI**). De opgeslagen sleutel hoort nu
+  bij één werkruimte en één adres; een sleutel die zo niet opent, geldt als ontbrekend. Typ
+  hem dus opnieuw in.
+- **Na het bijwerken: tekst die vóór deze versie is opgeslagen, kan nog een BSN
+  bevatten** in een van de schrijfwijzen die de oude maskering miste (zie Beveiliging).
+  Alleen nieuwe tekst wordt met de sterkere maskering verwerkt. Opnieuw maskeren van
+  bestaande tekst is een vervolgstap en zit niet in deze versie.
+- **Stond de autopilot in een werkruimte aan?** Een beheerder moet die werkruimte dan
+  akkoord laten gaan met de nieuwe tekst (zie Gewijzigd) voordat de autopilot het label van
+  een regel toepast.
 
 ### Toegevoegd
 
@@ -70,7 +68,7 @@ reeks beveiligingsverbeteringen.
 - Het aantal door een mens gemaakte personen en labels per werkruimte is begrensd.
 - Een remmer houdt zijn staat per thread bij in plaats van gedeeld.
 
-### Gerepareerd
+### Opgelost
 
 - Verwijderen, archiveren en herhaald uploaden zien ook verborgen brieven.
 - Regels bij bevestigen zien de bevestigde waarden; een herhaalde bevestiging geeft alleen
