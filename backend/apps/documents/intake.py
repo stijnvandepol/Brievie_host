@@ -66,7 +66,10 @@ def create_document_from_upload(
                     )
             except IntegrityError:
                 # Another request with this client_id got in first; nothing is written yet.
-                winner = _find_existing(workspace, metadata.client_id)
+                with system_actor():
+                    winner = Document.objects.filter(
+                        workspace=workspace, client_id=metadata.client_id
+                    ).first()
                 if winner is None:
                     raise
                 return _same_upload(winner, hashes), False

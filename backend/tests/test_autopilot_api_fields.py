@@ -8,6 +8,7 @@ from django.db import connection
 from django.test import Client
 from django.test.utils import CaptureQueriesContext
 
+from apps.documents import visibility
 from apps.documents.models import Document, DocumentAddressee, DocumentLabel
 from apps.labels.models import Label
 from apps.tasks.models import Task
@@ -51,6 +52,7 @@ def link_person(
         DocumentAddressee.objects.create(
             workspace=workspace, document=document, person=person, automatic=automatic
         )
+        visibility.sync_addressee_ids(document)
 
 
 def ids_of(client: Client, workspace: Workspace, **query: str) -> set[str]:

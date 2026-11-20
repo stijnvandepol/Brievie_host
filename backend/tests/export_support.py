@@ -7,6 +7,7 @@ import zipfile
 from datetime import date
 
 from apps.accounts.models import User
+from apps.documents import visibility
 from apps.documents.intake import create_document_from_upload
 from apps.documents.models import Document, DocumentAddressee, DocumentLabel
 from apps.documents.schemas import UploadMetadataIn
@@ -44,6 +45,7 @@ def sealed_document(
         document.save()
         for person in persons or []:
             DocumentAddressee.objects.create(workspace=ws, document=document, person=person)
+        visibility.sync_addressee_ids(document)
         for name in labels or []:
             label, _made = Label.objects.get_or_create(workspace=ws, name=name)
             DocumentLabel.objects.create(workspace=ws, document=document, label=label)

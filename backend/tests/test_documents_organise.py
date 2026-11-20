@@ -139,6 +139,9 @@ def test_list_filters_and_counts(ws_a: Workspace) -> None:
     with workspace_context(ws_a.id, actor=SYSTEM):
         DocumentAddressee.objects.create(workspace=ws_a, document=sorted_, person=papa)
         DocumentAddressee.objects.create(workspace=ws_a, document=review, person=papa)
+        # Links made by hand: `addressee_ids` follows them as the services keep it.
+        visibility.sync_addressee_ids(sorted_)
+        visibility.sync_addressee_ids(review)
 
         def ids(inbox_state: str = "", person_id: uuid.UUID | None = None) -> set[uuid.UUID]:
             found = services.list_documents(ws_a, inbox_state=inbox_state, person_id=person_id)
