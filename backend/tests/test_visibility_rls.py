@@ -130,7 +130,8 @@ def test_child_rows_follow_their_document(o: Office, model: type[Model]) -> None
     with as_actor(o.workspace, SYSTEM):
         rows = {(i, d) for i, d in manager.values_list("id", "document_id")}
     assert rows
-    for actor in [*(u.id for u in o.users.values()), NOBODY]:
+    actors: list[Actor] = [*(u.id for u in o.users.values()), NOBODY]
+    for actor in actors:
         letters = {o.letters[n].id for n in o.visible(actor)}
         with as_actor(o.workspace, actor):
             seen = set(manager.values_list("id", "document_id"))

@@ -204,22 +204,24 @@ def office() -> Office:
         if label is None:
             label = Label.objects.create(workspace=workspace, name="Post")
         rule = make_rule(workspace, text_word("kantoor"), actions=[add_label(label)])
-        common = {"rule": rule, "label": label}
         letters = {
-            "own_piet": _letter(workspace, on=[persons["Piet"]], **common),
-            "finance_letter": _letter(workspace, on=[persons["Finance"]], **common),
-            "hr_letter": _letter(workspace, on=[persons["HR"]], **common),
-            "unassigned": _letter(workspace, on=[], **common),
-            "only_directie": _letter(workspace, on=[persons["Directie"]], **common),
-            "person_without_account": _letter(workspace, on=[persons["Jan"]], **common),
+            "own_piet": _letter(workspace, on=[persons["Piet"]], rule=rule, label=label),
+            "finance_letter": _letter(workspace, on=[persons["Finance"]], rule=rule, label=label),
+            "hr_letter": _letter(workspace, on=[persons["HR"]], rule=rule, label=label),
+            "unassigned": _letter(workspace, on=[], rule=rule, label=label),
+            "only_directie": _letter(workspace, on=[persons["Directie"]], rule=rule, label=label),
+            "person_without_account": _letter(
+                workspace, on=[persons["Jan"]], rule=rule, label=label
+            ),
             "scanned_in_review": _letter(
                 workspace,
                 on=[persons["Femke"]],
                 status="needs_review",
                 scanned_by=plain,
-                **common,
+                rule=rule,
+                label=label,
             ),
-            "private_femke": _letter(workspace, on=[persons["Femke"]], **common),
+            "private_femke": _letter(workspace, on=[persons["Femke"]], rule=rule, label=label),
         }
         private = letters["private_femke"]
         DocumentShare.objects.create(workspace=workspace, document=private, user=finance)
