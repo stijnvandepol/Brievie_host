@@ -133,6 +133,7 @@ def _store_confirmation(
             deadline_source=task.deadline_source,
             deadline_quote=task.deadline_quote,
             created_by_ai=by_ai,
+            created_by=user,
         )
     # After the confirmed choices, now with the confirmed sender and type.
     _rules_guarded(document)

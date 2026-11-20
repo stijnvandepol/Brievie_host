@@ -23,13 +23,11 @@ def test_the_document_policies_use_the_shipping_condition() -> None:
         assert function in statements
 
 
-def test_new_tables_have_forced_row_level_security() -> None:
+def test_the_reader_table_has_forced_row_level_security() -> None:
     statements = scratch_schema.statements()
-    for table in ("people_departmentmember", "documents_documentreader"):
-        assert f'ALTER TABLE "{table}" FORCE ROW LEVEL SECURITY' in statements
-        assert any(
-            s.startswith(f'CREATE POLICY workspace_isolation ON "{table}"') for s in statements
-        )
+    table = "documents_documentreader"
+    assert f'ALTER TABLE "{table}" FORCE ROW LEVEL SECURITY' in statements
+    assert any(s.startswith(f'CREATE POLICY workspace_isolation ON "{table}"') for s in statements)
 
 
 def test_every_table_with_a_document_key_follows_its_document() -> None:

@@ -300,8 +300,10 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
         )
         c.execute(
             "INSERT INTO workspaces_workspace (id, created_at, updated_at, name, kind, modules,"
-            " allow_member_export, everyone_sees_all, departments_enabled, admins_read_all)"
-            " VALUES (%s, %s, %s, 'Meetkantoor', 'business', '{}', false, true, false, true)",
+            " allow_member_export, everyone_sees_all, departments_enabled, admins_read_all,"
+            " care_is_private, emergency_access)"
+            " VALUES (%s, %s, %s, 'Meetkantoor', 'business', '{}', false, true, false, true,"
+            " false, true)",
             [workspace_id, now, now],
         )
         c.execute(

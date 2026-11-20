@@ -23,8 +23,18 @@ def create_workspace(
     if kind not in Workspace.Kind.values:
         raise ValueError(f"Unknown workspace kind: {kind!r}")
     with transaction.atomic():
+        home = kind == Workspace.Kind.HOME
+        # Every new workspace starts as "Iedereen ziet alle post" until every path that
+        # could show a hidden letter is closed (P8); the privacy defaults follow the kind.
         workspace = Workspace.objects.create(
-            name=name, kind=kind, allow_member_export=kind == Workspace.Kind.HOME
+            name=name,
+            kind=kind,
+            allow_member_export=home,
+            everyone_sees_all=True,
+            departments_enabled=False,
+            admins_read_all=True,
+            care_is_private=home,
+            emergency_access=not home,
         )
         Membership.objects.create(user=admin, workspace=workspace, role=Membership.Role.ADMIN)
         with workspace_context(workspace.id, actor=admin.id):

@@ -1,12 +1,12 @@
 """The visibility schema of S 4.9 on top of today's tables, for the measurement only (P2).
 
-`install` adds to the migrated test database what Tasks 6 and 7 will add as migrations:
-the switches, the sorting flag, `Person.kind`, `Document.visibility` and `addressee_ids`
-(GIN), `Task.created_by`, the department-member and reader tables (forced RLS through the
+`install` adds to the migrated test database what Task 7 will add as migrations:
+`Document.visibility` and `addressee_ids` (GIN), the reader table (forced RLS through the
 real `enable_rls`), the four visibility functions and the policy condition from
 `apps.workspaces.visibility_sql` (the SQL that ships), the reader policy, the three
 restrictive document policies, the child policies and the task CASE policy. The actor
-helpers already come from migration `workspaces/0005` (Task 3). A failing measurement
+helpers (Task 3), the switches, the sorting flag, `Person.kind`, the department members and
+`Task.created_by` (Task 6) already come from the migrations. A failing measurement
 therefore costs no product migration. Removed in Task 11, when the measurement runs on the
 real schema.
 
@@ -22,12 +22,6 @@ from apps.workspaces.rls import enable_rls
 from apps.workspaces.visibility_sql import POLICY_CONDITION, visibility_functions_sql
 
 COLUMNS: Final = [
-    "ALTER TABLE workspaces_workspace"
-    " ADD COLUMN everyone_sees_all boolean NOT NULL DEFAULT true,"
-    " ADD COLUMN departments_enabled boolean NOT NULL DEFAULT false,"
-    " ADD COLUMN admins_read_all boolean NOT NULL DEFAULT true",
-    "ALTER TABLE workspaces_membership ADD COLUMN sorts_post boolean NOT NULL DEFAULT false",
-    "ALTER TABLE people_person ADD COLUMN kind varchar(20) NOT NULL DEFAULT 'person'",
     "ALTER TABLE documents_document"
     " ADD COLUMN visibility varchar(20) NOT NULL DEFAULT 'workspace',"
     " ADD COLUMN addressee_ids uuid[] NOT NULL DEFAULT '{}'",
@@ -36,29 +30,11 @@ COLUMNS: Final = [
     # without an addressee, newest first, for the "Zonder naam" list and its count.
     "CREATE INDEX documents_document_unassigned ON documents_document"
     " (workspace_id, created_at DESC) WHERE status = 'done' AND addressee_ids = '{}'",
-    # The R39 arm of the task policy reads the maker (Task 6 adds it as a field).
-    "ALTER TABLE tasks_task ADD COLUMN created_by_id uuid NULL"
-    " REFERENCES accounts_user (id) DEFERRABLE INITIALLY DEFERRED",
-    "CREATE INDEX tasks_task_created_by_id ON tasks_task (created_by_id)",
 ]
 
-# As Django would create them for the models of Tasks 6 and 7: foreign keys deferred,
+# As Django would create it for the model of Task 7: foreign keys deferred,
 # an index per foreign key, the unique constraints and the reader index of PB T3.
 TABLES: Final = [
-    """CREATE TABLE people_departmentmember (
-  id uuid PRIMARY KEY,
-  created_at timestamptz NOT NULL,
-  updated_at timestamptz NOT NULL,
-  workspace_id uuid NOT NULL REFERENCES workspaces_workspace (id)
-    DEFERRABLE INITIALLY DEFERRED,
-  department_id uuid NOT NULL REFERENCES people_person (id) DEFERRABLE INITIALLY DEFERRED,
-  user_id uuid NOT NULL REFERENCES accounts_user (id) DEFERRABLE INITIALLY DEFERRED,
-  is_lead boolean NOT NULL,
-  CONSTRAINT people_departmentmember_unique UNIQUE (department_id, user_id)
-)""",
-    "CREATE INDEX people_departmentmember_workspace_id ON people_departmentmember (workspace_id)",
-    "CREATE INDEX people_departmentmember_department_id ON people_departmentmember (department_id)",
-    "CREATE INDEX people_departmentmember_user_id ON people_departmentmember (user_id)",
     """CREATE TABLE documents_documentreader (
   id uuid PRIMARY KEY,
   created_at timestamptz NOT NULL,
@@ -126,10 +102,9 @@ def _restrictive(table: str, condition: str) -> list[str]:
 def statements() -> list[str]:
     """Everything `install` runs, in order."""
     sql = [*COLUMNS, *TABLES]
-    for table in ("people_departmentmember", "documents_documentreader"):
-        operation = enable_rls(table).sql
-        assert isinstance(operation, list)
-        sql += [str(s) for s in operation]
+    operation = enable_rls("documents_documentreader").sql
+    assert isinstance(operation, list)
+    sql += [str(s) for s in operation]
     sql += visibility_functions_sql()
     sql.append(READER_POLICY)
     sql += _restrictive("documents_document", POLICY_CONDITION)
