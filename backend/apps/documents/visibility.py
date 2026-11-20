@@ -323,10 +323,11 @@ def visible_documents(membership: Membership) -> QuerySet[Document]:
     The document policies decide (S 4.1), with the request's actor; the member filter
     (S 4.9.5) only lets PostgreSQL use the indexes and changes no result. Runs only as
     that member: as the system or another user the policies would show other letters,
-    so that is a programming error (fail closed).
+    so that is a programming error (fail closed). The generated search vector is not
+    loaded: no reader needs it, and it is about as large as the text.
     """
     if current_actor() != membership.user_id:
         raise RuntimeError("visible_documents() runs only as the member it is asked for.")
-    documents = Document.objects.filter(workspace_id=membership.workspace_id)
+    documents = Document.objects.filter(workspace_id=membership.workspace_id).defer("search_vector")
     member = member_filter()
     return documents if member is None else documents.filter(member)
