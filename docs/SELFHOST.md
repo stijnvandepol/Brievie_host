@@ -511,6 +511,9 @@ is usually short.
   copy of your data, and **lies on the same machine**: it is a way back from a failed
   update, not a back-up. It does not count in `./brievie status`. To free the space,
   remove it when no update is unfinished: `docker volume rm brievie_update-backup`.
+  `docker compose down -v` (or `--volumes`) removes it too, together with all your data.
+- The safety back-up on a destination is kept 30 days. After that, the way back from
+  that update is an ordinary back-up of before it, if you have one.
 
 ### A jump that is refused
 
@@ -543,11 +546,33 @@ Brievie before it backs up.
 ### An update that was interrupted
 
 A closed terminal or a power cut during an update leaves `deploy/.update/in-progress`.
-Before the switch nothing changed: `./brievie start` (or the next `./brievie update`)
-starts the old version again. After the switch, `./brievie start` refuses and prints
-the way back, and `./brievie update` (without a version, or with the same one) finishes
-the update; a database update can safely run again. A restore while an update is
-unfinished only takes that update's own back-up, after `git checkout` of the old version.
+`./brievie status` then says what to type. Only when the update stopped before the
+switch, with the folder exactly as it was, did nothing change: `./brievie start` (or the
+next `./brievie update`) starts the old version again. In every other case (the folder
+was switched, files are half switched, or the database update began, even if you put the
+folder back by hand) `./brievie start`, `status`, `backup`, `sweep --delete` and
+`recovery-sheet` refuse and print the way back, until you either finish the update with
+`./brievie update` (without a version, or with the same one; a database update can
+safely run again) or take the way back. A restore while an update is unfinished only
+takes that update's own back-up, after `git checkout` of the old version. When files
+were half switched, the way back says `git checkout --force`: the update only starts on
+a folder without changes of your own, so that discards nothing of yours. As a second
+guard, `./brievie start` refuses code that is older than its database (the database has
+steps the code does not know).
+
+If the terminal closes during an update (an SSH connection that drops), the update goes
+on as far as it can and writes the rest to `deploy/.brievie-last.log`; read that file,
+or `./brievie status`, when you are back. Over SSH, run a long update inside `tmux` or
+`screen` so a dropped connection does not interrupt it. If the machine stops or
+`./brievie` is killed, the next `./brievie` sees that the one holding the lock no longer
+runs and takes it over (it says so); an older lock without that information still needs
+the twelve hours or `JA`.
+
+After the way back, the folder is on a tag, not on a branch (git calls it a "detached
+HEAD"). That is fine: `./brievie update` works from there.
+
+If the recovery sheet is lost, the master key is also in `deploy/.env`
+(`BRIEVIE_MASTER_KEY`) as long as this machine still has it.
 
 ### Not (yet) done by `./brievie update`
 
@@ -581,8 +606,10 @@ unfinished only takes that update's own back-up, after `git checkout` of the old
 
 ### Not verified yet
 
-Proven on GitHub's Linux runners (the CI job `update`: an update, a failing update and
-the way back typed literally) and with a fake Docker in the test suite. Not yet proven:
+Proven on GitHub's Linux runners by the CI job `update` (green on pull request 23: an
+update, a failing update, and the printed way back typed literally, after which the pages,
+the paired device and the certificate authority were back) and with a fake Docker in the
+test suite (the interruptions, a dropped terminal, the lock). Not yet proven:
 an update on a real NAS or Raspberry Pi (building takes long there, and needs about
 4 GB free), an update interrupted by a power cut on real hardware, an update with a
 remote destination, and two releases in a row over months.
