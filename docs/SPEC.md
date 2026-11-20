@@ -170,8 +170,21 @@ Begin bij mensen die al een NAS of homeserver hebben of er makkelijk een neerzet
 5. **Inbox:** nieuw, te controleren, zonder eigenaar.
 6. **Mappen, labels en regels** (sectie 9), beheerd via de webinterface.
 7. **Taken en deadlines:** tijdlijn, toewijzen, meldingen (7 dagen, 2 dagen, op de dag; instelbaar), ICS-feed per lid.
-8. **Zoeken:** volledige tekst, filters op persoon/relatie, label, map, jaar, bedrag.
+8. **Zoeken:** in de tekst, afzender, samenvatting, labels en personen van de eigen werkruimte, met filters (zie "Zoeken in post" hieronder). Nog niet: filters op map en bedrag.
 9. **Export:** alles als ZIP (PDF's + JSON/CSV).
+
+### Zoeken in post
+
+Eén zoekveld in de balk van de webinterface (`/` zet de cursor erin) en één eindpunt, `POST searchDocuments`; de zoekterm staat in de body, nooit in een adres. Alleen binnen de eigen werkruimte en alleen post die het lid mag zien.
+
+- **Wat er doorzocht wordt:** de (BSN-gemaskeerde) tekst van de brief, de afzender, de samenvatting, de namen van de labels en de namen en naamvarianten van de personen. Elk woord moet gevonden worden, maar niet op dezelfde plek: in de afzender, de samenvatting of de tekst, of in de naam van een label of persoon van de brief ("aanslag papa" vindt de aanslag die voor Papa is). Het begin van een woord is genoeg ("belast" vindt "belastingdienst"; "dienst" vindt "belastingdienst" niet) en Nederlandse woordvormen tellen mee ("betaling" vindt "betalen"). Bij labels en personen is elk deel van de naam genoeg.
+- **Volgorde:** eerst de beste treffer (meer gevonden woorden weegt zwaarder; afzender zwaarder dan samenvatting, die zwaarder dan de tekst; elk woord in een naam van een label of persoon telt mee), dan de nieuwste.
+- **Typefouten:** alleen als er niets exact gevonden is, zoekt Brievie op gelijkende woorden in de afzender en de samenvatting. Het antwoord zegt dan "Geen exacte treffer. Dit lijkt erop." Een typefout in een woord dat alleen in de tekst van de brief staat vindt niets.
+- **Filters:** soort brief, label, persoon, status (in de web: controleren of naam kiezen; de API kent ook nieuw) en periode op dagtekening (zonder dagtekening geldt de uploaddatum). Ze beperken altijd; samen gelden ze allemaal.
+- **Fragment:** bij elke treffer een kort stuk tekst (hoogstens 240 tekens) met de gevonden woorden gemarkeerd; platte tekst, nooit HTML.
+- **Grenzen:** hoogstens 8 woorden, 200 tekens, minstens 2 tekens; resultaten tot 1000 diep (bladeren stopt daar); een zeer algemeen woord rangschikt de nieuwste 1000 treffers, niet alle; 30 zoekopdrachten per minuut.
+- **Een BSN is niet te zoeken:** een BSN (ook met andere scheidingstekens, zoals een schuine streep of komma), het woord `[BSN]` zelf en de woorden "bsn" en "burgerservicenummer" worden uit de zoekterm gehaald; het antwoord en de pagina zeggen dat.
+- Brievie zet de zoekterm niet in zijn logboek, auditlog of een foutmelding. PostgreSQL logt wel een opdracht die mislukt (standaard), en daarin staat dan de zoekterm; dat geldt al voor elke mislukte opdracht met brieftekst. De webinterface houdt de term alleen in het geheugen en vergeet hem bij uitloggen of een andere werkruimte. Zoeken in de app volgt apart.
 
 ### Thuis
 

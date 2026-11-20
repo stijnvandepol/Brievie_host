@@ -9,7 +9,7 @@ from psycopg import errors as pg_errors
 from apps.accounts.models import User
 from apps.common import crypto
 from apps.common.errors import ApiError
-from apps.documents import organise, suggestions
+from apps.documents import organise, suggestions, visibility
 from apps.documents.intake import page_aad
 from apps.documents.models import (
     Document,
@@ -33,7 +33,7 @@ from apps.documents.storage import default_storage
 from apps.pipeline.jobs import defer_processing
 from apps.tasks.models import Task
 from apps.workspaces.keys import workspace_key
-from apps.workspaces.models import Workspace
+from apps.workspaces.models import Membership, Workspace
 
 _PATH_UNIQUE = "documents_folder_workspace_path_unique"
 
@@ -212,20 +212,20 @@ def _in_state(state: str) -> models.Q:
 
 
 def list_documents(
-    workspace: Workspace,
+    membership: Membership,
     *,
     inbox_state: str = "",
     person_id: UUID | None = None,
     label_id: UUID | None = None,
     automatic: bool = False,
 ) -> list[Document]:
-    """The newest documents of the workspace (at most 200; paging comes later), filtered.
+    """The newest documents the member sees (at most 200; paging comes later), filtered.
 
     `automatic` keeps the documents the autopilot confirmed or organised.
     """
     if inbox_state and inbox_state not in INBOX_STATES:
         raise ApiError(422, "validation_error", _("Deze stand van de inbox kennen we niet."))
-    documents = Document.objects.filter(workspace=workspace).annotate(
+    documents = visibility.visible_documents(membership).annotate(
         has_addressee=_has_addressee(), has_automatic=_has_automatic_link()
     )
     if inbox_state:
@@ -243,9 +243,9 @@ def list_documents(
     )
 
 
-def inbox_counts(workspace: Workspace) -> dict[str, int]:
-    """How many documents are in each inbox state, for the badges."""
-    documents = Document.objects.filter(workspace=workspace).annotate(
+def inbox_counts(membership: Membership) -> dict[str, int]:
+    """How many of the documents the member sees are in each inbox state, for the badges."""
+    documents = visibility.visible_documents(membership).annotate(
         has_addressee=_has_addressee(), has_automatic=_has_automatic_link()
     )
     counts = documents.aggregate(
@@ -255,8 +255,9 @@ def inbox_counts(workspace: Workspace) -> dict[str, int]:
     return {name: int(counts[name]) for name in (*INBOX_STATES, "automatic")}
 
 
-def get_document(*, workspace: Workspace, document_id: UUID) -> Document:
-    document = Document.objects.filter(workspace=workspace, id=document_id).first()
+def get_document(*, membership: Membership, document_id: UUID) -> Document:
+    """A document the member sees, or 404 (one they may not see is not found either)."""
+    document = visibility.visible_documents(membership).filter(id=document_id).first()
     if document is None:
         raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
     return document
@@ -354,9 +355,10 @@ def document_out(document: Document) -> DocumentOut:
     )
 
 
-def read_page(*, workspace: Workspace, document_id: UUID, index: int) -> tuple[bytes, str]:
+def read_page(*, membership: Membership, document_id: UUID, index: int) -> tuple[bytes, str]:
     """The decrypted page file and its content type."""
-    document = get_document(workspace=workspace, document_id=document_id)
+    workspace = membership.workspace
+    document = get_document(membership=membership, document_id=document_id)
     page = DocumentPage.objects.filter(document=document, index=index).first()
     if page is None:
         raise ApiError(404, "page_not_found", _("We kunnen deze pagina niet vinden."))
@@ -509,7 +511,7 @@ def _lock_for_organising(workspace: Workspace, document_id: UUID) -> Document:
     return document
 
 
-def list_document_events(*, workspace: Workspace, document_id: UUID) -> list[DocumentEvent]:
+def list_document_events(*, membership: Membership, document_id: UUID) -> list[DocumentEvent]:
     """The document's history, newest first.
 
     Annotated with `undone` (an undo event points at it), `still_linked` (its label or
@@ -517,7 +519,7 @@ def list_document_events(*, workspace: Workspace, document_id: UUID) -> list[Doc
     automatic) and `superseded` (a later event concerns the same label or person), which
     `DocumentEventOut.can_undo` reads.
     """
-    document = get_document(workspace=workspace, document_id=document_id)
+    document = get_document(membership=membership, document_id=document_id)
     label_linked = DocumentLabel.objects.filter(
         document_id=models.OuterRef("document_id"), label_id=models.OuterRef("label_id")
     )

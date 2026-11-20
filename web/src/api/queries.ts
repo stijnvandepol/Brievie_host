@@ -299,3 +299,39 @@ export const myExportQuery = (workspaceId: string) =>
       return data;
     },
   });
+
+const SEARCH_PAGE_SIZE = 30;
+
+export type DocumentSearch = {
+  q: string;
+  document_type?: string;
+  label_id?: string;
+  person_id?: string;
+  inbox_state?: string;
+  date_from?: string;
+  date_to?: string;
+  offset?: number;
+};
+
+/**
+ * A search in the letters of a workspace. A POST, so the term travels in the body. It is
+ * deliberately no query: a query key would hold the term in the cache and its devtools.
+ */
+export async function searchDocuments(workspaceId: string, search: DocumentSearch) {
+  const { data, error } = await api.POST("/api/v1/workspaces/{workspace_id}/documents/search", {
+    params: { path: { workspace_id: workspaceId } },
+    body: {
+      q: search.q,
+      document_type: search.document_type ?? "",
+      inbox_state: search.inbox_state ?? "",
+      label_id: search.label_id || null,
+      person_id: search.person_id || null,
+      date_from: search.date_from || null,
+      date_to: search.date_to || null,
+      offset: search.offset ?? 0,
+      limit: SEARCH_PAGE_SIZE,
+    },
+  });
+  if (error !== undefined || !data) throw new ApiFailure(error);
+  return data;
+}
