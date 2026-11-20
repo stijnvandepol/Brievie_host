@@ -77,8 +77,12 @@ def _confirm(client: Client, o: Office, letter: str, body: dict[str, object]) ->
 def test_confirm_handing_over_answers_can_read_false(o: Office) -> None:
     letter = o.letters["scanned_in_review"]
     with as_actor(o.workspace, SYSTEM):
-        open_before = DocumentSuggestion.objects.filter(document=letter, state="open").count()
-    assert open_before > 0
+        open_ids = list(
+            DocumentSuggestion.objects.filter(document=letter, state="open").values_list(
+                "id", flat=True
+            )
+        )
+    assert open_ids
 
     response = _confirm(_as(o, "plain"), o, "scanned_in_review", _body(o, addressees=["Femke"]))
 
@@ -104,7 +108,9 @@ def test_confirm_handing_over_answers_can_read_false(o: Office) -> None:
         )
         made = Task.objects.get(document=letter, description="Betaal de rekening")
         assert made.created_by_id == o.plain.id
-        assert not DocumentSuggestion.objects.filter(document=letter, state="open").exists()
+        # The open proposals at the time of the review are dismissed (a rule at confirm
+        # may propose anew).
+        assert not DocumentSuggestion.objects.filter(id__in=open_ids, state="open").exists()
         assert DocumentEvent.objects.filter(document=letter, kind="confirmed").count() == 1
         assert stored.addressee_ids == [o.persons["Femke"].id]
 
@@ -209,13 +215,10 @@ def test_status_written_last_as_system(o: Office) -> None:
     sync = next(
         i for i, q in enumerate(sql) if q.startswith("UPDATE documents_document SET addressee_ids")
     )
-    status = next(
-        i for i, q in enumerate(sql) if q.startswith('UPDATE "documents_document" SET "status"')
-    )
+    writes = [i for i, q in enumerate(sql) if q.startswith('UPDATE "documents_document" SET')]
+    status = next(i for i in writes if '"status" =' in sql[i])
     assert sync < status
-    assert not any(
-        '"status"' in q for q in sql[:sync] if q.startswith('UPDATE "documents_document"')
-    )
+    assert not any('"status" =' in sql[i] for i in writes if i < sync)
 
 
 def test_reopen_of_a_hidden_letter_is_404(o: Office) -> None:
