@@ -322,6 +322,8 @@ class DocumentEvent(WorkspaceModel):
         # The autopilot did it: an AI proposal applied, or a name match applied.
         AI = "ai"
         NAME_MATCH = "name_match"
+        # The autopilot applied a rule's label proposal (`rule` names the rule).
+        RULE_AUTOPILOT = "rule_autopilot"
 
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="events")
     kind = models.CharField(max_length=30, choices=Kind.choices)
@@ -399,6 +401,10 @@ class DocumentSuggestion(WorkspaceModel):
     confidence = models.DecimalField(max_digits=4, decimal_places=3, default=Decimal("0"))
     # True once a name match of 0.85 or higher contributed to this row.
     preselected = models.BooleanField(default=False)
+    # The AI's own confidence for this change (0: the AI did not propose it), kept when a
+    # stronger origin takes the row over: the autopilot applies a rule's label the AI
+    # agrees with strongly enough.
+    ai_confidence = models.DecimalField(max_digits=4, decimal_places=3, default=Decimal("0"))
     state = models.CharField(max_length=20, choices=State.choices, default=State.OPEN)
 
     class Meta:

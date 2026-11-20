@@ -63,7 +63,7 @@ def test_a_member_reads_the_autopilot_and_its_notice(ws_a: Workspace) -> None:
 
     assert r.status_code == 200
     body = r.json()
-    assert set(body) == {"auto_organise", "auto_confirm", "allowed", "notice"}
+    assert set(body) == {"auto_organise", "auto_confirm", "allowed", "notice", "notice_outdated"}
     assert (body["auto_organise"], body["auto_confirm"], body["allowed"]) == (False, False, True)
     assert body["notice"] == settings_service.autopilot_notice()
 

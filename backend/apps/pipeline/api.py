@@ -173,6 +173,7 @@ def _autopilot_out(workspace_id: UUID) -> AiAutopilotOut:
         auto_confirm=state.confirm,
         allowed=state.allowed,
         notice=settings_service.autopilot_notice(),
+        notice_outdated=state.notice_outdated,
     )
 
 
@@ -210,7 +211,9 @@ def get_ai_autopilot(request: HttpRequest, workspace_id: UUID) -> AiAutopilotOut
         "`acknowledged` (409 `ai_autopilot_ack_required`), AI on for the workspace "
         "(409 `ai_autopilot_needs_ai`) and the server's permission (409 "
         "`ai_autopilot_forbidden`). Switching off always works. Switching AI off or "
-        "agreeing to another AI address also switches both off."
+        "agreeing to another AI address also switches both off. `acknowledged` with a "
+        "switch on records that the current `notice` was agreed to (clears "
+        "`notice_outdated`), also when no switch changes."
     ),
 )
 def update_ai_autopilot(

@@ -545,6 +545,16 @@ describe("document made by the autopilot", () => {
           { ...base, id: "a3", kind: "confirmed", created_at: "2026-11-10T10:02:00Z" },
           {
             ...base,
+            id: "a5",
+            kind: "label_added",
+            origin: "rule_autopilot",
+            rule_name: "Label Gemeente",
+            label_name: "Gemeente",
+            can_undo: false,
+            created_at: "2026-11-10T10:02:30Z",
+          },
+          {
+            ...base,
             id: "a4",
             kind: "reopened",
             origin: "user",
@@ -562,6 +572,9 @@ describe("document made by the autopilot", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Automatisch toegevoegd: naam herkend (Papa)")).toBeInTheDocument();
     expect(screen.getByText("Automatisch bevestigd door AI")).toBeInTheDocument();
+    expect(
+      screen.getByText("Automatisch toegevoegd door regel Label Gemeente: label Gemeente"),
+    ).toBeInTheDocument();
     expect(
       screen.getByText("Bram zette de brief terug op Te doen om te controleren"),
     ).toBeInTheDocument();
