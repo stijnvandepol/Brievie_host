@@ -3,7 +3,7 @@
 Stored beside the text it made every letter row about twice as wide, and the lists and
 inbox counts scan that table (DECISIONS 2026-11-20). The new table is a workspace content
 table with the letter's own visibility (`restrict_to_visible_documents`), deleted with its
-letter like its other rows. A trigger keeps it, as the generated column did: built by
+letter by the database. A trigger keeps it, as the generated column did: built by
 PostgreSQL from the stored, already BSN-masked sender, summary and text. Existing letters
 are filled in batches per workspace. Reversible: the reverse restores the generated
 column and its index and drops the table, the trigger and the function.
@@ -136,7 +136,7 @@ class Migration(migrations.Migration):
                 (
                     "document",
                     models.OneToOneField(
-                        on_delete=django.db.models.deletion.CASCADE,
+                        on_delete=django.db.models.deletion.DB_CASCADE,
                         related_name="search",
                         to="documents.document",
                     ),
@@ -151,7 +151,7 @@ class Migration(migrations.Migration):
             options={
                 "indexes": [
                     django.contrib.postgres.indexes.GinIndex(
-                        fields=["search_vector"], name="documents_docsearch_vector"
+                        fields=["search_vector"], name="documents_documentsearch_vector"
                     )
                 ],
             },
