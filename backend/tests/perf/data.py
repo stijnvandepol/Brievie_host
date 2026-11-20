@@ -452,10 +452,10 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
         c.execute(
             "INSERT INTO documents_documentevent (id, created_at, updated_at, workspace_id,"
             " document_id, kind, origin, actor_id, person_id, person_name, label_id, label_name,"
-            " rule_id, rule_name, undoes_id)"
+            " rule_id, rule_name, undoes_id, note)"
             " SELECT gen_random_uuid(), d.created_at, d.created_at, d.workspace_id, d.id,"
             " (ARRAY['addressee_added', 'label_added', 'confirmed'])[1 + ((g - 1) %% 3)::int],"
-            " 'user', d.scanned_by_id, NULL, '', NULL, '', NULL, '', NULL"
+            " 'user', d.scanned_by_id, NULL, '', NULL, '', NULL, '', NULL, ''"
             " FROM documents_document d CROSS JOIN generate_series(1, %s) g"
             " WHERE d.workspace_id = %s",
             [shape.events_per_letter, workspace_id],
