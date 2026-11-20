@@ -331,10 +331,10 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
             " 'Samenvatting van brief ' || n, false,"
             " CASE WHEN status = 'done' THEN scanner END,"
             " CASE WHEN status = 'done' THEN %s - make_interval(secs => age) END,"
-            " false, NULL, CASE WHEN private THEN 'restricted' ELSE 'workspace' END, '{}'"
+            " false, NULL, CASE WHEN is_private THEN 'restricted' ELSE 'workspace' END, '{}'"
             " FROM unnest(%s::uuid[], %s::uuid[], %s::text[], %s::int[], %s::boolean[],"
             "             %s::text[], %s::text[])"
-            "   WITH ORDINALITY AS t(id, scanner, status, age, private, sender, kind, n)",
+            "   WITH ORDINALITY AS t(id, scanner, status, age, is_private, sender, kind, n)",
             [
                 now,
                 now,
