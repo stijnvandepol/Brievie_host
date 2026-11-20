@@ -59,6 +59,31 @@ def _normalise_with_map(value: str) -> tuple[str, list[int]]:
     return "".join(chars), origin
 
 
+# Characters that draw nothing although Unicode files them as letters or symbols.
+_BLANK_LOOKALIKES = frozenset("\u115f\u1160\u2800\u3164\uffa0")
+# Categories that draw nothing on their own: controls, format characters (zero width,
+# joiners, direction marks), separators, combining marks without a base, unassigned.
+_INVISIBLE_CATEGORIES = frozenset({"Cc", "Cf", "Co", "Cn", "Cs", "Zs", "Zl", "Zp", "Mn", "Me"})
+# Embeddings, overrides and isolates turn the text after them around (U+202E in a
+# label name reverses the list it stands in).
+_DIRECTION_CONTROLS = frozenset(
+    "\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069"
+)
+
+
+def is_visible(value: str) -> bool:
+    """Whether `value` has at least one character that draws something."""
+    return any(
+        char not in _BLANK_LOOKALIKES and unicodedata.category(char) not in _INVISIBLE_CATEGORIES
+        for char in value
+    )
+
+
+def has_direction_control(value: str) -> bool:
+    """Whether `value` holds a character that changes the direction of the text."""
+    return any(char in _DIRECTION_CONTROLS for char in value)
+
+
 def searchable(phrase: str) -> str:
     """`phrase` normalised to search for; empty (matches nothing) when it holds the mask."""
     needle = normalise(phrase)

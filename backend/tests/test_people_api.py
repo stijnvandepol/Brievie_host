@@ -412,3 +412,21 @@ def test_other_workspace_is_404_on_every_person_endpoint(
     with workspace_context(ws_b.id):
         other.refresh_from_db()
         assert other.user_id == admin_of(ws_b).id
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"display_name": "​"},
+        {"display_name": "⠀"},
+        {"display_name": "TEST ‮​"},
+        {"display_name": "Jan", "name_variants": ["​​"]},
+    ],
+)
+def test_a_name_that_shows_nothing_or_turns_text_around_is_refused(
+    client_a: Client, ws_a: Workspace, body: dict[str, object]
+) -> None:
+    r = create(client_a, ws_a.id, body)
+
+    assert r.status_code == 422
+    assert r.json()["code"] == "validation_error"

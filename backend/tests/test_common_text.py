@@ -1,7 +1,11 @@
+import pytest
+
 from apps.common.text import (
     excerpt,
     find_all_phrases,
     find_phrase,
+    has_direction_control,
+    is_visible,
     normalise,
     prepare,
 )
@@ -114,3 +118,24 @@ def test_text_around_the_mask_token_still_matches() -> None:
     assert span is not None
     assert MASKED_LETTER[span[0] : span[1]] == "J. de Vries"
     assert find_phrase(MASKED_LETTER, "burgerservicenummer", whole_words=True) == (0, 19)
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["​", "⠀", "ㅤ", " ​‍ ", "‮​", "️", "́"],
+)
+def test_names_without_a_visible_character(value: str) -> None:
+    assert not is_visible(value)
+
+
+@pytest.mark.parametrize("value", ["Zorg", "📄", "👨‍👩‍👧", "ß", "José"])
+def test_visible_names(value: str) -> None:
+    assert is_visible(value)
+    assert not has_direction_control(value)
+
+
+def test_direction_controls() -> None:
+    # The finding: "TEST ‮​" turns the text after it around in a list.
+    assert has_direction_control("TEST ‮​")
+    assert has_direction_control("a⁧b")
+    assert not has_direction_control("שלום")

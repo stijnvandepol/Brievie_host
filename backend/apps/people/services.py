@@ -12,6 +12,7 @@ from apps.accounts.models import User
 from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
+from apps.common.names import check_shown
 from apps.common.privacy import holds_bsn, mask_bsns
 from apps.common.text import normalise
 from apps.documents.models import DocumentSuggestion
@@ -92,8 +93,7 @@ def _tidy(value: str) -> str:
 def _clean_name(display_name: str, kept: Collection[str] = ()) -> str:
     _refuse_bsn(display_name, kept)
     name = _tidy(mask_bsns(display_name))
-    if not name:
-        raise ApiError(422, "validation_error", _("Een persoon heeft een naam nodig."))
+    check_shown(name, empty=_("Een persoon heeft een naam nodig."))
     if len(name) > NAME_MAX:
         raise ApiError(
             422, "validation_error", _("Een naam is hoogstens %(max)d tekens.") % {"max": NAME_MAX}
@@ -108,6 +108,9 @@ def _clean_variants(name_variants: list[str], kept: Collection[str] = ()) -> lis
     for raw in name_variants:
         _refuse_bsn(raw, kept)
         variant = _tidy(mask_bsns(raw))
+        check_shown(
+            variant, empty=_("Een schrijfwijze van een naam heeft een zichtbaar teken nodig.")
+        )
         if not VARIANT_MIN <= len(variant) <= VARIANT_MAX:
             raise ApiError(
                 422,
