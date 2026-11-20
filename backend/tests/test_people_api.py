@@ -225,7 +225,17 @@ def test_update_person(client_a: Client, ws_a: Workspace) -> None:
     assert r.json()["name_variants"] == ["G. Jansen"]
     assert r.json()["archived"] is True
 
+    # Left out: the stored variants and archive state stay (a rename alone).
     r = put(client_a, f"/workspaces/{ws_a.id}/persons/{person['id']}", {"display_name": "Oma"})
+    assert r.json()["name_variants"] == ["G. Jansen"]
+    assert r.json()["archived"] is True
+
+    # Sent explicitly, an empty list and false still apply.
+    r = put(
+        client_a,
+        f"/workspaces/{ws_a.id}/persons/{person['id']}",
+        {"display_name": "Oma", "name_variants": [], "archived": False},
+    )
     assert r.json()["name_variants"] == []
     assert r.json()["archived"] is False
 
