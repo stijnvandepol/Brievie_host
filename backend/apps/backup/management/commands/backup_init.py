@@ -16,6 +16,15 @@ class Command(BaseCommand):
             action="store_true",
             help="Allow the back-up on the same disk as the documents.",
         )
+        parser.add_argument(
+            "--update-fallback",
+            action="store_true",
+            help=(
+                "Prepare the Docker volume update-backup, which ./brievie mounts at /backup "
+                "for this call: an update's emergency back-up on a server without a "
+                "destination (same disk by design)."
+            ),
+        )
 
     def handle(self, *args: object, **options: object) -> None:
         try:
@@ -23,7 +32,10 @@ class Command(BaseCommand):
         except BackupError as error:
             raise CommandError(error.message, returncode=1) from error
         try:
-            services.initialise_destination(allow_same_disk=bool(options["allow_same_disk"]))
+            services.initialise_destination(
+                allow_same_disk=bool(options["allow_same_disk"]),
+                fallback=bool(options["update_fallback"]),
+            )
         except BackupError as error:
             # For ./brievie: the code on stderr, before the sentence.
             if os.environ.get("BRIEVIE_WRAPPER") == "1":

@@ -78,8 +78,13 @@ def test_session_without_csrf_token_is_403() -> None:
 
     r = post_json(client, "/auth/logout")
 
+    # Its own code: the client only has to refresh, unlike a role that may not do this.
     assert r.status_code == 403
-    assert r.json()["code"] == "forbidden"
+    assert r.json() == {
+        "code": "csrf_failed",
+        "message": "Je sessie is niet meer geldig voor deze pagina. Ververs de pagina en "
+        "probeer het opnieuw.",
+    }
 
 
 def test_session_with_csrf_token_succeeds() -> None:

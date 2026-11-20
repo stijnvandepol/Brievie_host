@@ -24,6 +24,10 @@ msgstr "(nog {0})"
 msgid "(verwijderd)"
 msgstr "(verwijderd)"
 
+#: src/components/document-table.tsx
+msgid "(voorstel)"
+msgstr "(voorstel)"
+
 #. placeholder {0}: data.length
 #: src/components/device-table.tsx
 msgid "{0, plural, one {# apparaat} other {# apparaten}}"
@@ -1798,7 +1802,6 @@ msgstr "Onbekend"
 
 #: src/components/document-table.tsx
 #: src/routes/document.tsx
-#: src/routes/inbox.tsx
 msgid "Onbekende afzender"
 msgstr "Onbekende afzender"
 

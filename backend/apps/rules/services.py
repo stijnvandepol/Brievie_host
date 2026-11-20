@@ -15,7 +15,7 @@ from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
 from apps.documents.models import Document
-from apps.documents.services import SUGGESTIONS, document_summary_out
+from apps.documents.services import HEADLINE_PROPOSALS, SUGGESTIONS, document_summary_out
 from apps.labels.models import Label
 from apps.people.models import Person
 from apps.rules import definition, jobs
@@ -75,8 +75,14 @@ def _get_for_update(workspace: Workspace, rule_id: UUID) -> Rule:
     return rule
 
 
-def _fill(rule: Rule, workspace: Workspace, data: RuleIn) -> None:
-    """Validate `data` and copy it onto `rule` (not saved)."""
+def _fill(rule: Rule, workspace: Workspace, data: RuleIn, *, any_person: bool = False) -> None:
+    """Validate `data` and copy it onto `rule` (not saved).
+
+    A rule may name a person who is not archived, and keeps naming an archived one it
+    already named: it can always be switched off or edited (the executor skips an
+    archived target, and the web shows the person as archived). `any_person` allows
+    every person, for a test that stores nothing.
+    """
     name = mask_bsns(data.name).strip()
     if not name:
         raise _invalid(_("Een regel heeft een naam nodig."))
@@ -84,16 +90,21 @@ def _fill(rule: Rule, workspace: Workspace, data: RuleIn) -> None:
         raise _invalid(_("Kies of de regel een voorstel doet of het zelf doet."))
     conditions = [Condition(field=c.field, op=c.op, value=c.value) for c in data.conditions]
     actions: list[definition.ActionIn] = [(a.type, a.label_id, a.person_id) for a in data.actions]
+    persons = dict(Person.objects.filter(workspace=workspace).values_list("id", "archived_at"))
+    already_named = definition.named_ids(rule)[1]
+    allowed = {
+        person_id
+        for person_id, archived_at in persons.items()
+        if archived_at is None or any_person or person_id in already_named
+    }
     definition.validate(
         data.match,
         conditions,
         actions,
+        kept_values=definition.phrase_values(rule),
         label_ids=set(Label.objects.filter(workspace=workspace).values_list("id", flat=True)),
-        person_ids=set(
-            Person.objects.filter(workspace=workspace, archived_at__isnull=True).values_list(
-                "id", flat=True
-            )
-        ),
+        person_ids=allowed,
+        archived_person_ids=set(persons) - allowed,
     )
     rule.name = name
     rule.active = data.active
@@ -171,7 +182,7 @@ def reorder_rules(*, workspace: Workspace, rule_ids: list[UUID]) -> list[Rule]:
 def test_rule(*, workspace: Workspace, data: RuleIn) -> RuleTestOut:
     """Which existing documents the (unsaved) rule's conditions hold for; stores nothing."""
     rule = Rule(workspace=workspace, position=0)
-    _fill(rule, workspace, data)
+    _fill(rule, workspace, data, any_person=True)
     spec = definition.to_spec(rule)
     if spec is None:
         raise _invalid(_("Deze regel kunnen we niet lezen."))
@@ -183,7 +194,9 @@ def test_rule(*, workspace: Workspace, data: RuleIn) -> RuleTestOut:
     facts = facts_for_many(checked)
     matched = [d for d in checked if spec.id in evaluate(facts[d.id], [spec]).matched_rule_ids]
     shown = matched[:TEST_SHOWN]
-    prefetch_related_objects(shown, "addressee_links", "label_links", SUGGESTIONS)
+    prefetch_related_objects(
+        shown, "addressee_links", "label_links", SUGGESTIONS, HEADLINE_PROPOSALS
+    )
     return RuleTestOut(
         total_count=total,
         checked_count=len(checked),

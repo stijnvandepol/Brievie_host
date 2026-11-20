@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "apps.pipeline",
     "apps.devices",
     "apps.backup",
+    "apps.updates",
     "apps.audit",
 ]
 
@@ -52,14 +53,12 @@ AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
 ]
 
+# Django's four rules with their own Dutch sentences (apps.accounts.passwords).
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
-    {
-        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
-        "OPTIONS": {"min_length": 12},
-    },
-    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
-    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    {"NAME": "apps.accounts.passwords.UserAttributeSimilarityValidator"},
+    {"NAME": "apps.accounts.passwords.MinimumLengthValidator", "OPTIONS": {"min_length": 12}},
+    {"NAME": "apps.accounts.passwords.CommonPasswordValidator"},
+    {"NAME": "apps.accounts.passwords.NumericPasswordValidator"},
 ]
 
 MIDDLEWARE = [

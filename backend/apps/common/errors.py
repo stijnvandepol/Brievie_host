@@ -20,6 +20,7 @@ from ninja import NinjaAPI
 from ninja.errors import HttpError, Throttled, ValidationError
 from psycopg import errors as pg_errors
 
+from apps.common.input_errors import generic, message_for
 from apps.common.schemas import ErrorOut
 
 logger = logging.getLogger(__name__)
@@ -85,9 +86,8 @@ def install_error_handlers(api: NinjaAPI) -> None:
             response[name] = value
         return response
 
-    def handle_validation_error(request: HttpRequest, exc: object) -> JsonResponse:
-        message = _("De gegevens kloppen niet. Controleer wat je hebt ingevuld.")
-        return error_response(422, "validation_error", message)
+    def handle_validation_error(request: HttpRequest, exc: ValidationError) -> JsonResponse:
+        return error_response(422, "validation_error", message_for(exc.errors))
 
     def handle_not_found(request: HttpRequest, exc: object) -> JsonResponse:
         return http_error_response(404)
@@ -118,11 +118,7 @@ def install_error_handlers(api: NinjaAPI) -> None:
         request: HttpRequest, exc: DjangoValidationError
     ) -> JsonResponse:
         messages = exc.messages
-        message = (
-            messages[0]
-            if messages
-            else _("De gegevens kloppen niet. Controleer wat je hebt ingevuld.")
-        )
+        message = messages[0] if messages else generic()
         return error_response(422, "validation_error", message)
 
     def handle_unexpected_error(request: HttpRequest, exc: object) -> JsonResponse:
@@ -153,7 +149,7 @@ def install_error_handlers(api: NinjaAPI) -> None:
     # Ninja types the handler argument as "instance or class"; it always passes an instance.
     api.add_exception_handler(ApiError, handle_api_error)  # type: ignore[arg-type]
     api.add_exception_handler(HttpError, handle_http_error)  # type: ignore[arg-type]
-    api.add_exception_handler(ValidationError, handle_validation_error)
+    api.add_exception_handler(ValidationError, handle_validation_error)  # type: ignore[arg-type]
     api.add_exception_handler(Http404, handle_not_found)
     api.add_exception_handler(SuspiciousOperation, handle_suspicious_operation)
     api.add_exception_handler(BadRequest, handle_suspicious_operation)
@@ -287,6 +283,9 @@ class ApiJsonBodyMiddleware:
             and _has_body(request)
             and request.content_type != _expected_content_type(request)
         ):
+            if is_document_upload(request):
+                message = _("Stuur de brief als formulier met bestanden (multipart/form-data).")
+                return error_response(415, "unsupported_media_type", message)
             return http_error_response(415)
         return self.get_response(request)
 

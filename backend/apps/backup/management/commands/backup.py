@@ -5,7 +5,8 @@ from django.core.management.base import BaseCommand, CommandError, CommandParser
 from django.template.defaultfilters import filesizeformat
 from django.utils.translation import gettext as _
 
-from apps.backup import services
+from apps.backup import restic, services
+from apps.backup.errors import BackupError
 from apps.backup.models import BackupRun
 
 # Six hours: a first back-up of a large archive to a slow destination.
@@ -33,6 +34,14 @@ class Command(BaseCommand):
             ),
         )
         parser.add_argument(
+            "--label",
+            default="",
+            help=(
+                "With --safety: the safety back-up of an update, named pre-update-X.Y.Z "
+                "on both snapshots (./brievie restore pre-update-X.Y.Z)."
+            ),
+        )
+        parser.add_argument(
             "--timeout",
             type=int,
             default=DEFAULT_TIMEOUT,
@@ -42,18 +51,29 @@ class Command(BaseCommand):
     def handle(self, *args: object, **options: object) -> None:
         check = bool(options["check"])
         safety = bool(options["safety"])
+        label = str(options["label"])
         if check and safety:
             raise CommandError(_("--safety hoort bij een back-up, niet bij --check."))
+        if label and not safety:
+            raise CommandError(_("--label hoort bij --safety."))
+        if label:
+            try:
+                restic.check_label(label)
+            except BackupError as error:
+                raise CommandError(error.message) from None
         kind = BackupRun.Kind.CHECK if check else BackupRun.Kind.BACKUP
-        requested_by = services.RESTORE_SAFETY if safety else "cli"
-        run = services.request_run(kind, requested_by=requested_by)
+        if label:
+            requested_by = services.UPDATE_SAFETY
+        else:
+            requested_by = services.RESTORE_SAFETY if safety else "cli"
+        run = services.request_run(kind, requested_by=requested_by, label=label)
         timeout = float(str(options["timeout"]))
-        if safety and run.requested_by != services.RESTORE_SAFETY:
-            # An ordinary back-up was already open: it is no safety back-up (it prunes and
-            # carries no safety tag). Wait for it, then request one of our own.
+        if safety and (run.requested_by != requested_by or run.label != label):
+            # Another back-up was already open: it is not this safety back-up (it may prune,
+            # or carry no safety tag or another name). Wait for it, then request our own.
             with contextlib.suppress(TimeoutError):
                 services.wait_for_run(run.id, timeout=timeout)
-            run = services.request_run(kind, requested_by=requested_by)
+            run = services.request_run(kind, requested_by=requested_by, label=label)
         if safety and os.environ.get("BRIEVIE_WRAPPER") == "1":
             self.stdout.write(f"safety_run_id={run.id}")
         self.stdout.write(_("Controle gestart…") if check else _("Back-up gestart…"))

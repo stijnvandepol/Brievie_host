@@ -15,7 +15,7 @@ from django.utils import timezone
 from pydantic import ValidationError
 
 from apps.common.errors import ApiError
-from apps.common.privacy import mask_bsns
+from apps.common.privacy import holds_bsn, mask_bsns
 from apps.documents import review, suggestions
 from apps.documents.models import Document, DocumentSuggestion, Extraction
 from apps.labels.models import Label
@@ -180,9 +180,12 @@ def organise_processed(
 
 
 def active_persons() -> list[PersonNames]:
-    """The workspace's non-archived persons with every way their name is written."""
+    """The workspace's non-archived persons with every way their name is written.
+
+    A variant masked before a BSN was refused there is left out: it says nothing.
+    """
     return [
-        PersonNames(person_id, (name, *variants))
+        PersonNames(person_id, (name, *(v for v in variants if not holds_bsn(v))))
         for person_id, name, variants in Person.objects.filter(
             archived_at__isnull=True
         ).values_list("id", "display_name", "name_variants")

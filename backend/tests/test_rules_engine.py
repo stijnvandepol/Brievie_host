@@ -321,3 +321,29 @@ def test_a_dismissed_addressee_is_never_planned_nor_built_on() -> None:
     document = facts("Zorg", dismissed_addressee_ids=frozenset({MAMA}))
 
     assert evaluate(document, [a, b]).planned == ()
+
+
+def test_a_condition_on_the_mask_token_matches_no_letter() -> None:
+    # A rule value typed as a BSN was masked to "[BSN]" before this was refused.
+    letter = facts("Burgerservicenummer: [BSN]", sender="Belastingdienst [BSN]")
+    for op in ("contains", "contains_word"):
+        assert evaluate(letter, [rule(Condition("text", op, "[BSN]"))]).matched_rule_ids == ()
+        assert evaluate(letter, [rule(Condition("sender", op, "[BSN]"))]).matched_rule_ids == ()
+    equals = rule(Condition("sender", "equals", "Belastingdienst [BSN]"))
+    assert evaluate(letter, [equals]).matched_rule_ids == ()
+
+
+def test_a_condition_on_the_mask_token_never_holds_also_negated() -> None:
+    # Review: "does not contain [BSN]" was true for every letter, so an automatic rule
+    # or one with match "any" labelled every new letter. A value holding the mask says
+    # nothing, so the condition is false for every operator.
+    for text in ("Burgerservicenummer: [BSN]", "Een brief zonder nummer"):
+        letter = facts(text)
+        negated = rule(Condition("text", "not_contains_word", "[BSN]"))
+        assert evaluate(letter, [negated]).matched_rule_ids == ()
+        either = rule(
+            Condition("text", "not_contains_word", "J [BSN]"),
+            Condition("text", "contains_word", "nergens"),
+            match="any",
+        )
+        assert evaluate(letter, [either]).matched_rule_ids == ()

@@ -220,3 +220,47 @@ def test_active_specs_are_active_rules_in_position_order(ws_a: Workspace) -> Non
         Rule.objects.filter(id=third.id).update(position=1)
 
         assert [spec.id for spec in active_specs(ws_a.id)] == [third.id, first.id]
+
+
+@pytest.mark.parametrize(
+    "condition",
+    [
+        Condition("text", "contains_word", "123456782"),
+        Condition("text", "contains", "BSN 111.222.333"),
+        Condition("sender", "contains", "Gemeente 111222333"),
+        Condition("text", "not_contains_word", "[BSN]"),
+    ],
+)
+def test_a_bsn_in_a_phrase_is_refused(condition: Condition) -> None:
+    with pytest.raises(ApiError) as excinfo:
+        check([condition])
+    assert excinfo.value.message.startswith("Een BSN bewaren we nooit")
+
+
+def test_a_masked_phrase_the_rule_already_stores_may_stay() -> None:
+    validate(
+        "all",
+        [Condition("text", "contains_word", "[BSN]")],
+        [("add_label", LABEL, None)],
+        label_ids={LABEL},
+        person_ids=set(),
+        kept_values={"[BSN]"},
+    )
+    stored = Rule(definition=to_json("all", [text_word("111222333")], [("add_label", LABEL, None)]))
+    assert definition.phrase_values(stored) == {"[BSN]"}
+    assert definition.phrase_values(Rule()) == frozenset()
+
+
+def test_a_label_or_person_id_is_stored_in_its_one_form() -> None:
+    # The finding: "urn:uuid:…", "{…}" and upper case without hyphens were stored as typed,
+    # so a client comparing with the canonical id did not find its label.
+    for typed in (f"urn:uuid:{LABEL}", "{" + str(LABEL) + "}", LABEL.hex.upper()):
+        stored = to_json(
+            "all",
+            [Condition("label", "has", typed), Condition("addressee", "is", f" {PERSON} ")],
+            [("add_label", LABEL, None)],
+        )
+        assert stored["conditions"] == [
+            {"field": "label", "op": "has", "value": str(LABEL)},
+            {"field": "addressee", "op": "is", "value": str(PERSON)},
+        ]

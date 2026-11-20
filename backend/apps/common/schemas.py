@@ -28,6 +28,8 @@ class ErrorOut(Schema):
 class HealthOut(Schema):
     status: str
     api_version: str
+    # The server's own version (backend/pyproject.toml); added after 1.0.0, so optional.
+    server_version: str = ""
 
 
 # Documented error responses shared by many operations, merged into `response=`.

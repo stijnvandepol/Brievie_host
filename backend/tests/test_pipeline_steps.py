@@ -500,3 +500,19 @@ def test_rule_takes_over_the_ais_proposal_of_the_same_label(ws_a: Workspace) -> 
     assert (row.label_id, row.origin, row.rule_name) == (belasting.id, "rule", "Fiscus")
     assert row.quote == "Belastingdienst"
     assert row.confidence == Decimal("1.000")
+
+
+def test_a_masked_variant_from_before_is_neither_proposed_nor_sent_to_the_ai(
+    ws_a: Workspace,
+) -> None:
+    # The finding: variant "123456782" was stored as "[BSN]"; a letter with another BSN
+    # then proposed and preselected this person.
+    bsn_test = make_person(ws_a, "BSN-test", "[BSN]")
+    document = make_document(ws_a, text="Burgerservicenummer: [BSN]\nT.a.v. de heer K. Bakker")
+
+    with workspace_context(ws_a.id):
+        names = {p.person_id: p.names for p in steps.active_persons()}
+        assert names[bsn_test.id] == ("BSN-test",)
+    run(ws_a, document, None)
+
+    assert open_suggestions(ws_a, document) == []

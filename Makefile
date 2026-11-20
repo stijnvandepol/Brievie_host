@@ -3,7 +3,8 @@
 ## Always passed with -p, so a missing or stray line never leads a make target into
 ## another installation's project.
 PROJECT := $(or $(COMPOSE_PROJECT_NAME),$(shell sed -n 's/^[[:space:]]*\(export[[:space:]][[:space:]]*\)\{0,1\}COMPOSE_PROJECT_NAME=//p' deploy/.env 2>/dev/null | tail -n 1),brievie)
-COMPOSE := docker compose -p $(PROJECT) --project-directory deploy -f deploy/docker-compose.yml
+## The development override publishes PostgreSQL on 127.0.0.1:$POSTGRES_PORT for make test.
+COMPOSE := docker compose -p $(PROJECT) --project-directory deploy -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml
 BACKEND := cd backend &&
 
 .PHONY: dev down migrate test lint format typecheck openapi web-install web-test web-lint web-build web-api web-i18n

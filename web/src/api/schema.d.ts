@@ -1174,7 +1174,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Update Person */
+        /**
+         * Update Person
+         * @description `name_variants` and `archived` left out keep the person's current value (a rename never archives, restores or clears the variants); sent, they replace it.
+         */
         put: operations["updatePerson"];
         post?: never;
         /** Delete Person */
@@ -1781,6 +1784,21 @@ export interface components {
             pages: components["schemas"]["PageOut"][];
             /** Proposals */
             proposals: components["schemas"]["ProposalOut"][];
+            /**
+             * Proposed Document Type
+             * @default
+             */
+            proposed_document_type: string;
+            /**
+             * Proposed Letter Date
+             * Format: date
+             */
+            proposed_letter_date?: string | null;
+            /**
+             * Proposed Sender
+             * @default
+             */
+            proposed_sender: string;
             /** Sender */
             sender: string;
             /** Status */
@@ -1843,6 +1861,21 @@ export interface components {
             open_suggestion_count: number;
             /** Page Count */
             page_count: number;
+            /**
+             * Proposed Document Type
+             * @default
+             */
+            proposed_document_type: string;
+            /**
+             * Proposed Letter Date
+             * Format: date
+             */
+            proposed_letter_date?: string | null;
+            /**
+             * Proposed Sender
+             * @default
+             */
+            proposed_sender: string;
             /** Sender */
             sender: string;
             /** Status */
@@ -1889,6 +1922,11 @@ export interface components {
         HealthOut: {
             /** Api Version */
             api_version: string;
+            /**
+             * Server Version
+             * @default
+             */
+            server_version: string;
             /** Status */
             status: string;
         };
@@ -3212,6 +3250,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthOut"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
                 };
             };
         };

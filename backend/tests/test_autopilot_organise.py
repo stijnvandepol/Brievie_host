@@ -489,3 +489,29 @@ def test_an_ai_pick_of_a_person_is_applied_only_when_its_quote_holds_a_name(
         locked = Document.objects.select_for_update().get(id=document.id)
         assert autopilot.apply_open_proposals(locked) == applied
         assert DocumentAddressee.objects.filter(document=document).count() == applied
+
+
+@pytest.mark.parametrize(
+    ("variants", "quote"),
+    [
+        # Masked before BSNs were refused: the quote of any letter with a BSN holds it.
+        (["[BSN]"], "Burgerservicenummer: [BSN]"),
+        # The same name on another active person: the quote does not say whose it is.
+        (["Stijn van de Pol"], "De heer Stijn van de Pol"),
+    ],
+)
+def test_an_ai_pick_is_not_applied_on_a_masked_or_shared_name(
+    ws_a: Workspace, variants: list[str], quote: str
+) -> None:
+    make_person(ws_a, "Stijn van de Pol")
+    person = make_person(ws_a, "Andere Stijn")
+    with workspace_context(ws_a.id):
+        person.name_variants = variants
+        person.save()
+    document = new_document(ws_a, quote)
+    _ai_pick(ws_a, document, person, quote)
+
+    with workspace_context(ws_a.id):
+        locked = Document.objects.select_for_update().get(id=document.id)
+        assert autopilot.apply_open_proposals(locked) == 0
+        assert not DocumentAddressee.objects.filter(document=document).exists()

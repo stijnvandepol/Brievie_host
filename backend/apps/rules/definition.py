@@ -11,7 +11,7 @@ from uuid import UUID
 from django.utils.translation import gettext as _
 
 from apps.common.errors import ApiError
-from apps.common.privacy import mask_bsns
+from apps.common.privacy import holds_bsn, mask_bsns
 from apps.documents.models import Document
 from apps.rules.engine import ACTIONS, OPERATORS, Action, Condition, RuleSpec
 from apps.rules.models import Rule
@@ -36,11 +36,15 @@ def validate(
     *,
     label_ids: Collection[UUID],
     person_ids: Collection[UUID],
+    kept_values: Collection[str] = (),
+    archived_person_ids: Collection[UUID] = (),
 ) -> None:
     """Refuse a definition that breaks a limit, with a Dutch sentence that names it.
 
-    `label_ids` are the workspace's labels, `person_ids` its persons that are not
-    archived.
+    `label_ids` are the workspace's labels, `person_ids` the persons the rule may name
+    (see rules.services), `archived_person_ids` the archived ones it may not, only to
+    say so. `kept_values` are the text and sender values the rule already stores: one
+    masked before a BSN was refused here may stay (it matches nothing).
     """
     if match not in MATCHES:
         raise _invalid(_("Kies of alle voorwaarden moeten kloppen of een van de voorwaarden."))
@@ -55,13 +59,29 @@ def validate(
             % {"min": ACTIONS_MIN, "max": ACTIONS_MAX}
         )
     for condition in conditions:
-        _validate_condition(condition, label_ids=label_ids, person_ids=person_ids)
+        _validate_condition(
+            condition,
+            label_ids=label_ids,
+            person_ids=person_ids,
+            kept_values=kept_values,
+            archived_person_ids=archived_person_ids,
+        )
     for action in actions:
-        _validate_action(action, label_ids=label_ids, person_ids=person_ids)
+        _validate_action(
+            action,
+            label_ids=label_ids,
+            person_ids=person_ids,
+            archived_person_ids=archived_person_ids,
+        )
 
 
 def _validate_condition(
-    condition: Condition, *, label_ids: Collection[UUID], person_ids: Collection[UUID]
+    condition: Condition,
+    *,
+    label_ids: Collection[UUID],
+    person_ids: Collection[UUID],
+    kept_values: Collection[str],
+    archived_person_ids: Collection[UUID],
 ) -> None:
     field, op = condition.field, condition.op
     if field not in OPERATORS:
@@ -76,6 +96,14 @@ def _validate_condition(
                 _("De tekst van een voorwaarde is %(min)d tot %(max)d tekens.")
                 % {"min": low, "max": high}
             )
+        # Letters hold every BSN as the same mask, so a BSN would find any letter with one.
+        if holds_bsn(value) and value not in kept_values:
+            raise _invalid(
+                _(
+                    "Een BSN bewaren we nooit, dus je kunt het niet in een regel gebruiken. "
+                    "Laat het nummer weg."
+                )
+            )
     elif field == "document_type":
         if value not in Document.Type.values:
             raise _invalid(_("Dit soort document kennen we niet."))
@@ -89,11 +117,17 @@ def _validate_condition(
         if value:
             raise _invalid(_("Bij 'op naam van niemand' hoort geen persoon."))
     elif _uuid(value) not in person_ids:
+        if _uuid(value) in archived_person_ids:
+            raise _archived_person()
         raise _invalid(_("Een voorwaarde noemt een persoon die we niet kunnen vinden."))
 
 
 def _validate_action(
-    action: ActionIn, *, label_ids: Collection[UUID], person_ids: Collection[UUID]
+    action: ActionIn,
+    *,
+    label_ids: Collection[UUID],
+    person_ids: Collection[UUID],
+    archived_person_ids: Collection[UUID],
 ) -> None:
     kind, label_id, person_id = action
     if kind not in ACTIONS:
@@ -107,7 +141,15 @@ def _validate_action(
     if label_id is not None or person_id is None:
         raise _invalid(_("Een actie 'op naam zetten' noemt alleen een persoon."))
     if person_id not in person_ids:
+        if person_id in archived_person_ids:
+            raise _archived_person()
         raise _invalid(_("Een actie noemt een persoon die we niet kunnen vinden."))
+
+
+def _archived_person() -> ApiError:
+    return _invalid(
+        _("Deze persoon is gearchiveerd. Zet de persoon eerst terug, of kies een ander.")
+    )
 
 
 def to_json(
@@ -118,16 +160,23 @@ def to_json(
         "version": VERSION,
         "match": match,
         "conditions": [
-            {"field": c.field, "op": c.op, "value": mask_bsns(c.value.strip())}
-            if c.field in VALUE_LENGTH
-            else {"field": c.field, "op": c.op, "value": c.value.strip()}
-            for c in conditions
+            {"field": c.field, "op": c.op, "value": _stored_value(c)} for c in conditions
         ],
         "actions": [
             {"type": kind, "label_id": _str(label_id), "person_id": _str(person_id)}
             for kind, label_id, person_id in actions
         ],
     }
+
+
+def _stored_value(condition: Condition) -> str:
+    """A phrase trimmed and BSN-masked; a label or person id in its one form."""
+    value = condition.value.strip()
+    if condition.field in VALUE_LENGTH:
+        return mask_bsns(value)
+    if condition.field in ("label", "addressee") and (target := _uuid(value)) is not None:
+        return str(target)
+    return value
 
 
 def to_spec(rule: Rule) -> RuleSpec | None:
@@ -228,6 +277,20 @@ def named_ids(rule: Rule) -> tuple[frozenset[UUID], frozenset[UUID]]:
             if target is not None:
                 found.add(target)
     return frozenset(labels), frozenset(persons)
+
+
+def phrase_values(rule: Rule) -> frozenset[str]:
+    """The text and sender values the rule stores (none for a rule not saved yet)."""
+    data: object = rule.definition
+    if not isinstance(data, dict):
+        return frozenset()
+    return frozenset(
+        str(item["value"])
+        for item in _list(data.get("conditions"))
+        if isinstance(item, dict)
+        and item.get("field") in VALUE_LENGTH
+        and isinstance(item.get("value"), str)
+    )
 
 
 def only_adds_label(rule: Rule, label_id: UUID) -> bool:

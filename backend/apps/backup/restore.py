@@ -156,20 +156,32 @@ def find_run(
     *,
     extra_secrets: Sequence[str] = (),
 ) -> RunSnapshots:
-    """The snapshots of run `run` (a run id), or of the newest run that has both kinds.
+    """The snapshots of run `run`, or of the newest run that has both kinds.
 
+    `run` is a run id, or the label of an update's safety back-up (`pre-update-X.Y.Z`):
+    then the newest complete run whose database snapshot carries that label.
     A run whose files step ended incomplete (restic exit 3) has both and is restorable.
     `extra_secrets` are hidden from the log too (the typed master key).
     """
     wanted: UUID | None = None
+    label: str | None = None
     if run is not None:
-        try:
-            wanted = UUID(run)
-        except ValueError:
-            raise BackupError("run_not_found") from None
+        if restic.LABEL_PATTERN.fullmatch(run):
+            label = run
+        else:
+            try:
+                wanted = UUID(run)
+            except ValueError:
+                raise BackupError("run_not_found") from None
     db = _snapshots_of_kind(repository, password, "db", extra_secrets)
     files = _snapshots_of_kind(repository, password, "files", extra_secrets)
-    complete = [run_id for run_id in db if run_id in files and wanted in (None, run_id)]
+    complete = [
+        run_id
+        for run_id in db
+        if run_id in files
+        and wanted in (None, run_id)
+        and (label is None or f"label:{label}" in db[run_id].tags)
+    ]
     if not complete:
         raise BackupError("run_not_found")
     chosen = max(complete, key=lambda run_id: db[run_id].time)

@@ -206,6 +206,36 @@ def add_label(
         return True
 
 
+def record_label_deleted(label: Label, *, actor_id: UUID | None) -> None:
+    """Before a label is deleted (its links go with it): a `label_removed` line, with the
+    label's name, in the history of every document that has it.
+
+    The documents are not locked: nothing else is changed on them, and a rule that runs
+    holds the label's row, which the caller has locked. One INSERT for all of them; the
+    rows are built from the label's own links in its workspace, so the same-workspace
+    check of `save()` (which a bulk insert skips) holds by construction.
+    """
+    with transaction.atomic():
+        DocumentEvent.objects.bulk_create(
+            [
+                DocumentEvent(
+                    workspace_id=label.workspace_id,
+                    document_id=document_id,
+                    kind=DocumentEvent.Kind.LABEL_REMOVED,
+                    origin=DocumentEvent.Origin.USER,
+                    actor_id=actor_id,
+                    label=label,
+                    label_name=label.name,
+                )
+                for document_id in DocumentLabel.objects.filter(
+                    label=label, workspace_id=label.workspace_id
+                )
+                .order_by("document_id")
+                .values_list("document_id", flat=True)
+            ]
+        )
+
+
 def record_task_event(document: Document, kind: str, actor: User) -> None:
     """History entry for ticking a task off or reopening it (`task_completed`, `task_reopened`)."""
     _write_event(document, kind, actor, DocumentEvent.Origin.USER)

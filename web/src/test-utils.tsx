@@ -104,6 +104,9 @@ export const documentSummary = {
   confirmed_by_ai: false,
   auto_label_ids: [],
   auto_addressee_ids: [],
+  proposed_sender: "",
+  proposed_document_type: "",
+  proposed_letter_date: null,
 };
 
 export const documentDetail: components["schemas"]["DocumentOut"] = {
