@@ -227,6 +227,19 @@ def test_non_jpeg_is_refused(client_a: Client, ws_a: Workspace) -> None:
     assert rejected(client_a, ws_a, [png]) == "validation_error"
 
 
+@pytest.mark.parametrize(
+    "page",
+    [b"\xff\xd8\xff", b"\xff\xd8\xff\xe0" + bytes(2000)],
+    ids=["three bytes", "only a start"],
+)
+def test_a_page_that_is_no_usable_jpeg_is_refused_before_anything_is_queued(
+    client_a: Client, ws_a: Workspace, page: bytes
+) -> None:
+    # The finding: three magic bytes were stored and sent to the paid AI service.
+    # `rejected` also checks that nothing was stored or queued.
+    assert rejected(client_a, ws_a, [page]) == "validation_error"
+
+
 def test_page_count_must_match_the_metadata(client_a: Client, ws_a: Workspace) -> None:
     metadata = metadata_for([jpeg("een"), jpeg("twee")])
 
