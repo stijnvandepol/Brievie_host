@@ -65,10 +65,10 @@ _BLANK_LOOKALIKES = frozenset("\u115f\u1160\u2800\u3164\uffa0")
 # joiners, direction marks), separators, combining marks without a base, unassigned.
 _INVISIBLE_CATEGORIES = frozenset({"Cc", "Cf", "Co", "Cn", "Cs", "Zs", "Zl", "Zp", "Mn", "Me"})
 # Embeddings, overrides and isolates turn the text after them around (U+202E in a
-# label name reverses the list it stands in).
-_DIRECTION_CONTROLS = frozenset(
-    "\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069"
-)
+# label name reverses the list it stands in). The plain marks (LRM, RLM, ALM) are not
+# here: Hebrew and Arabic keyboards put them in real names, and they reorder nothing
+# outside the name.
+_DIRECTION_CONTROLS = frozenset("\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
 
 
 def is_visible(value: str) -> bool:

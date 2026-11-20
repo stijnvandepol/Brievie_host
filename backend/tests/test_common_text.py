@@ -139,3 +139,21 @@ def test_direction_controls() -> None:
     assert has_direction_control("TEST ‮​")
     assert has_direction_control("a⁧b")
     assert not has_direction_control("שלום")
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "محمد علي‏ (2)",  # Arabic, a right-to-left mark
+        "דוד כהן‎",  # Hebrew, a left-to-right mark
+        "أحمد؜ بن",  # Arabic letter mark
+    ],
+)
+def test_marks_that_keyboards_put_in_real_names_are_allowed(name: str) -> None:
+    assert is_visible(name)
+    assert not has_direction_control(name)
+
+
+@pytest.mark.parametrize("char", ["‪", "‫", "‬", "‭", "‮", "⁦", "⁩"])
+def test_embeddings_overrides_and_isolates_are_refused(char: str) -> None:
+    assert has_direction_control(f"Naam{char}")
