@@ -35,12 +35,14 @@ def list_labels(workspace: Workspace) -> list[Label]:
 
     `document_count` from one grouped count over the label links (each through its
     policy, the visible letters hashed once), not a join of every label to every link
-    (measured, DECISIONS 2026-11-20). Same count: the links the policy shows.
+    (measured, DECISIONS 2026-11-20). Same count: the links the policy shows, of letters
+    not in the trash.
     """
     labels = list(Label.objects.filter(workspace=workspace).order_by(Lower("name"), "id"))
     with connection.cursor() as cursor:
         cursor.execute(
             "SELECT l.label_id, pg_catalog.count(*) FROM public.documents_documentlabel l"
+            " JOIN public.documents_document d ON d.id = l.document_id AND d.trashed_at IS NULL"
             " WHERE l.workspace_id = %s GROUP BY l.label_id",
             [workspace.id],
         )

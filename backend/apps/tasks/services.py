@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from django.db import transaction
-from django.db.models import F
+from django.db.models import F, Q
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
@@ -21,10 +21,17 @@ def task_not_found() -> ApiError:
 
 
 def list_tasks(workspace: Workspace, *, status: str = "open") -> list[Task]:
-    """Tasks by deadline (undated last), then by creation; needs the workspace's RLS context."""
+    """Tasks by deadline (undated last), then by creation; needs the workspace's RLS context.
+
+    The task policy follows the letter; a task of a letter in the trash is left out here.
+    """
     if status not in _STATUSES:
         raise ApiError(422, "validation_error", _("De status moet open, done of all zijn."))
-    tasks = Task.objects.filter(workspace=workspace).select_related("document")
+    tasks = (
+        Task.objects.filter(workspace=workspace)
+        .filter(Q(document__isnull=True) | Q(document__trashed_at__isnull=True))
+        .select_related("document")
+    )
     if status != "all":
         tasks = tasks.filter(status=status)
     return list(tasks.order_by(F("deadline").asc(nulls_last=True), "created_at", "id")[:LIST_MAX])

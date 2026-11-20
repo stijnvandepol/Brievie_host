@@ -46,12 +46,22 @@ def _in_use(person: Person) -> bool:
     return person.user_id is not None or person.document_links.exists()
 
 
+def _only_in_trash(person: Person) -> bool:
+    """In use only through letters in the trash (no account, no link to a live letter):
+    after the purge it can go. As the system, like `_in_use`."""
+    return (
+        person.user_id is None
+        and not person.document_links.filter(document__trashed_at__isnull=True).exists()
+    )
+
+
 def list_persons(workspace: Workspace) -> list[Person]:
     """Active persons by name, then archived ones; needs the workspace's RLS context.
 
     `document_count` from one grouped count over the letters the policy shows, not a
     link-by-link join (measured, DECISIONS 2026-11-20). The same number: a link is
-    visible exactly when its letter is, and `addressee_ids` mirrors the links.
+    visible exactly when its letter is, and `addressee_ids` mirrors the links. A letter in
+    the trash is not counted.
     """
     persons = list(
         Person.objects.filter(workspace=workspace).order_by(
@@ -66,7 +76,7 @@ def list_persons(workspace: Workspace) -> list[Person]:
         cursor.execute(
             "SELECT a.id, pg_catalog.count(*) FROM public.documents_document d,"
             " LATERAL pg_catalog.unnest(d.addressee_ids) AS a(id)"
-            " WHERE d.workspace_id = %s GROUP BY a.id",
+            " WHERE d.workspace_id = %s AND d.trashed_at IS NULL GROUP BY a.id",
             [workspace.id],
         )
         counts: dict[UUID, int] = {row[0]: int(row[1]) for row in cursor.fetchall()}
@@ -288,6 +298,16 @@ def delete_person(*, workspace: Workspace, person_id: UUID, actor: AuditActor) -
         # says what the use is.
         with system_actor():
             in_use = _in_use(person)
+            only_in_trash = in_use and _only_in_trash(person)
+        if only_in_trash:
+            raise ApiError(
+                409,
+                "person_in_use",
+                _(
+                    "Deze persoon staat nog op een brief in de prullenbak. Na het wissen van "
+                    "die brief kun je de persoon verwijderen. Archiveren kan nu al."
+                ),
+            )
         if in_use:
             raise ApiError(
                 409,
