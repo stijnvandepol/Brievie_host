@@ -84,6 +84,8 @@ letters through `visible_documents` without further change.
 ### Services (`apps/documents/trash.py`, new)
 
 All mutating functions are `transaction.atomic` and lock the row (`select_for_update`).
+`move_to_trash`, `purge_now`, `empty_trash` and `purge.mark_expired` first ask
+`retention.check_removal` (ruling 18), which allows everything today.
 
 - `move_to_trash(document: Document, *, user: User | None, actor: AuditActor, reason: str = "user") -> None`:
   the building block on a locked live document (the duplicate merge will call it with
@@ -221,7 +223,8 @@ restore; on purge it goes with the letter (cascade). The audit row is what remai
 - `EmptyTrashOut`: `document_count: int`.
 - New error codes: 404 `document_in_trash` ("Deze brief staat in de prullenbak."), 409
   `document_trashed` ("Deze brief staat in de prullenbak. Zet hem daar terug als je hem
-  weer wilt zien.").
+  weer wilt zien."). Reserved for the retention hook, not raised today: 409
+  `document_retained`.
 - Every new field has a default or is in a new schema; no `anyOf`; nullable only primitives.
 
 ### Web (Dutch B1, Lingui; `pnpm extract`)
@@ -246,13 +249,18 @@ restore; on purge it goes with the letter (cascade). The audit row is what remai
   empty) and "Nog {n} dagen" / "Nog 1 dag" / "Wordt vandaag gewist" from `purge_after`.
   Per row "Terugzetten" (not for a viewer); for an admin also "Definitief verwijderen".
   Header button "Prullenbak legen" for an admin when the list is not empty. Empty state:
-  "De prullenbak is leeg."
+  "De prullenbak is leeg." For an admin, under the intro: "Brievie houdt nog geen
+  bewaartermijn bij. Moet je een brief bewaren, bijvoorbeeld een factuur voor de
+  belasting? Let daar dan zelf op voordat je hem wist."
 - "Definitief verwijderen" dialog (danger): title "Brief voorgoed wissen?", text "De brief
-  en de gescande pagina's worden gewist. Dit kun je niet ongedaan maken. In oudere
-  back-ups staat de brief nog tot die back-ups verlopen.", button "Definitief verwijderen".
+  en de gescande pagina's worden voorgoed uit Brievie gewist. Dit kun je niet ongedaan
+  maken. Een back-up die eerder is gemaakt, heeft de brief nog. Daar blijft hij in tot die
+  back-up verloopt.", button "Definitief verwijderen".
 - "Prullenbak legen" dialog (danger): title "Prullenbak legen?", text "{n} brieven in de
-  prullenbak worden voorgoed gewist. Dit kun je niet ongedaan maken." (plural), button
-  "Prullenbak legen"; sends `up_to` = the newest `trashed_at` on screen.
+  prullenbak worden voorgoed uit Brievie gewist. Dit kun je niet ongedaan maken. Een
+  back-up die eerder is gemaakt, heeft deze brieven nog. Daar blijven ze in tot die
+  back-up verloopt." (plural), button "Prullenbak legen"; sends `up_to` = the newest
+  `trashed_at` on screen.
 - A link to a trashed letter (`document_in_trash`): "Deze brief staat in de prullenbak."
   with a link "Naar de prullenbak".
 - History lines: "Naar de prullenbak verplaatst door {naam}", "Teruggezet uit de
@@ -307,6 +315,20 @@ Added:
 17. **`move_to_trash` is the building block with a `reason`.** The duplicate merge calls it
     with `reason="duplicate"` and its own actor; nothing in the trash knows about
     duplicates. Cost if wrong: an extra allowed reason value.
+18. **One hook for a retention term: `apps/documents/retention.py`.**
+    `check_removal(document: Document, *, step: RemovalStep) -> RemovalVerdict` with
+    `RemovalStep = Literal["trash", "purge"]` and
+    `@dataclass(frozen=True) RemovalVerdict(allowed: bool = True, warning: str = "")`.
+    Today it returns `RemovalVerdict()` for every letter. It is called in exactly four
+    places: `move_to_trash` (`"trash"`), `purge_now`, `empty_trash` and `mark_expired`
+    (`"purge"`), on the locked row, before anything changes. A refused verdict raises
+    `ApiError(409, "document_retained", <the verdict's sentence>)` in the two request paths,
+    skips the letter in `empty_trash` (not counted) and in `mark_expired` (stays in the
+    trash). A warning is not shown yet: when terms arrive, the endpoints add an additive
+    `warnings` field and a confirm step. Cost if wrong: one function to widen; no caller
+    has to be found again.
+19. **The back-up sentence is in the confirm questions, not only in PRIVACY.** "Definitief"
+    is only honest with it. Cost if wrong: a longer dialog.
 
 ## Left to the builder
 
@@ -330,10 +352,12 @@ Added:
   upload from the queue: drop the queued scan and say the letter is in the trash.
 - `purgeDocument` and `emptyTrash` stay web-only (session).
 
-## Point for Stijn
+## Decided on Stijn's mandate (20-11)
 
-Zakelijk has a fiscal retention duty (spec section 8: "bewaartermijn per document ... met
-waarschuwing vóór verwijderen", `bewaren_tot`). It is not built; the trash lets any member
-delete an invoice and an admin purge it. When `bewaren_tot` arrives, `move_to_trash` and
-`purge_now`/`empty_trash` must warn or refuse for a letter under retention. Decide whether
-that blocks Zakelijk, or the trash ships now for Thuis and Zakelijk alike.
+- **Retention.** The trash ships for Thuis and Zakelijk alike. A retention term per letter
+  (spec section 8, `bewaren_tot`) is a later feature; the hook for it is
+  `retention.check_removal` (ruling 18), and the admin text says honestly that Brievie
+  does not watch a retention term yet.
+- **"Definitief" and back-ups.** The texts say what is true: gone from Brievie for good,
+  but a back-up made earlier still holds the letter until that back-up expires (the two
+  confirm questions above, PRIVACY and SELFHOST).
