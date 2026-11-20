@@ -6,7 +6,7 @@ from apps.workspaces.rls import task_visibility_policy
 class Migration(migrations.Migration):
     dependencies = [
         ("tasks", "0003_task_created_by"),
-        ("documents", "0011_visibility"),
+        ("documents", "0012_visibility"),
     ]
 
     operations = [task_visibility_policy()]
