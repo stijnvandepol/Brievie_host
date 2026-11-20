@@ -71,3 +71,29 @@ def test_content_security_policy_allows_no_inline_script_or_eval() -> None:
     assert policy["frame-ancestors"] == ["'none'"]
     assert "'unsafe-inline'" not in match.group(1)
     assert "'unsafe-eval'" not in match.group(1)
+
+
+def service_block(name: str) -> str:
+    """The compose service `name` up to the next top-level service."""
+    start = COMPOSE.index(f"\n  {name}:\n")
+    following = re.search(r"\n  [a-z][a-z0-9_-]*:\n", COMPOSE[start + 1 :])
+    return COMPOSE[start : start + 1 + following.start()] if following else COMPOSE[start:]
+
+
+def test_caddy_replaces_a_client_sent_forwarded_for() -> None:
+    # The client address (sessions, audit log, login lockout) is the last
+    # X-Forwarded-For entry (apps.common.net, BRIEVIE_PROXY_COUNT 1). Caddy trusts no
+    # proxy here, so it replaces whatever X-Forwarded-For a client sends with the peer
+    # it sees: a client cannot pick its own address. Trusting a proxy, or passing the
+    # header on by hand, would let any client do so.
+    assert "trusted_proxies" not in CADDYFILE
+    assert "client_ip_headers" not in CADDYFILE
+    assert not re.search(r"header_up\s+[+-]?X-Forwarded-For", CADDYFILE, re.IGNORECASE)
+    assert 'BRIEVIE_PROXY_COUNT: "1"' in service_block("api")
+
+
+def test_only_caddy_publishes_the_api() -> None:
+    # Reached directly, the api would believe any X-Forwarded-For.
+    for service in ("api", "worker", "keeper", "admin", "migrate"):
+        assert "ports:" not in service_block(service), service
+    assert "ports:" in service_block("caddy")

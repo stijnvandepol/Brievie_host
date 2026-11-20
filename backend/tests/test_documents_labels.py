@@ -2,7 +2,9 @@ import uuid
 from typing import TYPE_CHECKING
 
 import pytest
+from django.db import connection
 from django.test import Client
+from django.test.utils import CaptureQueriesContext
 
 from apps.documents import organise
 from apps.documents.models import Document, DocumentEvent, DocumentLabel
@@ -10,6 +12,7 @@ from apps.labels.models import Label
 from apps.workspaces.context import workspace_context
 from apps.workspaces.models import Workspace
 from tests.documents_support import admin_of, documents_url, make_document
+from tests.helpers import post_json
 
 if TYPE_CHECKING:
     from tests.helpers import Response
@@ -130,10 +133,11 @@ def test_delete_label_removes_it_from_documents_and_keeps_event_names(
     assert r.status_code == 204
     body = client_a.get(f"{documents_url(ws_a.id)}/{document.id}").json()
     assert body["label_ids"] == [str(bank.id)]
-    # No event per document for the delete; the old event keeps the name.
+    # A removed line per document for the delete; the events keep the name.
     assert events(ws_a, document) == [
         ("label_added", "Zorg", None),
         ("label_added", "Bank", bank.id),
+        ("label_removed", "Zorg", None),
     ]
 
 
@@ -151,3 +155,28 @@ def test_list_filter_on_label(client_a: Client, ws_a: Workspace) -> None:
     assert {row["id"] for row in by_zorg} == {str(with_zorg.id), str(with_both.id)}
     assert [row["id"] for row in by_bank] == [str(with_both.id)]
     assert set(by_bank[0]["label_ids"]) == {str(zorg.id), str(bank.id)}
+
+
+def test_deleting_a_label_writes_its_removed_lines_in_one_insert(
+    client_a: Client, ws_a: Workspace
+) -> None:
+    def delete_on(count: int) -> int:
+        created = post_json(
+            client_a, f"/workspaces/{ws_a.id}/labels", {"name": f"Tijdelijk {count}"}
+        )
+        label_id = created.json()["id"]
+        for _ in range(count):
+            put_labels(client_a, ws_a.id, make_document(ws_a).id, [uuid.UUID(label_id)])
+        with CaptureQueriesContext(connection) as queries:
+            r = client_a.delete(f"/api/v1/workspaces/{ws_a.id}/labels/{label_id}")
+        assert r.status_code == 204
+        with workspace_context(ws_a.id):
+            assert (
+                DocumentEvent.objects.filter(
+                    label_name=f"Tijdelijk {count}", kind="label_removed"
+                ).count()
+                == count
+            )
+        return len(queries.captured_queries)
+
+    assert delete_on(1) == delete_on(6)

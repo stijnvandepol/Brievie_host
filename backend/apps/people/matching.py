@@ -5,7 +5,7 @@ suggestion; a match of `PRESELECT_FROM` or higher is preselected on the review s
 """
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from uuid import UUID
 
@@ -16,6 +16,9 @@ PRESELECT_FROM = Decimal("0.85")
 AFTER_ADDRESS_WORD = Decimal("0.950")
 IN_ADDRESS_BLOCK = Decimal("0.850")
 ELSEWHERE = Decimal("0.600")
+# A name found where another person's name, as long or longer, was found too: whose letter
+# it is stays a question, so it is never preselected (spec 6.3, below PRESELECT_FROM).
+AMBIGUOUS = Decimal("0.700")
 
 MIN_NAME_LENGTH = 3
 ADDRESS_WORD_REACH = 40
@@ -94,26 +97,50 @@ def _confidence(text: str, first_page_length: int, start: int) -> Decimal:
 
 
 def match_addressees(text: str, persons: Sequence[PersonNames]) -> list[NameMatch]:
-    """One match per person found in `text`: the highest confidence, then the longest name."""
+    """One match per person found in `text`: the highest confidence, then the longest name.
+
+    A person whose match lies where another person's name of at least the same length
+    was found (one name on two persons, or "Test Persoon" inside "Test Persoon B") gets
+    at most `AMBIGUOUS`. The result does not depend on the order of `persons`.
+    """
     first_page_length = text.find(PAGE_SEPARATOR)
     if first_page_length == -1:
         first_page_length = len(text)
     prepared = prepare(text)
-    matches: list[NameMatch] = []
+    best_spans: list[tuple[UUID, tuple[int, int], NameMatch]] = []
+    all_spans: list[tuple[UUID, tuple[int, int]]] = []
     for person in persons:
-        best: tuple[Decimal, int, NameMatch] | None = None
+        best: tuple[Decimal, int, tuple[int, int], NameMatch] | None = None
         for name in person.names:
             length = len(normalise(name))
             if length < MIN_NAME_LENGTH:
                 continue
             for span in find_all_phrases(prepared, name, whole_words=True):
+                all_spans.append((person.person_id, span))
                 confidence = _confidence(text, first_page_length, span[0])
                 if best is None or (confidence, length) > best[:2]:
                     best = (
                         confidence,
                         length,
+                        span,
                         NameMatch(person.person_id, excerpt(text, span), confidence),
                     )
         if best is not None:
-            matches.append(best[2])
-    return matches
+            best_spans.append((person.person_id, best[2], best[3]))
+    return [
+        replace(match, confidence=min(match.confidence, AMBIGUOUS))
+        if _shadowed(person_id, span, all_spans)
+        else match
+        for person_id, span, match in best_spans
+    ]
+
+
+def _shadowed(
+    person_id: UUID, span: tuple[int, int], spans: Sequence[tuple[UUID, tuple[int, int]]]
+) -> bool:
+    """Whether another person's name, at least as long, was found overlapping `span`."""
+    start, end = span
+    return any(
+        other != person_id and o_start < end and start < o_end and o_end - o_start >= end - start
+        for other, (o_start, o_end) in spans
+    )

@@ -1,5 +1,6 @@
 """Helpers for the document API tests: fake page images and multipart uploads."""
 
+import base64
 import hashlib
 import json
 import uuid
@@ -19,13 +20,37 @@ from apps.workspaces.models import Membership, Workspace
 if TYPE_CHECKING:
     from tests.helpers import Response
 
-JPEG_MAGIC = b"\xff\xd8\xff\xe0"
+# A whole 1 x 1 baseline JPEG (the same file as .github/scripts/restore-seed.py).
+_BASE_JPEG = base64.b64decode(
+    "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////"
+    "////////////////////////////////////////////////////////wgALCAAB"
+    "AAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA="
+)
+# Its frame header (progressive), after the quantisation table.
+_SOF_AT = _BASE_JPEG.index(b"\xff\xc2")
 
 
 def jpeg(seed: str = "pagina", size: int = 2000) -> bytes:
-    """Bytes that start like a JPEG; the server stores them, it never decodes them."""
+    """A whole JPEG of about `size` bytes whose content depends on `seed`.
+
+    The server checks a page's structure (apps.documents.jpeg) but never decodes it;
+    comment segments carry the seed, so two seeds give two hashes.
+    """
     filler = hashlib.sha256(seed.encode()).digest()
-    return (JPEG_MAGIC + filler * (size // len(filler) + 1))[:size]
+    room = max(len(filler), size - len(_BASE_JPEG))
+    comment = (filler * (room // len(filler) + 1))[:room]
+    segments = b"".join(
+        b"\xff\xfe" + (len(part) + 2).to_bytes(2, "big") + part
+        for part in (comment[i : i + 65000] for i in range(0, len(comment), 65000))
+    )
+    return _BASE_JPEG[:2] + segments + _BASE_JPEG[2:]
+
+
+def jpeg_of_size(width: int, height: int) -> bytes:
+    """`jpeg()` with another width and height in its frame header."""
+    data = jpeg()
+    at = len(data) - len(_BASE_JPEG) + _SOF_AT + 5
+    return data[:at] + height.to_bytes(2, "big") + width.to_bytes(2, "big") + data[at + 4 :]
 
 
 def admin_of(workspace: Workspace) -> User:

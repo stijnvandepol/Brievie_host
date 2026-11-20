@@ -15,6 +15,7 @@ from decimal import Decimal
 
 from django.db.models import Case, IntegerField, Value, When
 
+from apps.common.privacy import holds_bsn
 from apps.documents import organise, suggestions
 from apps.documents.models import (
     NEEDS_ATTENTION_BELOW,
@@ -68,6 +69,9 @@ def apply_open_proposals(document: Document) -> int:
         )
         .order_by("order", "-confidence", "id")
     )
+    active_persons = list(
+        Person.objects.filter(workspace_id=document.workspace_id, archived_at__isnull=True)
+    )
     applied = 0
     for row in rows:
         event_origin = _event_origin(row)
@@ -80,10 +84,11 @@ def apply_open_proposals(document: Document) -> int:
         else:
             if row.person is None or row.person.archived_at is not None:
                 continue
-            if row.origin == DocumentSuggestion.Origin.AI and not quote_names(
-                row.quote, row.person
+            if row.origin == DocumentSuggestion.Origin.AI and (
+                not quote_names(row.quote, row.person)
+                or named_by_another(row.quote, row.person, active_persons)
             ):
-                continue  # the letter's own words must name the person
+                continue  # the letter's own words must name this person, and only them
             added = organise.add_addressee(document, row.person, actor=None, origin=event_origin)
         if added:
             suggestions.mark_accepted(document, row.action, suggestions.target_id_of(row))
@@ -97,14 +102,31 @@ def quote_names(quote: str, person: Person) -> bool:
 
     Case-insensitive, on whitespace-normalised text, as whole words. An AI pick of a person
     whose quote does not name them ("Geachte heer/mevrouw") stays a proposal: otherwise the
-    letter alone could decide whose post it is.
+    letter alone could decide whose post it is. A name holding a (masked) BSN names
+    nobody: every letter with any BSN holds the same mask.
     """
+    return _named_length(_normalised(quote), person) > 0
+
+
+def named_by_another(quote: str, person: Person, persons: Sequence[Person]) -> bool:
+    """Whether `quote` names another of `persons` with a name at least as long as the
+    longest one of `person`'s it names: then it does not tell whose letter it is (as name
+    matching, which never preselects such a name)."""
     text = _normalised(quote)
+    own = _named_length(text, person)
+    return any(other.pk != person.pk and _named_length(text, other) >= own for other in persons)
+
+
+def _named_length(text: str, person: Person) -> int:
+    """The length of the longest of the person's names that `text` holds; 0 for none."""
+    longest = 0
     for name in (person.display_name, *person.name_variants):
+        if holds_bsn(str(name)):
+            continue
         wanted = _normalised(str(name))
         if wanted and re.search(r"(?<!\w)" + re.escape(wanted) + r"(?!\w)", text):
-            return True
-    return False
+            longest = max(longest, len(wanted))
+    return longest
 
 
 def _normalised(text: str) -> str:

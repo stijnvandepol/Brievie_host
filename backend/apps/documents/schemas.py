@@ -60,6 +60,12 @@ class DocumentSummaryOut(Schema):
     # Of `label_ids` and `addressee_ids`: the ones Brievie put there itself (the autopilot).
     auto_label_ids: list[UUID] = Field(default_factory=list)
     auto_addressee_ids: list[UUID] = Field(default_factory=list)
+    # Before a person confirmed the letter: the pipeline's strongest proposal for an empty
+    # `sender`, `document_type` and `letter_date`, as the detail's `proposals` show it. A
+    # proposal, never a fact: show it as one. Empty (null) once confirmed or without one.
+    proposed_sender: str = ""
+    proposed_document_type: str = ""
+    proposed_letter_date: date | None = None
 
 
 class PageOut(Schema):

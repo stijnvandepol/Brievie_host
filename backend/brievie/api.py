@@ -1,13 +1,16 @@
 from django.conf import settings
 from django.http import HttpRequest
+from django.utils.translation import gettext as _
 from ninja import NinjaAPI
 from pydantic import BaseModel
 
 from apps.accounts.api import router as accounts_router
 from apps.accounts.auth import session_auth
 from apps.audit.api import router as audit_router
-from apps.common.errors import install_error_handlers
-from apps.common.schemas import HealthOut
+from apps.common import health
+from apps.common.errors import ApiError, install_error_handlers
+from apps.common.schemas import ErrorOut, HealthOut
+from apps.common.version import server_version
 from apps.devices.api import router as devices_router
 from apps.devices.auth import DeviceTokenAuth
 from apps.documents.api import router as documents_router
@@ -47,9 +50,17 @@ api = NinjaAPI(
 install_error_handlers(api)
 
 
-@api.get("/health", response=HealthOut, auth=None, operation_id="getHealth")
+# Up, and the database answers. Outside the request transaction (brievie/urls.py), so an
+# unreachable database is a 503 with a sentence, never a 500.
+@api.get("/health", response={200: HealthOut, 503: ErrorOut}, auth=None, operation_id="getHealth")
 def get_health(request: HttpRequest) -> HealthOut:
-    return HealthOut(status="ok", api_version=api.version)
+    if not health.database_reachable():
+        raise ApiError(
+            503,
+            "database_unavailable",
+            _("De database is niet bereikbaar. Probeer het later opnieuw."),
+        )
+    return HealthOut(status="ok", api_version=api.version, server_version=server_version())
 
 
 api.add_router("", accounts_router)

@@ -166,7 +166,9 @@ def test_authority_fingerprint_matches_pki(tmp_path: Path) -> None:
 
 
 def test_brievie_version_reads_pyproject() -> None:
-    assert brievie_version() == "0.1.0"
+    from apps.common.version import server_version
+
+    assert brievie_version() == server_version()
 
 
 def test_hostname_comes_from_settings(settings: Settings) -> None:

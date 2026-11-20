@@ -14,7 +14,7 @@ from brievie.api import api
 ERROR_REF = "#/components/schemas/ErrorOut"
 CAMEL_CASE = re.compile(r"^[a-z][a-zA-Z0-9]*$")
 # No failure mode besides a server error (ruling); every other operation documents its errors.
-NO_ERROR_RESPONSES = {"getHealth", "getSetupStatus"}
+NO_ERROR_RESPONSES = {"getSetupStatus"}
 BODY_ERRORS = {"400", "413", "415", "422"}
 HTTP_METHODS = {"get", "put", "post", "delete", "patch", "options", "head", "trace"}
 
@@ -70,6 +70,15 @@ def test_no_operation_documents_a_500() -> None:
         responses = op["responses"]
         assert isinstance(responses, dict)
         assert "500" not in {str(status) for status in responses}, op["operationId"]
+
+
+def test_health_documents_503_and_server_version_is_optional() -> None:
+    contract = json.loads(export_openapi.OUTPUT.read_text(encoding="utf-8"))
+    health = contract["paths"]["/api/v1/health"]["get"]
+    assert "503" in health["responses"]
+    out = contract["components"]["schemas"]["HealthOut"]
+    assert "server_version" in out["properties"]
+    assert "server_version" not in out.get("required", [])
 
 
 def test_version_is_1_0_0() -> None:
@@ -367,3 +376,17 @@ def test_released_schemas_gain_no_required_properties(released_contract: Contrac
         if name in current
     }
     assert {name: props for name, props in gained.items() if props} == {}
+
+
+def test_list_row_proposals_are_optional_primitives() -> None:
+    # Additive: an app built before them reads the row as before, and the iOS generator
+    # gets plain optionals (no anyOf, no object).
+    schemas = current_contract()["components"]["schemas"]
+    for name in ("DocumentSummaryOut", "DocumentOut"):
+        properties = schema_properties(schemas[name])
+        required = schema_required(schemas[name])
+        assert properties["proposed_sender"]["type"] == "string"
+        assert properties["proposed_document_type"]["type"] == "string"
+        assert properties["proposed_letter_date"]["type"] == ["string", "null"]
+        assert properties["proposed_letter_date"]["format"] == "date"
+        assert not {"proposed_sender", "proposed_document_type", "proposed_letter_date"} & required

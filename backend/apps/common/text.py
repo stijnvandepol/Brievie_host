@@ -3,11 +3,22 @@
 Pure functions, used by name matching and the rules engine. Both sides of a
 comparison are normalised the same way (accents removed, case folded, whitespace
 collapsed) while spans always refer to the original text.
+
+The BSN mask token is no text: it stands for any number, so it never matches. In a
+letter it becomes one opaque character that no phrase can contain; a phrase that holds
+it (a name or rule value masked before a BSN was refused there) matches nothing.
 """
 
 import unicodedata
 from collections.abc import Iterator
 from dataclasses import dataclass
+
+from apps.common.privacy import MASK
+
+# What the mask token normalises to: a noncharacter, so neither a letter nor a digit
+# (a word boundary) and never typed.
+_OPAQUE = "\uffff"
+_MASK_FOLDED = MASK.casefold()
 
 
 def _normalise_with_map(value: str) -> tuple[str, list[int]]:
@@ -15,7 +26,19 @@ def _normalise_with_map(value: str) -> tuple[str, list[int]]:
     chars: list[str] = []
     origin: list[int] = []
     pending_space = False
-    for index, original in enumerate(value):
+    index = 0
+    while index < len(value):
+        original = value[index]
+        if value[index : index + len(MASK)].casefold() == _MASK_FOLDED:
+            if pending_space and chars:
+                chars.append(" ")
+                origin.append(index - 1)
+            pending_space = False
+            chars.append(_OPAQUE)
+            origin.append(index + len(MASK) - 1)
+            index += len(MASK)
+            continue
+        index += 1
         if original.isspace():
             pending_space = True
             continue
@@ -28,12 +51,43 @@ def _normalise_with_map(value: str) -> tuple[str, list[int]]:
             continue
         if pending_space and chars:
             chars.append(" ")
-            origin.append(index - 1 if index > 0 else 0)
+            origin.append(index - 2 if index > 1 else 0)
         pending_space = False
         for c in folded:
             chars.append(c)
-            origin.append(index)
+            origin.append(index - 1)
     return "".join(chars), origin
+
+
+# Characters that draw nothing although Unicode files them as letters or symbols.
+_BLANK_LOOKALIKES = frozenset("\u115f\u1160\u2800\u3164\uffa0")
+# Categories that draw nothing on their own: controls, format characters (zero width,
+# joiners, direction marks), separators, combining marks without a base, unassigned.
+_INVISIBLE_CATEGORIES = frozenset({"Cc", "Cf", "Co", "Cn", "Cs", "Zs", "Zl", "Zp", "Mn", "Me"})
+# Embeddings, overrides and isolates turn the text after them around (U+202E in a
+# label name reverses the list it stands in). The plain marks (LRM, RLM, ALM) are not
+# here: Hebrew and Arabic keyboards put them in real names, and they reorder nothing
+# outside the name.
+_DIRECTION_CONTROLS = frozenset("\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
+
+
+def is_visible(value: str) -> bool:
+    """Whether `value` has at least one character that draws something."""
+    return any(
+        char not in _BLANK_LOOKALIKES and unicodedata.category(char) not in _INVISIBLE_CATEGORIES
+        for char in value
+    )
+
+
+def has_direction_control(value: str) -> bool:
+    """Whether `value` holds a character that changes the direction of the text."""
+    return any(char in _DIRECTION_CONTROLS for char in value)
+
+
+def searchable(phrase: str) -> str:
+    """`phrase` normalised to search for; empty (matches nothing) when it holds the mask."""
+    needle = normalise(phrase)
+    return "" if _OPAQUE in needle else needle
 
 
 def normalise(value: str) -> str:
@@ -65,7 +119,7 @@ def find_all_phrases(
 
     With `whole_words` the characters around a match may not be letters or digits.
     """
-    needle = normalise(phrase)
+    needle = searchable(phrase)
     if not needle:
         return
     prepared = haystack if isinstance(haystack, Prepared) else prepare(haystack)

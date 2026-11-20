@@ -1,5 +1,6 @@
 import uuid
 
+import pytest
 from django.contrib.sessions.models import Session
 from django.test import Client
 
@@ -136,3 +137,16 @@ def test_my_sessions_need_a_csrf_token() -> None:
 
     assert r.status_code == 403
     assert UserSession.objects.filter(user=user).exists()
+
+
+@pytest.mark.usefixtures("without_test_session_receiver")
+def test_a_new_session_was_not_used_before_it_started() -> None:
+    # The finding: last_used_at lay 1-2 ms before started_at. Recorded as in production
+    # (one insert): the test run's own receiver would insert first and hide it.
+    client = signed_in(UserFactory.create())
+
+    row = row_of(client)
+    (listed,) = client.get("/api/v1/me/sessions").json()
+
+    assert row.last_used_at == row.created_at
+    assert listed["last_used_at"] == listed["started_at"]

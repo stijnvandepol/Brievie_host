@@ -185,3 +185,23 @@ def test_extra_labels_that_only_postgresql_sees_as_equal_are_skipped(
     assert {"İstanbul", "Reizen"} <= names
     assert "istanbul" not in names
     assert "stanbul" not in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("name", "message"),
+    [
+        ("​", "Een label heeft een naam nodig."),
+        ("⠀", "Een label heeft een naam nodig."),
+        (
+            "TEST ‮​",
+            "Een naam mag geen tekens bevatten die de leesrichting van de tekst omdraaien.",
+        ),
+    ],
+)
+def test_a_name_that_shows_nothing_or_turns_text_around_is_refused(
+    client_a: Client, ws_a: Workspace, name: str, message: str
+) -> None:
+    r = create(client_a, ws_a.id, {"name": name})
+
+    assert r.status_code == 422
+    assert r.json() == {"code": "validation_error", "message": message}

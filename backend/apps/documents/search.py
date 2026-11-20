@@ -37,6 +37,7 @@ from apps.documents import visibility
 from apps.documents.models import Document, DocumentAddressee, DocumentLabel
 from apps.documents.schemas import DocumentSearchHitOut, DocumentSearchOut, SnippetPartOut
 from apps.documents.services import (
+    HEADLINE_PROPOSALS,
     INBOX_STATES,
     SUGGESTIONS,
     _has_addressee,
@@ -293,10 +294,10 @@ def _word_match(word: str, names: _Names) -> models.Q:
 def _page(
     documents: "models.QuerySet[Document]", limit: int, offset: int
 ) -> tuple[list[Document], int | None]:
-    rows = list(
-        documents.prefetch_related("addressee_links", "label_links", SUGGESTIONS)[
-            offset : offset + limit + 1
-        ]
+    rows: list[Document] = list(
+        documents.prefetch_related(
+            "addressee_links", "label_links", SUGGESTIONS, HEADLINE_PROPOSALS
+        )[offset : offset + limit + 1]
     )
     more = len(rows) > limit and offset + limit <= MAX_OFFSET
     return rows[:limit], (offset + limit if more else None)

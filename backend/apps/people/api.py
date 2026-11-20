@@ -43,21 +43,31 @@ def create_person(request: HttpRequest, workspace_id: UUID, payload: PersonIn) -
     return Status(201, person)
 
 
+def sent_fields(payload: PersonIn) -> set[str]:
+    """The fields the client sent; a field it left out keeps the stored value on update."""
+    return set(payload.model_fields_set)
+
+
 @router.put(
     _PERSON,
     response={200: PersonOut, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS, **BODY_ERRORS},
     operation_id="updatePerson",
+    description=(
+        "`name_variants` and `archived` left out keep the person's current value (a rename "
+        "never archives, restores or clears the variants); sent, they replace it."
+    ),
 )
 def update_person(
     request: HttpRequest, workspace_id: UUID, person_id: UUID, payload: PersonIn
 ) -> Person:
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    sent = sent_fields(payload)
     return services.update_person(
         workspace=membership.workspace,
         person_id=person_id,
         display_name=payload.display_name,
-        name_variants=payload.name_variants,
-        archived=payload.archived,
+        name_variants=payload.name_variants if "name_variants" in sent else None,
+        archived=payload.archived if "archived" in sent else None,
     )
 
 

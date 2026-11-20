@@ -11,6 +11,7 @@ from apps.accounts.models import User
 from apps.common import crypto
 from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
+from apps.documents.jpeg import jpeg_size
 from apps.documents.models import Document, DocumentPage
 from apps.documents.schemas import UploadMetadataIn
 from apps.documents.storage import DocumentStorage, default_storage
@@ -18,7 +19,6 @@ from apps.pipeline.jobs import defer_processing
 from apps.workspaces.keys import workspace_key
 from apps.workspaces.models import Workspace
 
-_JPEG_MAGIC = b"\xff\xd8\xff"
 PAGE_SEPARATOR = "\n\f\n"
 
 
@@ -135,8 +135,9 @@ def _validate(metadata: UploadMetadataIn, pages: list[bytes]) -> None:
     for data, meta in zip(pages, metadata.pages, strict=True):
         if len(meta.text) > settings.BRIEVIE_MAX_PAGE_TEXT_CHARS:
             raise _invalid(_("De tekst van een pagina is te lang."))
-        if not data.startswith(_JPEG_MAGIC):
-            raise _invalid(_("Een pagina is geen JPEG-afbeelding."))
+        if jpeg_size(data) is None:
+            # Before anything is stored or queued: no AI call for a page that is no picture.
+            raise _invalid(_("Een pagina is geen bruikbare JPEG-afbeelding."))
         if hashlib.sha256(data).hexdigest() != meta.sha256:
             raise ApiError(
                 422,

@@ -66,7 +66,7 @@ def record_session(
     if key is None:
         raise RuntimeError("The session has no key after saving.")
     now = timezone.now()
-    row, _created = UserSession.objects.update_or_create(
+    row, created = UserSession.objects.update_or_create(
         session_key=key,
         defaults={
             "user": user,
@@ -79,6 +79,11 @@ def record_session(
             "browser": describe_user_agent(str(request.META.get("HTTP_USER_AGENT", ""))),
         },
     )
+    if created and row.last_used_at != row.created_at:
+        # On insert `created_at` is set by auto_now_add, a moment after `now`: a new
+        # session would have been used before it started.
+        UserSession.objects.filter(pk=row.pk).update(last_used_at=row.created_at)
+        row.last_used_at = row.created_at
     request.session.set_expiry(expiry_of(row, now))
     return row
 

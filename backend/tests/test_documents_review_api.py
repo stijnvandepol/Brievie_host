@@ -227,7 +227,36 @@ def test_confirm_while_processing_is_a_conflict(client_a: Client, ws_a: Workspac
     r = confirm(client_a, ws_a.id, document_id, review())
 
     assert r.status_code == 409
+    assert r.json() == {
+        "code": "document_not_reviewable",
+        "message": "Dit document wordt nog verwerkt. Probeer het zo opnieuw.",
+    }
     assert task_count(ws_a) == 0
+
+
+@pytest.mark.parametrize("letter_date", ["0001-01-01", "9999-12-31", "1899-12-31", "2062-11-03"])
+def test_a_letter_date_out_of_any_sane_range_is_refused(
+    client_a: Client, ws_a: Workspace, letter_date: str
+) -> None:
+    # The finding: 0001-01-01 and 9999-12-31 were confirmed and landed in lists and exports.
+    document_id = reviewable(client_a, ws_a)
+
+    r = confirm(client_a, ws_a.id, document_id, review(letter_date=letter_date))
+
+    assert r.status_code == 422
+    assert r.json() == {
+        "code": "validation_error",
+        "message": "Een briefdatum ligt tussen 1 januari 1900 en een jaar na vandaag.",
+    }
+    assert task_count(ws_a) == 0
+
+
+def test_an_old_letter_date_is_fine(client_a: Client, ws_a: Workspace) -> None:
+    document_id = reviewable(client_a, ws_a)
+
+    r = confirm(client_a, ws_a.id, document_id, review(letter_date="1950-06-01"))
+
+    assert r.status_code == 200
 
 
 def test_failed_document_can_be_reviewed_by_hand(client_a: Client, ws_a: Workspace) -> None:
