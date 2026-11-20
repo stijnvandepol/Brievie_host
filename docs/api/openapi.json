@@ -8908,6 +8908,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/persons/{person_id}": {
       "delete": {
+        "description": "Admins only (403 `forbidden` for others): `person_in_use` also counts letters the caller cannot see, so only an admin learns that a person is in use.",
         "operationId": "deletePerson",
         "parameters": [
           {

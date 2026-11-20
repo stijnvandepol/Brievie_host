@@ -15,6 +15,7 @@ from apps.common.text import has_direction_control, is_visible
 from apps.labels.models import COLORS, Label
 from apps.rules.definition import named_ids, only_adds_label
 from apps.rules.models import Rule
+from apps.workspaces.context import system_actor
 from apps.workspaces.models import Workspace
 
 _NAME_UNIQUE = "labels_label_name_unique"
@@ -128,13 +129,16 @@ def delete_label(*, workspace: Workspace, label_id: UUID, actor: AuditActor) -> 
                 _("De regel '%(rule)s' gebruikt dit label. Pas die regel eerst aan.")
                 % {"rule": rule.name},
             )
-        for rule in own_rules:
-            rule.delete()
         # Imported here: organise imports this module (label_not_found).
         from apps.documents import organise
 
-        organise.record_label_deleted(label, actor_id=actor.user_id)
-        label.delete()
+        # Checked as the caller above; the label leaves every letter, also those the
+        # caller cannot see (a hidden link would otherwise fail the commit).
+        with system_actor():
+            for rule in own_rules:
+                rule.delete()
+            organise.record_label_deleted(label, actor_id=actor.user_id)
+            label.delete()
         # A label's name is the user's own words: the row carries the id only.
         record(
             AuditCode.LABEL_DELETED,

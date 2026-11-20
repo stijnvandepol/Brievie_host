@@ -20,6 +20,12 @@ ALLOWED_SYSTEM_CALLERS = {
     "apps/documents/visibility.py",
     # Confirm: the repeat is recognised and the status written as the system (S 4.9.3).
     "apps/documents/review.py",
+    # Deletes, archiving and a repeated upload reach letters the caller cannot see,
+    # after the authorisation as the caller (plan Task 10).
+    "apps/people/services.py",
+    "apps/labels/services.py",
+    "apps/rules/services.py",
+    "apps/documents/intake.py",
 }
 
 

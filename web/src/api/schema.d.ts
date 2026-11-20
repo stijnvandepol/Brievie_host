@@ -1183,7 +1183,10 @@ export interface paths {
          */
         put: operations["updatePerson"];
         post?: never;
-        /** Delete Person */
+        /**
+         * Delete Person
+         * @description Admins only (403 `forbidden` for others): `person_in_use` also counts letters the caller cannot see, so only an admin learns that a person is in use.
+         */
         delete: operations["deletePerson"];
         options?: never;
         head?: never;

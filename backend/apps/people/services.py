@@ -19,6 +19,7 @@ from apps.documents.models import DocumentSuggestion
 from apps.people.models import Person
 from apps.rules.definition import named_ids
 from apps.rules.models import Rule
+from apps.workspaces.context import system_actor
 from apps.workspaces.models import Membership, Workspace
 
 _NAME_UNIQUE = "people_person_name_unique"
@@ -38,7 +39,10 @@ def _persons(workspace: Workspace) -> "models.QuerySet[Person]":
 
 
 def _in_use(person: Person) -> bool:
-    """Whether deleting would lose information; archiving is the alternative."""
+    """Whether deleting would lose information; archiving is the alternative.
+
+    Counts letters the caller cannot see too: the caller runs it as the system.
+    """
     return person.user_id is not None or person.document_links.exists()
 
 
@@ -236,9 +240,11 @@ def update_person(
             person.archived_at = timezone.now()
             # An archived person cannot be added to a document, so their open proposals
             # could be neither accepted nor confirmed. Accepted and dismissed rows stay.
-            DocumentSuggestion.objects.filter(
-                person=person, state=DocumentSuggestion.State.OPEN
-            ).delete()
+            # As the system: proposals on letters the caller cannot see go too.
+            with system_actor():
+                DocumentSuggestion.objects.filter(
+                    person=person, state=DocumentSuggestion.State.OPEN
+                ).delete()
         _refuse_taken_names(person)
         _save(person)
         return _annotated(workspace, person.id)
@@ -249,7 +255,12 @@ def delete_person(*, workspace: Workspace, person_id: UUID, actor: AuditActor) -
         # Rules first, in id order: a running rule holds its rules and then needs the person.
         rules = list(Rule.objects.select_for_update().filter(workspace=workspace).order_by("id"))
         person = _get_for_update(workspace, person_id)
-        if _in_use(person):
+        # The caller is authorised above; the use and the delete reach letters the caller
+        # cannot see (a hidden link would otherwise fail the commit). The message never
+        # says what the use is.
+        with system_actor():
+            in_use = _in_use(person)
+        if in_use:
             raise ApiError(
                 409,
                 "person_in_use",
@@ -263,7 +274,8 @@ def delete_person(*, workspace: Workspace, person_id: UUID, actor: AuditActor) -
                     _("De regel '%(rule)s' gebruikt deze persoon. Pas die regel eerst aan.")
                     % {"rule": rule.name},
                 )
-        person.delete()
+        with system_actor():
+            person.delete()
         record(
             AuditCode.PERSON_DELETED,
             actor=actor,

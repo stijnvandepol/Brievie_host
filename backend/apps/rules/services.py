@@ -24,6 +24,7 @@ from apps.rules.facts import facts_for_many
 from apps.rules.models import Rule, RuleRun
 from apps.rules.schemas import RuleIn, RuleTestOut
 from apps.rules.templates import RuleTemplate, rule_templates
+from apps.workspaces.context import system_actor
 from apps.workspaces.models import Workspace
 
 RULES_MAX = 200
@@ -159,7 +160,9 @@ def delete_rule(*, workspace: Workspace, rule_id: UUID, actor: AuditActor) -> No
     """Its runs go with it; history events keep the rule's name."""
     with transaction.atomic():
         rule = _get_for_update(workspace, rule_id)
-        rule.delete()
+        # Its runs and events on letters the caller cannot see go too.
+        with system_actor():
+            rule.delete()
         _record(AuditCode.RULE_DELETED, workspace, actor, rule_id)
 
 
