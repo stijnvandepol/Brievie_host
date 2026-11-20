@@ -14,7 +14,7 @@ from apps.accounts.models import User
 from apps.devices.services import create_pairing_code, pair_device
 from apps.documents.models import Document
 from apps.people.models import Person
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
 
 if TYPE_CHECKING:
@@ -107,14 +107,14 @@ def upload(
 
 def make_document(workspace: Workspace, status: str = "done") -> Document:
     """A document row without pages, in `status`; enough for organising tests."""
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Document.objects.create(
             workspace=workspace, client_id=uuid.uuid4(), page_count=1, status=status
         )
 
 
 def make_person(workspace: Workspace, name: str, *, archived: bool = False) -> Person:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Person.objects.create(
             workspace=workspace,
             display_name=name,

@@ -11,7 +11,7 @@ from django.test.utils import CaptureQueriesContext
 from apps.documents.models import Document, DocumentAddressee, DocumentLabel
 from apps.labels.models import Label
 from apps.tasks.models import Task
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 from tests.documents_support import admin_of, documents_url, make_document, make_person
 from tests.helpers import post_json
@@ -36,7 +36,7 @@ def base(workspace: Workspace, document: Document) -> str:
 
 
 def link_label(workspace: Workspace, document: Document, name: str, *, automatic: bool) -> Label:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         label = Label.objects.get_or_create(workspace=workspace, name=name)[0]
         DocumentLabel.objects.create(
             workspace=workspace, document=document, label=label, automatic=automatic
@@ -47,7 +47,7 @@ def link_label(workspace: Workspace, document: Document, name: str, *, automatic
 def link_person(
     workspace: Workspace, document: Document, person: "Person", *, automatic: bool
 ) -> None:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         DocumentAddressee.objects.create(
             workspace=workspace, document=document, person=person, automatic=automatic
         )
@@ -66,7 +66,7 @@ def automatic_documents(workspace: Workspace) -> dict[str, Document]:
     """One document per way of being automatic, plus two that are not."""
     jan = make_person(workspace, f"Jan {next(_persons)}")
     ai_confirmed = make_document(workspace, "done")
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         Document.objects.filter(id=ai_confirmed.id).update(confirmed_by_ai=True)
     auto_label = make_document(workspace, "needs_review")
     link_label(workspace, auto_label, f"Automatisch {next(_persons)}", automatic=True)
@@ -122,7 +122,7 @@ def test_fields_after_an_automatic_run_after_undo_and_after_reopen(
 ) -> None:
     switch_on(ws_a, organise=True, confirm=True)
     jan = make_person(ws_a, "Jan de Vries")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         label = Label.objects.create(workspace=ws_a, name="Gezondheid")
     document = new_processing_document(ws_a)
 
@@ -159,7 +159,7 @@ def test_fields_after_an_automatic_run_after_undo_and_after_reopen(
 
 def test_a_task_a_person_made_is_not_by_ai(client_a: Client, ws_a: Workspace) -> None:
     document = make_document(ws_a, "done")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Task.objects.create(workspace=ws_a, document=document, type="pay", description="Eigen")
 
     detail = client_a.get(base(ws_a, document)).json()
@@ -183,7 +183,7 @@ def test_a_document_with_several_automatic_links_is_listed_once(
     document = make_document(ws_a, "done")
     link_label(ws_a, document, "Een", automatic=True)
     link_label(ws_a, document, "Twee", automatic=True)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Document.objects.filter(id=document.id).update(confirmed_by_ai=True)
 
     rows = client_a.get(documents_url(ws_a.id), {"automatic": "true"}).json()
@@ -195,7 +195,7 @@ def test_the_automatic_filter_combines_with_the_other_filters(
     client_a: Client, ws_a: Workspace
 ) -> None:
     docs = automatic_documents(ws_a)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         jan = DocumentAddressee.objects.get(document=docs["auto_person"]).person
         auto_label_id = DocumentLabel.objects.get(document=docs["auto_label"]).label_id
 
@@ -253,7 +253,7 @@ def test_automatic_documents_of_another_workspace_are_not_listed_or_counted(
     }
     assert client.get(counts.format(ws_a.id)).json()["automatic"] == 3
     # Even a query that forgets the workspace sees only A's rows (forced RLS).
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         unfiltered = set(
             Document.objects.annotate(has_automatic=services._has_automatic_link())
             .filter(services._is_automatic())

@@ -11,7 +11,7 @@ from pytest_django import Settings
 from apps.documents import intake
 from apps.documents.models import Document, DocumentPage
 from apps.documents.storage import default_storage
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.documents_support import (
     admin_of,
@@ -36,7 +36,7 @@ def stored_files() -> list[Path]:
 
 
 def counts(workspace: Workspace) -> tuple[int, int]:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Document.objects.count(), DocumentPage.objects.count()
 
 
@@ -63,7 +63,7 @@ def test_upload_stores_the_document_encrypted_and_queues_processing(
         assert not content.startswith(b"\xff\xd8\xff")
         assert page[4:40] not in content
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         document = Document.objects.get()
         assert document.scanned_by == admin_of(ws_a)
         assert document.ocr_text == "Belastingdienst\n\f\nPagina twee"
@@ -97,7 +97,7 @@ def test_bsn_in_the_page_text_is_masked_before_storage(client_a: Client, ws_a: W
     r = upload(client_a, ws_a.id, [jpeg()], texts=["Uw BSN 111222333 staat hier"])
 
     assert r.json()["pages"][0]["ocr_text"] == "Uw BSN [BSN] staat hier"
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert "111222333" not in Document.objects.get().ocr_text
         assert "111222333" not in DocumentPage.objects.get().ocr_text
 
@@ -343,7 +343,7 @@ def test_page_file_cannot_be_opened_as_another_page(client_a: Client, ws_a: Work
     upload(client_a, ws_a.id, [jpeg("een"), jpeg("twee")])
     first, second = stored_files()
     second.write_bytes(first.read_bytes())
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         document = Document.objects.get()
     client_a.raise_request_exception = False
 

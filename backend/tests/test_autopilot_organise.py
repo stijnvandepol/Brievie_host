@@ -23,7 +23,7 @@ from apps.pipeline import autopilot, jobs, settings_service
 from apps.pipeline.choices import ExtractionRequest
 from apps.pipeline.errors import PermanentError
 from apps.pipeline.steps import run_pipeline
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 from tests.documents_support import admin_of, make_person
 from tests.rules_support import add_label, make_rule, text_word
@@ -88,7 +88,7 @@ class Picking:
 
 
 def switch_on(workspace: Workspace, *, organise_on: bool = True) -> None:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         settings_service.configure(
             workspace_id=workspace.id,
             mode="external",
@@ -109,13 +109,13 @@ def switch_on(workspace: Workspace, *, organise_on: bool = True) -> None:
 
 
 def new_label(workspace: Workspace, name: str) -> Label:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         existing = Label.objects.filter(workspace=workspace, name=name).first()
         return existing or Label.objects.create(workspace=workspace, name=name)
 
 
 def new_document(workspace: Workspace, text: str = LETTER) -> Document:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Document.objects.create(
             workspace=workspace,
             client_id=uuid.uuid4(),
@@ -132,7 +132,7 @@ def run(workspace: Workspace, document: Document, provider: Picking | None) -> N
 
 
 def on_document(workspace: Workspace, document: Document) -> tuple[set[str], set[str]]:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return (
             set(
                 DocumentLabel.objects.filter(document=document).values_list(
@@ -149,7 +149,7 @@ def on_document(workspace: Workspace, document: Document) -> tuple[set[str], set
 
 def suggestion_states(workspace: Workspace, document: Document) -> dict[str, tuple[str, str]]:
     """target name -> (state, origin)."""
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return {
             (s.label.name if s.label is not None else s.person.display_name): (s.state, s.origin)  # type: ignore[union-attr]
             for s in DocumentSuggestion.objects.filter(document=document).select_related(
@@ -186,7 +186,7 @@ def test_switch_on_applies_a_strong_ai_pick_and_a_strong_name_match(ws_a: Worksp
         "Jan de Vries": ("accepted", "name_match"),
         "Gezondheid": ("accepted", "ai"),
     }
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert DocumentLabel.objects.get(document=document).automatic is True
         assert DocumentAddressee.objects.get(document=document).automatic is True
         events = {e.kind: e for e in DocumentEvent.objects.filter(document=document)}
@@ -252,7 +252,7 @@ def test_a_letter_that_instructs_the_ai_does_not_get_its_label(ws_a: Workspace) 
 
     assert on_document(ws_a, document) == (set(), set())
     assert suggestion_states(ws_a, document) == {"Belastingdienst": ("open", "rule")}
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert not DocumentEvent.objects.filter(document=document, origin="ai").exists()
 
 
@@ -260,7 +260,7 @@ def test_a_dismissed_change_is_not_applied(ws_a: Workspace) -> None:
     switch_on(ws_a)
     new_label(ws_a, "Gezondheid")
     document = new_document(ws_a)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         from apps.documents import suggestions
 
         suggestions.mark_dismissed(
@@ -310,7 +310,7 @@ def test_a_failed_document_is_not_applied(ws_a: Workspace) -> None:
         run=lambda w, d: run_pipeline(w, d, provider_factory=lambda _: provider),
     )
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         failed = Document.objects.get(id=document.id)
         assert (failed.status, failed.failure_code) == ("failed", "ai_rejected")
         assert not DocumentEvent.objects.filter(document=document).exists()
@@ -326,7 +326,7 @@ def test_the_switch_is_read_after_the_ai_call(ws_a: Workspace) -> None:
     provider = Picking(labels={"Gezondheid": 0.9})
 
     def switch_off_meanwhile() -> None:
-        with workspace_context(ws_a.id):
+        with workspace_context(ws_a.id, actor=SYSTEM):
             settings_service.configure_autopilot(
                 workspace_id=ws_a.id,
                 organise=False,
@@ -379,7 +379,7 @@ def test_a_failing_apply_is_rolled_back_and_the_document_goes_to_review(
     with caplog.at_level(logging.DEBUG):
         run(ws_a, document, Picking(labels={"Gezondheid": 0.9}))
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert Document.objects.get(id=document.id).status == "needs_review"
         assert not DocumentEvent.objects.filter(document=document).exists()
     assert on_document(ws_a, document) == (set(), set())
@@ -414,7 +414,7 @@ def test_a_removal_by_hand_is_not_undone_by_a_second_run(ws_a: Workspace) -> Non
     run(ws_a, document, provider)
     assert on_document(ws_a, document)[0] == {"Gezondheid"}
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         locked = Document.objects.select_for_update().get(id=document.id)
         organise.set_labels(document=locked, label_ids=[], actor=admin_of(ws_a))
         Document.objects.filter(id=document.id).update(status=Document.Status.PROCESSING)
@@ -431,7 +431,7 @@ def test_apply_returns_how_many_it_applied(ws_a: Workspace) -> None:
     document = new_document(ws_a)
     run(ws_a, document, Picking(labels={"Gezondheid": 0.9}))
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         locked = Document.objects.select_for_update().get(id=document.id)
         assert autopilot.apply_open_proposals(locked) == 0
     assert Decimal("0.800") == autopilot.AUTO_APPLY_FROM
@@ -454,7 +454,7 @@ def test_an_ai_pick_of_a_person_whose_quote_holds_no_name_stays_open(ws_a: Works
 def _ai_pick(workspace: Workspace, document: Document, person: object, quote: str) -> None:
     from apps.documents import suggestions
 
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         locked = Document.objects.select_for_update().get(id=document.id)
         suggestions.propose(
             locked,
@@ -479,13 +479,13 @@ def test_an_ai_pick_of_a_person_is_applied_only_when_its_quote_holds_a_name(
     ws_a: Workspace, quote: str, applied: int
 ) -> None:
     person = make_person(ws_a, "Jan de Vries")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         person.name_variants = ["J. de Vries"]
         person.save()
     document = new_document(ws_a, quote)
     _ai_pick(ws_a, document, person, quote)
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         locked = Document.objects.select_for_update().get(id=document.id)
         assert autopilot.apply_open_proposals(locked) == applied
         assert DocumentAddressee.objects.filter(document=document).count() == applied
@@ -505,13 +505,13 @@ def test_an_ai_pick_is_not_applied_on_a_masked_or_shared_name(
 ) -> None:
     make_person(ws_a, "Stijn van de Pol")
     person = make_person(ws_a, "Andere Stijn")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         person.name_variants = variants
         person.save()
     document = new_document(ws_a, quote)
     _ai_pick(ws_a, document, person, quote)
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         locked = Document.objects.select_for_update().get(id=document.id)
         assert autopilot.apply_open_proposals(locked) == 0
         assert not DocumentAddressee.objects.filter(document=document).exists()

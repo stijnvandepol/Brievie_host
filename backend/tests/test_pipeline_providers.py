@@ -16,7 +16,7 @@ from apps.pipeline.providers import (
     ProviderUnavailable,
 )
 from apps.pipeline.schema import json_schema
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.keys import workspace_key
 from apps.workspaces.models import Workspace
 
@@ -169,7 +169,7 @@ def test_one_very_long_page_is_cut_hard() -> None:
 
 
 def test_provider_for_is_none_when_ai_is_off(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert settings_service.provider_for(ws_a.id) is None
         settings_service.configure(
             workspace_id=ws_a.id, mode="off", base_url="", model="", api_key=None
@@ -178,7 +178,7 @@ def test_provider_for_is_none_when_ai_is_off(ws_a: Workspace) -> None:
 
 
 def test_configure_external_seals_the_key_and_builds_the_provider(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         settings_service.configure(
             workspace_id=ws_a.id,
             mode="external",
@@ -200,7 +200,7 @@ def test_configure_external_seals_the_key_and_builds_the_provider(ws_a: Workspac
 
 
 def test_configure_again_replaces_the_settings(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         settings_service.configure(
             workspace_id=ws_a.id,
             mode="external",
@@ -219,7 +219,7 @@ def test_configure_again_replaces_the_settings(ws_a: Workspace) -> None:
 
 
 def test_external_needs_https_and_a_key(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         with pytest.raises(ValueError, match="https"):
             settings_service.configure(
                 workspace_id=ws_a.id, mode="external", base_url="http://api.mistral.ai/v1",
@@ -244,7 +244,7 @@ def test_external_needs_https_and_a_key(ws_a: Workspace) -> None:
      "http://10.0.0.5/v1"],
 )  # fmt: skip
 def test_local_accepts_addresses_on_the_own_network(ws_a: Workspace, url: str) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         settings_service.configure(
             workspace_id=ws_a.id, mode="local", base_url=url, model="qwen", api_key=None
         )
@@ -258,14 +258,14 @@ def test_local_accepts_addresses_on_the_own_network(ws_a: Workspace, url: str) -
 )  # fmt: skip
 def test_local_refuses_addresses_outside_the_own_network(ws_a: Workspace, url: str) -> None:
     # Spec acceptance: no document content leaves the server with AI `local`.
-    with workspace_context(ws_a.id), pytest.raises(ValueError, match="network"):
+    with workspace_context(ws_a.id, actor=SYSTEM), pytest.raises(ValueError, match="network"):
         settings_service.configure(
             workspace_id=ws_a.id, mode="local", base_url=url, model="qwen", api_key=None
         )
 
 
 def test_local_is_checked_again_before_use(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         AISettings.objects.create(
             workspace=ws_a, mode="local", base_url="https://api.mistral.ai/v1", model="m"
         )
@@ -276,7 +276,7 @@ def test_local_is_checked_again_before_use(ws_a: Workspace) -> None:
 
 
 def test_unknown_mode_is_refused(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id), pytest.raises(ValueError, match="mode"):
+    with workspace_context(ws_a.id, actor=SYSTEM), pytest.raises(ValueError, match="mode"):
         settings_service.configure(
             workspace_id=ws_a.id, mode="cloud", base_url="", model="", api_key=None
         )
@@ -294,7 +294,7 @@ LONG_HOST = "ollama-inference-gateway.huis-van-de-familie.example-lan.local"
 def test_local_refuses_numeric_host_forms(ws_a: Workspace, url: str) -> None:
     # A resolver reads these as IPv4 addresses (8.8.8.8, 127.0.0.1, ...), not as names.
     assert not settings_service.is_on_own_network(url)
-    with workspace_context(ws_a.id), pytest.raises(ValueError, match="network"):
+    with workspace_context(ws_a.id, actor=SYSTEM), pytest.raises(ValueError, match="network"):
         settings_service.configure(
             workspace_id=ws_a.id, mode="local", base_url=url, model="qwen", api_key=None
         )
@@ -309,7 +309,7 @@ def test_local_still_accepts_service_names_with_digits(url: str) -> None:
 
 def test_long_realistic_host_name_is_accepted_and_named(ws_a: Workspace) -> None:
     assert len(LONG_HOST) > 50
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         settings_service.configure(
             workspace_id=ws_a.id, mode="local", base_url=f"http://{LONG_HOST}:11434/v1",
             model="qwen", api_key=None,
@@ -327,7 +327,7 @@ def test_long_realistic_host_name_is_accepted_and_named(ws_a: Workspace) -> None
      "https://api.mistral.ai/" + "v" * 300],
 )  # fmt: skip
 def test_host_or_address_that_cannot_be_stored_is_refused(ws_a: Workspace, url: str) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         with pytest.raises(ValueError, match="AI service"):
             settings_service.configure(
                 workspace_id=ws_a.id,

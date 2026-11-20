@@ -18,7 +18,7 @@ from apps.audit.models import ServerAuditEvent, WorkspaceAuditEvent
 from apps.common.errors import ApiError
 from apps.devices.models import Device, TokenExpiryStart
 from apps.devices.services import create_pairing_code, pair_device
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.factories import TEST_PASSWORD, UserFactory
 from tests.helpers import post_json
@@ -67,7 +67,7 @@ def server_events(code: AuditCode) -> list[ServerAuditEvent]:
 
 
 def workspace_events(ws: Workspace, code: AuditCode) -> list[WorkspaceAuditEvent]:
-    with workspace_context(ws.id):
+    with workspace_context(ws.id, actor=SYSTEM):
         return list(WorkspaceAuditEvent.objects.filter(code=code.value))
 
 

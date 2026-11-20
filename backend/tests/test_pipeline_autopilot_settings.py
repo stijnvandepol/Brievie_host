@@ -8,7 +8,7 @@ from apps.audit.models import WorkspaceAuditEvent
 from apps.pipeline import settings_service
 from apps.pipeline.models import AISettings
 from apps.pipeline.settings_service import Actor, AutopilotError
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 from tests.documents_support import admin_of
 
@@ -66,14 +66,14 @@ def values(workspace: Workspace) -> list[tuple[object, object]]:
 
 
 def test_without_a_settings_row_everything_is_off(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert settings_service.autopilot(ws_a.id) == settings_service.Autopilot(
             organise=False, confirm=False, allowed=True
         )
 
 
 def test_switching_on_without_ai_needs_ai(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         with pytest.raises(AutopilotError) as no_row:
             set_autopilot(ws_a, organise=True, confirm=False)
         AISettings.objects.create(workspace=ws_a, mode="off")
@@ -84,7 +84,7 @@ def test_switching_on_without_ai_needs_ai(ws_a: Workspace) -> None:
 
 
 def test_switching_on_when_the_server_forbids_it_is_forbidden(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         external(ws_a)
         with (
             override_settings(BRIEVIE_AI_AUTOPILOT_ALLOWED=False),
@@ -96,7 +96,7 @@ def test_switching_on_when_the_server_forbids_it_is_forbidden(ws_a: Workspace) -
 
 
 def test_switching_on_without_acknowledgement_is_refused(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         external(ws_a)
         with pytest.raises(AutopilotError) as error:
             set_autopilot(ws_a, organise=True, confirm=True, acknowledged=False)
@@ -107,7 +107,7 @@ def test_switching_on_without_acknowledgement_is_refused(ws_a: Workspace) -> Non
 
 def test_switching_on_with_acknowledgement_audits_the_user(ws_a: Workspace) -> None:
     admin = admin_of(ws_a)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         external(ws_a)
         result = set_autopilot(ws_a, organise=True, confirm=False, user_id=admin.id)
         assert result == settings_service.Autopilot(organise=True, confirm=False, allowed=True)
@@ -117,7 +117,7 @@ def test_switching_on_with_acknowledgement_audits_the_user(ws_a: Workspace) -> N
 
 
 def test_switching_off_needs_no_acknowledgement_and_is_audited(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         external(ws_a)
         set_autopilot(ws_a, organise=True, confirm=True)
         set_autopilot(ws_a, organise=False, confirm=False, acknowledged=False)
@@ -126,7 +126,7 @@ def test_switching_off_needs_no_acknowledgement_and_is_audited(ws_a: Workspace) 
 
 
 def test_switching_off_works_even_when_the_server_forbids_it(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         external(ws_a)
         set_autopilot(ws_a, organise=True, confirm=False)
         with override_settings(BRIEVIE_AI_AUTOPILOT_ALLOWED=False):
@@ -135,7 +135,7 @@ def test_switching_off_works_even_when_the_server_forbids_it(ws_a: Workspace) ->
 
 
 def test_no_change_writes_no_audit_row(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         external(ws_a)
         set_autopilot(ws_a, organise=True, confirm=False)
         set_autopilot(ws_a, organise=True, confirm=False)
@@ -143,7 +143,7 @@ def test_no_change_writes_no_audit_row(ws_a: Workspace) -> None:
 
 
 def test_staying_on_needs_no_new_acknowledgement(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         external(ws_a)
         set_autopilot(ws_a, organise=True, confirm=False)
         # confirm goes on, organise stays on: only the new switch needs the ack.
@@ -155,7 +155,7 @@ def test_staying_on_needs_no_new_acknowledgement(ws_a: Workspace) -> None:
 
 def test_switching_ai_off_resets_both_switches_and_audits(ws_a: Workspace) -> None:
     admin = admin_of(ws_a)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         external(ws_a)
         set_autopilot(ws_a, organise=True, confirm=True)
         settings_service.configure(
@@ -173,7 +173,7 @@ def test_switching_ai_off_resets_both_switches_and_audits(ws_a: Workspace) -> No
 
 
 def test_off_and_on_again_leaves_both_switches_off(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         external(ws_a)
         set_autopilot(ws_a, organise=True, confirm=True)
         switch_off(ws_a)
@@ -184,7 +184,7 @@ def test_off_and_on_again_leaves_both_switches_off(ws_a: Workspace) -> None:
 
 
 def test_consent_to_another_address_resets_both_switches(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         external(ws_a)
         set_autopilot(ws_a, organise=True, confirm=True)
         external(ws_a, supplier="openai", model="gpt-test")
@@ -204,7 +204,7 @@ def local(workspace: Workspace, *, model: str = "qwen") -> None:
 
 
 def test_moving_from_external_to_local_resets_both_switches(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         external(ws_a)
         set_autopilot(ws_a, organise=True, confirm=True)
         local(ws_a)
@@ -214,7 +214,7 @@ def test_moving_from_external_to_local_resets_both_switches(ws_a: Workspace) -> 
 
 
 def test_moving_from_local_to_external_resets_both_switches(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         local(ws_a)
         set_autopilot(ws_a, organise=True, confirm=True)
         external(ws_a)
@@ -224,7 +224,7 @@ def test_moving_from_local_to_external_resets_both_switches(ws_a: Workspace) -> 
 
 
 def test_another_local_model_keeps_the_switches(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         local(ws_a)
         set_autopilot(ws_a, organise=True, confirm=True)
         local(ws_a, model="llama")
@@ -233,7 +233,7 @@ def test_another_local_model_keeps_the_switches(ws_a: Workspace) -> None:
 
 
 def test_another_model_at_the_same_address_keeps_the_switches(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         external(ws_a)
         set_autopilot(ws_a, organise=True, confirm=True)
         external(ws_a, model="mistral-large-latest")
@@ -242,7 +242,7 @@ def test_another_model_at_the_same_address_keeps_the_switches(ws_a: Workspace) -
 
 
 def test_in_force_is_off_when_the_server_forbids_it_even_if_stored_on(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         external(ws_a)
         set_autopilot(ws_a, organise=True, confirm=True)
         assert settings_service.autopilot_in_force(ws_a.id) == settings_service.Autopilot(
@@ -257,7 +257,7 @@ def test_in_force_is_off_when_the_server_forbids_it_even_if_stored_on(ws_a: Work
 
 
 def test_in_force_is_off_when_the_mode_is_off_even_if_stored_on(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         external(ws_a)
         set_autopilot(ws_a, organise=True, confirm=True)
         # A row changed behind the service's back.
@@ -303,7 +303,7 @@ def test_the_notice_has_short_paragraphs_and_no_reassurance() -> None:
 
 
 def test_a_partial_switch_off_works_when_the_server_forbids_it(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         external(ws_a)
         set_autopilot(ws_a, organise=True, confirm=True)
         with override_settings(BRIEVIE_AI_AUTOPILOT_ALLOWED=False):
@@ -312,7 +312,7 @@ def test_a_partial_switch_off_works_when_the_server_forbids_it(ws_a: Workspace) 
 
 
 def test_a_partial_switch_off_works_when_the_mode_is_off(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         external(ws_a)
         set_autopilot(ws_a, organise=True, confirm=True)
         AISettings.objects.filter(workspace=ws_a).update(mode="off")

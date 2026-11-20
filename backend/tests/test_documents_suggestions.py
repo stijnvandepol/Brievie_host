@@ -17,7 +17,7 @@ from apps.documents.models import (
 )
 from apps.labels.models import Label
 from apps.people.models import Person
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 from tests.documents_support import admin_of, documents_url, make_document, make_person
 from tests.helpers import post_json
@@ -36,7 +36,7 @@ def client_a(client: Client, ws_a: Workspace) -> Client:
 
 
 def label(workspace: Workspace, key: str) -> Label:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Label.objects.get(workspace=workspace, system_key=key)
 
 
@@ -49,7 +49,7 @@ def propose_label(
     quote: str = "",
     preselected: bool = False,
 ) -> DocumentSuggestion | None:
-    with workspace_context(document.workspace_id):
+    with workspace_context(document.workspace_id, actor=SYSTEM):
         return suggestions.propose(
             document,
             action=ADD_LABEL,
@@ -69,7 +69,7 @@ def propose_person(
     confidence: str = "0.950",
     preselected: bool = True,
 ) -> DocumentSuggestion | None:
-    with workspace_context(document.workspace_id):
+    with workspace_context(document.workspace_id, actor=SYSTEM):
         return suggestions.propose(
             document,
             action=ADD_ADDRESSEE,
@@ -81,24 +81,24 @@ def propose_person(
 
 
 def rows(document: Document) -> list[DocumentSuggestion]:
-    with workspace_context(document.workspace_id):
+    with workspace_context(document.workspace_id, actor=SYSTEM):
         return list(DocumentSuggestion.objects.filter(document=document))
 
 
 def state_of(suggestion: DocumentSuggestion) -> str:
-    with workspace_context(suggestion.workspace_id):
+    with workspace_context(suggestion.workspace_id, actor=SYSTEM):
         return DocumentSuggestion.objects.get(id=suggestion.id).state
 
 
 def label_ids(document: Document) -> set[uuid.UUID]:
-    with workspace_context(document.workspace_id):
+    with workspace_context(document.workspace_id, actor=SYSTEM):
         return set(
             DocumentLabel.objects.filter(document=document).values_list("label_id", flat=True)
         )
 
 
 def events(document: Document) -> list[tuple[str, str]]:
-    with workspace_context(document.workspace_id):
+    with workspace_context(document.workspace_id, actor=SYSTEM):
         return [
             (e.kind, e.origin)
             for e in DocumentEvent.objects.filter(document=document).order_by("created_at", "id")
@@ -146,7 +146,7 @@ def test_two_origins_merge_into_the_strongest(ws_a: Workspace) -> None:
     anna = make_person(ws_a, "Anna")
 
     propose_person(document, anna, origin="ai", confidence="0.6", preselected=False)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         suggestions.propose(
             document,
             action=ADD_ADDRESSEE,
@@ -176,7 +176,7 @@ def test_propose_masks_bsns_in_the_quote(ws_a: Workspace) -> None:
 def test_propose_skips_what_is_already_there(ws_a: Workspace) -> None:
     document = make_document(ws_a, "needs_review")
     zorg = label(ws_a, "zorg")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         organise.add_label(document, zorg, actor=None, origin="user")
 
     assert propose_label(document, zorg) is None
@@ -186,7 +186,7 @@ def test_propose_skips_what_is_already_there(ws_a: Workspace) -> None:
 def test_propose_skips_dismissed(ws_a: Workspace) -> None:
     document = make_document(ws_a, "needs_review")
     zorg = label(ws_a, "zorg")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         suggestions.mark_dismissed(document, ADD_LABEL, zorg.id)
         assert suggestions.is_dismissed(document, ADD_LABEL, zorg.id)
 
@@ -200,7 +200,7 @@ def test_accepted_row_whose_change_is_gone_opens_again(ws_a: Workspace) -> None:
     zorg = label(ws_a, "zorg")
     row = propose_label(document, zorg)
     assert row is not None
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         suggestions.mark_accepted(document, ADD_LABEL, zorg.id)
 
     assert propose_label(document, zorg) is not None
@@ -210,7 +210,7 @@ def test_accepted_row_whose_change_is_gone_opens_again(ws_a: Workspace) -> None:
 def test_reopened_accepted_row_takes_the_new_proposal(ws_a: Workspace) -> None:
     document = make_document(ws_a, "needs_review")
     anna = make_person(ws_a, "Anna")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         suggestions.propose(
             document,
             action=ADD_ADDRESSEE,
@@ -235,7 +235,7 @@ def test_clear_open_removes_only_open_rows_of_those_origins(ws_a: Workspace) -> 
     propose_label(document, zorg, origin="ai")
     propose_label(document, bank, origin="rule", confidence="1")
     propose_label(document, auto, origin="ai")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         suggestions.mark_dismissed(document, ADD_LABEL, auto.id)
         suggestions.clear_open(document, ["ai"])
 
@@ -316,7 +316,7 @@ def test_removing_by_hand_marks_dismissed(client_a: Client, ws_a: Workspace) -> 
 def test_removing_an_addressee_by_hand_marks_dismissed(ws_a: Workspace) -> None:
     document = make_document(ws_a, "needs_review")
     anna = make_person(ws_a, "Anna")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         organise.set_addressees(document=document, person_ids=[anna.id], actor=None)
         organise.set_addressees(document=document, person_ids=[], actor=None)
         assert suggestions.is_dismissed(document, ADD_ADDRESSEE, anna.id)
@@ -419,7 +419,7 @@ def test_deleting_a_label_removes_its_suggestions(ws_a: Workspace) -> None:
     zorg = label(ws_a, "zorg")
     propose_label(document, zorg)
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Label.objects.filter(id=zorg.id).delete()
 
     assert rows(document) == []
@@ -428,7 +428,11 @@ def test_deleting_a_label_removes_its_suggestions(ws_a: Workspace) -> None:
 def test_a_suggestion_names_exactly_one_target(ws_a: Workspace) -> None:
     document = make_document(ws_a, "needs_review")
     anna = make_person(ws_a, "Anna")
-    with workspace_context(ws_a.id), pytest.raises(IntegrityError), transaction.atomic():
+    with (
+        workspace_context(ws_a.id, actor=SYSTEM),
+        pytest.raises(IntegrityError),
+        transaction.atomic(),
+    ):
         DocumentSuggestion.objects.create(
             workspace=ws_a,
             document=document,
@@ -451,7 +455,7 @@ def test_archiving_a_person_removes_only_their_open_suggestions(
     dismissed_anna = propose_person(other, anna)
     assert open_bram is not None
     assert dismissed_anna is not None
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         suggestions.mark_dismissed(other, ADD_ADDRESSEE, anna.id)
 
     r = client_a.put(
@@ -472,7 +476,7 @@ def test_an_open_suggestion_of_an_archived_person_is_not_shown(
     anna, bram = make_person(ws_a, "Anna"), make_person(ws_a, "Bram")
     propose_person(document, anna)
     propose_person(document, bram)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         # Behind the service's back: archiving through the service removes the row.
         Person.objects.filter(id=anna.id).update(archived_at=timezone.now())
 

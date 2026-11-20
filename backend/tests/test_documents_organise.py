@@ -5,13 +5,13 @@ import pytest
 from apps.common.errors import ApiError
 from apps.documents import organise, services
 from apps.documents.models import Document, DocumentAddressee, DocumentEvent
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 from tests.documents_support import admin_of, make_document, make_person
 
 
 def addressees(workspace: Workspace, document: Document) -> set[uuid.UUID]:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return set(
             DocumentAddressee.objects.filter(document=document).values_list("person_id", flat=True)
         )
@@ -19,7 +19,7 @@ def addressees(workspace: Workspace, document: Document) -> set[uuid.UUID]:
 
 def events(workspace: Workspace, document: Document) -> list[tuple[str, str]]:
     """(kind, person_name) of the document's events, oldest first."""
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return [
             (e.kind, e.person_name)
             for e in DocumentEvent.objects.filter(document=document).order_by("created_at", "id")
@@ -27,7 +27,7 @@ def events(workspace: Workspace, document: Document) -> list[tuple[str, str]]:
 
 
 def set_addressees(workspace: Workspace, document: Document, ids: list[uuid.UUID]) -> None:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         locked = Document.objects.select_for_update().get(id=document.id)
         organise.set_addressees(document=locked, person_ids=ids, actor=admin_of(workspace))
 
@@ -46,7 +46,7 @@ def test_set_addressees_makes_the_set_exact_and_writes_events(ws_a: Workspace) -
         ("addressee_removed", "Anna"),
         ("addressee_added", "Cor"),
     ]
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         event = DocumentEvent.objects.filter(document=document).first()
         assert event is not None
         assert event.origin == "user"
@@ -83,7 +83,7 @@ def test_archived_person_cannot_be_added_but_stays(ws_a: Workspace) -> None:
     a = make_person(ws_a, "Anna")
     old = make_person(ws_a, "Oud", archived=True)
     set_addressees(ws_a, document, [a.id])
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         DocumentAddressee.objects.create(workspace=ws_a, document=document, person=old)
 
     with pytest.raises(ApiError) as excinfo:
@@ -99,7 +99,7 @@ def test_archived_person_cannot_be_added_but_stays(ws_a: Workspace) -> None:
 def test_add_addressee_reports_whether_it_added(ws_a: Workspace) -> None:
     document = make_document(ws_a)
     a = make_person(ws_a, "Anna")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert organise.add_addressee(document, a, actor=None, origin="rule") is True
         assert organise.add_addressee(document, a, actor=None, origin="rule") is False
         (event,) = DocumentEvent.objects.filter(document=document)
@@ -120,12 +120,12 @@ def test_add_addressee_reports_whether_it_added(ws_a: Workspace) -> None:
 def test_inbox_states(ws_a: Workspace, status: str, with_addressee: bool, state: str) -> None:
     document = make_document(ws_a, status)
     if with_addressee:
-        with workspace_context(ws_a.id):
+        with workspace_context(ws_a.id, actor=SYSTEM):
             DocumentAddressee.objects.create(
                 workspace=ws_a, document=document, person=make_person(ws_a, "Anna")
             )
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert services.inbox_state(Document.objects.get(id=document.id)) == state
 
 
@@ -135,7 +135,7 @@ def test_list_filters_and_counts(ws_a: Workspace) -> None:
     review = make_document(ws_a, "needs_review")
     unassigned = make_document(ws_a, "done")
     sorted_ = make_document(ws_a, "done")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         DocumentAddressee.objects.create(workspace=ws_a, document=sorted_, person=papa)
         DocumentAddressee.objects.create(workspace=ws_a, document=review, person=papa)
 

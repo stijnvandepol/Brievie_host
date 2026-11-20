@@ -19,7 +19,7 @@ from apps.audit.services import AuditActor
 from apps.common.errors import ApiError
 from apps.people.models import Person
 from apps.workspaces import members
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.members import change_role, lock_memberships
 from apps.workspaces.models import Invitation, Membership, Workspace
 from tests.helpers import post_json
@@ -253,7 +253,7 @@ def test_an_unknown_role_is_422(ws_a: Workspace) -> None:
 def test_role_change_is_logged_with_from_and_to(ws_a: Workspace) -> None:
     admin = admin_of(ws_a)
     member = join(ws_a)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         person = Person.objects.create(workspace=ws_a, display_name="Papa", user=member)
 
     put_role(as_user(admin), ws_a, member.id, "admin")

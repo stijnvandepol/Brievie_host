@@ -27,7 +27,7 @@ def create_workspace(
             name=name, kind=kind, allow_member_export=kind == Workspace.Kind.HOME
         )
         Membership.objects.create(user=admin, workspace=workspace, role=Membership.Role.ADMIN)
-        with workspace_context(workspace.id):
+        with workspace_context(workspace.id, actor=admin.id):
             workspace_key(workspace.id)
             ensure_person_for_member(workspace=workspace, user=admin)
             apply_preset(workspace)

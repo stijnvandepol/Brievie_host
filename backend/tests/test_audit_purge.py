@@ -16,7 +16,7 @@ from apps.audit import jobs
 from apps.audit.codes import AuditCode
 from apps.audit.models import ServerAuditEvent, WorkspaceAuditEvent
 from apps.audit.services import AuditActor, AuditTarget, record
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 from apps.workspaces.rls import SETTING_NAME
 
@@ -35,7 +35,7 @@ def workspace_row(workspace: Workspace, *, age_days: int) -> uuid.UUID:
         target=AuditTarget(kind="rule", id=target_id),
         workspace_id=workspace.id,
     )
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         WorkspaceAuditEvent.objects.filter(target_id=target_id).update(
             created_at=timezone.now() - timedelta(days=age_days)
         )
@@ -56,7 +56,7 @@ def server_row(*, age_days: int) -> uuid.UUID:
 
 
 def remaining(workspace: Workspace) -> set[uuid.UUID | None]:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return set(WorkspaceAuditEvent.objects.values_list("target_id", flat=True))
 
 
@@ -114,7 +114,7 @@ def test_purge_removes_only_older_rows_of_that_workspace(ws_a: Workspace, ws_b: 
 def test_purge_restores_the_previous_workspace_setting(ws_a: Workspace, ws_b: Workspace) -> None:
     workspace_row(ws_a, age_days=400)
 
-    with workspace_context(ws_b.id):
+    with workspace_context(ws_b.id, actor=SYSTEM):
         assert purge_workspace(ws_a.id, timezone.now() - timedelta(days=365)) == 1
         assert current_workspace_setting() == str(ws_b.id)
     assert current_workspace_setting() == ""

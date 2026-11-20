@@ -129,7 +129,7 @@ def _set_state(world: PerfWorld, state: str) -> None:
 
 
 def _enter(world: PerfWorld, actor: UUID | str) -> None:
-    """What a request does (Task 4 makes this `workspace_context(ws, actor=…)`)."""
+    """What a request does (`enter_workspace_for_transaction`); "system" for the preview."""
     with connection.cursor() as c:
         c.execute(
             "SELECT set_config('brievie.workspace_id', %s, true),"

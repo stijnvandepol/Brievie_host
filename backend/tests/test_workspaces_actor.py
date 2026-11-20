@@ -1,9 +1,25 @@
-"""The actor helpers that the visibility policies read (PB T1, plan Task 3)."""
+"""The actor the visibility policies read: the helpers (PB T1, plan Task 3) and the
+contexts that set it (PB T2, plan Task 4)."""
 
 from uuid import UUID, uuid4
 
 import pytest
 from django.db import connection, transaction
+from django.test import RequestFactory
+
+from apps.audit.codes import AuditCode, TargetKind
+from apps.audit.services import AuditActor, AuditTarget, record
+from apps.devices.auth import DeviceTokenAuth
+from apps.documents.export import export_context
+from apps.workspaces.context import (
+    SYSTEM,
+    current_actor,
+    system_actor,
+    workspace_context,
+)
+from apps.workspaces.deps import workspace_member
+from apps.workspaces.models import Workspace
+from tests.members_support import admin_of, join, paired
 
 APP_ROLE = "brievie_app"
 HELPERS = ("public.brievie_actor_id()", "public.brievie_is_system()")
@@ -80,3 +96,85 @@ def test_app_role_may_execute_the_helpers(signature: str) -> None:
 def test_actor_id_returns_a_uuid_type() -> None:
     value = _with_actor(str(UUID(int=7)), "public.brievie_actor_id()")
     assert isinstance(value, UUID)
+
+
+def test_workspace_context_requires_an_actor(ws_a: Workspace) -> None:
+    with pytest.raises(TypeError), workspace_context(ws_a.id):  # type: ignore[call-arg]
+        pass
+
+
+def test_workspace_context_refuses_an_unknown_actor(ws_a: Workspace) -> None:
+    not_an_actor = str(uuid4())
+    with (
+        pytest.raises(ValueError, match="Not an actor"),
+        workspace_context(ws_a.id, actor=not_an_actor),  # type: ignore[arg-type]
+    ):
+        pass
+
+
+def test_context_sets_and_restores_the_actor(ws_a: Workspace) -> None:
+    user = admin_of(ws_a)
+    with workspace_context(ws_a.id, actor=SYSTEM):
+        assert current_actor() == SYSTEM
+        with workspace_context(ws_a.id, actor=user.id):
+            assert current_actor() == user.id
+        assert current_actor() == SYSTEM
+    assert current_actor() is None
+
+
+def test_actor_restored_after_an_exception(ws_a: Workspace) -> None:
+    with pytest.raises(RuntimeError), workspace_context(ws_a.id, actor=admin_of(ws_a).id):
+        raise RuntimeError
+    assert current_actor() is None
+
+
+def test_system_actor_sets_and_restores(ws_a: Workspace) -> None:
+    user = admin_of(ws_a)
+    with workspace_context(ws_a.id, actor=user.id):
+        with system_actor():
+            assert current_actor() == SYSTEM
+        assert current_actor() == user.id
+
+
+def test_system_actor_needs_a_workspace() -> None:
+    with pytest.raises(RuntimeError), system_actor():
+        pass
+
+
+def test_workspace_member_runs_as_the_session_user(ws_a: Workspace, rf: RequestFactory) -> None:
+    user = admin_of(ws_a)
+    request = rf.get("/")
+    request.user = user
+    with transaction.atomic():
+        workspace_member(request, ws_a.id)
+        assert current_actor() == user.id
+
+
+def test_workspace_member_runs_as_the_device_user(ws_a: Workspace, rf: RequestFactory) -> None:
+    user = join(ws_a)
+    _device, token = paired(user)
+    request = rf.get("/")
+    assert DeviceTokenAuth().authenticate(request, token) == user
+    with transaction.atomic():
+        workspace_member(request, ws_a.id)
+        assert current_actor() == user.id
+
+
+def test_record_inside_a_user_context_restores_the_user(ws_a: Workspace) -> None:
+    user = admin_of(ws_a)
+    with workspace_context(ws_a.id, actor=user.id):
+        record(
+            AuditCode.RULE_RUN,
+            actor=AuditActor.for_user(user),
+            target=AuditTarget(kind=TargetKind.RULE, id=uuid4()),
+            workspace_id=ws_a.id,
+        )
+        assert current_actor() == user.id
+
+
+def test_export_context_runs_as_the_reader_or_the_system(ws_a: Workspace) -> None:
+    user = admin_of(ws_a)
+    with export_context(ws_a.id, reader_id=user.id):
+        assert current_actor() == user.id
+    with export_context(ws_a.id, reader_id=None):
+        assert current_actor() == SYSTEM

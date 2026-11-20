@@ -6,7 +6,7 @@ from django.test import Client
 
 from apps.pipeline import settings_service
 from apps.pipeline.models import AIConsentEvent, AISettings
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.documents_support import admin_of
 from tests.factories import UserFactory
@@ -37,12 +37,12 @@ def external(**overrides: object) -> dict[str, object]:
 
 
 def stored(workspace: Workspace) -> AISettings | None:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return AISettings.objects.first()
 
 
 def events(workspace: Workspace) -> list[AIConsentEvent]:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return list(AIConsentEvent.objects.order_by("created_at"))
 
 

@@ -36,7 +36,7 @@ from apps.documents.export_files import (
 from apps.documents.jobs import build_member_export, remove_expired_exports
 from apps.documents.models import MemberExport
 from apps.people.services import ensure_person_for_member
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.export_support import export_documents, read_zip, sealed_document
 from tests.helpers import post_json
@@ -57,17 +57,17 @@ def run_member_export(workspace_id: UUID, export_id: UUID) -> None:
 
 
 def person_of(ws: Workspace, user: User) -> object:
-    with workspace_context(ws.id):
+    with workspace_context(ws.id, actor=SYSTEM):
         return ensure_person_for_member(workspace=ws, user=user)
 
 
 def rows(ws: Workspace) -> list[MemberExport]:
-    with workspace_context(ws.id):
+    with workspace_context(ws.id, actor=SYSTEM):
         return list(MemberExport.objects.order_by("created_at"))
 
 
 def export_of(ws: Workspace, user: User) -> MemberExport:
-    with workspace_context(ws.id):
+    with workspace_context(ws.id, actor=SYSTEM):
         return MemberExport.objects.get(user=user)
 
 
@@ -170,7 +170,7 @@ def test_a_missing_export_answers_404_before_streaming(ws_a: Workspace) -> None:
     assert nothing.json()["code"] == "export_not_found"
 
     row = build(ws_a, user)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         MemberExport.objects.filter(id=row.id).update(expires_at=timezone.now())
     expired = client.get(url(ws_a, "/file"))
     assert (expired.status_code, expired.streaming) == (404, False)
@@ -178,12 +178,12 @@ def test_a_missing_export_answers_404_before_streaming(ws_a: Workspace) -> None:
     assert expired["Content-Type"].startswith("application/json")
 
     # A pending or failed export is not a file either.
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         MemberExport.objects.filter(id=row.id).update(
             expires_at=timezone.now() + timedelta(hours=1), status="pending"
         )
     assert client.get(url(ws_a, "/file")).status_code == 404
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         MemberExport.objects.filter(id=row.id).update(status="failed")
     assert client.get(url(ws_a, "/file")).status_code == 404
 
@@ -354,7 +354,7 @@ def test_expired_export_is_removed(ws_a: Workspace) -> None:
     kept = build(ws_a, kept_user)
     assert row.expires_at is not None
     assert timedelta(hours=23) < row.expires_at - timezone.now() <= timedelta(hours=24)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         MemberExport.objects.filter(id=row.id).update(
             expires_at=timezone.now() - timedelta(minutes=1)
         )
@@ -376,7 +376,7 @@ def test_a_stuck_pending_export_loses_its_partial_file(ws_a: Workspace) -> None:
     for row in (stuck, recent):
         file_of(row).parent.mkdir(parents=True, exist_ok=True)
         file_of(row).write_bytes(b"partial")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         MemberExport.objects.filter(id=stuck.id).update(
             created_at=timezone.now() - timedelta(hours=3)
         )
@@ -394,7 +394,7 @@ def test_a_stuck_pending_export_loses_its_partial_file(ws_a: Workspace) -> None:
 def test_a_failed_export_can_be_asked_for_again(ws_a: Workspace) -> None:
     user, _mine = member_with_post(ws_a)
     post_json(as_user(user), f"/workspaces/{ws_a.id}/my-export")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         MemberExport.objects.update(status="failed")
 
     assert post_json(as_user(user), f"/workspaces/{ws_a.id}/my-export").status_code == 202
@@ -498,19 +498,19 @@ def test_a_refused_request_is_not_logged(ws_b: Workspace) -> None:
 def test_asking_and_downloading_are_rate_limited(ws_a: Workspace) -> None:
     user, _mine = member_with_post(ws_a)
     client = as_user(user)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         MemberExport.objects.all().delete()
 
     asked = []
     for _ in range(8):
         asked.append(post_json(client, f"/workspaces/{ws_a.id}/my-export").status_code)
-        with workspace_context(ws_a.id):
+        with workspace_context(ws_a.id, actor=SYSTEM):
             MemberExport.objects.update(status="failed")
     assert 429 in asked
     assert asked.index(429) == 5
 
     build_row = export_of(ws_a, user)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         MemberExport.objects.filter(id=build_row.id).update(
             status="ready", expires_at=timezone.now() + timedelta(hours=1)
         )
@@ -690,7 +690,7 @@ def test_a_stored_path_that_is_not_an_export_path_is_never_removed(
     victim.parent.mkdir(parents=True, exist_ok=True)
     victim.write_text("precious")
     post_json(as_user(user), f"/workspaces/{ws_a.id}/my-export")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         MemberExport.objects.update(
             storage_path="../victim.txt", created_at=timezone.now() - timedelta(hours=3)
         )
@@ -806,7 +806,7 @@ def test_a_restored_ready_row_without_its_file_answers_404_and_is_swept(ws_a: Wo
     gone = as_user(user).get(url(ws_a, "/file"))
     assert (gone.status_code, gone.streaming) == (404, False)
     assert gone.json()["code"] == "export_not_found"
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         MemberExport.objects.filter(id=row.id).update(
             expires_at=timezone.now() - timedelta(minutes=1)
         )
@@ -827,7 +827,7 @@ def test_a_member_removed_while_the_export_is_built_leaves_no_file_and_no_ready_
 
     def removed_midway(**kwargs: object) -> export.ExportCounts:
         counts = real(**kwargs)  # type: ignore[arg-type]
-        with workspace_context(ws_a.id):
+        with workspace_context(ws_a.id, actor=SYSTEM):
             MemberExport.objects.filter(id=row.id).delete()
         return counts
 

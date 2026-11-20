@@ -15,7 +15,7 @@ from apps.labels.models import Label
 from apps.people import services as people_services
 from apps.rules import services as rule_services
 from apps.rules.models import Rule
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 from tests.documents_support import make_person
 from tests.rules_support import add_label, make_rule, text_word
@@ -23,7 +23,10 @@ from tests.rules_support import add_label, make_rule, text_word
 
 def locks(workspace: Workspace, call: Callable[[], object]) -> list[str]:
     """The SQL of every locking query `call` runs."""
-    with workspace_context(workspace.id), CaptureQueriesContext(connection) as queries:
+    with (
+        workspace_context(workspace.id, actor=SYSTEM),
+        CaptureQueriesContext(connection) as queries,
+    ):
         call()
     return [q["sql"] for q in queries if "FOR UPDATE" in q["sql"]]
 
@@ -35,7 +38,7 @@ def rule_lock_index(sql: list[str]) -> int:
 
 
 def test_reorder_locks_the_rules_in_id_order(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         ids = list(Rule.objects.filter(workspace=ws_a).values_list("id", flat=True))
 
     sql = locks(ws_a, lambda: rule_services.reorder_rules(workspace=ws_a, rule_ids=ids[::-1]))
@@ -44,7 +47,7 @@ def test_reorder_locks_the_rules_in_id_order(ws_a: Workspace) -> None:
 
 
 def test_delete_label_locks_the_rules_first_in_id_order(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         own = Label.objects.create(workspace=ws_a, name="Eigen")
 
     sql = locks(
@@ -74,7 +77,7 @@ def test_delete_person_locks_the_rules_first_in_id_order(ws_a: Workspace) -> Non
 
 
 def _any_label(workspace: Workspace) -> Label:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         label = Label.objects.filter(workspace=workspace).first()
     assert label is not None
     return label

@@ -34,7 +34,7 @@ from apps.people.services import ensure_person_for_member
 from apps.pipeline import settings_service
 from apps.pipeline.settings_service import AiStatus, Autopilot
 from apps.workspaces.access import on_member_added, person_requires_email
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import NOBODY, workspace_context
 from apps.workspaces.models import Invitation, Membership, Workspace
 
 INVITATION_PATH = "/uitnodiging"
@@ -334,7 +334,7 @@ def lookup_invitation(*, token: str) -> InvitationInfo:
     role, whether the address is fixed, the person and the workspace's AI line. The person
     and the AI settings are workspace rows, read inside the workspace's context."""
     invitation = _usable(token)
-    with workspace_context(invitation.workspace_id):
+    with workspace_context(invitation.workspace_id, actor=NOBODY):
         person_name = (
             Person.objects.filter(workspace_id=invitation.workspace_id, id=invitation.person_id)
             .values_list("display_name", flat=True)
@@ -448,7 +448,7 @@ def accept_invitation(
             keep_id=invitation.id,
             skip_locked=True,
         )
-        with workspace_context(invitation.workspace_id):
+        with workspace_context(invitation.workspace_id, actor=user.id):
             person = _link_person(invitation, user)
             on_member_added(
                 invitation.workspace_id,

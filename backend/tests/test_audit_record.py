@@ -8,13 +8,13 @@ from apps.audit.codes import ALLOWED_VALUES, NAMED_TARGETS, AuditCode, TargetKin
 from apps.audit.models import ServerAuditEvent, WorkspaceAuditEvent
 from apps.audit.services import AuditActor, AuditTarget, actor_from_request, record
 from apps.devices.models import Device
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 from tests.factories import UserFactory
 
 
 def workspace_rows(workspace: Workspace) -> list[WorkspaceAuditEvent]:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return list(WorkspaceAuditEvent.objects.all())
 
 
@@ -49,7 +49,7 @@ def test_record_writes_a_workspace_row_in_its_own_context(ws_a: Workspace, ws_b:
 def test_record_nested_in_another_workspace_context_writes_to_its_own(
     ws_a: Workspace, ws_b: Workspace
 ) -> None:
-    with workspace_context(ws_b.id):
+    with workspace_context(ws_b.id, actor=SYSTEM):
         record(AuditCode.RULE_DELETED, actor=AuditActor.system(), workspace_id=ws_a.id)
         assert WorkspaceAuditEvent.objects.count() == 0
     assert len(workspace_rows(ws_a)) == 1

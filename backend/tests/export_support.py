@@ -13,7 +13,7 @@ from apps.documents.schemas import UploadMetadataIn
 from apps.labels.models import Label
 from apps.people.models import Person
 from apps.tasks.models import Task
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 from tests.documents_support import jpeg, metadata_for
 
@@ -34,7 +34,7 @@ def sealed_document(
     seed = seed or uuid.uuid4().hex
     data = [jpeg(f"{seed}-{n}") for n in range(pages)]
     metadata = UploadMetadataIn.model_validate(metadata_for(data))
-    with workspace_context(ws.id):
+    with workspace_context(ws.id, actor=SYSTEM):
         document, _created = create_document_from_upload(
             workspace=ws, user=user, metadata=metadata, pages=data
         )

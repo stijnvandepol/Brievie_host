@@ -29,7 +29,7 @@ from apps.pipeline.schema import ExtractionPayload
 from apps.pipeline.settings_service import autopilot_in_force, provider_for
 from apps.pipeline.validation import ValidatedChoice, ValidatedValue, validate, validate_choices
 from apps.rules import triggers
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ def run_pipeline(
     open while the AI call runs.
     """
     started = time.monotonic()
-    with workspace_context(workspace_id):
+    with workspace_context(workspace_id, actor=SYSTEM):
         document = _lock_processing(document_id)
         if document is None:
             logger.info("Skipped document %s in workspace %s", document_id, workspace_id)
@@ -71,7 +71,7 @@ def run_pipeline(
         values = validate(payload, text, today=day)
         choices, dropped = validate_choices(payload, text, request)
 
-    with workspace_context(workspace_id):
+    with workspace_context(workspace_id, actor=SYSTEM):
         document = _lock_processing(document_id)
         if document is None:
             # Confirmed, failed or deleted while the AI was reading: leave it.
@@ -256,7 +256,7 @@ def mark_failed(workspace_id: UUID, document_id: UUID, code: str) -> None:
     The deterministic proposals are still made (design 17): the user organises the
     document by hand and finds them there.
     """
-    with workspace_context(workspace_id):
+    with workspace_context(workspace_id, actor=SYSTEM):
         document = _lock_processing(document_id)
         if document is None:
             return

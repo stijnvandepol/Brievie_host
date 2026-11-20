@@ -240,6 +240,8 @@ def run_rule(*, workspace: Workspace, rule_id: UUID, actor: AuditActor) -> None:
             raise rule_not_found()
         if not rule.active:
             raise ApiError(409, "rule_inactive", _("Deze regel staat uit. Zet hem eerst aan."))
+        if actor.user_id is None:
+            raise ValueError("A rule run is started by a member (R7).")
         # A second click while the first run waits is the same ask.
-        jobs.defer_rule_run(workspace.id, rule.id)
+        jobs.defer_rule_run(workspace.id, rule.id, user_id=actor.user_id)
         _record(AuditCode.RULE_RUN, workspace, actor, rule.id)
