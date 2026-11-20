@@ -121,6 +121,16 @@ DATABASES = {
     "default": DATABASE_OWNER if _use_owner_role and DATABASE_OWNER else env.db("DATABASE_URL")
 }
 DATABASES["default"]["ATOMIC_REQUESTS"] = True
+# No JIT compilation, for every connection the app, the migrate run and the tests open.
+# PostgreSQL compiles a query once its estimated cost passes jit_above_cost (100,000);
+# with the visibility policies inlined into every list query the estimates pass it
+# easily, and compiling then costs 0.3-1.3 s for queries that run in well under that
+# (measured, DECISIONS 2026-11-20). Set at connection start through libpq's `options`:
+# no extra round trip, and the server and database stay at their defaults.
+_db_options = DATABASES["default"].get("OPTIONS")
+_db_options = dict(_db_options) if isinstance(_db_options, dict) else {}
+_db_options["options"] = f"{_db_options.get('options', '')} -c jit=off".strip()
+DATABASES["default"]["OPTIONS"] = _db_options
 
 # The database cache is shared by all gunicorn workers (throttle counts).
 # `manage.py createcachetable` creates its table; the test run does so itself.
