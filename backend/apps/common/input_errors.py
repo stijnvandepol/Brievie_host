@@ -10,35 +10,42 @@ from collections.abc import Mapping, Sequence
 
 from django.utils.translation import gettext as _
 
-# Field name -> the Dutch noun with "een", for a text that is too long or empty.
-_TEXTS: Mapping[str, str] = {
-    "name": "een naam",
-    "display_name": "een naam",
-    "workspace_name": "een naam",
-    "device_name": "een naam",
-    "sender": "een afzender",
-    "summary": "een samenvatting",
-    "description": "een omschrijving",
-    "note": "een notitie",
-    "email": "een e-mailadres",
-    "password": "een wachtwoord",
-    "new_password": "een wachtwoord",
-    "current_password": "een wachtwoord",
-    "value": "een voorwaarde",
-}
-# Field name -> the Dutch plural, for a list with too many or too few items.
-_LISTS: Mapping[str, str] = {
-    "conditions": "voorwaarden",
-    "actions": "acties",
-    "tasks": "taken",
-    "label_ids": "labels",
-    "addressee_ids": "personen",
-    "person_ids": "personen",
-    "name_variants": "schrijfwijzen",
-    "rule_ids": "regels",
-    "notice_ids": "meldingen",
-    "extra_labels": "labels",
-}
+
+def _texts() -> Mapping[str, str]:
+    """Field name -> the Dutch noun with "een", for a text that is too long or empty."""
+    return {
+        "name": _("een naam"),
+        "display_name": _("een naam"),
+        "workspace_name": _("een naam"),
+        "device_name": _("een naam"),
+        "sender": _("een afzender"),
+        "summary": _("een samenvatting"),
+        "description": _("een omschrijving"),
+        "note": _("een notitie"),
+        "email": _("een e-mailadres"),
+        "password": _("een wachtwoord"),
+        "new_password": _("een wachtwoord"),
+        "current_password": _("een wachtwoord"),
+        "value": _("een voorwaarde"),
+    }
+
+
+def _lists() -> Mapping[str, str]:
+    """Field name -> the Dutch plural, for a list with too many or too few items."""
+    return {
+        "conditions": _("voorwaarden"),
+        "actions": _("acties"),
+        "tasks": _("taken"),
+        "label_ids": _("labels"),
+        "addressee_ids": _("personen"),
+        "person_ids": _("personen"),
+        "name_variants": _("schrijfwijzen"),
+        "rule_ids": _("regels"),
+        "notice_ids": _("meldingen"),
+        "extra_labels": _("labels"),
+    }
+
+
 _DATES = frozenset(
     {"date_parsing", "date_from_datetime_parsing", "date_from_datetime_inexact", "date_type"}
 )
@@ -81,8 +88,8 @@ def message_for(errors: Sequence[Mapping[str, object]]) -> str:
     error = errors[0]
     kind = str(error.get("type", ""))
     field = _field(error)
-    text = _TEXTS.get(field)
-    plural = _LISTS.get(field)
+    text = _texts().get(field)
+    plural = _lists().get(field)
     if kind == "string_too_long" and text and (high := _limit(error, "max_length")):
         return _("Dit is te lang: %(field)s heeft hoogstens %(max)d tekens.") % {
             "field": text,
