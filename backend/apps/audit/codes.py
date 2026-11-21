@@ -48,6 +48,7 @@ class AuditCode(models.TextChoices):
     PERSON_UNLINKED = "person_unlinked", _("Persoon losgekoppeld van een account")
     DEPARTMENT_MEMBER_ADDED = "department_member_added", _("Lid aan afdeling toegevoegd")
     DEPARTMENT_MEMBER_REMOVED = "department_member_removed", _("Lid uit afdeling gehaald")
+    DEPARTMENT_LEAD_CHANGED = "department_lead_changed", _("Leidinggevende van afdeling gewijzigd")
     EMERGENCY_ACCESS_SWITCHED_ON = "emergency_access_switched_on", _("Noodtoegang aangezet")
     EMERGENCY_ACCESS_SWITCHED_OFF = "emergency_access_switched_off", _("Noodtoegang uitgezet")
     EMERGENCY_ACCESS_USED = "emergency_access_used", _("Noodtoegang gebruikt")
@@ -138,6 +139,8 @@ ALLOWED_VALUES: dict[AuditCode, frozenset[str]] = {
     AuditCode.PERSON_UNLINKED: _NONE,
     AuditCode.DEPARTMENT_MEMBER_ADDED: frozenset({"member"}),
     AuditCode.DEPARTMENT_MEMBER_REMOVED: frozenset({"member"}),
+    # value: whether the member is now a lead.
+    AuditCode.DEPARTMENT_LEAD_CHANGED: frozenset({"member", "value"}),
     AuditCode.EMERGENCY_ACCESS_SWITCHED_ON: _NONE,
     AuditCode.EMERGENCY_ACCESS_SWITCHED_OFF: _NONE,
     AuditCode.EMERGENCY_ACCESS_USED: frozenset({"reason", "document_count"}),

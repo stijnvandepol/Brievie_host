@@ -422,6 +422,10 @@ msgid "Lid uit afdeling gehaald"
 msgstr "Member removed from department"
 
 #: apps/audit/codes.py
+msgid "Leidinggevende van afdeling gewijzigd"
+msgstr "Department lead changed"
+
+#: apps/audit/codes.py
 msgid "Export gemaakt"
 msgstr "Export created"
 
@@ -1519,6 +1523,18 @@ msgstr "We can't find this suggestion."
 msgid "Er zijn net heel veel brieven verstuurd. Wacht even, dan gaat het vanzelf verder."
 msgstr "A lot of letters were just sent. Wait a moment, it will continue by itself."
 
+#: apps/documents/visibility.py apps/people/services.py apps/workspaces/members.py
+msgid "We kunnen dit lid niet vinden."
+msgstr "We can't find this member."
+
+#: apps/documents/visibility.py
+msgid "Alleen iemand op wiens naam deze brief staat, kan hem weer voor iedereen zichtbaar maken."
+msgstr "Only someone this letter is addressed to can make it visible to everyone again."
+
+#: apps/documents/visibility.py
+msgid "Dan kun je deze brief zelf niet meer lezen."
+msgstr "You would no longer be able to read this letter yourself."
+
 #: apps/labels/presets.py
 msgid "Belastingdienst"
 msgstr "Belastingdienst"
@@ -1658,6 +1674,10 @@ msgid "Dit lid hoort al bij een andere persoon."
 msgstr "This member already belongs to another person."
 
 #: apps/people/services.py
+msgid "Kies een persoon of een afdeling."
+msgstr "Choose a person or a department."
+
+#: apps/people/services.py
 msgid "Deze werkruimte heeft het grootste aantal personen. Verwijder er eerst een."
 msgstr "This workspace has the largest number of persons. Delete one first."
 
@@ -1674,9 +1694,21 @@ msgstr "This person is still in use. You can archive the person instead."
 msgid "De regel '%(rule)s' gebruikt deze persoon. Pas die regel eerst aan."
 msgstr "The rule '%(rule)s' uses this person. Change that rule first."
 
-#: apps/people/services.py apps/workspaces/members.py
-msgid "We kunnen dit lid niet vinden."
-msgstr "We can't find this member."
+#: apps/people/services.py
+msgid "Een afdeling koppel je niet aan één account. Voeg leden toe."
+msgstr "A department is not linked to one account. Add members instead."
+
+#: apps/people/services.py apps/workspaces/deps.py apps/workspaces/members.py
+msgid "Je mag dit niet doen in deze werkruimte."
+msgstr "You are not allowed to do this in this workspace."
+
+#: apps/people/services.py
+msgid "Dit is geen afdeling."
+msgstr "This is not a department."
+
+#: apps/people/services.py
+msgid "Je kunt jezelf geen toegang geven tot privé-post. Gebruik een uitnodiging of noodtoegang."
+msgstr "You cannot give yourself access to private post. Use an invitation or emergency access."
 
 #: apps/pipeline/api.py
 msgid "Lees eerst wat er naar de AI-dienst gaat en geef akkoord."
@@ -2182,10 +2214,6 @@ msgstr "From version {installed} there is no way to {target} with ./brievie upda
 #: apps/workspaces/deps.py apps/workspaces/locks.py
 msgid "We kunnen deze werkruimte niet vinden."
 msgstr "We can't find this workspace."
-
-#: apps/workspaces/deps.py apps/workspaces/members.py
-msgid "Je mag dit niet doen in deze werkruimte."
-msgstr "You are not allowed to do this in this workspace."
 
 #: apps/workspaces/invitations.py
 msgid "Deze persoon is al gekoppeld aan een lid."

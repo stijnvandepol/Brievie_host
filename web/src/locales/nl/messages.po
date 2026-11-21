@@ -2010,6 +2010,10 @@ msgstr "Leden mogen hun eigen post exporteren"
 msgid "Leeg laten kiest {0}."
 msgstr "Leeg laten kiest {0}."
 
+#: src/components/audit-codes.ts
+msgid "Leidinggevende van afdeling gewijzigd"
+msgstr "Leidinggevende van afdeling gewijzigd"
+
 #: src/routes/duplicate.tsx
 msgid "Let op: {fields} verschilt. Een herinnering of een tweede termijn lijkt vaak op de eerste brief, maar het is een andere brief."
 msgstr "Let op: {fields} verschilt. Een herinnering of een tweede termijn lijkt vaak op de eerste brief, maar het is een andere brief."

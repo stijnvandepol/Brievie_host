@@ -157,6 +157,7 @@ export const papa: Person = {
   archived: false,
   document_count: 2,
   user_id: null,
+  kind: "person",
 };
 
 export const annaPerson: Person = {
@@ -166,6 +167,7 @@ export const annaPerson: Person = {
   archived: false,
   document_count: 0,
   user_id: user.id,
+  kind: "person",
 };
 
 export const members: components["schemas"]["MemberOut"][] = [

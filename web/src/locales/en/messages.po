@@ -2010,6 +2010,10 @@ msgstr "Members may export their own mail"
 msgid "Leeg laten kiest {0}."
 msgstr "Leaving it empty chooses {0}."
 
+#: src/components/audit-codes.ts
+msgid "Leidinggevende van afdeling gewijzigd"
+msgstr "Department lead changed"
+
 #: src/routes/duplicate.tsx
 msgid "Let op: {fields} verschilt. Een herinnering of een tweede termijn lijkt vaak op de eerste brief, maar het is een andere brief."
 msgstr "Note: these differ: {fields}. A reminder or a second installment often looks like the first letter, but it is a different letter."

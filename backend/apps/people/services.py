@@ -17,11 +17,12 @@ from apps.common.privacy import holds_bsn, mask_bsns
 from apps.common.text import normalise
 from apps.documents import visibility
 from apps.documents.models import DocumentSuggestion
-from apps.people.models import Person
+from apps.people.models import DepartmentMember, Person
 from apps.rules.definition import named_ids
 from apps.rules.models import Rule
 from apps.tasks.assignment import release_unseeing_assignees
 from apps.workspaces.context import system_actor
+from apps.workspaces.locks import lock_own_membership
 from apps.workspaces.models import Membership, Workspace
 
 _NAME_UNIQUE = "people_person_name_unique"
@@ -34,10 +35,19 @@ VARIANT_MAX = 100
 
 
 def _persons(workspace: Workspace) -> "models.QuerySet[Person]":
-    """The workspace's persons, each annotated with `document_count`."""
-    return Person.objects.filter(workspace=workspace).annotate(
-        document_count=models.Count("document_links")
+    """The workspace's persons, each annotated with `document_count`, with the members
+    of a department (`PersonOut.member_user_ids`, `lead_user_ids`)."""
+    return (
+        Person.objects.filter(workspace=workspace)
+        .annotate(document_count=models.Count("document_links"))
+        .prefetch_related(DEPARTMENT_MEMBERS)
     )
+
+
+# A department's members in a stable order, fetched once for a list of persons.
+DEPARTMENT_MEMBERS = models.Prefetch(
+    "department_members", queryset=DepartmentMember.objects.order_by("created_at", "id")
+)
 
 
 def _in_use(person: Person) -> bool:
@@ -76,7 +86,9 @@ def list_persons(workspace: Workspace) -> list[Person]:
     the trash is not counted.
     """
     persons = list(
-        Person.objects.filter(workspace=workspace).order_by(
+        Person.objects.filter(workspace=workspace)
+        .prefetch_related(DEPARTMENT_MEMBERS)
+        .order_by(
             models.ExpressionWrapper(
                 models.Q(archived_at__isnull=False), output_field=models.BooleanField()
             ).asc(),
@@ -248,9 +260,26 @@ def _member_already_linked() -> ApiError:
 MAX_PERSONS = 500
 
 
+def _valid_kind(kind: str) -> str:
+    if kind not in Person.Kind.values:
+        raise ApiError(422, "validation_error", _("Kies een persoon of een afdeling."))
+    return kind
+
+
 def create_person(
-    *, workspace: Workspace, display_name: str, name_variants: list[str], archived: bool = False
+    *,
+    workspace: Workspace,
+    display_name: str,
+    name_variants: list[str],
+    archived: bool = False,
+    kind: str = Person.Kind.PERSON,
+    actor_role: str = Membership.Role.ADMIN,
 ) -> Person:
+    """A person, or a department (`kind`; only an admin makes one: departments decide
+    who reads post). The kind is set here only: an update never changes it."""
+    _valid_kind(kind)
+    if kind == Person.Kind.DEPARTMENT and actor_role != Membership.Role.ADMIN:
+        raise _forbidden()
     with transaction.atomic():
         if Person.objects.filter(workspace=workspace).count() >= MAX_PERSONS:
             raise ApiError(
@@ -263,6 +292,7 @@ def create_person(
             display_name=_clean_name(display_name),
             name_variants=_clean_variants(name_variants),
             archived_at=timezone.now() if archived else None,
+            kind=kind,
         )
         _refuse_taken_names(person)
         _save(person)
@@ -410,6 +440,12 @@ def link_member(
     """Link the person to a member of the workspace, or unlink it (`user_id` None)."""
     with transaction.atomic():
         person = _get_for_update(workspace, person_id)
+        if person.kind == Person.Kind.DEPARTMENT:
+            raise ApiError(
+                409,
+                "is_a_department",
+                _("Een afdeling koppel je niet aan één account. Voeg leden toe."),
+            )
         if user_id is not None:
             if not Membership.objects.filter(workspace=workspace, user_id=user_id).exists():
                 raise ApiError(404, "member_not_found", _("We kunnen dit lid niet vinden."))
@@ -437,3 +473,134 @@ def link_member(
                 workspace_id=workspace.id,
             )
         return _annotated(workspace, person.id)
+
+
+def _forbidden() -> ApiError:
+    return ApiError(403, "forbidden", _("Je mag dit niet doen in deze werkruimte."))
+
+
+def _department_for_update(workspace: Workspace, person_id: UUID, actor: AuditActor) -> Person:
+    """The department, locked after the actor's own membership (the lock order); 409
+    `not_a_department` for a person."""
+    if actor.user_id is not None:
+        lock_own_membership(workspace.id, actor.user_id)
+    department = _get_for_update(workspace, person_id)
+    if department.kind != Person.Kind.DEPARTMENT:
+        raise ApiError(409, "not_a_department", _("Dit is geen afdeling."))
+    return department
+
+
+def _member_name(workspace: Workspace, user_id: UUID) -> str:
+    """The member's name, or 404 `member_not_found` for somebody who is no member."""
+    name = (
+        Membership.objects.filter(workspace=workspace, user_id=user_id)
+        .values_list("user__name", flat=True)
+        .first()
+    )
+    if name is None:
+        raise ApiError(404, "member_not_found", _("We kunnen dit lid niet vinden."))
+    return str(name)
+
+
+def _department_target(department: Person) -> AuditTarget:
+    return AuditTarget(TargetKind.PERSON, department.id, department.display_name)
+
+
+def add_department_member(
+    *,
+    workspace: Workspace,
+    person_id: UUID,
+    user_id: UUID,
+    actor: AuditActor,
+    is_lead: bool = False,
+) -> Person:
+    """Put a member in a department (S 4.5, PB T11): a grant. An admin never adds
+    themselves to a department with private post (409 `cannot_grant_self`). Adding a
+    member who is in it already changes nothing."""
+    with transaction.atomic():
+        department = _department_for_update(workspace, person_id, actor)
+        name = _member_name(workspace, user_id)
+        if DepartmentMember.objects.filter(department=department, user_id=user_id).exists():
+            return _annotated(workspace, department.id)
+        if user_id == actor.user_id and visibility.has_private_post(department):
+            raise _cannot_grant_self()
+        DepartmentMember.objects.create(
+            workspace=workspace, department=department, user_id=user_id, is_lead=is_lead
+        )
+        visibility.recompute_where(workspace_id=workspace.id, person_id=department.id)
+        grantee = User.objects.get(id=user_id)
+        visibility.record_grant(department, grantee=grantee, actor_user_id=actor.user_id)
+        record(
+            AuditCode.DEPARTMENT_MEMBER_ADDED,
+            actor=actor,
+            target=_department_target(department),
+            workspace_id=workspace.id,
+            values={"member": name},
+        )
+        return _annotated(workspace, department.id)
+
+
+def remove_department_member(
+    *, workspace: Workspace, person_id: UUID, user_id: UUID, actor: AuditActor
+) -> Person:
+    """Take a member out of a department; their sight of its post goes (also for an admin
+    removing themselves: deliberate, so no `would_lose_access`, ruling c)."""
+    with transaction.atomic():
+        department = _department_for_update(workspace, person_id, actor)
+        name = _member_name(workspace, user_id)
+        removed, _rows = DepartmentMember.objects.filter(
+            department=department, user_id=user_id
+        ).delete()
+        if not removed:
+            return _annotated(workspace, department.id)
+        visibility.recompute_where(workspace_id=workspace.id, person_id=department.id)
+        # The member may no longer read the department's post: their tasks there end.
+        release_unseeing_assignees(workspace_id=workspace.id)
+        record(
+            AuditCode.DEPARTMENT_MEMBER_REMOVED,
+            actor=actor,
+            target=_department_target(department),
+            workspace_id=workspace.id,
+            values={"member": name},
+        )
+        return _annotated(workspace, department.id)
+
+
+def update_department_member(
+    *, workspace: Workspace, person_id: UUID, user_id: UUID, is_lead: bool, actor: AuditActor
+) -> Person:
+    """Make a department member its lead ("leidinggevende") or not. A lead manages the
+    department's labels and sees nothing extra (S 4.5). 404 `member_not_found` for
+    somebody who is not in the department."""
+    with transaction.atomic():
+        department = _department_for_update(workspace, person_id, actor)
+        row = (
+            DepartmentMember.objects.select_for_update()
+            .filter(department=department, user_id=user_id)
+            .select_related("user")
+            .first()
+        )
+        if row is None:
+            raise ApiError(404, "member_not_found", _("We kunnen dit lid niet vinden."))
+        if row.is_lead != is_lead:
+            row.is_lead = is_lead
+            row.save(update_fields=["is_lead", "updated_at"])
+            record(
+                AuditCode.DEPARTMENT_LEAD_CHANGED,
+                actor=actor,
+                target=_department_target(department),
+                workspace_id=workspace.id,
+                values={"member": row.user.name, "value": is_lead},
+            )
+        return _annotated(workspace, department.id)
+
+
+def _cannot_grant_self() -> ApiError:
+    return ApiError(
+        409,
+        "cannot_grant_self",
+        _(
+            "Je kunt jezelf geen toegang geven tot privé-post. Gebruik een uitnodiging of "
+            "noodtoegang."
+        ),
+    )

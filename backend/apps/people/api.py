@@ -8,7 +8,13 @@ from apps.audit.services import actor_from_request
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.people import services
 from apps.people.models import Person
-from apps.people.schemas import PersonIn, PersonMemberIn, PersonOut
+from apps.people.schemas import (
+    DepartmentMemberIn,
+    DepartmentMemberUpdateIn,
+    PersonIn,
+    PersonMemberIn,
+    PersonOut,
+)
 from apps.workspaces.deps import workspace_member
 from apps.workspaces.models import Membership
 
@@ -32,6 +38,7 @@ def list_persons(request: HttpRequest, workspace_id: UUID) -> list[Person]:
     _PERSONS,
     response={201: PersonOut, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS, **BODY_ERRORS},
     operation_id="createPerson",
+    description='`kind` "department" makes a department: admins only (403 `forbidden`).',
 )
 def create_person(request: HttpRequest, workspace_id: UUID, payload: PersonIn) -> Status[Person]:
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
@@ -40,6 +47,8 @@ def create_person(request: HttpRequest, workspace_id: UUID, payload: PersonIn) -
         display_name=payload.display_name,
         name_variants=payload.name_variants,
         archived=payload.archived,
+        kind=payload.kind,
+        actor_role=membership.role,
     )
     return Status(201, person)
 
@@ -110,5 +119,82 @@ def link_person_to_member(
         workspace=membership.workspace,
         person_id=person_id,
         user_id=payload.user_id,
+        actor=actor_from_request(request),
+    )
+
+
+_MEMBERS = f"{_PERSON}/members"
+_DEPARTMENT_WRITE = {
+    200: PersonOut,
+    404: ErrorOut,
+    409: ErrorOut,
+    **SESSION_WRITE_ERRORS,
+    **BODY_ERRORS,
+}
+
+
+@router.post(
+    _MEMBERS,
+    response=_DEPARTMENT_WRITE,
+    auth=session_auth,
+    operation_id="addDepartmentMember",
+    description=(
+        "Web session only. Admins put a member in a department (a grant). 409 "
+        "`not_a_department`, 409 `cannot_grant_self` (an admin adding themselves where "
+        "there is private post). A member already in it: 200, unchanged."
+    ),
+)
+def add_department_member(
+    request: HttpRequest, workspace_id: UUID, person_id: UUID, payload: DepartmentMemberIn
+) -> Person:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
+    return services.add_department_member(
+        workspace=membership.workspace,
+        person_id=person_id,
+        user_id=payload.user_id,
+        is_lead=payload.is_lead,
+        actor=actor_from_request(request),
+    )
+
+
+@router.put(
+    f"{_MEMBERS}/{{user_id}}",
+    response=_DEPARTMENT_WRITE,
+    auth=session_auth,
+    operation_id="updateDepartmentMember",
+    description="Web session only. Admins make a department member its lead, or not.",
+)
+def update_department_member(
+    request: HttpRequest,
+    workspace_id: UUID,
+    person_id: UUID,
+    user_id: UUID,
+    payload: DepartmentMemberUpdateIn,
+) -> Person:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
+    return services.update_department_member(
+        workspace=membership.workspace,
+        person_id=person_id,
+        user_id=user_id,
+        is_lead=payload.is_lead,
+        actor=actor_from_request(request),
+    )
+
+
+@router.delete(
+    f"{_MEMBERS}/{{user_id}}",
+    response={200: PersonOut, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS},
+    auth=session_auth,
+    operation_id="removeDepartmentMember",
+    description="Web session only. Admins take a member out of a department.",
+)
+def remove_department_member(
+    request: HttpRequest, workspace_id: UUID, person_id: UUID, user_id: UUID
+) -> Person:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
+    return services.remove_department_member(
+        workspace=membership.workspace,
+        person_id=person_id,
+        user_id=user_id,
         actor=actor_from_request(request),
     )

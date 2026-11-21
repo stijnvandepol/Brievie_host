@@ -1863,3 +1863,11 @@ M3). "Iedereen ziet alle post" stays on everywhere until Task 40, so departments
   recomputed only at the scope's end; it answers 409 `would_lose_access` for a private
   letter only. "Reads private post" counts reader rows on private letters only: a share of
   a letter that is not private is no private post.
+- **Departments (Task 25, PB T11, S 4.5).** `addDepartmentMember`, `updateDepartmentMember`
+  (the lead, audit `department_lead_changed`) and `removeDepartmentMember` are admin and
+  web-session only (they administer people). Only an admin makes a department
+  (`createPerson` with `kind` "department"; a member gets 403); `kind` is read on create
+  only. A department with letters is in use; an empty one is deleted with its
+  memberships (S 4.5 over PB's "in use while it has members"). Name matching and the AI
+  are offered departments only while departments are on; an archived department is not
+  offered and cannot be newly put on a letter, its members keep its letters.
