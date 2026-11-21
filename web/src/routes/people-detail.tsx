@@ -284,7 +284,8 @@ function PersonDetailPage() {
           ) : null}
         </div>
       </section>
-      {active || !visibility.data ? null : (
+      {/* Admins: who manages a person's post is an admin's fact on this page (B4). */}
+      {active || !isAdmin || !visibility.data ? null : (
         <PostOfInactivePerson
           name={name}
           everyoneSeesAll={visibility.data.everyone_sees_all}
