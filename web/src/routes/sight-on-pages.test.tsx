@@ -19,6 +19,7 @@ import {
   http,
   labelHandlers,
   loggedInHandlers,
+  memberAsPerson,
   members,
   papa,
   renderApp,
@@ -85,6 +86,7 @@ function world({
     http.get(`${base}/visibility`, () => HttpResponse.json(shown)),
     http.get(`${base}/persons`, () => HttpResponse.json([papa, annaPerson, finance])),
     http.get(`${base}/members`, () => HttpResponse.json(list)),
+    http.get(`${base}/people`, () => HttpResponse.json(list.map(memberAsPerson))),
     http.get(`${base}/invitations`, () => HttpResponse.json([])),
     http.get(`${base}/my-export`, () => HttpResponse.json(exportState())),
     ...loggedInHandlers(),
@@ -166,7 +168,7 @@ describe("labels of a department", () => {
   });
 });
 
-describe("Leden", () => {
+describe("Mensen", () => {
   it("Verdeelt post switches with a preview", async () => {
     const seen: { confirmed: boolean; preview_token: string }[] = [];
     server.use(
@@ -175,7 +177,7 @@ describe("Leden", () => {
       ...world(),
     );
     const u = userEvent.setup();
-    renderApp(`/w/${workspace.id}/leden`);
+    renderApp(`/w/${workspace.id}/mensen`);
     await u.click(await screen.findByRole("switch", { name: "Verdeelt post: Bram" }));
     const dialog = await screen.findByRole("alertdialog");
     expect(within(dialog).getByText("post zonder naam", { exact: false })).toBeInTheDocument();
@@ -186,7 +188,7 @@ describe("Leden", () => {
 
   it("a viewer cannot be a sorter", async () => {
     server.use(...world());
-    renderApp(`/w/${workspace.id}/leden`);
+    renderApp(`/w/${workspace.id}/mensen`);
     const toggle = await screen.findByRole("switch", { name: "Verdeelt post: Carla" });
     expect(toggle).toBeDisabled();
     const row = toggle.closest("tr") as HTMLElement;
@@ -195,8 +197,8 @@ describe("Leden", () => {
 
   it("members list their departments", async () => {
     server.use(...world());
-    renderApp(`/w/${workspace.id}/leden`);
-    const table = await screen.findByRole("region", { name: "Leden" });
+    renderApp(`/w/${workspace.id}/mensen`);
+    const table = await screen.findByRole("region", { name: "Mensen" });
     expect(
       await within(table).findByRole("columnheader", { name: "Afdelingen" }),
     ).toBeInTheDocument();
@@ -206,7 +208,7 @@ describe("Leden", () => {
 
   it("no sorter column while everyone sees all post", async () => {
     server.use(...world({ shown: { ...ownPost, everyone_sees_all: true } }));
-    renderApp(`/w/${workspace.id}/leden`);
+    renderApp(`/w/${workspace.id}/mensen`);
     await screen.findByRole("rowheader", { name: /Bram/ });
     expect(screen.queryByRole("columnheader", { name: "Verdeelt post" })).toBeNull();
   });
@@ -219,7 +221,7 @@ describe("Leden", () => {
       ...world({ shown: { ...ownPost, admins_read_all: true } }),
     );
     const u = userEvent.setup();
-    renderApp(`/w/${workspace.id}/leden`);
+    renderApp(`/w/${workspace.id}/mensen`);
     await u.click(await screen.findByRole("button", { name: "Rol wijzigen: Bram" }));
     const roleDialog = await screen.findByRole("dialog", { name: "Rol van Bram" });
     await u.click(within(roleDialog).getByRole("radio", { name: "Beheerder" }));
@@ -275,8 +277,8 @@ describe("Leden", () => {
       ...world(),
     );
     const u = userEvent.setup();
-    renderApp(`/w/${workspace.id}/leden`);
-    await u.click(await screen.findByRole("button", { name: "Uitnodigen" }));
+    renderApp(`/w/${workspace.id}/mensen`);
+    await u.click(await screen.findByRole("button", { name: "Iemand uitnodigen" }));
     const dialog = await screen.findByRole("dialog", { name: "Iemand uitnodigen" });
     await u.selectOptions(within(dialog).getByRole("combobox", { name: "Wie is het?" }), "Papa");
     await u.click(within(dialog).getByRole("button", { name: "Link maken" }));
@@ -300,8 +302,8 @@ describe("Uitnodigen", () => {
   it("offers persons but never a department", async () => {
     server.use(...world());
     const u = userEvent.setup();
-    renderApp(`/w/${workspace.id}/leden`);
-    await u.click(await screen.findByRole("button", { name: "Uitnodigen" }));
+    renderApp(`/w/${workspace.id}/mensen`);
+    await u.click(await screen.findByRole("button", { name: "Iemand uitnodigen" }));
     const dialog = await screen.findByRole("dialog", { name: "Iemand uitnodigen" });
     const who = await within(dialog).findByRole("combobox", { name: "Wie is het?" });
     const options = within(who)
@@ -350,7 +352,7 @@ describe("Nieuwe link", () => {
       ...world(),
     );
     const u = userEvent.setup();
-    renderApp(`/w/${workspace.id}/leden`);
+    renderApp(`/w/${workspace.id}/mensen`);
     await u.click(await screen.findByRole("button", { name: "Nieuwe link: nina@example.nl" }));
     const preview = await screen.findByRole("alertdialog");
     await u.click(within(preview).getByRole("button", { name: "Ja, maak een nieuwe link" }));

@@ -198,9 +198,9 @@ describe("post", () => {
     const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
     const todo = await within(nav).findByRole("link", { name: "Inbox, 3 brieven" });
     expect(todo).toHaveAttribute("href", `/w/${workspace.id}/inbox`);
-    expect(within(nav).getByRole("link", { name: "Personen" })).toHaveAttribute(
+    expect(within(nav).getByRole("link", { name: "Mensen" })).toHaveAttribute(
       "href",
-      `/w/${workspace.id}/personen`,
+      `/w/${workspace.id}/mensen`,
     );
   });
 

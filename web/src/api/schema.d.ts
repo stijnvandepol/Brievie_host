@@ -3457,6 +3457,11 @@ export interface components {
              */
             invitation_id?: string | null;
             /**
+             * Invitation Role
+             * @default
+             */
+            invitation_role: string;
+            /**
              * Last App Use At
              * Format: date-time
              */

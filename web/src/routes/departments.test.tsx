@@ -7,11 +7,13 @@ import {
   annaPerson,
   asRole,
   errorBody,
+  exportState,
   HttpResponse,
   http,
   loggedInHandlers,
   members,
   papa,
+  people,
   renderApp,
   server,
   user,
@@ -71,6 +73,9 @@ function handlers({
     http.get(`${base}/visibility`, () => HttpResponse.json(shown)),
     http.get(`${base}/persons`, () => HttpResponse.json(persons)),
     http.get(`${base}/members`, () => HttpResponse.json(members)),
+    http.get(`${base}/people`, () => HttpResponse.json(people)),
+    http.get(`${base}/invitations`, () => HttpResponse.json([])),
+    http.get(`${base}/my-export`, () => HttpResponse.json(exportState())),
     ...loggedInHandlers(),
   ];
 }
@@ -227,15 +232,15 @@ describe("afdelingen", () => {
 
   it("the page is absent while departments are off", async () => {
     server.use(...handlers({ shown: { ...visibility, departments_enabled: false } }));
-    renderApp(`/w/${workspace.id}/personen`);
+    renderApp(`/w/${workspace.id}/mensen`);
     const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
-    await within(nav).findByRole("link", { name: "Personen" });
+    await within(nav).findByRole("link", { name: "Mensen" });
     expect(within(nav).queryByRole("link", { name: "Afdelingen" })).toBeNull();
   });
 
-  it("is in the navigation while departments are on, and Personen leaves them out", async () => {
+  it("is in the navigation while departments are on, and Mensen leaves them out", async () => {
     server.use(...handlers());
-    renderApp(`/w/${workspace.id}/personen`);
+    renderApp(`/w/${workspace.id}/mensen`);
     const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
     expect(await within(nav).findByRole("link", { name: "Afdelingen" })).toHaveAttribute(
       "href",

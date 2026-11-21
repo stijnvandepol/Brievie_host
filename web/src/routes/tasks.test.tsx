@@ -250,7 +250,7 @@ describe("Mijn taken", () => {
     renderApp(path);
     expect(
       await screen.findByText(
-        "Je account hangt nog niet aan een naam. Daarom zie je hier alleen taken die iemand aan je geeft. Vraag een beheerder om je te koppelen bij Personen.",
+        "Je account hangt nog niet aan een naam. Daarom zie je hier alleen taken die iemand aan je geeft. Vraag een beheerder om je te koppelen bij Mensen.",
       ),
     ).toBeVisible();
     expect(screen.getByText("Je kunt taken bekijken, maar niet afvinken.")).toBeVisible();

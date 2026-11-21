@@ -13,6 +13,7 @@ import {
   memberHandlers,
   members,
   papa,
+  people,
   renderApp,
   server,
   workspace,
@@ -27,7 +28,7 @@ vi.mock("qrcode.react", () => ({
   },
 }));
 
-const path = `/w/${workspace.id}/leden`;
+const path = `/w/${workspace.id}/mensen`;
 const base = `*${API}/workspaces/${workspace.id}`;
 const LINK = "https://brievie.example.nl/uitnodiging#tok-abcdefghijklmnop";
 
@@ -61,6 +62,7 @@ function created(extra: Partial<components["schemas"]["CreatedInvitationOut"]> =
 function handlers(list: Invitation[] = [], persons = [papa, annaPerson]) {
   return [
     ...loggedInHandlers(),
+    http.get(`${base}/people`, () => HttpResponse.json(people.slice(0, 2))),
     ...memberHandlers(members, list),
     http.get(`${base}/persons`, () => HttpResponse.json(persons)),
   ];
@@ -74,7 +76,7 @@ describe("inviting", () => {
     );
     const u = userEvent.setup();
     renderApp(path);
-    await u.click(await screen.findByRole("button", { name: "Uitnodigen" }));
+    await u.click(await screen.findByRole("button", { name: "Iemand uitnodigen" }));
     const dialog = await screen.findByRole("dialog", { name: "Iemand uitnodigen" });
     await u.click(within(dialog).getByRole("button", { name: "Link maken" }));
 
@@ -97,7 +99,7 @@ describe("inviting", () => {
     );
     const u = userEvent.setup();
     renderApp(path);
-    await u.click(await screen.findByRole("button", { name: "Uitnodigen" }));
+    await u.click(await screen.findByRole("button", { name: "Iemand uitnodigen" }));
     await u.click(await screen.findByRole("button", { name: "Link maken" }));
     const writes = vi.spyOn(navigator.clipboard, "writeText");
     await screen.findByRole("button", { name: "Kopieer link" });
@@ -118,7 +120,7 @@ describe("inviting", () => {
     );
     const u = userEvent.setup();
     renderApp(path);
-    await u.click(await screen.findByRole("button", { name: "Uitnodigen" }));
+    await u.click(await screen.findByRole("button", { name: "Iemand uitnodigen" }));
     const dialog = await screen.findByRole("dialog");
     // The advanced choices are folded away.
     expect(within(dialog).queryByRole("radio")).not.toBeInTheDocument();
@@ -147,7 +149,7 @@ describe("inviting", () => {
     );
     const u = userEvent.setup();
     renderApp(path);
-    await u.click(await screen.findByRole("button", { name: "Uitnodigen" }));
+    await u.click(await screen.findByRole("button", { name: "Iemand uitnodigen" }));
     const dialog = await screen.findByRole("dialog");
     await u.click(within(dialog).getByRole("button", { name: "Meer opties" }));
     expect(within(dialog).getByRole("radio", { name: "Lid" })).toBeChecked();
@@ -181,7 +183,7 @@ describe("inviting", () => {
     );
     const u = userEvent.setup();
     renderApp(path);
-    await u.click(await screen.findByRole("button", { name: "Uitnodigen" }));
+    await u.click(await screen.findByRole("button", { name: "Iemand uitnodigen" }));
     const dialog = await screen.findByRole("dialog");
     const who = within(dialog).getByRole("combobox", { name: "Wie is het?" });
     expect(
@@ -199,7 +201,7 @@ describe("inviting", () => {
     server.use(...handlers([], [annaPerson]));
     const u = userEvent.setup();
     renderApp(path);
-    await u.click(await screen.findByRole("button", { name: "Uitnodigen" }));
+    await u.click(await screen.findByRole("button", { name: "Iemand uitnodigen" }));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).queryByRole("combobox", { name: "Wie is het?" })).not.toBeInTheDocument();
   });
@@ -213,7 +215,7 @@ describe("inviting", () => {
     );
     const u = userEvent.setup();
     renderApp(path);
-    await u.click(await screen.findByRole("button", { name: "Uitnodigen" }));
+    await u.click(await screen.findByRole("button", { name: "Iemand uitnodigen" }));
     await u.click(await screen.findByRole("button", { name: "Link maken" }));
     expect(
       await screen.findByText("Deze link werkt alleen op je thuisnetwerk."),
@@ -231,7 +233,7 @@ describe("inviting", () => {
     );
     const u = userEvent.setup();
     renderApp(path);
-    await u.click(await screen.findByRole("button", { name: "Uitnodigen" }));
+    await u.click(await screen.findByRole("button", { name: "Iemand uitnodigen" }));
     const dialog = await screen.findByRole("dialog");
     await u.click(within(dialog).getByRole("button", { name: "Link maken" }));
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(
@@ -247,7 +249,7 @@ describe("inviting", () => {
     );
     const u = userEvent.setup();
     const { queryClient } = renderApp(path);
-    await u.click(await screen.findByRole("button", { name: "Uitnodigen" }));
+    await u.click(await screen.findByRole("button", { name: "Iemand uitnodigen" }));
     await u.click(await screen.findByRole("button", { name: "Link maken" }));
     await screen.findByRole("textbox", { name: "Link" });
     await u.click(screen.getByRole("button", { name: "Klaar" }));
@@ -270,7 +272,7 @@ describe("inviting", () => {
     ).not.toContain(secret);
     expect(screen.queryByDisplayValue(LINK)).not.toBeInTheDocument();
     // A new dialog starts at the form again.
-    await u.click(screen.getByRole("button", { name: "Uitnodigen" }));
+    await u.click(screen.getByRole("button", { name: "Iemand uitnodigen" }));
     expect(await screen.findByRole("button", { name: "Link maken" })).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: "Link" })).not.toBeInTheDocument();
   });
@@ -290,7 +292,7 @@ describe("inviting", () => {
     );
     const u = userEvent.setup();
     renderApp(path);
-    await u.click(await screen.findByRole("button", { name: "Uitnodigen" }));
+    await u.click(await screen.findByRole("button", { name: "Iemand uitnodigen" }));
     await u.click(await screen.findByRole("button", { name: "Link maken" }));
     const field = await screen.findByRole("textbox", { name: "Link" });
     const overlay = field.closest(".overlay") as HTMLElement;
@@ -301,11 +303,11 @@ describe("inviting", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
-  it("a member does not see Uitnodigen or the open invitations", async () => {
+  it("a member does not see Iemand uitnodigen or the open invitations", async () => {
     server.use(asRole("member"), ...handlers([open]));
     renderApp(path);
     await screen.findByRole("row", { name: /Bram/ });
-    expect(screen.queryByRole("button", { name: "Uitnodigen" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Iemand uitnodigen" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Open uitnodigingen" })).not.toBeInTheDocument();
   });
 });
@@ -335,6 +337,7 @@ describe("open invitations", () => {
       }),
       ...loggedInHandlers(),
       http.get(`${base}/invitations`, () => HttpResponse.json(list)),
+      http.get(`${base}/people`, () => HttpResponse.json(people.slice(0, 2))),
       ...memberHandlers(),
       http.get(`${base}/persons`, () => HttpResponse.json([papa])),
     );
