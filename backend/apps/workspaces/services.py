@@ -4,12 +4,13 @@ from uuid import UUID
 from django.db import transaction
 from django.db.models import Count
 
-from apps.accounts.authority import account_action_requires_server_admin
+from apps.accounts.authority import actor_reads_all_post
 from apps.accounts.models import User
 from apps.labels.presets import apply_preset
 from apps.labels.services import create_extra_labels
 from apps.people.models import Person
 from apps.people.services import ensure_person_for_member
+from apps.workspaces import access
 from apps.workspaces.context import workspace_context
 from apps.workspaces.keys import workspace_key
 from apps.workspaces.models import Membership, Workspace
@@ -59,7 +60,9 @@ def list_members(
     """The workspace's members by name (only `user_id` when given), each with their linked
     person (needs the RLS context) and whether `viewer` may act on their account: the rule
     of `account_authority` (a server admin for anyone else; a workspace admin only for a
-    member of this workspace alone who is no server admin; nobody for their own account)."""
+    member of this workspace alone who is no server admin, who reads no private post,
+    while the viewer reads all post that is not private (S 4.19); nobody for their own
+    account). The private-post readers in one query."""
     person_ids = dict(
         Person.objects.filter(workspace=workspace).exclude(user=None).values_list("user_id", "id")
     )
@@ -72,6 +75,10 @@ def list_members(
             user=viewer, workspace=workspace, role=Membership.Role.ADMIN
         ).exists()
     )
+    readers_of_private_post = (
+        access.private_post_readers(workspace.id) if viewer_administers else set()
+    )
+    viewer_reads_all = actor_reads_all_post(workspace, actor_is_admin=viewer_administers)
     counts = dict(
         Membership.objects.filter(user_id__in=[m.user_id for m in memberships])
         .values("user_id")
@@ -89,7 +96,8 @@ def list_members(
             viewer_administers
             and counts.get(target.id) == 1
             and not target.is_server_admin
-            and not account_action_requires_server_admin(target)
+            and viewer_reads_all
+            and target.id not in readers_of_private_post
         )
 
     return [

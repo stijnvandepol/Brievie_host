@@ -184,10 +184,12 @@ def test_the_private_post_hook_reserves_the_action_for_the_server_admin(
     ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     member = join(ws_a)
-    assert authority.account_action_requires_server_admin(member) is False
+    assert authority.account_action_requires_server_admin(member, actor=admin_of(ws_a)) is False
     assert account_authority(admin_of(ws_a), member.id).workspace_id == ws_a.id
 
-    monkeypatch.setattr(authority, "account_action_requires_server_admin", lambda target: True)
+    monkeypatch.setattr(
+        authority, "account_action_requires_server_admin", lambda target, actor: True
+    )
 
     with pytest.raises(ApiError) as caught:
         account_authority(admin_of(ws_a), member.id)

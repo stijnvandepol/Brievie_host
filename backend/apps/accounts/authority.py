@@ -14,7 +14,7 @@ from django.utils.translation import gettext as _
 
 from apps.accounts.models import User
 from apps.common.errors import ApiError
-from apps.workspaces.models import Membership
+from apps.workspaces.models import Membership, Workspace
 
 
 @dataclass(frozen=True)
@@ -24,11 +24,32 @@ class AccountAuthority:
     workspace_id: UUID | None
 
 
-def account_action_requires_server_admin(target: User) -> bool:
-    """Seam for private post (a later part, provisional ruling D 8.5): True when only a
-    server admin may act on `target`'s account, also for a single-membership member.
-    Nothing in this part makes it True."""
-    return False
+def actor_reads_all_post(workspace: Workspace, *, actor_is_admin: bool) -> bool:
+    """Condition 3 of S 4.19: the actor reads all post of the workspace that is not
+    private ("Iedereen ziet alle post", or "Beheerders lezen alle post" for an admin)."""
+    return workspace.everyone_sees_all or (workspace.admins_read_all and actor_is_admin)
+
+
+def account_action_requires_server_admin(target: User, *, actor: User) -> bool:
+    """Whether only a server admin may act on `target`'s account (S 4.19, the owner's
+    decision of 2026-11-19, DECISIONS "6. Reset links"). A workspace admin may only when
+    (1) the target's single membership is that workspace and the target is no server
+    admin, (2) the target reads no private letter there (emergency access does not
+    count), and (3) the actor reads all post there that is not private. An account
+    action lets the actor act as the member, so it may not reach further than the
+    actor's own sight. `list_members` applies the same three conditions to a list."""
+    from apps.workspaces import access  # access imports the apps that import this module
+
+    memberships = list(Membership.objects.filter(user_id=target.id).select_related("workspace"))
+    if len(memberships) != 1 or target.is_server_admin:
+        return True
+    workspace = memberships[0].workspace
+    actor_is_admin = Membership.objects.filter(
+        user_id=actor.id, workspace=workspace, role=Membership.Role.ADMIN
+    ).exists()
+    if not actor_reads_all_post(workspace, actor_is_admin=actor_is_admin):
+        return True
+    return access.reads_private_post(workspace.id, target.id)
 
 
 def _not_found() -> ApiError:
@@ -65,11 +86,7 @@ def account_authority(actor: User, target_id: UUID) -> AccountAuthority:
         return AccountAuthority(target=target, workspace_id=only_workspace)
     if not target_workspaces & administered:
         raise _not_found()
-    if (
-        only_workspace is None
-        or target.is_server_admin
-        or account_action_requires_server_admin(target)
-    ):
+    if only_workspace is None or target.is_server_admin:
         raise ApiError(
             403,
             "server_admin_only",
@@ -78,4 +95,6 @@ def account_authority(actor: User, target_id: UUID) -> AccountAuthority:
                 "werkruimte bestaat."
             ),
         )
+    if account_action_requires_server_admin(target, actor=actor):
+        raise ApiError(403, "server_admin_only", _("Dit kan alleen de serverbeheerder."))
     return AccountAuthority(target=target, workspace_id=only_workspace)

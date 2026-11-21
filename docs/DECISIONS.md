@@ -1890,3 +1890,12 @@ M3). "Iedereen ziet alle post" stays on everywhere until Task 40, so departments
   The removal itself is not wrapped in `system_actor()`: every step that must reach
   letters the admin cannot see (releasing tasks, forgetting the member) runs as the system
   on its own.
+- **Account actions follow who reads which post (Task 28, S 4.19; implements "6. Reset
+  links" above).** A workspace admin makes a reset link, ends sessions or lists and
+  revokes devices of a member only when the member belongs to that workspace alone and is
+  no server admin, reads no private letter there (emergency rows do not count), and the
+  admin reads all post there that is not private ("Iedereen ziet alle post", or
+  "Beheerders lezen alle post"). Otherwise 403 `server_admin_only` ("Dit kan alleen de
+  serverbeheerder."). A link made before the member became a reader stops working (the
+  rule is checked again at completion). `listMembers.can_manage_account` applies the
+  same conditions with one query for the readers.
