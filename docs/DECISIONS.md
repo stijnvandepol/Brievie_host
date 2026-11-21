@@ -1950,3 +1950,13 @@ M3). "Iedereen ziet alle post" stays on everywhere until Task 40, so departments
   their reader rows, shares and department memberships (Task 27), which closes the
   reader-row arm in practice. Closing it inside the policy stays the owner's call (a
   policy migration and a new measurement).
+
+### Security review of PR #38 (2026-11-21)
+
+- **The autopilot never widens a private letter's readers (finding 1).** On a letter that
+  is private (read from the database before every addressee: a rule of the same run may
+  have made it private, and a letter processed again may be private already) an AI or
+  name-match addressee stays a proposal. So does it when an open Zorg proposal could be
+  applied in the same run where Zorg makes letters private: addressees are applied before
+  labels, and a rule's Zorg proposal counts even though `rule_labels_to_apply` decides
+  only later (the autopilot blocks rather than guesses).
