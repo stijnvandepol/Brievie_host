@@ -35,7 +35,7 @@ From the spec, not left to the builder:
 - **Status (S 4.1, 4.2):** `new` = `status != done`; `handled` = done ∧ `task_open_count = 0`; `waiting` = done ∧ count > 0 ∧ `task_wait_until > today`; `open` = done ∧ count > 0 ∧ (`task_wait_until` null ∨ ≤ today); `overdue` = done ∧ `task_overdue_from <= today`.
 - **Facts:** `task_open_count` = open tasks; `task_wait_until` = min of `waiting_until` over open tasks when every open task has one, else null; `task_overdue_from` = min over open tasks with a deadline of `max(deadline + 1 day, waiting_until)` (`waiting_until` ignored when null), null when none.
 - **Dates (S 5):** `waiting_until` and snooze `until` must be after today and at most today + 365; snooze `until` at most the task's deadline (when it has one; B2 default). Same value again: no write, no line.
-- **Lines (S 4.3, LS8):** `letter_handled` / `letter_reopened` only when the handled-ness of a reviewed, not trashed letter changes; origin `system` without actor, except `handleDocument` (origin `user`, actor). No line when a date passes.
+- **Lines (S 4.3, LS8):** `letter_handled` / `letter_reopened` only when the handled-ness of a letter not in the trash changes, judged with its status before the change (`previous_status`, Task 3); origin `system` without actor, except `handleDocument` (origin `user`, actor). No line when a date passes.
 - **Copy:** spec section 12 verbatim.
 
 ## Review Focus
@@ -163,7 +163,7 @@ def test_backfill_matches_the_pure_rule(): ...           # migrate to before, se
 - Modify: `backend/apps/tasks/services.py` (`_get_for_update`, `complete_task`, `reopen_task`, `set_deadline`), `backend/apps/documents/review.py` (`_store_confirmation` step 2), `backend/apps/documents/services.py` (`reopen_document`), `backend/apps/documents/duplicates.py` (`_merge_tasks` caller), `backend/apps/documents/jobs.py` (`verify_visibility_job`), `backend/apps/documents/organise.py`, `backend/tests/test_actor_callers.py` (add `apps/tasks/letter_sync.py`)
 
 **Interfaces:**
-- `sync(document: Document, *, actor: User | None = None) -> None`: as `system_actor()`, read the letter's tasks (`status`, `deadline`, `waiting_until`), `facts_of`, compare with the stored columns, write them (`update_fields`) when different. When the document is `done`, not trashed and `(old.open_count == 0) != (new.open_count == 0)`: `organise.record_letter_handled(document, actor=actor)` or `organise.record_letter_reopened(document)`; with `actor` the line has origin `user`, without it origin `system` and no actor. Caller holds the letter's row lock.
+- `sync(document: Document, *, actor: User | None = None, previous_status: str | None = None) -> None`: as `system_actor()`, read the letter's tasks (`status`, `deadline`, `waiting_until`), `facts_of`, compare with the stored columns, write them (`update_fields`) when different. `previous_status` is the letter's `status` before the caller changed it (None: unchanged). `handled_before = (previous_status or document.status) == done and old.open_count == 0`; `handled_after = document.status == done and new.open_count == 0`. For a letter not in the trash: `handled_after and not handled_before` → `organise.record_letter_handled(document, actor=actor)`; `document.status == done and handled_before and not handled_after` → `organise.record_letter_reopened(document)`. With `actor` the line has origin `user`, without it origin `system` and no actor. Confirm (step 2) passes `previous_status=needs_review/failed` (so a confirm without tasks writes `letter_handled`); `reopen_document` passes `done` (its status is no longer done: no `letter_reopened`, the existing `reopened` line suffices). Caller holds the letter's row lock.
 - `verify_all() -> int`: per workspace as the system, one `UPDATE documents_document d SET … FROM (aggregate) WHERE … IS DISTINCT FROM …` (`RECOMPUTE`); returns the number of letters fixed; logged as a count. No history lines (a repair is not an event).
 - Lock order: `tasks.services._get_for_update` first takes `Document.objects.select_for_update(no_key=True)` on the task's letter (as the member, `LIVE`), then the task `FOR UPDATE OF self`. Letterless tasks: task only.
 - Callers of `sync` (exactly): `complete_task`, `reopen_task`, `set_deadline`, `waiting.set_waiting`, `handle.handle_document` (once, with actor), `review._store_confirmation` (step 2, as the system, after the status write), `services.reopen_document`, `duplicates._merge_tasks` (both letters, after the loop). `purge` needs none (the letter goes).
@@ -194,6 +194,7 @@ def test_verify_all_repairs_a_tampered_row(): ...                # set task_open
 **Files:**
 - Modify: `backend/tests/perf/data.py` (per 100,000 letters: 80 % done; tasks as now plus 5 % of open tasks waiting, a third of them with a past date; 2 % of open tasks snoozed by their assignee), `backend/tests/perf/test_visibility_at_scale.py`
 - Add to `FILTERED` and `_list`: `list_documents_open` (`letter_status="open"`), `list_documents_own_person_waiting`, `letter_status_counts` (no person), `letter_status_counts_own_person`; `list_my_tasks` and `count_my_tasks` are already there and now include the waiting/snooze filters once Task 10 lands (re-run then).
+- Modify: `.github/workflows/visibility-perf.yml`: add `backend/apps/tasks/letter_sync.py`, `backend/apps/tasks/waiting.py`, `backend/apps/tasks/snooze.py` and `backend/apps/documents/handle.py` to both the `pull_request` and the `push` path lists.
 - Temporary: until Task 5 exists, measure the queries through a test helper that builds the same `Q` from `letter_state` (move the helper into `documents.services` in Task 5; the perf names stay).
 
 - [ ] **Step 1:** Push; run the `visibility-perf` workflow on the branch (workflow_dispatch).
@@ -259,7 +260,7 @@ def test_no_line_when_waiting_ends(freezer): ...             # set wait, move cl
 - Modify: `backend/apps/documents/schemas.py` (`HandleDocumentIn`), `api.py` (`handleDocument`), `backend/apps/tasks/services.py` (an internal `_complete_locked(task, user, origin)` shared with `complete_task`, so `handle` completes without a `sync` per task)
 
 **Interfaces:**
-- `handle_document(*, membership: Membership, user: User, document_id: UUID, task_ids: list[UUID], payments_confirmed: bool) -> Document` in `transaction.atomic`: letter via `visible_documents(...).select_for_update(no_key=True)` (404 `document_not_found`), `require_editable`; 409 `document_not_reviewed`; open task ids (all open, waiting included) locked `FOR UPDATE`; set differs → 409 `tasks_changed`; a `pay` task and not `payments_confirmed` → 409 `payment_not_confirmed`; `_complete_locked` each (lines `task_completed`, actor; `waiting_until` cleared; snooze rows of the task deleted); `letter_sync.sync(document, actor=user)`. Already handled and `task_ids == []`: return unchanged.
+- `handle_document(*, membership: Membership, user: User, document_id: UUID, task_ids: list[UUID], payments_confirmed: bool) -> Document` in `transaction.atomic`: letter via `visible_documents(...).select_for_update(no_key=True)` (404 `document_not_found`), `require_editable`; 409 `document_not_reviewed`; open task ids (all open, waiting included) locked `FOR UPDATE`; set differs → 409 `tasks_changed`; a `pay` task and not `payments_confirmed` → 409 `payment_not_confirmed`; `_complete_locked` each (lines `task_completed`, actor; `waiting_until` cleared; every member's snooze rows of the task deleted inside `system_actor()`, since the own-rows policy lets the caller delete only their own; the policy is not widened); `letter_sync.sync(document, actor=user)`. Already handled and `task_ids == []`: return unchanged.
 - `HandleDocumentIn(InputSchema)`: `task_ids: list[UUID] = Field(default_factory=list, max_length=200)`, `payments_confirmed: bool = False`.
 - `handleDocument` POST `/workspaces/{workspace_id}/documents/{document_id}/handle`, `min_role=MEMBER`, `response={200: DocumentOut, 404, 409, **SESSION_WRITE_ERRORS, **BODY_ERRORS}`, answers `services.document_out_for(document)`.
 
@@ -328,7 +329,7 @@ def test_snooze_not_after_deadline(client): ...
 def test_overdue_task_cannot_be_snoozed(client): ...             # deadline < today -> no valid date -> 422
 def test_unsnooze(client): ...
 def test_viewer_may_snooze(client): ...
-def test_completion_deletes_snoozes(client): ...
+def test_completion_deletes_snoozes(client): ...                 # Anne snoozes; Piet completes the task; Anne's row is gone (deleted as the system)
 ```
 
 - [ ] **Step 2–4:** Push → FAIL; implement; push → PASS.
@@ -450,4 +451,4 @@ Short list; the iOS plan details them.
 - **I2. Person scope:** `LetterStatusBadge` per row ("Te laat" in words and VoiceOver), segmented status filter, count line (spec 6.1); hide all of it when the server sends no `letter_status`.
 - **I3. Letter:** status under the title; "Brief afhandelen" sheet with the tasks, payment toggle, 409 `tasks_changed` reloads the sheet.
 - **I4. Task row:** "Wacht op reactie…" (member+) and "Uitstellen…" (date picker capped at the deadline); collapsed groups in Mijn taken with `include_waiting: true`.
-- **I5. Reminders:** `ReminderPlanner` keeps reading the default `listMyTasks` (waiting and snoozed are out) and adds one reminder at 09:00 on `waiting_until` of a waiting task ("Wachten voorbij", body: task type only unless "toon afzender"); `CalendarSync` unchanged.
+- **I5. Reminders:** `ReminderPlanner` keeps planning deadline reminders from the default `listMyTasks` (waiting and snoozed are out); for the waiting-end reminders only it reads `listMyTasks(include_waiting: true)` and plans one reminder at 09:00 on each waiting task's `waiting_until` ("Wachten voorbij", body: task type only unless "toon afzender"); `CalendarSync` unchanged.

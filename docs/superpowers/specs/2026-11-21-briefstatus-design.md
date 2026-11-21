@@ -148,8 +148,10 @@ plus `processing`; Afgehandeld uses the recent index (most post).
 | `reopenDocument` (AI's confirmation taken back) | → Nieuw | `reopened` (exists) |
 | Trash / restore | none (a trashed letter is out of every list) | exists |
 
-- A `letter_handled` / `letter_reopened` line is written only for a reviewed letter that
-  is not in the trash, and only when `sync` sees the handled-ness change. Transitions
+- A `letter_handled` / `letter_reopened` line is written only for a letter that is not in
+  the trash, and only when `sync` sees the handled-ness change; it is told the letter's
+  status before the change, so a confirm without tasks (Nieuw → Afgehandeld) writes
+  `letter_handled`, and `reopenDocument` (back to Nieuw) writes no `letter_reopened`. Transitions
   into and out of "Wacht op reactie" are told by the task's own lines.
 - **When the waiting date arrives** nothing is written: the line "Anne wacht op een
   reactie tot 3 december" already says when it ends, and a job that writes history at
@@ -172,7 +174,7 @@ Two different things, never merged (R 1 item 2):
 | Who may set it | whoever may edit the letter (role member+, `require_editable`; not through emergency access only), as `completeTask` (ruling LS4) | any member who sees the task, a viewer included (it changes nothing shared) |
 | Date | after today, at most a year ahead (422 otherwise) | after today, at most a year ahead, and **not after the task's deadline** (422 `snooze_after_deadline`; Besluit B2) |
 | History | `task_waiting` (with the date), `task_waiting_ended`, with actor | none: personal, not on the letter, not in the audit log |
-| On completion | cleared with the completion (no own line) | the caller's and others' snooze rows of the task are deleted |
+| On completion | cleared with the completion (no own line) | every member's snooze row of the task is deleted, as the system (the own-rows policy is not widened) |
 | On a merge | moves with the task | moves with the task (rows follow the task id) |
 | On purge | gone with the task | gone with the task (cascade) |
 
