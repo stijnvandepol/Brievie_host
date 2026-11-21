@@ -6,7 +6,9 @@ import re
 import uuid
 
 import pytest
+from django.db import connection
 from django.test import Client
+from django.test.utils import CaptureQueriesContext
 from pytest_django import Settings
 
 from apps.accounts.models import AccountNotice, User
@@ -381,3 +383,35 @@ def test_renewing_an_invitation_that_widens_nothing_needs_no_body(client: Client
     invitation = Invitation.objects.get(workspace=o.workspace, revoked_at=None)
     status, body = _renew(client, o, invitation.id)
     assert status == 201, body
+
+
+def test_renewing_a_person_invitation_locks_the_invitation_before_the_person(
+    client: Client,
+) -> None:
+    """Security review of PR #40, point 2: accepting locks the invitation, then the
+    account, then the person; renewing must not hold the person while it waits for the
+    invitation, or the two deadlock."""
+    o = office()
+    jan = o.persons["Jan"]
+    client.force_login(o.admin)
+    preview = _preview_person_invite(client, o, jan.id)
+    status, _body = _invite(
+        client, o, person_id=str(jan.id), confirmed=True, preview_token=preview["preview_token"]
+    )
+    assert status == 201
+    invitation = Invitation.objects.get(workspace=o.workspace, revoked_at=None)
+    preview = _preview_person_invite(client, o, jan.id)
+    with CaptureQueriesContext(connection) as queries:
+        status, _body = _renew(
+            client, o, invitation.id, confirmed=True, preview_token=preview["preview_token"]
+        )
+    assert status == 201
+    locks = [
+        ("invitation" if 'FROM "workspaces_invitation"' in q["sql"] else "person")
+        for q in queries.captured_queries
+        if " FOR " in q["sql"]
+        and ('FROM "workspaces_invitation"' in q["sql"] or 'FROM "people_person"' in q["sql"])
+    ]
+    assert "invitation" in locks
+    assert "person" in locks
+    assert locks.index("invitation") < locks.index("person"), locks

@@ -195,14 +195,19 @@ def _require_invitation_confirmed(
     `confirmation_required`, `preview_outdated`; S 4.4: "an accepted invitation was
     confirmed when it was made"). Takes the memberships' lock, which comes before the
     invitations and the persons in the lock order; a member invitation without a person
-    gives nobody anything and takes no lock."""
+    gives nobody anything and takes no lock. Lock order of the invitation writers:
+    memberships, then the invitation, then the person (accepting: the invitation, then the
+    account, then the person); this check locks no person."""
     if role not in Membership.Role.values:
         return  # `_issue` refuses it
     if role != Membership.Role.ADMIN and person_id is None:
         return
     lock_memberships(workspace)
     if person_id is not None:
-        invitable_person(workspace, person_id)  # 404 or 409 before any question
+        # 404 or 409 before any question; not locked here: the person is locked by
+        # `_issue`, after the invitation (lock order invitation, then person, as
+        # accepting takes them; security review of PR #40, point 2).
+        invitable_person(workspace, person_id, lock=False)
     before, changes = invitation_changes(workspace, role=role, person_id=person_id)
     require_confirmation(
         changes=changes,
