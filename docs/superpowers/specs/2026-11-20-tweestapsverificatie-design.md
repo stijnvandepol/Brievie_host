@@ -360,3 +360,19 @@ components and the exact Dutch of texts not quoted here, the QR library the web 
 6. Per-account lockout with doubling, and a notice to the user after a lockout.
 7. Admin clearing offers to unlink the member's devices by default.
 8. `login` answers 202 for a second step (web only; iOS unaffected).
+
+## Update 2026-11-21 (plan `2026-11-21-host-tweestapsverificatie.md`)
+
+- **External access** (`2026-11-21-externe-toegang-design.md`, B1/B2): this design is what must
+  land before `BRIEVIE_PUBLIC_WEB=true` is a normal choice. Added rule, subject to Stijn's answer
+  to B2: a password sign-in on the public route (`apps.access.route.is_public_route`) of a user
+  without a confirmed factor is refused (403 `second_factor_needed_outside`, "Zet eerst thuis
+  tweestapsverificatie aan."), with no pending `setup` step, so a password alone cannot enrol a
+  factor from the internet. The plan then sets `BRIEVIE_SECOND_FACTOR_AVAILABLE = True`.
+- **Pairing and re-authentication**: for a user with a factor, `createPairingCode` needs a session
+  that passed the second step, and `reauthenticate` takes the code as well as the password. A
+  device token is a possession factor (8), so getting one must not be easier than signing in.
+- **Clearing a factor** follows `account_authority` as the code has it now (three conditions,
+  including "the member reads no private post there"), not the two conditions of 7.
+- **Order**: merge point M1 (everything but the per-workspace requirement, "Nieuwe telefoon" and
+  the clock warning) precedes public web sign-in; M2 follows.
