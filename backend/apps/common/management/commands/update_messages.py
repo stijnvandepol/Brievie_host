@@ -65,6 +65,5 @@ class Command(BaseCommand):
             po_path.write_text(po, encoding="utf-8")
             mo_path.write_bytes(mo)
             self.stdout.write(
-                f"Wrote {po_path.relative_to(settings.BASE_DIR)}: {len(messages)} texts, "
-                f"{len(missing)} without a translation."
+                f"Wrote {po_path}: {len(messages)} texts, {len(missing)} without a translation."
             )
