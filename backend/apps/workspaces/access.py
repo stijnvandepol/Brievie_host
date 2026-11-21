@@ -42,8 +42,12 @@ def on_member_removed(workspace_id: UUID, user_id: UUID) -> None:
     """A member leaves or is removed, inside that transaction: their reader rows, shares
     and department memberships go (the person link went before this call)."""
     from apps.documents import visibility
+    from apps.tasks.assignment import release_unseeing_assignees
 
     visibility.forget_member(workspace_id, user_id)
+    # The member's own assignments went with `release_member`; nobody else lost sight,
+    # but the release keeps the rule "no assignment outlives sight" in one place.
+    release_unseeing_assignees(workspace_id=workspace_id)
 
 
 def reads_private_post(workspace_id: UUID, user_id: UUID) -> bool:

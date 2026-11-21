@@ -64,8 +64,9 @@ def test_private_post_readers_is_one_query(
 ) -> None:
     h = home()
     private_letter(h.workspace, addressees=[h.persons["Bob"]], shared_with=[h.carla])
-    # One query for the readers; system_actor reads and sets the actor around it.
-    with as_actor(h.workspace, SYSTEM), django_assert_max_num_queries(4):
+    # One query for the readers; system_actor adds its savepoint and reads, sets and
+    # restores the actor around it.
+    with as_actor(h.workspace, SYSTEM), django_assert_max_num_queries(6):
         found = visibility.private_post_readers()
     assert found == {h.bob.id, h.carla.id}
 

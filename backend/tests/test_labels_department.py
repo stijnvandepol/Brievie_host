@@ -151,7 +151,9 @@ def test_deleting_the_department_keeps_the_label_for_everyone(client: Client) ->
         empty = Person.objects.create(
             workspace=o.workspace, display_name="Inkoop", kind=Person.Kind.DEPARTMENT
         )
-        label = Label.objects.create(workspace=o.workspace, name="Inkoop", department=empty)
+        label = Label.objects.create(
+            workspace=o.workspace, name="Inkoop: bestellingen", department=empty
+        )
     client.force_login(o.admin)
     assert client.delete(f"/api/v1/workspaces/{o.workspace.id}/persons/{empty.id}").status_code == (
         204
@@ -159,4 +161,4 @@ def test_deleting_the_department_keeps_the_label_for_everyone(client: Client) ->
     with as_actor(o.workspace, SYSTEM):
         assert Label.objects.get(id=label.id).department_id is None
     client.force_login(o.plain)
-    assert "Inkoop" in _listed(client, o)
+    assert "Inkoop: bestellingen" in _listed(client, o)
