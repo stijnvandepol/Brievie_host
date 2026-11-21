@@ -337,8 +337,8 @@ msgid "Aan wie geef je deze taak?"
 msgstr "Aan wie geef je deze taak?"
 
 #: src/routes/visibility.tsx
-msgid "Aan: {admins} zien alle post die niet privé is. Uit: zij regelen wie wat ziet, maar lezen alleen post die voor hen is."
-msgstr "Aan: {admins} zien alle post die niet privé is. Uit: zij regelen wie wat ziet, maar lezen alleen post die voor hen is."
+msgid "Aan: {admins} zien alle post die niet privé is. Uit: zij regelen wie wat ziet, en lezen alleen post op hun eigen naam of van hun afdeling, post zonder naam als niemand anders die verdeelt, en met noodtoegang een uur lang andere post."
+msgstr "Aan: {admins} zien alle post die niet privé is. Uit: zij regelen wie wat ziet, en lezen alleen post op hun eigen naam of van hun afdeling, post zonder naam als niemand anders die verdeelt, en met noodtoegang een uur lang andere post."
 
 #: src/routes/rule-editor.tsx
 msgid "Aan: de regel zet het label of de naam er altijd zelf op. Uit: de regel doet een voorstel dat jij bevestigt."
@@ -588,6 +588,10 @@ msgstr "Alleen de beheerder van deze werkruimte kan dit veranderen."
 #: src/routes/tasks.tsx
 msgid "Alleen de eerste 500 taken worden getoond."
 msgstr "Alleen de eerste 500 taken worden getoond."
+
+#: src/routes/labels.tsx
+msgid "Alleen de mensen in {departmentWord} en de beheerders krijgen dit label te kiezen. Wie een brief met dit label ziet, ziet het label ook."
+msgstr "Alleen de mensen in {departmentWord} en de beheerders krijgen dit label te kiezen. Wie een brief met dit label ziet, ziet het label ook."
 
 #: src/routes/trash.tsx
 msgid "Alleen de nieuwste {LIST_CAP} worden getoond."
@@ -1099,6 +1103,10 @@ msgstr "Datum zelf ingevuld"
 msgid "De acties: een label of een naam op de brief. Eerst als voorstel dat jij bevestigt, tenzij je de regel automatisch laat toepassen."
 msgstr "De acties: een label of een naam op de brief. Eerst als voorstel dat jij bevestigt, tenzij je de regel automatisch laat toepassen."
 
+#: src/routes/labels.tsx
+msgid "de afdeling"
+msgstr "de afdeling"
+
 #: src/components/rule-sentence.ts
 msgid "de afzender"
 msgstr "de afzender"
@@ -1170,6 +1178,10 @@ msgstr "de bron {source} is"
 #: src/components/export-panel.tsx
 msgid "De export is niet gelukt. Probeer het opnieuw."
 msgstr "De export is niet gelukt. Probeer het opnieuw."
+
+#: src/routes/labels.tsx
+msgid "de groep"
+msgstr "de groep"
 
 #: src/routes/members.tsx
 msgid "De link werkt daarna niet meer. Wie hem al heeft, kan er niet meer mee binnenkomen."
@@ -1380,10 +1392,6 @@ msgstr "een actie die deze versie niet kent"
 msgid "Een actie die deze versie van Brievie niet kent. Die blijft zoals hij is."
 msgstr "Een actie die deze versie van Brievie niet kent. Die blijft zoals hij is."
 
-#: src/routes/labels.tsx
-msgid "een afdeling"
-msgstr "een afdeling"
-
 #: src/routes/ai.tsx
 msgid "Een AI die je zelf thuis of op kantoor draait, zoals Ollama. Brievie stuurt de tekst alleen naar een adres op je eigen netwerk."
 msgstr "Een AI die je zelf thuis of op kantoor draait, zoals Ollama. Brievie stuurt de tekst alleen naar een adres op je eigen netwerk."
@@ -1404,17 +1412,9 @@ msgstr "Een beheerder kan dan een uur lang post lezen die hij anders niet ziet, 
 msgid "Een brief met het label Zorg wordt dan vanzelf privé. Brieven die er al zijn, blijven zoals ze zijn."
 msgstr "Een brief met het label Zorg wordt dan vanzelf privé. Brieven die er al zijn, blijven zoals ze zijn."
 
-#: src/routes/labels.tsx
-msgid "een groep"
-msgstr "een groep"
-
 #: src/components/rule-sentence.ts
 msgid "Een label"
 msgstr "Een label"
-
-#: src/routes/labels.tsx
-msgid "Een label van {departmentWord} zien alleen de mensen die erin zitten, en de beheerders."
-msgstr "Een label van {departmentWord} zien alleen de mensen die erin zitten, en de beheerders."
 
 #: src/routes/automations.tsx
 msgid "Een regel zet labels of een naam op nieuwe post. De regels draaien van boven naar beneden."

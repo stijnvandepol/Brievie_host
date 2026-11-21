@@ -130,7 +130,7 @@ function LabelDialog({
               ))}
             </select>
             <span className="muted small">
-              {t`Een label van ${departmentWord} zien alleen de mensen die erin zitten, en de beheerders.`}
+              {t`Alleen de mensen in ${departmentWord} en de beheerders krijgen dit label te kiezen. Wie een brief met dit label ziet, ziet het label ook.`}
             </span>
           </div>
         ) : null}
@@ -400,7 +400,7 @@ function LabelsPage() {
     );
   };
   const shown = (labels.data ?? []).filter((label) => !van || label.department_id === van);
-  const departmentWord = visibility.data?.kind === "home" ? t`een groep` : t`een afdeling`;
+  const departmentWord = visibility.data?.kind === "home" ? t`de groep` : t`de afdeling`;
   const [open, setOpen] = useState<Open>(null);
   const [rowError, setRowError] = useState<unknown>(null);
   const canEdit = workspace.role !== "viewer";

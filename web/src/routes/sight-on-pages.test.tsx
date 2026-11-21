@@ -149,6 +149,11 @@ describe("labels of a department", () => {
     expect(
       within(dialog).getByText("Noem een label niet naar een persoon of een gevoelig onderwerp."),
     ).toBeInTheDocument();
+    expect(
+      await within(dialog).findByText(
+        "Alleen de mensen in de afdeling en de beheerders krijgen dit label te kiezen. Wie een brief met dit label ziet, ziet het label ook.",
+      ),
+    ).toBeInTheDocument();
     await u.type(within(dialog).getByRole("textbox", { name: "Naam" }), "Facturen");
     await u.selectOptions(await within(dialog).findByRole("combobox", { name: "Van" }), "Finance");
     await u.click(within(dialog).getByRole("button", { name: "Opslaan" }));

@@ -93,7 +93,7 @@ describe("wie ziet wat", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Aan: Anna zien alle post die niet privé is. Uit: zij regelen wie wat ziet, maar lezen alleen post die voor hen is.",
+        "Aan: Anna zien alle post die niet privé is. Uit: zij regelen wie wat ziet, en lezen alleen post op hun eigen naam of van hun afdeling, post zonder naam als niemand anders die verdeelt, en met noodtoegang een uur lang andere post.",
       ),
     ).toBeInTheDocument();
     expect(
