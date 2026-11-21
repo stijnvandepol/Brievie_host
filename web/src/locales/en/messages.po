@@ -789,6 +789,16 @@ msgstr "Automation"
 msgid "Back-up instellen: typ op de server"
 msgstr "Set up the backup: on the server, type"
 
+#. placeholder {0}: person.display_name
+#: src/components/person-picker.tsx
+msgid "Bedoel je {0}?"
+msgstr "Do you mean {0}?"
+
+#. placeholder {0}: person.display_name
+#: src/components/person-picker.tsx
+msgid "Bedoel je {0}? (ook: {variant})"
+msgstr "Do you mean {0}? (also: {variant})"
+
 #: src/routes/duplicate.tsx
 msgid "bedrag"
 msgstr "amount"
@@ -2573,6 +2583,7 @@ msgid "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
 msgstr "After five failed attempts, signing in is blocked for a while."
 
 #: src/components/person-dialog.tsx
+#: src/components/person-picker.tsx
 #: src/routes/departments.tsx
 #: src/routes/home.tsx
 #: src/routes/invitation.tsx
@@ -2693,6 +2704,14 @@ msgstr "New link"
 #: src/components/open-invitations.tsx
 msgid "Nieuwe link: {name}"
 msgstr "New link: {name}"
+
+#: src/components/person-picker.tsx
+msgid "Nieuwe persoon"
+msgstr "New person"
+
+#: src/components/person-picker.tsx
+msgid "Nieuwe persoon: ‘{typed}’"
+msgstr "New person: ‘{typed}’"
 
 #: src/routes/automations.tsx
 #: src/routes/rule-editor.tsx

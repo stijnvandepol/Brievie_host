@@ -281,6 +281,7 @@ function DocumentView({
                   selectedIds={document.addressee_ids ?? []}
                   onChange={chooseAddressees}
                   disabled={!canEdit || document.status === "processing" || setAddressees.isPending}
+                  newPersonIn={canEdit ? workspaceId : undefined}
                   departments={
                     departmentsOn
                       ? departmentsTitle(visibility.data?.kind ?? "business")
