@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button, Dialog, Form, Heading, Modal, ModalOverlay } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
-import { membersQuery, meQuery } from "../api/queries";
+import { membersQuery, meQuery, visibilityQuery } from "../api/queries";
 import type { components } from "../api/schema";
 import { ErrorAlert } from "./page";
 import { CheckRow } from "./ui";
@@ -59,7 +59,11 @@ export function ShareDialog({
   const save = useSetVisibility(workspaceId, document.id);
   const restricted = document.visibility === "restricted";
   const shared = document.shared_user_ids ?? [];
-  const [chosen, setChosen] = useState<Set<string>>(() => new Set(mode === "share" ? shared : []));
+  const { data: sight } = useQuery(visibilityQuery(workspaceId));
+  const home = sight?.kind === "home";
+  // Both start from the current shares: an earlier share is visible and can be unticked
+  // (the server then removes it), never kept silently.
+  const [chosen, setChosen] = useState<Set<string>>(() => new Set(shared));
   const myId = me?.id ?? "";
   // On a private letter your own share can be taken away; on any other letter you are no
   // share of your own.
@@ -75,7 +79,8 @@ export function ShareDialog({
   }
 
   async function submit() {
-    const ids = [...chosen];
+    // Your own share is the dialog's "Jij": fixed when making private, a tick otherwise.
+    const ids = [...chosen].filter((id) => id !== myId || ownShare);
     const answer = await save.mutateAsync({
       visibility: mode === "private" || restricted ? "restricted" : "workspace",
       shared_user_ids: ids,
@@ -98,7 +103,9 @@ export function ShareDialog({
           </Heading>
           <p>
             {mode === "private"
-              ? t`Alleen jij, de mensen op wier naam de brief staat en wie je hier aanvinkt, kunnen hem dan lezen.`
+              ? home
+                ? t`Alleen jij, wie de brief scande, de mensen op wier naam hij staat, de mensen van een groep op wier naam hij staat, en wie je hier aanvinkt, kunnen hem dan lezen.`
+                : t`Alleen jij, wie de brief scande, de mensen op wier naam hij staat, de mensen van een afdeling op wier naam hij staat, en wie je hier aanvinkt, kunnen hem dan lezen.`
               : t`Wie je aanvinkt, kan deze brief lezen, ook als die anders niet bij hem komt.`}
           </p>
           <Form

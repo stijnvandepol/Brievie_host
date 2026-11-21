@@ -223,6 +223,34 @@ def test_share_without_making_private(client: Client) -> None:
         assert not Document.objects.filter(id=doc.id, visibility="restricted").exists()
 
 
+def test_making_private_keeps_only_the_shares_sent(client: Client) -> None:
+    """Security review of PR #40, point 1: an earlier share of a letter that becomes private
+    is not kept silently. The shares become the ones sent, besides the scanner and the
+    caller (who stay readers, as the dialog says)."""
+    h = home()
+    doc = letter(h.workspace, scanned_by=h.bob)
+    client.force_login(h.anne)
+    assert _set(client, doc, "workspace", (h.carla.id,)).status_code == 200
+    r = _set(client, doc, "restricted")
+    assert r.status_code == 200, r.json()
+    assert sorted(r.json()["shared_user_ids"]) == sorted([str(h.anne.id), str(h.bob.id)])
+    assert not sees(h.carla, doc)
+    assert readers(doc) == {("Anne", "share"), ("Bob", "share")}
+    with as_actor(h.workspace, SYSTEM):
+        assert DocumentEvent.objects.filter(
+            document=doc, kind=DocumentEvent.Kind.SHARE_REMOVED, person_name="Carla"
+        ).exists()
+
+
+def test_making_private_keeps_a_share_that_is_sent_again(client: Client) -> None:
+    h = home()
+    doc = letter(h.workspace, scanned_by=h.bob)
+    client.force_login(h.anne)
+    assert _set(client, doc, "workspace", (h.carla.id,)).status_code == 200
+    assert _set(client, doc, "restricted", (h.carla.id,)).status_code == 200
+    assert sees(h.carla, doc)
+
+
 def test_the_history_shows_who_made_it_private() -> None:
     h = home()
     doc = letter(h.workspace, scanned_by=h.bob)

@@ -603,8 +603,12 @@ msgid "Alleen een beheerder kan regels wijzigen."
 msgstr "Only an admin can change rules."
 
 #: src/components/share-dialog.tsx
-msgid "Alleen jij, de mensen op wier naam de brief staat en wie je hier aanvinkt, kunnen hem dan lezen."
-msgstr "Only you, the people the letter is addressed to and whoever you tick here can read it then."
+msgid "Alleen jij, wie de brief scande, de mensen op wier naam hij staat, de mensen van een afdeling op wier naam hij staat, en wie je hier aanvinkt, kunnen hem dan lezen."
+msgstr "Only you, whoever scanned the letter, the people it is addressed to, the people of a department it is addressed to, and whoever you tick here can read it then."
+
+#: src/components/share-dialog.tsx
+msgid "Alleen jij, wie de brief scande, de mensen op wier naam hij staat, de mensen van een groep op wier naam hij staat, en wie je hier aanvinkt, kunnen hem dan lezen."
+msgstr "Only you, whoever scanned the letter, the people it is addressed to, the people of a group it is addressed to, and whoever you tick here can read it then."
 
 #: src/routes/automations.tsx
 msgid "Alleen leden en beheerders van deze werkruimte zien de regels."

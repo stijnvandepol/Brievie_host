@@ -722,8 +722,9 @@ def set_document_visibility(
 ) -> DocumentVisibilityOut:
     """ "Privé maken", "Voor iedereen zichtbaar maken" and "Delen met" (PB T17, R44).
 
-    `restricted`: a letter that is not private becomes private with these shares besides
-    the scanner and the caller; a private one gets exactly these shares. `workspace`: a
+    `restricted`: a letter that is not private becomes private with exactly these shares
+    besides the scanner and the caller (an earlier share not sent again ends); a private
+    one gets exactly these shares. `workspace`: a
     private letter becomes visible to everyone (403 `cannot_make_public` for someone not
     addressed while an addressee reads it), then the shares become exactly these (also on
     a letter that is not private). Anything else 422. The answer says whether the caller
@@ -734,9 +735,22 @@ def set_document_visibility(
         document = _lock_for_organising(workspace, document_id)
         if visibility_value == Document.Visibility.RESTRICTED:
             if document.visibility != Document.Visibility.RESTRICTED:
-                visibility.make_private(
+                made = visibility.make_private(
                     document, actor=actor, origin="user", share_user_ids=shared_user_ids
                 )
+                if made == "made_private":
+                    # An earlier share not sent again ends here: nobody stays a reader
+                    # silently (security review of PR #40). The scanner and the caller
+                    # keep the shares `make_private` gave them.
+                    keep = set(shared_user_ids) | {user.id}
+                    if document.scanned_by_id is not None:
+                        keep.add(document.scanned_by_id)
+                    members = set(
+                        Membership.objects.filter(
+                            workspace=workspace, user_id__in=keep
+                        ).values_list("user_id", flat=True)
+                    )
+                    visibility.set_shares(document, user_ids=keep & members, actor=actor)
             else:
                 visibility.set_shares(document, user_ids=shared_user_ids, actor=actor)
         else:

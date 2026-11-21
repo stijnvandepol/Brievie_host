@@ -155,6 +155,32 @@ describe("privé maken en delen", () => {
     );
   });
 
+  it("Privé maken starts from the current shares and says who else keeps reading", async () => {
+    let body: unknown = null;
+    server.use(
+      http.put(`${base}/documents/${documentSummary.id}/visibility`, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json({ visibility: "restricted", can_read: true, reader_names: [] });
+      }),
+      ...loggedInHandlers(),
+      ...documentHandlers({ ...documentDetail, shared_user_ids: [bram] }),
+    );
+    const u = userEvent.setup();
+    renderApp(letterPath);
+    await u.click(await screen.findByRole("button", { name: "Privé maken" }));
+    const dialog = await screen.findByRole("dialog", { name: "Privé maken" });
+    expect(
+      within(dialog).getByText(
+        "Alleen jij, wie de brief scande, de mensen op wier naam hij staat, de mensen van een groep op wier naam hij staat, en wie je hier aanvinkt, kunnen hem dan lezen.",
+      ),
+    ).toBeInTheDocument();
+    const share = within(dialog).getByRole("checkbox", { name: "Bram" });
+    expect(share).toBeChecked();
+    await u.click(share);
+    await u.click(within(dialog).getByRole("button", { name: "Privé maken" }));
+    await waitFor(() => expect(body).toEqual({ visibility: "restricted", shared_user_ids: [] }));
+  });
+
   it("Delen met is offered on a letter that is not private", async () => {
     let body: unknown = null;
     server.use(
