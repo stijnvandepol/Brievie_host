@@ -94,14 +94,30 @@ describe("mogelijk dubbel", () => {
     expect(screen.getByText("Lijkt op elkaar voor 94%")).toBeInTheDocument();
   });
 
-  it("warning names the differing fields", async () => {
+  it("warning names the differing fields, not the page count", async () => {
     server.use(...pairHandlers());
     renderApp(path);
     expect(
       await screen.findByText(
-        "Let op: bedrag en pagina's verschilt. Een herinnering of een tweede termijn lijkt vaak op de eerste brief, maar het is een andere brief.",
+        "Let op: bedrag verschilt. Een herinnering of een tweede termijn lijkt vaak op de eerste brief, maar het is een andere brief.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("a page count alone gives no warning (a scan may miss a page)", async () => {
+    server.use(
+      ...pairHandlers(
+        pairOf({
+          differences: [{ field: "page_count", first: "3", second: "2", uncertain: false }],
+        }),
+      ),
+    );
+    renderApp(path);
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Mogelijk dubbel" }),
+    ).toBeInTheDocument();
+    await screen.findByText("Lijkt op elkaar voor 94%");
+    expect(screen.queryByText(/^Let op:/)).not.toBeInTheDocument();
   });
 
   it("Samenvoegen sends keep id and complete_twin_tasks true, opens kept letter with undo bar", async () => {

@@ -15,7 +15,7 @@ const dateTime = new Intl.DateTimeFormat("nl-NL", { dateStyle: "medium", timeSty
 function sentence(
   event: DocumentEvent,
   me: { id: string; name: string } | null | undefined,
-  trashedAsDuplicate: boolean,
+  movedAway: boolean,
 ): string | null {
   const ruleName = event.rule_name;
   const who =
@@ -54,7 +54,7 @@ function sentence(
       case "trashed":
         return t`Als dubbele brief naar de prullenbak verplaatst door ${by}`;
       case "task_moved":
-        return trashedAsDuplicate
+        return movedAway
           ? t`Taak verplaatst naar de dubbele brief`
           : t`Taak verplaatst uit de dubbele brief`;
       case "label_added":
@@ -151,12 +151,19 @@ export function DocumentHistory({
   const { data, error } = useQuery(documentEventsQuery(workspaceId, documentId));
   const { data: me } = useQuery(meQuery);
   const undo = useUndoEvent(workspaceId, documentId);
-  // This letter went to the trash in a merge: a task the merge moved went from here.
-  const trashedAsDuplicate = (data ?? []).some(
+  // The letters this one was merged into (it went to the trash): a task moved with one of
+  // them went from here. Without the other letter's id (purged, or not readable) a task
+  // moved away when this letter ever went to the trash in a merge.
+  const trashedMerges = (data ?? []).filter(
     (event) => event.kind === "trashed" && event.origin === "merge",
   );
+  const keptLetters = new Set(trashedMerges.map((event) => event.related_document_id));
+  const movedAway = (event: DocumentEvent) =>
+    event.related_document_id
+      ? keptLetters.has(event.related_document_id)
+      : trashedMerges.length > 0;
   const lines = (data ?? []).flatMap((event) => {
-    const text = sentence(event, me, trashedAsDuplicate);
+    const text = sentence(event, me, movedAway(event));
     return text === null ? [] : [{ event, text }];
   });
   return (

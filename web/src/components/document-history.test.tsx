@@ -87,4 +87,21 @@ describe("history of duplicate letters", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Taak verplaatst naar de dubbele brief")).toBeInTheDocument();
   });
+
+  it("a letter trashed in one merge and kept in a later one says which way each task went", async () => {
+    const later = "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b8888";
+    server.use(
+      withEvents([
+        event(4, { kind: "task_moved", origin: "merge", related_document_id: later }),
+        event(3, { kind: "merged", related_document_id: later }),
+        event(2, { kind: "task_moved", origin: "merge" }),
+        event(1, { kind: "trashed", origin: "merge" }),
+      ]),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
+    renderApp(path);
+    expect(await screen.findByText("Taak verplaatst uit de dubbele brief")).toBeInTheDocument();
+    expect(screen.getByText("Taak verplaatst naar de dubbele brief")).toBeInTheDocument();
+  });
 });

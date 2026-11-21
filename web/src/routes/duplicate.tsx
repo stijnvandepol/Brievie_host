@@ -314,7 +314,9 @@ function DuplicateView({
       await refreshAfterDuplicate(queryClient, workspaceId);
     },
   });
-  const fields = list.format(differences.map((d) => fieldWord(d.field)));
+  // A page count is shown as a difference but never warned about: a scan may miss a page.
+  const warned = differences.filter((d) => d.field !== "page_count");
+  const fields = list.format(warned.map((d) => fieldWord(d.field)));
   const similarity = pair.text_similarity;
   const sameFields = list.format(same.map(fieldWord));
   const columns = (
@@ -340,7 +342,7 @@ function DuplicateView({
   return (
     <>
       <p className="muted">{t`Lijkt op elkaar voor ${similarity}%`}</p>
-      {differences.length > 0 ? (
+      {warned.length > 0 ? (
         <MessageBar intent="warning">
           {t`Let op: ${fields} verschilt. Een herinnering of een tweede termijn lijkt vaak op de eerste brief, maar het is een andere brief.`}
         </MessageBar>
