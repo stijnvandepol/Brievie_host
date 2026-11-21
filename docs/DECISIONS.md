@@ -1744,3 +1744,10 @@ Finance's letter, with the owner as control.
   `document_id`, `member`, `setting` and `device`: a letter by its id, everything else by
   a directory name. `device` is added to the plan's list: the existing device notices
   carry the device's name, which is no letter content.
+- **The own export reads as the member (Task 20, S 4.18, PB decision 26).**
+  `member_document_ids` keeps the letters on a person linked to the member and adds the
+  private letters they read through an unexpired share, addressee or department reader
+  row; never a department's open post, never what a switch or emergency access shows.
+  A queued export job for someone who is no member any more (their row normally goes
+  with them) reads and writes nothing and marks the export failed. `export_context(...,
+  reader_id=None)` is the system's bookkeeping and the future full copy only.

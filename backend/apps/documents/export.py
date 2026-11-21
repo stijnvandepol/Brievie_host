@@ -45,9 +45,10 @@ README_FILE = "LEESMIJ.txt"
 def export_context(workspace_id: UUID, *, reader_id: UUID | None) -> AbstractContextManager[None]:
     """The context in which an export reads: the workspace's, as seen by `reader_id`.
 
-    Part A: the whole workspace, the reader is not looked at (callers pick the documents).
-    Part B passes the reader on to row-level security, so letters the reader may not see
-    are left out here too.
+    A member's export passes the member: row-level security then leaves out every letter
+    they may not read, whatever the caller picked. `reader_id=None` reads as the system
+    and is only for the server-side bookkeeping of exports and the full copy of the
+    workspace (`workspace_full_export`, not built yet): never for what one member gets.
     """
     return workspace_context(workspace_id, actor=reader_id if reader_id is not None else SYSTEM)
 
