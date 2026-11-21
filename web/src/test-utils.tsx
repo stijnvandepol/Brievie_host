@@ -44,7 +44,27 @@ export function loggedInHandlers() {
     http.get(`*${API}/workspaces/${workspace.id}/visibility`, () =>
       HttpResponse.json(homeVisibility),
     ),
+    http.get(`*${API}/workspaces/${workspace.id}/menu/counts`, () =>
+      HttpResponse.json(noMenuCounts),
+    ),
   ];
+}
+
+export const noMenuCounts: components["schemas"]["MenuCountsOut"] = {
+  inbox: 0,
+  my_post_unread: 0,
+  my_tasks: 0,
+  my_tasks_overdue: 0,
+  lingering: 0,
+  shows_lingering: false,
+  has_person: true,
+};
+
+/** The menu's numbers of the first workspace. */
+export function menuCounts(counts: Partial<components["schemas"]["MenuCountsOut"]>) {
+  return http.get(`*${API}/workspaces/${workspace.id}/menu/counts`, () =>
+    HttpResponse.json({ ...noMenuCounts, ...counts }),
+  );
 }
 
 /** "Wie ziet wat" of a Thuis workspace: everyone sees all post, no departments. */
@@ -89,6 +109,7 @@ export function workspaceHandlers(
     http.get(`${base}/members`, () => HttpResponse.json([])),
     http.get(`${base}/labels`, () => HttpResponse.json([])),
     http.get(`${base}/ai`, () => HttpResponse.json({ mode: "off" })),
+    http.get(`${base}/menu/counts`, () => HttpResponse.json(noMenuCounts)),
   ];
 }
 

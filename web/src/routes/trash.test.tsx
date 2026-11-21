@@ -66,14 +66,14 @@ describe("trash", () => {
     expect(within(third).getByText("Wordt vandaag gewist")).toBeVisible();
   });
 
-  it("is in the navigation, below Alle post", async () => {
+  it("is in the navigation, last before Instellingen", async () => {
     server.use(...loggedInHandlers(), ...trashHandlers());
     renderApp(path);
     const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
     const names = within(nav)
       .getAllByRole("link")
       .map((link) => link.textContent);
-    expect(names.indexOf("Prullenbak")).toBe(names.indexOf("Alle post") + 1);
+    expect(names.indexOf("Instellingen")).toBe(names.indexOf("Prullenbak") + 1);
     expect(names).toContain("Inbox");
   });
 

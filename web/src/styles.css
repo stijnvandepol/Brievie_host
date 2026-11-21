@@ -465,6 +465,7 @@ q {
   display: flex;
   flex-direction: column;
   gap: var(--s-xxs);
+  height: calc(100vh - var(--topbar-height));
   max-height: calc(100vh - var(--topbar-height));
   overflow-y: auto;
   padding: var(--s-s) var(--s-xs);
@@ -644,6 +645,25 @@ button.ws-switcher[data-hovered] {
 .nav-count-warning {
   background: var(--warning-icon);
   color: #fff;
+}
+
+/* Instellingen: the links of a section side by side, the workspace's part under a heading. */
+.settings-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-s);
+}
+
+.settings-heading {
+  margin-top: var(--s-l);
+}
+
+/* Instellingen at the bottom of the pane (spec S 4.1). */
+.nav-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-xxs);
+  margin-top: auto;
 }
 
 .nav-divider {

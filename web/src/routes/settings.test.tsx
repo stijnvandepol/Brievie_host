@@ -85,7 +85,7 @@ describe("settings", () => {
     expect(within(nav).getByRole("link", { name: "Instellingen" })).toBeInTheDocument();
   });
 
-  it("a member has no Instellingen and is sent away from the page", async () => {
+  it("a member has Instellingen without the workspace's settings", async () => {
     server.use(
       asRole("member"),
       ...loggedInHandlers(),
@@ -96,7 +96,17 @@ describe("settings", () => {
     );
     renderApp(path);
     const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
-    expect(within(nav).queryByRole("link", { name: "Instellingen" })).not.toBeInTheDocument();
+    expect(await within(nav).findByRole("link", { name: "Instellingen" })).toHaveAttribute(
+      "href",
+      path,
+    );
+    expect(await screen.findByRole("heading", { level: 2, name: "Jouw account" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Apparaten" })).toHaveAttribute("href", "/koppel-app");
+    expect(screen.getAllByRole("link", { name: "Wie kan mijn post zien?" })[0]).toHaveAttribute(
+      "href",
+      `/w/${workspace.id}/wie-ziet-mijn-post`,
+    );
     expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Logboek" })).not.toBeInTheDocument();
   });
 });

@@ -158,6 +158,10 @@ msgstr "{length} van {REASON_MAX} tekens, minstens {REASON_MIN}."
 msgid "{letters, plural, one {Het gaat om # brief die jij kunt lezen.} other {Het gaat om # brieven die jij kunt lezen.}}"
 msgstr "{letters, plural, one {Het gaat om # brief die jij kunt lezen.} other {Het gaat om # brieven die jij kunt lezen.}}"
 
+#: src/components/page.tsx
+msgid "{lingering, plural, one {# blijft liggen} other {# blijven liggen}}"
+msgstr "{lingering, plural, one {# blijft liggen} other {# blijven liggen}}"
+
 #: src/routes/people-detail.tsx
 msgid "{manager} beheert de post van {name} en ziet die als eigen post."
 msgstr "{manager} beheert de post van {name} en ziet die als eigen post."
@@ -224,8 +228,12 @@ msgid "{subject} het woord {0} niet bevat"
 msgstr "{subject} het woord {0} niet bevat"
 
 #: src/components/page.tsx
-msgid "{todo, plural, one {Inbox, # brief} other {Inbox, # brieven}}"
-msgstr "{todo, plural, one {Inbox, # brief} other {Inbox, # brieven}}"
+msgid "{unread, plural, one {Mijn post, # ongelezen} other {Mijn post, # ongelezen}}"
+msgstr "{unread, plural, one {Mijn post, # ongelezen} other {Mijn post, # ongelezen}}"
+
+#: src/components/page.tsx
+msgid "{waiting, plural, one {# brief} other {# brieven}}"
+msgstr "{waiting, plural, one {# brief} other {# brieven}}"
 
 #: src/components/document-history.tsx
 msgid "{who} bevestigde deze brief"
@@ -505,8 +513,8 @@ msgstr "afzender"
 msgid "Afzender"
 msgstr "Afzender"
 
-#: src/components/page.tsx
 #: src/routes/ai.tsx
+#: src/routes/settings.tsx
 msgid "AI"
 msgstr "AI"
 
@@ -705,6 +713,7 @@ msgstr "Apparaat verlopen"
 
 #: src/components/page.tsx
 #: src/routes/pair-app.tsx
+#: src/routes/settings.tsx
 msgid "Apparaten"
 msgstr "Apparaten"
 
@@ -1285,6 +1294,10 @@ msgstr "De tekst van elke brief gaat naar een bedrijf dat de AI levert. Je krijg
 #: src/routes/member-devices.tsx
 msgid "De telefoons en browsers waarmee {who} bij Brievie kan."
 msgstr "De telefoons en browsers waarmee {who} bij Brievie kan."
+
+#: src/routes/settings.tsx
+msgid "De telefoons waarmee je scant, en een nieuwe koppelen."
+msgstr "De telefoons waarmee je scant, en een nieuwe koppelen."
 
 #: src/routes/password.tsx
 msgid "De twee nieuwe wachtwoorden zijn niet hetzelfde."
@@ -1957,6 +1970,14 @@ msgstr "In deze link zit geen uitnodiging. Open de link uit je bericht opnieuw."
 msgid "Inbox"
 msgstr "Inbox"
 
+#: src/components/page.tsx
+msgid "Inbox, {letters}"
+msgstr "Inbox, {letters}"
+
+#: src/components/page.tsx
+msgid "Inbox, {letters}, {late}"
+msgstr "Inbox, {letters}, {late}"
+
 #: src/components/document-table.tsx
 msgid "Informatie"
 msgstr "Informatie"
@@ -2109,6 +2130,15 @@ msgstr "Jaaropgave"
 msgid "Je account hangt nog niet aan een naam. Daarom zie je hier alleen taken die iemand aan je geeft. Vraag een beheerder om je te koppelen bij Mensen."
 msgstr "Je account hangt nog niet aan een naam. Daarom zie je hier alleen taken die iemand aan je geeft. Vraag een beheerder om je te koppelen bij Mensen."
 
+#. placeholder {0}: workspace.name
+#: src/routes/settings.tsx
+msgid "Je account, je apparaten en wat leden in {0} mogen doen."
+msgstr "Je account, je apparaten en wat leden in {0} mogen doen."
+
+#: src/routes/settings.tsx
+msgid "Je account, je apparaten en wie je post kan zien."
+msgstr "Je account, je apparaten en wie je post kan zien."
+
 #: src/components/person-actions.tsx
 msgid "Je bent de enige beheerder. Maak eerst iemand anders beheerder als je wilt stoppen."
 msgstr "Je bent de enige beheerder. Maak eerst iemand anders beheerder als je wilt stoppen."
@@ -2239,6 +2269,7 @@ msgstr "Jij doet dit"
 msgid "jou"
 msgstr "jou"
 
+#: src/routes/settings.tsx
 #: src/routes/setup.tsx
 msgid "Jouw account"
 msgstr "Jouw account"
@@ -2587,6 +2618,7 @@ msgstr "Met labels zet je orde in je post, bijvoorbeeld Belasting of Zorg. Met d
 msgid "Methode"
 msgstr "Methode"
 
+#: src/components/page.tsx
 #: src/routes/my-post.tsx
 #: src/routes/people.tsx
 msgid "Mijn post"
@@ -2868,6 +2900,10 @@ msgstr "Nu zien nog steeds alle mensen alle post; groepen helpen dan alleen bij 
 #: src/components/rule-sentence.ts
 msgid "of"
 msgstr "of"
+
+#: src/routes/settings.tsx
+msgid "Of AI je brieven leest, en welke dienst dat doet."
+msgstr "Of AI je brieven leest, en welke dienst dat doet."
 
 #: src/routes/invitation.tsx
 msgid "Of typ deze code in de app."
@@ -3448,6 +3484,7 @@ msgstr "Taak verplaatst uit de dubbele brief"
 #: src/components/language-switch.tsx
 #: src/components/page.tsx
 #: src/routes/language.tsx
+#: src/routes/settings.tsx
 msgid "Taal"
 msgstr "Taal"
 
@@ -3899,8 +3936,13 @@ msgstr "Waar gebruik je Brievie voor?"
 
 #: src/components/page.tsx
 #: src/routes/sessions.tsx
+#: src/routes/settings.tsx
 msgid "Waar je bent ingelogd"
 msgstr "Waar je bent ingelogd"
+
+#: src/routes/settings.tsx
+msgid "Waar je bent ingelogd, je wachtwoord en de taal van Brievie."
+msgstr "Waar je bent ingelogd, je wachtwoord en de taal van Brievie."
 
 #: src/routes/rule-editor.tsx
 msgid "Waar moet een brief aan voldoen? De tekst zoekt in de hele brief: ook een brief die het woord alleen noemt, past. De afzender en het soort post zijn preciezer; die zijn bekend als de AI de brief heeft gelezen, of zodra jij hem bevestigt."
@@ -3928,6 +3970,7 @@ msgstr "Wachtwoord opslaan"
 
 #: src/components/page.tsx
 #: src/routes/password.tsx
+#: src/routes/settings.tsx
 msgid "Wachtwoord wijzigen"
 msgstr "Wachtwoord wijzigen"
 
@@ -3946,11 +3989,6 @@ msgstr "Wat er gebeurt met een brief die past: een label erop, of op naam van ee
 #: src/routes/tasks.tsx
 msgid "Wat je met je post moet doen, op datum. Je hoeft de brief er niet voor te openen."
 msgstr "Wat je met je post moet doen, op datum. Je hoeft de brief er niet voor te openen."
-
-#. placeholder {0}: workspace.name
-#: src/routes/settings.tsx
-msgid "Wat leden in {0} mogen doen, en het logboek van wat er is gebeurd. Alleen beheerders zien deze pagina."
-msgstr "Wat leden in {0} mogen doen, en het logboek van wat er is gebeurd. Alleen beheerders zien deze pagina."
 
 #: src/routes/setup-summary.tsx
 msgid "Wat nu?"
@@ -4003,6 +4041,11 @@ msgstr "Welkom bij Brievie"
 #: src/components/audit-codes.ts
 msgid "Werkruimte"
 msgstr "Werkruimte"
+
+#. placeholder {0}: workspace.name
+#: src/routes/settings.tsx
+msgid "Werkruimte {0}"
+msgstr "Werkruimte {0}"
 
 #: src/components/audit-codes.ts
 msgid "Werkruimte gemaakt"
@@ -4060,6 +4103,11 @@ msgstr "Wie is het?"
 msgid "Wie je aanvinkt, kan deze brief lezen, ook als die anders niet bij hem komt."
 msgstr "Wie je aanvinkt, kan deze brief lezen, ook als die anders niet bij hem komt."
 
+#. placeholder {0}: workspace.name
+#: src/routes/settings.tsx
+msgid "Wie jouw brieven kan lezen in {0}, en waarom."
+msgstr "Wie jouw brieven kan lezen in {0}, en waarom."
+
 #: src/routes/people-detail.tsx
 msgid "Wie kan de post van {name} zien?"
 msgstr "Wie kan de post van {name} zien?"
@@ -4070,6 +4118,7 @@ msgstr "Wie kan deze brief zien?"
 
 #: src/components/page.tsx
 #: src/routes/post-access.tsx
+#: src/routes/settings.tsx
 #: src/routes/visibility.tsx
 msgid "Wie kan mijn post zien?"
 msgstr "Wie kan mijn post zien?"

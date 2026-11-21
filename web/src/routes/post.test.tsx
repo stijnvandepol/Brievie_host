@@ -9,6 +9,7 @@ import {
   HttpResponse,
   http,
   loggedInHandlers,
+  menuCounts,
   papa,
   renderApp,
   server,
@@ -188,14 +189,8 @@ describe("post", () => {
     );
   });
 
-  it("sums review and unassigned in the sidebar count", async () => {
-    server.use(
-      http.get(`*${API}/workspaces/${workspace.id}/inbox/counts`, () =>
-        HttpResponse.json({ new: 5, review: 1, unassigned: 2 }),
-      ),
-      ...loggedInHandlers(),
-      ...documentHandlers(),
-    );
+  it("shows the waiting letters as the Inbox count", async () => {
+    server.use(menuCounts({ inbox: 3 }), ...loggedInHandlers(), ...documentHandlers());
     renderApp(`/w/${workspace.id}/post`);
     const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
     const todo = await within(nav).findByRole("link", { name: "Inbox, 3 brieven" });
@@ -207,13 +202,7 @@ describe("post", () => {
   });
 
   it("names a single letter to do in the singular", async () => {
-    server.use(
-      http.get(`*${API}/workspaces/${workspace.id}/inbox/counts`, () =>
-        HttpResponse.json({ new: 0, review: 0, unassigned: 1 }),
-      ),
-      ...loggedInHandlers(),
-      ...documentHandlers(),
-    );
+    server.use(menuCounts({ inbox: 1 }), ...loggedInHandlers(), ...documentHandlers());
     renderApp(`/w/${workspace.id}/post`);
     const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
     expect(await within(nav).findByRole("link", { name: "Inbox, 1 brief" })).toBeInTheDocument();

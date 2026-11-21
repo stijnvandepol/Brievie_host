@@ -211,6 +211,28 @@ export const inboxCountsQuery = (workspaceId: string) =>
     },
   });
 
+/** How often the menu's numbers are asked again while a page is open. */
+export const MENU_REFETCH_MS = 60_000;
+
+/**
+ * The menu's numbers in one call (spec S 9): waiting in the Inbox, unread in Mijn post, my
+ * open and late tasks, and "Blijft liggen" for sorters. Under "documents", so every change
+ * of a letter or a task (which refreshes that key) refreshes the menu too.
+ */
+export const menuCountsQuery = (workspaceId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "documents", "menu-counts"],
+    refetchOnWindowFocus: true,
+    refetchInterval: MENU_REFETCH_MS,
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/menu/counts", {
+        params: { path: { workspace_id: workspaceId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
 export type TaskPart = "mine" | "to_pick_up" | "all";
 export type TaskStatus = "open" | "done";
 
