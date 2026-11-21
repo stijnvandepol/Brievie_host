@@ -9,6 +9,8 @@ from dataclasses import dataclass
 
 from django.db import transaction
 from django.db.models.functions import Lower
+from django.utils import translation
+from django.utils.translation import gettext_noop as _
 
 from apps.labels.models import Label
 from apps.labels.services import list_labels
@@ -25,6 +27,8 @@ class Recognise:
 @dataclass(frozen=True)
 class PresetLabel:
     key: str
+    # The Dutch name, marked for the catalogue: a label is created with the name in the
+    # language of the request that creates it (`display_name`) and keeps it.
     name: str
     color: str
     recognise: tuple[Recognise, ...]
@@ -45,14 +49,14 @@ def _type_is(code: str) -> Recognise:
 _HOME = (
     PresetLabel(
         "belastingdienst",
-        "Belastingdienst",
+        _("Belastingdienst"),
         "blue",
         # Not "aanslag": the municipality and the water board send an aanslag too.
         _words("belastingdienst", "toeslagen"),
     ),
     PresetLabel(
         "zorg",
-        "Zorg",
+        _("Zorg"),
         "red",
         _words(
             "zorgverzekering",
@@ -66,46 +70,46 @@ _HOME = (
     ),
     PresetLabel(
         "verzekering",
-        "Verzekering",
+        _("Verzekering"),
         "purple",
         _words("polis", "polisblad", "verzekering", "verzekeringen"),
     ),
     PresetLabel(
-        "wonen", "Wonen", "green", _words("hypotheek", "huur", "huurovereenkomst", "WOZ", "VvE")
+        "wonen", _("Wonen"), "green", _words("hypotheek", "huur", "huurovereenkomst", "WOZ", "VvE")
     ),
     PresetLabel(
         "energie",
-        "Energie en water",
+        _("Energie en water"),
         "yellow",
         _words("energie", "gas", "stroom", "waterbedrijf", "drinkwater"),
     ),
     PresetLabel(
         "auto",
-        "Auto",
+        _("Auto"),
         "teal",
         _words("APK", "RDW", "kenteken", "wegenbelasting", "motorrijtuigenbelasting"),
     ),
     PresetLabel(
         "bank",
-        "Bank",
+        _("Bank"),
         "grey",
         (_sender_contains("bank"), *_words("rekeningafschrift", "creditcard")),
     ),
     PresetLabel(
         "inkomen",
-        "Inkomen",
+        _("Inkomen"),
         "green",
         _words("loonstrook", "jaaropgave", "UWV", "SVB", "pensioen"),
     ),
     PresetLabel(
         "gemeente",
-        "Gemeente",
+        _("Gemeente"),
         "orange",
         _words("gemeente", "gemeentelijke belastingen", "waterschap"),
     ),
     PresetLabel(
         "abonnementen",
-        "Abonnementen",
+        _("Abonnementen"),
         "teal",
         (Recognise("text", "contains", "abonnement"), *_words("contributie", "lidmaatschap")),
     ),
@@ -114,39 +118,39 @@ _HOME = (
 _BUSINESS = (
     PresetLabel(
         "belastingdienst",
-        "Belastingdienst",
+        _("Belastingdienst"),
         "blue",
         _words("belastingdienst", "naheffing", "aangifte"),
     ),
-    PresetLabel("inkoop", "Inkoop", "orange", (_type_is("invoice"),)),
-    PresetLabel("verkoop", "Verkoop", "green", _words("offerte", "opdrachtbevestiging")),
+    PresetLabel("inkoop", _("Inkoop"), "orange", (_type_is("invoice"),)),
+    PresetLabel("verkoop", _("Verkoop"), "green", _words("offerte", "opdrachtbevestiging")),
     PresetLabel(
         "bank",
-        "Bank",
+        _("Bank"),
         "grey",
         (_sender_contains("bank"), *_words("rekeningafschrift", "creditcard")),
     ),
     PresetLabel(
         "personeel",
-        "Personeel",
+        _("Personeel"),
         "purple",
         _words("loonstrook", "loonheffing", "pensioenfonds", "UWV", "arbo"),
     ),
     PresetLabel(
         "verzekering",
-        "Verzekering",
+        _("Verzekering"),
         "purple",
         _words("polis", "polisblad", "verzekering", "verzekeringen"),
     ),
     PresetLabel(
         "contracten",
-        "Contracten",
+        _("Contracten"),
         "teal",
         (_type_is("contract"),),
     ),
     PresetLabel(
         "kvk",
-        "KVK en overheid",
+        _("KVK en overheid"),
         "grey",
         (
             Recognise("sender", "contains_word", "KVK"),
@@ -156,9 +160,18 @@ _BUSINESS = (
         ),
     ),
     PresetLabel(
-        "huisvesting", "Huisvesting", "yellow", _words("huur", "huurovereenkomst", "energie", "VvE")
+        "huisvesting",
+        _("Huisvesting"),
+        "yellow",
+        _words("huur", "huurovereenkomst", "energie", "VvE"),
     ),
 )
+
+
+def display_name(preset: PresetLabel) -> str:
+    """The preset's name in the active language."""
+    return translation.gettext(preset.name)
+
 
 PRESETS: Mapping[str, tuple[PresetLabel, ...]] = {
     Workspace.Kind.HOME: _HOME,
@@ -184,10 +197,11 @@ def apply_preset(workspace: Workspace) -> list[Label]:
         keys = set(existing.exclude(system_key="").values_list("system_key", flat=True))
         names = set(existing.annotate(lower=Lower("name")).values_list("lower", flat=True))
         for preset in PRESETS[workspace.kind]:
-            if preset.key in keys or preset.name.lower() in names:
+            name = display_name(preset)
+            if preset.key in keys or name.lower() in names:
                 continue
             Label.objects.create(
-                workspace=workspace, name=preset.name, color=preset.color, system_key=preset.key
+                workspace=workspace, name=name, color=preset.color, system_key=preset.key
             )
         ensure_preset_rules(workspace)
         return list_labels(workspace)

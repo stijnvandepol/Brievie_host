@@ -27,6 +27,11 @@ class UserManager(BaseUserManager["User"]):
 
 
 class User(AbstractBaseUser, PermissionsMixin, BaseModel):
+    class Language(models.TextChoices):
+        # Each language in its own name, so a reader finds theirs; not translated.
+        DUTCH = "nl", "Nederlands"
+        ENGLISH = "en", "English"
+
     class ExplanationLanguage(models.TextChoices):
         # Each language in its own name, so a reader finds theirs; not translated.
         DUTCH = "nl", "Nederlands"
@@ -36,7 +41,9 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel):
     # rejects anything else), so the unique index ignores case.
     email = models.EmailField(max_length=254, unique=True)
     name = models.CharField(max_length=150)
-    language = models.CharField(max_length=10, default="nl")
+    # The language of the interface and of the server's messages, chosen by the user;
+    # "" until they choose: then the browser's or device's Accept-Language decides.
+    language = models.CharField(max_length=2, choices=Language.choices, blank=True, default="")
     explanation_language = models.CharField(
         max_length=2, choices=ExplanationLanguage.choices, default=ExplanationLanguage.DUTCH
     )
