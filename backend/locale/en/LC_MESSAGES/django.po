@@ -1621,6 +1621,14 @@ msgid "Er is al een label met deze naam."
 msgstr "There is already a label with this name."
 
 #: apps/labels/services.py
+msgid "Kies een afdeling."
+msgstr "Choose a department."
+
+#: apps/labels/services.py apps/people/services.py apps/workspaces/deps.py apps/workspaces/members.py
+msgid "Je mag dit niet doen in deze werkruimte."
+msgstr "You are not allowed to do this in this workspace."
+
+#: apps/labels/services.py
 msgid "Deze werkruimte heeft het grootste aantal labels. Verwijder er eerst een."
 msgstr "This workspace has the largest number of labels. Delete one first."
 
@@ -1697,10 +1705,6 @@ msgstr "The rule '%(rule)s' uses this person. Change that rule first."
 #: apps/people/services.py
 msgid "Een afdeling koppel je niet aan één account. Voeg leden toe."
 msgstr "A department is not linked to one account. Add members instead."
-
-#: apps/people/services.py apps/workspaces/deps.py apps/workspaces/members.py
-msgid "Je mag dit niet doen in deze werkruimte."
-msgstr "You are not allowed to do this in this workspace."
 
 #: apps/people/services.py
 msgid "Dit is geen afdeling."

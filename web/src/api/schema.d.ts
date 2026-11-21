@@ -2733,6 +2733,11 @@ export interface components {
              * @default grey
              */
             color: string;
+            /**
+             * Department Id
+             * Format: uuid
+             */
+            department_id?: string | null;
             /** Name */
             name: string;
         };
@@ -2740,6 +2745,11 @@ export interface components {
         LabelOut: {
             /** Color */
             color: string;
+            /**
+             * Department Id
+             * Format: uuid
+             */
+            department_id?: string | null;
             /** Document Count */
             document_count: number;
             /**
@@ -2759,6 +2769,11 @@ export interface components {
              * @default
              */
             color: string;
+            /**
+             * Department Id
+             * Format: uuid
+             */
+            department_id?: string | null;
             /** Name */
             name: string;
         };

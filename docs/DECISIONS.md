@@ -1871,3 +1871,10 @@ M3). "Iedereen ziet alle post" stays on everywhere until Task 40, so departments
   memberships (S 4.5 over PB's "in use while it has members"). Name matching and the AI
   are offered departments only while departments are on; an archived department is not
   offered and cannot be newly put on a letter, its members keep its letters.
+- **Labels of a department (Task 26, S 4.6).** `Label.department` (nullable, `SET_NULL`).
+  `listLabels` leaves out, for a member who is no admin, the labels of departments they
+  are not in while departments are on; a label on a letter they see still comes with it.
+  Creating, renaming, moving or deleting a department's label needs an admin or a lead of
+  that department (403 `forbidden`); members keep managing labels for everyone.
+  `updateLabel` moves a label only when `department_id` is sent, so an older client never
+  moves one.

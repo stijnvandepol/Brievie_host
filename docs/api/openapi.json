@@ -1691,6 +1691,14 @@
             "title": "Color",
             "type": "string"
           },
+          "department_id": {
+            "format": "uuid",
+            "title": "Department Id",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "name": {
             "maxLength": 50,
             "minLength": 1,
@@ -1709,6 +1717,14 @@
           "color": {
             "title": "Color",
             "type": "string"
+          },
+          "department_id": {
+            "format": "uuid",
+            "title": "Department Id",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "document_count": {
             "title": "Document Count",
@@ -1744,6 +1760,14 @@
             "default": "",
             "title": "Color",
             "type": "string"
+          },
+          "department_id": {
+            "format": "uuid",
+            "title": "Department Id",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "name": {
             "maxLength": 50,
