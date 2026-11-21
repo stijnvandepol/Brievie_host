@@ -19,6 +19,7 @@ import { passwordRoute } from "./routes/password";
 import { passwordResetRoute } from "./routes/password-reset";
 import { personsRoute } from "./routes/persons";
 import { postRoute } from "./routes/post";
+import { postAccessRoute } from "./routes/post-access";
 import { rootRoute } from "./routes/root";
 import { newRuleRoute, ruleRoute } from "./routes/rule-editor";
 import { searchRoute } from "./routes/search";
@@ -26,6 +27,7 @@ import { serverAuditLogRoute } from "./routes/server-audit-log";
 import { sessionsRoute } from "./routes/sessions";
 import { settingsRoute } from "./routes/settings";
 import { setupRoute } from "./routes/setup";
+import { setupSummaryRoute } from "./routes/setup-summary";
 import { tasksRoute } from "./routes/tasks";
 import { trashRoute } from "./routes/trash";
 import { visibilityRoute } from "./routes/visibility";
@@ -57,6 +59,8 @@ const routeTree = rootRoute.addChildren([
     settingsRoute,
     auditLogRoute,
     visibilityRoute,
+    postAccessRoute,
+    setupSummaryRoute,
     labelsRoute,
     automationsRoute,
     aiRoute,

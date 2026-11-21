@@ -442,7 +442,6 @@ msgstr "Make a department"
 
 #: src/components/page.tsx
 #: src/routes/departments.tsx
-#: src/routes/setup.tsx
 #: src/routes/visibility.tsx
 msgid "Afdelingen"
 msgstr "Departments"
@@ -450,6 +449,10 @@ msgstr "Departments"
 #: src/routes/visibility.tsx
 msgid "Afdelingen gebruiken"
 msgstr "Use departments"
+
+#: src/routes/setup-summary.tsx
+msgid "Afdelingen maken"
+msgstr "Make departments"
 
 #: src/routes/automations.tsx
 msgid "Afdelingen staan uit: deze post gaat nu naar wie post verdeelt."
@@ -776,6 +779,10 @@ msgstr "Switch on the autopilot?"
 msgid "Automatisering"
 msgstr "Automation"
 
+#: src/routes/setup-summary.tsx
+msgid "Back-up instellen: typ op de server"
+msgstr "Set up the backup: on the server, type"
+
 #: src/routes/duplicate.tsx
 msgid "bedrag"
 msgstr "amount"
@@ -872,10 +879,6 @@ msgstr "e.g. {0}"
 #: src/routes/ai.tsx
 msgid "Bijvoorbeeld http://ollama:11434/v1"
 msgstr "For example http://ollama:11434/v1"
-
-#: src/routes/setup.tsx
-msgid "Bijvoorbeeld: Sales, Finance, HR. Je krijgt per afdeling een label."
-msgstr "For example: Sales, Finance, HR. You get a label for each department."
 
 #: src/task-time.ts
 msgid "Binnen 7 dagen"
@@ -1815,11 +1818,16 @@ msgstr "Someone"
 msgid "Iemand nieuw"
 msgstr "Someone new"
 
+#: src/routes/setup-summary.tsx
+msgid "Iemand post laten verdelen"
+msgstr "Let someone sort post"
+
 #: src/routes/visibility.tsx
 msgid "Iemand toevoegen"
 msgstr "Add someone"
 
 #: src/components/invite-dialog.tsx
+#: src/routes/setup-summary.tsx
 msgid "Iemand uitnodigen"
 msgstr "Invite someone"
 
@@ -2435,6 +2443,10 @@ msgstr "Add several at once"
 msgid "Meld {who} overal af als een account misbruikt kan zijn. Gekoppelde telefoons blijven werken."
 msgstr "Sign {who} out everywhere if an account may have been misused. Paired phones keep working."
 
+#: src/routes/setup-summary.tsx
+msgid "Mensen uitnodigen"
+msgstr "Invite people"
+
 #: src/components/page.tsx
 msgid "Menu"
 msgstr "Menu"
@@ -2524,8 +2536,8 @@ msgid "Naam kiezen"
 msgstr "Choose a name"
 
 #: src/routes/setup.tsx
-msgid "Naam van de werkruimte"
-msgstr "Name of the workspace"
+msgid "Naam, bijvoorbeeld 'Familie de Vries' of 'Bakkerij Jansen'"
+msgstr "Name, for example 'The Smith family' or 'Jansen Bakery'"
 
 #: src/routes/departments.tsx
 #: src/routes/persons.tsx
@@ -2844,6 +2856,9 @@ msgstr "Save"
 msgid "Oranje"
 msgstr "Orange"
 
+#: src/components/rule-templates.tsx
+#: src/routes/home.tsx
+#: src/routes/setup.tsx
 #: src/routes/visibility.tsx
 msgid "Organisatie"
 msgstr "Organisation"
@@ -2890,6 +2905,10 @@ msgstr "Period"
 #: src/routes/persons.tsx
 msgid "Personen"
 msgstr "Persons"
+
+#: src/routes/setup-summary.tsx
+msgid "Personen toevoegen"
+msgstr "Add persons"
 
 #: src/components/audit-codes.ts
 #: src/components/audit-table.tsx
@@ -3299,8 +3318,8 @@ msgid "Thuis"
 msgstr "Home"
 
 #: src/components/rule-templates.tsx
-msgid "Thuis en zakelijk"
-msgstr "Home and business"
+msgid "Thuis en organisatie"
+msgstr "Home and organisation"
 
 #: src/components/audit-table.tsx
 msgid "Tijdstip"
@@ -3553,12 +3572,12 @@ msgid "Voor {others}"
 msgstr "For {others}"
 
 #: src/routes/setup.tsx
-msgid "Voor de post van je bedrijf."
-msgstr "For the mail of your business."
+msgid "Voor een bedrijf, praktijk of vereniging. Ieder ziet zijn eigen post en die van zijn afdeling."
+msgstr "For a company, practice or association. Each sees their own post and that of their department."
 
 #: src/routes/setup.tsx
-msgid "Voor je eigen post en die van je gezin. Alles bij elkaar, rustig en overzichtelijk."
-msgstr "For your own mail and that of your family. Everything together, calm and clear."
+msgid "Voor jezelf en je gezin. Iedereen ziet alle post, behalve wat privé is."
+msgstr "For yourself and your family. Everyone sees all post, except what is private."
 
 #: src/task-time.ts
 msgid "Voor jou"
@@ -3683,6 +3702,10 @@ msgstr "What to do with your mail, by date. You do not need to open the letter f
 msgid "Wat leden in {0} mogen doen, en het logboek van wat er is gebeurd. Alleen beheerders zien deze pagina."
 msgstr "What members in {0} may do, and the log of what happened. Only admins see this page."
 
+#: src/routes/setup-summary.tsx
+msgid "Wat nu?"
+msgstr "What now?"
+
 #: src/routes/inbox.tsx
 msgid "Wat te doen"
 msgstr "What to do"
@@ -3778,6 +3801,12 @@ msgstr "Whoever you tick can read this letter, even if it would not reach them o
 msgid "Wie kan deze brief zien?"
 msgstr "Who can see this letter?"
 
+#: src/components/page.tsx
+#: src/routes/post-access.tsx
+#: src/routes/visibility.tsx
+msgid "Wie kan mijn post zien?"
+msgstr "Who can see my post?"
+
 #: src/routes/ai.tsx
 msgid "Wie leest je brieven?"
 msgstr "Who reads your letters?"
@@ -3809,6 +3838,10 @@ msgstr "Who sees which post: everyone everything, or each their own post and tha
 #: src/routes/visibility.tsx
 msgid "Wie ziet wat"
 msgstr "Who sees what"
+
+#: src/routes/setup-summary.tsx
+msgid "Wie ziet wat wijzigen"
+msgstr "Change who sees what"
 
 #: src/routes/visibility.tsx
 msgid "Wie ziet welke post"
@@ -3850,12 +3883,6 @@ msgstr "Being made…"
 msgid "Wordt vandaag gewist"
 msgstr "Erased today"
 
-#: src/components/rule-templates.tsx
-#: src/routes/home.tsx
-#: src/routes/setup.tsx
-msgid "Zakelijk"
-msgstr "Business"
-
 #: src/routes/document.tsx
 msgid "Zelf controleren"
 msgstr "Check it yourself"
@@ -3884,9 +3911,18 @@ msgstr "Visibility changed"
 msgid "Zie je hier een browser die je niet kent? Log die uit en wijzig je wachtwoord."
 msgstr "Do you see a browser here you don't know? Sign it out and change your password."
 
+#: src/routes/setup-summary.tsx
+msgid "Zo is Brievie nu ingesteld"
+msgstr "This is how Brievie is set up now"
+
 #: src/routes/visibility.tsx
 msgid "Zo is het nu"
 msgstr "How it is now"
+
+#. placeholder {0}: workspace.name
+#: src/routes/post-access.tsx
+msgid "Zo is het nu in {0}. Alleen een beheerder kan dit veranderen."
+msgstr "This is how it is now in {0}. Only an admin can change this."
 
 #: src/routes/departments.tsx
 msgid "Zo staat de naam op brieven, bijvoorbeeld Afd. Financiën. Zet elke variant op een eigen regel."

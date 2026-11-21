@@ -11,7 +11,7 @@ import { rootRoute } from "./root";
 
 function kindLabel(kind: string): string {
   if (kind === "home") return t`Thuis`;
-  if (kind === "business") return t`Zakelijk`;
+  if (kind === "business") return t`Organisatie`;
   return kind;
 }
 

@@ -23,7 +23,7 @@ the translation. Add a line before introducing a new domain term.
 | op naam van | addressee |
 | startset | preset |
 | thuis | home |
-| zakelijk | business |
+| organisatie (heette zakelijk) | business |
 | document | document |
 | pagina | page |
 | dagtekening | letter_date |
@@ -139,7 +139,7 @@ the request that creates the workspace and keep that name.
 | termijn, uiterlijk | deadline | Never "term" or "due date"; "Deadline {date}" on a task. Vervaldatum (invoice field) is "Due date". |
 | taak | task | |
 | werkruimte | workspace | |
-| Thuis / Zakelijk (Organisatie) | Home / Business | |
+| Thuis / Organisatie | Home / Organisation | The kind of a workspace (`home`, `business`); "Zakelijk" is no longer shown. |
 | lid | member | |
 | Alleen lezen (rol; heette meekijker) | Read only | The role `viewer`; its badge says "Read only" (R29). |
 | beheerder | admin | serverbeheerder: server admin. |
@@ -151,6 +151,14 @@ the request that creates the workspace and keep that name.
 | post zonder naam | unnamed post | |
 | Iedereen ziet alle post / Eigen post | Everyone sees all post / Own post | The two positions of "Wie ziet wat". |
 | Wie ziet wat; Wie kan mijn post zien?; Wie kan deze brief zien? | Who sees what; Who can see my post?; Who can see this letter? | |
+| Soort gebruik | Kind of use | Thuis or Organisatie on "Wie ziet wat"; a starting point, not a mode. |
+| Zo is Brievie nu ingesteld | This is how Brievie is set up now | The page after installation (`/w/<id>/ingesteld`). |
+| Toewijzen | Assign | What a letter without a name waits for while departments are on; "Naam kiezen" without them. |
+| Voor mij; Zonder naam | For me; Unnamed | The chips of the Inbox. |
+| Privé maken; Delen met; Niet meer privé | Make private; Share with; No longer private | On a letter. |
+| Noodtoegang | Emergency access | |
+| Zorg-post is privé | Care post is private | The label Zorg is "Healthcare" in English. |
+| Leidinggevende | Lead | Of a department. |
 | persoon | person | Persons (page), never "people" for the list of persons. |
 | op naam van, geadresseerde | addressed to, addressee | "Address to" for the rule action. |
 | afzender | sender | |

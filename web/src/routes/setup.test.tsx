@@ -9,7 +9,6 @@ import {
   loggedInHandlers,
   renderApp,
   server,
-  twoWorkspaces,
   user,
   workspace,
 } from "../test-utils";
@@ -24,7 +23,7 @@ function needsSetup() {
 }
 
 async function fillIn(u: ReturnType<typeof userEvent.setup>) {
-  await u.type(await screen.findByRole("textbox", { name: /naam van de werkruimte/i }), "Ons huis");
+  await u.type(await screen.findByRole("textbox", { name: /^Naam, bijvoorbeeld/ }), "Ons huis");
   await u.type(screen.getByRole("textbox", { name: /^je naam/i }), "Anna");
   await u.type(screen.getByRole("textbox", { name: /e-mailadres/i }), "anna@example.nl");
   await u.type(screen.getByLabelText(/^wachtwoord/i), "een-lang-wachtwoord");
@@ -32,7 +31,29 @@ async function fillIn(u: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("setup", () => {
-  it("sends workspace_kind home when the Thuis card is chosen", async () => {
+  it("setup shows Thuis and Organisatie with their sentences and no Afdelingen field", async () => {
+    needsSetup();
+    const u = userEvent.setup();
+    renderApp("/setup");
+    expect(await screen.findByRole("radio", { name: /Thuis/ })).toBeInTheDocument();
+    expect(
+      screen.getByText("Voor jezelf en je gezin. Iedereen ziet alle post, behalve wat privé is."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Voor een bedrijf, praktijk of vereniging. Ieder ziet zijn eigen post en die van zijn afdeling.",
+      ),
+    ).toBeInTheDocument();
+    await u.click(screen.getByRole("radio", { name: /Organisatie/ }));
+    expect(screen.queryByRole("textbox", { name: "Afdelingen" })).toBeNull();
+    expect(
+      screen.getByRole("textbox", {
+        name: "Naam, bijvoorbeeld 'Familie de Vries' of 'Bakkerij Jansen'",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("setup sends no extra_labels and opens Zo is Brievie nu ingesteld", async () => {
     needsSetup();
     let body: unknown;
     let contentType: string | null = null;
@@ -41,20 +62,18 @@ describe("setup", () => {
         body = await request.json();
         contentType = request.headers.get("content-type");
         // After setup the server is set up and the session exists.
-        server.use(twoWorkspaces(), ...loggedInHandlers());
+        server.use(...loggedInHandlers());
         return HttpResponse.json({ user, workspace }, { status: 201 });
       }),
     );
     const u = userEvent.setup();
     renderApp("/setup");
-
-    await u.click(await screen.findByRole("radio", { name: /thuis/i }));
+    await u.click(await screen.findByRole("radio", { name: /Organisatie/ }));
     await fillIn(u);
     await u.click(screen.getByRole("button", { name: /^start/i }));
-
     await waitFor(() => expect(body).toBeDefined());
     expect(body).toEqual({
-      workspace_kind: "home",
+      workspace_kind: "business",
       workspace_name: "Ons huis",
       name: "Anna",
       email: "anna@example.nl",
@@ -63,76 +82,9 @@ describe("setup", () => {
       extra_labels: [],
     });
     expect(contentType).toContain("application/json");
-    expect(await screen.findByRole("heading", { name: /werkruimtes/i })).toBeInTheDocument();
-  });
-
-  it("sends workspace_kind business when the Zakelijk card is chosen", async () => {
-    needsSetup();
-    let body: { workspace_kind?: string } = {};
-    server.use(
-      http.post(`*${API}/setup`, async ({ request }) => {
-        body = (await request.json()) as typeof body;
-        server.use(twoWorkspaces(), ...loggedInHandlers());
-        return HttpResponse.json({ user, workspace }, { status: 201 });
-      }),
-    );
-    const u = userEvent.setup();
-    renderApp("/setup");
-    await u.click(await screen.findByRole("radio", { name: /zakelijk/i }));
-    await fillIn(u);
-    await u.click(screen.getByRole("button", { name: /^start/i }));
-    await waitFor(() => expect(body.workspace_kind).toBe("business"));
-    // Setting up lands on the workspace list; wait for it, so no navigation outlives the test.
-    expect(await screen.findByRole("heading", { level: 1, name: /werkruimtes/i })).toBeVisible();
-  });
-
-  it("asks for departments with Zakelijk and sends them as extra labels", async () => {
-    needsSetup();
-    let body: { extra_labels?: string[] } = {};
-    server.use(
-      http.post(`*${API}/setup`, async ({ request }) => {
-        body = (await request.json()) as typeof body;
-        server.use(twoWorkspaces(), ...loggedInHandlers());
-        return HttpResponse.json({ user, workspace }, { status: 201 });
-      }),
-    );
-    const u = userEvent.setup();
-    renderApp("/setup");
-    await screen.findByRole("radio", { name: /zakelijk/i });
-    expect(screen.queryByRole("textbox", { name: "Afdelingen" })).not.toBeInTheDocument();
-    await u.click(screen.getByRole("radio", { name: /zakelijk/i }));
     expect(
-      screen.getByText("Bijvoorbeeld: Sales, Finance, HR. Je krijgt per afdeling een label."),
+      await screen.findByRole("heading", { level: 1, name: "Zo is Brievie nu ingesteld" }),
     ).toBeInTheDocument();
-    await u.type(screen.getByRole("textbox", { name: "Afdelingen" }), "Sales, Finance, HR, ");
-    await fillIn(u);
-    await u.click(screen.getByRole("button", { name: /^start/i }));
-    await waitFor(() => expect(body.extra_labels).toEqual(["Sales", "Finance", "HR"]));
-    // Setting up lands on the workspace list; wait for it, so no navigation outlives the test.
-    expect(await screen.findByRole("heading", { level: 1, name: /werkruimtes/i })).toBeVisible();
-  });
-
-  it("sends no extra labels when Thuis is chosen after typing departments", async () => {
-    needsSetup();
-    let body: { extra_labels?: string[] } = {};
-    server.use(
-      http.post(`*${API}/setup`, async ({ request }) => {
-        body = (await request.json()) as typeof body;
-        server.use(twoWorkspaces(), ...loggedInHandlers());
-        return HttpResponse.json({ user, workspace }, { status: 201 });
-      }),
-    );
-    const u = userEvent.setup();
-    renderApp("/setup");
-    await u.click(await screen.findByRole("radio", { name: /zakelijk/i }));
-    await u.type(screen.getByRole("textbox", { name: "Afdelingen" }), "Sales");
-    await u.click(screen.getByRole("radio", { name: /thuis/i }));
-    expect(screen.queryByRole("textbox", { name: "Afdelingen" })).not.toBeInTheDocument();
-    await fillIn(u);
-    await u.click(screen.getByRole("button", { name: /^start/i }));
-    await waitFor(() => expect(body.extra_labels).toEqual([]));
-    // Setting up lands on the workspace list; wait for it, so no navigation outlives the test.
-    expect(await screen.findByRole("heading", { level: 1, name: /werkruimtes/i })).toBeVisible();
   });
 
   it("shows the server message for a wrong installation code and stays on the form", async () => {
@@ -168,7 +120,7 @@ describe("setup", () => {
     server.use(
       http.post(`*${API}/setup`, async ({ request }) => {
         body = (await request.json()) as typeof body;
-        server.use(twoWorkspaces(), ...loggedInHandlers());
+        server.use(...loggedInHandlers());
         return HttpResponse.json({ user, workspace }, { status: 201 });
       }),
     );
@@ -179,8 +131,10 @@ describe("setup", () => {
     await u.type(screen.getByRole("textbox", { name: /installatiecode/i }), "  ");
     await u.click(screen.getByRole("button", { name: /^start/i }));
     await waitFor(() => expect(body.setup_token).toBe("abc-def"));
-    // Setting up lands on the workspace list; wait for it, so no navigation outlives the test.
-    expect(await screen.findByRole("heading", { level: 1, name: /werkruimtes/i })).toBeVisible();
+    // Setting up lands on the summary; wait for it, so no navigation outlives the test.
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Zo is Brievie nu ingesteld" }),
+    ).toBeVisible();
   });
 
   it("explains where to find the installation code", async () => {

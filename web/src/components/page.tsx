@@ -366,9 +366,12 @@ function useNavPane() {
 function AccountMenu({
   me,
   onLogout,
+  workspaceId,
 }: {
   me: { name: string; email: string; is_server_admin?: boolean } | null | undefined;
   onLogout: () => void;
+  /** The workspace of the page, for "Wie kan mijn post zien?". */
+  workspaceId?: string;
 }) {
   return (
     <DialogTrigger>
@@ -391,6 +394,16 @@ function AccountMenu({
                 <span className="account-email">{me.email}</span>
               </div>
             </div>
+          ) : null}
+          {workspaceId ? (
+            <Link
+              to="/w/$workspaceId/wie-ziet-mijn-post"
+              params={{ workspaceId }}
+              className="menu-item"
+            >
+              <Icon name="people" />
+              {t`Wie kan mijn post zien?`}
+            </Link>
           ) : null}
           <Link to="/account/sessies" className="menu-item">
             <Icon name="grid" />
@@ -481,7 +494,7 @@ export function Shell({ children, workspace }: { children: ReactNode; workspace?
         </Link>
         {workspace ? <SearchField key={workspace.id} workspaceId={workspace.id} /> : null}
         <div className="topbar-end">
-          <AccountMenu me={me} onLogout={() => logout.mutate()} />
+          <AccountMenu me={me} onLogout={() => logout.mutate()} workspaceId={workspace?.id} />
         </div>
       </header>
       <div className="app-body">

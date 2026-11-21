@@ -442,7 +442,6 @@ msgstr "Afdeling maken"
 
 #: src/components/page.tsx
 #: src/routes/departments.tsx
-#: src/routes/setup.tsx
 #: src/routes/visibility.tsx
 msgid "Afdelingen"
 msgstr "Afdelingen"
@@ -450,6 +449,10 @@ msgstr "Afdelingen"
 #: src/routes/visibility.tsx
 msgid "Afdelingen gebruiken"
 msgstr "Afdelingen gebruiken"
+
+#: src/routes/setup-summary.tsx
+msgid "Afdelingen maken"
+msgstr "Afdelingen maken"
 
 #: src/routes/automations.tsx
 msgid "Afdelingen staan uit: deze post gaat nu naar wie post verdeelt."
@@ -776,6 +779,10 @@ msgstr "Automatisch verwerken aanzetten?"
 msgid "Automatisering"
 msgstr "Automatisering"
 
+#: src/routes/setup-summary.tsx
+msgid "Back-up instellen: typ op de server"
+msgstr "Back-up instellen: typ op de server"
+
 #: src/routes/duplicate.tsx
 msgid "bedrag"
 msgstr "bedrag"
@@ -872,10 +879,6 @@ msgstr "bijv. {0}"
 #: src/routes/ai.tsx
 msgid "Bijvoorbeeld http://ollama:11434/v1"
 msgstr "Bijvoorbeeld http://ollama:11434/v1"
-
-#: src/routes/setup.tsx
-msgid "Bijvoorbeeld: Sales, Finance, HR. Je krijgt per afdeling een label."
-msgstr "Bijvoorbeeld: Sales, Finance, HR. Je krijgt per afdeling een label."
 
 #: src/task-time.ts
 msgid "Binnen 7 dagen"
@@ -1815,11 +1818,16 @@ msgstr "Iemand"
 msgid "Iemand nieuw"
 msgstr "Iemand nieuw"
 
+#: src/routes/setup-summary.tsx
+msgid "Iemand post laten verdelen"
+msgstr "Iemand post laten verdelen"
+
 #: src/routes/visibility.tsx
 msgid "Iemand toevoegen"
 msgstr "Iemand toevoegen"
 
 #: src/components/invite-dialog.tsx
+#: src/routes/setup-summary.tsx
 msgid "Iemand uitnodigen"
 msgstr "Iemand uitnodigen"
 
@@ -2435,6 +2443,10 @@ msgstr "Meerdere tegelijk toevoegen"
 msgid "Meld {who} overal af als een account misbruikt kan zijn. Gekoppelde telefoons blijven werken."
 msgstr "Meld {who} overal af als een account misbruikt kan zijn. Gekoppelde telefoons blijven werken."
 
+#: src/routes/setup-summary.tsx
+msgid "Mensen uitnodigen"
+msgstr "Mensen uitnodigen"
+
 #: src/components/page.tsx
 msgid "Menu"
 msgstr "Menu"
@@ -2524,8 +2536,8 @@ msgid "Naam kiezen"
 msgstr "Naam kiezen"
 
 #: src/routes/setup.tsx
-msgid "Naam van de werkruimte"
-msgstr "Naam van de werkruimte"
+msgid "Naam, bijvoorbeeld 'Familie de Vries' of 'Bakkerij Jansen'"
+msgstr "Naam, bijvoorbeeld 'Familie de Vries' of 'Bakkerij Jansen'"
 
 #: src/routes/departments.tsx
 #: src/routes/persons.tsx
@@ -2844,6 +2856,9 @@ msgstr "Opslaan"
 msgid "Oranje"
 msgstr "Oranje"
 
+#: src/components/rule-templates.tsx
+#: src/routes/home.tsx
+#: src/routes/setup.tsx
 #: src/routes/visibility.tsx
 msgid "Organisatie"
 msgstr "Organisatie"
@@ -2890,6 +2905,10 @@ msgstr "Periode"
 #: src/routes/persons.tsx
 msgid "Personen"
 msgstr "Personen"
+
+#: src/routes/setup-summary.tsx
+msgid "Personen toevoegen"
+msgstr "Personen toevoegen"
 
 #: src/components/audit-codes.ts
 #: src/components/audit-table.tsx
@@ -3299,8 +3318,8 @@ msgid "Thuis"
 msgstr "Thuis"
 
 #: src/components/rule-templates.tsx
-msgid "Thuis en zakelijk"
-msgstr "Thuis en zakelijk"
+msgid "Thuis en organisatie"
+msgstr "Thuis en organisatie"
 
 #: src/components/audit-table.tsx
 msgid "Tijdstip"
@@ -3553,12 +3572,12 @@ msgid "Voor {others}"
 msgstr "Voor {others}"
 
 #: src/routes/setup.tsx
-msgid "Voor de post van je bedrijf."
-msgstr "Voor de post van je bedrijf."
+msgid "Voor een bedrijf, praktijk of vereniging. Ieder ziet zijn eigen post en die van zijn afdeling."
+msgstr "Voor een bedrijf, praktijk of vereniging. Ieder ziet zijn eigen post en die van zijn afdeling."
 
 #: src/routes/setup.tsx
-msgid "Voor je eigen post en die van je gezin. Alles bij elkaar, rustig en overzichtelijk."
-msgstr "Voor je eigen post en die van je gezin. Alles bij elkaar, rustig en overzichtelijk."
+msgid "Voor jezelf en je gezin. Iedereen ziet alle post, behalve wat privé is."
+msgstr "Voor jezelf en je gezin. Iedereen ziet alle post, behalve wat privé is."
 
 #: src/task-time.ts
 msgid "Voor jou"
@@ -3683,6 +3702,10 @@ msgstr "Wat je met je post moet doen, op datum. Je hoeft de brief er niet voor t
 msgid "Wat leden in {0} mogen doen, en het logboek van wat er is gebeurd. Alleen beheerders zien deze pagina."
 msgstr "Wat leden in {0} mogen doen, en het logboek van wat er is gebeurd. Alleen beheerders zien deze pagina."
 
+#: src/routes/setup-summary.tsx
+msgid "Wat nu?"
+msgstr "Wat nu?"
+
 #: src/routes/inbox.tsx
 msgid "Wat te doen"
 msgstr "Wat te doen"
@@ -3778,6 +3801,12 @@ msgstr "Wie je aanvinkt, kan deze brief lezen, ook als die anders niet bij hem k
 msgid "Wie kan deze brief zien?"
 msgstr "Wie kan deze brief zien?"
 
+#: src/components/page.tsx
+#: src/routes/post-access.tsx
+#: src/routes/visibility.tsx
+msgid "Wie kan mijn post zien?"
+msgstr "Wie kan mijn post zien?"
+
 #: src/routes/ai.tsx
 msgid "Wie leest je brieven?"
 msgstr "Wie leest je brieven?"
@@ -3809,6 +3838,10 @@ msgstr "Wie welke post ziet: iedereen alles, of ieder zijn eigen post en die van
 #: src/routes/visibility.tsx
 msgid "Wie ziet wat"
 msgstr "Wie ziet wat"
+
+#: src/routes/setup-summary.tsx
+msgid "Wie ziet wat wijzigen"
+msgstr "Wie ziet wat wijzigen"
 
 #: src/routes/visibility.tsx
 msgid "Wie ziet welke post"
@@ -3850,12 +3883,6 @@ msgstr "Wordt gemaakt…"
 msgid "Wordt vandaag gewist"
 msgstr "Wordt vandaag gewist"
 
-#: src/components/rule-templates.tsx
-#: src/routes/home.tsx
-#: src/routes/setup.tsx
-msgid "Zakelijk"
-msgstr "Zakelijk"
-
 #: src/routes/document.tsx
 msgid "Zelf controleren"
 msgstr "Zelf controleren"
@@ -3884,9 +3911,18 @@ msgstr "Zichtbaarheid gewijzigd"
 msgid "Zie je hier een browser die je niet kent? Log die uit en wijzig je wachtwoord."
 msgstr "Zie je hier een browser die je niet kent? Log die uit en wijzig je wachtwoord."
 
+#: src/routes/setup-summary.tsx
+msgid "Zo is Brievie nu ingesteld"
+msgstr "Zo is Brievie nu ingesteld"
+
 #: src/routes/visibility.tsx
 msgid "Zo is het nu"
 msgstr "Zo is het nu"
+
+#. placeholder {0}: workspace.name
+#: src/routes/post-access.tsx
+msgid "Zo is het nu in {0}. Alleen een beheerder kan dit veranderen."
+msgstr "Zo is het nu in {0}. Alleen een beheerder kan dit veranderen."
 
 #: src/routes/departments.tsx
 msgid "Zo staat de naam op brieven, bijvoorbeeld Afd. Financiën. Zet elke variant op een eigen regel."

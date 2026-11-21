@@ -497,6 +497,13 @@ function VisibilityPage() {
             >
               {t`Privé`}
             </Link>
+            <Link
+              to="/w/$workspaceId/wie-ziet-mijn-post"
+              params={{ workspaceId: workspace.id }}
+              className="button secondary"
+            >
+              {t`Wie kan mijn post zien?`}
+            </Link>
             {data.departments_enabled ? (
               <Link
                 to="/w/$workspaceId/afdelingen"
