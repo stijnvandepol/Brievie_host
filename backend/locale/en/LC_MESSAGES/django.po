@@ -2343,6 +2343,150 @@ msgstr "Member"
 msgid "Alleen lezen"
 msgstr "Read only"
 
+#: apps/workspaces/policy_text.py
+#, python-format
+msgid "%(first)s en %(last)s"
+msgstr "%(first)s and %(last)s"
+
+#: apps/workspaces/policy_text.py
+msgid "alle post die niet privé is"
+msgstr "all post that is not private"
+
+#: apps/workspaces/policy_text.py
+msgid "alle post als beheerder"
+msgstr "all post as an admin"
+
+#: apps/workspaces/policy_text.py
+msgid "post zonder naam"
+msgstr "unnamed post"
+
+#: apps/workspaces/policy_text.py
+#, python-format
+msgid "post van %(department)s"
+msgstr "post for %(department)s"
+
+#: apps/workspaces/policy_text.py
+#, python-format
+msgid "post van %(person)s"
+msgstr "post for %(person)s"
+
+#: apps/workspaces/policy_text.py
+#, python-format
+msgid "Tekst van brieven gaat naar %(supplier)s."
+msgstr "The text of letters goes to %(supplier)s."
+
+#: apps/workspaces/policy_text.py
+msgid "Brieven worden gelezen door AI op je eigen netwerk."
+msgstr "Letters are read by AI on your own network."
+
+#: apps/workspaces/policy_text.py
+msgid "Brieven worden niet door AI gelezen."
+msgstr "Letters are not read by AI."
+
+#: apps/workspaces/policy_text.py
+msgid "Iedereen in Brievie ziet alle post, behalve post die privé is."
+msgstr "Everyone in Brievie sees all post, except post that is private."
+
+#: apps/workspaces/policy_text.py
+msgid "Ieder ziet zijn eigen post en die van zijn groepen."
+msgstr "Everyone sees their own post and that of their groups."
+
+#: apps/workspaces/policy_text.py
+msgid "Ieder ziet zijn eigen post en die van zijn afdelingen."
+msgstr "Everyone sees their own post and that of their departments."
+
+#: apps/workspaces/policy_text.py
+msgid "Ieder ziet zijn eigen post."
+msgstr "Everyone sees their own post."
+
+#: apps/workspaces/policy_text.py
+msgid "Er zijn nog geen groepen."
+msgstr "There are no groups yet."
+
+#: apps/workspaces/policy_text.py
+msgid "Er zijn nog geen afdelingen."
+msgstr "There are no departments yet."
+
+#: apps/workspaces/policy_text.py
+#, python-format
+msgid "Post zonder naam zien: %(names)s (verdeelt post)."
+msgstr "Unnamed post is seen by: %(names)s (sorts post)."
+
+#: apps/workspaces/policy_text.py
+msgid "Post zonder naam zie jij, tot je iemand aanwijst die post verdeelt."
+msgstr "You see unnamed post, until you choose someone who sorts post."
+
+#: apps/workspaces/policy_text.py
+#, python-format
+msgid "Post zonder naam zien de beheerders: %(names)s."
+msgstr "Unnamed post is seen by the admins: %(names)s."
+
+#: apps/workspaces/policy_text.py
+msgid "Beheerders lezen alle post die niet privé is."
+msgstr "Admins read all post that is not private."
+
+#: apps/workspaces/policy_text.py
+msgid "Beheerders lezen geen post die niet voor hen is."
+msgstr "Admins read no post that is not for them."
+
+#: apps/workspaces/policy_text.py
+msgid "Zorgpost is privé."
+msgstr "Care post is private."
+
+#: apps/workspaces/policy_text.py
+msgid "Je bent beheerder."
+msgstr "You are an admin."
+
+#: apps/workspaces/policy_text.py
+msgid "Noodtoegang staat aan."
+msgstr "Emergency access is on."
+
+#: apps/workspaces/policy_text.py
+msgid "Er is nog geen back-up."
+msgstr "There is no backup yet."
+
+#: apps/workspaces/policy_text.py
+msgid "Iedereen in Brievie ziet alle post, behalve privé-post."
+msgstr "Everyone in Brievie sees all post, except private post."
+
+#: apps/workspaces/policy_text.py
+msgid "Je post zien alleen jij en, als hij op naam van een groep staat, de mensen van die groep."
+msgstr "Your post is seen only by you and, when it is addressed to a group, the people in that group."
+
+#: apps/workspaces/policy_text.py
+msgid "Je post zien alleen jij en, als hij op naam van een afdeling staat, de mensen van die afdeling."
+msgstr "Your post is seen only by you and, when it is addressed to a department, the people in that department."
+
+#: apps/workspaces/policy_text.py
+msgid "Je post zien alleen jij."
+msgstr "Your post is seen only by you."
+
+#: apps/workspaces/policy_text.py
+#, python-format
+msgid "De beheerders %(names)s lezen alle post die niet privé is."
+msgstr "The admins %(names)s read all post that is not private."
+
+#: apps/workspaces/policy_text.py
+msgid "De beheerders lezen je post niet."
+msgstr "The admins do not read your post."
+
+#: apps/workspaces/policy_text.py
+msgid "Privé-post zie alleen jij, en wie je die brief geeft."
+msgstr "Private post is seen only by you, and by whoever you give that letter to."
+
+#: apps/workspaces/policy_text.py
+msgid "Noodtoegang staat aan. De beheerders kunnen je post openen. Ze moeten een reden geven, en jij krijgt dan een melding."
+msgstr "Emergency access is on. The admins can open your post. They must give a reason, and you then get a notice."
+
+#: apps/workspaces/policy_text.py
+msgid "Noodtoegang staat uit."
+msgstr "Emergency access is off."
+
+#: apps/workspaces/policy_text.py
+#, python-format
+msgid "Wie de server zelf beheert, kan technisch bij alle gegevens. Dat is %(names)s."
+msgstr "Whoever manages the server itself can technically reach all data. That is %(names)s."
+
 #: brievie/api.py
 msgid "De database is niet bereikbaar. Probeer het later opnieuw."
 msgstr "The database cannot be reached. Try again later."
