@@ -480,6 +480,7 @@ export function personAccount(
     invitation_expires_at: null,
     invitation_expired: false,
     can_manage_account: false,
+    activity_hidden: false,
     ...overrides,
   };
 }

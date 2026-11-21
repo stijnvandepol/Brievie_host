@@ -73,6 +73,8 @@ class PersonAccount:
     invitation_expired: bool = False
     can_manage_account: bool = False
     managed_by_user_id: UUID | None = None
+    # The account is in another workspace too: its sign-ins and app use are not shown.
+    activity_hidden: bool = False
 
 
 def _invalid_state() -> ApiError:
@@ -133,13 +135,18 @@ def list_people(
     accounts: dict[UUID, tuple[str, datetime | None]] = {}
     app_use: dict[UUID, datetime] = {}
     manageable: set[UUID] = set()
+    elsewhere: set[UUID] = set()
     if admin:
-        account_ids = {
-            user_id
-            for p in persons
-            for user_id in (p.user_id, p.former_user_id)
-            if user_id is not None
-        }
+        # Only active accounts are read live, and only when this is their one workspace:
+        # an account's sign-ins and devices are not per workspace, so for a member of
+        # another workspace too they would tell an admin of activity there (security
+        # review of PR #43, point 2). A switched-off person shows what was frozen then.
+        account_ids = {p.user_id for p in persons if p.user_id is not None}
+        elsewhere = set(
+            Membership.objects.filter(user_id__in=account_ids)
+            .exclude(workspace=workspace)
+            .values_list("user_id", flat=True)
+        )
         accounts = {
             user_id: (email, last_login)
             for user_id, email, last_login in User.objects.filter(id__in=account_ids).values_list(
@@ -147,7 +154,7 @@ def list_people(
             )
         }
         for user_id, seen in (
-            Device.objects.filter(user_id__in=account_ids, revoked_at__isnull=True)
+            Device.objects.filter(user_id__in=account_ids - elsewhere, revoked_at__isnull=True)
             .values("user_id")
             .annotate(seen=Max("last_seen_at"))
             .values_list("user_id", "seen")
@@ -191,8 +198,16 @@ def list_people(
             )
             continue
         membership = memberships.get(person.user_id) if person.user_id is not None else None
-        account = person.user_id if person.user_id is not None else person.former_user_id
-        email, last_login = accounts.get(account, ("", None)) if account is not None else ("", None)
+        account = person.user_id
+        if account is not None:
+            email, last_login = accounts.get(account, ("", None))
+            app_use_at = app_use.get(account)
+            if account in elsewhere:
+                last_login = None
+        else:
+            email = person.former_email
+            last_login = person.former_last_sign_in_at
+            app_use_at = person.former_last_app_use_at
         result.append(
             PersonAccount(
                 person=person,
@@ -203,7 +218,8 @@ def list_people(
                 department_ids=member_departments,
                 email=email,
                 last_sign_in_at=last_login,
-                last_app_use_at=app_use.get(account) if account is not None else None,
+                last_app_use_at=app_use_at,
+                activity_hidden=account is not None and account in elsewhere,
                 deactivated_at=person.deactivated_at if person.user_id is None else None,
                 invitation_id=invitation.id if invitation is not None else None,
                 invitation_role=invitation.role if invitation is not None else "",
@@ -218,7 +234,8 @@ def list_people(
 
 def person_has_private_post(workspace: Workspace, person_id: UUID) -> bool:
     """Whether a private letter is on this person's name: a yes or no, never a count or a
-    letter (asked by the "Uitschakelen" and "Uitnodigen" dialogs; the endpoint checks the
+    letter (asked by the "Uitschakelen" dialog only, for a person with an active account,
+    else 409 `person_has_no_account`; the endpoint checks the
     admin). 404 `person_not_found` for a department or an unknown id. Needs the
     workspace's context; the letters are read as the system by `has_private_post`."""
     from apps.workspaces.access import person_requires_email
@@ -228,4 +245,8 @@ def person_has_private_post(workspace: Workspace, person_id: UUID) -> bool:
     ).first()
     if person is None:
         raise ApiError(404, "person_not_found", _("We kunnen deze persoon niet vinden."))
+    if person.user_id is None:
+        # Only for switching an active account off (security review of PR #43, point 6):
+        # inviting learns it from `email_required`, managing from its own refusal.
+        raise ApiError(409, "person_has_no_account", _("Deze persoon heeft geen actief account."))
     return person_requires_email(person)

@@ -1589,7 +1589,7 @@ export interface paths {
         get?: never;
         /**
          * Set Person Manager
-         * @description Web session only, admins. "Beheerd door": a member (`user_id`) reads the post of a person without an active account as their own, and that post no longer goes to whoever sorts post; null ends it. 409 `is_a_department`, `person_has_account`, `cannot_grant_self` (an admin naming themselves while private post is on the person); 404 `member_not_found`. A gain needs `confirmed` and the token of `previewVisibilityChange` with member_change `manage` (409 `confirmation_required`, `preview_outdated`). Accepting an invitation for the person, or the manager leaving the workspace, ends it.
+         * @description Web session only, admins. "Beheerd door": a member (`user_id`) reads the post of a person without an active account as their own, and that post no longer goes to whoever sorts post; null ends it. 409 `is_a_department`, `person_has_account`, `cannot_grant_self` (an admin naming themselves while private post is on the person), `private_post_acknowledgement_required` (private post on the person: send `private_post_acknowledged`); 404 `member_not_found`. A gain needs `confirmed` and the token of `previewVisibilityChange` with member_change `manage` (409 `confirmation_required`, `preview_outdated`). Accepting an invitation for the person, or the manager leaving the workspace, ends it.
          */
         put: operations["setPersonManager"];
         post?: never;
@@ -1672,7 +1672,7 @@ export interface paths {
         };
         /**
          * Get Person Has Private Post
-         * @description Web session only, admins (403 forbidden for others). Whether a private letter is on the person's name, also one the admin cannot read: a yes or no, for the dialogs that switch an account off or invite. 404 person_not_found for a department.
+         * @description Web session only, admins (403 forbidden for others). Whether a private letter is on the name of a person with an active account, also one the admin cannot read: a yes or no, for the dialog that switches an account off. 404 person_not_found for a department; 409 person_has_no_account for a person without an active account.
          */
         get: operations["getPersonHasPrivatePost"];
         put?: never;
@@ -3498,6 +3498,11 @@ export interface components {
          *     else they are empty and `state` is only `active` or `inactive`.
          */
         PersonAccountOut: {
+            /**
+             * Activity Hidden
+             * @default false
+             */
+            activity_hidden: boolean;
             /** Archived */
             archived: boolean;
             /**
@@ -3610,6 +3615,11 @@ export interface components {
              * @default
              */
             preview_token: string;
+            /**
+             * Private Post Acknowledged
+             * @default false
+             */
+            private_post_acknowledged: boolean;
             /**
              * User Id
              * Format: uuid
@@ -10801,6 +10811,15 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

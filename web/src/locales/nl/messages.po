@@ -2026,6 +2026,11 @@ msgstr "is niet"
 msgid "is precies"
 msgstr "is precies"
 
+#. placeholder {0}: askAcknowledgement?.name ?? ""
+#: src/components/person-actions.tsx
+msgid "Ja, {0} leest ze"
+msgstr "Ja, {0} leest ze"
+
 #. placeholder {0}: member.name
 #. placeholder {0}: person.display_name
 #: src/components/person-actions.tsx
@@ -2713,6 +2718,10 @@ msgstr "Niet meer privé"
 msgid "Niet meer privé maken?"
 msgstr "Niet meer privé maken?"
 
+#: src/components/person-actions.tsx
+msgid "Niet te zien"
+msgstr "Niet te zien"
+
 #: src/routes/search.tsx
 msgid "Niets gevonden"
 msgstr "Niets gevonden"
@@ -2906,22 +2915,22 @@ msgstr "Op de andere scan is ''{task}'' al afgerond."
 msgid "Op naam van"
 msgstr "Op naam van"
 
-#. placeholder {0}: person.name
-#: src/components/invite-dialog.tsx
-msgid "Op naam van {0} staan privébrieven. Alleen dit adres kan de uitnodiging gebruiken."
-msgstr "Op naam van {0} staan privébrieven. Alleen dit adres kan de uitnodiging gebruiken."
-
 #: src/components/rule-sentence.ts
 msgid "op naam van {name}"
 msgstr "op naam van {name}"
 
 #: src/components/person-actions.tsx
-msgid "Op naam van {name} staan privébrieven. Na uitschakelen kan niemand ze lezen, tot je {name} opnieuw uitnodigt of iemand de post laat beheren."
-msgstr "Op naam van {name} staan privébrieven. Na uitschakelen kan niemand ze lezen, tot je {name} opnieuw uitnodigt of iemand de post laat beheren."
+msgid "Op naam van {name} staan privébrieven. Na uitschakelen leest {name} ze niet meer. Wie een brief gedeeld kreeg, leest hem nog. Staat noodtoegang aan, dan kan een beheerder ze met een reden openen. Moet iemand anders ze kunnen lezen, laat dan de post beheren of nodig {name} opnieuw uit."
+msgstr "Op naam van {name} staan privébrieven. Na uitschakelen leest {name} ze niet meer. Wie een brief gedeeld kreeg, leest hem nog. Staat noodtoegang aan, dan kan een beheerder ze met een reden openen. Moet iemand anders ze kunnen lezen, laat dan de post beheren of nodig {name} opnieuw uit."
 
 #: src/components/suggestion-list.tsx
 msgid "Op naam van {name}?"
 msgstr "Op naam van {name}?"
+
+#. placeholder {0}: askAcknowledgement?.name ?? ""
+#: src/components/person-actions.tsx
+msgid "Op naam van {personName} staan privébrieven. Als {0} de post beheert, leest die deze privébrieven ook."
+msgstr "Op naam van {personName} staan privébrieven. Als {0} de post beheert, leest die deze privébrieven ook."
 
 #: src/routes/rule-editor.tsx
 msgid "Op naam zetten van"
@@ -2951,6 +2960,10 @@ msgstr "Open de app op je telefoon en scan de code. De telefoon moet op hetzelfd
 #: src/routes/invitation.tsx
 msgid "Open de Brievie-app"
 msgstr "Open de Brievie-app"
+
+#: src/components/person-actions.tsx
+msgid "Open uitnodiging"
+msgstr "Open uitnodiging"
 
 #: src/components/open-invitations.tsx
 msgid "Open uitnodigingen"
@@ -3124,6 +3137,10 @@ msgstr "Privé maken kan alleen in een regel die automatisch werkt. Zet Automati
 #: src/components/private-lock.tsx
 msgid "Privé voor {names}"
 msgstr "Privé voor {names}"
+
+#: src/components/person-actions.tsx
+msgid "Privébrieven laten lezen?"
+msgstr "Privébrieven laten lezen?"
 
 #: src/routes/people-detail.tsx
 msgid "Privébrieven lezen alleen de mensen met wie ze gedeeld zijn."

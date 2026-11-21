@@ -113,6 +113,12 @@ def _issue(
     if expires_in_days not in VALIDITY_DAYS:
         raise ApiError(422, "validation_error", _("Een uitnodiging werkt 1, 7 of 30 dagen."))
     email = _clean_email(email)
+    if person_id is not None:
+        # At most one open invitation per person: a new one replaces the earlier links
+        # (their invitations first, then the person: the lock order).
+        revoke_invitations_for_persons(
+            workspace_id=workspace.id, person_ids=[person_id], actor=actor, reason="replaced"
+        )
     person = invitable_person(workspace, person_id) if person_id is not None else None
     if person is not None and not email and person_requires_email(person):
         raise ApiError(
@@ -365,6 +371,42 @@ def renew_invitation(
         )
 
 
+def revoke_invitations_for_persons(
+    *,
+    workspace_id: UUID,
+    person_ids: list[UUID],
+    actor: AuditActor,
+    reason: str,
+    keep_id: UUID | None = None,
+    skip_locked: bool = False,
+) -> int:
+    """Stop every open invitation (expired ones too) that names one of these persons: a
+    person has at most one way in at a time, and an old link must never bring an account
+    back after it was switched off, unlinked or activated by another link (security review
+    of PR #43, point 1). Locks the invitations, never the persons (lock order:
+    memberships, invitations, person). `skip_locked` leaves one another request is
+    accepting right now; that accept then finds the person taken. Returns how many."""
+    if not person_ids:
+        return 0
+    with transaction.atomic():
+        rows = (
+            Invitation.objects.select_for_update(skip_locked=skip_locked)
+            .filter(
+                workspace_id=workspace_id,
+                person_id__in=person_ids,
+                accepted_at=None,
+                revoked_at=None,
+            )
+            .order_by("id")
+        )
+        if keep_id is not None:
+            rows = rows.exclude(id=keep_id)
+        invitations = list(rows)
+        for invitation in invitations:
+            _revoke(invitation, actor=actor, reason=reason)
+    return len(invitations)
+
+
 def lock_open_invitations_for_person(*, workspace_id: UUID, person_id: UUID) -> list[Invitation]:
     """The open invitations (expired ones included) that name this person, locked in id
     order. Taken before the person's row: the lock order is memberships, then
@@ -607,6 +649,17 @@ def accept_invitation(
             keep_id=invitation.id,
             skip_locked=True,
         )
+        if invitation.person_id is not None:
+            # Every other link for this person is done with (also one bound to another
+            # address): one person, one way in.
+            revoke_invitations_for_persons(
+                workspace_id=invitation.workspace_id,
+                person_ids=[invitation.person_id],
+                actor=accepter,
+                reason="superseded",
+                keep_id=invitation.id,
+                skip_locked=True,
+            )
         with workspace_context(invitation.workspace_id, actor=user.id):
             person = _link_person(invitation, user)
             on_member_added(
@@ -690,17 +743,33 @@ def _link_person(invitation: Invitation, user: User) -> Person:
     )
     if person is None or person.user_id is not None:
         raise _person_taken_error()
+    if not invitation.email and person_requires_email(person):
+        # Private post came onto the name after the link was made without an address:
+        # such a link may not open it (the rule of making one holds at accepting too).
+        raise _dead_invitation()
     former_manager = person.managed_by_id
     person.user = user
     # Activated (again): no longer "uitgeschakeld" (spec 3.3), and whoever managed the post
     # stops (M6: an adult with an account decides who reads their post).
     person.deactivated_at = None
     person.former_user = None
+    person.former_email = ""
+    person.former_last_sign_in_at = None
+    person.former_last_app_use_at = None
     person.managed_by = None
     try:
         with transaction.atomic():
             person.save(
-                update_fields=["user", "deactivated_at", "former_user", "managed_by", "updated_at"]
+                update_fields=[
+                    "user",
+                    "deactivated_at",
+                    "former_user",
+                    "former_email",
+                    "former_last_sign_in_at",
+                    "former_last_app_use_at",
+                    "managed_by",
+                    "updated_at",
+                ]
             )
     except IntegrityError as exc:
         # The account is still linked to another person here (from an earlier

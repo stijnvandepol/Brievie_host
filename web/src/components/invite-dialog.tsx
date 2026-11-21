@@ -18,7 +18,7 @@ import {
   TextField,
 } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
-import { invitationsQuery, personPrivatePostQuery, personsQuery } from "../api/queries";
+import { invitationsQuery, personsQuery } from "../api/queries";
 import type { components } from "../api/schema";
 import { dateFormat } from "../format";
 import { Icon } from "./icons";
@@ -125,36 +125,26 @@ export type InvitedPerson = { id: string; name: string; email: string };
 /** The address field of an invitation for one person: in sight, prefilled, and required when
  * private letters are on the person's name (only that address may then accept). */
 function PersonEmailField({
-  workspaceId,
-  person,
   email,
   onChange,
   serverSentence,
 }: {
-  workspaceId: string;
-  person: InvitedPerson;
   email: string;
   onChange: (value: string) => void;
+  /** The server's `email_required` sentence: it alone says when an address is needed. */
   serverSentence: string | undefined;
 }) {
-  const privatePost = useQuery(personPrivatePostQuery(workspaceId, person.id));
-  const required = privatePost.data?.has_private_post === true;
   return (
     <TextField
       type="email"
       className="field"
       value={email}
       onChange={onChange}
-      isRequired={required}
       isInvalid={serverSentence !== undefined}
       validationBehavior="aria"
     >
       <Label>{t`E-mailadres`}</Label>
-      <Text slot="description">
-        {required
-          ? t`Op naam van ${person.name} staan privébrieven. Alleen dit adres kan de uitnodiging gebruiken.`
-          : t`Alleen dit adres kan de uitnodiging gebruiken.`}
-      </Text>
+      <Text slot="description">{t`Alleen dit adres kan de uitnodiging gebruiken.`}</Text>
       <Input autoComplete="off" />
       <FieldError>{serverSentence}</FieldError>
     </TextField>
@@ -253,13 +243,7 @@ function InviteForm({
         }}
       >
         {person ? (
-          <PersonEmailField
-            workspaceId={workspaceId}
-            person={person}
-            email={email}
-            onChange={setEmail}
-            serverSentence={emailSentence}
-          />
+          <PersonEmailField email={email} onChange={setEmail} serverSentence={emailSentence} />
         ) : null}
         {!person && free.length > 0 ? (
           <div className="field">

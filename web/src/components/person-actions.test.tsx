@@ -117,11 +117,7 @@ describe("Mensen: what an admin does on a row", () => {
     renderApp(path);
     await u.click(await screen.findByRole("button", { name: "Uitnodigen: Papa" }));
     const dialog = await screen.findByRole("dialog", { name: "Papa uitnodigen" });
-    expect(
-      await within(dialog).findByText(
-        "Op naam van Papa staan privébrieven. Alleen dit adres kan de uitnodiging gebruiken.",
-      ),
-    ).toBeInTheDocument();
+    // Nothing is asked beforehand: the server's answer says when an address is needed.
     await u.click(within(dialog).getByRole("button", { name: "Link maken" }));
     const field = within(dialog).getByRole("textbox", { name: "E-mailadres" });
     await waitFor(() => expect(field).toHaveAttribute("aria-invalid", "true"));
@@ -208,7 +204,7 @@ describe("Mensen: what an admin does on a row", () => {
     });
     expect(
       await within(dialog).findByText(
-        "Op naam van Bram staan privébrieven. Na uitschakelen kan niemand ze lezen, tot je Bram opnieuw uitnodigt of iemand de post laat beheren.",
+        "Op naam van Bram staan privébrieven. Na uitschakelen leest Bram ze niet meer. Wie een brief gedeeld kreeg, leest hem nog. Staat noodtoegang aan, dan kan een beheerder ze met een reden openen. Moet iemand anders ze kunnen lezen, laat dan de post beheren of nodig Bram opnieuw uit.",
       ),
     ).toBeInTheDocument();
     await u.click(within(dialog).getByRole("button", { name: "Uitschakelen" }));

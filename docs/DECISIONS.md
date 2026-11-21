@@ -2425,3 +2425,46 @@ Spec `docs/superpowers/specs/2026-11-21-mensen-en-accounts-design.md`, plan
 - **Measured:** the perf world manages 2 % of its persons (one of fifty, by a member in a
   department); `visibility-perf` stays within the M0 budget with no threshold raised (the
   numbers are in the run's summary of the PR's last commit).
+
+### Security review of PR #43 (2026-11-21)
+
+- **Point 1 (high), fixed: one way in per person.** A new invitation for a person revokes
+  the earlier open ones (reason `replaced`); accepting revokes every other open invitation
+  for the person, whatever its address (`superseded`, skip-locked as for the address);
+  switching off (`member_removed`) and unlinking (`person_unlinked`) revoke every open
+  invitation naming the person. Accepting refuses (the one answer of a dead link) an
+  invitation without an address once private post is on the person: the rule of making one
+  holds at accepting too. Lock order stays memberships, invitations, person (unlink locks
+  the invitations before the person). Mensen shows an open invitation on any row ("Open
+  uitnodiging", Intrekken), also an active person's. — Ruling: replace, not refuse, a
+  second invitation: the admin's newest intent wins and "Opnieuw uitnodigen" keeps
+  working; the older link is logged as revoked.
+- **Point 2 (medium), fixed: no activity from elsewhere.** Sign-ins and devices are per
+  account, not per workspace, so the list shows them only for an account whose only
+  workspace this is; for any other `activity_hidden` is true and the times are null ("Niet
+  te zien"). A switched-off person shows the address and times frozen at switch-off
+  (`former_email`, `former_last_sign_in_at`, `former_last_app_use_at`); the former account
+  is never read live. — Cost: an admin no longer sees when a member of two workspaces was
+  last active; showing that "it is not shown" tells them the account is elsewhere too,
+  which listMembers' `can_manage_account` already implied.
+- **Point 3, fixed:** the switch-off warning says what stays true: the person no longer
+  reads them, shares still do, an admin can open them with emergency access when it is on.
+- **Point 4 (decided): managing private post needs its own yes.** With private post on the
+  person, `setPersonManager` answers 409 `private_post_acknowledgement_required` until
+  `private_post_acknowledged` is sent; the web asks "Privébrieven laten lezen?" naming the
+  manager, apart from the preview. Not refused: after a switch-off it is the one way (with
+  re-inviting) for anybody to read those letters, and every step is logged and told. Two
+  admins naming each other stays possible, each act audited and notified (S 4.7 rules out
+  only naming oneself). — Cost if wrong: an admin who agrees twice can read a former
+  colleague's private post through a colleague; the audit log shows both acts.
+- **Point 5, fixed generally:** every change of sight now removes the own export of
+  everybody who loses sight (`sight_change`), not only in the writers that did it by hand.
+- **Point 6 (decided): narrowed.** `getPersonHasPrivatePost` answers only for a person with
+  an active account (409 `person_has_no_account` otherwise): the switch-off dialog needs it
+  before the act; inviting relies on `email_required` and managing on its own refusal. Not
+  removed: a warning after the switch-off would come too late. It tells an admin no more
+  than `email_required` does for one invitation.
+- **Point 7, fixed:** linking locks the member's own person `FOR UPDATE`, which waits for a
+  letter putting that person on at the same moment, and then finds it in use (409) instead
+  of failing at commit. No test: it needs two transactions racing; the lock mode is in the
+  code with its reason.

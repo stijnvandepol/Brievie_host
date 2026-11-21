@@ -60,7 +60,15 @@ def _manager(o: Office, person: str) -> uuid.UUID | None:
 def _manage(o: Office, person: str, user_id: uuid.UUID) -> None:
     admin = as_user(o.admin)
     token = _preview(admin, o, person, user_id)
-    status, body = _put(admin, o, person, user_id=user_id, confirmed=True, preview_token=token)
+    status, body = _put(
+        admin,
+        o,
+        person,
+        user_id=user_id,
+        confirmed=True,
+        preview_token=token,
+        private_post_acknowledged=True,
+    )
     assert status == 200, body
 
 

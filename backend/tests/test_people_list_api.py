@@ -129,14 +129,14 @@ def test_schema_has_no_anyof() -> None:
 
 def test_private_post_read_admin_only() -> None:
     o = office()
-    private_letter(o.workspace, addressees=[o.persons["Jan"]], scanned_by=o.sorter)
+    private_letter(o.workspace, addressees=[o.persons["Hans"]], scanned_by=o.sorter)
     base = f"/api/v1/workspaces/{o.workspace.id}/persons"
     admin = as_user(o.admin)
-    r = admin.get(f"{base}/{o.persons['Jan'].id}/private-post")
+    r = admin.get(f"{base}/{o.persons['Hans'].id}/private-post")
     assert (r.status_code, r.json()) == (200, {"has_private_post": True})
     r = admin.get(f"{base}/{o.persons['Piet'].id}/private-post")
     assert r.json() == {"has_private_post": False}
-    r = as_user(o.plain).get(f"{base}/{o.persons['Jan'].id}/private-post")
+    r = as_user(o.plain).get(f"{base}/{o.persons['Hans'].id}/private-post")
     assert (r.status_code, r.json()["code"]) == (403, "forbidden")
     r = admin.get(f"{base}/{o.persons['Finance'].id}/private-post")
     assert (r.status_code, r.json()["code"]) == (404, "person_not_found")

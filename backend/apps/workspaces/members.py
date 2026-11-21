@@ -16,6 +16,7 @@ user. No path takes them the other way round.
 from uuid import UUID
 
 from django.db import transaction
+from django.db.models import Max
 from django.http import HttpRequest
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -27,12 +28,17 @@ from apps.accounts.services import lock_active_server_admins
 from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
+from apps.devices.models import Device
 from apps.documents.member_export import remove_member_exports
 from apps.people.models import Person
 from apps.tasks.assignment import release_member
 from apps.workspaces.access import on_member_removed
 from apps.workspaces.context import NOBODY, Actor, workspace_context
-from apps.workspaces.invitations import revoke_invitations_bound_to, revoke_invitations_made_by
+from apps.workspaces.invitations import (
+    revoke_invitations_bound_to,
+    revoke_invitations_for_persons,
+    revoke_invitations_made_by,
+)
 from apps.workspaces.locks import lock_memberships as lock_memberships
 from apps.workspaces.models import Membership, Workspace
 from apps.workspaces.visibility_rules import UNASSIGNED
@@ -250,10 +256,22 @@ def _unlink_and_unassign(
     check "former_user needs deactivated_at" holds at every moment."""
     now = timezone.now()
     as_actor: Actor = actor.user_id if actor.user_id is not None else NOBODY
+    account = User.objects.filter(id=user_id).values_list("email", "last_login").first()
+    email, last_login = account if account is not None else ("", None)
+    app_use = Device.objects.filter(user_id=user_id, revoked_at__isnull=True).aggregate(
+        seen=Max("last_seen_at")
+    )["seen"]
     with workspace_context(workspace.id, actor=as_actor):
         persons = list(Person.objects.filter(workspace=workspace, user_id=user_id).order_by("id"))
+        # The account as it is now, frozen: the list never reads it live afterwards.
         Person.objects.filter(id__in=[p.id for p in persons]).update(
-            user=None, deactivated_at=now, former_user_id=user_id, updated_at=now
+            user=None,
+            deactivated_at=now,
+            former_user_id=user_id,
+            former_email=email,
+            former_last_sign_in_at=last_login,
+            former_last_app_use_at=app_use,
+            updated_at=now,
         )
         managed = list(
             Person.objects.filter(workspace=workspace, managed_by_id=user_id).order_by("id")
@@ -303,6 +321,17 @@ def remove_member(
             email=member.user.email,
             actor=actor,
             reason="member_removed",
+        )
+        # And every link for the member's person, whatever its address: a switched-off
+        # person comes back only by a new invitation (security review of PR #43, point 1).
+        with workspace_context(workspace.id, actor=NOBODY):
+            own_persons = list(
+                Person.objects.filter(workspace=workspace, user_id=user_id).values_list(
+                    "id", flat=True
+                )
+            )
+        revoke_invitations_for_persons(
+            workspace_id=workspace.id, person_ids=own_persons, actor=actor, reason="member_removed"
         )
         server_admins = lock_active_server_admins()
         user = User.objects.select_for_update(no_key=True).get(id=user_id)

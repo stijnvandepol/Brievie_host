@@ -198,10 +198,10 @@ def test_non_admin_sees_only_active_or_inactive() -> None:
 
 
 def test_person_has_private_post_is_boolean_only() -> None:
-    o = office()  # E off: Anne (admin, A off) cannot read Jan's private letter
-    private_letter(o.workspace, addressees=[o.persons["Jan"]], scanned_by=o.sorter)
+    o = office()  # E off: Anne (admin, A off) cannot read Hans's private letter
+    private_letter(o.workspace, addressees=[o.persons["Hans"]], scanned_by=o.sorter)
     with as_actor(o.workspace, o.admin.id):
-        assert person_has_private_post(o.workspace, o.persons["Jan"].id) is True
+        assert person_has_private_post(o.workspace, o.persons["Hans"].id) is True
         assert person_has_private_post(o.workspace, o.persons["Piet"].id) is False
         with pytest.raises(ApiError) as caught:
             person_has_private_post(o.workspace, o.persons["Finance"].id)

@@ -8,7 +8,7 @@ import { myExportQuery, personPrivatePostQuery, workspacesQuery } from "../api/q
 import type { components } from "../api/schema";
 import { dateFormat } from "../format";
 import { putSortsPost } from "../routes/visibility";
-import { ConfirmAction } from "./confirm-dialog";
+import { ConfirmAction, ConfirmDialog } from "./confirm-dialog";
 import { ExportPanel } from "./export-panel";
 import { Icon } from "./icons";
 import { type CreatedInvitation, InvitationLinkDialog, InviteDialog } from "./invite-dialog";
@@ -45,12 +45,17 @@ export function StateBadge({ person }: { person: PersonAccount }) {
       {person.state === "invited" && person.invitation_expired ? (
         <Badge intent="warning">{t`Verlopen`}</Badge>
       ) : null}
+      {person.state !== "invited" && person.invitation_id ? (
+        <Badge intent="warning">{t`Open uitnodiging`}</Badge>
+      ) : null}
     </span>
   );
 }
 
 /** "Laatst ingelogd op ..." or "Nooit ingelogd" (admins only get the times). */
 export function lastSignIn(person: PersonAccount): string {
+  // The account is in another workspace too: its activity is not this workspace's.
+  if (person.activity_hidden) return t`Niet te zien`;
   return person.last_sign_in_at
     ? t`Laatst ingelogd op ${dateTime.format(new Date(person.last_sign_in_at))}`
     : t`Nooit ingelogd`;
@@ -131,7 +136,7 @@ function PrivatePostWarning({
   return (
     <>
       <MessageBar intent="warning">
-        {t`Op naam van ${name} staan privébrieven. Na uitschakelen kan niemand ze lezen, tot je ${name} opnieuw uitnodigt of iemand de post laat beheren.`}
+        {t`Op naam van ${name} staan privébrieven. Na uitschakelen leest ${name} ze niet meer. Wie een brief gedeeld kreeg, leest hem nog. Staat noodtoegang aan, dan kan een beheerder ze met een reden openen. Moet iemand anders ze kunnen lezen, laat dan de post beheren of nodig ${name} opnieuw uit.`}
       </MessageBar>
       {managers.length > 0 ? (
         <div className="field">
@@ -159,8 +164,20 @@ function PrivatePostWarning({
 export function useSetManager(workspaceId: string, person: PersonAccount) {
   const queryClient = useQueryClient();
   const sight = useSightChange(workspaceId);
+  const [askAcknowledgement, setAskAcknowledgement] = useState<{
+    userId: string;
+    name: string;
+  } | null>(null);
   const mutation = useMutation({
-    mutationFn: ({ userId, name }: { userId: string | null; name: string }) =>
+    mutationFn: ({
+      userId,
+      name,
+      acknowledged = false,
+    }: {
+      userId: string | null;
+      name: string;
+      acknowledged?: boolean;
+    }) =>
       sight.tryFirst({
         preview: previewBody({
           member_change: "manage",
@@ -173,15 +190,53 @@ export function useSetManager(workspaceId: string, person: PersonAccount) {
             "/api/v1/workspaces/{workspace_id}/persons/{person_id}/manager",
             {
               params: { path: { workspace_id: workspaceId, person_id: person.id } },
-              body: { user_id: userId, ...confirmation },
+              body: {
+                user_id: userId,
+                private_post_acknowledged: acknowledged,
+                ...confirmation,
+              },
             },
           );
           if (error !== undefined) throw new ApiFailure(error);
         },
       }),
+    onError: (reason, { userId, name }) => {
+      // Private letters on the name: the admin agrees to that on its own first.
+      if (
+        reason instanceof ApiFailure &&
+        reason.code === "private_post_acknowledgement_required" &&
+        userId !== null
+      ) {
+        setAskAcknowledgement({ userId, name });
+      }
+    },
     onSettled: () => refreshPeople(queryClient, workspaceId),
   });
-  return { mutation, dialog: sight.dialog };
+  const personName = person.display_name;
+  const dialog = (
+    <>
+      {sight.dialog}
+      <ConfirmDialog
+        isOpen={askAcknowledgement !== null}
+        onOpenChange={(open) => {
+          if (!open) setAskAcknowledgement(null);
+        }}
+        title={t`Privébrieven laten lezen?`}
+        confirmLabel={t`Ja, ${askAcknowledgement?.name ?? ""} leest ze`}
+        tone="primary"
+        onConfirm={async () => {
+          const asked = askAcknowledgement;
+          setAskAcknowledgement(null);
+          if (asked) mutation.mutate({ ...asked, acknowledged: true });
+        }}
+      >
+        <p>
+          {t`Op naam van ${personName} staan privébrieven. Als ${askAcknowledgement?.name ?? ""} de post beheert, leest die deze privébrieven ook.`}
+        </p>
+      </ConfirmDialog>
+    </>
+  );
+  return { mutation, dialog };
 }
 
 /** "Beheerd door" of a person without an active account: a choice of member, or nobody. */
@@ -370,27 +425,29 @@ export function PersonActions({
         </>
       ) : null}
       {isAdmin && person.state === "invited" && person.invitation_id ? (
-        <>
-          <Button
-            className="button-text"
-            aria-label={t`Opnieuw versturen: ${name}`}
-            isPending={renew.isPending}
-            onPress={() => renew.mutate()}
-          >
-            <Icon name="refresh" />
-            {t`Opnieuw versturen`}
-          </Button>
-          <ConfirmAction
-            label={t`Intrekken`}
-            ariaLabel={t`Intrekken: ${name}`}
-            icon="dismiss"
-            title={t`Uitnodiging van ${name} intrekken?`}
-            confirmLabel={t`Intrekken`}
-            onConfirm={withdraw}
-          >
-            <p>{t`De link werkt daarna niet meer. Wie hem al heeft, kan er niet meer mee binnenkomen.`}</p>
-          </ConfirmAction>
-        </>
+        <Button
+          className="button-text"
+          aria-label={t`Opnieuw versturen: ${name}`}
+          isPending={renew.isPending}
+          onPress={() => renew.mutate()}
+        >
+          <Icon name="refresh" />
+          {t`Opnieuw versturen`}
+        </Button>
+      ) : null}
+      {/* Any open link can be withdrawn, also one left on an active person (review of
+          PR #43, point 1). */}
+      {isAdmin && person.invitation_id ? (
+        <ConfirmAction
+          label={t`Intrekken`}
+          ariaLabel={t`Intrekken: ${name}`}
+          icon="dismiss"
+          title={t`Uitnodiging van ${name} intrekken?`}
+          confirmLabel={t`Intrekken`}
+          onConfirm={withdraw}
+        >
+          <p>{t`De link werkt daarna niet meer. Wie hem al heeft, kan er niet meer mee binnenkomen.`}</p>
+        </ConfirmAction>
       ) : null}
       {isAdmin && active && !ownAndLast ? (
         <>

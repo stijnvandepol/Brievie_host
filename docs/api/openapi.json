@@ -2668,6 +2668,11 @@
       "PersonAccountOut": {
         "description": "A person on Mensen with the state of their account (spec 3.1, 8). Departments are\nnever listed. The account facts (`email`, the times, the invitation,\n`can_manage_account`, `role`, `sorts_post`) are filled for admins only; for anybody\nelse they are empty and `state` is only `active` or `inactive`.",
         "properties": {
+          "activity_hidden": {
+            "default": false,
+            "title": "Activity Hidden",
+            "type": "boolean"
+          },
           "archived": {
             "title": "Archived",
             "type": "boolean"
@@ -2846,6 +2851,11 @@
             "maxLength": 64,
             "title": "Preview Token",
             "type": "string"
+          },
+          "private_post_acknowledged": {
+            "default": false,
+            "title": "Private Post Acknowledged",
+            "type": "boolean"
           },
           "user_id": {
             "format": "uuid",
@@ -13018,7 +13028,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/persons/{person_id}/manager": {
       "put": {
-        "description": "Web session only, admins. \"Beheerd door\": a member (`user_id`) reads the post of a person without an active account as their own, and that post no longer goes to whoever sorts post; null ends it. 409 `is_a_department`, `person_has_account`, `cannot_grant_self` (an admin naming themselves while private post is on the person); 404 `member_not_found`. A gain needs `confirmed` and the token of `previewVisibilityChange` with member_change `manage` (409 `confirmation_required`, `preview_outdated`). Accepting an invitation for the person, or the manager leaving the workspace, ends it.",
+        "description": "Web session only, admins. \"Beheerd door\": a member (`user_id`) reads the post of a person without an active account as their own, and that post no longer goes to whoever sorts post; null ends it. 409 `is_a_department`, `person_has_account`, `cannot_grant_self` (an admin naming themselves while private post is on the person), `private_post_acknowledgement_required` (private post on the person: send `private_post_acknowledged`); 404 `member_not_found`. A gain needs `confirmed` and the token of `previewVisibilityChange` with member_change `manage` (409 `confirmation_required`, `preview_outdated`). Accepting an invitation for the person, or the manager leaving the workspace, ends it.",
         "operationId": "setPersonManager",
         "parameters": [
           {
@@ -13681,7 +13691,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/persons/{person_id}/private-post": {
       "get": {
-        "description": "Web session only, admins (403 forbidden for others). Whether a private letter is on the person's name, also one the admin cannot read: a yes or no, for the dialogs that switch an account off or invite. 404 person_not_found for a department.",
+        "description": "Web session only, admins (403 forbidden for others). Whether a private letter is on the name of a person with an active account, also one the admin cannot read: a yes or no, for the dialog that switches an account off. 404 person_not_found for a department; 409 person_has_no_account for a person without an active account.",
         "operationId": "getPersonHasPrivatePost",
         "parameters": [
           {
@@ -13745,6 +13755,16 @@
               }
             },
             "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
           }
         },
         "security": [

@@ -50,6 +50,12 @@ class Person(WorkspaceModel):
         on_delete=models.SET_NULL,
         related_name="+",
     )
+    # The former account's address and last activity, frozen at the moment it was switched
+    # off: never read live, so an admin does not follow the account elsewhere (security
+    # review of PR #43, point 2). Display only, like `former_user`.
+    former_email = models.EmailField(max_length=254, blank=True, default="")
+    former_last_sign_in_at = models.DateTimeField(null=True, blank=True)
+    former_last_app_use_at = models.DateTimeField(null=True, blank=True)
     # "Beheerd door" (Mensen slice C): the member who reads this person's post as their own
     # while the person has no active account. Set only by `people.services.set_manager`
     # (preview and confirmation); activating the person or removing the member ends it.

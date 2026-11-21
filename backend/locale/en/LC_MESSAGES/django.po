@@ -1827,6 +1827,10 @@ msgstr "The rule '%(rule)s' uses this label. Change that rule first."
 msgid "Kies een status uit de lijst."
 msgstr "Choose a status from the list."
 
+#: apps/people/accounts.py
+msgid "Deze persoon heeft geen actief account."
+msgstr "This person has no active account."
+
 #: apps/people/models.py
 msgid "Afdeling"
 msgstr "Department"
@@ -1912,6 +1916,10 @@ msgstr "A department has members, not a manager. Add members."
 #: apps/people/services.py
 msgid "Deze persoon heeft een eigen account en leest de eigen post."
 msgstr "This person has their own account and reads their own mail."
+
+#: apps/people/services.py
+msgid "Op naam van deze persoon staan privébrieven. Wie de post beheert, leest die ook. Bevestig dat apart."
+msgstr "There are private letters addressed to this person. Whoever manages the mail reads them too. Confirm that separately."
 
 #: apps/people/services.py
 msgid "Dit is geen afdeling."

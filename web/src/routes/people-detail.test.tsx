@@ -228,7 +228,9 @@ describe("Beheerd door", () => {
     ).toHaveTextContent("Bram beheert de post van Papa");
     await u.selectOptions(screen.getByRole("combobox", { name: "Beheerd door: Papa" }), "Niemand");
     await waitFor(() =>
-      expect(sent).toEqual([{ user_id: null, confirmed: false, preview_token: "" }]),
+      expect(sent).toEqual([
+        { user_id: null, private_post_acknowledged: false, confirmed: false, preview_token: "" },
+      ]),
     );
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
@@ -283,5 +285,71 @@ describe("Beheerd door", () => {
     await waitFor(() => expect(calls).toHaveLength(2));
     expect(calls[0]).toBe("removed");
     expect(calls[1]).toContain(people[0]?.user_id ?? "");
+  });
+});
+
+describe("security review of PR #43", () => {
+  it("asks apart before a manager reads private letters", async () => {
+    const sent: { private_post_acknowledged?: boolean }[] = [];
+    server.use(
+      http.put(`${base}/persons/${papa.id}/manager`, async ({ request }) => {
+        const body = (await request.json()) as { private_post_acknowledged: boolean };
+        sent.push(body);
+        if (!body.private_post_acknowledged) {
+          return HttpResponse.json(
+            errorBody(
+              "private_post_acknowledgement_required",
+              "Op naam van deze persoon staan privébrieven. Wie de post beheert, leest die ook. Bevestig dat apart.",
+            ),
+            { status: 409 },
+          );
+        }
+        return HttpResponse.json({});
+      }),
+      ...loggedInHandlers(),
+      ...peopleHandlers(),
+    );
+    const u = userEvent.setup();
+    renderApp(detail(papa.id));
+    await u.selectOptions(
+      await screen.findByRole("combobox", { name: "Beheerd door: Papa" }),
+      "Bram",
+    );
+    const ask = await screen.findByRole("alertdialog", { name: "Privébrieven laten lezen?" });
+    expect(ask).toHaveTextContent(
+      "Op naam van Papa staan privébrieven. Als Bram de post beheert, leest die deze privébrieven ook.",
+    );
+    await u.click(within(ask).getByRole("button", { name: "Ja, Bram leest ze" }));
+    await waitFor(() => expect(sent).toHaveLength(2));
+    expect(sent[1]?.private_post_acknowledged).toBe(true);
+  });
+
+  it("an open link left on an active person can be withdrawn", async () => {
+    server.use(
+      ...loggedInHandlers(),
+      ...peopleHandlers(
+        people.map((p) =>
+          p.id === bram.id ? { ...p, invitation_id: "e7777777-7777-4777-8777-777777777777" } : p,
+        ),
+      ),
+    );
+    renderApp(detail(bram.id));
+    const facts = await screen.findByRole("region", { name: "Gegevens van Bram" });
+    expect(facts).toHaveTextContent("Open uitnodiging");
+    expect(within(facts).getByRole("button", { name: "Intrekken: Bram" })).toBeInTheDocument();
+  });
+
+  it("activity of an account that is in another workspace too is not shown", async () => {
+    server.use(
+      ...loggedInHandlers(),
+      ...peopleHandlers(
+        people.map((p) =>
+          p.id === bram.id ? { ...p, activity_hidden: true, last_sign_in_at: null } : p,
+        ),
+      ),
+    );
+    renderApp(detail(bram.id));
+    const facts = await screen.findByRole("region", { name: "Gegevens van Bram" });
+    expect(facts).toHaveTextContent("Niet te zien");
   });
 });

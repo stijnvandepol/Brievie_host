@@ -31,6 +31,7 @@ from apps.workspaces.visibility_settings import (
     MemberChange,
     member_change_key,
     notify_self_grant,
+    previewing,
     sight_change,
 )
 
@@ -534,8 +535,19 @@ def link_member(
     themselves: the other admins are told (S 4.7). A member's rights are those of the
     locked membership; `actor_role` counts only for a call without a user, which must
     say `ACTING_AS_SYSTEM`. Lock order: every membership, then the person."""
+    from apps.workspaces.invitations import (
+        lock_open_invitations_for_person,
+        revoke_invitations_for_persons,
+    )
+
     with transaction.atomic():
         locked, locked_role = _lock_for_sight(workspace, actor, actor_role=actor_role)
+        # Its open invitations before the person (lock order); an unlink stops them.
+        open_links = (
+            lock_open_invitations_for_person(workspace_id=workspace.id, person_id=person_id)
+            if user_id is None
+            else []
+        )
         person = _get_for_update(workspace, person_id)
         if person.kind == Person.Kind.DEPARTMENT:
             raise ApiError(
@@ -552,8 +564,11 @@ def link_member(
         if user_id is not None:
             if not Membership.objects.filter(workspace=workspace, user_id=user_id).exists():
                 raise ApiError(404, "member_not_found", _("We kunnen dit lid niet vinden."))
+            # FOR UPDATE, not FOR NO KEY UPDATE: a letter that puts this person on it at
+            # the same moment holds a key-share lock, so this waits for it and then sees
+            # the person in use (security review of PR #43, point 7).
             own = (
-                Person.objects.select_for_update(no_key=True)
+                Person.objects.select_for_update()
                 .filter(workspace=workspace, user_id=user_id)
                 .exclude(id=person.id)
                 .first()
@@ -593,6 +608,15 @@ def link_member(
                 else MemberChange(kind="unlink", person_id=person.id)
             ),
         ) as sight:
+            if open_links:
+                # Unlinked, the person is "niet actief": an old link must not make them
+                # somebody's account (security review of PR #43, point 1).
+                revoke_invitations_for_persons(
+                    workspace_id=workspace.id,
+                    person_ids=[person.id],
+                    actor=actor,
+                    reason="person_unlinked",
+                )
             if unused_own is not None:
                 _delete_unused(unused_own, actor=actor)
             person.user_id = user_id
@@ -602,6 +626,9 @@ def link_member(
                 # manages the post any more (M6).
                 person.deactivated_at = None
                 person.former_user = None
+                person.former_email = ""
+                person.former_last_sign_in_at = None
+                person.former_last_app_use_at = None
                 person.managed_by = None
             _save(person)
             visibility.recompute_where(workspace_id=workspace.id, person_id=person.id)
@@ -715,6 +742,7 @@ def set_manager(
     actor: AuditActor,
     confirmed: bool = False,
     preview_token: str = "",
+    private_post_acknowledged: bool = False,
 ) -> Person:
     """ "Beheerd door" (Mensen slice C): a member reads the post of a person without an
     active account as their own (the person counts as read through, so the sorters stop
@@ -750,8 +778,20 @@ def set_manager(
             raise ApiError(404, "member_not_found", _("We kunnen dit lid niet vinden."))
         if person.managed_by_id == user_id:
             return _annotated(workspace, person.id)
-        if user_id is not None and user_id == actor.user_id and visibility.has_private_post(person):
+        private = user_id is not None and visibility.has_private_post(person)
+        if private and user_id == actor.user_id:
             raise _cannot_grant_self()
+        if private and not private_post_acknowledged and not previewing():
+            # The manager will read this person's private letters too: said and agreed
+            # to on its own, apart from the preview (security review of PR #43, point 4).
+            raise ApiError(
+                409,
+                "private_post_acknowledgement_required",
+                _(
+                    "Op naam van deze persoon staan privébrieven. Wie de post beheert, "
+                    "leest die ook. Bevestig dat apart."
+                ),
+            )
         former = person.managed_by_id
         named = user_id if user_id is not None else former
         with sight_change(

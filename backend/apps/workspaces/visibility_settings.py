@@ -354,6 +354,18 @@ def _release(workspace_id: UUID) -> None:
         release_unseeing_assignees(workspace_id=workspace_id)
 
 
+def _end_exports(workspace_id: UUID, user_ids: Sequence[UUID]) -> None:
+    """An export ends with sight of what it holds: the own export of everybody who loses
+    sight goes, whatever the change (security review of PR #43, point 5)."""
+    from apps.documents.member_export import remove_member_exports
+
+    if previewing():
+        return
+    with workspace_context(workspace_id, actor=SYSTEM):
+        for user_id in user_ids:
+            remove_member_exports(workspace_id, user_id)
+
+
 @dataclass
 class SightChange:
     """What `sight_change` found: the snapshots and the changes per member."""
@@ -404,6 +416,7 @@ def sight_change(
     )
     if any(c.loses for c in result.changes):
         _release(workspace.id)
+        _end_exports(workspace.id, [c.user_id for c in result.changes if c.loses])
 
 
 # --- the preview ----------------------------------------------------------------------

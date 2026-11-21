@@ -2026,6 +2026,11 @@ msgstr "is not"
 msgid "is precies"
 msgstr "is exactly"
 
+#. placeholder {0}: askAcknowledgement?.name ?? ""
+#: src/components/person-actions.tsx
+msgid "Ja, {0} leest ze"
+msgstr "Yes, {0} reads them"
+
 #. placeholder {0}: member.name
 #. placeholder {0}: person.display_name
 #: src/components/person-actions.tsx
@@ -2713,6 +2718,10 @@ msgstr "No longer private"
 msgid "Niet meer privé maken?"
 msgstr "Make it no longer private?"
 
+#: src/components/person-actions.tsx
+msgid "Niet te zien"
+msgstr "Not shown"
+
 #: src/routes/search.tsx
 msgid "Niets gevonden"
 msgstr "Nothing found"
@@ -2906,22 +2915,22 @@ msgstr "On the other scan, ''{task}'' is already completed."
 msgid "Op naam van"
 msgstr "Addressed to"
 
-#. placeholder {0}: person.name
-#: src/components/invite-dialog.tsx
-msgid "Op naam van {0} staan privébrieven. Alleen dit adres kan de uitnodiging gebruiken."
-msgstr "There are private letters addressed to {0}. Only this address can use the invitation."
-
 #: src/components/rule-sentence.ts
 msgid "op naam van {name}"
 msgstr "addressed to {name}"
 
 #: src/components/person-actions.tsx
-msgid "Op naam van {name} staan privébrieven. Na uitschakelen kan niemand ze lezen, tot je {name} opnieuw uitnodigt of iemand de post laat beheren."
-msgstr "There are private letters addressed to {name}. After switching off, nobody can read them until you invite {name} again or let someone manage the mail."
+msgid "Op naam van {name} staan privébrieven. Na uitschakelen leest {name} ze niet meer. Wie een brief gedeeld kreeg, leest hem nog. Staat noodtoegang aan, dan kan een beheerder ze met een reden openen. Moet iemand anders ze kunnen lezen, laat dan de post beheren of nodig {name} opnieuw uit."
+msgstr "There are private letters addressed to {name}. After switching off, {name} no longer reads them. Whoever a letter was shared with still reads it. If emergency access is on, an admin can open them with a reason. If someone else must be able to read them, let the mail be managed or invite {name} again."
 
 #: src/components/suggestion-list.tsx
 msgid "Op naam van {name}?"
 msgstr "Address to {name}?"
+
+#. placeholder {0}: askAcknowledgement?.name ?? ""
+#: src/components/person-actions.tsx
+msgid "Op naam van {personName} staan privébrieven. Als {0} de post beheert, leest die deze privébrieven ook."
+msgstr "There are private letters addressed to {personName}. If {0} manages the mail, they read these private letters too."
 
 #: src/routes/rule-editor.tsx
 msgid "Op naam zetten van"
@@ -2951,6 +2960,10 @@ msgstr "Open the app on your phone and scan the code. The phone must be on the s
 #: src/routes/invitation.tsx
 msgid "Open de Brievie-app"
 msgstr "Open the Brievie app"
+
+#: src/components/person-actions.tsx
+msgid "Open uitnodiging"
+msgstr "Open invitation"
 
 #: src/components/open-invitations.tsx
 msgid "Open uitnodigingen"
@@ -3124,6 +3137,10 @@ msgstr "Make private only works in a rule that applies itself. Turn on Apply aut
 #: src/components/private-lock.tsx
 msgid "Privé voor {names}"
 msgstr "Private for {names}"
+
+#: src/components/person-actions.tsx
+msgid "Privébrieven laten lezen?"
+msgstr "Let them read private letters?"
 
 #: src/routes/people-detail.tsx
 msgid "Privébrieven lezen alleen de mensen met wie ze gedeeld zijn."

@@ -80,6 +80,7 @@ def list_people(
             invitation_expired=a.invitation_expired,
             can_manage_account=a.can_manage_account,
             managed_by_user_id=a.managed_by_user_id,
+            activity_hidden=a.activity_hidden,
         )
         for a in services.list_people(membership.workspace, viewer=membership, state=state[:20])
     ]
@@ -87,13 +88,20 @@ def list_people(
 
 @router.get(
     f"{_PERSON}/private-post",
-    response={200: PersonPrivatePostOut, 403: ErrorOut, 404: ErrorOut, **AUTH_ERRORS},
+    response={
+        200: PersonPrivatePostOut,
+        403: ErrorOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        **AUTH_ERRORS,
+    },
     auth=session_auth,
     operation_id="getPersonHasPrivatePost",
     description=(
         "Web session only, admins (403 forbidden for others). Whether a private letter is on "
-        "the person's name, also one the admin cannot read: a yes or no, for the dialogs "
-        "that switch an account off or invite. 404 person_not_found for a department."
+        "the name of a person with an active account, also one the admin cannot read: a yes "
+        "or no, for the dialog that switches an account off. 404 person_not_found for a "
+        "department; 409 person_has_no_account for a person without an active account."
     ),
 )
 def get_person_has_private_post(
@@ -216,7 +224,9 @@ def link_person_to_member(
         "a person without an active account as their own, and that post no longer goes to "
         "whoever sorts post; null ends it. 409 `is_a_department`, `person_has_account`, "
         "`cannot_grant_self` (an admin naming themselves while private post is on the "
-        "person); 404 `member_not_found`. A gain needs `confirmed` and the token of "
+        "person), `private_post_acknowledgement_required` (private post on the person: send "
+        "`private_post_acknowledged`); 404 `member_not_found`. A gain needs `confirmed` "
+        "and the token of "
         "`previewVisibilityChange` with member_change `manage` (409 "
         "`confirmation_required`, `preview_outdated`). Accepting an invitation for the "
         "person, or the manager leaving the workspace, ends it."
@@ -233,6 +243,7 @@ def set_person_manager(
         actor=actor_from_request(request),
         confirmed=payload.confirmed,
         preview_token=payload.preview_token,
+        private_post_acknowledged=payload.private_post_acknowledged,
     )
 
 

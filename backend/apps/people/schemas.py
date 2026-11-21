@@ -77,6 +77,9 @@ class PersonAccountOut(Schema):
     # "Beheerd door": the member who reads this person's post while they have no active
     # account (admins only).
     managed_by_user_id: UUID | None = None
+    # The account is in another workspace too: its last sign-in and app use are left out,
+    # they would tell of activity there (admins only).
+    activity_hidden: bool = False
 
 
 class PersonPrivatePostOut(Schema):
@@ -107,6 +110,9 @@ class PersonMemberIn(InputSchema):
 class PersonManagerIn(InputSchema):
     # The member who manages the person's post ("Beheerd door"); null ends it.
     user_id: UUID | None = None
+    # With private post on the person: the admin agreed, apart from the preview, that the
+    # manager reads it (409 `private_post_acknowledgement_required` otherwise).
+    private_post_acknowledged: bool = False
     # A gain needs these (S 4.4): see `previewVisibilityChange` with member_change "manage".
     confirmed: bool = False
     preview_token: str = Field(default="", max_length=64)
