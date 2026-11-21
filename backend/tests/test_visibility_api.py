@@ -91,7 +91,7 @@ def test_preview_changes_nothing(client: Client) -> None:
     assert _switches(o) == before
     assert _audit(o, "workspace_setting_changed") == []
     assert _notices(o) == {}
-    assert o.visible(o.plain.id) == {"own_piet"}
+    assert o.visible(o.plain.id) == {"own_piet", "scanned_in_review"}
 
 
 def test_widening_without_confirmation_is_409(client: Client) -> None:
@@ -128,7 +128,7 @@ def test_narrowing_needs_no_confirmation(client: Client) -> None:
     r = _update(_as(client, o.admin), o, {"everyone_sees_all": False})
     assert r.status_code == 200, r.json()
     assert _switches(o) == (False, True, True)
-    assert o.visible(o.plain.id) == {"own_piet"}
+    assert o.visible(o.plain.id) == {"own_piet", "scanned_in_review"}
 
 
 def test_audit_row_per_changed_setting(client: Client) -> None:

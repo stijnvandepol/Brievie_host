@@ -316,13 +316,15 @@ def sight_change(
 
 def _letters_with_readers(workspace_id: UUID) -> list[UUID]:
     """Letters with an unexpired reader row (private ones, shares, emergency): asked
-    one by one, the others in groups of alike letters (ruling M0)."""
-    return list(
-        DocumentReader.objects.filter(workspace_id=workspace_id)
-        .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()))
-        .values_list("document_id", flat=True)
-        .distinct()
-    )
+    one by one, the others in groups of alike letters (ruling M0). As the system: the
+    admin may not see every reader row."""
+    with workspace_context(workspace_id, actor=SYSTEM):
+        return list(
+            DocumentReader.objects.filter(workspace_id=workspace_id)
+            .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()))
+            .values_list("document_id", flat=True)
+            .distinct()
+        )
 
 
 ViewerMap = dict[object, tuple[int, frozenset[UUID]]]
@@ -402,7 +404,7 @@ def policy_facts(
 
 def preview(
     workspace: Workspace,
-    apply: Callable[[], None],
+    apply: Callable[[], object],
     *,
     narrowing: bool,
     viewer_id: UUID | None = None,

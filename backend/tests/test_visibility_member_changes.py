@@ -316,7 +316,7 @@ def test_preview_of_a_member_change_changes_nothing(client: Client) -> None:
         assert not DepartmentMember.objects.filter(user=o.plain).exists()
     assert _audit(o, "department_member_added") == []
     assert _notices(o.plain) == []
-    assert o.visible(o.plain.id) == {"own_piet"}
+    assert o.visible(o.plain.id) == {"own_piet", "scanned_in_review"}
 
 
 def test_preview_of_a_removal_changes_nothing(client: Client) -> None:
