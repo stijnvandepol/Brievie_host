@@ -2582,3 +2582,32 @@ Instellingen with their routes kept.
   name as the exception (it pairs with "My tasks", and "Who can see my post?" already
   said "post"). The one catalogue entry "Mijn post" (also the heading of the own export on
   Mensen) now reads "My post".
+
+### Security review of PR #44 (2026-11-21)
+
+Every point was checked against the code before fixing; all four held.
+
+- **Point 1 (medium), fixed: only an opening counts.** A scan wrote a read mark, and the
+  recompute after an addressee change took the earliest mark of any addressee's member,
+  so a mail-room member in the addressed department made scanned letters "opened". A
+  mark now has `opened_at`, set only by `markDocumentRead` of the member themselves on a
+  confirmed letter, not through emergency access only; the recompute takes the earliest
+  `opened_at`. A scan, "Alles gelezen", an opening during review or through emergency
+  access is a read mark without an opening. Marks from before (none outside this branch)
+  are not openings.
+- **Point 2 (medium), fixed: day-granular.** A letter left "Nog niet geopend" (and the
+  menu's count) the moment its addressee opened it; with the menu polling every minute a
+  sorter learned the minute. A letter opened today now stays in the list until the day
+  ends (Europe/Amsterdam); a second partial index serves "opened today". PRIVACY (in
+  English and Dutch) and the hint in Instellingen say exactly what is told: that no
+  addressee opened it before today, so at most the day, never the hour, never which of
+  several. Cost: a sorter may chase a letter that was opened this morning.
+- **Point 3 (low), fixed.** Only an opening of a confirmed letter counts; confirming (a
+  person's or the autopilot's) recomputes, so an opening during review does not count and
+  one of an earlier confirmation still does.
+- **Point 4 (low, from before this branch), fixed.** `listMyNotices` answers a notice
+  about a workspace only while the user is still a member there.
+- **Checked, unchanged:** Instellingen is open to every role in the web, but every write
+  and admin read behind it (`updateWorkspaceSettings`, `updateVisibility`,
+  `updateAiSettings`, `setEmergencyAccess`, `listWorkspaceAuditEvents`) still requires a
+  web session and an admin (emergency access: a server admin) on the server.
