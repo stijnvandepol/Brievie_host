@@ -291,6 +291,22 @@ describe("Leden", () => {
   });
 });
 
+describe("Uitnodigen", () => {
+  it("offers persons but never a department", async () => {
+    server.use(...world());
+    const u = userEvent.setup();
+    renderApp(`/w/${workspace.id}/leden`);
+    await u.click(await screen.findByRole("button", { name: "Uitnodigen" }));
+    const dialog = await screen.findByRole("dialog", { name: "Iemand uitnodigen" });
+    const who = await within(dialog).findByRole("combobox", { name: "Wie is het?" });
+    const options = within(who)
+      .getAllByRole("option")
+      .map((option) => option.textContent);
+    expect(options).toContain("Papa");
+    expect(options).not.toContain("Finance");
+  });
+});
+
 describe("Nieuwe link", () => {
   it("renewing an admin invitation asks again when it widens now", async () => {
     const invitation = {

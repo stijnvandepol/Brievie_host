@@ -127,7 +127,10 @@ function InviteForm({
   const [email, setEmail] = useState("");
   const [note, setNote] = useState("");
   // Somebody who already has an account is no one to invite.
-  const free = (persons ?? []).filter((person) => person.user_id === null && !person.archived);
+  // A department is nobody to invite: it has no account of its own.
+  const free = (persons ?? []).filter(
+    (person) => person.user_id === null && !person.archived && person.kind !== "department",
+  );
 
   const sight = useSightChange(workspaceId);
   const create = useMutation({

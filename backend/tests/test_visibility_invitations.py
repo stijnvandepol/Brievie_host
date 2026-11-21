@@ -415,3 +415,19 @@ def test_renewing_a_person_invitation_locks_the_invitation_before_the_person(
     assert "invitation" in locks
     assert "person" in locks
     assert locks.index("invitation") < locks.index("person"), locks
+
+
+def test_a_department_cannot_be_invited_as_a_person(client: Client) -> None:
+    """Security review of PR #40, point 3: a department has no account of its own."""
+    o = office()
+    finance = o.persons["Finance"]
+    client.force_login(o.admin)
+    status, body = _invite(client, o, role="member", person_id=str(finance.id))
+    assert (status, body["code"]) == (404, "person_not_found")
+    r = post_json(
+        client,
+        f"/workspaces/{o.workspace.id}/visibility/preview",
+        {"member_change": "invite", "member_role": "member", "member_person_id": str(finance.id)},
+    )
+    assert (r.status_code, r.json()["code"]) == (404, "person_not_found")
+    assert not Invitation.objects.filter(workspace=o.workspace).exists()

@@ -78,11 +78,14 @@ def _clean_email(email: str) -> str:
 
 
 def invitable_person(workspace: Workspace, person_id: UUID, *, lock: bool = True) -> Person:
-    """The person, locked (unless `lock` is false: the preview, which takes the
+    """The person (never a department), locked (unless `lock` is false: the preview, which takes the
     memberships' lock after it); needs the workspace's context. Another workspace's
     person and an archived one answer as an unknown one."""
     persons = Person.objects.select_for_update(no_key=True) if lock else Person.objects.all()
-    person = persons.filter(workspace=workspace, id=person_id, archived_at__isnull=True).first()
+    # A department is nobody to invite: it has no account of its own (review of PR #40).
+    person = persons.filter(
+        workspace=workspace, id=person_id, archived_at__isnull=True, kind=Person.Kind.PERSON
+    ).first()
     if person is None:
         raise ApiError(404, "person_not_found", _("We kunnen deze persoon niet vinden."))
     if person.user_id is not None:
@@ -660,6 +663,7 @@ def _link_person(invitation: Invitation, user: User) -> Person:
             workspace_id=invitation.workspace_id,
             id=invitation.person_id,
             archived_at__isnull=True,
+            kind=Person.Kind.PERSON,
         )
         .first()
     )
