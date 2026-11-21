@@ -364,6 +364,26 @@ def renew_invitation(
         )
 
 
+def lock_open_invitations_for_person(*, workspace_id: UUID, person_id: UUID) -> list[Invitation]:
+    """The open invitations (expired ones included) that name this person, locked in id
+    order. Taken before the person's row: the lock order is memberships, then
+    invitations, then the person (as `renew_invitation` and accepting take them)."""
+    return list(
+        Invitation.objects.select_for_update()
+        .filter(workspace_id=workspace_id, person_id=person_id, accepted_at=None, revoked_at=None)
+        .order_by("id")
+    )
+
+
+def revoke_invitations_for_person(invitations: list[Invitation], *, actor: AuditActor) -> int:
+    """Stop the invitations `lock_open_invitations_for_person` locked (the person was
+    archived: an archived person cannot be invited, so an old link must not activate
+    them). Returns how many."""
+    for invitation in invitations:
+        _revoke(invitation, actor=actor, reason="person_archived")
+    return len(invitations)
+
+
 def revoke_invitations_made_by(*, workspace_id: UUID, user_id: UUID, actor: AuditActor) -> int:
     """Stop every open invitation `user_id` made in this workspace, for when they stop
     being its admin (Tasks 13 and 14). Returns how many."""
@@ -670,9 +690,12 @@ def _link_person(invitation: Invitation, user: User) -> Person:
     if person is None or person.user_id is not None:
         raise _person_taken_error()
     person.user = user
+    # Activated (again): no longer "uitgeschakeld" (spec 3.3).
+    person.deactivated_at = None
+    person.former_user = None
     try:
         with transaction.atomic():
-            person.save(update_fields=["user", "updated_at"])
+            person.save(update_fields=["user", "deactivated_at", "former_user", "updated_at"])
     except IntegrityError as exc:
         # The account is still linked to another person here (from an earlier
         # membership): one person per account, so this one cannot be theirs.

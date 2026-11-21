@@ -292,9 +292,12 @@ def create_person(
     archived: bool = False,
     kind: str = Person.Kind.PERSON,
     actor_role: str,
+    actor: AuditActor,
 ) -> Person:
     """A person, or a department (`kind`; only an admin makes one: departments decide
-    who reads post). The kind is set here only: an update never changes it."""
+    who reads post). The kind is set here only: an update never changes it. Recorded
+    (`person_created`): under Mensen every person is an account slot (spec 6). Only a
+    human's request reaches this; nothing automatic makes a person (spec M7)."""
     _valid_kind(kind)
     if kind == Person.Kind.DEPARTMENT and not _acts_as_admin(actor_role):
         raise _forbidden()
@@ -314,6 +317,12 @@ def create_person(
         )
         _refuse_taken_names(person)
         _save(person)
+        record(
+            AuditCode.PERSON_CREATED,
+            actor=actor,
+            target=AuditTarget(TargetKind.PERSON, person.id, person.display_name),
+            workspace_id=workspace.id,
+        )
         return _annotated(workspace, person.id)
 
 
@@ -325,14 +334,30 @@ def update_person(
     name_variants: list[str] | None,
     archived: bool | None,
     actor_role: str,
+    actor: AuditActor,
 ) -> Person:
     """`name_variants` or `archived` None keeps the stored value.
+
+    Archiving stops the person's open invitations (`invitation_revoked`, reason
+    `person_archived`): an archived person cannot be invited, so an old link must not
+    activate them. Those invitations are locked before the person (lock order:
+    memberships, invitations, person).
 
     A department, and a person linked to an account, are changed by admins only (403
     `forbidden`): their names decide through name matching whose post a letter becomes,
     so a member renaming or adding a variant could steer letters to themselves or to
     another member (review of PR #38). Members keep editing persons without an account."""
+    from apps.workspaces.invitations import (
+        lock_open_invitations_for_person,
+        revoke_invitations_for_person,
+    )
+
     with transaction.atomic():
+        invitations = (
+            lock_open_invitations_for_person(workspace_id=workspace.id, person_id=person_id)
+            if archived
+            else []
+        )
         person = _get_for_update(workspace, person_id)
         if not _acts_as_admin(actor_role) and (
             person.kind == Person.Kind.DEPARTMENT or person.user_id is not None
@@ -353,6 +378,7 @@ def update_person(
                 DocumentSuggestion.objects.filter(
                     person=person, state=DocumentSuggestion.State.OPEN
                 ).delete()
+            revoke_invitations_for_person(invitations, actor=actor)
         _refuse_taken_names(person)
         _save(person)
         return _annotated(workspace, person.id)
@@ -541,6 +567,7 @@ def link_member(
         if user_id is not None and user_id == actor.user_id and visibility.has_private_post(person):
             raise _cannot_grant_self()
         former = person.user_id
+        former_stays_member = former is not None and any(m.user_id == former for m in locked)
         with sight_change(
             workspace,
             narrowing=user_id is None,
@@ -554,6 +581,10 @@ def link_member(
             ),
         ) as sight:
             person.user_id = user_id
+            if user_id is not None:
+                # Linked: an account again, no longer "uitgeschakeld".
+                person.deactivated_at = None
+                person.former_user = None
             _save(person)
             visibility.recompute_where(workspace_id=workspace.id, person_id=person.id)
             if former is not None:
@@ -572,6 +603,12 @@ def link_member(
                 target=AuditTarget(TargetKind.PERSON, person.id, person.display_name),
                 workspace_id=workspace.id,
             )
+        if former is not None and former_stays_member:
+            # Every member keeps exactly one person (spec M8): the former member gets a
+            # fresh one at once, after the change of sight is settled. A new person is on
+            # no letter, so nobody's sight changes by it (and nobody is told of a "gain"
+            # of an empty name); the old person stays, "niet actief".
+            ensure_person_for_member(workspace=workspace, user=User.objects.get(id=former))
         if user_id is not None and user_id == actor.user_id:
             others = [
                 m.user for m in locked if m.role == Membership.Role.ADMIN and m.user_id != user_id

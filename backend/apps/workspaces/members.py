@@ -240,14 +240,18 @@ def _server_admin_only() -> ApiError:
 
 def _unlink_and_unassign(workspace: Workspace, user_id: UUID, actor: AuditActor) -> list[Person]:
     """Inside the workspace's context: the member's person stays without its account
-    link, their tasks here lose their assignee, and part B's seam runs. Returns the
+    link, marked "uitgeschakeld" (`deactivated_at`, `former_user`: display only, spec
+    M4), their tasks here lose their assignee, and part B's seam runs. Returns the
     unlinked persons. A queryset `update()`, before the membership goes, because
-    `Person.save` refuses a user who is no member."""
+    `Person.save` refuses a user who is no member; one statement, so the check
+    "former_user needs deactivated_at" holds at every moment."""
     now = timezone.now()
     as_actor: Actor = actor.user_id if actor.user_id is not None else NOBODY
     with workspace_context(workspace.id, actor=as_actor):
         persons = list(Person.objects.filter(workspace=workspace, user_id=user_id).order_by("id"))
-        Person.objects.filter(id__in=[p.id for p in persons]).update(user=None, updated_at=now)
+        Person.objects.filter(id__in=[p.id for p in persons]).update(
+            user=None, deactivated_at=now, former_user_id=user_id, updated_at=now
+        )
         release_member(workspace_id=workspace.id, user_id=user_id)
         on_member_removed(workspace.id, user_id)
         # Their own export goes with them (its files once this transaction commits).

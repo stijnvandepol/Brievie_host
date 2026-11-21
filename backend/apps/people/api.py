@@ -51,6 +51,7 @@ def create_person(request: HttpRequest, workspace_id: UUID, payload: PersonIn) -
         archived=payload.archived,
         kind=payload.kind,
         actor_role=membership.role,
+        actor=actor_from_request(request),
     )
     return Status(201, person)
 
@@ -82,6 +83,7 @@ def update_person(
         name_variants=payload.name_variants if "name_variants" in sent else None,
         archived=payload.archived if "archived" in sent else None,
         actor_role=membership.role,
+        actor=actor_from_request(request),
     )
 
 

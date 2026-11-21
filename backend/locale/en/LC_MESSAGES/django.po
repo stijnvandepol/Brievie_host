@@ -510,6 +510,10 @@ msgid "Persoon verwijderd"
 msgstr "Person deleted"
 
 #: apps/audit/codes.py
+msgid "Persoon toegevoegd"
+msgstr "Person added"
+
+#: apps/audit/codes.py
 msgid "Zichtbaarheid gewijzigd"
 msgstr "Visibility changed"
 
