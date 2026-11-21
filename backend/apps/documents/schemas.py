@@ -153,6 +153,10 @@ class TaskOut(Schema):
     # The member it is given to ("Aan Anne gegeven"); empty and null when nobody.
     assigned_to_name: str = ""
     assigned_to_id: UUID | None = None
+    # What the caller may do with who does it, as `TaskItemOut` (navigation spec S 7).
+    can_take: bool = False
+    can_hand_over: bool = False
+    can_release: bool = False
 
 
 class SuggestionOut(Schema):

@@ -30,6 +30,22 @@ def lock_own_membership(workspace_id: UUID, user_id: UUID) -> None:
         raise ApiError(404, "workspace_not_found", _("We kunnen deze werkruimte niet vinden."))
 
 
+def lock_own_role(workspace_id: UUID, user_id: UUID) -> str:
+    """`lock_own_membership`, answering the role as it stands under the lock: a decision
+    that depends on being an admin reads it here, not from the request's earlier read (a
+    demotion waits for this transaction, or this one sees it)."""
+    with connection.cursor() as c:
+        c.execute(
+            "SELECT role FROM workspaces_membership"
+            " WHERE workspace_id = %s AND user_id = %s FOR SHARE",
+            [workspace_id, user_id],
+        )
+        row = c.fetchone()
+    if row is None:
+        raise ApiError(404, "workspace_not_found", _("We kunnen deze werkruimte niet vinden."))
+    return str(row[0])
+
+
 def lock_memberships(workspace: Workspace) -> list[Membership]:
     """Lock every membership of the workspace, in id order: the one lock order of every
     member change and of every change of who sees what. Must run inside a transaction."""

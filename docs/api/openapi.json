@@ -4054,6 +4054,21 @@
             "title": "Can Edit",
             "type": "boolean"
           },
+          "can_hand_over": {
+            "default": false,
+            "title": "Can Hand Over",
+            "type": "boolean"
+          },
+          "can_release": {
+            "default": false,
+            "title": "Can Release",
+            "type": "boolean"
+          },
+          "can_take": {
+            "default": false,
+            "title": "Can Take",
+            "type": "boolean"
+          },
           "completed_at": {
             "format": "date-time",
             "title": "Completed At",
@@ -4197,6 +4212,21 @@
             "default": "",
             "title": "Assigned To Name",
             "type": "string"
+          },
+          "can_hand_over": {
+            "default": false,
+            "title": "Can Hand Over",
+            "type": "boolean"
+          },
+          "can_release": {
+            "default": false,
+            "title": "Can Release",
+            "type": "boolean"
+          },
+          "can_take": {
+            "default": false,
+            "title": "Can Take",
+            "type": "boolean"
           },
           "completed_at": {
             "format": "date-time",

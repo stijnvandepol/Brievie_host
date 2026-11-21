@@ -4316,6 +4316,21 @@ export interface components {
              */
             can_edit: boolean;
             /**
+             * Can Hand Over
+             * @default false
+             */
+            can_hand_over: boolean;
+            /**
+             * Can Release
+             * @default false
+             */
+            can_release: boolean;
+            /**
+             * Can Take
+             * @default false
+             */
+            can_take: boolean;
+            /**
              * Completed At
              * Format: date-time
              */
@@ -4412,6 +4427,21 @@ export interface components {
              * @default
              */
             assigned_to_name: string;
+            /**
+             * Can Hand Over
+             * @default false
+             */
+            can_hand_over: boolean;
+            /**
+             * Can Release
+             * @default false
+             */
+            can_release: boolean;
+            /**
+             * Can Take
+             * @default false
+             */
+            can_take: boolean;
             /**
              * Completed At
              * Format: date-time

@@ -1814,7 +1814,7 @@ msgstr "There is already a label with this name."
 msgid "Kies een afdeling."
 msgstr "Choose a department."
 
-#: apps/labels/services.py apps/people/services.py apps/workspaces/deps.py apps/workspaces/members.py apps/workspaces/visibility_settings.py
+#: apps/labels/services.py apps/people/services.py apps/tasks/assignment.py apps/workspaces/deps.py apps/workspaces/members.py apps/workspaces/visibility_settings.py
 msgid "Je mag dit niet doen in deze werkruimte."
 msgstr "You are not allowed to do this in this workspace."
 
@@ -2297,6 +2297,10 @@ msgstr "One of the conditions is enough. The kind of mail is known once the AI h
 #: apps/tasks/assignment.py
 msgid "Deze taak hoort niet bij een brief en kan niet worden gegeven."
 msgstr "This task does not belong to a letter and cannot be handed over."
+
+#: apps/tasks/assignment.py
+msgid "Iemand anders doet deze taak al. Vraag die persoon of een beheerder om hem door te geven."
+msgstr "Someone else is already doing this task. Ask that person or an admin to hand it over."
 
 #: apps/tasks/assignment.py
 msgid "Deze persoon mag de brief niet lezen. Kies iemand anders."

@@ -36,6 +36,9 @@ const task = {
   term_quote: "",
   assigned_to_name: "",
   assigned_to_id: null,
+  can_take: true,
+  can_hand_over: true,
+  can_release: false,
 };
 const path = `/w/${workspace.id}/post/${documentSummary.id}`;
 

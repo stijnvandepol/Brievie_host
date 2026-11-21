@@ -46,6 +46,9 @@ const needsDate: Item = {
   completed_by_name: "",
   document_type: "decision",
   can_edit: true,
+  can_take: true,
+  can_hand_over: true,
+  can_release: false,
 };
 
 function myTasks(items: () => Item[]) {

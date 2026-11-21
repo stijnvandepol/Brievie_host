@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import date
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from django.core.exceptions import ValidationError
@@ -53,6 +54,9 @@ from apps.workspaces.context import current_actor
 from apps.workspaces.keys import workspace_key
 from apps.workspaces.locks import lock_own_membership
 from apps.workspaces.models import Membership, Workspace
+
+if TYPE_CHECKING:
+    from apps.tasks.assignment import TaskFlags
 
 _PATH_UNIQUE = "documents_folder_workspace_path_unique"
 
@@ -521,6 +525,13 @@ def document_out(document: Document, *, open_duplicate_count: int = 0) -> Docume
     names = visibility.reader_names([document]).get(document.id, [])
     actor = current_actor()
     unread = reading.is_unread_for_actor(document)
+    # Imported here: the tasks app reads letters through this module.
+    from apps.tasks.assignment import flags_for_actor
+
+    tasks = list(
+        document.tasks.select_related("assigned_to").order_by("deadline", "created_at", "id")
+    )
+    flags = flags_for_actor(document.workspace_id, tasks)
     return DocumentOut(
         **_summary_out(
             document, open_suggestions, open_duplicate_count, names, unread
@@ -555,26 +566,7 @@ def document_out(document: Document, *, open_duplicate_count: int = 0) -> Docume
             )
             for e in document.extractions.order_by("group", "created_at", "id")
         ],
-        tasks=[
-            TaskOut(
-                id=task.id,
-                type=task.type,
-                description=task.description,
-                deadline=task.deadline,
-                deadline_source=task.deadline_source,
-                deadline_quote=task.deadline_quote,
-                status=task.status,
-                completed_at=task.completed_at,
-                created_by_ai=task.created_by_ai,
-                amount=amount_text(task.amount),
-                term_quote=task.term_quote,
-                assigned_to_name=task.assigned_to.name if task.assigned_to is not None else "",
-                assigned_to_id=task.assigned_to_id,
-            )
-            for task in document.tasks.select_related("assigned_to").order_by(
-                "deadline", "created_at", "id"
-            )
-        ],
+        tasks=[_task_out(task, flags[task.id]) for task in tasks],
         suggestions=[
             SuggestionOut(
                 id=s.id,
@@ -589,6 +581,27 @@ def document_out(document: Document, *, open_duplicate_count: int = 0) -> Docume
             )
             for s in open_suggestions
         ],
+    )
+
+
+def _task_out(task: Task, flags: "TaskFlags") -> TaskOut:
+    return TaskOut(
+        id=task.id,
+        type=task.type,
+        description=task.description,
+        deadline=task.deadline,
+        deadline_source=task.deadline_source,
+        deadline_quote=task.deadline_quote,
+        status=task.status,
+        completed_at=task.completed_at,
+        created_by_ai=task.created_by_ai,
+        amount=amount_text(task.amount),
+        term_quote=task.term_quote,
+        assigned_to_name=task.assigned_to.name if task.assigned_to is not None else "",
+        assigned_to_id=task.assigned_to_id,
+        can_take=flags.can_take,
+        can_hand_over=flags.can_hand_over,
+        can_release=flags.can_release,
     )
 
 
