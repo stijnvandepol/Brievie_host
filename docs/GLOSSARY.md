@@ -100,6 +100,10 @@ the translation. Add a line before introducing a new domain term.
 | definitief verwijderen | purge (`purgeDocument`, `purge_started_at`) |
 | prullenbak legen | empty trash (`emptyTrash`) |
 | bewaartermijn | retention term (`retention.check_removal`) |
+| dubbel, Dubbel?, mogelijk dubbel | duplicate (`DuplicateCandidate`, `listDuplicates`) |
+| samenvoegen, Het is dezelfde brief | merge (`mergeDuplicate`) |
+| Het zijn twee brieven | dismiss (`dismissDuplicate`) |
+| Taak ook afronden | complete twin tasks (`complete_twin_tasks`, `task_twins`) |
 
 ## English in the interface
 
@@ -146,6 +150,9 @@ the request that creates the workspace and keep that name.
 | terugdraaien | undo | |
 | herstelblad | recovery sheet | |
 | prullenbak | Trash | verwijderen: delete (to the trash); definitief verwijderen: delete permanently; terugzetten: restore; prullenbak legen: empty trash. |
+| dubbele brief | duplicate letter | Never "double" or "copy". Dubbel?: "Duplicate?"; Mogelijk dubbel: "Possible duplicate". |
+| samenvoegen, Het is dezelfde brief / Het zijn twee brieven | merge, "It is the same letter" / "They are two letters" | |
+| Taak ook afronden | Also complete the task | The checkbox when a merge would leave a twin task open. |
 | herstellink | reset link | |
 | back-up | backup | |
 | logboek | log | Serverlogboek: Server log. |

@@ -33,7 +33,7 @@ from django.utils.translation import gettext as _
 
 from apps.common.errors import ApiError
 from apps.common.privacy import MASK, mask_bsns, passes_elfproef
-from apps.documents import visibility
+from apps.documents import duplicates, visibility
 from apps.documents.models import Document, DocumentAddressee, DocumentLabel
 from apps.documents.schemas import DocumentSearchHitOut, DocumentSearchOut, SnippetPartOut
 from apps.documents.services import (
@@ -114,6 +114,8 @@ class SearchResult:
     fuzzy: bool = False
     # A BSN was taken out of the term before searching.
     bsn_removed: bool = False
+    # Per hit, the open duplicate pairs the member sees in full (left out when none).
+    duplicate_counts: dict[UUID, int] = field(default_factory=dict)
 
 
 def clean_term(q: str) -> tuple[str, bool]:
@@ -436,6 +438,7 @@ def search_documents(
         next_offset=next_offset,
         fuzzy=fuzzy and bool(rows),
         bsn_removed=bsn_removed,
+        duplicate_counts=duplicates.pair_counts(membership, [d.id for d in rows]),
     )
 
 
@@ -555,7 +558,10 @@ def search_out(result: SearchResult) -> DocumentSearchOut:
     return DocumentSearchOut(
         items=[
             DocumentSearchHitOut(
-                **document_summary_out(hit.document).model_dump(),
+                **document_summary_out(
+                    hit.document,
+                    open_duplicate_count=result.duplicate_counts.get(hit.document.id, 0),
+                ).model_dump(),
                 snippet=[SnippetPartOut(text=p.text, hit=p.hit) for p in hit.snippet],
             )
             for hit in result.hits

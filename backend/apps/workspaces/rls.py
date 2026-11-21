@@ -120,6 +120,20 @@ def restrict_to_visible_documents(table: str, *, nullable: bool = False) -> migr
     return _restrictive(table, condition)
 
 
+def restrict_to_visible_document_pair(table: str) -> migrations.RunSQL:
+    """A pair of letters (`first_id`, `second_id`) is visible, updatable and deletable
+    only for an actor who reads both letters (the document policy runs inside each
+    EXISTS; the system reads all)."""
+    table = _checked(table)
+    condition = (
+        'EXISTS (SELECT 1 FROM "documents_document" d'  # noqa: S608 - checked table name
+        f' WHERE d.id = "{table}".first_id)'
+        ' AND EXISTS (SELECT 1 FROM "documents_document" d'
+        f' WHERE d.id = "{table}".second_id)'
+    )
+    return _restrictive(table, condition)
+
+
 def restrict_reader_rows() -> migrations.RunSQL:
     """A user sees their own reader rows; only the system writes them. No child policy on
     this table: the document policy reads it, and a policy back to the document would

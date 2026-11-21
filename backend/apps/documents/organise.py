@@ -259,9 +259,12 @@ def record_label_deleted(label: Label, *, actor_id: UUID | None) -> None:
         sync_automatic(automatic)
 
 
-def record_task_event(document: Document, kind: str, actor: User) -> None:
-    """History entry for ticking a task off or reopening it (`task_completed`, `task_reopened`)."""
-    _write_event(document, kind, actor, DocumentEvent.Origin.USER)
+def record_task_event(
+    document: Document, kind: str, actor: User, origin: str = DocumentEvent.Origin.USER
+) -> None:
+    """History entry for ticking a task off or reopening it (`task_completed`, `task_reopened`);
+    origin `merge` when a merge completed a twin task."""
+    _write_event(document, kind, actor, origin)
 
 
 _UNDOABLE = (DocumentEvent.Kind.LABEL_ADDED, DocumentEvent.Kind.ADDRESSEE_ADDED)
@@ -422,9 +425,54 @@ def record_reopened(document: Document, *, actor: User) -> None:
     )
 
 
-def record_trashed(document: Document, *, actor: User | None) -> None:
-    """The history line for moving the letter to the trash (no actor: Brievie did it)."""
-    _write_event(document, DocumentEvent.Kind.TRASHED, actor, DocumentEvent.Origin.USER)
+def record_trashed(
+    document: Document,
+    *,
+    actor: User | None,
+    origin: str = DocumentEvent.Origin.USER,
+    related_document: Document | None = None,
+) -> None:
+    """The history line for moving the letter to the trash: origin `user`, or `merge` with
+    the kept letter as `related_document` when a merge discarded it."""
+    _write_event(
+        document, DocumentEvent.Kind.TRASHED, actor, origin, related_document=related_document
+    )
+
+
+def record_merged(document: Document, *, actor: User, related_document: Document) -> None:
+    """On the kept letter: a person merged `related_document` (now in the trash) into it."""
+    _write_event(
+        document,
+        DocumentEvent.Kind.MERGED,
+        actor,
+        DocumentEvent.Origin.USER,
+        related_document=related_document,
+    )
+
+
+def record_duplicate_dismissed(
+    document: Document, *, actor: User, related_document: Document
+) -> None:
+    """On both letters of a pair: a person said they are two letters."""
+    _write_event(
+        document,
+        DocumentEvent.Kind.DUPLICATE_DISMISSED,
+        actor,
+        DocumentEvent.Origin.USER,
+        related_document=related_document,
+    )
+
+
+def record_task_moved(document: Document, *, actor: User, related_document: Document) -> None:
+    """On both letters of a merge: an open task moved from the discarded letter to the kept
+    one (`related_document` is the other letter)."""
+    _write_event(
+        document,
+        DocumentEvent.Kind.TASK_MOVED,
+        actor,
+        DocumentEvent.Origin.MERGE,
+        related_document=related_document,
+    )
 
 
 def record_restored(document: Document, *, actor: User) -> None:
@@ -446,6 +494,7 @@ def _write_event(
     label: Label | None = None,
     rule: Rule | None = None,
     undoes: DocumentEvent | None = None,
+    related_document: Document | None = None,
 ) -> None:
     DocumentEvent.objects.create(
         workspace_id=document.workspace_id,
@@ -460,4 +509,5 @@ def _write_event(
         rule=rule,
         rule_name=rule.name if rule is not None else "",
         undoes=undoes,
+        related_document=related_document,
     )

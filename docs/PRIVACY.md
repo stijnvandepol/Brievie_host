@@ -222,6 +222,25 @@ may see the letter see it in the trash.
   invoice): an admin who purges early must mind that themselves. The web says so on the
   trash page.
 
+## Duplicate letters
+
+When a letter arrives, Brievie compares it with the live letters of the same workspace that
+arrived in the last 180 days, to notice the same letter scanned twice. This runs in the
+server's own database, as the system, over all those letters, private ones included: the
+comparison must see both to find a pair. Nothing is sent to an AI service or any other
+party, and nothing is compared across workspaces.
+
+- **Shown only to who sees both.** A pair ("Dubbel?") is shown, counted and decided only by
+  a member who may see both letters. A member who sees one of them gets no row, no count, no
+  mark on that letter and the same "not found" answer as for a pair that does not exist, so
+  nobody learns that a letter they may not see exists. A viewer sees no pairs.
+- **What is kept.** The pair row holds the two letter ids, two scores and the choice (who,
+  when). The history of both letters says that they were merged or called two letters. A
+  merge moves the other letter to the trash (30 days, see above), written to the log as
+  `document_trashed` with reason `duplicate` and ids only.
+- **No content in logs.** Detection and merge log ids, counts and error type names only:
+  never a sender, an amount, a reference or a word of the text, and no audit row holds them.
+
 ## Search
 
 Searching letters (`searchDocuments`) runs in the server's own database, inside the

@@ -180,6 +180,10 @@ msgstr "{who} is signed out everywhere."
 msgid "{who} rondde een taak af"
 msgstr "{who} completed a task"
 
+#: src/components/document-history.tsx
+msgid "{who} rondde een taak af (uit de dubbele brief)"
+msgstr "{who} completed a task (from the duplicate letter)"
+
 #: src/routes/member-devices.tsx
 msgid "{who} wordt overal uitgelogd en krijgt daar een melding van. Gekoppelde telefoons blijven werken."
 msgstr "{who} will be signed out everywhere and gets a notification about it. Paired phones keep working."
@@ -193,12 +197,20 @@ msgid "{who} zette deze brief op naam van {person}"
 msgstr "{who} addressed this letter to {person}"
 
 #: src/components/document-history.tsx
+msgid "{who} zette deze brief op naam van {person} (uit de dubbele brief)"
+msgstr "{who} addressed this letter to {person} (from the duplicate letter)"
+
+#: src/components/document-history.tsx
 msgid "{who} zette een taak weer open"
 msgstr "{who} reopened a task"
 
 #: src/components/document-history.tsx
 msgid "{who} zette het label {label} erop"
 msgstr "{who} added the label {label}"
+
+#: src/components/document-history.tsx
+msgid "{who} zette het label {label} erop (uit de dubbele brief)"
+msgstr "{who} added the label {label} (from the duplicate letter)"
 
 #: src/components/invite-dialog.tsx
 msgid "1 dag"
@@ -306,13 +318,22 @@ msgstr "Address of the AI on your network"
 msgid "Afdelingen"
 msgstr "Departments"
 
+#: src/routes/duplicate.tsx
+msgid "afgerond"
+msgstr "completed"
+
 #. placeholder {0}: day.format(new Date(task.completed_at))
 #: src/components/task-list.tsx
 msgid "Afgerond op {0}"
 msgstr "Completed on {0}"
 
+#: src/routes/duplicate.tsx
+msgid "afzender"
+msgstr "sender"
+
 #: src/components/document-table.tsx
 #: src/routes/document.tsx
+#: src/routes/duplicate.tsx
 #: src/routes/inbox.tsx
 #: src/routes/trash.tsx
 msgid "Afzender"
@@ -430,6 +451,10 @@ msgstr "Only for another service that works like OpenAI. Starts with https://. I
 #: src/routes/rule-editor.tsx
 msgid "Als"
 msgstr "If"
+
+#: src/components/document-history.tsx
+msgid "Als dubbele brief naar de prullenbak verplaatst door {by}"
+msgstr "Moved to the trash as a duplicate letter by {by}"
 
 #: src/components/confirm-dialog.tsx
 #: src/components/invite-dialog.tsx
@@ -561,6 +586,14 @@ msgstr "Switch on the autopilot?"
 msgid "Automatisering"
 msgstr "Automation"
 
+#: src/routes/duplicate.tsx
+msgid "bedrag"
+msgstr "amount"
+
+#: src/routes/duplicate.tsx
+msgid "Bedrag"
+msgstr "Amount"
+
 #: src/routes/document.tsx
 msgid "Bedrag incl. btw"
 msgstr "Amount incl. VAT"
@@ -657,6 +690,10 @@ msgstr "Receipt"
 msgid "Brief"
 msgstr "Letter"
 
+#: src/routes/duplicate.tsx
+msgid "Brief {position}"
+msgstr "Letter {position}"
+
 #: src/components/audit-codes.ts
 msgid "Brief definitief verwijderd"
 msgstr "Letter deleted permanently"
@@ -664,6 +701,10 @@ msgstr "Letter deleted permanently"
 #: src/components/audit-codes.ts
 msgid "Brief naar de prullenbak"
 msgstr "Letter moved to the trash"
+
+#: src/routes/duplicate.tsx
+msgid "Brief openen"
+msgstr "Open letter"
 
 #: src/components/audit-codes.ts
 msgid "Brief teruggezet"
@@ -782,6 +823,14 @@ msgstr "After that you are signed in. You need to pair your phone again."
 msgid "Dan"
 msgstr "Then"
 
+#: src/routes/duplicate.tsx
+msgid "datum"
+msgstr "date"
+
+#: src/routes/duplicate.tsx
+msgid "Datum"
+msgstr "Date"
+
 #: src/components/document-table.tsx
 #: src/routes/document.tsx
 #: src/routes/inbox.tsx
@@ -804,6 +853,10 @@ msgstr "The sender"
 #: src/components/autopilot-panel.tsx
 msgid "De beheerder van de server heeft automatisch verwerken uitgezet. Hier kun je het niet aanzetten."
 msgstr "The server admin has switched off the autopilot. You can't switch it on here."
+
+#: src/routes/duplicate.tsx
+msgid "De brief die je houdt, krijgt de labels en personen van allebei. De andere brief gaat naar de prullenbak. Daar kun je hem 30 dagen terugzetten."
+msgstr "The letter you keep gets the labels and persons of both. The other letter goes to the trash. You can restore it from there for 30 days."
 
 #: src/routes/trash.tsx
 msgid "De brief en de gescande pagina's worden voorgoed uit Brievie gewist. Dit kun je niet ongedaan maken. Een back-up die eerder is gemaakt, heeft de brief nog. Daar blijft hij in tot die back-up verloopt."
@@ -925,6 +978,14 @@ msgstr "Delete permanently"
 msgid "Definitief verwijderen: {name}"
 msgstr "Delete permanently: {name}"
 
+#: src/routes/duplicate.tsx
+msgid "Deze brief houden"
+msgstr "Keep this letter"
+
+#: src/routes/duplicate.tsx
+msgid "Deze brief houden: brief {position}"
+msgstr "Keep this letter: letter {position}"
+
 #: src/routes/document.tsx
 msgid "Deze brief staat in de prullenbak."
 msgstr "This letter is in the trash."
@@ -932,6 +993,10 @@ msgstr "This letter is in the trash."
 #: src/routes/document.tsx
 msgid "Deze brief wordt nog gelezen."
 msgstr "This letter is still being read."
+
+#: src/routes/inbox.tsx
+msgid "Deze brieven lijken twee keer gescand. Kijk of het dezelfde brief is."
+msgstr "These letters seem to have been scanned twice. Check if it is the same letter."
 
 #: src/routes/sessions.tsx
 msgid "Deze browser"
@@ -941,6 +1006,10 @@ msgstr "This browser"
 #: src/routes/pair-app.tsx
 msgid "Deze code is verlopen."
 msgstr "This code has expired."
+
+#: src/routes/duplicate.tsx
+msgid "Deze dubbele brieven zijn er niet (meer)."
+msgstr "These duplicate letters are not here (any more)."
 
 #: src/components/invite-dialog.tsx
 msgid "Deze link werkt alleen op je thuisnetwerk."
@@ -953,6 +1022,14 @@ msgstr "This page does not exist."
 #: src/routes/rule-editor.tsx
 msgid "Deze regel bestaat niet (meer)."
 msgstr "This rule does not exist (any more)."
+
+#: src/routes/duplicate.tsx
+msgid "Deze twee brieven lijken op elkaar. Is het dezelfde brief, twee keer gescand? Kijk wat hetzelfde is en wat verschilt."
+msgstr "These two letters look alike. Is it the same letter, scanned twice? See what is the same and what differs."
+
+#: src/routes/duplicate.tsx
+msgid "Deze twee brieven zijn niet voor dezelfde mensen zichtbaar. Daarom kun je ze niet samenvoegen. Kies 'Het zijn twee brieven', of laat ze eerst voor dezelfde mensen zichtbaar zijn."
+msgstr "These two letters are not visible to the same people, so you can't merge them. Choose 'They are two letters', or first make them visible to the same people."
 
 #. placeholder {0}: info.person_name
 #: src/routes/invitation.tsx
@@ -993,6 +1070,15 @@ msgstr "Download ({letters}, valid until {0})"
 msgid "Download als CSV"
 msgstr "Download as CSV"
 
+#: src/routes/inbox.tsx
+msgid "Dubbel?"
+msgstr "Duplicate?"
+
+#. placeholder {0}: counts.duplicate
+#: src/routes/inbox.tsx
+msgid "Dubbel?: {0}"
+msgstr "Duplicate?: {0}"
+
 #: src/components/invite-dialog.tsx
 #: src/routes/invitation.tsx
 #: src/routes/login.tsx
@@ -1027,6 +1113,10 @@ msgstr "one of"
 #: src/routes/home.tsx
 msgid "Een werkruimte heeft eigen post en eigen leden, bijvoorbeeld Thuis of je bedrijf. Kies welke je wilt openen."
 msgstr "A workspace has its own mail and its own members, for example Home or your business. Choose which one to open."
+
+#: src/routes/duplicate.tsx
+msgid "Eerste pagina van brief {position}"
+msgstr "First page of letter {position}"
 
 #: src/routes/ai.tsx
 msgid "Eigen adres"
@@ -1108,7 +1198,12 @@ msgstr "Exporting is switched off for this workspace. Ask an admin to switch it 
 msgid "Factuur"
 msgstr "Invoice"
 
+#: src/routes/duplicate.tsx
+msgid "factuurnummer"
+msgstr "invoice number"
+
 #: src/routes/document.tsx
+#: src/routes/duplicate.tsx
 msgid "Factuurnummer"
 msgstr "Invoice number"
 
@@ -1153,6 +1248,7 @@ msgid "Geel"
 msgstr "Yellow"
 
 #: src/components/label-picker.tsx
+#: src/routes/duplicate.tsx
 msgid "Geen"
 msgstr "None"
 
@@ -1201,6 +1297,10 @@ msgstr "Paired on"
 msgid "Gekoppelde apparaten"
 msgstr "Paired devices"
 
+#: src/components/document-history.tsx
+msgid "Gekozen: geen dubbele brief, door {by}"
+msgstr "Marked as not a duplicate letter by {by}"
+
 #: src/components/invite-dialog.tsx
 #: src/routes/members.tsx
 msgid "Geldig"
@@ -1222,6 +1322,10 @@ msgstr "Applies to letters the AI reads from now on. The letter itself stays as 
 msgid "Gemaakt door AI. Controleer of het klopt."
 msgstr "Made by AI. Check whether it is right."
 
+#: src/routes/duplicate.tsx
+msgid "Gescand op {when}"
+msgstr "Scanned on {when}"
+
 #: src/components/document-history.tsx
 msgid "Geschiedenis"
 msgstr "History"
@@ -1233,6 +1337,10 @@ msgstr "Started"
 #: src/components/notice-bar.tsx
 msgid "Gezien"
 msgstr "Seen"
+
+#: src/routes/inbox.tsx
+msgid "Goed. We vragen het niet meer voor deze twee brieven."
+msgstr "OK. We won't ask again about these two letters."
 
 #: src/components/label-chip.tsx
 msgid "Grijs"
@@ -1287,6 +1395,10 @@ msgstr "Create a reset link for {name}?"
 msgid "Herstellink voor {name}"
 msgstr "Reset link for {name}"
 
+#: src/routes/duplicate.tsx
+msgid "Het is dezelfde brief"
+msgstr "It is the same letter"
+
 #: src/components/rule-sentence.ts
 msgid "Het soort post"
 msgstr "The kind of mail"
@@ -1298,6 +1410,10 @@ msgstr "the kind of mail is {type}"
 #: src/components/rule-sentence.ts
 msgid "het soort post niet {type} is"
 msgstr "the kind of mail is not {type}"
+
+#: src/routes/duplicate.tsx
+msgid "Het zijn twee brieven"
+msgstr "They are two letters"
 
 #: src/routes/rule-editor.tsx
 msgid "Hoeveel voorwaarden moeten kloppen"
@@ -1555,6 +1671,14 @@ msgstr "Can invite members and set everything up."
 msgid "Kan post scannen, controleren en ordenen."
 msgstr "Can scan, check and organize mail."
 
+#: src/routes/duplicate.tsx
+msgid "kenmerk"
+msgstr "reference"
+
+#: src/routes/duplicate.tsx
+msgid "Kenmerk"
+msgstr "Reference"
+
 #: src/components/document-table.tsx
 msgid "Keuring"
 msgstr "Inspection"
@@ -1690,6 +1814,7 @@ msgstr "Edit label"
 #: src/components/label-picker.tsx
 #: src/components/page.tsx
 #: src/routes/document.tsx
+#: src/routes/duplicate.tsx
 #: src/routes/inbox.tsx
 #: src/routes/labels.tsx
 msgid "Labels"
@@ -1711,6 +1836,10 @@ msgstr "Members may export their own mail"
 msgid "Leeg laten kiest {0}."
 msgstr "Leaving it empty chooses {0}."
 
+#: src/routes/duplicate.tsx
+msgid "Let op: {fields} verschilt. Een herinnering of een tweede termijn lijkt vaak op de eerste brief, maar het is een andere brief."
+msgstr "Note: these differ: {fields}. A reminder or a second installment often looks like the first letter, but it is a different letter."
+
 #: src/components/role-dialog.tsx
 #: src/routes/home.tsx
 msgid "Lid"
@@ -1731,6 +1860,11 @@ msgstr "Member left"
 #: src/components/audit-codes.ts
 msgid "Lid verwijderd"
 msgstr "Member removed"
+
+#: src/routes/duplicate.tsx
+#: src/routes/inbox.tsx
+msgid "Lijkt op elkaar voor {similarity}%"
+msgstr "{similarity}% alike"
 
 #: src/components/one-time-link.tsx
 msgid "Link"
@@ -1829,6 +1963,10 @@ msgstr "Mistral in France ({host})"
 msgid "Model"
 msgstr "Model"
 
+#: src/routes/duplicate.tsx
+msgid "Mogelijk dubbel"
+msgstr "Possible duplicate"
+
 #: src/routes/password.tsx
 msgid "Na het wijzigen word je in je andere browsers uitgelogd. Je gekoppelde telefoon blijft werken."
 msgstr "After the change you are signed out in your other browsers. Your paired phone keeps working."
@@ -1874,12 +2012,16 @@ msgid "Naar de prullenbak"
 msgstr "Move to trash"
 
 #: src/components/document-history.tsx
-msgid "Naar de prullenbak verplaatst door {by}"
-msgstr "Moved to the trash by {by}"
+msgid "Naar de prullenbak verplaatst door {trasher}"
+msgstr "Moved to the trash by {trasher}"
 
 #: src/routes/root.tsx
 msgid "Naar de startpagina"
 msgstr "Go to the start page"
+
+#: src/routes/duplicate.tsx
+msgid "Naar Te doen"
+msgstr "Go to To do"
 
 #: src/routes/labels.tsx
 msgid "Namen"
@@ -2006,10 +2148,19 @@ msgstr "Undo"
 msgid "Ontvangen"
 msgstr "Received"
 
+#: src/routes/duplicate.tsx
+msgid "Op beide brieven hetzelfde: {sameFields}."
+msgstr "The same on both letters: {sameFields}."
+
+#: src/routes/duplicate.tsx
+msgid "Op de andere scan is ''{task}'' al afgerond."
+msgstr "On the other scan, ''{task}'' is already completed."
+
 #: src/components/document-table.tsx
 #: src/components/person-picker.tsx
 #: src/components/rule-sentence.ts
 #: src/routes/document.tsx
+#: src/routes/duplicate.tsx
 msgid "Op naam van"
 msgstr "Addressed to"
 
@@ -2089,6 +2240,14 @@ msgstr "Page {n} of {0}"
 #: src/routes/root.tsx
 msgid "Pagina niet gevonden"
 msgstr "Page not found"
+
+#: src/routes/duplicate.tsx
+msgid "pagina's"
+msgstr "pages"
+
+#: src/routes/duplicate.tsx
+msgid "Pagina's"
+msgstr "Pages"
 
 #: src/components/audit-table.tsx
 msgid "Pas de filters aan om andere gebeurtenissen te zien."
@@ -2242,6 +2401,10 @@ msgstr "Change role: {0}"
 msgid "Rood"
 msgstr "Red"
 
+#: src/components/document-history.tsx
+msgid "Samengevoegd met een dubbele brief door {by}"
+msgstr "Merged with a duplicate letter by {by}"
+
 #: src/routes/document.tsx
 msgid "Samenvatting"
 msgstr "Summary"
@@ -2249,6 +2412,14 @@ msgstr "Summary"
 #: src/routes/settings.tsx
 msgid "Samenvattingen"
 msgstr "Summaries"
+
+#: src/routes/duplicate.tsx
+msgid "Samenvoegen"
+msgstr "Merge"
+
+#: src/routes/duplicate.tsx
+msgid "Samenvoegen?"
+msgstr "Merge?"
 
 #: src/components/rule-sentence.ts
 msgid "Scan"
@@ -2302,8 +2473,13 @@ msgstr "Key of the service (API key)"
 msgid "Sluiten"
 msgstr "Close"
 
+#: src/routes/duplicate.tsx
+msgid "soort"
+msgstr "kind"
+
 #: src/components/document-table.tsx
 #: src/routes/document.tsx
+#: src/routes/duplicate.tsx
 #: src/routes/home.tsx
 #: src/routes/inbox.tsx
 #: src/routes/search.tsx
@@ -2355,6 +2531,18 @@ msgstr "System"
 msgid "Taak"
 msgstr "Task"
 
+#: src/routes/duplicate.tsx
+msgid "Taak ook afronden"
+msgstr "Also complete the task"
+
+#: src/components/document-history.tsx
+msgid "Taak verplaatst naar de dubbele brief"
+msgstr "Task moved to the duplicate letter"
+
+#: src/components/document-history.tsx
+msgid "Taak verplaatst uit de dubbele brief"
+msgstr "Task moved from the duplicate letter"
+
 #: src/components/language-switch.tsx
 #: src/components/page.tsx
 #: src/routes/language.tsx
@@ -2370,10 +2558,12 @@ msgid "Taal van de samenvatting en de taken die AI maakt"
 msgstr "Language of the summary and the tasks the AI makes"
 
 #: src/routes/document.tsx
+#: src/routes/duplicate.tsx
 msgid "Taken"
 msgstr "Tasks"
 
 #: src/components/page.tsx
+#: src/routes/duplicate.tsx
 #: src/routes/inbox.tsx
 msgid "Te doen"
 msgstr "To do"
@@ -2571,6 +2761,14 @@ msgstr "Expires on {0}"
 msgid "Verlopen"
 msgstr "Expired"
 
+#: src/routes/duplicate.tsx
+msgid "Verschilt"
+msgstr "Differs"
+
+#: src/routes/duplicate.tsx
+msgid "Verschilt misschien (slecht leesbaar)"
+msgstr "May differ (hard to read)"
+
 #: src/routes/document.tsx
 msgid "Vervaldatum"
 msgstr "Due date"
@@ -2738,6 +2936,10 @@ msgstr "What to do"
 #: src/api/client.ts
 msgid "We kunnen de server niet bereiken. Controleer je verbinding en probeer het opnieuw."
 msgstr "We can't reach the server. Check your connection and try again."
+
+#: src/routes/duplicate.tsx
+msgid "Welke brief houd je?"
+msgstr "Which letter do you keep?"
 
 #: src/routes/ai.tsx
 msgid "Welke dienst?"

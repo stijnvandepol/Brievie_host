@@ -108,6 +108,7 @@ export const documentSummary = {
   proposed_sender: "",
   proposed_document_type: "",
   proposed_letter_date: null,
+  open_duplicate_count: 0,
 };
 
 export const documentDetail: components["schemas"]["DocumentOut"] = {

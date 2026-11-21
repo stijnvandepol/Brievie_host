@@ -19,6 +19,14 @@ Lees bij elke versie eerst **Voor je bijwerkt**, als die er staat.
   wordt na 30 dagen door Brievie zelf gewist.
 - Het logboek noemt verplaatsen naar de prullenbak, terugzetten en definitief wissen.
   Brievie houdt nog geen bewaartermijn per brief bij (zie SELFHOST, deel 23).
+- **Dubbele brieven.** Scant iemand een brief die er al is, dan zie je onder **Te doen**
+  het blok **Dubbel?**. Op de pagina **Mogelijk dubbel** staan de twee brieven naast
+  elkaar, met wat hetzelfde is en wat verschilt. Kies **Het is dezelfde brief**: de brief
+  die je houdt krijgt de labels, personen en open taken van allebei, en de andere gaat naar
+  de prullenbak (30 dagen terug te zetten). Of kies **Het zijn twee brieven**: dan vraagt
+  Brievie het niet meer. Je ziet een paar alleen als je beide brieven mag zien. Brievie
+  vergelijkt alleen nieuwe brieven met de post van de laatste 180 dagen; zolang een brief
+  een open paar heeft, bevestigt de AI hem niet zelf.
 
 ## [0.3.0] - 2026-11-20
 

@@ -226,7 +226,7 @@ def test_the_inbox_counter_counts_automatic_documents(client_a: Client, ws_a: Wo
 
     counts = client_a.get(f"/api/v1/workspaces/{ws_a.id}/inbox/counts").json()
 
-    assert counts == {"new": 0, "review": 2, "unassigned": 1, "automatic": 3}
+    assert counts == {"new": 0, "review": 2, "unassigned": 1, "automatic": 3, "duplicate": 0}
 
 
 def test_the_list_does_not_query_per_document(client_a: Client, ws_a: Workspace) -> None:

@@ -16,7 +16,7 @@ from pydantic import ValidationError
 
 from apps.common.errors import ApiError
 from apps.common.privacy import holds_bsn, mask_bsns
-from apps.documents import review, suggestions, visibility
+from apps.documents import duplicates, review, suggestions, visibility
 from apps.documents.models import LIVE, Document, DocumentSuggestion, Extraction
 from apps.labels.models import Label
 from apps.people.matching import PRESELECT_FROM, PersonNames, match_addressees
@@ -83,6 +83,9 @@ def run_pipeline(
             logger.info("Document %s changed during processing; result dropped", document_id)
             return
         store_proposals(document, values, provider)
+        # Before the autopilot: an open duplicate pair (or a check that failed) stops the
+        # AI's confirm, so a letter scanned twice never gets its tasks twice.
+        detected = _detect_guarded(document)
         # One addressee scope around proposing, applying and confirming: the letter's
         # addressee list and readers are synced once, after all of it.
         with visibility.addressee_scope(document):
@@ -99,7 +102,13 @@ def run_pipeline(
             # When applying failed, nothing says the persons are right either.
             if in_force is not None and in_force.confirm and payload is not None and applied_ok:
                 confirmed = _confirm_guarded(
-                    document, payload, values, text, day, organised=in_force.organise
+                    document,
+                    payload,
+                    values,
+                    text,
+                    day,
+                    organised=in_force.organise,
+                    blocked_by_duplicate=not detected or duplicates.has_open_pair(document.id),
                 )
         if not confirmed:
             document.status = Document.Status.NEEDS_REVIEW
@@ -274,6 +283,8 @@ def mark_failed(workspace_id: UUID, document_id: UUID, code: str) -> None:
         document = _lock_processing(document_id)
         if document is None:
             return
+        # The text came with the upload: a failed AI step only means fewer facts.
+        _detect_guarded(document)
         with visibility.addressee_scope(document):
             _organise_guarded(document, load_text(document), active_persons(), [])
         document.status = Document.Status.FAILED
@@ -298,6 +309,24 @@ def _organise_guarded(
         # The type only: an exception message may quote the document.
         logger.error(
             "Unexpected %s while proposing for document %s", type(exc).__name__, document.id
+        )
+        return False
+    return True
+
+
+def _detect_guarded(document: Document) -> bool:
+    """`duplicates.detect` in a savepoint; whether it ran. When it fails, its writes are
+    rolled back and the caller treats the letter as having an open pair (no automatic
+    confirm): fail closed."""
+    try:
+        with transaction.atomic():
+            duplicates.detect(document)
+    except Exception as exc:  # noqa: BLE001 - the document must not stay processing
+        # The type only: an exception message may quote the document.
+        logger.error(
+            "Unexpected %s while looking for duplicates of document %s",
+            type(exc).__name__,
+            document.id,
         )
         return False
     return True
@@ -328,8 +357,12 @@ def _confirm_guarded(
     today: date,
     *,
     organised: bool,
+    blocked_by_duplicate: bool,
 ) -> bool:
     """Confirm the document when every guard rail holds; whether it was confirmed.
+
+    `blocked_by_duplicate` (an open duplicate pair, or the duplicate check failed) stops it
+    before anything is decided: a confirmed duplicate would make its tasks a second time.
 
     An addressee proposal still open after the organise step also stops it when
     `organised`: whose letter it is, is then still a question. An open label proposal
@@ -339,6 +372,9 @@ def _confirm_guarded(
     when either fails (validation of the built review included), its writes are rolled back
     and the document is reloaded, so the caller moves it on to review with its proposals.
     """
+    if blocked_by_duplicate:
+        logger.info("Document %s not confirmed by AI: it may be a duplicate", document.id)
+        return False
     try:
         with transaction.atomic():
             data = decide_confirmation(payload=payload, values=values, text=text, today=today)

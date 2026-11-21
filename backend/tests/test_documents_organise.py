@@ -162,4 +162,5 @@ def test_list_filters_and_counts(ws_a: Workspace) -> None:
             "review": 1,
             "unassigned": 1,
             "automatic": 0,
+            "duplicate": 0,
         }

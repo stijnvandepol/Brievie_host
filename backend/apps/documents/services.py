@@ -9,7 +9,7 @@ from psycopg import errors as pg_errors
 from apps.accounts.models import User
 from apps.common import crypto
 from apps.common.errors import ApiError
-from apps.documents import organise, suggestions, visibility
+from apps.documents import duplicates, organise, suggestions, visibility
 from apps.documents.intake import page_aad
 from apps.documents.models import (
     LIVE,
@@ -253,7 +253,10 @@ def inbox_counts(membership: Membership) -> dict[str, int]:
         **{state: models.Count("id", filter=_in_state(state)) for state in INBOX_STATES},
         automatic=models.Count("id", filter=_is_automatic()),
     )
-    return {name: int(counts[name]) for name in (*INBOX_STATES, "automatic")}
+    return {
+        **{name: int(counts[name]) for name in (*INBOX_STATES, "automatic")},
+        "duplicate": duplicates.count_pairs(membership),
+    }
 
 
 def get_document(*, membership: Membership, document_id: UUID) -> Document:
@@ -270,13 +273,32 @@ def get_document(*, membership: Membership, document_id: UUID) -> Document:
     return document
 
 
-def document_summary_out(document: Document) -> DocumentSummaryOut:
+def document_summary_out(
+    document: Document, *, open_duplicate_count: int = 0
+) -> DocumentSummaryOut:
     """A row of a document list."""
-    return _summary_out(document, _open_suggestions(document))
+    return _summary_out(document, _open_suggestions(document), open_duplicate_count)
+
+
+def document_summaries_out(
+    membership: Membership, documents: list[Document]
+) -> list[DocumentSummaryOut]:
+    """Rows of a document list for the member, with the open duplicate pairs they see in
+    full per letter (one query for all)."""
+    counts = duplicates.pair_counts(membership, [d.id for d in documents])
+    return [document_summary_out(d, open_duplicate_count=counts.get(d.id, 0)) for d in documents]
+
+
+def document_out_as(membership: Membership, document: Document) -> DocumentOut:
+    """`document_out` for the member, with the open duplicate pairs they see in full."""
+    counts = duplicates.pair_counts(membership, [document.id])
+    return document_out(document, open_duplicate_count=counts.get(document.id, 0))
 
 
 def _summary_out(
-    document: Document, open_suggestions: list[DocumentSuggestion]
+    document: Document,
+    open_suggestions: list[DocumentSuggestion],
+    open_duplicate_count: int = 0,
 ) -> DocumentSummaryOut:
     proposed = _headline_proposals(document)
     return DocumentSummaryOut(
@@ -303,6 +325,7 @@ def _summary_out(
         proposed_letter_date=None
         if document.letter_date
         else _iso_date(proposed.get(Extraction.Field.LETTER_DATE, "")),
+        open_duplicate_count=open_duplicate_count,
     )
 
 
@@ -335,12 +358,12 @@ def document_out_for(document: Document) -> DocumentOut:
     )
 
 
-def document_out(document: Document) -> DocumentOut:
+def document_out(document: Document, *, open_duplicate_count: int = 0) -> DocumentOut:
     """The document with its pages, proposals and tasks, as the API shows it."""
     models.prefetch_related_objects([document], SUGGESTIONS)
     open_suggestions = _open_suggestions(document)
     return DocumentOut(
-        **_summary_out(document, open_suggestions).model_dump(),
+        **_summary_out(document, open_suggestions, open_duplicate_count).model_dump(),
         failure_code=document.failure_code,
         summary=document.summary,
         summary_by_ai=document.summary_by_ai,
@@ -574,8 +597,15 @@ def list_document_events(*, membership: Membership, document_id: UUID) -> list[D
     person is on the document now), `still_automatic` (that link is still marked
     automatic) and `superseded` (a later event concerns the same label or person), which
     `DocumentEventOut.can_undo` reads.
+
+    A line never tells the member about a letter they may not read (the trash counted):
+    a `duplicate_dismissed` line about such a letter is left out, and any other line
+    (`merged`, `task_moved`, `trashed` by a merge) loses its `related_document_id`.
     """
     document = get_document(membership=membership, document_id=document_id)
+    related_readable = models.Exists(
+        visibility.readable_documents(membership).filter(id=models.OuterRef("related_document_id"))
+    )
     label_linked = DocumentLabel.objects.filter(
         document_id=models.OuterRef("document_id"), label_id=models.OuterRef("label_id")
     )
@@ -585,9 +615,15 @@ def list_document_events(*, membership: Membership, document_id: UUID) -> list[D
     later = DocumentEvent.objects.filter(
         document_id=models.OuterRef("document_id"), created_at__gt=models.OuterRef("created_at")
     )
-    return list(
+    found: list[DocumentEvent] = list(
         DocumentEvent.objects.filter(document=document)
         .select_related("actor")
+        .annotate(related_readable=related_readable)
+        .exclude(
+            kind=DocumentEvent.Kind.DUPLICATE_DISMISSED,
+            related_document_id__isnull=False,
+            related_readable=False,
+        )
         .annotate(
             undone=models.Exists(DocumentEvent.objects.filter(undoes=models.OuterRef("pk"))),
             still_linked=models.Exists(label_linked) | models.Exists(person_linked),
@@ -598,6 +634,10 @@ def list_document_events(*, membership: Membership, document_id: UUID) -> list[D
         )
         .order_by("-created_at", "-id")
     )
+    for event in found:
+        if not getattr(event, "related_readable", False):
+            event.related_document_id = None
+    return found
 
 
 def undo_document_event(

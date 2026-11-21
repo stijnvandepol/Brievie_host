@@ -106,6 +106,33 @@ export const trashQuery = (workspaceId: string) =>
     },
   });
 
+/** The open pairs of letters that are probably one letter scanned twice, newest first. */
+export const duplicatesQuery = (workspaceId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "duplicates"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/duplicates", {
+        params: { path: { workspace_id: workspaceId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
+/** One pair with what is the same and what differs. */
+export const duplicateQuery = (workspaceId: string, duplicateId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "duplicates", duplicateId],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/duplicates/{duplicate_id}",
+        { params: { path: { workspace_id: workspaceId, duplicate_id: duplicateId } } },
+      );
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
 export const personsQuery = (workspaceId: string) =>
   queryOptions({
     queryKey: ["workspaces", workspaceId, "persons"],

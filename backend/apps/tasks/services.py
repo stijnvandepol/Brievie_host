@@ -37,15 +37,25 @@ def list_tasks(workspace: Workspace, *, status: str = "open") -> list[Task]:
     return list(tasks.order_by(F("deadline").asc(nulls_last=True), "created_at", "id")[:LIST_MAX])
 
 
-def complete_task(*, workspace: Workspace, user: User, task_id: UUID) -> Task:
-    """Mark the task done; asking again changes nothing and writes no second event."""
+def complete_task(
+    *,
+    workspace: Workspace,
+    user: User,
+    task_id: UUID,
+    origin: str = DocumentEvent.Origin.USER,
+) -> Task:
+    """Mark the task done; asking again changes nothing and writes no second event.
+
+    The one place that completes a task. `origin` is `merge` when a merge of duplicate
+    letters completes the open twin of a task done on the other scan.
+    """
     with transaction.atomic():
         task = _get_for_update(workspace, task_id)
         if task.status != Task.Status.DONE:
             task.status = Task.Status.DONE
             task.completed_at = timezone.now()
             task.save(update_fields=["status", "completed_at", "updated_at"])
-            _record(task, DocumentEvent.Kind.TASK_COMPLETED, user)
+            _record(task, DocumentEvent.Kind.TASK_COMPLETED, user, origin)
         return task
 
 
@@ -74,6 +84,6 @@ def _get_for_update(workspace: Workspace, task_id: UUID) -> Task:
     return task
 
 
-def _record(task: Task, kind: str, user: User) -> None:
+def _record(task: Task, kind: str, user: User, origin: str = DocumentEvent.Origin.USER) -> None:
     if task.document is not None:
-        organise.record_task_event(task.document, kind, user)
+        organise.record_task_event(task.document, kind, user, origin)

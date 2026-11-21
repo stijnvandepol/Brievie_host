@@ -21,7 +21,7 @@ from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
 from apps.documents import organise, retention, visibility
 from apps.documents.jobs import defer_purge
-from apps.documents.models import Document
+from apps.documents.models import Document, DocumentEvent
 from apps.documents.schemas import TrashedDocumentOut
 from apps.documents.services import HEADLINE_PROPOSALS, SUGGESTIONS, document_summary_out
 from apps.pipeline.jobs import defer_processing, has_live_job
@@ -38,12 +38,34 @@ def _not_found() -> ApiError:
     return ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
 
 
+# The history origin of a trash, by its audit `reason`.
+_ORIGINS: Final = {
+    "user": DocumentEvent.Origin.USER,
+    "duplicate": DocumentEvent.Origin.MERGE,
+}
+
+
 def move_to_trash(
-    document: Document, *, user: User | None, actor: AuditActor, reason: str = "user"
+    document: Document,
+    *,
+    user: User | None,
+    actor: AuditActor,
+    reason: str = "user",
+    related_document: Document | None = None,
 ) -> None:
     """Put a locked live letter in the trash: the two fields, a history line and an audit
     row with `reason`. Nothing else about the letter changes. The building block for
-    every caller (a later duplicate merge passes `reason="duplicate"`)."""
+    every caller: a duplicate merge passes `reason="duplicate"` (history origin `merge`)
+    and the kept letter as `related_document`.
+
+    A person always does it: Brievie trashes nothing on its own, so `user=None` is refused
+    (a `trashed` line would otherwise record nobody for what nobody did). A future system
+    trash brings its own origin.
+    """
+    if user is None:
+        raise ValueError("move_to_trash needs the person who trashes the letter.")
+    if reason not in _ORIGINS:
+        raise ValueError(f"Unknown trash reason {reason!r}.")
     with transaction.atomic():
         verdict = retention.check_removal(document, step="trash")
         if not verdict.allowed:
@@ -51,7 +73,9 @@ def move_to_trash(
         document.trashed_at = timezone.now()
         document.trashed_by = user
         document.save(update_fields=["trashed_at", "trashed_by", "updated_at"])
-        organise.record_trashed(document, actor=user)
+        organise.record_trashed(
+            document, actor=user, origin=_ORIGINS[reason], related_document=related_document
+        )
         record(
             AuditCode.DOCUMENT_TRASHED,
             actor=actor,

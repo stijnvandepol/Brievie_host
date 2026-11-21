@@ -13,7 +13,7 @@ from django.utils.translation import gettext as _
 from apps.accounts.models import User
 from apps.common.errors import ApiError, is_try_again
 from apps.common.privacy import mask_bsns
-from apps.documents import organise, visibility
+from apps.documents import duplicates, organise, visibility
 from apps.documents.models import LIVE, Document, DocumentEvent, DocumentSuggestion
 from apps.documents.schemas import ConfirmIn, TaskIn
 from apps.pipeline.validation import dates_in, quote_in_text
@@ -119,6 +119,9 @@ def _store_confirmation(
         document.status = Document.Status.DONE
         document.confirmed_by = user
         document.save(update_fields=["status", "confirmed_by", "confirmed_at", "updated_at"])
+        # Its facts are confirmed now: a pair whose guard fires is withdrawn. As the
+        # system: the confirming member may not see the other letter.
+        duplicates.recheck(document)
 
 
 _CONFIRMED_FIELDS = [
@@ -159,7 +162,7 @@ def _write_confirmation(
     )
     # A task already on the document stays as it is (after a reopen a ticked-off task is
     # still there): the same one is not made twice.
-    present = {_key_of(task) for task in document.tasks.all()}
+    present = {task_key(task) for task in document.tasks.all()}
     for task in _stored_tasks(data, document):
         if (task.type, task.description, task.deadline, task.deadline_source) in present:
             continue
@@ -178,7 +181,7 @@ def _write_confirmation(
     _rules_guarded(document)
 
 
-def _key_of(task: Task) -> tuple[str, str, date | None, str]:
+def task_key(task: Task) -> tuple[str, str, date | None, str]:
     return (task.type, task.description, task.deadline, task.deadline_source)
 
 

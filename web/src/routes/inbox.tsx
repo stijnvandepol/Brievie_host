@@ -1,8 +1,14 @@
 import { t } from "@lingui/core/macro";
 import { useQuery } from "@tanstack/react-query";
 import { createRoute, Link } from "@tanstack/react-router";
-import { useEffect, useRef } from "react";
-import { documentsQuery, inboxCountsQuery, labelsQuery, personsQuery } from "../api/queries";
+import { useEffect, useId, useRef, useState } from "react";
+import {
+  documentsQuery,
+  duplicatesQuery,
+  inboxCountsQuery,
+  labelsQuery,
+  personsQuery,
+} from "../api/queries";
 import type { components } from "../api/schema";
 import { AiStatusLine } from "../components/ai-status-line";
 import { LetterDateText, SenderText, TypeText } from "../components/document-table";
@@ -10,13 +16,15 @@ import { LabelChips } from "../components/label-chip";
 import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
 import { PersonPicker, useSetAddressees } from "../components/person-picker";
 import { SuggestionMark } from "../components/suggestion-list";
-import { Badge, EmptyState, Loading } from "../components/ui";
+import { Badge, EmptyState, Loading, MessageBar } from "../components/ui";
+import { clearDismissed, isDismissedPending } from "../duplicate-notice";
 import { workspaceRoute } from "./workspace";
 
 type DocumentSummary = components["schemas"]["DocumentSummaryOut"];
 type Person = components["schemas"]["PersonOut"];
 type LabelOut = components["schemas"]["LabelOut"];
 type Counts = components["schemas"]["InboxCountsOut"];
+type Duplicate = components["schemas"]["DuplicateOut"];
 
 /**
  * The page "Te doen" (route and API keep the name inbox). For the person, `review` and
@@ -66,6 +74,9 @@ function InboxRow({
         <span className="cell-badges">
           <LabelChips labels={labels} ids={document.label_ids ?? []} />
           <SuggestionMark count={document.open_suggestion_count} />
+          {(document.open_duplicate_count ?? 0) > 0 ? (
+            <Badge intent="warning">{t`Dubbel?`}</Badge>
+          ) : null}
         </span>
       </td>
       <td>
@@ -215,14 +226,75 @@ function CountsLine({ counts }: { counts: Counts }) {
     counts.review > 0 ? t`Controleren: ${counts.review}` : "",
     counts.unassigned > 0 ? t`Naam kiezen: ${counts.unassigned}` : "",
     counts.new > 0 ? t`Bezig: ${counts.new}` : "",
+    (counts.duplicate ?? 0) > 0 ? t`Dubbel?: ${counts.duplicate}` : "",
   ].filter(Boolean);
   return parts.length > 0 ? <p className="muted">{parts.join(" · ")}</p> : null;
+}
+
+/** One pair: both senders and dates, and how alike they are; the link opens the pair. */
+function DuplicateItem({ workspaceId, pair }: { workspaceId: string; pair: Duplicate }) {
+  const similarity = pair.text_similarity;
+  return (
+    <li>
+      <Link
+        to="/w/$workspaceId/dubbel/$duplicateId"
+        params={{ workspaceId, duplicateId: pair.id }}
+        className="duplicate-link"
+      >
+        <span className="duplicate-letters">
+          {[pair.first, pair.second].map((letter) => (
+            <span key={letter.id} className="duplicate-letter">
+              <span className="cell-strong">
+                <SenderText document={letter} />
+              </span>{" "}
+              <span className="muted">
+                <LetterDateText document={letter} />
+              </span>
+            </span>
+          ))}
+        </span>
+        <span className="muted">{t`Lijkt op elkaar voor ${similarity}%`}</span>
+      </Link>
+    </li>
+  );
+}
+
+/** "Dubbel?": pairs of letters that are probably one letter scanned twice. Only when there are any. */
+function Duplicates({ workspaceId, count }: { workspaceId: string; count: number }) {
+  const { data, error } = useQuery({ ...duplicatesQuery(workspaceId), enabled: count > 0 });
+  const headingId = useId();
+  if (count === 0) return null;
+  return (
+    <section className="panel" aria-labelledby={headingId}>
+      <div className="panel-head">
+        <h2 id={headingId}>
+          {t`Dubbel?`} <Badge intent="warning">{count}</Badge>
+        </h2>
+      </div>
+      <p className="panel-note">
+        {t`Deze brieven lijken twee keer gescand. Kijk of het dezelfde brief is.`}
+      </p>
+      <ErrorAlert error={error} />
+      {data ? (
+        <ul className="duplicate-list">
+          {data.map((pair) => (
+            <DuplicateItem key={pair.id} workspaceId={workspaceId} pair={pair} />
+          ))}
+        </ul>
+      ) : error ? null : (
+        <Loading />
+      )}
+    </section>
+  );
 }
 
 function InboxPage() {
   usePageTitle(t`Te doen`);
   const { workspace } = inboxRoute.useRouteContext();
   const { data: counts, error } = useQuery(inboxCountsQuery(workspace.id));
+  // "Het zijn twee brieven" brought the person here: say it once.
+  const [dismissed] = useState(() => isDismissedPending(workspace.id));
+  useEffect(() => clearDismissed(), []);
   return (
     <Shell workspace={workspace}>
       <PageHeader
@@ -231,7 +303,13 @@ function InboxPage() {
       />
       <AiStatusLine workspaceId={workspace.id} />
       <ErrorAlert error={error} />
+      {dismissed ? (
+        <MessageBar intent="success" role="status">
+          {t`Goed. We vragen het niet meer voor deze twee brieven.`}
+        </MessageBar>
+      ) : null}
       {counts ? <CountsLine counts={counts} /> : null}
+      {counts ? <Duplicates workspaceId={workspace.id} count={counts.duplicate ?? 0} /> : null}
       <TodoList workspaceId={workspace.id} canEdit={workspace.role !== "viewer"} />
     </Shell>
   );

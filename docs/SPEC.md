@@ -464,9 +464,12 @@ De namen hieronder zijn de begrippen uit dit document. In de code zijn tabel- en
 | `rule` | volgorde, naam, voorwaarden (JSON), acties (JSON), stop, actief |
 | `rule_run` | rule_id, document_id, resultaat, tijd |
 | `task` | document_id (optioneel), type, deadline, deadline_bron, toegewezen_aan, status, afgerond_op |
+| `duplicate_candidate` | eerste_document_id, tweede_document_id (geordend, één rij per paar), stand (`open`/`samengevoegd`/`afgewezen`/`ingetrokken`), tekstgelijkenis, getallen_overlap, behouden_document_id, besloten_door, besloten_op |
 | `entry` (post) | document_id, richting, bedrag_excl, btw (JSON), bedrag_incl, categorie, person_id/relation_id, vervaldatum, status |
 | `bank_transaction` | datum, bedrag, omschrijving, tegenrekening (versleuteld), match_entry_id |
 | `audit_log` | user_id, actie, object, tijd |
+
+**Dubbele brieven.** Bij binnenkomst vergelijkt Brievie een brief met de brieven van de laatste 180 dagen in dezelfde werkruimte en slaat een vermoedelijk paar op (`duplicate_candidate`, hooguit 3 open per brief). Een paar is alleen zichtbaar voor wie beide brieven mag zien. API: `listDuplicates` (`GET /workspaces/{id}/duplicates`), `getDuplicate` (`GET .../duplicates/{duplicate_id}`), `mergeDuplicate` (`POST .../merge`: de gekozen brief blijft, de andere gaat naar de prullenbak) en `dismissDuplicate` (`POST .../dismiss`: het zijn twee brieven, nooit meer gevraagd). Erbij: `InboxCountsOut.duplicate`, `DocumentSummaryOut.open_duplicate_count` en `DocumentEventOut.related_document_id`. Ontwerp: `docs/superpowers/specs/2026-11-20-duplicates-design.md`.
 
 **Wat "versleuteld per werkruimte" precies dekt** (keuze, zie sectie 14): de documentbestanden en losse gevoelige velden (IBAN, tegenrekening). De OCR-tekst en de zoekindex staan leesbaar in de database, anders kan er niet gezocht worden. Die worden beschermd door RLS, door BSN-maskering vóór opslag en door het advies om het databasevolume op een versleutelde schijf te zetten.
 
