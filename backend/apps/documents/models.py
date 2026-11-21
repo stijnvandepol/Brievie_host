@@ -214,6 +214,15 @@ class Document(WorkspaceModel):
                 & models.Q(trashed_at__isnull=True),
                 name="documents_document_unopened",
             ),
+            # The letters opened today still count as not opened until the day ends
+            # (security review of PR #44, point 2): a range on the opening time.
+            models.Index(
+                fields=["workspace", "addressee_opened_at"],
+                condition=models.Q(status="done", addressee_opened_at__isnull=False)
+                & ~models.Q(addressee_ids=[])
+                & models.Q(trashed_at__isnull=True),
+                name="documents_document_opened",
+            ),
             GinIndex(fields=["search_vector"], name="documents_document_search"),
             # For the typo fallback of search (pg_trgm word similarity).
             GinIndex(
@@ -549,6 +558,11 @@ class DocumentReadMark(WorkspaceModel):
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="read_marks")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
     read_at = models.DateTimeField()
+    # When the member opened the confirmed letter themselves (`markDocumentRead` on a
+    # `done` letter, not only through emergency access). Null for a scan, "Alles gelezen",
+    # an opening during review or through emergency access: those are no opening that
+    # "Nog niet geopend" may count (security review of PR #44, points 1 and 3).
+    opened_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints: ClassVar[list[models.BaseConstraint]] = [

@@ -98,14 +98,23 @@ def _insert(user_id: UUID, workspace_id: UUID, document_ids: Sequence[UUID]) -> 
 def mark_read(membership: Membership, document_id: UUID) -> None:
     """The member opened the letter (S 5.3): their own mark, once. 404 like `getDocument`
     for a letter they may not see or that is in the trash. Writes nothing else of the
-    member: no history, no audit row."""
+    member: no history, no audit row.
+
+    Only an opening of a confirmed letter by the member themselves, not only through
+    emergency access, is an opening (`opened_at`); only that can make the letter "opened
+    by an addressee" (security review of PR #44, points 1 and 3)."""
     # Imported here: `services` builds the letter's answer with this module.
     from apps.documents.services import get_document
 
     with transaction.atomic():
         document = get_document(membership=membership, document_id=document_id)
         _insert(membership.user_id, membership.workspace_id, [document.id])
-        note_addressee_opened(document, membership)
+        if document.status != Document.Status.DONE or visibility.only_through_emergency(document):
+            return
+        DocumentReadMark.objects.filter(
+            document_id=document.id, user_id=membership.user_id, opened_at__isnull=True
+        ).update(opened_at=timezone.now())
+        _note_addressee_opened(document, membership)
 
 
 def mark_unread(membership: Membership, document_id: UUID) -> None:
@@ -131,17 +140,10 @@ def mark_many_read(membership: Membership, document_ids: Sequence[UUID]) -> int:
         return 0
     with transaction.atomic():
         documents = list(
-            visibility.visible_documents(membership)
-            .filter(id__in=ids)
-            .only("id", "workspace_id", "addressee_ids", "addressee_opened_at")
+            visibility.visible_documents(membership).filter(id__in=ids).only("id", "workspace_id")
         )
-        marked = _insert(membership.user_id, membership.workspace_id, [d.id for d in documents])
-        waiting = [d for d in documents if d.addressee_ids and d.addressee_opened_at is None]
-        if waiting:
-            mine = my_post_ids(membership.user_id)
-            for document in waiting:
-                note_addressee_opened(document, membership, post_ids=mine)
-        return marked
+        # Read, not opened: "Alles gelezen" is no addressee's opening of any of them.
+        return _insert(membership.user_id, membership.workspace_id, [d.id for d in documents])
 
 
 def mark_scanned(document: Document, user: User) -> None:
@@ -159,19 +161,13 @@ def my_post_ids(user_id: UUID) -> frozenset[UUID]:
     return frozenset(row[0]) if row is not None and row[0] else frozenset()
 
 
-def note_addressee_opened(
-    document: Document, membership: Membership, *, post_ids: frozenset[UUID] | None = None
-) -> None:
-    """When the member is one the letter is addressed to (their person, a person they
-    manage, their department) and reads it other than only through emergency access: the
-    letter counts as opened by an addressee (S 5.5), set once, as the system. It says
-    nothing about who. `post_ids`: the member's `my_post_ids`, when the caller has them."""
+def _note_addressee_opened(document: Document, membership: Membership) -> None:
+    """The member opened the confirmed letter (`mark_read`); when it is addressed to them
+    (their person, a person they manage, their department) it counts as opened by an
+    addressee (S 5.5), set once, as the system. It says nothing about who."""
     if document.addressee_opened_at is not None or not document.addressee_ids:
         return
-    mine = post_ids if post_ids is not None else my_post_ids(membership.user_id)
-    if not mine & set(document.addressee_ids):
-        return
-    if visibility.only_through_emergency(document):
+    if not my_post_ids(membership.user_id) & set(document.addressee_ids):
         return
     now = timezone.now()
     with system_actor():
@@ -182,9 +178,11 @@ def note_addressee_opened(
 
 
 def recompute_addressee_opened(document: Document) -> None:
-    """After the letter's addressees changed (`visibility.addressee_scope`): opened when one
-    of the members it is now addressed to has a mark (the earliest), else not. As the
-    system; `document.addressee_ids` is the synced list."""
+    """After the letter's addressees changed (`visibility.addressee_scope`) or it was
+    confirmed (`review`): opened when one of the members it is now addressed to opened
+    the confirmed letter (`opened_at`, the earliest), else not. A scan, "Alles gelezen",
+    an opening during review or through emergency access never counts. As the system;
+    `document.addressee_ids` is the synced list."""
     with system_actor():
         opened = None
         ids = list(document.addressee_ids)
@@ -208,7 +206,7 @@ def recompute_addressee_opened(document: Document) -> None:
                 )
             if users:
                 opened = DocumentReadMark.objects.filter(
-                    document_id=document.id, user_id__in=users
-                ).aggregate(first=Min("read_at"))["first"]
+                    document_id=document.id, user_id__in=users, opened_at__isnull=False
+                ).aggregate(first=Min("opened_at"))["first"]
         Document.objects.filter(id=document.id).update(addressee_opened_at=opened)
     document.addressee_opened_at = opened
