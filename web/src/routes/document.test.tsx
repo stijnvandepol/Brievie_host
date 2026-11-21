@@ -17,6 +17,7 @@ import {
   renderApp,
   sales,
   server,
+  trashedLetter,
   user,
   workspace,
 } from "../test-utils";
@@ -410,6 +411,33 @@ describe("document", () => {
     expect(screen.getByText(`${user.name} bevestigde deze brief`)).toBeInTheDocument();
   });
 
+  it("names the trash and the restore in the history", async () => {
+    const base = {
+      can_undo: false,
+      undone: false,
+      label_name: "",
+      rule_name: "",
+      person_name: "",
+      origin: "user",
+      created_at: "2026-11-10T10:00:00Z",
+    };
+    server.use(
+      http.get(`*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/events`, () =>
+        HttpResponse.json([
+          { ...base, id: "e1", kind: "trashed", actor_id: "b3", actor_name: "Bram" },
+          { ...base, id: "e2", kind: "restored", actor_id: user.id, actor_name: user.name },
+          { ...base, id: "e3", kind: "trashed", actor_id: null, actor_name: "" },
+        ]),
+      ),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
+    renderApp(path);
+    expect(await screen.findByText("Naar de prullenbak verplaatst door Bram")).toBeInTheDocument();
+    expect(screen.getByText("Teruggezet uit de prullenbak door jou")).toBeInTheDocument();
+    expect(screen.getByText("Naar de prullenbak verplaatst door Brievie")).toBeInTheDocument();
+  });
+
   const eventsUrl = `*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/events`;
   const ruleEvent = {
     id: "e9",
@@ -631,6 +659,91 @@ describe("document made by the autopilot", () => {
     if (!byAi || !byHand) throw new Error("two tasks expected");
     expect(within(byAi).getByText("Automatisch door AI")).toBeVisible();
     expect(within(byHand).queryByText("Automatisch door AI")).not.toBeInTheDocument();
+  });
+
+  it("asks before Verwijderen, trashes and offers undo on Alle post", async () => {
+    const trashed: string[] = [];
+    server.use(
+      http.post(`*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/trash`, () => {
+        trashed.push(documentSummary.id);
+        return HttpResponse.json(trashedLetter());
+      }),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
+    const user = userEvent.setup();
+    renderApp(path);
+    await user.click(await screen.findByRole("button", { name: "Verwijderen" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Brief verwijderen?" });
+    expect(
+      within(dialog).getByText(
+        "De brief gaat naar de prullenbak. Daar blijft hij 30 dagen. Zo lang kun je hem terugzetten. Daarna wordt hij voorgoed gewist.",
+      ),
+    ).toBeVisible();
+    expect(trashed).toEqual([]);
+    await user.click(within(dialog).getByRole("button", { name: "Naar de prullenbak" }));
+    await waitFor(() => expect(trashed).toHaveLength(1));
+    expect(await screen.findByRole("heading", { level: 1, name: "Alle post" })).toBeVisible();
+    const bar = await screen.findByRole("status");
+    expect(bar).toHaveTextContent("De brief staat in de prullenbak.");
+    expect(within(bar).getByRole("button", { name: "Ongedaan maken" })).toBeVisible();
+  });
+
+  it("restores on Ongedaan maken and opens the letter", async () => {
+    const restored: string[] = [];
+    server.use(
+      http.post(`*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/trash`, () =>
+        HttpResponse.json(trashedLetter()),
+      ),
+      http.post(
+        `*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/restore`,
+        () => {
+          restored.push(documentSummary.id);
+          return HttpResponse.json(documentDetail);
+        },
+      ),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
+    const user = userEvent.setup();
+    renderApp(path);
+    await user.click(await screen.findByRole("button", { name: "Verwijderen" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Brief verwijderen?" });
+    await user.click(within(dialog).getByRole("button", { name: "Naar de prullenbak" }));
+    const bar = await screen.findByRole("status");
+    await user.click(within(bar).getByRole("button", { name: "Ongedaan maken" }));
+    await waitFor(() => expect(restored).toHaveLength(1));
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Belastingdienst" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("De brief staat in de prullenbak.")).not.toBeInTheDocument();
+  });
+
+  it("offers a viewer no Verwijderen", async () => {
+    server.use(asRole("viewer"), ...loggedInHandlers(), ...documentHandlers());
+    renderApp(path);
+    await screen.findByRole("heading", { level: 1, name: "Belastingdienst" });
+    expect(screen.queryByRole("button", { name: "Verwijderen" })).not.toBeInTheDocument();
+  });
+
+  it("says a letter is in the trash, with a link there", async () => {
+    server.use(
+      ...loggedInHandlers(),
+      http.get(`*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}`, () =>
+        HttpResponse.json(
+          { code: "document_in_trash", message: "Deze brief staat in de prullenbak." },
+          { status: 404 },
+        ),
+      ),
+      ...documentHandlers(),
+    );
+    renderApp(path);
+    expect(await screen.findByText("Deze brief staat in de prullenbak.")).toBeVisible();
+    expect(screen.getByRole("link", { name: "Naar de prullenbak" })).toHaveAttribute(
+      "href",
+      `/w/${workspace.id}/prullenbak`,
+    );
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("offers no reopen to a viewer", async () => {

@@ -2,7 +2,7 @@ from datetime import date, datetime
 from uuid import UUID
 
 from ninja import Schema
-from pydantic import Field
+from pydantic import AwareDatetime, Field
 
 from apps.common.schemas import InputSchema
 from apps.documents.models import DocumentEvent
@@ -69,6 +69,41 @@ class DocumentSummaryOut(Schema):
     proposed_sender: str = ""
     proposed_document_type: str = ""
     proposed_letter_date: date | None = None
+
+
+class TrashedDocumentOut(DocumentSummaryOut):
+    """A letter in the trash: its summary row, when and by whom it was trashed, and when
+    it is purged (clients never compute the retention themselves)."""
+
+    trashed_at: datetime
+    # Empty when Brievie did it.
+    trashed_by_name: str = ""
+    # `trashed_at` plus the retention (30 days); purged within the hour after.
+    purge_after: datetime
+
+
+class TrashListOut(Schema):
+    """The caller's trash, the most recently trashed first (at most 500)."""
+
+    items: list[TrashedDocumentOut] = Field(default_factory=list)
+    # How many days a letter stays in the trash.
+    retention_days: int = 30
+    # How many letters the caller's trash holds, also beyond the 500 listed: what
+    # `emptyTrash` without a newer `up_to` would purge.
+    total: int = 0
+
+
+class EmptyTrashIn(InputSchema):
+    """Empty the trash up to the newest `trashed_at` the caller showed (all when absent):
+    a letter trashed while the admin read the question is not emptied. With an offset
+    only (422 otherwise): a moment without one would be read in the server's zone."""
+
+    up_to: AwareDatetime | None = None
+
+
+class EmptyTrashOut(Schema):
+    # How many letters are now being purged.
+    document_count: int
 
 
 class PageOut(Schema):

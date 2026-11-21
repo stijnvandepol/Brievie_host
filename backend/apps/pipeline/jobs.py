@@ -10,7 +10,7 @@ from procrastinate import JobContext, RetryStrategy
 from procrastinate.contrib.django import app
 from procrastinate.contrib.django.models import ProcrastinateJob
 
-from apps.documents.models import Document
+from apps.documents.models import LIVE, Document
 from apps.pipeline.errors import PermanentError, RetryableError
 from apps.pipeline.steps import mark_failed, run_pipeline
 from apps.workspaces.context import SYSTEM, workspace_context
@@ -87,10 +87,10 @@ def requeue_abandoned_documents() -> int:
     for workspace_id in Workspace.objects.values_list("id", flat=True):
         with workspace_context(workspace_id, actor=SYSTEM):
             stale = Document.objects.filter(
-                status=Document.Status.PROCESSING, updated_at__lt=stale_before
+                LIVE, status=Document.Status.PROCESSING, updated_at__lt=stale_before
             ).values_list("id", flat=True)
             for document_id in stale:
-                if _has_live_job(document_id):
+                if has_live_job(document_id):
                     continue
                 defer_processing(workspace_id=workspace_id, document_id=document_id)
                 queued += 1
@@ -99,7 +99,8 @@ def requeue_abandoned_documents() -> int:
     return queued
 
 
-def _has_live_job(document_id: UUID) -> bool:
+def has_live_job(document_id: UUID) -> bool:
+    """A `process_document` job for the letter waits or runs."""
     return ProcrastinateJob.objects.filter(
         task_name="process_document",
         status__in=["todo", "doing"],

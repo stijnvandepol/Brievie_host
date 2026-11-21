@@ -12,7 +12,9 @@ same transaction (P3).
 `visible_documents` is the one seam of every member-facing read: the list, the inbox
 counts, a letter's detail, pages and history, and search all start from it. The
 policies decide what a member sees; the seam adds the member filter so PostgreSQL can use
-the indexes, and refuses to run as anyone but the member it is asked for.
+the indexes, leaves out the letters in the trash, and refuses to run as anyone but the
+member it is asked for. `trashed_documents` is its sibling for the trash, on the same
+rights.
 """
 
 import logging
@@ -26,7 +28,7 @@ from django.db import connection, transaction
 from django.db.models import Q, QuerySet
 from django.utils import timezone
 
-from apps.documents.models import Document, DocumentReader, DocumentShare
+from apps.documents.models import LIVE, Document, DocumentReader, DocumentShare
 from apps.people.models import DepartmentMember, Person
 from apps.workspaces.context import SYSTEM, current_actor, system_actor, workspace_context
 from apps.workspaces.models import Membership, Workspace
@@ -316,9 +318,8 @@ def verify_all() -> VisibilityCheck:
     return VisibilityCheck(addressee_ids_fixed=fixed_ids, reader_rows_fixed=fixed_readers)
 
 
-def visible_documents(membership: Membership) -> QuerySet[Document]:
-    """The letters `membership`'s user may see in its workspace: the seam of every
-    member-facing read (list, inbox counts, detail, pages, history, search).
+def _readable(membership: Membership) -> QuerySet[Document]:
+    """Every letter `membership`'s user may read in its workspace, in the trash or not.
 
     The document policies decide (S 4.1), with the request's actor; the member filter
     (S 4.9.5) only lets PostgreSQL use the indexes and changes no result. Runs only as
@@ -327,7 +328,20 @@ def visible_documents(membership: Membership) -> QuerySet[Document]:
     loaded: no reader needs it, and it is about as large as the text.
     """
     if current_actor() != membership.user_id:
-        raise RuntimeError("visible_documents() runs only as the member it is asked for.")
+        raise RuntimeError("The document seam runs only as the member it is asked for.")
     documents = Document.objects.filter(workspace_id=membership.workspace_id).defer("search_vector")
     member = member_filter()
     return documents if member is None else documents.filter(member)
+
+
+def visible_documents(membership: Membership) -> QuerySet[Document]:
+    """The letters `membership`'s user may see in its workspace, the trash left out: the
+    seam of every member-facing read (list, inbox counts, detail, pages, history, search)."""
+    return _readable(membership).filter(LIVE)
+
+
+def trashed_documents(membership: Membership) -> QuerySet[Document]:
+    """The letters in the trash `membership`'s user may see, on the same rights as
+    `visible_documents`: the only read of the trash (list, count, restore, purge-now,
+    empty). A letter whose purge started is in neither."""
+    return _readable(membership).filter(trashed_at__isnull=False, purge_started_at__isnull=True)

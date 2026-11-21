@@ -430,6 +430,18 @@ msgid "Export gedownload"
 msgstr "Export downloaded"
 
 #: apps/audit/codes.py
+msgid "Brief naar de prullenbak"
+msgstr "Letter moved to the trash"
+
+#: apps/audit/codes.py
+msgid "Brief teruggezet"
+msgstr "Letter restored"
+
+#: apps/audit/codes.py
+msgid "Brief definitief verwijderd"
+msgstr "Letter deleted permanently"
+
+#: apps/audit/codes.py
 msgid "Gebruiker"
 msgstr "User"
 
@@ -1228,6 +1240,14 @@ msgid "Er bestaat al een ander document met dit kenmerk."
 msgstr "Another document with this reference already exists."
 
 #: apps/documents/intake.py
+msgid "Deze brief staat in de prullenbak en wordt nu voorgoed gewist."
+msgstr "This letter is in the trash and is being erased for good right now."
+
+#: apps/documents/intake.py
+msgid "Deze brief staat in de prullenbak. Zet hem daar terug als je hem weer wilt zien."
+msgstr "This letter is in the trash. Restore it from there if you want to see it again."
+
+#: apps/documents/intake.py
 msgid "Het aantal pagina's klopt niet."
 msgstr "The number of pages is not correct."
 
@@ -1395,7 +1415,11 @@ msgstr "We can't find this event."
 msgid "Deze wijziging kun je niet meer terugdraaien."
 msgstr "This change can no longer be undone."
 
-#: apps/documents/review.py apps/documents/services.py
+#: apps/documents/retention.py
+msgid "Deze brief moet nog bewaard worden. Je kunt hem nu niet wissen."
+msgstr "This letter still has to be kept. You can't erase it now."
+
+#: apps/documents/review.py apps/documents/services.py apps/documents/trash.py
 msgid "We kunnen dit document niet vinden."
 msgstr "We can't find this document."
 
@@ -1450,6 +1474,10 @@ msgstr "We can't find this folder."
 #: apps/documents/services.py
 msgid "Er is al een map met deze naam op deze plek."
 msgstr "There is already a folder with this name in this place."
+
+#: apps/documents/services.py
+msgid "Deze brief staat in de prullenbak."
+msgstr "This letter is in the trash."
 
 #: apps/documents/services.py
 msgid "We kunnen deze pagina niet vinden."
@@ -1612,6 +1640,10 @@ msgstr "This member already belongs to another person."
 #: apps/people/services.py
 msgid "Deze werkruimte heeft het grootste aantal personen. Verwijder er eerst een."
 msgstr "This workspace has the largest number of persons. Delete one first."
+
+#: apps/people/services.py
+msgid "Deze persoon staat nog op een brief in de prullenbak. Na het wissen van die brief kun je de persoon verwijderen. Archiveren kan nu al."
+msgstr "This person is still on a letter in the trash. Once that letter is erased you can delete the person. You can archive them now."
 
 #: apps/people/services.py
 msgid "Deze persoon is nog in gebruik. Je kunt de persoon wel archiveren."

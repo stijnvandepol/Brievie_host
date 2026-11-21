@@ -16,11 +16,13 @@ import {
 import { ApiFailure, api, errorMessage } from "../api/client";
 import { inboxCountsQuery, meQuery, workspacesQuery } from "../api/queries";
 import { resetSearch } from "../search-term";
+import { clearUndo } from "../undo-trash";
 import { Icon, type IconName } from "./icons";
 import { LanguageSwitch } from "./language-switch";
 import { NoticeBar } from "./notice-bar";
 import { SearchField } from "./search-field";
 import { initials, MessageBar } from "./ui";
+import { UndoBar } from "./undo-bar";
 
 /** Every page gets its own title (WCAG 2.4.2). */
 export function usePageTitle(title: string) {
@@ -176,6 +178,7 @@ function NavItem({
     | "/koppel-app"
     | "/w/$workspaceId/inbox"
     | "/w/$workspaceId/post"
+    | "/w/$workspaceId/prullenbak"
     | "/w/$workspaceId/personen"
     | "/w/$workspaceId/leden"
     | "/w/$workspaceId/instellingen"
@@ -236,6 +239,12 @@ function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
         count={todo}
       />
       <NavItem to="/w/$workspaceId/post" params={params} icon="mail" label={t`Alle post`} />
+      <NavItem
+        to="/w/$workspaceId/prullenbak"
+        params={params}
+        icon="delete"
+        label={t`Prullenbak`}
+      />
       <NavItem to="/w/$workspaceId/personen" params={params} icon="people" label={t`Personen`} />
       <NavItem to="/w/$workspaceId/leden" params={params} icon="personAdd" label={t`Leden`} />
       <NavItem to="/w/$workspaceId/labels" params={params} icon="tag" label={t`Labels`} />
@@ -397,6 +406,7 @@ export function Shell({ children, workspace }: { children: ReactNode; workspace?
     onSuccess: async () => {
       queryClient.clear();
       resetSearch();
+      clearUndo();
       await navigate({ to: "/login" });
     },
   });
@@ -454,6 +464,7 @@ export function Shell({ children, workspace }: { children: ReactNode; workspace?
           <div className="content-inner">
             <ErrorAlert error={logout.error} />
             <NoticeBar />
+            {workspace ? <UndoBar workspaceId={workspace.id} /> : null}
             {children}
           </div>
         </main>

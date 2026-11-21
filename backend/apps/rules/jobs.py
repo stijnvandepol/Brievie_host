@@ -7,7 +7,7 @@ from django.db import transaction
 from procrastinate.contrib.django import app
 from procrastinate.exceptions import AlreadyEnqueued
 
-from apps.documents.models import Document
+from apps.documents.models import LIVE, Document
 from apps.pipeline.jobs import QUEUE
 from apps.rules.definition import to_spec
 from apps.rules.engine import RuleSpec, evaluate
@@ -89,7 +89,7 @@ def apply_rule_batch(
         spec = _active_spec(workspace_id, rule_id)
         if spec is None:
             return
-        documents = Document.objects.filter(workspace_id=workspace_id).exclude(
+        documents = Document.objects.filter(LIVE, workspace_id=workspace_id).exclude(
             status=Document.Status.PROCESSING
         )
         if after is not None:
@@ -98,7 +98,7 @@ def apply_rule_batch(
         if not ids:
             return
         locked = (
-            Document.objects.filter(id__in=ids)
+            Document.objects.filter(LIVE, id__in=ids)
             .exclude(status=Document.Status.PROCESSING)
             .select_for_update(no_key=True)
             .order_by("id")

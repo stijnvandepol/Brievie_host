@@ -24,6 +24,7 @@ import { serverAuditLogRoute } from "./routes/server-audit-log";
 import { sessionsRoute } from "./routes/sessions";
 import { settingsRoute } from "./routes/settings";
 import { setupRoute } from "./routes/setup";
+import { trashRoute } from "./routes/trash";
 import { workspaceRoute } from "./routes/workspace";
 
 const routeTree = rootRoute.addChildren([
@@ -40,6 +41,7 @@ const routeTree = rootRoute.addChildren([
   workspaceRoute.addChildren([
     inboxRoute,
     postRoute,
+    trashRoute,
     searchRoute,
     documentRoute,
     personsRoute,

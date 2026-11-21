@@ -94,6 +94,12 @@ the translation. Add a line before introducing a new domain term.
 | zoeken | search (`searchDocuments`) |
 | fragment (stuk tekst bij een treffer) | snippet (`SnippetPartOut`) |
 | Geen exacte treffer. Dit lijkt erop. | approximate match (`fuzzy`) |
+| prullenbak | trash (`trashed_at`, `listTrash`) |
+| verwijderen (naar de prullenbak) | trash (`trashDocument`) |
+| terugzetten | restore (`restoreDocument`) |
+| definitief verwijderen | purge (`purgeDocument`, `purge_started_at`) |
+| prullenbak legen | empty trash (`emptyTrash`) |
+| bewaartermijn | retention term (`retention.check_removal`) |
 
 ## English in the interface
 
@@ -139,6 +145,7 @@ the request that creates the workspace and keep that name.
 | bevestigen | confirm | |
 | terugdraaien | undo | |
 | herstelblad | recovery sheet | |
+| prullenbak | Trash | verwijderen: delete (to the trash); definitief verwijderen: delete permanently; terugzetten: restore; prullenbak legen: empty trash. |
 | herstellink | reset link | |
 | back-up | backup | |
 | logboek | log | Serverlogboek: Server log. |

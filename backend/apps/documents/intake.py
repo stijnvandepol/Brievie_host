@@ -95,7 +95,9 @@ def _find_existing(workspace: Workspace, client_id: UUID) -> Document | None:
 
 def _same_upload(existing: Document, hashes: list[str]) -> Document:
     """The existing letter when the uploader may read it and the pages are the same;
-    otherwise the same 409 as for a different upload, so the answer tells nothing."""
+    otherwise the same 409 as for a different upload, so the answer tells nothing. A
+    letter in the trash is never brought back by an upload: 409 `document_trashed`, only
+    once the pages and the right to read it are established."""
     with system_actor():
         stored = list(existing.pages.order_by("index").values_list("sha256", flat=True))
     if stored != hashes or not visibility.can_read(existing.id):
@@ -103,6 +105,19 @@ def _same_upload(existing: Document, hashes: list[str]) -> Document:
             409,
             "document_conflict",
             _("Er bestaat al een ander document met dit kenmerk."),
+        )
+    if existing.purge_started_at is not None:
+        # Restoring it is no longer possible: no advice to do so.
+        raise ApiError(
+            409,
+            "document_trashed",
+            _("Deze brief staat in de prullenbak en wordt nu voorgoed gewist."),
+        )
+    if existing.trashed_at is not None:
+        raise ApiError(
+            409,
+            "document_trashed",
+            _("Deze brief staat in de prullenbak. Zet hem daar terug als je hem weer wilt zien."),
         )
     return existing
 

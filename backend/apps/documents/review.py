@@ -14,7 +14,7 @@ from apps.accounts.models import User
 from apps.common.errors import ApiError, is_try_again
 from apps.common.privacy import mask_bsns
 from apps.documents import organise, visibility
-from apps.documents.models import Document, DocumentEvent, DocumentSuggestion
+from apps.documents.models import LIVE, Document, DocumentEvent, DocumentSuggestion
 from apps.documents.schemas import ConfirmIn, TaskIn
 from apps.pipeline.validation import dates_in, quote_in_text
 from apps.rules import triggers
@@ -64,7 +64,7 @@ def confirm_document(
         with system_actor():
             seen = (
                 Document.objects.select_for_update(no_key=True)
-                .filter(workspace=workspace, id=document_id)
+                .filter(LIVE, workspace=workspace, id=document_id)
                 .first()
             )
             # Only a person's review repeats: the AI's confirmation is taken back by
@@ -78,7 +78,7 @@ def confirm_document(
                 and _is_repeat(data, seen)
             ):
                 return seen
-        document = Document.objects.filter(workspace=workspace, id=document_id).first()
+        document = Document.objects.filter(LIVE, workspace=workspace, id=document_id).first()
         if document is None:
             raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
         if document.status not in _REVIEWABLE:
