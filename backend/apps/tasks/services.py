@@ -75,7 +75,9 @@ def complete_task(
         if task.status != Task.Status.DONE:
             task.status = Task.Status.DONE
             task.completed_at = timezone.now()
-            task.save(update_fields=["status", "completed_at", "updated_at"])
+            # "Afgevinkt door Anne"; a merge's completion keeps the person who merged.
+            task.completed_by = user
+            task.save(update_fields=["status", "completed_at", "completed_by", "updated_at"])
             _record(task, DocumentEvent.Kind.TASK_COMPLETED, user, origin)
         return task
 
@@ -87,8 +89,28 @@ def reopen_task(*, workspace: Workspace, user: User, task_id: UUID) -> Task:
         if task.status != Task.Status.OPEN:
             task.status = Task.Status.OPEN
             task.completed_at = None
-            task.save(update_fields=["status", "completed_at", "updated_at"])
+            task.completed_by = None
+            task.save(update_fields=["status", "completed_at", "completed_by", "updated_at"])
             _record(task, DocumentEvent.Kind.TASK_REOPENED, user)
+        return task
+
+
+def set_deadline(*, workspace: Workspace, user: User, task_id: UUID, deadline: date | None) -> Task:
+    """ "Datum invullen": the date the letter names, filled in by hand (source `manual`,
+    no quote; the term's words stay). The same date again writes nothing. 422 for a date
+    before the letter's date; 404 like an unknown id for a task the caller does not see."""
+    with transaction.atomic():
+        task = _get_for_update(workspace, task_id)
+        letter_date = task.document.letter_date if task.document is not None else None
+        if deadline is not None and letter_date is not None and deadline < letter_date:
+            raise ApiError(422, "validation_error", _("Die datum ligt voor de datum van de brief."))
+        if task.deadline == deadline and task.deadline_source == Task.DeadlineSource.MANUAL:
+            return task
+        task.deadline = deadline
+        task.deadline_source = Task.DeadlineSource.MANUAL
+        task.deadline_quote = ""
+        task.save(update_fields=["deadline", "deadline_source", "deadline_quote", "updated_at"])
+        _record(task, DocumentEvent.Kind.TASK_DEADLINE_SET, user)
         return task
 
 

@@ -112,7 +112,6 @@ def test_repeat_confirm_with_amount_matches(client_a: Client, ws_a: Workspace) -
     assert other.status_code == 409
 
 
-@pytest.mark.xfail(strict=True, reason="Task 8: setTaskDeadline")
 def test_reconfirm_after_dating_makes_no_second_task(client_a: Client, ws_a: Workspace) -> None:
     document_id = _letter(client_a, ws_a, TERM_TEXT)
     body = review(tasks=[_undated()])

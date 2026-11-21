@@ -8,6 +8,7 @@ from apps.common.schemas import AUTH_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.tasks import assignment, services
 from apps.tasks.schemas import (
     AssignIn,
+    DeadlineIn,
     MyTaskCountsOut,
     MyTasksOut,
     TaskAssigneeOut,
@@ -145,3 +146,27 @@ def list_task_assignees(
         TaskAssigneeOut(user_id=a.user_id, name=a.name, is_me=a.is_me)
         for a in assignment.assignees(membership, task_id)
     ]
+
+
+@router.post(
+    f"{_TASK}/deadline",
+    response={200: TaskItemOut, 404: ErrorOut, 422: ErrorOut, **SESSION_WRITE_ERRORS},
+    operation_id="setTaskDeadline",
+    description=(
+        '"Datum invullen": the date the letter names, filled in by hand (`deadline`; null '
+        "takes it away). The source becomes `manual`; the term's words stay. The same date "
+        "again changes nothing. Writes a `task_deadline_set` event on the letter. 422 "
+        "`validation_error` for a date before the letter's date."
+    ),
+)
+def set_task_deadline(
+    request: HttpRequest, workspace_id: UUID, task_id: UUID, payload: DeadlineIn
+) -> TaskItemOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    task = services.set_deadline(
+        workspace=membership.workspace,
+        user=current_user(request),
+        task_id=task_id,
+        deadline=payload.deadline,
+    )
+    return task_item_out(task, can_edit=True, today=services.task_today())
