@@ -56,6 +56,11 @@ def test_the_reader_table_needs_its_own_policy() -> None:
     assert privacy_problems(_conn()) == [_table("documents_documentreader")]
 
 
+def test_the_read_mark_table_needs_its_own_row_policy() -> None:
+    _run('DROP POLICY read_mark_own ON "documents_documentreadmark"')
+    assert privacy_problems(_conn()) == [_table("documents_documentreadmark")]
+
+
 def test_a_back_up_from_before_the_functions_is_not_checked_for_them() -> None:
     _run(
         "DELETE FROM django_migrations"

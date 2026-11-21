@@ -67,6 +67,9 @@ VISIBILITY_POLICIES = (
     "document_visibility_delete",
 )
 READER_TABLE = "documents_documentreader"
+# The read marks: besides the letter's policies, a member reads only their own rows.
+READ_MARK_TABLE = "documents_documentreadmark"
+READ_MARK_POLICY = "read_mark_own"
 
 
 def privacy_problems(conn: psycopg.Connection[tuple[object, ...]]) -> list[str]:
@@ -118,6 +121,17 @@ def privacy_problems(conn: psycopg.Connection[tuple[object, ...]]) -> list[str]:
         problems.append(
             _("De database mist de regels voor wie welke post ziet in tabel %(table)s.")
             % {"table": READER_TABLE}
+        )
+    # A back-up from before the read marks (documents/0022) has no such table.
+    mark = conn.execute(
+        "SELECT to_regclass(%s) IS NULL OR EXISTS (SELECT 1 FROM pg_catalog.pg_policy"
+        " WHERE polrelid = to_regclass(%s) AND polname = %s AND NOT polpermissive)",
+        [f"public.{READ_MARK_TABLE}", f"public.{READ_MARK_TABLE}", READ_MARK_POLICY],
+    ).fetchone()
+    if mark is None or not mark[0]:
+        problems.append(
+            _("De database mist de regels voor wie welke post ziet in tabel %(table)s.")
+            % {"table": READ_MARK_TABLE}
         )
     return problems
 

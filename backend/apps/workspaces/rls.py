@@ -80,6 +80,7 @@ VISIBILITY_POLICIES: Final = (
     "document_visibility_delete",
 )
 READER_POLICY: Final = "reader_scope"
+READ_MARK_POLICY: Final = "read_mark_own"
 _COMMANDS: Final = ("SELECT", "UPDATE", "DELETE")
 
 
@@ -146,6 +147,26 @@ def restrict_reader_rows() -> migrations.RunSQL:
             " WITH CHECK ((SELECT public.brievie_is_system()))"
         ],
         reverse_sql=[f'DROP POLICY {READER_POLICY} ON "documents_documentreader"'],
+    )
+
+
+def own_rows_policy(table: str, name: str) -> migrations.RunSQL:
+    """A user reads and writes only their own rows (`user_id`), the system all of the
+    workspace: a restrictive policy for every command, so it narrows whatever else the
+    table allows (navigation spec S 5: the read marks)."""
+    table = _checked(table)
+    if not _TABLE_NAME.fullmatch(name):
+        raise ValueError(f"Not a plain policy name: {name!r}")
+    condition = (
+        "(SELECT public.brievie_is_system())"
+        f' OR "{table}".user_id = (SELECT public.brievie_actor_id())'
+    )
+    return migrations.RunSQL(
+        sql=[
+            f'CREATE POLICY {name} ON "{table}" AS RESTRICTIVE FOR ALL'
+            f" USING ({condition}) WITH CHECK ({condition})"
+        ],
+        reverse_sql=[f'DROP POLICY {name} ON "{table}"'],
     )
 
 

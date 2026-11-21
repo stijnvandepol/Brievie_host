@@ -400,6 +400,7 @@ POLICY_TABLES = (
     "documents_documentsuggestion",
     "documents_documentshare",
     "documents_documentreader",
+    "documents_documentreadmark",
     "rules_rulerun",
     "tasks_task",
 )
