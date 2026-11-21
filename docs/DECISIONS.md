@@ -2143,3 +2143,10 @@ installation starts in own post.
   admin demoted in between gets 403 `forbidden`. `actor_role` of `link_member` counts only
   for a call without a user, and only `ACTING_AS_SYSTEM` with a system actor is the
   system; anything else without a user acts with no rights.
+- **The preview counts only what its admin can read (finding 4).** `letter_count` counted,
+  as the system, every letter whose viewers change, private ones included: an admin who
+  does not read all post learned exact counts per person or department by previewing a
+  link or a department member. Now it counts only letters the previewing admin can read
+  through the policy at that moment (for one who reads all post: every letter that is not
+  private, plus the private ones they read). The count says "letters you can read whose
+  viewers change"; it may be 0 where others' post moves.

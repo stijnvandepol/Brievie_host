@@ -36,7 +36,7 @@ from apps.accounts.models import User
 from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
-from apps.documents.models import DocumentReader
+from apps.documents.models import Document, DocumentReader
 from apps.people.models import DepartmentMember, Person
 from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.locks import lock_memberships
@@ -408,14 +408,53 @@ def _letters_with_readers(workspace_id: UUID) -> list[UUID]:
 ViewerMap = dict[object, tuple[int, frozenset[UUID]]]
 
 
-def _viewer_map(workspace_id: UUID, one_by_one: list[UUID]) -> ViewerMap:
+@dataclass(frozen=True)
+class _Counted:
+    """The letters a preview may count for its admin: what they can read (finding 4)."""
+
+    # None: every letter that is not private (the admin reads all of it).
+    readable: list[UUID] | None
+    # The letters with reader rows the admin can read, asked one by one.
+    one_by_one: list[UUID]
+    # Every letter with reader rows: never in a group.
+    with_readers: list[UUID]
+
+
+def _countable(workspace_id: UUID, actor_id: UUID | None) -> _Counted:
+    """Only letters the admin can read now count (security review of PR #39, finding 4):
+    a count of others would tell how much post a person or department has, private
+    post included. Read through the policy, as the admin; the system counts everything."""
+    with_readers = _letters_with_readers(workspace_id)
+    if actor_id is None:
+        return _Counted(readable=None, one_by_one=with_readers, with_readers=with_readers)
+    with workspace_context(workspace_id, actor=actor_id), connection.cursor() as c:
+        c.execute("SELECT public.brievie_sees_all_post(%s)", [actor_id])
+        row = c.fetchone()
+        sees_all = bool(row and row[0])
+        # As the admin: the policy leaves out what they cannot read.
+        letters = Document.objects.filter(workspace_id=workspace_id)
+        one_by_one = set(letters.filter(id__in=with_readers).values_list("id", flat=True))
+        readable = None if sees_all else sorted(letters.values_list("id", flat=True), key=str)
+    return _Counted(
+        readable=readable,
+        one_by_one=[d for d in with_readers if d in one_by_one],
+        with_readers=with_readers,
+    )
+
+
+def _viewer_map(workspace_id: UUID, counted: _Counted) -> ViewerMap:
     """Who sees what now: (letters, viewers) per group of alike letters, and per letter
-    for `one_by_one`; as the system."""
+    for the ones with reader rows; only letters the admin may count. As the system."""
     found: ViewerMap = {}
+    one_by_one = counted.one_by_one
+    readable = "" if counted.readable is None else " AND d.id = ANY(%s::uuid[])"
+    params: list[UUID | list[UUID]] = [workspace_id, counted.with_readers]
+    if counted.readable is not None:
+        params.append(counted.readable)
     with workspace_context(workspace_id, actor=SYSTEM), connection.cursor() as c:
         c.execute(
-            viewer_groups_sql("d.workspace_id = %s AND NOT (d.id = ANY(%s::uuid[]))"),
-            [workspace_id, one_by_one],
+            viewer_groups_sql("d.workspace_id = %s AND NOT (d.id = ANY(%s::uuid[]))" + readable),
+            params,
         )
         for addressees, scanner, status, letters, viewers in c.fetchall():
             found[("group", tuple(addressees), scanner, status)] = (
@@ -489,7 +528,8 @@ def preview(
     change: str,
 ) -> PreviewResult:
     """Run `apply` (a change of sight) inside a savepoint that is rolled back, and say
-    what it would do: who gains and who loses, how many letters change viewers, whether
+    what it would do: who gains and who loses, how many letters the admin can read
+    change viewers (no count of letters they cannot read, finding 4), whether
     the admin must confirm, the summary sentences of the state after, and the token a
     confirmation sends back (the fingerprint of the state now). Nothing is kept: no
     write, no audit row, no notice. Errors of `apply` (403, 404, 409, 422) pass through."""
@@ -498,11 +538,11 @@ def preview(
         with transaction.atomic():
             lock_memberships(workspace)
             before = snapshot(workspace)
-            one_by_one = _letters_with_readers(workspace.id)
-            before_map = _viewer_map(workspace.id, one_by_one)
+            counted = _countable(workspace.id, actor_id)
+            before_map = _viewer_map(workspace.id, counted)
             apply()
             after = snapshot(workspace)
-            after_map = _viewer_map(workspace.id, one_by_one)
+            after_map = _viewer_map(workspace.id, counted)
             sentences = describe(policy_facts(workspace, after, actor_id), audience="summary")
             transaction.set_rollback(True)
     finally:

@@ -311,7 +311,8 @@ def test_preview_of_a_member_change_changes_nothing(client: Client) -> None:
         ("Piet", ["post van Finance"], [])
     ]
     assert body["needs_confirmation"] is True
-    assert body["letter_count"] == 1
+    # Anne reads no post that is not for her: Finance's letter is not counted for her.
+    assert body["letter_count"] == 0
     with as_actor(o.workspace, SYSTEM):
         assert not DepartmentMember.objects.filter(user=o.plain).exists()
     assert _audit(o, "department_member_added") == []

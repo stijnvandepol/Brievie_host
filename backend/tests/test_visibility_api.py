@@ -17,7 +17,7 @@ from apps.workspaces.context import SYSTEM
 from apps.workspaces.models import Membership, Workspace
 from apps.workspaces.schemas import VisibilityIn
 from apps.workspaces.visibility_settings import fingerprint, snapshot
-from tests.visibility_support import Office, as_actor, office
+from tests.visibility_support import Office, as_actor, office, private_letter
 
 if TYPE_CHECKING:
     from tests.helpers import Response
@@ -64,17 +64,11 @@ def _audit(o: Office, code: str) -> list[dict[str, object]]:
 
 def test_preview_lists_who_gains_and_loses_and_counts_letters(client: Client) -> None:
     o = office()
+    o.state(e=False, d=True, a=True)  # Anne reads all post that is not private
     r = _preview(_as(client, o.admin), o, {"everyone_sees_all": True})
     assert r.status_code == 200, r.json()
     body = r.json()
-    assert [c["name"] for c in body["changes"]] == [
-        "Anne",
-        "Femke",
-        "Hans",
-        "Piet",
-        "Sandra",
-        "Vera",
-    ]
+    assert [c["name"] for c in body["changes"]] == ["Femke", "Hans", "Piet", "Sandra", "Vera"]
     assert all(c["gains"] == ["alle post die niet privé is"] for c in body["changes"])
     assert all(c["losses"] == [] for c in body["changes"])
     # Every letter that is not private changes viewers; the private one keeps its readers.
@@ -350,3 +344,24 @@ def test_a_token_belongs_to_its_workspace(client: Client) -> None:
     assert r.status_code == 409
     assert r.json()["code"] == "preview_outdated"
     assert _switches(o) == (False, True, False)
+
+
+def test_the_preview_counts_only_letters_the_admin_can_read(client: Client) -> None:
+    """Finding 4: no exact count of a department's or person's post, private or not,
+    for an admin who cannot read it."""
+    o = office()
+    private_letter(o.workspace, addressees=[o.persons["Finance"]])
+    body: dict[str, object] = {
+        "member_change": "department_add",
+        "member_user_id": str(o.plain.id),
+        "member_person_id": str(o.persons["Finance"].id),
+    }
+    _as(client, o.admin)
+    # Admins read no post that is not for them: Finance's letters are not counted.
+    assert _preview(client, o, body).json()["letter_count"] == 0
+    # Admins read all post: Finance's open letter counts, its private one does not.
+    o.state(e=False, d=True, a=True)
+    assert _preview(client, o, body).json()["letter_count"] == 1
+    # Femke reads both and would count both, were she an admin.
+    Membership.objects.filter(workspace=o.workspace, user=o.finance).update(role="admin")
+    assert _preview(_as(client, o.finance), o, body).json()["letter_count"] == 2
