@@ -23,6 +23,7 @@ from apps.documents.models import (
 from apps.documents.retention import RemovalVerdict
 from apps.labels.models import Label
 from apps.people.models import Person
+from apps.tasks import services as task_services
 from apps.tasks.models import Task
 from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
@@ -252,6 +253,27 @@ def test_merge_completes_twin_when_asked(ws_a: Workspace) -> None:
     assert after.completed_at is not None
     [completed] = events(keep, DocumentEvent.Kind.TASK_COMPLETED)
     assert (completed.origin, completed.actor_id) == ("merge", admin.id)
+
+
+def test_merge_completes_twin_through_the_task_service(
+    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One place completes a task: the merge calls `tasks.services.complete_task`."""
+    keep, other, candidate = two_letters(ws_a)
+    twin = task(keep)
+    task(other, status=Task.Status.DONE)
+    calls: list[tuple[UUID, str]] = []
+    real = task_services.complete_task
+
+    def spy(*, workspace: Workspace, user: User, task_id: UUID, origin: str) -> Task:
+        calls.append((task_id, origin))
+        return real(workspace=workspace, user=user, task_id=task_id, origin=origin)
+
+    monkeypatch.setattr(task_services, "complete_task", spy)
+
+    do_merge(ws_a, candidate, keep, complete_twin_tasks=True)
+
+    assert calls == [(twin.id, DocumentEvent.Origin.MERGE)]
 
 
 def test_merge_leaves_twin_open_when_not_asked(ws_a: Workspace) -> None:

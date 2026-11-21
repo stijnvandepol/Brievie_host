@@ -51,6 +51,7 @@ from apps.documents.models import (
     Extraction,
 )
 from apps.documents.visibility import visible_documents
+from apps.tasks import services as task_services
 from apps.tasks.models import Task
 from apps.workspaces.locks import lock_own_membership
 from apps.workspaces.models import Membership
@@ -270,7 +271,6 @@ def _merge_tasks(keep: Document, other: Document, user: User, *, complete_twin_t
     for task in Task.objects.select_for_update().filter(document=keep).order_by("created_at", "id"):
         on_keep[review.task_key(task)].append(task)
     kept_before = {task.id for tasks in on_keep.values() for task in tasks}
-    now = timezone.now()
     for task in (
         Task.objects.select_for_update().filter(document=other).order_by("created_at", "id")
     ):
@@ -285,12 +285,14 @@ def _merge_tasks(keep: Document, other: Document, user: User, *, complete_twin_t
             for twin in equals:
                 if twin.status != Task.Status.OPEN or twin.id not in kept_before:
                     continue
-                twin.status = Task.Status.DONE
-                twin.completed_at = now
-                twin.save(update_fields=["status", "completed_at", "updated_at"])
-                organise.record_task_event(
-                    keep, DocumentEvent.Kind.TASK_COMPLETED, user, DocumentEvent.Origin.MERGE
+                # The one completion path (event `task_completed`, origin `merge`).
+                task_services.complete_task(
+                    workspace=keep.workspace,
+                    user=user,
+                    task_id=twin.id,
+                    origin=DocumentEvent.Origin.MERGE,
                 )
+                twin.status = Task.Status.DONE
 
 
 def _decide(
