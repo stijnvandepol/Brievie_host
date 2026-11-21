@@ -37,6 +37,19 @@ class Person(WorkspaceModel):
     # An archived person stays on their documents but is not offered, matched or proposed.
     archived_at = models.DateTimeField(null=True, blank=True)
     kind = models.CharField(max_length=20, choices=Kind.choices, default=Kind.PERSON)
+    # When the account of this person was switched off (the member removed or gone):
+    # "Uitgeschakeld" on Mensen. Display only, like `former_user`.
+    deactivated_at = models.DateTimeField(null=True, blank=True)
+    # The account this person had before it was switched off: its address and last
+    # sign-in are shown, and "Opnieuw uitnodigen" starts from that address. Display only
+    # (spec M4): no visibility, lock or permission reads it.
+    former_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
 
     class Meta:
         constraints: ClassVar[list[models.BaseConstraint]] = [
@@ -47,6 +60,11 @@ class Person(WorkspaceModel):
                 fields=["workspace", "user"],
                 condition=models.Q(user__isnull=False),
                 name="people_person_user_unique",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(former_user__isnull=True)
+                | models.Q(deactivated_at__isnull=False),
+                name="people_person_former_user_needs_deactivated",
             ),
         ]
 
@@ -63,6 +81,12 @@ class Person(WorkspaceModel):
     ) -> None:
         if self.kind == self.Kind.DEPARTMENT and self.user_id is not None:
             raise ValueError("A department has no account of its own.")
+        if self.kind == self.Kind.DEPARTMENT and (
+            self.deactivated_at is not None or self.former_user_id is not None
+        ):
+            raise ValueError("A department has no account to switch off.")
+        if self.former_user_id is not None and self.deactivated_at is None:
+            raise ValueError("A former account needs the moment it was switched off.")
         if (
             self.user_id is not None
             and not Membership.objects.filter(
