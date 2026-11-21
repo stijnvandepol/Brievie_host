@@ -13,18 +13,21 @@ reader rows (only the system writes those). Nothing here runs in a request.
   transaction deletes its tasks and then the letter, whose cascade takes everything
   that hangs off it. Files go before rows: a crash in between leaves a marked, hidden
   row that the next run finishes. A refusal or an `OSError` logs the error type and
-  the id only, and keeps the row marked.
+  the id only, and keeps the row marked. One run tries each letter once, so letters
+  that keep being refused never hold up the others.
 - `purge_all` (hourly) and `purge_workspace` (after an admin's purge or empty) hold the
   back-up lock, so a back-up or restore never sees half a purge; a busy lock skips the
-  run (the next hourly run finishes it).
+  run (the next hourly run finishes it). An unexpected error in one workspace is
+  logged (its type and the workspace id) and the run goes on with the next.
 """
 
 import logging
-from dataclasses import dataclass
+from collections.abc import Collection
+from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
 
-from django.db import transaction
+from django.db import connection, transaction
 
 from apps.audit.services import AuditActor
 from apps.backup.errors import BackupError
@@ -45,6 +48,8 @@ PURGE_BATCH = 100
 class PurgeResult:
     purged: int
     refused: int
+    # The letters this call took up, purged or not (not part of the comparison).
+    tried: frozenset[UUID] = field(default=frozenset(), compare=False)
 
 
 def mark_expired(workspace_id: UUID, *, now: datetime) -> int:
@@ -67,10 +72,11 @@ def mark_expired(workspace_id: UUID, *, now: datetime) -> int:
         )
 
 
-def _marked_ids(workspace_id: UUID, limit: int) -> list[UUID]:
+def _marked_ids(workspace_id: UUID, limit: int, skip: Collection[UUID]) -> list[UUID]:
     with workspace_context(workspace_id, actor=SYSTEM):
         return list(
             Document.objects.filter(workspace_id=workspace_id, purge_started_at__isnull=False)
+            .exclude(id__in=skip)
             .order_by("purge_started_at", "id")
             .values_list("id", flat=True)[:limit]
         )
@@ -113,11 +119,17 @@ def _delete_rows(workspace_id: UUID, document_id: UUID) -> bool:
     return True
 
 
-def purge_marked(workspace_id: UUID, *, limit: int = PURGE_BATCH) -> PurgeResult:
+def purge_marked(
+    workspace_id: UUID, *, limit: int = PURGE_BATCH, skip: Collection[UUID] = ()
+) -> PurgeResult:
     """Remove the files and then the rows of up to `limit` marked letters of the
-    workspace. Must run outside a transaction: no transaction is open while files go."""
+    workspace, leaving out `skip`. Outside a transaction only: rolled back, it would
+    leave a restorable letter whose files are gone."""
+    if connection.in_atomic_block:
+        raise RuntimeError("The purge must run outside a transaction.")
     purged = refused = 0
-    for document_id in _marked_ids(workspace_id, limit):
+    tried = _marked_ids(workspace_id, limit, skip)
+    for document_id in tried:
         paths = _page_paths(workspace_id, document_id)
         if paths is None:
             continue
@@ -134,15 +146,17 @@ def purge_marked(workspace_id: UUID, *, limit: int = PURGE_BATCH) -> PurgeResult
             continue
         if _delete_rows(workspace_id, document_id):
             purged += 1
-    return PurgeResult(purged=purged, refused=refused)
+    return PurgeResult(purged=purged, refused=refused, tried=frozenset(tried))
 
 
 def _purge_until_done(workspace_id: UUID) -> None:
+    """Batches until every marked letter was tried once in this run."""
+    tried: set[UUID] = set()
     while True:
-        result = purge_marked(workspace_id)
-        # A short batch was the last; a batch of refusals only would come back unchanged.
-        if result.purged == 0 or result.purged + result.refused < PURGE_BATCH:
+        result = purge_marked(workspace_id, limit=PURGE_BATCH, skip=tried)
+        if not result.tried:
             return
+        tried |= result.tried
 
 
 def purge_workspace(workspace_id: UUID) -> None:
@@ -156,14 +170,25 @@ def purge_workspace(workspace_id: UUID) -> None:
         logger.info("Trash purge skipped: a back-up or restore is running.")
 
 
+def _purge_one_workspace(workspace_id: UUID, *, now: datetime) -> None:
+    """Mark and purge one workspace; an unexpected error stops only this workspace."""
+    try:
+        mark_expired(workspace_id, now=now)
+        _purge_until_done(workspace_id)
+    except Exception as error:  # noqa: BLE001 - one workspace must not stop the others
+        # The type and the id only: a database message can quote a letter's values.
+        logger.error(
+            "The trash purge of workspace %s stopped: %s", workspace_id, type(error).__name__
+        )
+
+
 def purge_all(*, now: datetime) -> None:
     """The hourly run: for every workspace, mark what expired and purge what is marked,
     under the back-up lock; skip the run when a back-up or restore holds it."""
     try:
         with backup_lock():
             for workspace_id in Workspace.objects.order_by("id").values_list("id", flat=True):
-                mark_expired(workspace_id, now=now)
-                _purge_until_done(workspace_id)
+                _purge_one_workspace(workspace_id, now=now)
     except BackupError as error:
         if error.code != "busy":
             raise

@@ -280,8 +280,41 @@ def test_remove_never_removes_a_directory_named_as_a_page(tmp_path: Path) -> Non
     assert (folder / ".tmp-dir").is_dir()
 
 
+def test_remove_refuses_pages_without_the_storage_root(tmp_path: Path) -> None:
+    # An unmounted share: the letter's files may still be there once it is mounted.
+    root = storage_root(tmp_path)
+    assert not root.exists()
+
+    with pytest.raises(PageFileRefused):
+        remove_document_files(WS, DOC, page_paths(1))
+
+    assert not root.exists()
+
+
+def test_remove_refuses_pages_without_the_workspace_dir(tmp_path: Path) -> None:
+    # An empty mount point: the root is there, the workspace folder is not.
+    root = storage_root(tmp_path)
+    root.mkdir()
+
+    with pytest.raises(PageFileRefused):
+        remove_document_files(WS, DOC, page_paths(1))
+
+    assert os.listdir(root) == []
+
+
+def test_remove_without_pages_needs_no_root_or_workspace_dir(tmp_path: Path) -> None:
+    root = storage_root(tmp_path)
+    assert not root.exists()
+
+    assert remove_document_files(WS, DOC, []) == 0
+    root.mkdir()
+    assert remove_document_files(WS, DOC, []) == 0
+    assert os.listdir(root) == []
+
+
 def test_remove_of_missing_files_is_fine(tmp_path: Path) -> None:
-    storage_root(tmp_path)
+    # A crash after the files went and before the rows: the letter folder is gone.
+    (storage_root(tmp_path) / str(WS)).mkdir(parents=True)
 
     assert remove_document_files(WS, DOC, page_paths(1, 2)) == 0
     letter_dir(tmp_path)

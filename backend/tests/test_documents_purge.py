@@ -10,13 +10,14 @@ that the guard refuses a root outside it, before every test here.
 import logging
 import uuid
 from collections.abc import Iterator
+from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
 import psycopg
 import pytest
 from django.conf import settings
-from django.db import connection
+from django.db import DatabaseError, connection, transaction
 from django.test import Client
 from django.utils import timezone
 
@@ -123,6 +124,7 @@ def test_mark_expired_marks_only_older_than_30_days(ws_a: Workspace) -> None:
     assert purge.mark_expired(ws_a.id, now=timezone.now()) == 0
 
 
+@pytest.mark.django_db(transaction=True)
 def test_purge_removes_rows_files_and_tasks(ws_a: Workspace) -> None:
     document = letter_with_pages(ws_a, "gone")
     other = letter_with_pages(ws_a, "stays")
@@ -149,6 +151,7 @@ def test_purge_removes_rows_files_and_tasks(ws_a: Workspace) -> None:
     assert count(Task, other) == 1
 
 
+@pytest.mark.django_db(transaction=True)
 def test_purge_removes_everything_hanging_off() -> None:
     o = office()
     ws = o.workspace
@@ -172,6 +175,8 @@ def test_purge_removes_everything_hanging_off() -> None:
         assert DocumentShare.objects.filter(document=private).exists()
         assert RuleRun.objects.filter(document=private).exists()
         assert DocumentSuggestion.objects.filter(document=private).exists()
+    # The workspace folder exists (a mounted share); the letter's own folder may be gone.
+    (storage_root() / str(ws.id)).mkdir(parents=True)
     trashed(private, by=o.finance, days_ago=31)
     mark(private)
 
@@ -210,6 +215,7 @@ def test_mark_expired_reaches_private_letters() -> None:
         DocumentPage.objects.filter(document=private).update(
             storage_path=f"{ws.id}/{private.id}/1.page"
         )
+    (storage_root() / str(ws.id)).mkdir(parents=True)
     trashed(private, by=o.finance, days_ago=31)
 
     purge.purge_all(now=timezone.now())
@@ -224,6 +230,7 @@ def test_mark_expired_reaches_private_letters() -> None:
     assert all(fresh(d) is not None for n, d in o.letters.items() if n != "private_femke")
 
 
+@pytest.mark.django_db(transaction=True)
 def test_purge_resumes_after_files_removed(ws_a: Workspace) -> None:
     document = letter_with_pages(ws_a)
     trashed(document, days_ago=31)
@@ -244,6 +251,7 @@ def test_purge_resumes_after_files_removed(ws_a: Workspace) -> None:
     "error",
     [PageFileRefused("Not a page file of this letter."), PermissionError(13, "denied", "/x")],
 )
+@pytest.mark.django_db(transaction=True)
 def test_purge_refusal_keeps_row_marked(
     ws_a: Workspace,
     monkeypatch: pytest.MonkeyPatch,
@@ -274,6 +282,7 @@ def test_purge_refusal_keeps_row_marked(
     assert type(error).__name__ in caplog.text
 
 
+@pytest.mark.django_db(transaction=True)
 def test_restore_after_mark_is_refused(ws_a: Workspace) -> None:
     document = letter_with_pages(ws_a)
     trashed(document, days_ago=31)
@@ -340,6 +349,7 @@ def test_purge_leaves_live_and_fresh_trash_alone(ws_a: Workspace, ws_b: Workspac
         assert sorted(p.name for p in letter_dir(kept).iterdir()) == ["1.page", "2.page"]
 
 
+@pytest.mark.django_db(transaction=True)
 def test_purge_marked_takes_at_most_limit(ws_a: Workspace) -> None:
     letters = [trashed(letter_with_pages(ws_a, f"n{i}"), days_ago=31) for i in range(3)]
     purge.mark_expired(ws_a.id, now=timezone.now())
@@ -349,6 +359,7 @@ def test_purge_marked_takes_at_most_limit(ws_a: Workspace) -> None:
     assert purge.purge_marked(ws_a.id, limit=2) == purge.PurgeResult(purged=1, refused=0)
 
 
+@pytest.mark.django_db(transaction=True)
 def test_purge_marked_never_reaches_another_workspace(ws_a: Workspace, ws_b: Workspace) -> None:
     other = trashed(letter_with_pages(ws_b, "b"), days_ago=31)
     purge.mark_expired(ws_b.id, now=timezone.now())
@@ -358,6 +369,7 @@ def test_purge_marked_never_reaches_another_workspace(ws_a: Workspace, ws_b: Wor
     assert letter_dir(other).is_dir()
 
 
+@pytest.mark.django_db(transaction=True)
 def test_purge_of_a_letter_without_page_dir_is_fine(ws_a: Workspace) -> None:
     document = trashed(make_document(ws_a), days_ago=31)
     mark(document)
@@ -366,6 +378,7 @@ def test_purge_of_a_letter_without_page_dir_is_fine(ws_a: Workspace) -> None:
     assert fresh(document) is None
 
 
+@pytest.mark.django_db(transaction=True)
 def test_unplaceable_stored_path_is_refused_and_kept(
     ws_a: Workspace, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -381,3 +394,111 @@ def test_unplaceable_stored_path_is_refused_and_kept(
     assert fresh(document) is not None
     assert sorted(p.name for p in letter_dir(document).iterdir()) == ["1.page", "2.page"]
     assert "PageFileRefused" in caplog.text
+
+
+def unplaceable(document: Document) -> None:
+    """A page row in another form: the guard refuses the whole letter."""
+    with workspace_context(document.workspace_id, actor=SYSTEM):
+        DocumentPage.objects.filter(document=document, index=1).update(
+            storage_path=f"{document.workspace_id}/{uuid.uuid4()}/1.page"
+        )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_purge_refuses_pages_when_the_workspace_folder_is_missing(
+    ws_a: Workspace, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    document = letter_with_pages(ws_a)
+    trashed(document, days_ago=31)
+    mark(document)
+    # The share is not mounted: the workspace folder is elsewhere (under tmp_path).
+    unmounted = tmp_path / "unmounted"
+    (storage_root() / str(ws_a.id)).rename(unmounted)
+
+    assert purge.purge_marked(ws_a.id) == purge.PurgeResult(purged=0, refused=1)
+
+    current = fresh(document)
+    assert current is not None
+    assert current.purge_started_at is not None
+    assert sorted(p.name for p in (unmounted / str(document.id)).iterdir()) == [
+        "1.page",
+        "2.page",
+    ]
+    assert "PageFileRefused" in caplog.text
+
+
+@pytest.mark.django_db(transaction=True)
+def test_one_run_tries_a_refused_letter_once_and_reaches_the_rest(
+    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(purge, "PURGE_BATCH", 2)
+    broken = [letter_with_pages(ws_a, f"broken-{i}") for i in range(2)]
+    good = letter_with_pages(ws_a, "good")
+    for document in broken:
+        unplaceable(document)
+    for document in (*broken, good):
+        trashed(document, days_ago=31)
+    purge.mark_expired(ws_a.id, now=timezone.now())
+    # The refused letters come first in every batch.
+    with workspace_context(ws_a.id, actor=SYSTEM):
+        for hours, document in ((3, broken[0]), (2, broken[1]), (1, good)):
+            Document.objects.filter(id=document.id).update(
+                purge_started_at=timezone.now() - timedelta(hours=hours)
+            )
+    tried: list[uuid.UUID] = []
+    real = remove_document_files
+
+    def counting(workspace_id: uuid.UUID, document_id: uuid.UUID, paths: list[str]) -> int:
+        tried.append(document_id)
+        return real(workspace_id, document_id, paths)
+
+    monkeypatch.setattr(purge, "remove_document_files", counting)
+
+    purge.purge_workspace(ws_a.id)
+
+    assert fresh(good) is None
+    assert all(fresh(document) is not None for document in broken)
+    assert sorted(tried) == sorted(d.id for d in (*broken, good))
+    assert caplog.text.count("PageFileRefused") == 2
+
+
+@pytest.mark.django_db(transaction=True)
+def test_purge_all_goes_on_after_one_workspace_fails(
+    ws_a: Workspace,
+    ws_b: Workspace,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    failing, other = sorted((ws_a, ws_b), key=lambda ws: ws.id)
+    old = trashed(letter_with_pages(other, "other"), days_ago=31)
+    real = purge.mark_expired
+
+    def mark_or_fail(workspace_id: uuid.UUID, *, now: datetime) -> int:
+        if workspace_id == failing.id:
+            raise DatabaseError("relation details 1234")
+        return real(workspace_id, now=now)
+
+    monkeypatch.setattr(purge, "mark_expired", mark_or_fail)
+
+    purge.purge_all(now=timezone.now())
+
+    assert fresh(old) is None
+    assert not letter_dir(old).exists()
+    assert "DatabaseError" in caplog.text
+    assert str(failing.id) in caplog.text
+    assert "relation details" not in caplog.text
+
+
+@pytest.mark.django_db(transaction=True)
+def test_purge_marked_refuses_inside_a_transaction(ws_a: Workspace) -> None:
+    document = letter_with_pages(ws_a)
+    trashed(document, days_ago=31)
+    mark(document)
+
+    with pytest.raises(RuntimeError), transaction.atomic():
+        purge.purge_marked(ws_a.id)
+
+    current = fresh(document)
+    assert current is not None
+    assert current.purge_started_at is not None
+    assert sorted(p.name for p in letter_dir(document).iterdir()) == ["1.page", "2.page"]

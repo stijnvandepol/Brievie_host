@@ -159,14 +159,25 @@ def _remove_letter_dir(workspace: int, name: str) -> None:
             raise
 
 
+def _nothing_there(page_names: set[str]) -> int:
+    """No root or workspace directory: nothing to remove for a letter without pages,
+    refused for one with pages (their files may be on a share that is not mounted)."""
+    if page_names:
+        raise _refused()
+    return 0
+
+
 def remove_document_files(
     workspace_id: UUID, document_id: UUID, storage_paths: Sequence[str]
 ) -> int:
     """Remove the letter's page files and leftovers; returns how many files went.
 
     All or nothing on the paths: every one is judged before anything is looked at. Then
-    the root is judged and opened without following a link. A file or directory that is
-    already gone is fine.
+    the root is judged and opened without following a link. A page file or the letter's
+    directory that is already gone is fine (a run that crashed after the files went). A
+    missing root or workspace directory is not, when the letter has pages: the purge
+    never removes those, so the share is not mounted and the files may still be on it.
+    Refused, so the rows stay and the next run tries again.
     """
     page_names = {
         judge_page_path(path, workspace_id=workspace_id, document_id=document_id).name
@@ -179,17 +190,17 @@ def remove_document_files(
     root_path = judge_storage_root(configured)
     expected = safepaths.identity(root_path)
     if expected is None:
-        return 0
+        return _nothing_there(page_names)
     try:
         root = safepaths.open_dir_nofollow(root_path, expect=expected)
     except BackupError:
         raise _refused() from None
     except FileNotFoundError:
-        return 0
+        return _nothing_there(page_names)
     try:
         workspace = _open_dir_at(root, str(workspace_id))
         if workspace is None:
-            return 0
+            return _nothing_there(page_names)
         try:
             letter = _open_dir_at(workspace, str(document_id))
             if letter is None:
