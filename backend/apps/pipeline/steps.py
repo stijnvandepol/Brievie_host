@@ -17,7 +17,7 @@ from pydantic import ValidationError
 from apps.common.errors import ApiError
 from apps.common.privacy import holds_bsn, mask_bsns
 from apps.documents import review, suggestions, visibility
-from apps.documents.models import Document, DocumentSuggestion, Extraction
+from apps.documents.models import LIVE, Document, DocumentSuggestion, Extraction
 from apps.labels.models import Label
 from apps.people.matching import PRESELECT_FROM, PersonNames, match_addressees
 from apps.people.models import Person
@@ -353,10 +353,11 @@ def _confirm_guarded(
 
 
 def _lock_processing(document_id: UUID) -> Document | None:
-    """The document, locked, when it exists in this workspace and is still processing."""
+    """The document, locked, when it exists in this workspace, is still processing and is
+    not in the trash (a letter trashed meanwhile is left alone: no AI call, no result)."""
     return (
         Document.objects.select_for_update(no_key=True)
-        .filter(id=document_id, status=Document.Status.PROCESSING)
+        .filter(LIVE, id=document_id, status=Document.Status.PROCESSING)
         .first()
     )
 

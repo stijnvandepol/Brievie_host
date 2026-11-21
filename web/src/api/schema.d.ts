@@ -858,6 +858,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Document
+         * @description Put a letter back from the trash, as it was (role member or admin). A letter that is not in the trash answers unchanged. 404 `document_not_found` once its purge started, or for a letter the caller does not see. Written to the log (`document_restored`).
+         */
+        post: operations["restoreDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}/retry": {
         parameters: {
             query?: never;
@@ -909,6 +929,26 @@ export interface paths {
          * @description Say no to a proposal; the document does not change and nothing automatic proposes or makes this change on it again.
          */
         post: operations["dismissSuggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/trash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trash Document
+         * @description Move the letter to the trash (role member or admin; a viewer gets 403). It is gone from every list, count, search and task list, and can be put back with `restoreDocument` until `purge_after` (30 days); then it is purged for good. Trashing a letter in the trash again answers the same. 404 `document_not_found` for a letter the caller does not see. Written to the log (`document_trashed`).
+         */
+        post: operations["trashDocument"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1460,6 +1500,66 @@ export interface paths {
          */
         post: operations["reopenTask"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/trash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Trash
+         * @description The letters in the trash the caller sees, the most recently trashed first (at most 500), with when and by whom, and `purge_after`; `total` counts them all.
+         */
+        get: operations["listTrash"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/trash/empty": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Empty Trash
+         * @description Web session only: a bearer token answers 401 not_authenticated. Purge every letter in the caller's trash for good (role admin), up to `up_to`: the newest `trashed_at` the caller showed (all when absent). Letters the caller does not see stay. Answers how many letters are now being purged; a job removes them. Written to the log, one `document_purged` row per letter.
+         */
+        post: operations["emptyTrash"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/trash/{document_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Purge Document
+         * @description Web session only: a bearer token answers 401 not_authenticated. Purge a letter from the trash now, for good (role admin). Only a letter in the caller's trash: a live letter, one whose purge started, or one the caller does not see answers 404 `document_not_found`. From this answer on it cannot be restored; a job removes its scanned pages and its rows. A back-up made earlier still holds it. Written to the log (`document_purged`).
+         */
+        delete: operations["purgeDocument"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2084,6 +2184,24 @@ export interface components {
             sender: string;
             /** Status */
             status: string;
+        };
+        /**
+         * EmptyTrashIn
+         * @description Empty the trash up to the newest `trashed_at` the caller showed (all when absent):
+         *     a letter trashed while the admin read the question is not emptied. With an offset
+         *     only (422 otherwise): a moment without one would be read in the server's zone.
+         */
+        EmptyTrashIn: {
+            /**
+             * Up To
+             * Format: date-time
+             */
+            up_to?: string | null;
+        };
+        /** EmptyTrashOut */
+        EmptyTrashOut: {
+            /** Document Count */
+            document_count: number;
         };
         /**
          * ErrorOut
@@ -2912,6 +3030,114 @@ export interface components {
             status: string;
             /** Type */
             type: string;
+        };
+        /**
+         * TrashListOut
+         * @description The caller's trash, the most recently trashed first (at most 500).
+         */
+        TrashListOut: {
+            /** Items */
+            items?: components["schemas"]["TrashedDocumentOut"][];
+            /**
+             * Retention Days
+             * @default 30
+             */
+            retention_days: number;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+        };
+        /**
+         * TrashedDocumentOut
+         * @description A letter in the trash: its summary row, when and by whom it was trashed, and when
+         *     it is purged (clients never compute the retention themselves).
+         */
+        TrashedDocumentOut: {
+            /** Addressee Ids */
+            addressee_ids?: string[];
+            /** Auto Addressee Ids */
+            auto_addressee_ids?: string[];
+            /** Auto Label Ids */
+            auto_label_ids?: string[];
+            /** Auto Rule Label Ids */
+            auto_rule_label_ids?: string[];
+            /**
+             * Client Id
+             * Format: uuid
+             */
+            client_id: string;
+            /**
+             * Confirmed By Ai
+             * @default false
+             */
+            confirmed_by_ai: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Document Type */
+            document_type: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Inbox State
+             * @default
+             */
+            inbox_state: string;
+            /** Label Ids */
+            label_ids?: string[];
+            /**
+             * Letter Date
+             * Format: date
+             */
+            letter_date: string | null;
+            /**
+             * Open Suggestion Count
+             * @default 0
+             */
+            open_suggestion_count: number;
+            /** Page Count */
+            page_count: number;
+            /**
+             * Proposed Document Type
+             * @default
+             */
+            proposed_document_type: string;
+            /**
+             * Proposed Letter Date
+             * Format: date
+             */
+            proposed_letter_date?: string | null;
+            /**
+             * Proposed Sender
+             * @default
+             */
+            proposed_sender: string;
+            /**
+             * Purge After
+             * Format: date-time
+             */
+            purge_after: string;
+            /** Sender */
+            sender: string;
+            /** Status */
+            status: string;
+            /**
+             * Trashed At
+             * Format: date-time
+             */
+            trashed_at: string;
+            /**
+             * Trashed By Name
+             * @default
+             */
+            trashed_by_name: string;
         };
         /**
          * UploadMetadataIn
@@ -5884,6 +6110,56 @@ export interface operations {
             };
         };
     };
+    restoreDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     retryDocumentProcessing: {
         parameters: {
             query?: never;
@@ -6032,6 +6308,65 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    trashDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashedDocumentOut"];
                 };
             };
             /** @description Unauthorized */
@@ -8499,6 +8834,192 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    listTrash: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashListOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    emptyTrash: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmptyTrashIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmptyTrashOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    purgeDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

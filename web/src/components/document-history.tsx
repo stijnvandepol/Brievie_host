@@ -63,6 +63,15 @@ function sentence(
       return t`${who} rondde een taak af`;
     case "task_reopened":
       return t`${who} zette een taak weer open`;
+    case "trashed": {
+      // Without anybody behind it, Brievie did it (a later merge of a double scan).
+      const by = isMine(event, me) ? t`jou` : event.actor_name || t`Brievie`;
+      return t`Naar de prullenbak verplaatst door ${by}`;
+    }
+    case "restored": {
+      const by = isMine(event, me) ? t`jou` : event.actor_name || t`iemand`;
+      return t`Teruggezet uit de prullenbak door ${by}`;
+    }
     default:
       return null;
   }

@@ -2,6 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { redirect } from "@tanstack/react-router";
 import { meQuery, setupStatusQuery } from "./api/queries";
 import { resetSearch } from "./search-term";
+import { clearUndo } from "./undo-trash";
 
 // Route guards always ask the server (staleTime 0): the answers change when somebody
 // sets up, logs in or logs out.
@@ -15,6 +16,7 @@ export async function requireUser(queryClient: QueryClient) {
   if (!user) {
     // The session ended: whoever signs in next does not get the last search.
     resetSearch();
+    clearUndo();
     throw redirect({ to: "/login" });
   }
   return user;

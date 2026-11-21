@@ -1,9 +1,10 @@
 import { t } from "@lingui/core/macro";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createRoute } from "@tanstack/react-router";
+import { createRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ApiFailure, api } from "../api/client";
 import { documentQuery, labelsQuery, personsQuery } from "../api/queries";
 import type { components } from "../api/schema";
+import { refreshAfterTrash, trashDocument } from "../api/trash";
 import { ConfirmAction } from "../components/confirm-dialog";
 import { DocumentHistory } from "../components/document-history";
 import {
@@ -18,6 +19,7 @@ import { PersonPicker, useSetAddressees } from "../components/person-picker";
 import { SuggestionList } from "../components/suggestion-list";
 import { TaskList } from "../components/task-list";
 import { Loading, MessageBar } from "../components/ui";
+import { showUndo } from "../undo-trash";
 import { workspaceRoute } from "./workspace";
 
 type Document = components["schemas"]["DocumentOut"];
@@ -116,6 +118,24 @@ function useReopen(workspaceId: string, documentId: string) {
   });
 }
 
+/**
+ * Moves the letter to the trash, then goes to "Alle post" with the undo bar. The letter's own
+ * cache entry goes: it answers `document_in_trash` from now on.
+ */
+function useTrash(workspaceId: string, documentId: string) {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  return useMutation({
+    mutationFn: () => trashDocument(workspaceId, documentId),
+    onSuccess: async () => {
+      showUndo(workspaceId, documentId);
+      await navigate({ to: "/w/$workspaceId/post", params: { workspaceId } });
+      queryClient.removeQueries({ queryKey: ["workspaces", workspaceId, "documents", documentId] });
+      await refreshAfterTrash(queryClient, workspaceId);
+    },
+  });
+}
+
 function DocumentView({
   workspaceId,
   document,
@@ -130,6 +150,7 @@ function DocumentView({
   const setAddressees = useSetAddressees(workspaceId, document.id);
   const setLabels = useSetLabels(workspaceId, document.id);
   const reopen = useReopen(workspaceId, document.id);
+  const trash = useTrash(workspaceId, document.id);
   const autoLabels = (labels.data ?? [])
     .filter((label) => (document.auto_label_ids ?? []).includes(label.id))
     .map((label) => label.name);
@@ -205,17 +226,30 @@ function DocumentView({
           <ErrorAlert
             error={setAddressees.error ?? setLabels.error ?? persons.error ?? labels.error}
           />
-          {canEdit && document.confirmed_by_ai ? (
+          {canEdit ? (
             <div className="panel-actions">
+              {document.confirmed_by_ai ? (
+                <ConfirmAction
+                  label={t`Zelf controleren`}
+                  icon="undo"
+                  title={t`Zelf controleren?`}
+                  confirmLabel={t`Zelf controleren`}
+                  tone="primary"
+                  onConfirm={() => reopen.mutateAsync()}
+                >
+                  <p>{t`De brief komt terug op Te doen, bij Controleren. De taken die de AI maakte en die nog open staan, verdwijnen. Je controleert de brief daarna in de app.`}</p>
+                </ConfirmAction>
+              ) : null}
+              {/* Primary, not danger: the letter can be put back for 30 days. */}
               <ConfirmAction
-                label={t`Zelf controleren`}
-                icon="undo"
-                title={t`Zelf controleren?`}
-                confirmLabel={t`Zelf controleren`}
+                label={t`Verwijderen`}
+                icon="delete"
+                title={t`Brief verwijderen?`}
+                confirmLabel={t`Naar de prullenbak`}
                 tone="primary"
-                onConfirm={() => reopen.mutateAsync()}
+                onConfirm={() => trash.mutateAsync()}
               >
-                <p>{t`De brief komt terug op Te doen, bij Controleren. De taken die de AI maakte en die nog open staan, verdwijnen. Je controleert de brief daarna in de app.`}</p>
+                <p>{t`De brief gaat naar de prullenbak. Daar blijft hij 30 dagen. Zo lang kun je hem terugzetten. Daarna wordt hij voorgoed gewist.`}</p>
               </ConfirmAction>
             </div>
           ) : null}
@@ -281,7 +315,16 @@ function DocumentPage() {
         }}
       />
       {isPending ? <Loading /> : null}
-      <ErrorAlert error={error} />
+      {error instanceof ApiFailure && error.code === "document_in_trash" ? (
+        <MessageBar intent="info">
+          {t`Deze brief staat in de prullenbak.`}{" "}
+          <Link to="/w/$workspaceId/prullenbak" params={{ workspaceId: workspace.id }}>
+            {t`Naar de prullenbak`}
+          </Link>
+        </MessageBar>
+      ) : (
+        <ErrorAlert error={error} />
+      )}
       {data ? (
         <DocumentView
           workspaceId={workspace.id}

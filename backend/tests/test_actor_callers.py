@@ -26,6 +26,9 @@ ALLOWED_SYSTEM_CALLERS = {
     "apps/labels/services.py",
     "apps/rules/services.py",
     "apps/documents/intake.py",
+    # The purge of the trash reaches every trashed letter and its reader rows (it marks
+    # what expired and deletes marked letters); the request paths of the trash never do.
+    "apps/documents/purge.py",
     # Fills the derived automatic flag of every letter (documents/0014).
     "apps/documents/migrations/0014_document_has_automatic_link.py",
 }

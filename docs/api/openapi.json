@@ -1175,6 +1175,34 @@
         "title": "DocumentSummaryOut",
         "type": "object"
       },
+      "EmptyTrashIn": {
+        "description": "Empty the trash up to the newest `trashed_at` the caller showed (all when absent):\na letter trashed while the admin read the question is not emptied. With an offset\nonly (422 otherwise): a moment without one would be read in the server's zone.",
+        "properties": {
+          "up_to": {
+            "format": "date-time",
+            "title": "Up To",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "EmptyTrashIn",
+        "type": "object"
+      },
+      "EmptyTrashOut": {
+        "properties": {
+          "document_count": {
+            "title": "Document Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "document_count"
+        ],
+        "title": "EmptyTrashOut",
+        "type": "object"
+      },
       "ErrorOut": {
         "description": "Body of every non-2xx response.",
         "properties": {
@@ -2883,6 +2911,176 @@
           "status"
         ],
         "title": "TaskOut",
+        "type": "object"
+      },
+      "TrashListOut": {
+        "description": "The caller's trash, the most recently trashed first (at most 500).",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TrashedDocumentOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "retention_days": {
+            "default": 30,
+            "title": "Retention Days",
+            "type": "integer"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "title": "TrashListOut",
+        "type": "object"
+      },
+      "TrashedDocumentOut": {
+        "description": "A letter in the trash: its summary row, when and by whom it was trashed, and when\nit is purged (clients never compute the retention themselves).",
+        "properties": {
+          "addressee_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Addressee Ids",
+            "type": "array"
+          },
+          "auto_addressee_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Auto Addressee Ids",
+            "type": "array"
+          },
+          "auto_label_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Auto Label Ids",
+            "type": "array"
+          },
+          "auto_rule_label_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Auto Rule Label Ids",
+            "type": "array"
+          },
+          "client_id": {
+            "format": "uuid",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "confirmed_by_ai": {
+            "default": false,
+            "title": "Confirmed By Ai",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "inbox_state": {
+            "default": "",
+            "title": "Inbox State",
+            "type": "string"
+          },
+          "label_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Label Ids",
+            "type": "array"
+          },
+          "letter_date": {
+            "format": "date",
+            "title": "Letter Date",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "open_suggestion_count": {
+            "default": 0,
+            "title": "Open Suggestion Count",
+            "type": "integer"
+          },
+          "page_count": {
+            "title": "Page Count",
+            "type": "integer"
+          },
+          "proposed_document_type": {
+            "default": "",
+            "title": "Proposed Document Type",
+            "type": "string"
+          },
+          "proposed_letter_date": {
+            "format": "date",
+            "title": "Proposed Letter Date",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "proposed_sender": {
+            "default": "",
+            "title": "Proposed Sender",
+            "type": "string"
+          },
+          "purge_after": {
+            "format": "date-time",
+            "title": "Purge After",
+            "type": "string"
+          },
+          "sender": {
+            "title": "Sender",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "trashed_at": {
+            "format": "date-time",
+            "title": "Trashed At",
+            "type": "string"
+          },
+          "trashed_by_name": {
+            "default": "",
+            "title": "Trashed By Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "client_id",
+          "status",
+          "page_count",
+          "created_at",
+          "sender",
+          "document_type",
+          "letter_date",
+          "trashed_at",
+          "purge_after"
+        ],
+        "title": "TrashedDocumentOut",
         "type": "object"
       },
       "UploadMetadataIn": {
@@ -7214,6 +7412,88 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/restore": {
+      "post": {
+        "description": "Put a letter back from the trash, as it was (role member or admin). A letter that is not in the trash answers unchanged. 404 `document_not_found` once its purge started, or for a letter the caller does not see. Written to the log (`document_restored`).",
+        "operationId": "restoreDocument",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Restore Document",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}/retry": {
       "post": {
         "operationId": "retryDocumentProcessing",
@@ -7514,6 +7794,98 @@
           }
         ],
         "summary": "Dismiss Suggestion",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/trash": {
+      "post": {
+        "description": "Move the letter to the trash (role member or admin; a viewer gets 403). It is gone from every list, count, search and task list, and can be put back with `restoreDocument` until `purge_after` (30 days); then it is purged for good. Trashing a letter in the trash again answers the same. 404 `document_not_found` for a letter the caller does not see. Written to the log (`document_trashed`).",
+        "operationId": "trashDocument",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashedDocumentOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Trash Document",
         "tags": [
           "documents"
         ]
@@ -11020,6 +11392,269 @@
         "summary": "Reopen Task",
         "tags": [
           "tasks"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/trash": {
+      "get": {
+        "description": "The letters in the trash the caller sees, the most recently trashed first (at most 500), with when and by whom, and `purge_after`; `total` counts them all.",
+        "operationId": "listTrash",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashListOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "List Trash",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/trash/empty": {
+      "post": {
+        "description": "Web session only: a bearer token answers 401 not_authenticated. Purge every letter in the caller's trash for good (role admin), up to `up_to`: the newest `trashed_at` the caller showed (all when absent). Letters the caller does not see stay. Answers how many letters are now being purged; a job removes them. Written to the log, one `document_purged` row per letter.",
+        "operationId": "emptyTrash",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmptyTrashIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyTrashOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Empty Trash",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/trash/{document_id}": {
+      "delete": {
+        "description": "Web session only: a bearer token answers 401 not_authenticated. Purge a letter from the trash now, for good (role admin). Only a letter in the caller's trash: a live letter, one whose purge started, or one the caller does not see answers 404 `document_not_found`. From this answer on it cannot be restored; a job removes its scanned pages and its rows. A back-up made earlier still holds it. Written to the log (`document_purged`).",
+        "operationId": "purgeDocument",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Purge Document",
+        "tags": [
+          "documents"
         ]
       }
     }

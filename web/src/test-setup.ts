@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, expect } from "vitest";
 import { resetSearch } from "./search-term";
 import { settleApps } from "./test-apps";
 import { server } from "./test-server";
+import { clearUndo } from "./undo-trash";
 
 beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
 afterEach(async () => {
@@ -15,6 +16,7 @@ afterEach(async () => {
   }
   cleanup();
   resetSearch();
+  clearUndo();
   server.resetHandlers();
   document.cookie = "csrftoken=; Max-Age=0; path=/";
 });

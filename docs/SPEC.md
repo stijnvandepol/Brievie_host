@@ -172,6 +172,7 @@ Begin bij mensen die al een NAS of homeserver hebben of er makkelijk een neerzet
 7. **Taken en deadlines:** tijdlijn, toewijzen, meldingen (7 dagen, 2 dagen, op de dag; instelbaar), ICS-feed per lid.
 8. **Zoeken:** in de tekst, afzender, samenvatting, labels en personen van de eigen werkruimte, met filters (zie "Zoeken in post" hieronder). Nog niet: filters op map en bedrag.
 9. **Export:** alles als ZIP (PDF's + JSON/CSV).
+10. **Prullenbak** (Thuis en Zakelijk): een lid (niet een meekijker) zet een brief in de prullenbak en kan hem 30 dagen terugzetten; daarna wist Brievie hem voorgoed, met de gescande pagina's. Een beheerder kan eerder definitief verwijderen of de prullenbak legen. Een back-up die eerder is gemaakt, houdt de brief tot die back-up verloopt. Een bewaartermijn per brief (zie Zakelijk) komt later.
 
 ### Zoeken in post
 
@@ -201,7 +202,7 @@ Eén zoekveld in de balk van de webinterface (`/` zet de cursor erin) en één e
 - E-facturen inlezen als bestand (UBL-XML) naast PDF. Geen eigen Peppol-ontvangst: dat loopt altijd via een betaald access point en zit al in boekhoudpakketten.
 - Btw-overzicht per kwartaal (voorbelasting) als hulp bij de aangifte, met duidelijke melding dat het geen aangifte is.
 - Doorsturen naar het boekhoudpakket: naar het inbox-mailadres van Moneybird, Jortt en vergelijkbare pakketten, en export als CSV.
-- Bewaartermijn per document (fiscale bewaarplicht; standaardwaarde laten controleren door een boekhouder) met waarschuwing vóór verwijderen.
+- Bewaartermijn per document (fiscale bewaarplicht; standaardwaarde laten controleren door een boekhouder) met waarschuwing vóór verwijderen. Komt later; de prullenbak vraagt het nu al aan één haakje (`retention.check_removal`) voordat een brief erin gaat of gewist wordt.
 - Meekijker-rol voor boekhouder, eventueel beperkt tot bepaalde mappen.
 
 ### Later
@@ -454,7 +455,7 @@ De namen hieronder zijn de begrippen uit dit document. In de code zijn tabel- en
 | `person` | (Thuis) weergavenaam, naamvarianten, gekoppeld user_id |
 | `relation` | (Zakelijk) naam, kvk, btw_nummer, iban, soort (leverancier/klant), standaardcategorie |
 | `folder` | parent_id, naam, pad, sjabloon |
-| `document` | gescand_door, afzender, relation_id, type, dagtekening, samenvatting_b1, ocr_tekst (BSN gemaskeerd), zoekindex, zichtbaarheid, folder_id, status, bron, bewaren_tot |
+| `document` | gescand_door, afzender, relation_id, type, dagtekening, samenvatting_b1, ocr_tekst (BSN gemaskeerd), zoekindex, zichtbaarheid, folder_id, status, bron, bewaren_tot, verwijderd_op, verwijderd_door, wissen_gestart_op |
 | `document_page` | document_id, volgorde, bestandspad (bestand versleuteld) |
 | `document_person` | document_id, person_id |
 | `document_acl` | document_id, user_id |

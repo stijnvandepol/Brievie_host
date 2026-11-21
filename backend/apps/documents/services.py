@@ -12,6 +12,7 @@ from apps.common.errors import ApiError
 from apps.documents import organise, suggestions, visibility
 from apps.documents.intake import page_aad
 from apps.documents.models import (
+    LIVE,
     Document,
     DocumentAddressee,
     DocumentEvent,
@@ -256,9 +257,15 @@ def inbox_counts(membership: Membership) -> dict[str, int]:
 
 
 def get_document(*, membership: Membership, document_id: UUID) -> Document:
-    """A document the member sees, or 404 (one they may not see is not found either)."""
+    """A document the member sees, or 404 (one they may not see is not found either).
+
+    A letter in the member's own trash answers `document_in_trash`; one in the trash they
+    may not see, or whose purge started, is not found like any other.
+    """
     document = visibility.visible_documents(membership).filter(id=document_id).first()
     if document is None:
+        if visibility.trashed_documents(membership).filter(id=document_id).exists():
+            raise ApiError(404, "document_in_trash", _("Deze brief staat in de prullenbak."))
         raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
     return document
 
@@ -405,7 +412,7 @@ def retry_processing(*, workspace: Workspace, document_id: UUID) -> Document:
         _lock_own_membership(workspace)
         document = (
             Document.objects.select_for_update(no_key=True)
-            .filter(workspace=workspace, id=document_id)
+            .filter(LIVE, workspace=workspace, id=document_id)
             .first()
         )
         if document is None:
@@ -436,7 +443,7 @@ def reopen_document(*, workspace: Workspace, user: User, document_id: UUID) -> D
         lock_own_membership(workspace.id, user.id)
         document = (
             Document.objects.select_for_update(no_key=True)
-            .filter(workspace=workspace, id=document_id)
+            .filter(LIVE, workspace=workspace, id=document_id)
             .first()
         )
         if document is None:
@@ -546,7 +553,7 @@ def _lock_for_organising(workspace: Workspace, document_id: UUID) -> Document:
     _lock_own_membership(workspace)
     document = (
         Document.objects.select_for_update(no_key=True)
-        .filter(workspace=workspace, id=document_id)
+        .filter(LIVE, workspace=workspace, id=document_id)
         .first()
     )
     if document is None:

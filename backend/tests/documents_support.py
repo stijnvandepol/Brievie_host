@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import uuid
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -111,6 +112,25 @@ def make_document(workspace: Workspace, status: str = "done") -> Document:
         return Document.objects.create(
             workspace=workspace, client_id=uuid.uuid4(), page_count=1, status=status
         )
+
+
+def trashed(
+    document: Document,
+    *,
+    by: User | None = None,
+    days_ago: int = 0,
+    purge_started: bool = False,
+) -> Document:
+    """Put the letter in the trash without the service (`days_ago` days ago, by `by`), and
+    mark its purge as started when asked; written as the system. The fresh row."""
+    now = timezone.now()
+    with workspace_context(document.workspace_id, actor=SYSTEM):
+        Document.objects.filter(id=document.id).update(
+            trashed_at=now - timedelta(days=days_ago),
+            trashed_by=by,
+            purge_started_at=now if purge_started else None,
+        )
+        return Document.objects.get(id=document.id)
 
 
 def make_person(workspace: Workspace, name: str, *, archived: bool = False) -> Person:

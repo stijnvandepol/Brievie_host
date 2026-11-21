@@ -422,6 +422,16 @@ def record_reopened(document: Document, *, actor: User) -> None:
     )
 
 
+def record_trashed(document: Document, *, actor: User | None) -> None:
+    """The history line for moving the letter to the trash (no actor: Brievie did it)."""
+    _write_event(document, DocumentEvent.Kind.TRASHED, actor, DocumentEvent.Origin.USER)
+
+
+def record_restored(document: Document, *, actor: User) -> None:
+    """The history line for putting the letter back from the trash."""
+    _write_event(document, DocumentEvent.Kind.RESTORED, actor, DocumentEvent.Origin.USER)
+
+
 def _origin_for(target_id: UUID, origin: str, suggested_ids: Collection[UUID]) -> str:
     return DocumentEvent.Origin.SUGGESTION if target_id in suggested_ids else origin
 

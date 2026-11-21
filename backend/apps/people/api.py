@@ -84,7 +84,10 @@ def update_person(
 def delete_person(request: HttpRequest, workspace_id: UUID, person_id: UUID) -> Status[None]:
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
     services.delete_person(
-        workspace=membership.workspace, person_id=person_id, actor=actor_from_request(request)
+        workspace=membership.workspace,
+        person_id=person_id,
+        actor=actor_from_request(request),
+        viewer=membership,
     )
     return Status(204, None)
 
