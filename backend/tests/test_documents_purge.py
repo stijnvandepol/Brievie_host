@@ -32,6 +32,7 @@ from apps.documents.models import (
     DocumentLabel,
     DocumentPage,
     DocumentReader,
+    DocumentReadMark,
     DocumentShare,
     DocumentSuggestion,
     Extraction,
@@ -175,6 +176,9 @@ def test_purge_removes_everything_hanging_off() -> None:
         assert DocumentShare.objects.filter(document=private).exists()
         assert RuleRun.objects.filter(document=private).exists()
         assert DocumentSuggestion.objects.filter(document=private).exists()
+        DocumentReadMark.objects.create(
+            workspace=ws, document=private, user=o.finance, read_at=timezone.now()
+        )
     # The workspace folder exists (a mounted share); the letter's own folder may be gone.
     (storage_root() / str(ws.id)).mkdir(parents=True)
     trashed(private, by=o.finance, days_ago=31)
@@ -190,6 +194,7 @@ def test_purge_removes_everything_hanging_off() -> None:
             DocumentSuggestion,
             DocumentShare,
             DocumentReader,
+            DocumentReadMark,
             RuleRun,
             DocumentEvent,
             DocumentPage,

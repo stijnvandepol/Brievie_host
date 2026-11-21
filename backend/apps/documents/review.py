@@ -16,7 +16,7 @@ from apps.accounts.models import User
 from apps.audit.services import AuditActor
 from apps.common.errors import ApiError, is_try_again
 from apps.common.privacy import mask_bsns
-from apps.documents import duplicates, organise, visibility
+from apps.documents import duplicates, organise, reading, visibility
 from apps.documents.models import LIVE, Document, DocumentEvent, DocumentSuggestion
 from apps.documents.schemas import ConfirmIn, TaskIn
 from apps.pipeline.autopilot import term_phrase
@@ -128,6 +128,9 @@ def _store_confirmation(
         document.status = Document.Status.DONE
         document.confirmed_by = user
         document.save(update_fields=["status", "confirmed_by", "confirmed_at", "updated_at"])
+        # Only openings of the confirmed letter count (security review of PR #44, point 3):
+        # one during review is no opening, one of an earlier confirmation still is.
+        reading.recompute_addressee_opened(document)
         # Its facts are confirmed now: a pair whose guard fires is withdrawn. As the
         # system: the confirming member may not see the other letter.
         duplicates.recheck(document)

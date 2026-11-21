@@ -1572,6 +1572,10 @@ msgstr "We can't find this event."
 msgid "Deze wijziging kun je niet meer terugdraaien."
 msgstr "This change can no longer be undone."
 
+#: apps/documents/reading.py
+msgid "Kies hoogstens 200 brieven."
+msgstr "Choose 200 letters at most."
+
 #: apps/documents/retention.py
 msgid "Deze brief moet nog bewaard worden. Je kunt hem nu niet wissen."
 msgstr "This letter still has to be kept. You can't erase it now."
@@ -1810,7 +1814,7 @@ msgstr "There is already a label with this name."
 msgid "Kies een afdeling."
 msgstr "Choose a department."
 
-#: apps/labels/services.py apps/people/services.py apps/workspaces/deps.py apps/workspaces/members.py apps/workspaces/visibility_settings.py
+#: apps/labels/services.py apps/people/services.py apps/tasks/assignment.py apps/workspaces/deps.py apps/workspaces/members.py apps/workspaces/visibility_settings.py
 msgid "Je mag dit niet doen in deze werkruimte."
 msgstr "You are not allowed to do this in this workspace."
 
@@ -2295,6 +2299,10 @@ msgid "Deze taak hoort niet bij een brief en kan niet worden gegeven."
 msgstr "This task does not belong to a letter and cannot be handed over."
 
 #: apps/tasks/assignment.py
+msgid "Iemand anders doet deze taak al. Vraag die persoon of een beheerder om hem door te geven."
+msgstr "Someone else is already doing this task. Ask that person or an admin to hand it over."
+
+#: apps/tasks/assignment.py
 msgid "Deze persoon mag de brief niet lezen. Kies iemand anders."
 msgstr "This person may not read the letter. Choose someone else."
 
@@ -2692,6 +2700,10 @@ msgstr "Emergency access is off."
 #, python-format
 msgid "Wie de server zelf beheert, kan technisch bij alle gegevens. Dat is %(names)s."
 msgstr "Whoever manages the server itself can technically reach all data. That is %(names)s."
+
+#: apps/workspaces/settings_service.py
+msgid "Dit kan alleen in een organisatie."
+msgstr "This is only possible in an organisation."
 
 #: apps/workspaces/visibility_settings.py
 msgid "Bevestig eerst dat deze mensen meer post gaan zien."

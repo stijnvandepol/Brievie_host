@@ -4,6 +4,7 @@ from uuid import UUID
 from ninja import Field, Schema
 
 from apps.common.schemas import InputSchema
+from apps.tasks.assignment import NO_FLAGS, TaskFlags
 from apps.tasks.mine import days_left, group_for
 from apps.tasks.models import Task, amount_text
 from apps.tasks.services import MyTask, MyTaskCounts, MyTaskList
@@ -53,6 +54,12 @@ class TaskItemOut(Schema):
     document_type: str = ""
     # Whether the caller may tick it off, date it or give it to someone (role member+).
     can_edit: bool = False
+    # Who may change who does it (navigation spec S 7): "Ik doe dit" (nobody has it),
+    # "Geef aan…" (free, yours, or as an admin), "Niet meer aan mij" / "Vrijgeven" (yours,
+    # or as an admin). Computed by the server's own rule; false for a viewer.
+    can_take: bool = False
+    can_hand_over: bool = False
+    can_release: bool = False
 
 
 class MyTasksOut(Schema):
@@ -100,9 +107,12 @@ def _name(user: object) -> str:
     return str(getattr(user, "name", "")) if user is not None else ""
 
 
-def task_item_out(obj: Task | MyTask, *, can_edit: bool, today: date | None = None) -> TaskItemOut:
+def task_item_out(
+    obj: Task | MyTask, *, can_edit: bool, flags: TaskFlags, today: date | None = None
+) -> TaskItemOut:
     """A task as the lists show it: from a bare task (`listTasks`, a tick) or from a
-    "Mijn taken" row with its reason, group and names."""
+    "Mijn taken" row with its reason, group and names. `flags`: what the caller may do
+    with its assignment (`assignment.flags_for_tasks`)."""
     task = obj.task if isinstance(obj, MyTask) else obj
     document = task.document
     is_open = task.status == Task.Status.OPEN
@@ -142,12 +152,18 @@ def task_item_out(obj: Task | MyTask, *, can_edit: bool, today: date | None = No
         completed_by_name=_name(task.completed_by),
         document_type=document.document_type if document is not None else "",
         can_edit=can_edit,
+        can_take=flags.can_take,
+        can_hand_over=flags.can_hand_over,
+        can_release=flags.can_release,
     )
 
 
-def my_tasks_out(result: MyTaskList, *, can_edit: bool) -> MyTasksOut:
+def my_tasks_out(result: MyTaskList, *, can_edit: bool, flags: dict[UUID, TaskFlags]) -> MyTasksOut:
     return MyTasksOut(
-        items=[task_item_out(item, can_edit=can_edit) for item in result.items],
+        items=[
+            task_item_out(item, can_edit=can_edit, flags=flags.get(item.task.id, NO_FLAGS))
+            for item in result.items
+        ],
         today=result.today,
         has_person=result.has_person,
         truncated=result.truncated,

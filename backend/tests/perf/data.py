@@ -13,12 +13,18 @@ flagged sorter; addressees 60 % one person, 25 % one department, 10 % a person a
 department, 5 % none; 2 % of the persons managed by a member ("Beheerd door"); 20 labels
 with 100,000 links; 20,000 tasks; 300,000 events; a
 private letter has one `addressee` and one `share` reader row.
+
+Navigation (plan Task 10): each member linked to a letter's addressee (their person, a
+department they are in) has read it in 70 % of the cases, the sorter 20 % of all letters
+too; "Ongelezen" starts 90 days back for every member; 3 % of the confirmed letters with
+addressees are not opened by any of them ("Blijft liggen"), the rest opened when
+confirmed; the workspace has "Blijft liggen" on.
 """
 
 import random
 from collections.abc import Sequence
-from dataclasses import dataclass
-from datetime import UTC, datetime
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from typing import Final, NamedTuple
 from uuid import UUID
 
@@ -71,6 +77,13 @@ class Shape:
     public_share_percent: int = 1  # non-private letters shared with one more member
     ocr_words: int = 45  # 45 hex words of 33 characters: about 1,500 characters a letter
     years: int = 5
+    # Navigation: read marks of the members a letter is addressed to, and of the sorter.
+    read_mark_percent: int = 70
+    sorter_mark_percent: int = 20
+    # Confirmed letters with addressees that none of them opened.
+    unopened_percent: int = 3
+    # "Ongelezen" starts this many days back for every member.
+    unread_days: int = 90
 
 
 DEFAULT: Final = Shape()
@@ -111,6 +124,9 @@ class Plan:
     automatic_addressees: frozenset[int]  # letters whose addressee links are automatic
     automatic_labels: frozenset[int]  # indexes into label_links
     by_ai: frozenset[int]  # letters the AI confirmed
+    # Navigation: (letter, member) read marks; letters no addressee opened.
+    read_marks: list[tuple[int, int]] = field(default_factory=list)
+    unopened: frozenset[int] = frozenset()
 
     @property
     def department_member(self) -> int:
@@ -237,6 +253,27 @@ def make_plan(shape: Shape = DEFAULT, seed: int = SEED) -> Plan:
         if not letter.private and extra.randrange(100) < shape.public_share_percent:
             readers.append(Reader(i, extra.randrange(shape.members), "share"))
 
+    # Navigation, from a generator of its own: the rest of the world stays as measured.
+    reading = random.Random(seed + 3)  # noqa: S311 - test data, not a secret
+    read_marks: list[tuple[int, int]] = []
+    unopened: set[int] = set()
+    for i, letter in enumerate(letters):
+        addressed = {p for p in letter.persons if p < shape.members}
+        for d in letter.departments:
+            addressed |= set(departments[d])
+        for member in sorted(addressed):
+            if reading.randrange(100) < shape.read_mark_percent:
+                read_marks.append((i, member))
+        if SORTER not in addressed and reading.randrange(100) < shape.sorter_mark_percent:
+            read_marks.append((i, SORTER))
+        has_addressee = bool(letter.persons or letter.departments)
+        if (
+            letter.status == "done"
+            and has_addressee
+            and reading.randrange(100) < shape.unopened_percent
+        ):
+            unopened.add(i)
+
     return Plan(
         shape=shape,
         roles=["admin" if m in ADMINS else "member" for m in range(shape.members)],
@@ -248,6 +285,8 @@ def make_plan(shape: Shape = DEFAULT, seed: int = SEED) -> Plan:
         automatic_addressees=automatic_addressees,
         automatic_labels=automatic_labels,
         by_ai=by_ai,
+        read_marks=read_marks,
+        unopened=frozenset(unopened),
     )
 
 
@@ -306,17 +345,25 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
         c.execute(
             "INSERT INTO workspaces_workspace (id, created_at, updated_at, name, kind, modules,"
             " allow_member_export, everyone_sees_all, departments_enabled, admins_read_all,"
-            " care_is_private, emergency_access)"
+            " care_is_private, emergency_access, lingering_enabled)"
             " VALUES (%s, %s, %s, 'Meetkantoor', 'business', '{}', false, true, false, true,"
-            " false, true)",
+            " false, true, true)",
             [workspace_id, now, now],
         )
         c.execute(
             "INSERT INTO workspaces_membership (id, created_at, updated_at, user_id,"
-            " workspace_id, role, sorts_post)"
-            " SELECT gen_random_uuid(), %s, %s, u, %s, r, n - 1 = %s"
+            " workspace_id, role, sorts_post, unread_from)"
+            " SELECT gen_random_uuid(), %s, %s, u, %s, r, n - 1 = %s, %s"
             " FROM unnest(%s::uuid[], %s::text[]) WITH ORDINALITY AS t(u, r, n)",
-            [now, now, workspace_id, SORTER, users, plan.roles],
+            [
+                now,
+                now,
+                workspace_id,
+                SORTER,
+                now - timedelta(days=shape.unread_days),
+                users,
+                plan.roles,
+            ],
         )
         person_users: list[UUID | None] = [*users, *([None] * shape.unlinked_persons)]
         c.execute(
@@ -368,7 +415,7 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
             " scanned_by_id, source, status, failure_code, page_count, ocr_text, sender,"
             " document_type, letter_date, summary, summary_by_ai, confirmed_by_id, confirmed_at,"
             " confirmed_by_ai, confirmed_organisation, visibility, addressee_ids,"
-            " has_automatic_link)"
+            " has_automatic_link, addressee_opened_at)"
             " SELECT id, %s - make_interval(secs => age), %s - make_interval(secs => age), %s,"
             " gen_random_uuid(), scanner, 'scan', status,"
             " CASE WHEN status = 'failed' THEN 'ocr_failed' ELSE '' END, (1 + n %% 3)::int,"
@@ -379,17 +426,20 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
             " CASE WHEN status = 'done' THEN scanner END,"
             " CASE WHEN status = 'done' THEN %s - make_interval(secs => age) END,"
             " by_ai, NULL, CASE WHEN is_private THEN 'restricted' ELSE 'workspace' END,"
-            " addressees::uuid[], false"
+            " addressees::uuid[], false,"
+            " CASE WHEN status = 'done' AND addressees <> '{}' AND NOT unopened"
+            "  THEN %s - make_interval(secs => age) END"
             " FROM unnest(%s::uuid[], %s::uuid[], %s::text[], %s::int[], %s::boolean[],"
-            "             %s::text[], %s::text[], %s::boolean[], %s::text[])"
+            "             %s::text[], %s::text[], %s::boolean[], %s::text[], %s::boolean[])"
             "   WITH ORDINALITY AS t(id, scanner, status, age, is_private, sender, kind, by_ai,"
-            "                        addressees, n)",
+            "                        addressees, unopened, n)",
             [
                 now,
                 now,
                 workspace_id,
                 shape.ocr_words,
                 today,
+                now,
                 now,
                 letters,
                 [users[x.scanned_by] for x in plan.letters],
@@ -406,6 +456,7 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
                     "{" + ",".join(str(a) for a in sorted(addressee_ids(plan, i))) + "}"
                     for i in range(shape.letters)
                 ],
+                [i in plan.unopened for i in range(shape.letters)],
             ],
         )
         links = [(i, persons[p]) for i, x in enumerate(plan.letters) for p in x.persons]
@@ -505,6 +556,24 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
             ],
         )
 
+        # Navigation: who read which letter, read when it arrived (half an hour later).
+        c.execute(
+            "INSERT INTO documents_documentreadmark (id, created_at, updated_at, workspace_id,"
+            " document_id, user_id, read_at)"
+            " SELECT gen_random_uuid(), %s, %s, %s, d, u, %s - make_interval(secs => age)"
+            " + interval '30 minutes'"
+            " FROM unnest(%s::uuid[], %s::uuid[], %s::int[]) AS t(d, u, age)",
+            [
+                now,
+                now,
+                workspace_id,
+                now,
+                [letters[i] for i, _ in plan.read_marks],
+                [users[m] for _, m in plan.read_marks],
+                [plan.letters[i].age_seconds for i, _ in plan.read_marks],
+            ],
+        )
+
     with connection.cursor() as c:
         for table in (
             "accounts_user",
@@ -518,6 +587,7 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
             "documents_documentlabel",
             "documents_documentevent",
             "documents_documentreader",
+            "documents_documentreadmark",
             "tasks_task",
         ):
             c.execute(f'VACUUM (ANALYZE) "{table}"')

@@ -5,7 +5,7 @@ import {
   HttpResponse,
   http,
   loggedInHandlers,
-  noTaskCounts,
+  menuCounts,
   renderApp,
   server,
   workspace,
@@ -14,9 +14,7 @@ import {
 const base = `*${API}/workspaces/${workspace.id}`;
 
 function taskCounts(mine: number, overdue: number) {
-  return http.get(`${base}/my-tasks/counts`, () =>
-    HttpResponse.json({ ...noTaskCounts, mine, overdue }),
-  );
+  return menuCounts({ my_tasks: mine, my_tasks_overdue: overdue });
 }
 
 function emptyList() {
@@ -33,15 +31,16 @@ function emptyList() {
 }
 
 describe("navigation", () => {
-  it("nav shows Mijn taken first with its count", async () => {
+  it("nav shows Mijn taken third, after Inbox and Mijn post, with its count", async () => {
     server.use(taskCounts(4, 0), ...loggedInHandlers(), emptyList());
     renderApp(`/w/${workspace.id}/taken`);
     const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
     const link = await within(nav).findByRole("link", { name: "Mijn taken, 4 open" });
     expect(link).toHaveAttribute("href", `/w/${workspace.id}/taken`);
-    const links = within(nav).getAllByRole("link");
-    const first = links.findIndex((l) => l.getAttribute("href")?.startsWith(`/w/${workspace.id}`));
-    expect(links[first]).toBe(link);
+    const links = within(nav)
+      .getAllByRole("link")
+      .filter((l) => l.getAttribute("href")?.startsWith(`/w/${workspace.id}/`));
+    expect(links[2]).toBe(link);
     expect(within(link).getByText("4")).not.toHaveClass("nav-count-warning");
   });
 

@@ -26,20 +26,35 @@ def update_settings(
     allow_member_export: bool | None = None,
     summary_language: str | None = None,
     care_is_private: bool | None = None,
+    lingering_enabled: bool | None = None,
+    lingering_inbox_days: int | None = None,
+    lingering_unopened_days: int | None = None,
 ) -> Workspace:
     """Change the given settings and log each one that really changed, in the same
-    transaction. The workspace row is locked, so two admins act one after the other."""
+    transaction. The workspace row is locked, so two admins act one after the other.
+    "Blijft liggen" is an organisation's: switching it on at home is 422."""
     if summary_language is not None and summary_language not in SUMMARY_LANGUAGES:
         raise ValueError(f"Unknown summary language {summary_language!r}")
-    changes: dict[str, bool | str] = {}
+    for days, most in ((lingering_inbox_days, 30), (lingering_unopened_days, 60)):
+        if days is not None and not 1 <= days <= most:
+            raise ValueError(f"Lingering days out of range: {days!r}")
+    changes: dict[str, bool | str | int] = {}
     if allow_member_export is not None:
         changes["allow_member_export"] = allow_member_export
     if summary_language is not None:
         changes["summary_language"] = summary_language
     if care_is_private is not None:
         changes["care_is_private"] = care_is_private
+    if lingering_enabled is not None:
+        changes["lingering_enabled"] = lingering_enabled
+    if lingering_inbox_days is not None:
+        changes["lingering_inbox_days"] = lingering_inbox_days
+    if lingering_unopened_days is not None:
+        changes["lingering_unopened_days"] = lingering_unopened_days
     with transaction.atomic():
         locked = Workspace.objects.select_for_update().get(id=workspace.id)
+        if lingering_enabled and locked.kind != Workspace.Kind.BUSINESS:
+            raise ApiError(422, "validation_error", _("Dit kan alleen in een organisatie."))
         for setting, value in changes.items():
             if getattr(locked, setting) == value:
                 continue
@@ -95,5 +110,6 @@ def set_emergency_access(
                 str(code),
                 actor_name=user.name,
                 values={"workspace": locked.name},
+                workspace_id=locked.id,
             )
         return locked

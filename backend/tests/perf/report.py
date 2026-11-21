@@ -35,6 +35,13 @@ LISTS: Final = (
     # Search (merged with M1): through the same seam, so measured on the same world.
     "search_sender",
     "search_common_word",
+    # Navigation (plan Task 10): the menu's counts, Mijn post (all, unread only), Alle
+    # post unread only, and "Blijft liggen".
+    "menu_counts",
+    "list_my_post",
+    "list_my_post_unread",
+    "list_all_unread",
+    "lingering_letters",
 )
 # Measured and shown, not part of P1's verdict (search is not a list of S 4.9.5); their
 # results must still match without the member filter.

@@ -228,7 +228,11 @@ def set_sorts_post(
                 m.user for m in locked if m.role == Membership.Role.ADMIN and m.user_id != user_id
             ]
             notify_self_grant(
-                others, category=UNASSIGNED, names=sight.before, actor_name=actor.name
+                others,
+                category=UNASSIGNED,
+                names=sight.before,
+                actor_name=actor.name,
+                workspace_id=workspace.id,
             )
     return member
 

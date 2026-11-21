@@ -13,6 +13,7 @@ import { labelsRoute } from "./routes/labels";
 import { languageRoute } from "./routes/language";
 import { loginRoute } from "./routes/login";
 import { memberDevicesRoute } from "./routes/member-devices";
+import { myPostRoute } from "./routes/my-post";
 import { pairAppRoute } from "./routes/pair-app";
 import { passwordRoute } from "./routes/password";
 import { passwordResetRoute } from "./routes/password-reset";
@@ -32,9 +33,11 @@ import { tasksRoute } from "./routes/tasks";
 import { trashRoute } from "./routes/trash";
 import { visibilityRoute } from "./routes/visibility";
 import { workspaceRoute } from "./routes/workspace";
+import { workspacesRoute } from "./routes/workspaces";
 
 const routeTree = rootRoute.addChildren([
   homeRoute,
+  workspacesRoute,
   setupRoute,
   loginRoute,
   pairAppRoute,
@@ -45,6 +48,7 @@ const routeTree = rootRoute.addChildren([
   passwordRoute,
   languageRoute,
   workspaceRoute.addChildren([
+    myPostRoute,
     tasksRoute,
     inboxRoute,
     postRoute,

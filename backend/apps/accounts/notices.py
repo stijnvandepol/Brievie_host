@@ -9,6 +9,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from django.db import transaction
+from django.db.models import Q
 from django.http import HttpRequest
 from django.utils import formats, timezone
 from django.utils.functional import Promise
@@ -136,6 +137,23 @@ NOTICE_VALUE_KEYS: Final[dict[str, frozenset[str]]] = {
 }
 
 
+# The notices about one workspace (navigation spec S 8, B7): made with that workspace and
+# shown only there. The others are about the account and shown everywhere.
+WORKSPACE_CODES: Final = frozenset(
+    {
+        Code.EMERGENCY_ACCESS_SWITCHED_ON,
+        Code.EMERGENCY_ACCESS_SWITCHED_OFF,
+        Code.EMERGENCY_ACCESS_USED,
+        Code.PRIVATE_WITHOUT_READERS,
+        Code.PRIVATE_WITHOUT_READERS_UNNAMED,
+        Code.SIGHT_WIDENED,
+        Code.SIGHT_NARROWED,
+        Code.ADMINS_READ_ALL_ON,
+        Code.SELF_GRANT,
+    }
+)
+
+
 class _Values(dict[str, str]):
     """A value a sentence names but the notice lacks reads as empty, never a crash."""
 
@@ -150,22 +168,36 @@ class NoticeView:
     message: str
     created_at: datetime
     can_dismiss: bool
+    workspace_id: UUID | None
 
 
 def notify(
-    user: User, code: str, *, actor_name: str, values: Mapping[str, str] | None = None
+    user: User,
+    code: str,
+    *,
+    actor_name: str,
+    values: Mapping[str, str] | None = None,
+    workspace_id: UUID | None = None,
 ) -> None:
     """Leave `user` a notice that `actor_name` did `code` (values fill in the sentence).
 
-    Only the value keys `NOTICE_VALUE_KEYS` allows for the code: never letter content."""
+    Only the value keys `NOTICE_VALUE_KEYS` allows for the code: never letter content. A
+    code about a workspace (`WORKSPACE_CODES`) needs that workspace and an account code
+    takes none, so no notice shows in the wrong place."""
     if code not in Code.values:
         raise ValueError(f"Unknown account notice code: {code!r}")
     unknown = sorted(set(values or {}) - NOTICE_VALUE_KEYS[code])
     if unknown:
         raise ValueError(f"Account notice {code!r} takes no value {', '.join(unknown)}")
+    if (code in WORKSPACE_CODES) != (workspace_id is not None):
+        raise ValueError(f"Account notice {code!r}: workspace {workspace_id!r} does not fit")
     with transaction.atomic():
         AccountNotice.objects.create(
-            user=user, code=code, actor_name=actor_name, values=dict(values or {})
+            user=user,
+            code=code,
+            actor_name=actor_name,
+            values=dict(values or {}),
+            workspace_id=workspace_id,
         )
 
 
@@ -193,10 +225,17 @@ def _current_session(request: HttpRequest) -> UserSession | None:
 
 
 def unseen_notices(request: HttpRequest) -> list[NoticeView]:
-    """The caller's notices not dismissed yet, oldest first."""
+    """The caller's notices not dismissed yet, oldest first: about the account, or about a
+    workspace they are still a member of (one they left may name its people, security
+    review of PR #44, point 4)."""
     user = current_user(request)
     session = _current_session(request)
-    notices = AccountNotice.objects.filter(user=user, seen_at=None).order_by("created_at", "id")
+    notices = (
+        AccountNotice.objects.filter(user=user, seen_at=None)
+        .filter(Q(workspace__isnull=True) | Q(workspace__memberships__user=user))
+        .distinct()
+        .order_by("created_at", "id")
+    )
     return [
         NoticeView(
             id=notice.id,
@@ -204,6 +243,7 @@ def unseen_notices(request: HttpRequest) -> list[NoticeView]:
             message=notice_message(notice),
             created_at=notice.created_at,
             can_dismiss=can_dismiss(notice, session),
+            workspace_id=notice.workspace_id,
         )
         for notice in notices
     ]

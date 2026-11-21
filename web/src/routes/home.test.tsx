@@ -1,8 +1,9 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   API,
+  documentHandlers,
   errorBody,
   HttpResponse,
   http,
@@ -13,12 +14,61 @@ import {
   twoWorkspaces,
   user,
   workspace,
+  workspaceHandlers,
 } from "../test-utils";
 
-describe("home", () => {
-  it("lists the workspaces in a table with kind and role, and links to the devices page", async () => {
+afterEach(() => window.localStorage.clear());
+
+describe("start", () => {
+  it("/ goes to Mijn post of the first workspace", async () => {
+    server.use(twoWorkspaces(), ...loggedInHandlers(), ...documentHandlers());
+    const { router } = renderApp("/");
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(`/w/${workspace.id}/mijn-post`),
+    );
+    expect(await screen.findByRole("heading", { level: 1, name: "Mijn post" })).toBeVisible();
+  });
+
+  it("/ goes to the last workspace used", async () => {
+    window.localStorage.setItem("brievie.last-workspace", secondWorkspace.id);
+    server.use(twoWorkspaces(), ...loggedInHandlers(), ...workspaceHandlers(secondWorkspace.id));
+    const { router } = renderApp("/");
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(`/w/${secondWorkspace.id}/mijn-post`),
+    );
+  });
+
+  it("/ does not open a workspace the user left", async () => {
+    window.localStorage.setItem("brievie.last-workspace", "00000000-0000-4000-8000-000000000000");
+    server.use(twoWorkspaces(), ...loggedInHandlers(), ...documentHandlers());
+    const { router } = renderApp("/");
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(`/w/${workspace.id}/mijn-post`),
+    );
+  });
+
+  it("/ goes to /werkruimtes without workspaces", async () => {
+    server.use(
+      http.get(`*${API}/workspaces`, () => HttpResponse.json([])),
+      ...loggedInHandlers(),
+    );
+    const { router } = renderApp("/");
+    await waitFor(() => expect(router.state.location.pathname).toBe("/werkruimtes"));
+    expect(await screen.findByText("Je hoort nog bij geen werkruimte.")).toBeVisible();
+  });
+
+  it("remembers the workspace opened last", async () => {
+    server.use(twoWorkspaces(), ...loggedInHandlers(), ...workspaceHandlers(secondWorkspace.id));
+    renderApp(`/w/${secondWorkspace.id}/post`);
+    await screen.findByRole("heading", { level: 1, name: "Alle post" });
+    expect(window.localStorage.getItem("brievie.last-workspace")).toBe(secondWorkspace.id);
+  });
+});
+
+describe("Alle werkruimtes", () => {
+  it("lists the workspaces in a table with kind and role", async () => {
     server.use(twoWorkspaces(), ...loggedInHandlers());
-    renderApp("/");
+    renderApp("/werkruimtes");
     expect(
       await screen.findByRole("heading", { level: 1, name: /werkruimtes/i }),
     ).toBeInTheDocument();
@@ -30,16 +80,20 @@ describe("home", () => {
     expect(screen.getByRole("link", { name: "Apparaten" })).toHaveAttribute("href", "/koppel-app");
   });
 
+  it("also lists a single workspace: the page never bounces", async () => {
+    server.use(...loggedInHandlers());
+    const { router } = renderApp("/werkruimtes");
+    expect(await screen.findByRole("rowheader", { name: "Thuis" })).toBeVisible();
+    expect(router.state.location.pathname).toBe("/werkruimtes");
+  });
+
   it("marks the current page in the menu and shows who is logged in", async () => {
     server.use(twoWorkspaces(), ...loggedInHandlers());
-    renderApp("/");
+    renderApp("/werkruimtes");
     const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
     expect(await within(nav).findByRole("link", { name: "Werkruimtes" })).toHaveAttribute(
       "aria-current",
       "page",
-    );
-    expect(within(nav).getByRole("link", { name: "Apparaten" })).not.toHaveAttribute(
-      "aria-current",
     );
     // The name is in the app bar; the e-mail address is in the account menu.
     expect(await screen.findByText("Anna")).toBeInTheDocument();
@@ -48,20 +102,13 @@ describe("home", () => {
     expect(within(menu).getByText("anna@example.nl")).toBeInTheDocument();
   });
 
-  it("links each workspace when there are several", async () => {
+  it("links each workspace to its Mijn post", async () => {
     server.use(twoWorkspaces(), ...loggedInHandlers());
-    renderApp("/");
+    renderApp("/werkruimtes");
     expect(await screen.findByRole("link", { name: "Bedrijf" })).toHaveAttribute(
       "href",
-      `/w/${secondWorkspace.id}/inbox`,
+      `/w/${secondWorkspace.id}/mijn-post`,
     );
-  });
-
-  it("redirects to the only workspace", async () => {
-    server.use(...loggedInHandlers());
-    const { router } = renderApp("/");
-    await waitFor(() => expect(router.state.location.pathname).toBe(`/w/${workspace.id}/inbox`));
-    expect(await screen.findByRole("heading", { level: 1, name: "Inbox" })).toBeInTheDocument();
   });
 
   it("logs out with the CSRF token and returns to the login screen", async () => {
@@ -82,7 +129,7 @@ describe("home", () => {
       }),
     );
     const u = userEvent.setup();
-    const { router } = renderApp("/");
+    const { router } = renderApp("/werkruimtes");
     await u.click(await screen.findByRole("button", { name: "Account" }));
     await u.click(await screen.findByRole("button", { name: /uitloggen/i }));
     expect(await screen.findByRole("button", { name: /^inloggen$/i })).toBeInTheDocument();
@@ -103,7 +150,7 @@ describe("home", () => {
       http.get(`*${API}/workspaces`, notLoggedIn),
       ...loggedInHandlers(),
     );
-    const { router } = renderApp("/");
+    const { router } = renderApp("/werkruimtes");
     await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
     expect(await screen.findByRole("button", { name: /^inloggen$/i })).toBeVisible();
   });

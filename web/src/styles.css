@@ -465,6 +465,7 @@ q {
   display: flex;
   flex-direction: column;
   gap: var(--s-xxs);
+  height: calc(100vh - var(--topbar-height));
   max-height: calc(100vh - var(--topbar-height));
   overflow-y: auto;
   padding: var(--s-s) var(--s-xs);
@@ -483,6 +484,92 @@ q {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The workspace switcher on top of the menu (spec S 4.3): the initial in a brand square,
+   the name and the kind. A plain block with one workspace, a menu button with several. */
+.ws-switcher {
+  display: flex;
+  align-items: center;
+  gap: var(--s-s);
+  width: 100%;
+  min-height: 48px;
+  margin-bottom: var(--s-xs);
+  padding: var(--s-xs) var(--s-s);
+  border: 1px solid var(--neutral-stroke2);
+  border-radius: var(--radius-medium);
+  background: var(--neutral-bg1);
+  color: var(--neutral-fg1);
+  font: inherit;
+  text-align: left;
+}
+
+button.ws-switcher {
+  cursor: pointer;
+}
+
+button.ws-switcher[data-hovered] {
+  background: var(--neutral-bg1-hover);
+}
+
+.ws-initial {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-medium);
+  background: var(--brand-bg);
+  color: var(--on-brand);
+  font-weight: var(--weight-semibold);
+}
+
+.ws-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ws-name {
+  overflow: hidden;
+  font-weight: var(--weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-kind,
+.ws-role {
+  color: var(--neutral-fg3);
+  font-size: var(--caption-size);
+  line-height: var(--caption-line);
+}
+
+.ws-chevron {
+  flex: none;
+  color: var(--neutral-fg3);
+}
+
+.ws-popover {
+  width: 300px;
+}
+
+.ws-menu {
+  padding: var(--s-xs);
+  outline: none;
+}
+
+.ws-item {
+  min-height: 48px;
+}
+
+.ws-check {
+  color: var(--brand-fg1);
+}
+
+.ws-menu [role="separator"] {
+  margin: var(--s-xs) 0;
+  border-top: 1px solid var(--neutral-stroke2);
 }
 
 .nav-link {
@@ -560,6 +647,25 @@ q {
   color: #fff;
 }
 
+/* Instellingen: the links of a section side by side, the workspace's part under a heading. */
+.settings-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-s);
+}
+
+.settings-heading {
+  margin-top: var(--s-l);
+}
+
+/* Instellingen at the bottom of the pane (spec S 4.1). */
+.nav-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-xxs);
+  margin-top: auto;
+}
+
 .nav-divider {
   width: 100%;
   margin: var(--s-xs) 0;
@@ -613,6 +719,26 @@ q {
   .app[data-nav="collapsed"] .nav-link {
     justify-content: center;
     padding: 0;
+  }
+
+  .app[data-nav="collapsed"] .ws-switcher {
+    justify-content: center;
+    padding: var(--s-xs) 0;
+    border-color: transparent;
+    background: transparent;
+  }
+
+  /* Folded to the rail: the initial shows, the name stays for screen readers. */
+  .app[data-nav="collapsed"] .ws-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .app[data-nav="collapsed"] .ws-chevron {
+    display: none;
   }
 
   .app[data-nav="collapsed"] .nav-label {
@@ -3341,4 +3467,47 @@ a.menu-item:hover {
   min-width: 260px;
   max-width: min(360px, calc(100vw - 32px));
   outline: none;
+}
+
+/* "Ongelezen" (spec S 5.4): the caller has not read the letter. A dot in the brand colour,
+   the row in bold; the word is in the row header for screen readers. */
+.unread-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: var(--s-s);
+  border-radius: var(--radius-circular);
+  background: var(--brand-bg);
+  vertical-align: middle;
+}
+
+tr.unread td,
+tr.unread th,
+.letter-card.unread {
+  font-weight: var(--weight-semibold);
+}
+
+/* "Blijft liggen" above the Inbox (spec S 6.2). */
+.lingering-title {
+  margin: var(--s-m) var(--s-l) var(--s-xs);
+  font-size: var(--body-size);
+}
+
+.lingering-list {
+  margin: 0;
+  padding: 0 var(--s-l) var(--s-m);
+  list-style: none;
+}
+
+.lingering-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-s) var(--s-m);
+  padding: var(--s-s) 0;
+  border-top: 1px solid var(--neutral-stroke2);
+}
+
+.lingering-age {
+  color: var(--warning-fg);
 }

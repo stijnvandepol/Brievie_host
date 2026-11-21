@@ -13,7 +13,7 @@ from apps.audit.services import actor_from_request
 from apps.common.errors import ApiError
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.common.throttling import CallerThrottle
-from apps.documents import intake, member_export, review, search, services, trash
+from apps.documents import intake, member_export, reading, review, search, services, trash
 from apps.documents.models import DocumentEvent, Folder, MemberExport
 from apps.documents.schemas import (
     AddresseesIn,
@@ -33,6 +33,10 @@ from apps.documents.schemas import (
     FolderOut,
     InboxCountsOut,
     LabelsIn,
+    LingeringOut,
+    MarkReadIn,
+    MarkReadOut,
+    MenuCountsOut,
     MyExportOut,
     TrashedDocumentOut,
     TrashListOut,
@@ -126,7 +130,11 @@ def create_document(
         "The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), "
         "`person_id`, `label_id` and `automatic` narrow the list; together they all apply. "
         "`automatic=true` keeps the documents the AI confirmed itself or put a label or "
-        "addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`)."
+        "addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`). "
+        '`addressed_to_me=true` keeps "Mijn post": the letters on the caller\'s own persons '
+        "(their own and those they manage), with `include_departments=true` also on their "
+        "departments; empty for a member without a person. `unread_only=true` keeps the "
+        "letters the caller has not read (`unread`)."
     ),
 )
 def list_documents(
@@ -136,6 +144,9 @@ def list_documents(
     person_id: UUID | None = None,
     label_id: UUID | None = None,
     automatic: bool = False,
+    addressed_to_me: bool = False,
+    include_departments: bool = False,
+    unread_only: bool = False,
 ) -> list[DocumentSummaryOut]:
     membership = workspace_member(request, workspace_id)
     documents = services.list_documents(
@@ -144,8 +155,29 @@ def list_documents(
         person_id=person_id,
         label_id=label_id,
         automatic=automatic,
+        addressed_to_me=addressed_to_me,
+        include_departments=include_departments,
+        unread_only=unread_only,
     )
     return services.document_summaries_out(membership, documents)
+
+
+@router.post(
+    "/workspaces/{workspace_id}/documents/read",
+    response={200: MarkReadOut, 404: ErrorOut, **SESSION_WRITE_ERRORS, **BODY_ERRORS},
+    operation_id="markDocumentsRead",
+    description=(
+        '"Alles gelezen": mark the given letters read for the caller (at most 200; 422 '
+        "`validation_error` for more). Ids the caller does not see are skipped without a "
+        "word. `marked`: how many were newly marked. The caller's own state only: nobody "
+        "else sees it; no history line, no log."
+    ),
+)
+def mark_documents_read(
+    request: HttpRequest, workspace_id: UUID, payload: MarkReadIn
+) -> MarkReadOut:
+    membership = workspace_member(request, workspace_id)
+    return MarkReadOut(marked=reading.mark_many_read(membership, payload.document_ids))
 
 
 @router.post(
@@ -203,6 +235,47 @@ def get_inbox_counts(request: HttpRequest, workspace_id: UUID) -> InboxCountsOut
 
 
 @router.get(
+    "/workspaces/{workspace_id}/menu/counts",
+    response={200: MenuCountsOut, 404: ErrorOut, **AUTH_ERRORS},
+    operation_id="getMenuCounts",
+    description=(
+        "The numbers of the menu in one call: letters waiting in the Inbox, unread letters "
+        'in "Mijn post", open and overdue tasks of "Mijn taken", and "Blijft liggen" for the '
+        "sorters and admins of an organisation. Only this workspace; nothing the caller may "
+        "not see is counted. `getInboxCounts` and `countMyTasks` stay as they are."
+    ),
+)
+def get_menu_counts(request: HttpRequest, workspace_id: UUID) -> MenuCountsOut:
+    membership = workspace_member(request, workspace_id)
+    counts = services.menu_counts(membership)
+    return MenuCountsOut(
+        inbox=counts.inbox,
+        my_post_unread=counts.my_post_unread,
+        my_tasks=counts.my_tasks,
+        my_tasks_overdue=counts.my_tasks_overdue,
+        lingering=counts.lingering,
+        shows_lingering=counts.shows_lingering,
+        has_person=counts.has_person,
+    )
+
+
+@router.get(
+    "/workspaces/{workspace_id}/inbox/lingering",
+    response={200: LingeringOut, 404: ErrorOut, **AUTH_ERRORS},
+    operation_id="listLingeringLetters",
+    description=(
+        '"Blijft liggen", for the sorters and admins of an organisation with it switched on '
+        "(`lingeringEnabled`): letters too long in the Inbox, and confirmed letters none of "
+        "whose addressees opened them, oldest first, at most 100 each, only letters the "
+        "caller may see. Empty lists for everyone else and at home."
+    ),
+)
+def list_lingering_letters(request: HttpRequest, workspace_id: UUID) -> LingeringOut:
+    membership = workspace_member(request, workspace_id)
+    return services.lingering_out(membership)
+
+
+@router.get(
     "/workspaces/{workspace_id}/documents/{document_id}",
     response={200: DocumentOut, 404: ErrorOut, **AUTH_ERRORS},
     operation_id="getDocument",
@@ -211,6 +284,39 @@ def get_document(request: HttpRequest, workspace_id: UUID, document_id: UUID) ->
     membership = workspace_member(request, workspace_id)
     document = services.get_document(membership=membership, document_id=document_id)
     return services.document_out_as(membership, document)
+
+
+@router.post(
+    "/workspaces/{workspace_id}/documents/{document_id}/read",
+    response={204: None, 404: ErrorOut, **SESSION_WRITE_ERRORS},
+    operation_id="markDocumentRead",
+    description=(
+        "The caller opened the letter: call once when the letter page or the reader shows "
+        "it (a plain `getDocument` marks nothing). Idempotent. 404 as `getDocument`. The "
+        "caller's own state only: nobody else sees it; no history line, no log."
+    ),
+)
+def mark_document_read(request: HttpRequest, workspace_id: UUID, document_id: UUID) -> Status[None]:
+    membership = workspace_member(request, workspace_id)
+    reading.mark_read(membership, document_id)
+    return Status(204, None)
+
+
+@router.delete(
+    "/workspaces/{workspace_id}/documents/{document_id}/read",
+    response={204: None, 404: ErrorOut, **SESSION_WRITE_ERRORS},
+    operation_id="markDocumentUnread",
+    description=(
+        '"Markeer als ongelezen": the caller\'s own mark goes; the letter is unread for them '
+        "again. Idempotent. 404 as `getDocument`."
+    ),
+)
+def mark_document_unread(
+    request: HttpRequest, workspace_id: UUID, document_id: UUID
+) -> Status[None]:
+    membership = workspace_member(request, workspace_id)
+    reading.mark_unread(membership, document_id)
+    return Status(204, None)
 
 
 @router.get(

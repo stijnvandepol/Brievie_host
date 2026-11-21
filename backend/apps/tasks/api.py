@@ -6,6 +6,7 @@ from ninja import Router
 from apps.accounts.services import current_user
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.tasks import assignment, services
+from apps.tasks.models import Task
 from apps.tasks.schemas import (
     AssignIn,
     DeadlineIn,
@@ -21,6 +22,13 @@ from apps.workspaces.deps import workspace_member
 from apps.workspaces.models import Membership
 
 router = Router(tags=["tasks"])
+
+
+def _one(membership: Membership, task: Task) -> TaskItemOut:
+    """A task after a change, with the caller's flags."""
+    flags = assignment.flags_for_tasks(membership, [task])[task.id]
+    return task_item_out(task, can_edit=True, flags=flags, today=services.task_today())
+
 
 _TASKS = "/workspaces/{workspace_id}/tasks"
 _TASK = "/workspaces/{workspace_id}/tasks/{task_id}"
@@ -40,7 +48,10 @@ def list_tasks(request: HttpRequest, workspace_id: UUID, status: str = "open") -
     tasks = services.list_tasks(membership.workspace, status=status)
     today = services.task_today()
     can_edit = membership.has_role(Membership.Role.MEMBER)
-    return [task_item_out(task, can_edit=can_edit, today=today) for task in tasks]
+    flags = assignment.flags_for_tasks(membership, tasks)
+    return [
+        task_item_out(task, can_edit=can_edit, flags=flags[task.id], today=today) for task in tasks
+    ]
 
 
 @router.get(
@@ -61,7 +72,8 @@ def list_my_tasks(
 ) -> MyTasksOut:
     membership = workspace_member(request, workspace_id)
     result = services.my_tasks(membership, part=part, status=status)
-    return my_tasks_out(result, can_edit=membership.has_role(Membership.Role.MEMBER))
+    flags = assignment.flags_for_tasks(membership, [item.task for item in result.items])
+    return my_tasks_out(result, can_edit=membership.has_role(Membership.Role.MEMBER), flags=flags)
 
 
 @router.get(
@@ -86,7 +98,7 @@ def complete_task(request: HttpRequest, workspace_id: UUID, task_id: UUID) -> Ta
     task = services.complete_task(
         workspace=membership.workspace, user=current_user(request), task_id=task_id
     )
-    return task_item_out(task, can_edit=True, today=services.task_today())
+    return _one(membership, task)
 
 
 @router.post(
@@ -100,7 +112,7 @@ def reopen_task(request: HttpRequest, workspace_id: UUID, task_id: UUID) -> Task
     task = services.reopen_task(
         workspace=membership.workspace, user=current_user(request), task_id=task_id
     )
-    return task_item_out(task, can_edit=True, today=services.task_today())
+    return _one(membership, task)
 
 
 @router.post(
@@ -126,7 +138,7 @@ def assign_task(
         task_id=task_id,
         assignee_id=payload.user_id,
     )
-    return task_item_out(task, can_edit=True, today=services.task_today())
+    return _one(membership, task)
 
 
 @router.get(
@@ -169,4 +181,4 @@ def set_task_deadline(
         task_id=task_id,
         deadline=payload.deadline,
     )
-    return task_item_out(task, can_edit=True, today=services.task_today())
+    return _one(membership, task)

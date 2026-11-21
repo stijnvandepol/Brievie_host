@@ -167,6 +167,11 @@ class AccountNotice(BaseModel):
     actor_name = models.CharField(max_length=150, blank=True)
     values = models.JSONField(default=dict, blank=True)
     seen_at = models.DateTimeField(null=True, blank=True)
+    # The workspace the notice is about (navigation spec S 8): shown only there. Null for
+    # a notice about the account itself (and for notices from before this field).
+    workspace = models.ForeignKey(
+        "workspaces.Workspace", null=True, blank=True, on_delete=models.CASCADE, related_name="+"
+    )
 
     class Meta:
         indexes: ClassVar[list[models.Index]] = [

@@ -15,6 +15,10 @@ PRIVACY = {
     "everyone_sees_all": True,
     "departments_enabled": False,
     "admins_read_all": True,
+    # "Blijft liggen" is an organisation's: off at home, with the default days.
+    "lingering_enabled": False,
+    "lingering_inbox_days": 2,
+    "lingering_unopened_days": 5,
 }
 
 if TYPE_CHECKING:

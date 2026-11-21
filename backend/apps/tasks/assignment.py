@@ -11,24 +11,111 @@ system (history origin `system`, no actor); every writer that narrows sight call
 The check runs as the caller, the write as the system: once given, the row is still the
 caller's to see (a task follows its letter), but the release must reach tasks the
 current actor may not see. Check and write share the task's row lock.
+
+Who may change an assignment (navigation spec S 7.1, `allowed`): a task nobody has can be
+taken or given by any member who sees it; a task of your own you give on or release; a
+task someone else has only that person or an admin hands on (409 `task_taken`). The admin
+role is read under the caller's own membership lock (lock order: own membership, then the
+task). The clients get the same rule per task as `can_take`, `can_hand_over` and
+`can_release` (`flags_for_tasks`).
 """
 
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
+from typing import Final
 from uuid import UUID
 
 from django.db import transaction
 from django.db.models import Q
+from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from apps.accounts.models import User
 from apps.common.errors import ApiError
 from apps.documents import organise, visibility
-from apps.documents.models import DocumentEvent
+from apps.documents.models import DocumentEvent, DocumentReader
 from apps.tasks.models import Task
 from apps.tasks.services import TASK_RELATED, task_not_found
-from apps.workspaces.context import system_actor
+from apps.workspaces.context import current_actor, system_actor
+from apps.workspaces.locks import lock_own_role
 from apps.workspaces.models import Membership
+
+
+def allowed(
+    *, caller_id: UUID, caller_is_admin: bool, current: UUID | None, wanted: UUID | None
+) -> bool:
+    """Whether the caller may change the assignment from `current` to `wanted` (S 7.1).
+    The same assignee again is always allowed (nothing changes)."""
+    if current == wanted or current is None or caller_is_admin:
+        return True
+    return current == caller_id
+
+
+@dataclass(frozen=True)
+class TaskFlags:
+    can_take: bool
+    can_hand_over: bool
+    can_release: bool
+
+
+NO_FLAGS: Final = TaskFlags(can_take=False, can_hand_over=False, can_release=False)
+
+
+def flags_for(
+    *, caller_id: UUID, role: str, assigned_to_id: UUID | None, has_letter: bool
+) -> TaskFlags:
+    """What the clients offer on one task, by `allowed` (S 7.2): "Ik doe dit" only on a
+    task nobody has; "Geef aan…" on a free task, your own, or as an admin any; "Niet meer
+    aan mij" / "Vrijgeven" on your own, or as an admin any taken one. Nothing for a
+    viewer or a task without a letter."""
+    if role not in (Membership.Role.MEMBER, Membership.Role.ADMIN) or not has_letter:
+        return NO_FLAGS
+    admin = role == Membership.Role.ADMIN
+    mine = assigned_to_id is not None and assigned_to_id == caller_id
+    return TaskFlags(
+        can_take=assigned_to_id is None,
+        can_hand_over=assigned_to_id is None or mine or admin,
+        can_release=assigned_to_id is not None and (mine or admin),
+    )
+
+
+def flags_for_tasks(membership: Membership, tasks: Sequence[Task]) -> dict[UUID, TaskFlags]:
+    """`flags_for` per task for the member, as the member. A task on a letter they hold
+    emergency access to gets none (emergency access is read-only, and never makes an
+    assignee): one query for the list."""
+    emergency = set(
+        DocumentReader.objects.filter(
+            user_id=membership.user_id,
+            reason=DocumentReader.Reason.EMERGENCY,
+            expires_at__gt=timezone.now(),
+            document_id__in=[t.document_id for t in tasks if t.document_id is not None],
+        ).values_list("document_id", flat=True)
+    )
+    return {
+        task.id: NO_FLAGS
+        if task.document_id in emergency
+        else flags_for(
+            caller_id=membership.user_id,
+            role=membership.role,
+            assigned_to_id=task.assigned_to_id,
+            has_letter=task.document_id is not None,
+        )
+        for task in tasks
+    }
+
+
+def flags_for_actor(workspace_id: UUID, tasks: Sequence[Task]) -> dict[UUID, TaskFlags]:
+    """`flags_for_tasks` for the current user (a letter's tasks); none for the system or
+    anybody who is not a member."""
+    actor = current_actor()
+    membership = (
+        Membership.objects.filter(workspace_id=workspace_id, user_id=actor).first()
+        if isinstance(actor, UUID)
+        else None
+    )
+    if membership is None:
+        return {task.id: NO_FLAGS for task in tasks}
+    return flags_for_tasks(membership, tasks)
 
 
 @dataclass(frozen=True)
@@ -86,9 +173,14 @@ def assign(*, membership: Membership, user: User, task_id: UUID, assignee_id: UU
 
     404 `task_not_found` for a task the caller does not see; 422 `task_without_letter`;
     422 `assignee_cannot_read` for anyone who may not read the letter, a viewer, or no
-    member.
+    member; 409 `task_taken` when someone else has it and the caller is no admin (S 7.1).
     """
     with transaction.atomic():
+        # Lock order: the caller's own membership (its role, read under the lock), then
+        # the task.
+        role = lock_own_role(membership.workspace_id, membership.user_id)
+        if role == Membership.Role.VIEWER:
+            raise ApiError(403, "forbidden", _("Je mag dit niet doen in deze werkruimte."))
         task = _visible(membership, task_id, lock=True)
         document = task.document
         if document is None:
@@ -96,6 +188,20 @@ def assign(*, membership: Membership, user: User, task_id: UUID, assignee_id: UU
                 422,
                 "task_without_letter",
                 _("Deze taak hoort niet bij een brief en kan niet worden gegeven."),
+            )
+        if not allowed(
+            caller_id=membership.user_id,
+            caller_is_admin=role == Membership.Role.ADMIN,
+            current=task.assigned_to_id,
+            wanted=assignee_id,
+        ):
+            raise ApiError(
+                409,
+                "task_taken",
+                _(
+                    "Iemand anders doet deze taak al. Vraag die persoon of een beheerder om "
+                    "hem door te geven."
+                ),
             )
         name = ""
         if assignee_id is not None:

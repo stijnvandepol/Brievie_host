@@ -155,7 +155,15 @@ def test_exported_query_parameters_have_no_anyof() -> None:
     operation = schema["paths"]["/api/v1/workspaces/{workspace_id}/documents"]["get"]
     parameters = {p["name"]: p for p in operation["parameters"] if p["in"] == "query"}
 
-    assert set(parameters) == {"inbox_state", "person_id", "label_id", "automatic"}
+    assert set(parameters) == {
+        "inbox_state",
+        "person_id",
+        "label_id",
+        "automatic",
+        "addressed_to_me",
+        "include_departments",
+        "unread_only",
+    }
     assert not any(p["required"] for p in parameters.values())
     assert "anyOf" not in json.dumps(parameters)
     assert parameters["person_id"]["schema"]["format"] == "uuid"

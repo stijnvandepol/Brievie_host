@@ -21,8 +21,10 @@ export const meQuery = queryOptions({
   },
 });
 
+/** The caller's workspaces. Its own key, not a prefix of the keys of one workspace
+ * (`["workspaces", id, …]`): refreshing the list refetches nothing of any workspace. */
 export const workspacesQuery = queryOptions({
-  queryKey: ["workspaces"],
+  queryKey: ["workspace-list"],
   queryFn: async () => {
     const { data, error } = await api.GET("/api/v1/workspaces");
     if (error !== undefined || !data) throw new ApiFailure(error);
@@ -44,6 +46,12 @@ export type DocumentFilters = {
   person_id?: string;
   label_id?: string;
   automatic?: boolean;
+  /** "Mijn post": the letters on the caller's own persons (spec S 9). */
+  addressed_to_me?: boolean;
+  /** With `addressed_to_me`: also the caller's departments ("Ook mijn afdeling"). */
+  include_departments?: boolean;
+  /** Only the letters the caller has not read. */
+  unread_only?: boolean;
 };
 
 export const documentsQuery = (
@@ -67,6 +75,9 @@ export const documentsQuery = (
             person_id: filters.person_id || undefined,
             label_id: filters.label_id || undefined,
             automatic: filters.automatic || undefined,
+            addressed_to_me: filters.addressed_to_me || undefined,
+            include_departments: filters.include_departments || undefined,
+            unread_only: filters.unread_only || undefined,
           },
         },
       });
@@ -193,6 +204,41 @@ export const inboxCountsQuery = (workspaceId: string) =>
     refetchInterval: (query) => ((query.state.data?.new ?? 0) > 0 ? READING_REFETCH_MS : false),
     queryFn: async () => {
       const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/inbox/counts", {
+        params: { path: { workspace_id: workspaceId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
+/** How often the menu's numbers are asked again while a page is open. */
+export const MENU_REFETCH_MS = 60_000;
+
+/**
+ * The menu's numbers in one call (spec S 9): waiting in the Inbox, unread in Mijn post, my
+ * open and late tasks, and "Blijft liggen" for sorters. Under "documents", so every change
+ * of a letter or a task (which refreshes that key) refreshes the menu too.
+ */
+export const menuCountsQuery = (workspaceId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "documents", "menu-counts"],
+    refetchOnWindowFocus: true,
+    refetchInterval: MENU_REFETCH_MS,
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/menu/counts", {
+        params: { path: { workspace_id: workspaceId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
+/** "Blijft liggen" (spec S 6): only asked for a sorter or admin of an organisation. */
+export const lingeringQuery = (workspaceId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "documents", "lingering"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/inbox/lingering", {
         params: { path: { workspace_id: workspaceId } },
       });
       if (error !== undefined || !data) throw new ApiFailure(error);

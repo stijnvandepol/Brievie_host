@@ -44,7 +44,27 @@ export function loggedInHandlers() {
     http.get(`*${API}/workspaces/${workspace.id}/visibility`, () =>
       HttpResponse.json(homeVisibility),
     ),
+    http.get(`*${API}/workspaces/${workspace.id}/menu/counts`, () =>
+      HttpResponse.json(noMenuCounts),
+    ),
   ];
+}
+
+export const noMenuCounts: components["schemas"]["MenuCountsOut"] = {
+  inbox: 0,
+  my_post_unread: 0,
+  my_tasks: 0,
+  my_tasks_overdue: 0,
+  lingering: 0,
+  shows_lingering: false,
+  has_person: true,
+};
+
+/** The menu's numbers of the first workspace. */
+export function menuCounts(counts: Partial<components["schemas"]["MenuCountsOut"]>) {
+  return http.get(`*${API}/workspaces/${workspace.id}/menu/counts`, () =>
+    HttpResponse.json({ ...noMenuCounts, ...counts }),
+  );
 }
 
 /** "Wie ziet wat" of a Thuis workspace: everyone sees all post, no departments. */
@@ -67,6 +87,30 @@ export const noTaskCounts = { mine: 0, overdue: 0, within_week: 0, needs_date: 0
  */
 export function twoWorkspaces() {
   return http.get(`*${API}/workspaces`, () => HttpResponse.json([workspace, secondWorkspace]));
+}
+
+/**
+ * Everything a workspace page asks besides its own content, for any workspace (the second
+ * one of `twoWorkspaces`, a switch test): counts, sight, persons, labels, members, AI.
+ * `documents`: what every document list of that workspace answers.
+ */
+export function workspaceHandlers(
+  id: string,
+  documents: components["schemas"]["DocumentSummaryOut"][] = [],
+) {
+  const base = `*${API}/workspaces/${id}`;
+  return [
+    http.get(`${base}/inbox/counts`, () => HttpResponse.json({ new: 0, review: 0, unassigned: 0 })),
+    http.get(`${base}/my-tasks/counts`, () => HttpResponse.json(noTaskCounts)),
+    http.get(`${base}/visibility`, () => HttpResponse.json(homeVisibility)),
+    http.get(`${base}/documents`, () => HttpResponse.json(documents)),
+    http.get(`${base}/persons`, () => HttpResponse.json([])),
+    http.get(`${base}/people`, () => HttpResponse.json([])),
+    http.get(`${base}/members`, () => HttpResponse.json([])),
+    http.get(`${base}/labels`, () => HttpResponse.json([])),
+    http.get(`${base}/ai`, () => HttpResponse.json({ mode: "off" })),
+    http.get(`${base}/menu/counts`, () => HttpResponse.json(noMenuCounts)),
+  ];
 }
 
 /**
@@ -130,6 +174,7 @@ export const documentSummary = {
   open_duplicate_count: 0,
   visibility: "workspace",
   reader_names: [],
+  unread: false,
 };
 
 export const documentDetail: components["schemas"]["DocumentOut"] = {
@@ -160,6 +205,9 @@ export const documentDetail: components["schemas"]["DocumentOut"] = {
       term_quote: "",
       assigned_to_name: "",
       assigned_to_id: null,
+      can_take: true,
+      can_hand_over: true,
+      can_release: false,
     },
   ],
   suggestions: [],
@@ -263,6 +311,11 @@ export function documentHandlers(detail: components["schemas"]["DocumentOut"] = 
     ),
     http.get(`*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/events`, () =>
       HttpResponse.json([]),
+    ),
+    // Opening a letter marks it read (spec S 5.3).
+    http.post(
+      `*${API}/workspaces/${workspace.id}/documents/:documentId/read`,
+      () => new HttpResponse(null, { status: 204 }),
     ),
     ...personHandlers(),
   ];

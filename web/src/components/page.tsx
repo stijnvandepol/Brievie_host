@@ -1,7 +1,16 @@
 import { plural, t } from "@lingui/core/macro";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import {
   Button,
   Dialog,
@@ -14,13 +23,7 @@ import {
   TextField,
 } from "react-aria-components";
 import { ApiFailure, api, errorMessage } from "../api/client";
-import {
-  inboxCountsQuery,
-  meQuery,
-  myTaskCountsQuery,
-  visibilityQuery,
-  workspacesQuery,
-} from "../api/queries";
+import { menuCountsQuery, meQuery, visibilityQuery } from "../api/queries";
 import { resetSearch } from "../search-term";
 import { clearUndo } from "../undo-trash";
 import { Icon, type IconName } from "./icons";
@@ -29,12 +32,22 @@ import { NoticeBar } from "./notice-bar";
 import { SearchField } from "./search-field";
 import { initials, MessageBar } from "./ui";
 import { UndoBar } from "./undo-bar";
+import { WorkspaceSwitcher } from "./workspace-switcher";
+
+/** The workspace a page's title names, when the user has several (set by the workspace
+ * route): "Mijn post · Bedrijf - Brievie". Empty otherwise. */
+const TitleSuffix = createContext("");
+
+export function PageTitleSuffix({ value, children }: { value: string; children: ReactNode }) {
+  return <TitleSuffix.Provider value={value}>{children}</TitleSuffix.Provider>;
+}
 
 /** Every page gets its own title (WCAG 2.4.2). */
 export function usePageTitle(title: string) {
+  const suffix = useContext(TitleSuffix);
   useEffect(() => {
-    document.title = `${title} - Brievie`;
-  }, [title]);
+    document.title = suffix ? `${title} · ${suffix} - Brievie` : `${title} - Brievie`;
+  }, [title, suffix]);
 }
 
 /** Moves keyboard and screen reader focus to the page's title (`h1`), for example after
@@ -180,10 +193,12 @@ function NavItem({
   ariaLabel,
   count,
   warn = false,
+  extra,
 }: {
   to:
-    | "/"
+    | "/werkruimtes"
     | "/koppel-app"
+    | "/w/$workspaceId/mijn-post"
     | "/w/$workspaceId/taken"
     | "/w/$workspaceId/inbox"
     | "/w/$workspaceId/post"
@@ -192,8 +207,7 @@ function NavItem({
     | "/w/$workspaceId/afdelingen"
     | "/w/$workspaceId/instellingen"
     | "/w/$workspaceId/labels"
-    | "/w/$workspaceId/automatisering"
-    | "/w/$workspaceId/ai";
+    | "/w/$workspaceId/automatisering";
   params?: { workspaceId: string };
   icon: IconName;
   label: string;
@@ -202,6 +216,8 @@ function NavItem({
   count?: number;
   /** The count in the warning style (something is late); the label says it in words. */
   warn?: boolean;
+  /** A second number in the warning style ("blijven liggen"); the label says it in words. */
+  extra?: number;
 }) {
   return (
     <Link
@@ -218,29 +234,65 @@ function NavItem({
           {count}
         </span>
       ) : null}
+      {extra ? (
+        <span className="nav-count nav-count-warning" aria-hidden="true">
+          {extra}
+        </span>
+      ) : null}
     </Link>
   );
 }
 
 /** The workspace a page belongs to, as far as the navigation needs it. */
-type NavWorkspace = { id: string; name: string; role?: string };
+type NavWorkspace = { id: string; name: string; kind?: string; role?: string };
 
-/** The entries of one workspace; "Inbox" (route `inbox`) counts what waits for you (review
- * plus unassigned; a letter still being read waits for nobody).
- * A viewer may not read the rules, so Automatisering is left out for them. */
+/** The words of the Inbox entry: what waits, and what lies too long (spec S 4.1, S 6.2). */
+function inboxLabel(waiting: number, lingering: number): string | undefined {
+  if (waiting === 0 && lingering === 0) return undefined;
+  const letters = plural(waiting, { one: "# brief", other: "# brieven" });
+  const late = plural(lingering, { one: "# blijft liggen", other: "# blijven liggen" });
+  if (lingering === 0) return t`Inbox, ${letters}`;
+  return t`Inbox, ${letters}, ${late}`;
+}
+
+/**
+ * The menu of one workspace in the owner's order (spec S 4.1): Inbox, Mijn post, Mijn
+ * taken, Alle post, Labels, Mensen, Afdelingen or Groepen (when on), Automatisering (not
+ * for viewers), Prullenbak; Instellingen at the bottom, for everyone. One call gives the
+ * numbers; a number shows only above zero, its words are in the link's name.
+ */
 function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
-  const { data: counts } = useQuery(inboxCountsQuery(workspace.id));
-  const { data: taskCounts } = useQuery(myTaskCountsQuery(workspace.id));
+  const { data: counts } = useQuery(menuCountsQuery(workspace.id));
   const { data: sight } = useQuery(visibilityQuery(workspace.id));
-  const todo = counts ? counts.review + counts.unassigned : 0;
-  const mine = taskCounts?.mine ?? 0;
-  const late = taskCounts?.overdue ?? 0;
+  const waiting = counts?.inbox ?? 0;
+  const lingering = counts?.shows_lingering ? counts.lingering : 0;
+  const unread = counts?.my_post_unread ?? 0;
+  const mine = counts?.my_tasks ?? 0;
+  const late = counts?.my_tasks_overdue ?? 0;
   const params = { workspaceId: workspace.id };
   return (
     <>
-      <p className="nav-section">
-        <span className="nav-section-name">{workspace.name}</span>
-      </p>
+      <NavItem
+        to="/w/$workspaceId/inbox"
+        params={params}
+        icon="inbox"
+        label={t`Inbox`}
+        ariaLabel={inboxLabel(waiting, lingering)}
+        count={waiting}
+        extra={lingering}
+      />
+      <NavItem
+        to="/w/$workspaceId/mijn-post"
+        params={params}
+        icon="mail"
+        label={t`Mijn post`}
+        ariaLabel={
+          unread > 0
+            ? plural(unread, { one: "Mijn post, # ongelezen", other: "Mijn post, # ongelezen" })
+            : undefined
+        }
+        count={unread}
+      />
       <NavItem
         to="/w/$workspaceId/taken"
         params={params}
@@ -256,35 +308,17 @@ function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
         count={mine}
         warn={late > 0}
       />
-      <NavItem
-        to="/w/$workspaceId/inbox"
-        params={params}
-        icon="inbox"
-        label={t`Inbox`}
-        ariaLabel={
-          todo > 0 ? plural(todo, { one: "Inbox, # brief", other: "Inbox, # brieven" }) : undefined
-        }
-        count={todo}
-      />
-      <NavItem to="/w/$workspaceId/post" params={params} icon="mail" label={t`Alle post`} />
-      <NavItem
-        to="/w/$workspaceId/prullenbak"
-        params={params}
-        icon="delete"
-        label={t`Prullenbak`}
-      />
-      {/* Mensen: one section for everybody who gets post, with their account (where Personen
-          and Leden were; the navigation redesign may move it). */}
+      <NavItem to="/w/$workspaceId/post" params={params} icon="layers" label={t`Alle post`} />
+      <NavItem to="/w/$workspaceId/labels" params={params} icon="tag" label={t`Labels`} />
       <NavItem to="/w/$workspaceId/mensen" params={params} icon="people" label={t`Mensen`} />
       {sight?.departments_enabled ? (
         <NavItem
           to="/w/$workspaceId/afdelingen"
           params={params}
-          icon="people"
+          icon="building"
           label={sight.kind === "home" ? t`Groepen` : t`Afdelingen`}
         />
       ) : null}
-      <NavItem to="/w/$workspaceId/labels" params={params} icon="tag" label={t`Labels`} />
       {workspace.role === "viewer" ? null : (
         <NavItem
           to="/w/$workspaceId/automatisering"
@@ -293,16 +327,21 @@ function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
           label={t`Automatisering`}
         />
       )}
-      <NavItem to="/w/$workspaceId/ai" params={params} icon="lightbulb" label={t`AI`} />
-      {workspace.role === "admin" ? (
+      <NavItem
+        to="/w/$workspaceId/prullenbak"
+        params={params}
+        icon="delete"
+        label={t`Prullenbak`}
+      />
+      <div className="nav-bottom">
+        <hr className="nav-divider" />
         <NavItem
           to="/w/$workspaceId/instellingen"
           params={params}
           icon="settings"
           label={t`Instellingen`}
         />
-      ) : null}
-      <hr className="nav-divider" />
+      </div>
     </>
   );
 }
@@ -434,14 +473,19 @@ function AccountMenu({
 }
 
 /** Layout of the screens after login: app bar, navigation pane, then the page. */
-export function Shell({ children, workspace }: { children: ReactNode; workspace?: NavWorkspace }) {
+export function Shell({
+  children,
+  workspace,
+  allNotices = false,
+}: {
+  children: ReactNode;
+  workspace?: NavWorkspace;
+  /** Every notice, also those about a workspace (the overview of workspaces). */
+  allNotices?: boolean;
+}) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { data: me } = useQuery(meQuery);
-  // With exactly one workspace there is nothing to choose (`/` goes straight to it), so the
-  // entry is left out. Hidden while loading, so it never shows and then disappears.
-  const workspaces = useQuery(workspacesQuery);
-  const showWorkspaces = workspaces.data ? workspaces.data.length !== 1 : workspaces.isError;
   const nav = useNavPane();
   const navId = useId();
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -488,10 +532,23 @@ export function Shell({ children, workspace }: { children: ReactNode; workspace?
         >
           <Icon name="menu" />
         </Button>
-        <Link to="/" className="brand">
-          <BrandMark />
-          <span>Brievie</span>
-        </Link>
+        {workspace ? (
+          // The start of this workspace, not `/` (which looked like a dead click, S 2.1).
+          <Link
+            to="/w/$workspaceId/mijn-post"
+            params={{ workspaceId: workspace.id }}
+            className="brand"
+            aria-label={t`Brievie, naar Mijn post`}
+          >
+            <BrandMark />
+            <span>Brievie</span>
+          </Link>
+        ) : (
+          <Link to="/" className="brand">
+            <BrandMark />
+            <span>Brievie</span>
+          </Link>
+        )}
         {workspace ? <SearchField key={workspace.id} workspaceId={workspace.id} /> : null}
         <div className="topbar-end">
           <AccountMenu me={me} onLogout={() => logout.mutate()} workspaceId={workspace?.id} />
@@ -501,9 +558,15 @@ export function Shell({ children, workspace }: { children: ReactNode; workspace?
         <div className="navpane" id={navId} ref={paneRef}>
           {/* A pane over the page closes by itself: every page change draws a new shell. */}
           <nav aria-label={t`Hoofdmenu`} className="nav">
-            {workspace ? <WorkspaceNav workspace={workspace} /> : null}
-            {showWorkspaces ? <NavItem to="/" exact icon="grid" label={t`Werkruimtes`} /> : null}
-            <NavItem to="/koppel-app" icon="phone" label={t`Apparaten`} />
+            {workspace ? <WorkspaceSwitcher current={workspace} /> : null}
+            {workspace ? (
+              <WorkspaceNav workspace={workspace} />
+            ) : (
+              <>
+                <NavItem to="/werkruimtes" icon="grid" label={t`Werkruimtes`} />
+                <NavItem to="/koppel-app" icon="phone" label={t`Apparaten`} />
+              </>
+            )}
           </nav>
         </div>
         {overlay ? (
@@ -513,7 +576,7 @@ export function Shell({ children, workspace }: { children: ReactNode; workspace?
         <main className="content">
           <div className="content-inner">
             <ErrorAlert error={logout.error} />
-            <NoticeBar />
+            <NoticeBar workspaceId={workspace?.id} all={allNotices} />
             {workspace ? <UndoBar workspaceId={workspace.id} /> : null}
             {children}
           </div>

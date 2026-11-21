@@ -119,6 +119,13 @@ the translation. Add a line before introducing a new domain term.
 | Datum nodig, Datum invullen | needs a date (`needs_deadline`, `term_quote`), set a date (`setTaskDeadline`) |
 | Afgerond, Afgevinkt door | done (`status=done`), completed by (`completed_by`) |
 | Ik doe dit, Geef aan…, Niet meer aan mij | assign to self, hand over, release (`assignTask`) |
+| Vrijgeven (beheerder, taak van een ander) | release (`assignTask`, `can_release`) |
+| Mijn post | my post (`listDocuments?addressed_to_me=true`); the start page |
+| Ook mijn afdeling / Ook mijn groep | include departments (`include_departments`) |
+| Ongelezen (per lid, per brief) | unread (`DocumentReadMark`, `unread`); not "Nieuw", which is the letter's own "not yet checked" |
+| Markeer als gelezen / ongelezen, Alles gelezen | mark read / unread (`markDocumentRead`, `markDocumentUnread`, `markDocumentsRead`) |
+| Blijft liggen, In de Inbox te lang, Nog niet geopend | lingering (`listLingeringLetters`, `lingering_enabled`), too long in the Inbox, not opened (`addressee_opened_at`) |
+| Werkruimte kiezen, Alle werkruimtes | workspace switcher (`/werkruimtes`) |
 
 ## English in the interface
 
@@ -134,7 +141,7 @@ the request that creates the workspace and keep that name.
 
 | Dutch | English | Note |
 |---|---|---|
-| post (alle brieven samen) | mail | "All mail", "Search your mail", "My mail". Never "post". |
+| post (alle brieven samen) | mail | "All mail", "Search your mail". Never "post", except the name "Mijn post": "My post" (decision B1, 21-11-2026; it pairs with "My tasks"). |
 | brief | letter | One item. "Letter date" for dagtekening. |
 | Alle post | All mail | |
 | Inbox | Inbox | The list of letters that wait for you; it was called "Te doen" / "To do" before. |
@@ -194,7 +201,14 @@ the request that creates the workspace and keep that name.
 | Alle taken | All tasks | |
 | Datum nodig / Datum invullen | Needs a date / Set a date | |
 | Afgerond / Afgevinkt door Anne | Done / Ticked off by Anne | "Toch niet klaar": "Not done after all". |
-| Geef aan… / Niet meer aan mij | Hand over… / Not mine any more | |
+| Geef aan… / Niet meer aan mij | Hand over… / Not mine any more | Vrijgeven (an admin, on someone else's task): "Release". |
+| Mijn post | My post | The start page; "Ook mijn afdeling": "Include my department" (home: "Ook mijn groep", "Include my group"). |
+| Ongelezen | Unread | Per member. Markeer als gelezen / ongelezen: "Mark as read" / "Mark as unread"; Alles gelezen: "Mark all read"; Alleen ongelezen: "Unread only". |
+| Blijft liggen | Lying too long | "ligt er 4 dagen": "waiting 4 days"; In de Inbox te lang: "Too long in the Inbox"; Nog niet geopend: "Not opened yet". |
+| Werkruimte kiezen / Alle werkruimtes | Choose workspace / All workspaces | The switcher's button: "Workspace: Bedrijf. Choose another workspace". |
+| Instellingen | Settings | At the bottom of the menu, for everyone: Jouw account (Your account), Apparaten (Devices), Wie kan mijn post zien? (Who can see my post?), AI; an admin also gets "Werkruimte Bedrijf" (Workspace Bedrijf) and Logboek (Log). |
+| Doet: Anne | Doing it: Anne | Someone else's task, shown without buttons to a member. |
+| Ik doe dit / Vrijgeven | I'll do it / Release | "Ik doe dit" only on a task nobody has; "Vrijgeven" is an admin's on someone else's task. |
 | herstellink | reset link | |
 | back-up | backup | |
 | logboek | log | Serverlogboek: Server log. |

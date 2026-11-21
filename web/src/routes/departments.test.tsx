@@ -12,6 +12,7 @@ import {
   http,
   loggedInHandlers,
   members,
+  noMenuCounts,
   papa,
   people,
   renderApp,
@@ -176,9 +177,10 @@ describe("afdelingen", () => {
   it("after a member leaves, the workspace's letters and counts are asked again", async () => {
     let counted = 0;
     server.use(
-      http.get(`${base}/inbox/counts`, () => {
+      // The menu's numbers (one call for the whole menu).
+      http.get(`${base}/menu/counts`, () => {
         counted += 1;
-        return HttpResponse.json({ new: 0, review: 0, unassigned: 0 });
+        return HttpResponse.json(noMenuCounts);
       }),
       http.delete(`${base}/persons/${finance.id}/members/${bram}`, () =>
         HttpResponse.json(finance),

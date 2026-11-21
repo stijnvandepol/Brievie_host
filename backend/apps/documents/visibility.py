@@ -37,7 +37,14 @@ from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
-from apps.documents.models import LIVE, Document, DocumentEvent, DocumentReader, DocumentShare
+from apps.documents.models import (
+    LIVE,
+    Document,
+    DocumentEvent,
+    DocumentReader,
+    DocumentReadMark,
+    DocumentShare,
+)
 from apps.people.models import DepartmentMember, Person
 from apps.workspaces.context import SYSTEM, current_actor, system_actor, workspace_context
 from apps.workspaces.locks import lock_own_membership
@@ -80,7 +87,11 @@ def addressee_scope(document: Document) -> Iterator[None]:
         else:
             _scopes.depth[document.id] = depth
     if depth == 0:
-        sync_addressee_ids(document)
+        if sync_addressee_ids(document):
+            # Imported here: `reading` reads letters through this module.
+            from apps.documents.reading import recompute_addressee_opened
+
+            recompute_addressee_opened(document)
         recompute(document)
         _release_assignees(document.workspace_id, [document.id])
 
@@ -98,9 +109,12 @@ def in_addressee_scope(document_id: UUID) -> bool:
     return _scopes.depth.get(document_id, 0) > 0
 
 
-def sync_addressee_ids(document: Document) -> None:
-    """`addressee_ids` := the letter's addressee links, sorted; as the system."""
+def sync_addressee_ids(document: Document) -> bool:
+    """`addressee_ids` := the letter's addressee links, sorted; as the system. Whether the
+    list changed."""
     with system_actor(), connection.cursor() as c:
+        c.execute("SELECT addressee_ids FROM documents_document WHERE id = %s", [document.id])
+        before = c.fetchone()
         c.execute(
             "UPDATE documents_document SET addressee_ids = ("
             " SELECT COALESCE(array_agg(person_id ORDER BY person_id), '{}')"
@@ -111,6 +125,7 @@ def sync_addressee_ids(document: Document) -> None:
         c.execute("SELECT addressee_ids FROM documents_document WHERE id = %s", [document.id])
         row = c.fetchone()
     document.addressee_ids = list(row[0]) if row else []
+    return (list(before[0]) if before else []) != document.addressee_ids
 
 
 def _members(workspace_id: UUID, user_ids: Collection[UUID]) -> set[UUID]:
@@ -535,6 +550,7 @@ def _private_skipped(
             "private_without_readers",
             actor_name="Brievie",
             values={"document_id": str(document.id), "workspace": workspace.name},
+            workspace_id=workspace.id,
         )
     if not named:
         for membership in admins:
@@ -543,6 +559,7 @@ def _private_skipped(
                 "private_without_readers_unnamed",
                 actor_name="Brievie",
                 values={"workspace": workspace.name},
+                workspace_id=workspace.id,
             )
 
 
@@ -707,10 +724,11 @@ def private_post_readers() -> set[UUID]:
 
 
 def forget_member(workspace_id: UUID, user_id: UUID) -> None:
-    """A member leaves: their reader rows, shares and department memberships in this
-    workspace go, as the system. Nothing else changes: the readers of every letter are
-    then the old ones without this user."""
+    """A member leaves: their reader rows, shares, department memberships and read marks
+    ("Ongelezen", navigation S 6.3) in this workspace go, as the system. Nothing else
+    changes: the readers of every letter are then the old ones without this user."""
     with transaction.atomic(), system_actor():
+        DocumentReadMark.objects.filter(workspace_id=workspace_id, user_id=user_id).delete()
         DocumentReader.objects.filter(workspace_id=workspace_id, user_id=user_id).delete()
         DocumentShare.objects.filter(workspace_id=workspace_id, user_id=user_id).delete()
         DepartmentMember.objects.filter(workspace_id=workspace_id, user_id=user_id).delete()
@@ -829,6 +847,7 @@ def open_emergency(
                     "emergency_access_used",
                     actor_name=actor.name,
                     values={"person": person.display_name, "count": str(len(opened))},
+                    workspace_id=workspace.id,
                 )
     return EmergencyResult(opened_count=len(opened), expires_at=expires_at)
 

@@ -24,6 +24,8 @@ def _new_workspace(*, name: str, kind: str) -> Workspace:
         raise ValueError(f"Unknown workspace kind: {kind!r}")
     workspace = Workspace(name=name, kind=kind)
     apply_preset_settings(workspace)
+    # "Blijft liggen" is for an organisation (navigation spec S 6, B3).
+    workspace.lingering_enabled = kind == Workspace.Kind.BUSINESS
     workspace.save()
     return workspace
 

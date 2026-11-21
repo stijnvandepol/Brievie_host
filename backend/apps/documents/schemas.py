@@ -77,6 +77,9 @@ class DocumentSummaryOut(Schema):
     # Of a private letter: who reads it ("Privé voor Anne en Bob"), by name. Filled in the
     # list and on the letter; empty elsewhere and for a letter that is not private.
     reader_names: list[str] = Field(default_factory=list)
+    # "Ongelezen": the caller has not read this letter yet (navigation spec S 5; their own
+    # state, nobody else's). Filled in `listDocuments` and the letter; false elsewhere.
+    unread: bool = False
 
 
 class TrashedDocumentOut(DocumentSummaryOut):
@@ -150,6 +153,10 @@ class TaskOut(Schema):
     # The member it is given to ("Aan Anne gegeven"); empty and null when nobody.
     assigned_to_name: str = ""
     assigned_to_id: UUID | None = None
+    # What the caller may do with who does it, as `TaskItemOut` (navigation spec S 7).
+    can_take: bool = False
+    can_hand_over: bool = False
+    can_release: bool = False
 
 
 class SuggestionOut(Schema):
@@ -248,6 +255,49 @@ class AddresseesIn(InputSchema):
 class LabelsIn(InputSchema):
     # The document's labels become exactly these labels.
     label_ids: list[UUID] = Field(max_length=30)
+
+
+class LingeringLetterOut(DocumentSummaryOut):
+    # Calendar days it has lain: since it arrived (Inbox) or was confirmed (not opened).
+    days: int = 0
+
+
+class LingeringOut(Schema):
+    # "In de Inbox te lang": to check or without a name for `inbox_days` days or more.
+    too_long_in_inbox: list[LingeringLetterOut]
+    # "Nog niet geopend": confirmed `unopened_days` days or more ago, and none of its
+    # addressees opened it.
+    not_opened: list[LingeringLetterOut]
+    inbox_days: int
+    unopened_days: int
+
+
+class MenuCountsOut(Schema):
+    # Letters waiting in the Inbox (to check, or without a name), as `getInboxCounts`'s
+    # review + unassigned.
+    inbox: int = 0
+    # Unread letters in "Mijn post" (the caller's own persons).
+    my_post_unread: int = 0
+    # Open tasks in "Mijn taken", and of those overdue (as `countMyTasks`).
+    my_tasks: int = 0
+    my_tasks_overdue: int = 0
+    # "Blijft liggen": 0 unless `shows_lingering`.
+    lingering: int = 0
+    # The caller sorts post or is an admin of an organisation with "Blijft liggen" on.
+    shows_lingering: bool = False
+    # False when the caller's account is linked to no person: "Mijn post" is empty.
+    has_person: bool = True
+
+
+class MarkReadIn(InputSchema):
+    # The letters to mark read ("Alles gelezen"): at most 200; ids the caller does not see
+    # are skipped.
+    document_ids: list[UUID] = Field(max_length=200)
+
+
+class MarkReadOut(Schema):
+    # How many letters were newly marked read.
+    marked: int
 
 
 class InboxCountsOut(Schema):

@@ -306,6 +306,8 @@ function VisibilityPage() {
       queryClient.invalidateQueries({ queryKey: workspaceSettingsQuery(workspace.id).queryKey }),
       queryClient.invalidateQueries({ queryKey: membersQuery(workspace.id).queryKey }),
       queryClient.invalidateQueries({ queryKey: workspacesQuery.queryKey }),
+      // Who sees what changed: every list and count of this workspace (not of others).
+      queryClient.invalidateQueries({ queryKey: ["workspaces", workspace.id] }),
     ]);
   }
 

@@ -100,6 +100,8 @@ DOCUMENT_OPERATION_CASES: Final[dict[str, Case]] = {
     "trashDocument": lambda c, ids, d: _post(c, _url(ids, d, "/trash")),
     "restoreDocument": lambda c, ids, d: _post(c, _url(ids, d, "/restore")),
     "purgeDocument": lambda c, ids, d: c.delete(f"/api/v1/workspaces/{ids.workspace_id}/trash/{d}"),
+    "markDocumentRead": lambda c, ids, d: _post(c, _url(ids, d, "/read")),
+    "markDocumentUnread": lambda c, ids, d: c.delete(_url(ids, d, "/read")),
     "setDocumentVisibility": lambda c, ids, d: _put(
         c, _url(ids, d, "/visibility"), {"visibility": "restricted", "shared_user_ids": []}
     ),

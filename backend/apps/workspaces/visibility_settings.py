@@ -302,6 +302,7 @@ def notify_changes(
                 "sight_widened",
                 actor_name=actor_name,
                 values=_notice_values(change.gains[0], names),
+                workspace_id=workspace.id,
             )
         if change.loses:
             notify(
@@ -309,11 +310,17 @@ def notify_changes(
                 "sight_narrowed",
                 actor_name=actor_name,
                 values=_notice_values(change.loses[0], names),
+                workspace_id=workspace.id,
             )
     if admins_gained_all:
         for member in User.objects.filter(memberships__workspace=workspace).order_by("id"):
             if member.id != skip_user_id:
-                notify(member, "admins_read_all_on", actor_name=actor_name)
+                notify(
+                    member,
+                    "admins_read_all_on",
+                    actor_name=actor_name,
+                    workspace_id=workspace.id,
+                )
 
 
 def notify_join(
@@ -334,16 +341,27 @@ def notify_join(
 
 
 def notify_self_grant(
-    users: Sequence[User], *, category: str, names: PolicySnapshot, actor_name: str
+    users: Sequence[User],
+    *,
+    category: str,
+    names: PolicySnapshot,
+    actor_name: str,
+    workspace_id: UUID,
 ) -> None:
     """S 4.7: an admin gave themselves sight; `users` (the department's members, or the
-    other admins) are told."""
+    other admins) are told, in that workspace."""
     from apps.accounts.notices import notify
 
     if previewing():
         return
     for user in users:
-        notify(user, "self_grant", actor_name=actor_name, values=_notice_values(category, names))
+        notify(
+            user,
+            "self_grant",
+            actor_name=actor_name,
+            values=_notice_values(category, names),
+            workspace_id=workspace_id,
+        )
 
 
 def _release(workspace_id: UUID) -> None:

@@ -48,10 +48,20 @@ msgstr "{0, plural, one {# brief} other {# brieven}}"
 msgid "{0, plural, one {# label toegevoegd} other {# labels toegevoegd}}"
 msgstr "{0, plural, one {# label toegevoegd} other {# labels toegevoegd}}"
 
+#. placeholder {0}: data?.inbox_days ?? 0
+#: src/routes/inbox.tsx
+msgid "{0, plural, one {In de Inbox te lang (# dag of meer)} other {In de Inbox te lang (# dagen of meer)}}"
+msgstr "{0, plural, one {In de Inbox te lang (# dag of meer)} other {In de Inbox te lang (# dagen of meer)}}"
+
 #. placeholder {0}: open.data.opened_count
 #: src/components/emergency-dialog.tsx
 msgid "{0, plural, one {Je kunt # brief een uur lang openen.} other {Je kunt # brieven een uur lang openen.}}"
 msgstr "{0, plural, one {Je kunt # brief een uur lang openen.} other {Je kunt # brieven een uur lang openen.}}"
+
+#. placeholder {0}: data?.unopened_days ?? 0
+#: src/routes/inbox.tsx
+msgid "{0, plural, one {Nog niet geopend (# dag of meer)} other {Nog niet geopend (# dagen of meer)}}"
+msgstr "{0, plural, one {Nog niet geopend (# dag of meer)} other {Nog niet geopend (# dagen of meer)}}"
 
 #. placeholder {0}: details.urls.length
 #: src/routes/pair-app.tsx
@@ -134,6 +144,14 @@ msgstr "{count, plural, one {Dit verandert voor # persoon wat die ziet.} other {
 msgid "{count, plural, one {Er wacht nog # brief op nakijken. Daar kunnen nieuwe taken uit komen.} other {Er wachten nog # brieven op nakijken. Daar kunnen nieuwe taken uit komen.}}"
 msgstr "{count, plural, one {Er wacht nog # brief op nakijken. Daar kunnen nieuwe taken uit komen.} other {Er wachten nog # brieven op nakijken. Daar kunnen nieuwe taken uit komen.}}"
 
+#: src/routes/inbox.tsx
+msgid "{days, plural, one {# dag niet geopend} other {# dagen niet geopend}}"
+msgstr "{days, plural, one {# dag niet geopend} other {# dagen niet geopend}}"
+
+#: src/routes/inbox.tsx
+msgid "{days, plural, one {ligt er # dag} other {ligt er # dagen}}"
+msgstr "{days, plural, one {ligt er # dag} other {ligt er # dagen}}"
+
 #: src/routes/trash.tsx
 msgid "{days, plural, one {Nog # dag} other {Nog # dagen}}"
 msgstr "{days, plural, one {Nog # dag} other {Nog # dagen}}"
@@ -157,6 +175,10 @@ msgstr "{length} van {REASON_MAX} tekens, minstens {REASON_MIN}."
 #: src/components/visibility-preview-dialog.tsx
 msgid "{letters, plural, one {Het gaat om # brief die jij kunt lezen.} other {Het gaat om # brieven die jij kunt lezen.}}"
 msgstr "{letters, plural, one {Het gaat om # brief die jij kunt lezen.} other {Het gaat om # brieven die jij kunt lezen.}}"
+
+#: src/components/page.tsx
+msgid "{lingering, plural, one {# blijft liggen} other {# blijven liggen}}"
+msgstr "{lingering, plural, one {# blijft liggen} other {# blijven liggen}}"
 
 #: src/routes/people-detail.tsx
 msgid "{manager} beheert de post van {name} en ziet die als eigen post."
@@ -224,8 +246,12 @@ msgid "{subject} het woord {0} niet bevat"
 msgstr "{subject} het woord {0} niet bevat"
 
 #: src/components/page.tsx
-msgid "{todo, plural, one {Inbox, # brief} other {Inbox, # brieven}}"
-msgstr "{todo, plural, one {Inbox, # brief} other {Inbox, # brieven}}"
+msgid "{unread, plural, one {Mijn post, # ongelezen} other {Mijn post, # ongelezen}}"
+msgstr "{unread, plural, one {Mijn post, # ongelezen} other {Mijn post, # ongelezen}}"
+
+#: src/components/page.tsx
+msgid "{waiting, plural, one {# brief} other {# brieven}}"
+msgstr "{waiting, plural, one {# brief} other {# brieven}}"
 
 #: src/components/document-history.tsx
 msgid "{who} bevestigde deze brief"
@@ -505,8 +531,8 @@ msgstr "afzender"
 msgid "Afzender"
 msgstr "Afzender"
 
-#: src/components/page.tsx
 #: src/routes/ai.tsx
+#: src/routes/settings.tsx
 msgid "AI"
 msgstr "AI"
 
@@ -588,6 +614,10 @@ msgstr "Alle soorten"
 msgid "Alle taken"
 msgstr "Alle taken"
 
+#: src/components/workspace-switcher.tsx
+msgid "Alle werkruimtes"
+msgstr "Alle werkruimtes"
+
 #: src/routes/ai.tsx
 msgid "Alleen de beheerder van deze werkruimte kan dit veranderen."
 msgstr "Alleen de beheerder van deze werkruimte kan dit veranderen."
@@ -627,13 +657,18 @@ msgstr "Alleen leden en beheerders van deze werkruimte zien de regels."
 
 #: src/components/person-actions.tsx
 #: src/components/role-dialog.tsx
-#: src/routes/home.tsx
+#: src/components/workspace-labels.ts
 msgid "Alleen lezen"
 msgstr "Alleen lezen"
 
 #: src/routes/rule-editor.tsx
 msgid "Alleen om de regel terug te vinden."
 msgstr "Alleen om de regel terug te vinden."
+
+#: src/routes/my-post.tsx
+#: src/routes/post.tsx
+msgid "Alleen ongelezen"
+msgstr "Alleen ongelezen"
 
 #: src/routes/ai.tsx
 msgid "Alleen voor een andere dienst die werkt zoals OpenAI. Begint met https://. Vul je dit in, dan geldt de dienst die je hierboven koos niet meer en is een model verplicht."
@@ -646,6 +681,10 @@ msgstr "Alleen wie deze brief mag lezen, staat in de lijst."
 #: src/routes/inbox.tsx
 msgid "Alles"
 msgstr "Alles"
+
+#: src/routes/my-post.tsx
+msgid "Alles gelezen"
+msgstr "Alles gelezen"
 
 #: src/components/rule-sentence.ts
 #: src/components/rule-templates.tsx
@@ -701,6 +740,7 @@ msgstr "Apparaat verlopen"
 
 #: src/components/page.tsx
 #: src/routes/pair-app.tsx
+#: src/routes/settings.tsx
 msgid "Apparaten"
 msgstr "Apparaten"
 
@@ -844,7 +884,7 @@ msgid "Beheerd door: {name}"
 msgstr "Beheerd door: {name}"
 
 #: src/components/role-dialog.tsx
-#: src/routes/home.tsx
+#: src/components/workspace-labels.ts
 msgid "Beheerder"
 msgstr "Beheerder"
 
@@ -923,6 +963,11 @@ msgstr "Binnen 7 dagen"
 #: src/components/label-chip.tsx
 msgid "Blauw"
 msgstr "Blauw"
+
+#: src/routes/inbox.tsx
+#: src/routes/settings.tsx
+msgid "Blijft liggen"
+msgstr "Blijft liggen"
 
 #: src/components/document-table.tsx
 msgid "Bonnetje"
@@ -1052,6 +1097,10 @@ msgstr "Brievie zet brieven zelf onder personen en labels."
 msgid "Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is. Een label dat een regel voorstelt, zet Brievie er ook op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is van hetzelfde label. Staat het woord alleen verderop in de brief en is de AI niet zeker? Dan blijft het een voorstel. Een regel die op 'Automatisch toepassen' staat, doet dat altijd."
 msgstr "Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is. Een label dat een regel voorstelt, zet Brievie er ook op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is van hetzelfde label. Staat het woord alleen verderop in de brief en is de AI niet zeker? Dan blijft het een voorstel. Een regel die op 'Automatisch toepassen' staat, doet dat altijd."
 
+#: src/components/page.tsx
+msgid "Brievie, naar Mijn post"
+msgstr "Brievie, naar Mijn post"
+
 #: src/routes/sessions.tsx
 msgid "Browser"
 msgstr "Browser"
@@ -1099,6 +1148,14 @@ msgstr "Daarna ben je ingelogd. Je moet je telefoon opnieuw koppelen."
 #: src/components/share-dialog.tsx
 msgid "Daarna kun je deze brief zelf misschien niet meer openen."
 msgstr "Daarna kun je deze brief zelf misschien niet meer openen."
+
+#: src/routes/settings.tsx
+msgid "Dagen in de Inbox"
+msgstr "Dagen in de Inbox"
+
+#: src/routes/settings.tsx
+msgid "Dagen niet geopend"
+msgstr "Dagen niet geopend"
 
 #: src/components/rule-templates.tsx
 #: src/routes/rule-editor.tsx
@@ -1205,6 +1262,10 @@ msgstr "de brief op niemands naam staat"
 msgid "De brief staat in de prullenbak."
 msgstr "De brief staat in de prullenbak."
 
+#: src/routes/my-post.tsx
+msgid "De brieven op jouw naam. Wat nog nagekeken of verdeeld moet worden, staat in de Inbox."
+msgstr "De brieven op jouw naam. Wat nog nagekeken of verdeeld moet worden, staat in de Inbox."
+
 #: src/components/rule-sentence.ts
 msgid "De bron"
 msgstr "De bron"
@@ -1273,6 +1334,10 @@ msgstr "De tekst van elke brief gaat naar een bedrijf dat de AI levert. Je krijg
 #: src/routes/member-devices.tsx
 msgid "De telefoons en browsers waarmee {who} bij Brievie kan."
 msgstr "De telefoons en browsers waarmee {who} bij Brievie kan."
+
+#: src/routes/settings.tsx
+msgid "De telefoons waarmee je scant, en een nieuwe koppelen."
+msgstr "De telefoons waarmee je scant, en een nieuwe koppelen."
 
 #: src/routes/password.tsx
 msgid "De twee nieuwe wachtwoorden zijn niet hetzelfde."
@@ -1410,6 +1475,10 @@ msgstr "Dit voorbeeld bestaat niet (meer)."
 msgid "Document"
 msgstr "Document"
 
+#: src/components/task-actions.tsx
+msgid "Doet: {takenBy}"
+msgstr "Doet: {takenBy}"
+
 #. placeholder {0}: dateTime.format(new Date(current.expires_at))
 #: src/components/export-panel.tsx
 msgid "Download ({letters}, geldig tot {0})"
@@ -1475,7 +1544,7 @@ msgstr "Een regel zet labels of een naam op nieuwe post. De regels draaien van b
 msgid "een van"
 msgstr "een van"
 
-#: src/routes/home.tsx
+#: src/routes/workspaces.tsx
 msgid "Een werkruimte heeft eigen post en eigen leden, bijvoorbeeld Thuis of je bedrijf. Kies welke je wilt openen."
 msgstr "Een werkruimte heeft eigen post en eigen leden, bijvoorbeeld Thuis of je bedrijf. Kies welke je wilt openen."
 
@@ -1503,6 +1572,10 @@ msgstr "Elk lid kan dan een ZIP-bestand met de eigen post downloaden."
 msgid "en"
 msgstr "en"
 
+#: src/routes/inbox.tsx
+msgid "Er blijft niets liggen."
+msgstr "Er blijft niets liggen."
+
 #: src/routes/root.tsx
 msgid "Er ging iets mis"
 msgstr "Er ging iets mis"
@@ -1522,6 +1595,10 @@ msgstr "Er is iets misgegaan. Probeer het later opnieuw."
 #: src/routes/visibility.tsx
 msgid "Er is niemand meer om toe te voegen. Iemand met de rol Alleen lezen kan geen post verdelen."
 msgstr "Er is niemand meer om toe te voegen. Iemand met de rol Alleen lezen kan geen post verdelen."
+
+#: src/routes/my-post.tsx
+msgid "Er is nog geen post op jouw naam."
+msgstr "Er is nog geen post op jouw naam."
 
 #: src/routes/post.tsx
 msgid "Er is nog geen post."
@@ -1941,6 +2018,14 @@ msgstr "In deze link zit geen uitnodiging. Open de link uit je bericht opnieuw."
 msgid "Inbox"
 msgstr "Inbox"
 
+#: src/components/page.tsx
+msgid "Inbox, {letters}"
+msgstr "Inbox, {letters}"
+
+#: src/components/page.tsx
+msgid "Inbox, {letters}, {late}"
+msgstr "Inbox, {letters}, {late}"
+
 #: src/components/document-table.tsx
 msgid "Informatie"
 msgstr "Informatie"
@@ -2093,6 +2178,19 @@ msgstr "Jaaropgave"
 msgid "Je account hangt nog niet aan een naam. Daarom zie je hier alleen taken die iemand aan je geeft. Vraag een beheerder om je te koppelen bij Mensen."
 msgstr "Je account hangt nog niet aan een naam. Daarom zie je hier alleen taken die iemand aan je geeft. Vraag een beheerder om je te koppelen bij Mensen."
 
+#: src/routes/my-post.tsx
+msgid "Je account hoort nog bij geen persoon in deze werkruimte, dus er staat hier geen post. Vraag een beheerder om je te koppelen bij Mensen."
+msgstr "Je account hoort nog bij geen persoon in deze werkruimte, dus er staat hier geen post. Vraag een beheerder om je te koppelen bij Mensen."
+
+#. placeholder {0}: workspace.name
+#: src/routes/settings.tsx
+msgid "Je account, je apparaten en wat leden in {0} mogen doen."
+msgstr "Je account, je apparaten en wat leden in {0} mogen doen."
+
+#: src/routes/settings.tsx
+msgid "Je account, je apparaten en wie je post kan zien."
+msgstr "Je account, je apparaten en wie je post kan zien."
+
 #: src/components/person-actions.tsx
 msgid "Je bent de enige beheerder. Maak eerst iemand anders beheerder als je wilt stoppen."
 msgstr "Je bent de enige beheerder. Maak eerst iemand anders beheerder als je wilt stoppen."
@@ -2113,6 +2211,10 @@ msgstr "Je gebruikt een externe AI-dienst. De namen op deze pagina gaan mee met 
 msgid "Je hebt {total} brieven"
 msgstr "Je hebt {total} brieven"
 
+#: src/routes/my-post.tsx
+msgid "Je hebt alles gelezen."
+msgstr "Je hebt alles gelezen."
+
 #: src/routes/tasks.tsx
 msgid "Je hebt de laatste 30 dagen niets afgevinkt."
 msgstr "Je hebt de laatste 30 dagen niets afgevinkt."
@@ -2124,6 +2226,10 @@ msgstr "Je hebt geen open taken. Nieuwe taken komen hier vanzelf zodra je post i
 #: src/routes/automations.tsx
 msgid "Je hebt nog geen regels."
 msgstr "Je hebt nog geen regels."
+
+#: src/routes/workspaces.tsx
+msgid "Je hoort nog bij geen werkruimte."
+msgstr "Je hoort nog bij geen werkruimte."
 
 #: src/components/invite-dialog.tsx
 msgid "Je krijgt een link en een QR-code. Wie die opent, maakt een account of logt in en hoort daarna bij deze werkruimte."
@@ -2219,6 +2325,7 @@ msgstr "Jij doet dit"
 msgid "jou"
 msgstr "jou"
 
+#: src/routes/settings.tsx
 #: src/routes/setup.tsx
 msgid "Jouw account"
 msgstr "Jouw account"
@@ -2258,6 +2365,10 @@ msgstr "Kies bij elke voorwaarde en actie een label of persoon."
 #: src/routes/post.tsx
 msgid "Kies bij Persoon of Label een andere waarde."
 msgstr "Kies bij Persoon of Label een andere waarde."
+
+#: src/routes/settings.tsx
+msgid "Kies een aantal dagen van 1 tot {most}."
+msgstr "Kies een aantal dagen van 1 tot {most}."
 
 #: src/routes/rule-editor.tsx
 msgid "Kies een label"
@@ -2332,6 +2443,10 @@ msgstr "Kruimelpad"
 #: src/components/person-actions.tsx
 msgid "Laat de post beheren door"
 msgstr "Laat de post beheren door"
+
+#: src/routes/settings.tsx
+msgid "Laat zien welke post blijft liggen"
+msgstr "Laat zien welke post blijft liggen"
 
 #: src/routes/sessions.tsx
 msgid "Laatst gebruikt"
@@ -2442,7 +2557,7 @@ msgid "Let op: {fields} verschilt. Een herinnering of een tweede termijn lijkt v
 msgstr "Let op: {fields} verschilt. Een herinnering of een tweede termijn lijkt vaak op de eerste brief, maar het is een andere brief."
 
 #: src/components/role-dialog.tsx
-#: src/routes/home.tsx
+#: src/components/workspace-labels.ts
 #: src/routes/visibility.tsx
 msgid "Lid"
 msgstr "Lid"
@@ -2511,6 +2626,14 @@ msgstr "Maak eerst een label."
 msgid "Mail"
 msgstr "Mail"
 
+#: src/routes/document.tsx
+msgid "Markeer als gelezen"
+msgstr "Markeer als gelezen"
+
+#: src/routes/document.tsx
+msgid "Markeer als ongelezen"
+msgstr "Markeer als ongelezen"
+
 #: src/components/audit-table.tsx
 #: src/routes/search.tsx
 msgid "Meer laden"
@@ -2567,6 +2690,8 @@ msgstr "Met labels zet je orde in je post, bijvoorbeeld Belasting of Zorg. Met d
 msgid "Methode"
 msgstr "Methode"
 
+#: src/components/page.tsx
+#: src/routes/my-post.tsx
 #: src/routes/people.tsx
 msgid "Mijn post"
 msgstr "Mijn post"
@@ -2623,11 +2748,11 @@ msgstr "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
 #: src/components/person-dialog.tsx
 #: src/components/person-picker.tsx
 #: src/routes/departments.tsx
-#: src/routes/home.tsx
 #: src/routes/invitation.tsx
 #: src/routes/labels.tsx
 #: src/routes/people.tsx
 #: src/routes/rule-editor.tsx
+#: src/routes/workspaces.tsx
 msgid "Naam"
 msgstr "Naam"
 
@@ -2848,6 +2973,10 @@ msgstr "Nu zien nog steeds alle mensen alle post; groepen helpen dan alleen bij 
 msgid "of"
 msgstr "of"
 
+#: src/routes/settings.tsx
+msgid "Of AI je brieven leest, en welke dienst dat doet."
+msgstr "Of AI je brieven leest, en welke dienst dat doet."
+
 #: src/routes/invitation.tsx
 msgid "Of typ deze code in de app."
 msgstr "Of typ deze code in de app."
@@ -2892,12 +3021,24 @@ msgid "Ongedaan maken"
 msgstr "Ongedaan maken"
 
 #: src/components/document-table.tsx
+msgid "Ongelezen"
+msgstr "Ongelezen"
+
+#: src/components/document-table.tsx
 msgid "Ontvangen"
 msgstr "Ontvangen"
 
 #: src/routes/visibility.tsx
 msgid "Ook de startset labels toevoegen"
 msgstr "Ook de startset labels toevoegen"
+
+#: src/routes/my-post.tsx
+msgid "Ook mijn afdeling"
+msgstr "Ook mijn afdeling"
+
+#: src/routes/my-post.tsx
+msgid "Ook mijn groep"
+msgstr "Ook mijn groep"
 
 #: src/routes/duplicate.tsx
 msgid "Op beide brieven hetzelfde: {sameFields}."
@@ -3026,7 +3167,7 @@ msgid "Oranje"
 msgstr "Oranje"
 
 #: src/components/rule-templates.tsx
-#: src/routes/home.tsx
+#: src/components/workspace-labels.ts
 #: src/routes/setup.tsx
 #: src/routes/visibility.tsx
 msgid "Organisatie"
@@ -3113,6 +3254,10 @@ msgstr "Persoon verwijderen?"
 #: src/components/document-table.tsx
 msgid "Polis"
 msgstr "Polis"
+
+#: src/routes/my-post.tsx
+msgid "Post op jouw naam staat hier zodra hij is gescand en verdeeld."
+msgstr "Post op jouw naam staat hier zodra hij is gescand en verdeeld."
 
 #: src/routes/visibility.tsx
 msgid "Post zonder naam"
@@ -3235,9 +3380,9 @@ msgstr "Rekening"
 #: src/components/invite-dialog.tsx
 #: src/components/open-invitations.tsx
 #: src/components/role-dialog.tsx
-#: src/routes/home.tsx
 #: src/routes/people-detail.tsx
 #: src/routes/people.tsx
+#: src/routes/workspaces.tsx
 msgid "Rol"
 msgstr "Rol"
 
@@ -3342,10 +3487,10 @@ msgstr "soort"
 #: src/components/document-table.tsx
 #: src/routes/document.tsx
 #: src/routes/duplicate.tsx
-#: src/routes/home.tsx
 #: src/routes/inbox.tsx
 #: src/routes/search.tsx
 #: src/routes/trash.tsx
+#: src/routes/workspaces.tsx
 msgid "Soort"
 msgstr "Soort"
 
@@ -3423,6 +3568,7 @@ msgstr "Taak verplaatst uit de dubbele brief"
 #: src/components/language-switch.tsx
 #: src/components/page.tsx
 #: src/routes/language.tsx
+#: src/routes/settings.tsx
 msgid "Taal"
 msgstr "Taal"
 
@@ -3492,7 +3638,7 @@ msgid "Test op bestaande post"
 msgstr "Test op bestaande post"
 
 #: src/components/rule-templates.tsx
-#: src/routes/home.tsx
+#: src/components/workspace-labels.ts
 #: src/routes/setup.tsx
 #: src/routes/visibility.tsx
 msgid "Thuis"
@@ -3848,6 +3994,18 @@ msgstr "Voorwaarde toevoegen"
 msgid "Voorwaarden"
 msgstr "Voorwaarden"
 
+#: src/routes/workspaces.tsx
+msgid "Vraag een beheerder om een uitnodiging."
+msgstr "Vraag een beheerder om een uitnodiging."
+
+#: src/components/task-actions.tsx
+msgid "Vrijgeven"
+msgstr "Vrijgeven"
+
+#: src/components/task-actions.tsx
+msgid "Vrijgeven: {description}"
+msgstr "Vrijgeven: {description}"
+
 #: src/routes/rule-editor.tsx
 msgid "Vul de gemarkeerde delen in. Met Test op bestaande post zie je welke brieven de regel zou raken. Er wordt niets opgeslagen tot je op Opslaan drukt."
 msgstr "Vul de gemarkeerde delen in. Met Test op bestaande post zie je welke brieven de regel zou raken. Er wordt niets opgeslagen tot je op Opslaan drukt."
@@ -3870,8 +4028,13 @@ msgstr "Waar gebruik je Brievie voor?"
 
 #: src/components/page.tsx
 #: src/routes/sessions.tsx
+#: src/routes/settings.tsx
 msgid "Waar je bent ingelogd"
 msgstr "Waar je bent ingelogd"
+
+#: src/routes/settings.tsx
+msgid "Waar je bent ingelogd, je wachtwoord en de taal van Brievie."
+msgstr "Waar je bent ingelogd, je wachtwoord en de taal van Brievie."
 
 #: src/routes/rule-editor.tsx
 msgid "Waar moet een brief aan voldoen? De tekst zoekt in de hele brief: ook een brief die het woord alleen noemt, past. De afzender en het soort post zijn preciezer; die zijn bekend als de AI de brief heeft gelezen, of zodra jij hem bevestigt."
@@ -3899,6 +4062,7 @@ msgstr "Wachtwoord opslaan"
 
 #: src/components/page.tsx
 #: src/routes/password.tsx
+#: src/routes/settings.tsx
 msgid "Wachtwoord wijzigen"
 msgstr "Wachtwoord wijzigen"
 
@@ -3917,11 +4081,6 @@ msgstr "Wat er gebeurt met een brief die past: een label erop, of op naam van ee
 #: src/routes/tasks.tsx
 msgid "Wat je met je post moet doen, op datum. Je hoeft de brief er niet voor te openen."
 msgstr "Wat je met je post moet doen, op datum. Je hoeft de brief er niet voor te openen."
-
-#. placeholder {0}: workspace.name
-#: src/routes/settings.tsx
-msgid "Wat leden in {0} mogen doen, en het logboek van wat er is gebeurd. Alleen beheerders zien deze pagina."
-msgstr "Wat leden in {0} mogen doen, en het logboek van wat er is gebeurd. Alleen beheerders zien deze pagina."
 
 #: src/routes/setup-summary.tsx
 msgid "Wat nu?"
@@ -3975,9 +4134,18 @@ msgstr "Welkom bij Brievie"
 msgid "Werkruimte"
 msgstr "Werkruimte"
 
+#. placeholder {0}: workspace.name
+#: src/routes/settings.tsx
+msgid "Werkruimte {0}"
+msgstr "Werkruimte {0}"
+
 #: src/components/audit-codes.ts
 msgid "Werkruimte gemaakt"
 msgstr "Werkruimte gemaakt"
+
+#: src/components/workspace-switcher.tsx
+msgid "Werkruimte kiezen"
+msgstr "Werkruimte kiezen"
 
 #: src/components/person-actions.tsx
 msgid "Werkruimte verlaten"
@@ -3987,8 +4155,13 @@ msgstr "Werkruimte verlaten"
 msgid "Werkruimte verlaten?"
 msgstr "Werkruimte verlaten?"
 
+#. placeholder {0}: current.name
+#: src/components/workspace-switcher.tsx
+msgid "Werkruimte: {0}. Kies een andere werkruimte"
+msgstr "Werkruimte: {0}. Kies een andere werkruimte"
+
 #: src/components/page.tsx
-#: src/routes/home.tsx
+#: src/routes/workspaces.tsx
 msgid "Werkruimtes"
 msgstr "Werkruimtes"
 
@@ -4022,6 +4195,11 @@ msgstr "Wie is het?"
 msgid "Wie je aanvinkt, kan deze brief lezen, ook als die anders niet bij hem komt."
 msgstr "Wie je aanvinkt, kan deze brief lezen, ook als die anders niet bij hem komt."
 
+#. placeholder {0}: workspace.name
+#: src/routes/settings.tsx
+msgid "Wie jouw brieven kan lezen in {0}, en waarom."
+msgstr "Wie jouw brieven kan lezen in {0}, en waarom."
+
 #: src/routes/people-detail.tsx
 msgid "Wie kan de post van {name} zien?"
 msgstr "Wie kan de post van {name} zien?"
@@ -4032,6 +4210,7 @@ msgstr "Wie kan deze brief zien?"
 
 #: src/components/page.tsx
 #: src/routes/post-access.tsx
+#: src/routes/settings.tsx
 #: src/routes/visibility.tsx
 msgid "Wie kan mijn post zien?"
 msgstr "Wie kan mijn post zien?"
@@ -4039,6 +4218,10 @@ msgstr "Wie kan mijn post zien?"
 #: src/routes/ai.tsx
 msgid "Wie leest je brieven?"
 msgstr "Wie leest je brieven?"
+
+#: src/routes/settings.tsx
+msgid "Wie post verdeelt en de beheerders zien boven de Inbox welke brieven te lang in de Inbox staan, en welke brieven niemand op wiens naam ze staan vóór vandaag heeft geopend. Zo zien zij op welke dag iemand een brief opende, nooit het uur."
+msgstr "Wie post verdeelt en de beheerders zien boven de Inbox welke brieven te lang in de Inbox staan, en welke brieven niemand op wiens naam ze staan vóór vandaag heeft geopend. Zo zien zij op welke dag iemand een brief opende, nooit het uur."
 
 #: src/routes/visibility.tsx
 msgid "Wie verdeelt post?"
@@ -4108,6 +4291,10 @@ msgstr "Zelf controleren"
 #: src/routes/document.tsx
 msgid "Zelf controleren?"
 msgstr "Zelf controleren?"
+
+#: src/routes/my-post.tsx
+msgid "Zet Alleen ongelezen uit om al je post te zien."
+msgstr "Zet Alleen ongelezen uit om al je post te zien."
 
 #: src/components/export-panel.tsx
 msgid "Zet het aan bij Instellingen."

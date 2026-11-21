@@ -2,6 +2,7 @@ from typing import ClassVar
 
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.common.models import BaseModel, WorkspaceModel
@@ -37,6 +38,12 @@ class Workspace(BaseModel):
     summary_language = models.CharField(
         max_length=2, choices=[("nl", "Nederlands"), ("en", "English")], default="nl"
     )
+    # "Blijft liggen" (navigation spec S 6): letters too long in the Inbox, or confirmed
+    # and not opened by any addressee, shown to the sorters and admins. Only in an
+    # organisation (on there from the start); the days are calendar days.
+    lingering_enabled = models.BooleanField(default=False)
+    lingering_inbox_days = models.PositiveSmallIntegerField(default=2)
+    lingering_unopened_days = models.PositiveSmallIntegerField(default=5)
 
     def __str__(self) -> str:
         return self.name
@@ -57,6 +64,10 @@ class Membership(BaseModel):
     role = models.CharField(max_length=10, choices=Role.choices)
     # "Verdeelt post": this member gets the letters no account or department covers.
     sorts_post = models.BooleanField(default=False)
+    # "Ongelezen" starts here (navigation spec S 5.2): a letter that arrived before it is
+    # read, so nobody starts with thousands of unread letters (the migration's moment
+    # for existing members, the moment of joining for new ones).
+    unread_from = models.DateTimeField(default=timezone.now)
 
     # Each role may do everything the roles below it may do.
     RANK: ClassVar[dict[str, int]] = {Role.VIEWER: 0, Role.MEMBER: 1, Role.ADMIN: 2}

@@ -10,6 +10,7 @@ import {
   http,
   loggedInHandlers,
   members,
+  noMenuCounts,
   renderApp,
   server,
   workspace,
@@ -162,9 +163,10 @@ describe("wie ziet wat", () => {
   it("after a change, the workspace's letters and counts are asked again", async () => {
     let counted = 0;
     server.use(
-      http.get(`${base}/inbox/counts`, () => {
+      // The menu's numbers (one call for the whole menu).
+      http.get(`${base}/menu/counts`, () => {
         counted += 1;
-        return HttpResponse.json({ new: 0, review: 0, unassigned: 0 });
+        return HttpResponse.json(noMenuCounts);
       }),
       ...handlers({ ...ownPost, everyone_sees_all: true }),
       http.post(`${base}/visibility/preview`, () =>

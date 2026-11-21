@@ -5,7 +5,7 @@ from django.db import connection
 
 from apps.common.models import WorkspaceModel
 from apps.documents.models import Document
-from apps.workspaces.rls import READER_POLICY, VISIBILITY_POLICIES
+from apps.workspaces.rls import READ_MARK_POLICY, READER_POLICY, VISIBILITY_POLICIES
 
 
 def workspace_tables() -> list[str]:
@@ -65,6 +65,7 @@ KNOWN_RESTRICTIVE = {
     VISIBILITY_POLICIES[1]: "w",
     VISIBILITY_POLICIES[2]: "d",
     READER_POLICY: "*",
+    READ_MARK_POLICY: "*",
 }
 
 
@@ -133,6 +134,12 @@ def test_document_policies_read_the_reader_table_and_the_helpers() -> None:
 def test_reader_table_has_reader_scope_and_no_child_policy() -> None:
     names = [p[0] for p in _policies("documents_documentreader")]
     assert names == [READER_POLICY, "workspace_isolation"]
+
+
+def test_read_mark_table_has_its_own_row_policy() -> None:
+    names = [p[0] for p in _policies("documents_documentreadmark")]
+    assert READ_MARK_POLICY in names
+    assert set(names) == {READ_MARK_POLICY, "workspace_isolation", *VISIBILITY_POLICIES}
 
 
 def test_task_policies_handle_tasks_without_a_letter() -> None:

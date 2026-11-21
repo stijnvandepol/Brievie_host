@@ -926,6 +926,11 @@
             "title": "Tasks",
             "type": "array"
           },
+          "unread": {
+            "default": false,
+            "title": "Unread",
+            "type": "boolean"
+          },
           "visibility": {
             "default": "workspace",
             "title": "Visibility",
@@ -1083,6 +1088,11 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "unread": {
+            "default": false,
+            "title": "Unread",
+            "type": "boolean"
           },
           "visibility": {
             "default": "workspace",
@@ -1332,6 +1342,11 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "unread": {
+            "default": false,
+            "title": "Unread",
+            "type": "boolean"
           },
           "visibility": {
             "default": "workspace",
@@ -2066,6 +2081,195 @@
         "title": "LanguageIn",
         "type": "object"
       },
+      "LingeringLetterOut": {
+        "properties": {
+          "addressee_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Addressee Ids",
+            "type": "array"
+          },
+          "auto_addressee_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Auto Addressee Ids",
+            "type": "array"
+          },
+          "auto_label_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Auto Label Ids",
+            "type": "array"
+          },
+          "auto_rule_label_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Auto Rule Label Ids",
+            "type": "array"
+          },
+          "client_id": {
+            "format": "uuid",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "confirmed_by_ai": {
+            "default": false,
+            "title": "Confirmed By Ai",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "days": {
+            "default": 0,
+            "title": "Days",
+            "type": "integer"
+          },
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "inbox_state": {
+            "default": "",
+            "title": "Inbox State",
+            "type": "string"
+          },
+          "label_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Label Ids",
+            "type": "array"
+          },
+          "letter_date": {
+            "format": "date",
+            "title": "Letter Date",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "open_duplicate_count": {
+            "default": 0,
+            "title": "Open Duplicate Count",
+            "type": "integer"
+          },
+          "open_suggestion_count": {
+            "default": 0,
+            "title": "Open Suggestion Count",
+            "type": "integer"
+          },
+          "page_count": {
+            "title": "Page Count",
+            "type": "integer"
+          },
+          "proposed_document_type": {
+            "default": "",
+            "title": "Proposed Document Type",
+            "type": "string"
+          },
+          "proposed_letter_date": {
+            "format": "date",
+            "title": "Proposed Letter Date",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "proposed_sender": {
+            "default": "",
+            "title": "Proposed Sender",
+            "type": "string"
+          },
+          "reader_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reader Names",
+            "type": "array"
+          },
+          "sender": {
+            "title": "Sender",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "unread": {
+            "default": false,
+            "title": "Unread",
+            "type": "boolean"
+          },
+          "visibility": {
+            "default": "workspace",
+            "title": "Visibility",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "client_id",
+          "status",
+          "page_count",
+          "created_at",
+          "sender",
+          "document_type",
+          "letter_date"
+        ],
+        "title": "LingeringLetterOut",
+        "type": "object"
+      },
+      "LingeringOut": {
+        "properties": {
+          "inbox_days": {
+            "title": "Inbox Days",
+            "type": "integer"
+          },
+          "not_opened": {
+            "items": {
+              "$ref": "#/components/schemas/LingeringLetterOut"
+            },
+            "title": "Not Opened",
+            "type": "array"
+          },
+          "too_long_in_inbox": {
+            "items": {
+              "$ref": "#/components/schemas/LingeringLetterOut"
+            },
+            "title": "Too Long In Inbox",
+            "type": "array"
+          },
+          "unopened_days": {
+            "title": "Unopened Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "too_long_in_inbox",
+          "not_opened",
+          "inbox_days",
+          "unopened_days"
+        ],
+        "title": "LingeringOut",
+        "type": "object"
+      },
       "LoginIn": {
         "properties": {
           "email": {
@@ -2084,6 +2288,37 @@
           "password"
         ],
         "title": "LoginIn",
+        "type": "object"
+      },
+      "MarkReadIn": {
+        "properties": {
+          "document_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 200,
+            "title": "Document Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "document_ids"
+        ],
+        "title": "MarkReadIn",
+        "type": "object"
+      },
+      "MarkReadOut": {
+        "properties": {
+          "marked": {
+            "title": "Marked",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "marked"
+        ],
+        "title": "MarkReadOut",
         "type": "object"
       },
       "MemberChangeOut": {
@@ -2199,6 +2434,47 @@
           "role"
         ],
         "title": "MemberRoleIn",
+        "type": "object"
+      },
+      "MenuCountsOut": {
+        "properties": {
+          "has_person": {
+            "default": true,
+            "title": "Has Person",
+            "type": "boolean"
+          },
+          "inbox": {
+            "default": 0,
+            "title": "Inbox",
+            "type": "integer"
+          },
+          "lingering": {
+            "default": 0,
+            "title": "Lingering",
+            "type": "integer"
+          },
+          "my_post_unread": {
+            "default": 0,
+            "title": "My Post Unread",
+            "type": "integer"
+          },
+          "my_tasks": {
+            "default": 0,
+            "title": "My Tasks",
+            "type": "integer"
+          },
+          "my_tasks_overdue": {
+            "default": 0,
+            "title": "My Tasks Overdue",
+            "type": "integer"
+          },
+          "shows_lingering": {
+            "default": false,
+            "title": "Shows Lingering",
+            "type": "boolean"
+          }
+        },
+        "title": "MenuCountsOut",
         "type": "object"
       },
       "MergeDuplicateIn": {
@@ -2402,6 +2678,14 @@
           "message": {
             "title": "Message",
             "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -3778,6 +4062,21 @@
             "title": "Can Edit",
             "type": "boolean"
           },
+          "can_hand_over": {
+            "default": false,
+            "title": "Can Hand Over",
+            "type": "boolean"
+          },
+          "can_release": {
+            "default": false,
+            "title": "Can Release",
+            "type": "boolean"
+          },
+          "can_take": {
+            "default": false,
+            "title": "Can Take",
+            "type": "boolean"
+          },
           "completed_at": {
             "format": "date-time",
             "title": "Completed At",
@@ -3921,6 +4220,21 @@
             "default": "",
             "title": "Assigned To Name",
             "type": "string"
+          },
+          "can_hand_over": {
+            "default": false,
+            "title": "Can Hand Over",
+            "type": "boolean"
+          },
+          "can_release": {
+            "default": false,
+            "title": "Can Release",
+            "type": "boolean"
+          },
+          "can_take": {
+            "default": false,
+            "title": "Can Take",
+            "type": "boolean"
           },
           "completed_at": {
             "format": "date-time",
@@ -4182,6 +4496,11 @@
             "default": "",
             "title": "Trashed By Name",
             "type": "string"
+          },
+          "unread": {
+            "default": false,
+            "title": "Unread",
+            "type": "boolean"
           },
           "visibility": {
             "default": "workspace",
@@ -4564,6 +4883,31 @@
               "null"
             ]
           },
+          "lingering_enabled": {
+            "title": "Lingering Enabled",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "lingering_inbox_days": {
+            "maximum": 30,
+            "minimum": 1,
+            "title": "Lingering Inbox Days",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "lingering_unopened_days": {
+            "maximum": 60,
+            "minimum": 1,
+            "title": "Lingering Unopened Days",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "summary_language": {
             "pattern": "^(nl|en)$",
             "title": "Summary Language",
@@ -4606,6 +4950,21 @@
             "default": true,
             "title": "Everyone Sees All",
             "type": "boolean"
+          },
+          "lingering_enabled": {
+            "default": false,
+            "title": "Lingering Enabled",
+            "type": "boolean"
+          },
+          "lingering_inbox_days": {
+            "default": 2,
+            "title": "Lingering Inbox Days",
+            "type": "integer"
+          },
+          "lingering_unopened_days": {
+            "default": 5,
+            "title": "Lingering Unopened Days",
+            "type": "integer"
           },
           "summary_language": {
             "default": "nl",
@@ -7656,7 +8015,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/documents": {
       "get": {
-        "description": "The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`).",
+        "description": "The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`). `addressed_to_me=true` keeps \"Mijn post\": the letters on the caller's own persons (their own and those they manage), with `include_departments=true` also on their departments; empty for a member without a person. `unread_only=true` keeps the letters the caller has not read (`unread`).",
         "operationId": "listDocuments",
         "parameters": [
           {
@@ -7712,6 +8071,36 @@
             "schema": {
               "default": false,
               "title": "Automatic",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "addressed_to_me",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Addressed To Me",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_departments",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Departments",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "unread_only",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Unread Only",
               "type": "boolean"
             }
           }
@@ -7950,6 +8339,128 @@
           }
         ],
         "summary": "Create Document",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/read": {
+      "post": {
+        "description": "\"Alles gelezen\": mark the given letters read for the caller (at most 200; 422 `validation_error` for more). Ids the caller does not see are skipped without a word. `marked`: how many were newly marked. The caller's own state only: nobody else sees it; no history line, no log.",
+        "operationId": "markDocumentsRead",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkReadIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkReadOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Mark Documents Read",
         "tags": [
           "documents"
         ]
@@ -9121,6 +9632,154 @@
           }
         ],
         "summary": "Get Document Page",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/read": {
+      "delete": {
+        "description": "\"Markeer als ongelezen\": the caller's own mark goes; the letter is unread for them again. Idempotent. 404 as `getDocument`.",
+        "operationId": "markDocumentUnread",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Mark Document Unread",
+        "tags": [
+          "documents"
+        ]
+      },
+      "post": {
+        "description": "The caller opened the letter: call once when the letter page or the reader shows it (a plain `getDocument` marks nothing). Idempotent. 404 as `getDocument`. The caller's own state only: nobody else sees it; no history line, no log.",
+        "operationId": "markDocumentRead",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Mark Document Read",
         "tags": [
           "documents"
         ]
@@ -10578,6 +11237,68 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/inbox/lingering": {
+      "get": {
+        "description": "\"Blijft liggen\", for the sorters and admins of an organisation with it switched on (`lingeringEnabled`): letters too long in the Inbox, and confirmed letters none of whose addressees opened them, oldest first, at most 100 each, only letters the caller may see. Empty lists for everyone else and at home.",
+        "operationId": "listLingeringLetters",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LingeringOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "List Lingering Letters",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/invitations": {
       "get": {
         "description": "Web session only: a bearer token answers 401 not_authenticated. For the workspace's admins: another role answers 403 forbidden, a workspace the caller is not a member of 404 workspace_not_found. Invitations neither used nor revoked, newest first; status open or expired.",
@@ -12001,6 +12722,68 @@
         "summary": "Update Member Sorts Post",
         "tags": [
           "workspaces"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/menu/counts": {
+      "get": {
+        "description": "The numbers of the menu in one call: letters waiting in the Inbox, unread letters in \"Mijn post\", open and overdue tasks of \"Mijn taken\", and \"Blijft liggen\" for the sorters and admins of an organisation. Only this workspace; nothing the caller may not see is counted. `getInboxCounts` and `countMyTasks` stay as they are.",
+        "operationId": "getMenuCounts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MenuCountsOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Get Menu Counts",
+        "tags": [
+          "documents"
         ]
       }
     },

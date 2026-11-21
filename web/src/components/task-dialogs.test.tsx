@@ -46,6 +46,9 @@ const needsDate: Item = {
   completed_by_name: "",
   document_type: "decision",
   can_edit: true,
+  can_take: true,
+  can_hand_over: true,
+  can_release: false,
 };
 
 function myTasks(items: () => Item[]) {
@@ -190,5 +193,84 @@ describe("task dialogs", () => {
     expect(
       within(tasks).getByRole("button", { name: `Geef aan: ${first.description}` }),
     ).toBeVisible();
+  });
+});
+
+describe("who may pick up a task (spec S 7)", () => {
+  type LetterTask = components["schemas"]["TaskOut"];
+  const free: LetterTask = {
+    ...(documentDetail.tasks[0] as LetterTask),
+    id: "0f0e0d0c-0b0a-4908-8706-050403020201",
+    description: "Vrije taak",
+    can_take: true,
+    can_hand_over: true,
+    can_release: false,
+  };
+  const colleagues: LetterTask = {
+    ...free,
+    id: "0f0e0d0c-0b0a-4908-8706-050403020202",
+    description: "Taak van Bram",
+    assigned_to_id: "b3333333-3333-4333-8333-333333333333",
+    assigned_to_name: "Bram",
+    can_take: false,
+    can_hand_over: false,
+    can_release: false,
+  };
+  const letterPath = `/w/${workspace.id}/post/${documentDetail.id}`;
+
+  function letter(tasks: LetterTask[]) {
+    let asked = 0;
+    server.use(
+      http.get(`${base}/documents/${documentDetail.id}`, () => {
+        asked += 1;
+        return HttpResponse.json({ ...documentDetail, tasks });
+      }),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
+    return () => asked;
+  }
+
+  it("shows Ik doe dit only on an unassigned task", async () => {
+    letter([free, colleagues]);
+    renderApp(letterPath);
+    expect(await screen.findByRole("button", { name: "Ik doe dit: Vrije taak" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Ik doe dit: Taak van Bram" })).toBeNull();
+  });
+
+  it("shows Doet: Bram without buttons on a colleague's task", async () => {
+    letter([colleagues]);
+    renderApp(letterPath);
+    const item = (await screen.findByText("Taak van Bram")).closest("li") as HTMLElement;
+    expect(within(item).getByText("Doet: Bram")).toBeVisible();
+    expect(
+      within(item).queryByRole("button", { name: /Ik doe dit|Geef aan|Vrijgeven/ }),
+    ).toBeNull();
+  });
+
+  it("an admin sees Vrijgeven and Geef aan… on a colleague's task", async () => {
+    letter([{ ...colleagues, can_hand_over: true, can_release: true }]);
+    renderApp(letterPath);
+    expect(await screen.findByRole("button", { name: "Vrijgeven: Taak van Bram" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Geef aan: Taak van Bram" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Ik doe dit: Taak van Bram" })).toBeNull();
+    expect(screen.queryByText("Doet: Bram")).toBeNull();
+  });
+
+  it("a 409 task_taken shows the server's sentence and refreshes", async () => {
+    const asked = letter([free]);
+    const sentence =
+      "Iemand anders doet deze taak al. Vraag die persoon of een beheerder om hem door te geven.";
+    server.use(
+      http.post(`${base}/tasks/${free.id}/assign`, () =>
+        HttpResponse.json({ code: "task_taken", message: sentence }, { status: 409 }),
+      ),
+    );
+    const clicker = userEvent.setup();
+    renderApp(letterPath);
+    await clicker.click(await screen.findByRole("button", { name: "Ik doe dit: Vrije taak" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(sentence);
+    // The letter (and so its tasks) is asked again: the page shows who has it now.
+    await waitFor(() => expect(asked()).toBeGreaterThan(1));
   });
 });

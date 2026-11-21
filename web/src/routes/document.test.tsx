@@ -36,6 +36,9 @@ const task = {
   term_quote: "",
   assigned_to_name: "",
   assigned_to_id: null,
+  can_take: true,
+  can_hand_over: true,
+  can_release: false,
 };
 const path = `/w/${workspace.id}/post/${documentSummary.id}`;
 
@@ -812,5 +815,71 @@ describe("a new person the AI proposes", () => {
     renderApp(path);
     const panel = await screen.findByRole("region", { name: "Nieuwe persoon?" });
     expect(within(panel).queryByRole("button")).toBeNull();
+  });
+});
+
+describe("read and unread (spec S 5.3)", () => {
+  const readUrl = `*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/read`;
+
+  it("opening a letter marks it read once, not on a refetch or a list", async () => {
+    const calls: string[] = [];
+    server.use(
+      http.post(readUrl, () => {
+        calls.push("read");
+        return new HttpResponse(null, { status: 204 });
+      }),
+      ...loggedInHandlers(),
+      ...documentHandlers({ ...documentDetail, unread: true }),
+    );
+    // A list shows the letter: nothing is marked.
+    const list = renderApp(`/w/${workspace.id}/post`);
+    await screen.findByRole("link", { name: "Belastingdienst" });
+    expect(calls).toEqual([]);
+
+    await list.router.navigate({
+      to: "/w/$workspaceId/post/$documentId",
+      params: { workspaceId: workspace.id, documentId: documentSummary.id },
+    });
+    await screen.findByRole("heading", { level: 1, name: "Belastingdienst" });
+    await waitFor(() => expect(calls).toEqual(["read"]));
+    // The page's own data is asked again (focus, a change): no second mark.
+    await list.queryClient.invalidateQueries({ queryKey: ["workspaces", workspace.id] });
+    await screen.findByRole("button", { name: "Markeer als ongelezen" });
+    expect(calls).toEqual(["read"]);
+  });
+
+  it("Markeer als ongelezen brings the dot back and the count up", async () => {
+    let unread = false;
+    let menuAsked = 0;
+    server.use(
+      http.delete(readUrl, () => {
+        unread = true;
+        return new HttpResponse(null, { status: 204 });
+      }),
+      http.get(`*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}`, () =>
+        HttpResponse.json({ ...documentDetail, unread }),
+      ),
+      http.get(`*${API}/workspaces/${workspace.id}/menu/counts`, () => {
+        menuAsked += 1;
+        return HttpResponse.json({
+          inbox: 0,
+          my_post_unread: unread ? 1 : 0,
+          my_tasks: 0,
+          my_tasks_overdue: 0,
+          lingering: 0,
+          shows_lingering: false,
+          has_person: true,
+        });
+      }),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
+    const u = userEvent.setup();
+    renderApp(path);
+    await u.click(await screen.findByRole("button", { name: "Markeer als ongelezen" }));
+    expect(await screen.findByRole("button", { name: "Markeer als gelezen" })).toBeVisible();
+    const nav = screen.getByRole("navigation", { name: "Hoofdmenu" });
+    expect(await within(nav).findByRole("link", { name: "Mijn post, 1 ongelezen" })).toBeVisible();
+    expect(menuAsked).toBeGreaterThan(1);
   });
 });

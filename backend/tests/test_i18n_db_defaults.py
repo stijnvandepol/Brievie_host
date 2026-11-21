@@ -22,7 +22,14 @@ def test_a_raw_workspace_insert_without_summary_language_gets_dutch() -> None:
             [workspace_id, now, now],
         )
 
-    assert Workspace.objects.get(id=workspace_id).summary_language == "nl"
+    workspace = Workspace.objects.get(id=workspace_id)
+    assert workspace.summary_language == "nl"
+    # "Blijft liggen" (navigation): off, with the default days.
+    assert (
+        workspace.lingering_enabled,
+        workspace.lingering_inbox_days,
+        workspace.lingering_unopened_days,
+    ) == (False, 2, 5)
 
 
 def test_a_raw_user_insert_without_language_has_no_choice() -> None:

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import {
   API,
+  asRole,
   errorBody,
   HttpResponse,
   http,
@@ -277,11 +278,13 @@ describe("AI settings", () => {
     expect(state.puts).toEqual([]);
   });
 
-  it("has an entry in the navigation for every member", async () => {
+  it("is reached from Instellingen by every member (decision B6)", async () => {
     aiServer();
-    renderApp(path);
+    server.use(asRole("member"));
+    renderApp(`/w/${workspace.id}/instellingen`);
     const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
-    expect(within(nav).getByRole("link", { name: "AI" })).toBeInTheDocument();
-    await screen.findByRole("button", { name: "Opslaan" });
+    await within(nav).findByRole("link", { name: "Instellingen" });
+    expect(within(nav).queryByRole("link", { name: "AI" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "AI" })).toHaveAttribute("href", path);
   });
 });

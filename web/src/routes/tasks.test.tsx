@@ -49,6 +49,9 @@ function task(overrides: Partial<Item> = {}): Item {
     completed_by_name: "",
     document_type: "assessment",
     can_edit: true,
+    can_take: true,
+    can_hand_over: true,
+    can_release: false,
     ...overrides,
   };
 }

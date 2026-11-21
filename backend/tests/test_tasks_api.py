@@ -94,6 +94,9 @@ def test_list_open_tasks_by_deadline_nulls_last(client_a: Client, ws_a: Workspac
         "completed_by_name",
         "document_type",
         "can_edit",
+        "can_take",
+        "can_hand_over",
+        "can_release",
     }
 
 

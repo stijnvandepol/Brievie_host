@@ -1,8 +1,11 @@
+from dataclasses import dataclass
 from datetime import date
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, models, transaction
+from django.utils import timezone
 from django.utils.translation import gettext as _
 from psycopg import errors as pg_errors
 
@@ -10,7 +13,15 @@ from apps.accounts.models import User
 from apps.audit.services import AuditActor
 from apps.common import crypto
 from apps.common.errors import ApiError
-from apps.documents import duplicates, new_persons, organise, suggestions, visibility
+from apps.documents import (
+    duplicates,
+    lingering,
+    new_persons,
+    organise,
+    reading,
+    suggestions,
+    visibility,
+)
 from apps.documents.intake import page_aad
 from apps.documents.models import (
     LIVE,
@@ -27,6 +38,8 @@ from apps.documents.schemas import (
     DocumentOut,
     DocumentSummaryOut,
     DocumentVisibilityOut,
+    LingeringLetterOut,
+    LingeringOut,
     NewPersonSuggestionOut,
     PageOut,
     ProposalOut,
@@ -35,11 +48,15 @@ from apps.documents.schemas import (
 )
 from apps.documents.storage import default_storage
 from apps.pipeline.jobs import defer_processing
+from apps.tasks.facts import member_facts
 from apps.tasks.models import Task, amount_text
 from apps.workspaces.context import current_actor
 from apps.workspaces.keys import workspace_key
 from apps.workspaces.locks import lock_own_membership
 from apps.workspaces.models import Membership, Workspace
+
+if TYPE_CHECKING:
+    from apps.tasks.assignment import TaskFlags
 
 _PATH_UNIQUE = "documents_folder_workspace_path_unique"
 
@@ -218,6 +235,20 @@ def _in_state(state: str) -> models.Q:
     return models.Q(status=Document.Status.DONE, addressee_ids=[])
 
 
+def my_post_filter(membership: Membership, *, include_departments: bool = False) -> models.Q:
+    """ "Mijn post" (navigation spec B2): letters on the member's own persons (their own and
+    those they manage), with `include_departments` also on their departments ("Ook mijn
+    afdeling"). Matches nothing for a member without any. The GIN index on
+    `addressee_ids`; only ever applied on top of `visible_documents`."""
+    facts = member_facts(membership)
+    ids = set(facts.person_ids)
+    if include_departments:
+        ids |= facts.department_ids
+    if not ids:
+        return models.Q(pk__in=[])
+    return models.Q(addressee_ids__overlap=sorted(ids))
+
+
 def list_documents(
     membership: Membership,
     *,
@@ -225,14 +256,25 @@ def list_documents(
     person_id: UUID | None = None,
     label_id: UUID | None = None,
     automatic: bool = False,
+    addressed_to_me: bool = False,
+    include_departments: bool = False,
+    unread_only: bool = False,
 ) -> list[Document]:
     """The newest documents the member sees (at most 200; paging comes later), filtered.
 
-    `automatic` keeps the documents the autopilot confirmed or organised.
+    `automatic` keeps the documents the autopilot confirmed or organised;
+    `addressed_to_me` the member's own post ("Mijn post", with `include_departments` also
+    their departments'); `unread_only` the letters they have not read (navigation S 5).
     """
     if inbox_state and inbox_state not in INBOX_STATES:
         raise ApiError(422, "validation_error", _("Deze stand van de inbox kennen we niet."))
     documents = visibility.visible_documents(membership)
+    if addressed_to_me:
+        documents = documents.filter(
+            my_post_filter(membership, include_departments=include_departments)
+        )
+    if unread_only:
+        documents = documents.filter(reading.unread_q(membership))
     if inbox_state:
         documents = documents.filter(_in_state(inbox_state))
     if person_id is not None:
@@ -275,6 +317,69 @@ def waiting_letters(membership: Membership) -> int:
     )
 
 
+@dataclass(frozen=True)
+class MenuCounts:
+    inbox: int
+    my_post_unread: int
+    my_tasks: int
+    my_tasks_overdue: int
+    lingering: int
+    shows_lingering: bool
+    has_person: bool
+
+
+def menu_counts(membership: Membership) -> MenuCounts:
+    """The numbers of the menu in one answer (navigation spec S 9): letters waiting in the
+    Inbox, unread letters in Mijn post, the member's open and overdue tasks, and for the
+    sorters and admins of an organisation the letters that linger. Every number starts
+    from `visible_documents` (or the task policy): nothing hidden is counted."""
+    # Imported here: `tasks.services` reads letters through this module.
+    from apps.tasks.services import count_my_tasks
+
+    facts = member_facts(membership)
+    own = sorted(facts.person_ids)
+    unread = (
+        visibility.visible_documents(membership)
+        .filter(addressee_ids__overlap=own)
+        .filter(reading.unread_q(membership))
+        .count()
+        if own
+        else 0
+    )
+    tasks = count_my_tasks(membership)
+    return MenuCounts(
+        inbox=waiting_letters(membership),
+        my_post_unread=unread,
+        my_tasks=tasks.mine,
+        my_tasks_overdue=tasks.overdue,
+        lingering=lingering.count_lingering(membership),
+        shows_lingering=lingering.applies_to(membership),
+        has_person=bool(own),
+    )
+
+
+def lingering_out(membership: Membership) -> LingeringOut:
+    """ "Blijft liggen" for the member (`lingering.lingering_letters`), as rows with their
+    days. Empty unless they sort post or are an admin of an organisation with it on."""
+    result = lingering.lingering_letters(membership)
+    now = timezone.now()
+
+    def rows(documents: list[Document]) -> list[LingeringLetterOut]:
+        return [
+            LingeringLetterOut(**summary.model_dump(), days=lingering.days_of(document, now=now))
+            for document, summary in zip(
+                documents, document_summaries_out(membership, documents), strict=True
+            )
+        ]
+
+    return LingeringOut(
+        too_long_in_inbox=rows(result.too_long_in_inbox),
+        not_opened=rows(result.not_opened),
+        inbox_days=result.inbox_days,
+        unopened_days=result.unopened_days,
+    )
+
+
 def get_document(*, membership: Membership, document_id: UUID) -> Document:
     """A document the member sees, or 404 (one they may not see is not found either).
 
@@ -308,11 +413,15 @@ def document_access(
 
 
 def document_summary_out(
-    document: Document, *, open_duplicate_count: int = 0, reader_names: list[str] | None = None
+    document: Document,
+    *,
+    open_duplicate_count: int = 0,
+    reader_names: list[str] | None = None,
+    unread: bool = False,
 ) -> DocumentSummaryOut:
     """A row of a document list."""
     return _summary_out(
-        document, _open_suggestions(document), open_duplicate_count, reader_names or []
+        document, _open_suggestions(document), open_duplicate_count, reader_names or [], unread
     )
 
 
@@ -323,9 +432,13 @@ def document_summaries_out(
     full per letter (one query for all)."""
     counts = duplicates.pair_counts(membership, [d.id for d in documents])
     names = visibility.reader_names(documents)
+    unread = reading.unread_ids(membership, documents)
     return [
         document_summary_out(
-            d, open_duplicate_count=counts.get(d.id, 0), reader_names=names.get(d.id, [])
+            d,
+            open_duplicate_count=counts.get(d.id, 0),
+            reader_names=names.get(d.id, []),
+            unread=d.id in unread,
         )
         for d in documents
     ]
@@ -342,6 +455,7 @@ def _summary_out(
     open_suggestions: list[DocumentSuggestion],
     open_duplicate_count: int = 0,
     reader_names: list[str] | None = None,
+    unread: bool = False,
 ) -> DocumentSummaryOut:
     proposed = _headline_proposals(document)
     return DocumentSummaryOut(
@@ -371,6 +485,7 @@ def _summary_out(
         open_duplicate_count=open_duplicate_count,
         visibility=document.visibility,
         reader_names=reader_names or [],
+        unread=unread,
     )
 
 
@@ -409,8 +524,18 @@ def document_out(document: Document, *, open_duplicate_count: int = 0) -> Docume
     open_suggestions = _open_suggestions(document)
     names = visibility.reader_names([document]).get(document.id, [])
     actor = current_actor()
+    unread = reading.is_unread_for_actor(document)
+    # Imported here: the tasks app reads letters through this module.
+    from apps.tasks.assignment import flags_for_actor
+
+    tasks = list(
+        document.tasks.select_related("assigned_to").order_by("deadline", "created_at", "id")
+    )
+    flags = flags_for_actor(document.workspace_id, tasks)
     return DocumentOut(
-        **_summary_out(document, open_suggestions, open_duplicate_count, names).model_dump(),
+        **_summary_out(
+            document, open_suggestions, open_duplicate_count, names, unread
+        ).model_dump(),
         shared_user_ids=visibility.shared_user_ids(document),
         new_person_suggestions=[
             NewPersonSuggestionOut(
@@ -441,26 +566,7 @@ def document_out(document: Document, *, open_duplicate_count: int = 0) -> Docume
             )
             for e in document.extractions.order_by("group", "created_at", "id")
         ],
-        tasks=[
-            TaskOut(
-                id=task.id,
-                type=task.type,
-                description=task.description,
-                deadline=task.deadline,
-                deadline_source=task.deadline_source,
-                deadline_quote=task.deadline_quote,
-                status=task.status,
-                completed_at=task.completed_at,
-                created_by_ai=task.created_by_ai,
-                amount=amount_text(task.amount),
-                term_quote=task.term_quote,
-                assigned_to_name=task.assigned_to.name if task.assigned_to is not None else "",
-                assigned_to_id=task.assigned_to_id,
-            )
-            for task in document.tasks.select_related("assigned_to").order_by(
-                "deadline", "created_at", "id"
-            )
-        ],
+        tasks=[_task_out(task, flags[task.id]) for task in tasks],
         suggestions=[
             SuggestionOut(
                 id=s.id,
@@ -475,6 +581,27 @@ def document_out(document: Document, *, open_duplicate_count: int = 0) -> Docume
             )
             for s in open_suggestions
         ],
+    )
+
+
+def _task_out(task: Task, flags: "TaskFlags") -> TaskOut:
+    return TaskOut(
+        id=task.id,
+        type=task.type,
+        description=task.description,
+        deadline=task.deadline,
+        deadline_source=task.deadline_source,
+        deadline_quote=task.deadline_quote,
+        status=task.status,
+        completed_at=task.completed_at,
+        created_by_ai=task.created_by_ai,
+        amount=amount_text(task.amount),
+        term_quote=task.term_quote,
+        assigned_to_name=task.assigned_to.name if task.assigned_to is not None else "",
+        assigned_to_id=task.assigned_to_id,
+        can_take=flags.can_take,
+        can_hand_over=flags.can_hand_over,
+        can_release=flags.can_release,
     )
 
 

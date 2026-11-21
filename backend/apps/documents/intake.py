@@ -11,7 +11,7 @@ from apps.accounts.models import User
 from apps.common import crypto
 from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
-from apps.documents import visibility
+from apps.documents import reading, visibility
 from apps.documents.jpeg import jpeg_size
 from apps.documents.models import Document, DocumentPage
 from apps.documents.schemas import UploadMetadataIn
@@ -74,6 +74,8 @@ def create_document_from_upload(
                     raise
                 return _same_upload(winner, hashes), False
             _store_pages(document, metadata, pages, storage, written)
+            # The uploader made it: not unread for them (navigation spec S 5.3).
+            reading.mark_scanned(document, user)
             defer_processing(workspace_id=workspace.id, document_id=document.id)
     except BaseException:
         # Anything that fails after a page was written (another page, queueing the
