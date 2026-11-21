@@ -108,6 +108,7 @@ def trash_document(
             if already is None:
                 raise _not_found()
             return already
+        visibility.require_editable(document)
         move_to_trash(document, user=user, actor=actor)
     return document
 

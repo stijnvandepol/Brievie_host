@@ -87,6 +87,7 @@ def confirm_document(
         document = Document.objects.filter(LIVE, workspace=workspace, id=document_id).first()
         if document is None:
             raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
+        visibility.require_editable(document)
         if document.status not in _REVIEWABLE:
             raise ApiError(
                 409,

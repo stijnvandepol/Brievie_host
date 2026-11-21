@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from ninja import Field, Schema
@@ -50,6 +51,17 @@ class PersonIn(InputSchema):
 class PersonMemberIn(InputSchema):
     # The member to link; null unlinks.
     user_id: UUID | None = None
+
+
+class EmergencyAccessUseIn(InputSchema):
+    # Why the admin needs the post now; shown on every letter opened and to its people.
+    reason: str = Field(min_length=10, max_length=200)
+
+
+class EmergencyAccessUseOut(Schema):
+    # Letters on the name that the admin could not see and now can, until `expires_at`.
+    opened_count: int
+    expires_at: datetime
 
 
 class DepartmentMemberIn(InputSchema):

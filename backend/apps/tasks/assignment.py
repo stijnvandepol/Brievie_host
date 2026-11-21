@@ -49,6 +49,8 @@ def _visible(membership: Membership, task_id: UUID, *, lock: bool = False) -> Ta
     task = tasks.select_related(*TASK_RELATED).first()
     if task is None:
         raise task_not_found()
+    if lock and task.document is not None:
+        visibility.require_editable(task.document)
     return task
 
 

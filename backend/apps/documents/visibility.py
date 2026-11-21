@@ -22,6 +22,7 @@ import threading
 from collections.abc import Collection, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
@@ -34,9 +35,11 @@ from apps.accounts.models import User
 from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
+from apps.common.privacy import mask_bsns
 from apps.documents.models import LIVE, Document, DocumentEvent, DocumentReader, DocumentShare
 from apps.people.models import DepartmentMember, Person
 from apps.workspaces.context import SYSTEM, current_actor, system_actor, workspace_context
+from apps.workspaces.locks import lock_own_membership
 from apps.workspaces.models import Membership, Workspace
 from apps.workspaces.visibility_sql import viewer_pairs_sql
 
@@ -638,6 +641,148 @@ def record_grant(person: Person, *, grantee: User, actor_user_id: UUID | None) -
                 note=grantee.name,
             )
         return len(documents)
+
+
+EMERGENCY_HOURS = 1
+REASON_MIN = 10
+# The audit log cuts strings at 200: the whole reason stays readable there.
+REASON_MAX = 200
+
+
+@dataclass(frozen=True)
+class EmergencyResult:
+    opened_count: int
+    expires_at: datetime
+
+
+def open_emergency(
+    *, workspace: Workspace, person: Person, actor: AuditActor, reason: str
+) -> EmergencyResult:
+    """Emergency access (S 4.7, D 8.5, PB T20): the admin reads, for one hour, every letter
+    on the person's or department's name they cannot see now, private or not.
+
+    409 `emergency_access_off` before anything else when the workspace has it off; the
+    reason, BSN-masked and trimmed, is 10 to 200 characters (422). As the system: an
+    `emergency` reader row per letter (renewed when there is one), a history line with the
+    reason on each, one audit row; the person's account or the department's members get
+    a notice when something opened. Read-only: see `require_editable`."""
+    from apps.accounts.notices import notify  # accounts imports this module's callers
+
+    if not Workspace.objects.filter(id=workspace.id, emergency_access=True).exists():
+        raise ApiError(409, "emergency_access_off", _("Noodtoegang staat uit in deze werkruimte."))
+    reason = mask_bsns(reason).strip()
+    if not REASON_MIN <= len(reason) <= REASON_MAX:
+        raise ApiError(
+            422,
+            "validation_error",
+            _("Geef een reden van %(min)d tot %(max)d tekens.")
+            % {"min": REASON_MIN, "max": REASON_MAX},
+        )
+    if actor.user_id is None:
+        raise RuntimeError("Emergency access is opened by a member.")
+    admin_id = actor.user_id
+    expires_at = timezone.now() + timedelta(hours=EMERGENCY_HOURS)
+    with transaction.atomic():
+        lock_own_membership(workspace.id, admin_id)
+        with system_actor():
+            on_name = list(
+                Document.objects.filter(
+                    workspace_id=workspace.id, addressee_ids__contains=[person.id]
+                )
+                .filter(LIVE)
+                .order_by("id")
+            )
+            seen = viewers([d.id for d in on_name])
+            opened = [d for d in on_name if admin_id not in seen.get(d.id, frozenset())]
+            for document in opened:
+                DocumentReader.objects.update_or_create(
+                    document=document,
+                    user_id=admin_id,
+                    reason=DocumentReader.Reason.EMERGENCY,
+                    defaults={"workspace_id": workspace.id, "expires_at": expires_at},
+                )
+                _history(
+                    document,
+                    DocumentEvent.Kind.EMERGENCY_OPENED,
+                    actor_id=admin_id,
+                    origin="user",
+                    note=reason,
+                )
+        record(
+            AuditCode.EMERGENCY_ACCESS_USED,
+            actor=actor,
+            target=AuditTarget(TargetKind.PERSON, person.id, person.display_name),
+            workspace_id=workspace.id,
+            values={"reason": reason, "document_count": len(opened)},
+        )
+        if opened:
+            concerned = (
+                [person.user_id]
+                if person.user_id is not None
+                else list(
+                    DepartmentMember.objects.filter(department=person).values_list(
+                        "user_id", flat=True
+                    )
+                )
+            )
+            for user in User.objects.filter(id__in=concerned):
+                notify(
+                    user,
+                    "emergency_access_used",
+                    actor_name=actor.name,
+                    values={"person": person.display_name, "count": str(len(opened))},
+                )
+    return EmergencyResult(opened_count=len(opened), expires_at=expires_at)
+
+
+def _sees_without_emergency(document: Document, user_id: UUID) -> bool:
+    """Whether the user would see the letter without their emergency rows: the rows are
+    taken away inside a savepoint that is rolled back, and the policy's own condition
+    asked (`viewers`)."""
+    with transaction.atomic(), system_actor():
+        DocumentReader.objects.filter(
+            document=document, user_id=user_id, reason=DocumentReader.Reason.EMERGENCY
+        ).delete()
+        seen = user_id in viewers([document.id]).get(document.id, frozenset())
+        transaction.set_rollback(True)
+    return seen
+
+
+def _has_emergency(document: Document, user_id: UUID) -> bool:
+    with system_actor():
+        return DocumentReader.objects.filter(
+            document=document,
+            user_id=user_id,
+            reason=DocumentReader.Reason.EMERGENCY,
+            expires_at__gt=timezone.now(),
+        ).exists()
+
+
+def can_edit(document: Document, user: User) -> bool:
+    """S 4.9.3: a member or admin who sees the letter, and not only through emergency
+    access (read-only, PB decision 10)."""
+    membership = Membership.objects.filter(
+        workspace_id=document.workspace_id, user_id=user.id
+    ).first()
+    if membership is None or membership.role == Membership.Role.VIEWER:
+        return False
+    if not can_read(document.id):
+        return False
+    return not _has_emergency(document, user.id) or _sees_without_emergency(document, user.id)
+
+
+def require_editable(document: Document) -> None:
+    """403 `emergency_read_only` when the current user sees the letter only through
+    emergency access: no organising, sharing, publishing, confirming, retrying or task
+    change, so an hour's access can never be kept or the letter sent to the AI again.
+    A no-op for the system. The caller found the letter as the user already."""
+    actor = current_actor()
+    if not isinstance(actor, UUID) or not _has_emergency(document, actor):
+        return
+    if not _sees_without_emergency(document, actor):
+        raise ApiError(
+            403, "emergency_read_only", _("Met noodtoegang kun je deze brief alleen lezen.")
+        )
 
 
 @dataclass(frozen=True)

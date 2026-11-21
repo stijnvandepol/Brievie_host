@@ -11,6 +11,8 @@ from apps.people.models import Person
 from apps.people.schemas import (
     DepartmentMemberIn,
     DepartmentMemberUpdateIn,
+    EmergencyAccessUseIn,
+    EmergencyAccessUseOut,
     PersonIn,
     PersonMemberIn,
     PersonOut,
@@ -202,3 +204,34 @@ def remove_department_member(
         user_id=user_id,
         actor=actor_from_request(request),
     )
+
+
+@router.post(
+    f"{_PERSON}/emergency-access",
+    response={
+        200: EmergencyAccessUseOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    auth=session_auth,
+    operation_id="openEmergencyAccess",
+    description=(
+        "Web session only, admins. Opens for one hour, read-only, every letter on the name of"
+        " this person or department that the admin cannot see, with a reason of 10 to 200"
+        " characters: a history line on each, an audit row, a notice to the person or the"
+        " department's members. 409 `emergency_access_off` when the workspace has it off."
+    ),
+)
+def open_emergency_access(
+    request: HttpRequest, workspace_id: UUID, person_id: UUID, payload: EmergencyAccessUseIn
+) -> EmergencyAccessUseOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
+    result = services.open_emergency_access(
+        workspace=membership.workspace,
+        person_id=person_id,
+        reason=payload.reason,
+        actor=actor_from_request(request),
+    )
+    return EmergencyAccessUseOut(opened_count=result.opened_count, expires_at=result.expires_at)

@@ -255,6 +255,8 @@ def _lock_pair(
     candidate = _seen_pairs(membership).select_for_update().filter(id=candidate_id).first()
     if len(letters) != 2 or candidate is None:
         raise duplicate_not_found()
+    for letter in letters.values():
+        visibility.require_editable(letter)
     if candidate.state != DuplicateCandidate.State.OPEN:
         raise duplicate_not_open()
     return candidate, letters

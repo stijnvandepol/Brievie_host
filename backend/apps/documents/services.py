@@ -478,6 +478,8 @@ def retry_processing(*, workspace: Workspace, document_id: UUID) -> Document:
         )
         if document is None:
             raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
+        # Never sent to the AI again by someone with emergency access only.
+        visibility.require_editable(document)
         if document.status != Document.Status.FAILED:
             raise ApiError(
                 409,
@@ -509,6 +511,7 @@ def reopen_document(*, workspace: Workspace, user: User, document_id: UUID) -> D
         )
         if document is None:
             raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
+        visibility.require_editable(document)
         if document.status != Document.Status.DONE or not document.confirmed_by_ai:
             raise ApiError(
                 409,
@@ -625,6 +628,7 @@ def _lock_for_organising(workspace: Workspace, document_id: UUID) -> Document:
             "document_processing",
             _("Dit document wordt nog verwerkt. Probeer het zo opnieuw."),
         )
+    visibility.require_editable(document)
     return document
 
 

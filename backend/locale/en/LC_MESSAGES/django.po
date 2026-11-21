@@ -192,8 +192,8 @@ msgstr "%(name)s switched off emergency access for the admin in %(workspace)s on
 
 #: apps/accounts/notices.py
 #, python-format
-msgid "%(name)s heeft op %(date)s met noodtoegang %(count)s privé-brieven van %(person)s geopend. De reden staat bij elke brief."
-msgstr "On %(date)s, %(name)s used emergency access to open %(count)s private letters of %(person)s. The reason is noted with each letter."
+msgid "%(name)s heeft op %(date)s met noodtoegang %(count)s brieven van %(person)s geopend. De reden staat bij elke brief."
+msgstr "On %(date)s, %(name)s used emergency access to open %(count)s letters of %(person)s. The reason is noted with each letter."
 
 #: apps/accounts/notices.py
 #, python-format
@@ -1542,6 +1542,19 @@ msgstr "Only someone this letter is addressed to can make it visible to everyone
 #: apps/documents/visibility.py
 msgid "Dan kun je deze brief zelf niet meer lezen."
 msgstr "You would no longer be able to read this letter yourself."
+
+#: apps/documents/visibility.py
+msgid "Noodtoegang staat uit in deze werkruimte."
+msgstr "Emergency access is off in this workspace."
+
+#: apps/documents/visibility.py
+#, python-format
+msgid "Geef een reden van %(min)d tot %(max)d tekens."
+msgstr "Give a reason of %(min)d to %(max)d characters."
+
+#: apps/documents/visibility.py
+msgid "Met noodtoegang kun je deze brief alleen lezen."
+msgstr "With emergency access you can only read this letter."
 
 #: apps/labels/presets.py
 msgid "Belastingdienst"

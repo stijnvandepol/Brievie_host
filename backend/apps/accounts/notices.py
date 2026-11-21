@@ -53,7 +53,7 @@ MESSAGES: dict[str, Promise] = {
         "%(name)s heeft op %(date)s noodtoegang voor de beheerder uitgezet in %(workspace)s."
     ),
     Code.EMERGENCY_ACCESS_USED: _(
-        "%(name)s heeft op %(date)s met noodtoegang %(count)s privé-brieven van %(person)s "
+        "%(name)s heeft op %(date)s met noodtoegang %(count)s brieven van %(person)s "
         "geopend. De reden staat bij elke brief."
     ),
     Code.PRIVATE_WITHOUT_READERS: _(

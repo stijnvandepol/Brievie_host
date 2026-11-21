@@ -637,3 +637,14 @@ def _cannot_grant_self() -> ApiError:
             "noodtoegang."
         ),
     )
+
+
+def open_emergency_access(
+    *, workspace: Workspace, person_id: UUID, reason: str, actor: AuditActor
+) -> visibility.EmergencyResult:
+    """Emergency access to the post of one person or department (S 4.7): 404
+    `person_not_found`, else `documents.visibility.open_emergency`."""
+    person = Person.objects.filter(workspace=workspace, id=person_id).first()
+    if person is None:
+        raise ApiError(404, "person_not_found", _("We kunnen deze persoon niet vinden."))
+    return visibility.open_emergency(workspace=workspace, person=person, actor=actor, reason=reason)

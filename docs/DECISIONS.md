@@ -1926,3 +1926,14 @@ M3). "Iedereen ziet alle post" stays on everywhere until Task 40, so departments
   read it, nothing changes and no run is recorded (ruling d). The web offers it only
   while "Automatisch toepassen" is on and sends an action type it does not know back
   unchanged.
+- **Emergency access (Task 33, PB T20, S 4.7).** `openEmergencyAccess` (admin, web session)
+  opens for one hour every letter on the person's or department's name the admin cannot
+  see at that moment, private or not (the set is asked of `viewers()`, so letters the
+  admin already sees are not counted or touched). It is read-only everywhere a letter or
+  its task changes: organising, sharing and visibility, confirm, reopen, retry (never
+  sent to the AI again), trash, merge, and completing, reopening, dating or assigning a
+  task answer 403 `emergency_read_only`. Whether someone sees a letter only through
+  emergency access is asked by taking their emergency rows away inside a savepoint that is
+  rolled back and running the policy's condition (`viewers`), so the answer is the
+  policy's own. The notice to the people concerned now says "brieven" (not only private
+  ones).

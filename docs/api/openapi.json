@@ -1503,6 +1503,40 @@
         "title": "EmergencyAccessOut",
         "type": "object"
       },
+      "EmergencyAccessUseIn": {
+        "properties": {
+          "reason": {
+            "maxLength": 200,
+            "minLength": 10,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "EmergencyAccessUseIn",
+        "type": "object"
+      },
+      "EmergencyAccessUseOut": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "opened_count": {
+            "title": "Opened Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "opened_count",
+          "expires_at"
+        ],
+        "title": "EmergencyAccessUseOut",
+        "type": "object"
+      },
       "EmptyTrashIn": {
         "description": "Empty the trash up to the newest `trashed_at` the caller showed (all when absent):\na letter trashed while the admin read the question is not emptied. With an offset\nonly (422 otherwise): a moment without one would be read in the server's zone.",
         "properties": {
@@ -11614,6 +11648,145 @@
           }
         ],
         "summary": "Update Person",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/persons/{person_id}/emergency-access": {
+      "post": {
+        "description": "Web session only, admins. Opens for one hour, read-only, every letter on the name of this person or department that the admin cannot see, with a reason of 10 to 200 characters: a history line on each, an audit row, a notice to the person or the department's members. 409 `emergency_access_off` when the workspace has it off.",
+        "operationId": "openEmergencyAccess",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "person_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Person Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmergencyAccessUseIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmergencyAccessUseOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Open Emergency Access",
         "tags": [
           "people"
         ]

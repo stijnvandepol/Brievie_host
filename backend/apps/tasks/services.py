@@ -22,7 +22,7 @@ from django.utils.translation import gettext as _
 
 from apps.accounts.models import User
 from apps.common.errors import ApiError
-from apps.documents import organise
+from apps.documents import organise, visibility
 from apps.documents.models import DocumentEvent
 from apps.people.models import Person
 from apps.tasks.facts import member_facts
@@ -135,6 +135,8 @@ def _get_for_update(workspace: Workspace, task_id: UUID) -> Task:
     )
     if task is None:
         raise task_not_found()
+    if task.document is not None:
+        visibility.require_editable(task.document)
     return task
 
 
