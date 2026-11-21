@@ -603,6 +603,7 @@ class DuplicateCandidate(WorkspaceModel):
 
     first = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="+")
     second = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="+")
+    # Also a database default 'open' (migration 0017) for raw inserts; no `db_default`.
     state = models.CharField(max_length=20, choices=State.choices, default=State.OPEN)
     # The scores at detection.
     text_similarity = models.DecimalField(max_digits=4, decimal_places=3)
