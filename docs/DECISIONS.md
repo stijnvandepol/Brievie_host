@@ -1718,3 +1718,15 @@ language arrives" (2026-11-13).
 - **Rule for later work.** Every new user-facing text needs both languages: Dutch in the
   code, English in the catalogue (`make messages` / `pnpm extract`). The tests above fail
   otherwise.
+
+## 2026-11-21: Who sees which letter: every leak path tested in own post (plan Tasks 12–23)
+
+Each path of S 4.10 is tested in `office()` in state E off, D on, A off (set by tests only:
+no user can switch "Iedereen ziet alle post" off yet), as a member who must not see
+Finance's letter, with the owner as control.
+
+- **`inbox_state = "unassigned"` keeps its meaning "no addressee at all" (P4, Task 12).**
+  A letter on an addressee nobody reads through (a person without an account, a
+  department without members) reaches the sorters through the policy and shows in their
+  list with its name; the chip "Zonder naam" and the badge count only letters without
+  any addressee. S 4.5's wider set would change the contract and the iPhone's filter.
