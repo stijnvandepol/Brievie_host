@@ -233,6 +233,19 @@ export const menuCountsQuery = (workspaceId: string) =>
     },
   });
 
+/** "Blijft liggen" (spec S 6): only asked for a sorter or admin of an organisation. */
+export const lingeringQuery = (workspaceId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "documents", "lingering"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/inbox/lingering", {
+        params: { path: { workspace_id: workspaceId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
 export type TaskPart = "mine" | "to_pick_up" | "all";
 export type TaskStatus = "open" | "done";
 

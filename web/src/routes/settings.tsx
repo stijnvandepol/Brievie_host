@@ -1,10 +1,11 @@
 import { t } from "@lingui/core/macro";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createRoute, Link } from "@tanstack/react-router";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useId, useState } from "react";
 import { Label, Radio, RadioGroup, Switch } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import { workspaceSettingsQuery } from "../api/queries";
+import type { components } from "../api/schema";
 import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
 import { PrivacySettings } from "../components/privacy-settings";
 import { Loading } from "../components/ui";
@@ -99,13 +100,108 @@ function SettingsPage() {
   );
 }
 
+type Settings = components["schemas"]["WorkspaceSettingsOut"];
+
+/** A number of days, saved when the field is left with a valid value (1 to `most`). */
+function DaysField({
+  label,
+  value,
+  most,
+  busy,
+  onSave,
+}: {
+  label: string;
+  value: number;
+  most: number;
+  busy: boolean;
+  onSave: (days: number) => void;
+}) {
+  const id = useId();
+  const [text, setText] = useState(String(value));
+  const days = Number(text);
+  const valid = Number.isInteger(days) && days >= 1 && days <= most;
+  return (
+    <div className="field form-narrow">
+      <label htmlFor={id}>{label}</label>
+      <input
+        id={id}
+        type="number"
+        min={1}
+        max={most}
+        value={text}
+        disabled={busy}
+        aria-invalid={!valid}
+        onChange={(event) => setText(event.target.value)}
+        onBlur={() => {
+          if (valid && days !== value) onSave(days);
+        }}
+      />
+      {valid ? null : (
+        <span className="field-error" role="alert">
+          {t`Kies een aantal dagen van 1 tot ${most}.`}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** "Blijft liggen" (spec S 6, decision B3): an organisation's admin switches it and sets the
+ * calendar days. Sorters and admins see the letters above the Inbox. */
+function LingeringSettings({
+  settings,
+  busy,
+  onChange,
+}: {
+  settings: Settings;
+  busy: boolean;
+  onChange: (body: components["schemas"]["WorkspaceSettingsIn"]) => void;
+}) {
+  return (
+    <section className="panel panel-pad" aria-labelledby="settings-lingering">
+      <h2 id="settings-lingering">{t`Blijft liggen`}</h2>
+      <Switch
+        className="switch"
+        isSelected={settings.lingering_enabled ?? false}
+        isDisabled={busy}
+        onChange={(on) => onChange({ lingering_enabled: on })}
+      >
+        <span className="switch-track" aria-hidden="true" />
+        {t`Laat zien welke post blijft liggen`}
+      </Switch>
+      <p className="switch-hint">{t`Wie post verdeelt en de beheerders zien boven de Inbox welke brieven te lang in de Inbox staan, en welke brieven niemand op wiens naam ze staan heeft geopend.`}</p>
+      {settings.lingering_enabled ? (
+        <>
+          <DaysField
+            label={t`Dagen in de Inbox`}
+            value={settings.lingering_inbox_days ?? 2}
+            most={30}
+            busy={busy}
+            onSave={(days) => onChange({ lingering_inbox_days: days })}
+          />
+          <DaysField
+            label={t`Dagen niet geopend`}
+            value={settings.lingering_unopened_days ?? 5}
+            most={60}
+            busy={busy}
+            onSave={(days) => onChange({ lingering_unopened_days: days })}
+          />
+        </>
+      ) : null}
+    </section>
+  );
+}
+
 /** The workspace's own settings: admins only (the server refuses everyone else too). */
-function WorkspaceSettings({ workspace }: { workspace: { id: string; name: string } }) {
+function WorkspaceSettings({
+  workspace,
+}: {
+  workspace: { id: string; name: string; kind?: string };
+}) {
   const queryClient = useQueryClient();
   const settings = useQuery(workspaceSettingsQuery(workspace.id));
   const [saved, setSaved] = useState(false);
   const save = useMutation({
-    mutationFn: async (body: { allow_member_export?: boolean; summary_language?: string }) => {
+    mutationFn: async (body: components["schemas"]["WorkspaceSettingsIn"]) => {
       const { data, error } = await api.PUT("/api/v1/workspaces/{workspace_id}/settings", {
         params: { path: { workspace_id: workspace.id } },
         body,
@@ -192,6 +288,16 @@ function WorkspaceSettings({ workspace }: { workspace: { id: string; name: strin
           </RadioGroup>
           <p className="switch-hint">{t`Geldt voor brieven die AI vanaf nu leest. De brief zelf blijft zoals hij is.`}</p>
         </section>
+      ) : null}
+      {settings.data && workspace.kind === "business" ? (
+        <LingeringSettings
+          settings={settings.data}
+          busy={save.isPending}
+          onChange={(body) => {
+            setSaved(false);
+            save.mutate(body);
+          }}
+        />
       ) : null}
       <section className="panel panel-pad" aria-labelledby="settings-log">
         <h2 id="settings-log">{t`Logboek`}</h2>

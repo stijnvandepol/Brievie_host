@@ -1,4 +1,4 @@
-import { t } from "@lingui/core/macro";
+import { plural, t } from "@lingui/core/macro";
 import { useQuery } from "@tanstack/react-query";
 import { createRoute, Link } from "@tanstack/react-router";
 import { useEffect, useId, useRef, useState } from "react";
@@ -8,7 +8,9 @@ import {
   duplicatesQuery,
   inboxCountsQuery,
   labelsQuery,
+  lingeringQuery,
   membersQuery,
+  menuCountsQuery,
   meQuery,
   personsQuery,
   visibilityQuery,
@@ -16,7 +18,7 @@ import {
 import type { components } from "../api/schema";
 import { AiStatusLine } from "../components/ai-status-line";
 import { ConfirmDialog } from "../components/confirm-dialog";
-import { LetterDateText, SenderText, TypeText } from "../components/document-table";
+import { Addressees, LetterDateText, SenderText, TypeText } from "../components/document-table";
 import {
   assignWord,
   handOverSentence,
@@ -410,6 +412,113 @@ function DuplicateItem({ workspaceId, pair }: { workspaceId: string; pair: Dupli
   );
 }
 
+type LingeringLetter = components["schemas"]["LingeringLetterOut"];
+
+/** One letter that lies too long: its sender (a link), how long, and for whom. */
+function LingeringItem({
+  workspaceId,
+  letter,
+  persons,
+  opened,
+}: {
+  workspaceId: string;
+  letter: LingeringLetter;
+  persons: Person[];
+  opened: boolean;
+}) {
+  const days = letter.days;
+  const age = opened
+    ? plural(days, { one: "# dag niet geopend", other: "# dagen niet geopend" })
+    : plural(days, { one: "ligt er # dag", other: "ligt er # dagen" });
+  return (
+    <li className="lingering-item">
+      <Link
+        to="/w/$workspaceId/post/$documentId"
+        params={{ workspaceId, documentId: letter.id }}
+        className="cell-strong"
+      >
+        <SenderText document={letter} />
+      </Link>
+      <span className="lingering-age">{age}</span>
+      <Addressees persons={persons} ids={letter.addressee_ids ?? []} />
+    </li>
+  );
+}
+
+/**
+ * "Blijft liggen" (spec S 6.2): for the sorters and admins of an organisation, the letters
+ * too long in the Inbox and the confirmed letters none of whose addressees opened them.
+ * Only letters the caller may see; one line when nothing lingers.
+ */
+function Lingering({ workspaceId }: { workspaceId: string }) {
+  const counts = useQuery(menuCountsQuery(workspaceId));
+  const shows = counts.data?.shows_lingering === true;
+  const { data, error } = useQuery({ ...lingeringQuery(workspaceId), enabled: shows });
+  const persons = useQuery({ ...personsQuery(workspaceId), enabled: shows });
+  const headingId = useId();
+  if (!shows) return null;
+  const inbox = data?.too_long_in_inbox ?? [];
+  const unopened = data?.not_opened ?? [];
+  const empty = data !== undefined && inbox.length === 0 && unopened.length === 0;
+  return (
+    <section className="panel" aria-labelledby={headingId}>
+      <div className="panel-head">
+        <h2 id={headingId}>
+          {t`Blijft liggen`}{" "}
+          {inbox.length + unopened.length > 0 ? (
+            <Badge intent="warning">{inbox.length + unopened.length}</Badge>
+          ) : null}
+        </h2>
+      </div>
+      <ErrorAlert error={error} />
+      {data === undefined && !error ? <Loading /> : null}
+      {empty ? <p className="panel-note">{t`Er blijft niets liggen.`}</p> : null}
+      {inbox.length > 0 ? (
+        <>
+          <h3 className="lingering-title">
+            {plural(data?.inbox_days ?? 0, {
+              one: "In de Inbox te lang (# dag of meer)",
+              other: "In de Inbox te lang (# dagen of meer)",
+            })}
+          </h3>
+          <ul className="lingering-list">
+            {inbox.map((letter) => (
+              <LingeringItem
+                key={letter.id}
+                workspaceId={workspaceId}
+                letter={letter}
+                persons={persons.data ?? []}
+                opened={false}
+              />
+            ))}
+          </ul>
+        </>
+      ) : null}
+      {unopened.length > 0 ? (
+        <>
+          <h3 className="lingering-title">
+            {plural(data?.unopened_days ?? 0, {
+              one: "Nog niet geopend (# dag of meer)",
+              other: "Nog niet geopend (# dagen of meer)",
+            })}
+          </h3>
+          <ul className="lingering-list">
+            {unopened.map((letter) => (
+              <LingeringItem
+                key={letter.id}
+                workspaceId={workspaceId}
+                letter={letter}
+                persons={persons.data ?? []}
+                opened
+              />
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
 /** "Dubbel?": pairs of letters that are probably one letter scanned twice. Only when there are any. */
 function Duplicates({ workspaceId, count }: { workspaceId: string; count: number }) {
   const { data, error } = useQuery({ ...duplicatesQuery(workspaceId), enabled: count > 0 });
@@ -470,6 +579,7 @@ function InboxPage() {
       {counts ? (
         <CountsLine counts={counts} departments={visibility?.departments_enabled === true} />
       ) : null}
+      <Lingering workspaceId={workspace.id} />
       {counts ? <Duplicates workspaceId={workspace.id} count={counts.duplicate ?? 0} /> : null}
       <TodoList
         workspaceId={workspace.id}

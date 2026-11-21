@@ -48,10 +48,20 @@ msgstr "{0, plural, one {# brief} other {# brieven}}"
 msgid "{0, plural, one {# label toegevoegd} other {# labels toegevoegd}}"
 msgstr "{0, plural, one {# label toegevoegd} other {# labels toegevoegd}}"
 
+#. placeholder {0}: data?.inbox_days ?? 0
+#: src/routes/inbox.tsx
+msgid "{0, plural, one {In de Inbox te lang (# dag of meer)} other {In de Inbox te lang (# dagen of meer)}}"
+msgstr "{0, plural, one {In de Inbox te lang (# dag of meer)} other {In de Inbox te lang (# dagen of meer)}}"
+
 #. placeholder {0}: open.data.opened_count
 #: src/components/emergency-dialog.tsx
 msgid "{0, plural, one {Je kunt # brief een uur lang openen.} other {Je kunt # brieven een uur lang openen.}}"
 msgstr "{0, plural, one {Je kunt # brief een uur lang openen.} other {Je kunt # brieven een uur lang openen.}}"
+
+#. placeholder {0}: data?.unopened_days ?? 0
+#: src/routes/inbox.tsx
+msgid "{0, plural, one {Nog niet geopend (# dag of meer)} other {Nog niet geopend (# dagen of meer)}}"
+msgstr "{0, plural, one {Nog niet geopend (# dag of meer)} other {Nog niet geopend (# dagen of meer)}}"
 
 #. placeholder {0}: details.urls.length
 #: src/routes/pair-app.tsx
@@ -133,6 +143,14 @@ msgstr "{count, plural, one {Dit verandert voor # persoon wat die ziet.} other {
 #: src/routes/tasks.tsx
 msgid "{count, plural, one {Er wacht nog # brief op nakijken. Daar kunnen nieuwe taken uit komen.} other {Er wachten nog # brieven op nakijken. Daar kunnen nieuwe taken uit komen.}}"
 msgstr "{count, plural, one {Er wacht nog # brief op nakijken. Daar kunnen nieuwe taken uit komen.} other {Er wachten nog # brieven op nakijken. Daar kunnen nieuwe taken uit komen.}}"
+
+#: src/routes/inbox.tsx
+msgid "{days, plural, one {# dag niet geopend} other {# dagen niet geopend}}"
+msgstr "{days, plural, one {# dag niet geopend} other {# dagen niet geopend}}"
+
+#: src/routes/inbox.tsx
+msgid "{days, plural, one {ligt er # dag} other {ligt er # dagen}}"
+msgstr "{days, plural, one {ligt er # dag} other {ligt er # dagen}}"
 
 #: src/routes/trash.tsx
 msgid "{days, plural, one {Nog # dag} other {Nog # dagen}}"
@@ -946,6 +964,11 @@ msgstr "Binnen 7 dagen"
 msgid "Blauw"
 msgstr "Blauw"
 
+#: src/routes/inbox.tsx
+#: src/routes/settings.tsx
+msgid "Blijft liggen"
+msgstr "Blijft liggen"
+
 #: src/components/document-table.tsx
 msgid "Bonnetje"
 msgstr "Bonnetje"
@@ -1125,6 +1148,14 @@ msgstr "Daarna ben je ingelogd. Je moet je telefoon opnieuw koppelen."
 #: src/components/share-dialog.tsx
 msgid "Daarna kun je deze brief zelf misschien niet meer openen."
 msgstr "Daarna kun je deze brief zelf misschien niet meer openen."
+
+#: src/routes/settings.tsx
+msgid "Dagen in de Inbox"
+msgstr "Dagen in de Inbox"
+
+#: src/routes/settings.tsx
+msgid "Dagen niet geopend"
+msgstr "Dagen niet geopend"
 
 #: src/components/rule-templates.tsx
 #: src/routes/rule-editor.tsx
@@ -1536,6 +1567,10 @@ msgstr "Elk lid kan dan een ZIP-bestand met de eigen post downloaden."
 #: src/components/rule-sentence.ts
 msgid "en"
 msgstr "en"
+
+#: src/routes/inbox.tsx
+msgid "Er blijft niets liggen."
+msgstr "Er blijft niets liggen."
 
 #: src/routes/root.tsx
 msgid "Er ging iets mis"
@@ -2327,6 +2362,10 @@ msgstr "Kies bij elke voorwaarde en actie een label of persoon."
 msgid "Kies bij Persoon of Label een andere waarde."
 msgstr "Kies bij Persoon of Label een andere waarde."
 
+#: src/routes/settings.tsx
+msgid "Kies een aantal dagen van 1 tot {most}."
+msgstr "Kies een aantal dagen van 1 tot {most}."
+
 #: src/routes/rule-editor.tsx
 msgid "Kies een label"
 msgstr "Kies een label"
@@ -2400,6 +2439,10 @@ msgstr "Kruimelpad"
 #: src/components/person-actions.tsx
 msgid "Laat de post beheren door"
 msgstr "Laat de post beheren door"
+
+#: src/routes/settings.tsx
+msgid "Laat zien welke post blijft liggen"
+msgstr "Laat zien welke post blijft liggen"
 
 #: src/routes/sessions.tsx
 msgid "Laatst gebruikt"
@@ -4163,6 +4206,10 @@ msgstr "Wie kan mijn post zien?"
 #: src/routes/ai.tsx
 msgid "Wie leest je brieven?"
 msgstr "Wie leest je brieven?"
+
+#: src/routes/settings.tsx
+msgid "Wie post verdeelt en de beheerders zien boven de Inbox welke brieven te lang in de Inbox staan, en welke brieven niemand op wiens naam ze staan heeft geopend."
+msgstr "Wie post verdeelt en de beheerders zien boven de Inbox welke brieven te lang in de Inbox staan, en welke brieven niemand op wiens naam ze staan heeft geopend."
 
 #: src/routes/visibility.tsx
 msgid "Wie verdeelt post?"

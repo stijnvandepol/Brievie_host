@@ -3486,3 +3486,28 @@ tr.unread th,
 .letter-card.unread {
   font-weight: var(--weight-semibold);
 }
+
+/* "Blijft liggen" above the Inbox (spec S 6.2). */
+.lingering-title {
+  margin: var(--s-m) var(--s-l) var(--s-xs);
+  font-size: var(--body-size);
+}
+
+.lingering-list {
+  margin: 0;
+  padding: 0 var(--s-l) var(--s-m);
+  list-style: none;
+}
+
+.lingering-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-s) var(--s-m);
+  padding: var(--s-s) 0;
+  border-top: 1px solid var(--neutral-stroke2);
+}
+
+.lingering-age {
+  color: var(--warning-fg);
+}
