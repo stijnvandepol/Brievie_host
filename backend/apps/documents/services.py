@@ -259,6 +259,17 @@ def inbox_counts(membership: Membership) -> dict[str, int]:
     }
 
 
+def waiting_letters(membership: Membership) -> int:
+    """How many letters the member sees wait to be checked or named ("Te doen"'s review
+    and unassigned states), for the line on top of "Mijn taken". A plain WHERE, not an
+    aggregate filter: the cheap status test runs before the policy (one count, no badges)."""
+    return (
+        visibility.visible_documents(membership)
+        .filter(_in_state(InboxState.REVIEW) | _in_state(InboxState.UNASSIGNED))
+        .count()
+    )
+
+
 def get_document(*, membership: Membership, document_id: UUID) -> Document:
     """A document the member sees, or 404 (one they may not see is not found either).
 
