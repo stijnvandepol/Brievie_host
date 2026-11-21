@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from apps.documents import member_export
 from apps.documents.models import DocumentReader, MemberExport
+from apps.people.models import Person
 from apps.workspaces.context import SYSTEM
 from apps.workspaces.models import Membership
 from tests.visibility_support import Office, as_actor, office, restrict_raw
@@ -104,5 +105,8 @@ def test_export_job_for_a_member_who_left_writes_nothing() -> None:
         stored = MemberExport.objects.get(id=export_id)
     assert stored.status == MemberExport.Status.FAILED
     assert stored.document_count == 0
-    # Read as Piet now (no member): no letter at all.
+    # Removing a member unlinks their persons (`members._unlink_and_unassign`); after
+    # that, read as Piet, nothing is his.
+    with as_actor(o.workspace, SYSTEM):
+        Person.objects.filter(workspace=o.workspace, user=o.plain).update(user=None)
     assert member_export.member_document_ids(o.workspace.id, o.plain.id) == []

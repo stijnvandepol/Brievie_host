@@ -1766,3 +1766,11 @@ Finance's letter, with the owner as control.
   keeps its own query: it reads as the admin under the policies (Task 21 tests it), and
   its query-count tests run as the system, which the seam refuses. The trash contract is
   written on `Task.document`: a purge deletes the letter's tasks as the system first.
+- **Found while testing Task 20: the policy does not itself check membership.** A user
+  whose membership row is gone but whose person is still linked, who has reader rows, or
+  who scanned a letter not yet done, would still match those arms if code ran as them.
+  No path does: every request passes `workspace_member` first, every job checks the
+  membership, and removing a member unlinks their persons (Task 27 also removes their
+  reader rows, shares and department memberships). Closing it inside the policy (the
+  actor counted only while a member) needs a migration of the policies and a new
+  measurement; left to the owner, not built here.
