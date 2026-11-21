@@ -1832,3 +1832,14 @@ section 16, recorded here as built.
 - **Web.** The list's query keys live under the documents key, so every existing refresh
   of the letters refreshes the list; a ticked row stays with "Ongedaan maken" until the
   page is left. "Datum invullen" uses the browser's date field (no new dependency).
+- **Measured at 100,000 letters (plan Task 10, `visibility-perf` run 44876363855, jit off,
+  medians in ms, budget 250).** Highest per list over the four actors:
+
+  | state | `list_my_tasks` | `list_my_tasks_to_pick_up` | `count_my_tasks` |
+  |---|---|---|---|
+  | E | 154 (sorter) | 31 (sorter) | 38 (sorter) |
+  | own+D | 162 (sorter) | 44 (department member) | 37 (sorter) |
+  | own | 176 (sorter) | 31 (sorter) | 40 (sorter) |
+
+  No fallback needed: the query keeps the task policy alone (no extra
+  `visible_documents` hint). The list includes its `waiting_letters` count.
