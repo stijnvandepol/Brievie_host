@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import {
   API,
+  documentHandlers,
   errorBody,
   HttpResponse,
   http,
@@ -11,6 +12,7 @@ import {
   server,
   twoWorkspaces,
   user,
+  workspace,
 } from "../test-utils";
 
 function loggedOut() {
@@ -52,7 +54,7 @@ describe("login", () => {
     );
   });
 
-  it("logs in, sends JSON and lands on the workspace list", async () => {
+  it("logs in, sends JSON and lands on Mijn post", async () => {
     loggedOut();
     let body: unknown;
     let contentType: string | null = null;
@@ -61,7 +63,7 @@ describe("login", () => {
         body = await request.json();
         contentType = request.headers.get("content-type");
         // From now on the session exists.
-        server.use(twoWorkspaces(), ...loggedInHandlers());
+        server.use(twoWorkspaces(), ...loggedInHandlers(), ...documentHandlers());
         return HttpResponse.json(user);
       }),
     );
@@ -70,10 +72,11 @@ describe("login", () => {
     await u.type(await screen.findByRole("textbox", { name: /e-mailadres/i }), "anna@example.nl");
     await u.type(screen.getByLabelText(/wachtwoord/i), "een-lang-wachtwoord");
     await u.click(screen.getByRole("button", { name: /^inloggen$/i }));
-    expect(await screen.findByRole("heading", { name: /werkruimtes/i })).toBeInTheDocument();
+    // Signed in, the start is Mijn post of the first workspace (spec S 4.4).
+    expect(await screen.findByRole("heading", { name: "Mijn post" })).toBeInTheDocument();
     expect(body).toEqual({ email: "anna@example.nl", password: "een-lang-wachtwoord" });
     expect(contentType).toContain("application/json");
-    expect(router.state.location.pathname).toBe("/");
+    expect(router.state.location.pathname).toBe(`/w/${workspace.id}/mijn-post`);
   });
 
   it("shows a calm message when the server cannot be reached", async () => {

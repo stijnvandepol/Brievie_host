@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   API,
+  documentHandlers,
   errorBody,
   HttpResponse,
   http,
@@ -11,6 +12,7 @@ import {
   server,
   twoWorkspaces,
   user,
+  workspace,
 } from "../test-utils";
 
 const TOKEN = "reset-token-xyz";
@@ -34,18 +36,17 @@ describe("the reset page", () => {
         return HttpResponse.json(user);
       }),
       ...loggedInHandlers(),
+      ...documentHandlers(),
     );
     const u = userEvent.setup();
     const { router } = renderApp(`/wachtwoord-herstellen#${TOKEN}`);
     await choose(u);
-    expect(
-      await screen.findByRole("heading", { level: 1, name: "Werkruimtes" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Mijn post" })).toBeInTheDocument();
     expect(seen).toHaveLength(1);
     expect(seen[0]?.body).toEqual({ token: TOKEN, password: "nieuw wachtwoord 22" });
     expect(new URL(seen[0]?.url ?? "").search).toBe("");
     expect(seen[0]?.url).not.toContain(TOKEN);
-    expect(router.state.location.pathname).toBe("/");
+    expect(router.state.location.pathname).toBe(`/w/${workspace.id}/mijn-post`);
   });
 
   it("removes the token from the address bar before anything is asked", async () => {

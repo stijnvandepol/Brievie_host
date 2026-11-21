@@ -141,7 +141,7 @@ the request that creates the workspace and keep that name.
 
 | Dutch | English | Note |
 |---|---|---|
-| post (alle brieven samen) | mail | "All mail", "Search your mail", "My mail". Never "post". |
+| post (alle brieven samen) | mail | "All mail", "Search your mail". Never "post", except the name "Mijn post": "My post" (decision B1, 21-11-2026; it pairs with "My tasks"). |
 | brief | letter | One item. "Letter date" for dagtekening. |
 | Alle post | All mail | |
 | Inbox | Inbox | The list of letters that wait for you; it was called "Te doen" / "To do" before. |

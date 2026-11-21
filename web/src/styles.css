@@ -485,6 +485,92 @@ q {
   white-space: nowrap;
 }
 
+/* The workspace switcher on top of the menu (spec S 4.3): the initial in a brand square,
+   the name and the kind. A plain block with one workspace, a menu button with several. */
+.ws-switcher {
+  display: flex;
+  align-items: center;
+  gap: var(--s-s);
+  width: 100%;
+  min-height: 48px;
+  margin-bottom: var(--s-xs);
+  padding: var(--s-xs) var(--s-s);
+  border: 1px solid var(--neutral-stroke2);
+  border-radius: var(--radius-medium);
+  background: var(--neutral-bg1);
+  color: var(--neutral-fg1);
+  font: inherit;
+  text-align: left;
+}
+
+button.ws-switcher {
+  cursor: pointer;
+}
+
+button.ws-switcher[data-hovered] {
+  background: var(--neutral-bg1-hover);
+}
+
+.ws-initial {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-medium);
+  background: var(--brand-bg);
+  color: var(--on-brand);
+  font-weight: var(--weight-semibold);
+}
+
+.ws-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ws-name {
+  overflow: hidden;
+  font-weight: var(--weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-kind,
+.ws-role {
+  color: var(--neutral-fg3);
+  font-size: var(--caption-size);
+  line-height: var(--caption-line);
+}
+
+.ws-chevron {
+  flex: none;
+  color: var(--neutral-fg3);
+}
+
+.ws-popover {
+  width: 300px;
+}
+
+.ws-menu {
+  padding: var(--s-xs);
+  outline: none;
+}
+
+.ws-item {
+  min-height: 48px;
+}
+
+.ws-check {
+  color: var(--brand-fg1);
+}
+
+.ws-menu [role="separator"] {
+  margin: var(--s-xs) 0;
+  border-top: 1px solid var(--neutral-stroke2);
+}
+
 .nav-link {
   position: relative;
   display: flex;
@@ -613,6 +699,26 @@ q {
   .app[data-nav="collapsed"] .nav-link {
     justify-content: center;
     padding: 0;
+  }
+
+  .app[data-nav="collapsed"] .ws-switcher {
+    justify-content: center;
+    padding: var(--s-xs) 0;
+    border-color: transparent;
+    background: transparent;
+  }
+
+  /* Folded to the rail: the initial shows, the name stays for screen readers. */
+  .app[data-nav="collapsed"] .ws-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .app[data-nav="collapsed"] .ws-chevron {
+    display: none;
   }
 
   .app[data-nav="collapsed"] .nav-label {

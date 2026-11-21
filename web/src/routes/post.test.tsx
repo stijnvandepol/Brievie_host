@@ -80,7 +80,9 @@ describe("post", () => {
     server.use(...loggedInHandlers(), ...documentHandlers());
     renderApp(`/w/${workspace.id}/post`);
     const nav = await screen.findByRole("navigation");
-    expect(within(nav).getByText("Thuis")).toBeInTheDocument();
+    // One workspace: its name on top of the menu, not a button (nothing to choose).
+    expect(within(nav).getAllByText("Thuis")[0]).toBeInTheDocument();
+    expect(within(nav).queryByRole("button", { name: /Werkruimte/ })).not.toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: "Alle post" })).toHaveAttribute(
       "href",
       `/w/${workspace.id}/post`,

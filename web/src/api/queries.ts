@@ -46,6 +46,12 @@ export type DocumentFilters = {
   person_id?: string;
   label_id?: string;
   automatic?: boolean;
+  /** "Mijn post": the letters on the caller's own persons (spec S 9). */
+  addressed_to_me?: boolean;
+  /** With `addressed_to_me`: also the caller's departments ("Ook mijn afdeling"). */
+  include_departments?: boolean;
+  /** Only the letters the caller has not read. */
+  unread_only?: boolean;
 };
 
 export const documentsQuery = (
@@ -69,6 +75,9 @@ export const documentsQuery = (
             person_id: filters.person_id || undefined,
             label_id: filters.label_id || undefined,
             automatic: filters.automatic || undefined,
+            addressed_to_me: filters.addressed_to_me || undefined,
+            include_departments: filters.include_departments || undefined,
+            unread_only: filters.unread_only || undefined,
           },
         },
       });

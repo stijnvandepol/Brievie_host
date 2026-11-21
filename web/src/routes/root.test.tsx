@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import {
   API,
+  documentHandlers,
   errorBody,
   HttpResponse,
   http,
@@ -36,15 +37,15 @@ describe("router screens", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Er ging iets mis op de server.");
     expect(screen.queryByText(/something went wrong/i)).not.toBeInTheDocument();
 
-    server.use(twoWorkspaces(), ...loggedInHandlers());
+    server.use(twoWorkspaces(), ...loggedInHandlers(), ...documentHandlers());
     await u.click(screen.getByRole("button", { name: "Probeer opnieuw" }));
-    expect(await screen.findByRole("heading", { name: /werkruimtes/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Mijn post" })).toBeInTheDocument();
   });
 
   it("moves focus to the heading of the new page after a route change", async () => {
     server.use(twoWorkspaces(), ...loggedInHandlers());
     const u = userEvent.setup();
-    renderApp("/");
+    renderApp("/werkruimtes");
     await screen.findByRole("heading", { name: /werkruimtes/i });
 
     await u.click(screen.getByRole("link", { name: "Apparaten" }));

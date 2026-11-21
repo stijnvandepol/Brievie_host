@@ -588,6 +588,10 @@ msgstr "All kinds"
 msgid "Alle taken"
 msgstr "All tasks"
 
+#: src/components/workspace-switcher.tsx
+msgid "Alle werkruimtes"
+msgstr "All workspaces"
+
 #: src/routes/ai.tsx
 msgid "Alleen de beheerder van deze werkruimte kan dit veranderen."
 msgstr "Only the admin of this workspace can change this."
@@ -627,7 +631,7 @@ msgstr "Only members and admins of this workspace see the rules."
 
 #: src/components/person-actions.tsx
 #: src/components/role-dialog.tsx
-#: src/routes/home.tsx
+#: src/components/workspace-labels.ts
 msgid "Alleen lezen"
 msgstr "Read only"
 
@@ -844,7 +848,7 @@ msgid "Beheerd door: {name}"
 msgstr "Managed by: {name}"
 
 #: src/components/role-dialog.tsx
-#: src/routes/home.tsx
+#: src/components/workspace-labels.ts
 msgid "Beheerder"
 msgstr "Admin"
 
@@ -1052,6 +1056,10 @@ msgstr "Brievie files letters under persons and labels by itself."
 msgid "Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is. Een label dat een regel voorstelt, zet Brievie er ook op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is van hetzelfde label. Staat het woord alleen verderop in de brief en is de AI niet zeker? Dan blijft het een voorstel. Een regel die op 'Automatisch toepassen' staat, doet dat altijd."
 msgstr "Brievie puts a letter with the right person and the right label by itself if the AI or the name is clear. A label that a rule suggests is also added by Brievie if the rule found the word in the sender or at the top of the letter, or if the AI is sure of the same label. Is the word only further down in the letter and is the AI not sure? Then it stays a suggestion. A rule set to 'Apply automatically' always does this."
 
+#: src/components/page.tsx
+msgid "Brievie, naar Mijn post"
+msgstr "Brievie, to My post"
+
 #: src/routes/sessions.tsx
 msgid "Browser"
 msgstr "Browser"
@@ -1204,6 +1212,10 @@ msgstr "the letter is addressed to nobody"
 #: src/components/undo-bar.tsx
 msgid "De brief staat in de prullenbak."
 msgstr "The letter is in the trash."
+
+#: src/routes/my-post.tsx
+msgid "De brieven op jouw naam. Wat nog nagekeken of verdeeld moet worden, staat in de Inbox."
+msgstr "The letters in your name. What still needs checking or sorting is in the Inbox."
 
 #: src/components/rule-sentence.ts
 msgid "De bron"
@@ -1475,7 +1487,7 @@ msgstr "A rule puts labels or a name on new mail. The rules run from top to bott
 msgid "een van"
 msgstr "one of"
 
-#: src/routes/home.tsx
+#: src/routes/workspaces.tsx
 msgid "Een werkruimte heeft eigen post en eigen leden, bijvoorbeeld Thuis of je bedrijf. Kies welke je wilt openen."
 msgstr "A workspace has its own mail and its own members, for example Home or your business. Choose which one to open."
 
@@ -1522,6 +1534,10 @@ msgstr "Something went wrong. Try again later."
 #: src/routes/visibility.tsx
 msgid "Er is niemand meer om toe te voegen. Iemand met de rol Alleen lezen kan geen post verdelen."
 msgstr "There is nobody left to add. Someone with the role Read only cannot sort post."
+
+#: src/routes/my-post.tsx
+msgid "Er is nog geen post op jouw naam."
+msgstr "There is no post in your name yet."
 
 #: src/routes/post.tsx
 msgid "Er is nog geen post."
@@ -2125,6 +2141,10 @@ msgstr "You have no open tasks. New tasks appear here by themselves once your ma
 msgid "Je hebt nog geen regels."
 msgstr "You have no rules yet."
 
+#: src/routes/workspaces.tsx
+msgid "Je hoort nog bij geen werkruimte."
+msgstr "You are not in any workspace yet."
+
 #: src/components/invite-dialog.tsx
 msgid "Je krijgt een link en een QR-code. Wie die opent, maakt een account of logt in en hoort daarna bij deze werkruimte."
 msgstr "You get a link and a QR code. Whoever opens it creates an account or signs in, and then belongs to this workspace."
@@ -2442,7 +2462,7 @@ msgid "Let op: {fields} verschilt. Een herinnering of een tweede termijn lijkt v
 msgstr "Note: these differ: {fields}. A reminder or a second installment often looks like the first letter, but it is a different letter."
 
 #: src/components/role-dialog.tsx
-#: src/routes/home.tsx
+#: src/components/workspace-labels.ts
 #: src/routes/visibility.tsx
 msgid "Lid"
 msgstr "Member"
@@ -2567,9 +2587,10 @@ msgstr "With labels you put your mail in order, for example Tax or Healthcare. W
 msgid "Methode"
 msgstr "Method"
 
+#: src/routes/my-post.tsx
 #: src/routes/people.tsx
 msgid "Mijn post"
-msgstr "My mail"
+msgstr "My post"
 
 #: src/components/export-panel.tsx
 msgid "Mijn post exporteren"
@@ -2623,11 +2644,11 @@ msgstr "After five failed attempts, signing in is blocked for a while."
 #: src/components/person-dialog.tsx
 #: src/components/person-picker.tsx
 #: src/routes/departments.tsx
-#: src/routes/home.tsx
 #: src/routes/invitation.tsx
 #: src/routes/labels.tsx
 #: src/routes/people.tsx
 #: src/routes/rule-editor.tsx
+#: src/routes/workspaces.tsx
 msgid "Naam"
 msgstr "Name"
 
@@ -3026,7 +3047,7 @@ msgid "Oranje"
 msgstr "Orange"
 
 #: src/components/rule-templates.tsx
-#: src/routes/home.tsx
+#: src/components/workspace-labels.ts
 #: src/routes/setup.tsx
 #: src/routes/visibility.tsx
 msgid "Organisatie"
@@ -3113,6 +3134,10 @@ msgstr "Delete person?"
 #: src/components/document-table.tsx
 msgid "Polis"
 msgstr "Policy"
+
+#: src/routes/my-post.tsx
+msgid "Post op jouw naam staat hier zodra hij is gescand en verdeeld."
+msgstr "Post in your name shows up here once it has been scanned and sorted."
 
 #: src/routes/visibility.tsx
 msgid "Post zonder naam"
@@ -3235,9 +3260,9 @@ msgstr "Bill"
 #: src/components/invite-dialog.tsx
 #: src/components/open-invitations.tsx
 #: src/components/role-dialog.tsx
-#: src/routes/home.tsx
 #: src/routes/people-detail.tsx
 #: src/routes/people.tsx
+#: src/routes/workspaces.tsx
 msgid "Rol"
 msgstr "Role"
 
@@ -3342,10 +3367,10 @@ msgstr "kind"
 #: src/components/document-table.tsx
 #: src/routes/document.tsx
 #: src/routes/duplicate.tsx
-#: src/routes/home.tsx
 #: src/routes/inbox.tsx
 #: src/routes/search.tsx
 #: src/routes/trash.tsx
+#: src/routes/workspaces.tsx
 msgid "Soort"
 msgstr "Kind"
 
@@ -3492,7 +3517,7 @@ msgid "Test op bestaande post"
 msgstr "Test on existing mail"
 
 #: src/components/rule-templates.tsx
-#: src/routes/home.tsx
+#: src/components/workspace-labels.ts
 #: src/routes/setup.tsx
 #: src/routes/visibility.tsx
 msgid "Thuis"
@@ -3848,6 +3873,10 @@ msgstr "Add condition"
 msgid "Voorwaarden"
 msgstr "Conditions"
 
+#: src/routes/workspaces.tsx
+msgid "Vraag een beheerder om een uitnodiging."
+msgstr "Ask an admin for an invitation."
+
 #: src/routes/rule-editor.tsx
 msgid "Vul de gemarkeerde delen in. Met Test op bestaande post zie je welke brieven de regel zou raken. Er wordt niets opgeslagen tot je op Opslaan drukt."
 msgstr "Fill in the highlighted parts. With Test on existing mail you see which letters the rule would match. Nothing is saved until you press Save."
@@ -3979,6 +4008,10 @@ msgstr "Workspace"
 msgid "Werkruimte gemaakt"
 msgstr "Workspace created"
 
+#: src/components/workspace-switcher.tsx
+msgid "Werkruimte kiezen"
+msgstr "Choose workspace"
+
 #: src/components/person-actions.tsx
 msgid "Werkruimte verlaten"
 msgstr "Leave workspace"
@@ -3987,8 +4020,13 @@ msgstr "Leave workspace"
 msgid "Werkruimte verlaten?"
 msgstr "Leave workspace?"
 
+#. placeholder {0}: current.name
+#: src/components/workspace-switcher.tsx
+msgid "Werkruimte: {0}. Kies een andere werkruimte"
+msgstr "Workspace: {0}. Choose another workspace"
+
 #: src/components/page.tsx
-#: src/routes/home.tsx
+#: src/routes/workspaces.tsx
 msgid "Werkruimtes"
 msgstr "Workspaces"
 

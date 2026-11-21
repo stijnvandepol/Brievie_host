@@ -1,7 +1,16 @@
 import { plural, t } from "@lingui/core/macro";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import {
   Button,
   Dialog,
@@ -14,13 +23,7 @@ import {
   TextField,
 } from "react-aria-components";
 import { ApiFailure, api, errorMessage } from "../api/client";
-import {
-  inboxCountsQuery,
-  meQuery,
-  myTaskCountsQuery,
-  visibilityQuery,
-  workspacesQuery,
-} from "../api/queries";
+import { inboxCountsQuery, meQuery, myTaskCountsQuery, visibilityQuery } from "../api/queries";
 import { resetSearch } from "../search-term";
 import { clearUndo } from "../undo-trash";
 import { Icon, type IconName } from "./icons";
@@ -29,12 +32,22 @@ import { NoticeBar } from "./notice-bar";
 import { SearchField } from "./search-field";
 import { initials, MessageBar } from "./ui";
 import { UndoBar } from "./undo-bar";
+import { WorkspaceSwitcher } from "./workspace-switcher";
+
+/** The workspace a page's title names, when the user has several (set by the workspace
+ * route): "Mijn post · Bedrijf - Brievie". Empty otherwise. */
+const TitleSuffix = createContext("");
+
+export function PageTitleSuffix({ value, children }: { value: string; children: ReactNode }) {
+  return <TitleSuffix.Provider value={value}>{children}</TitleSuffix.Provider>;
+}
 
 /** Every page gets its own title (WCAG 2.4.2). */
 export function usePageTitle(title: string) {
+  const suffix = useContext(TitleSuffix);
   useEffect(() => {
-    document.title = `${title} - Brievie`;
-  }, [title]);
+    document.title = suffix ? `${title} · ${suffix} - Brievie` : `${title} - Brievie`;
+  }, [title, suffix]);
 }
 
 /** Moves keyboard and screen reader focus to the page's title (`h1`), for example after
@@ -182,8 +195,9 @@ function NavItem({
   warn = false,
 }: {
   to:
-    | "/"
+    | "/werkruimtes"
     | "/koppel-app"
+    | "/w/$workspaceId/mijn-post"
     | "/w/$workspaceId/taken"
     | "/w/$workspaceId/inbox"
     | "/w/$workspaceId/post"
@@ -223,7 +237,7 @@ function NavItem({
 }
 
 /** The workspace a page belongs to, as far as the navigation needs it. */
-type NavWorkspace = { id: string; name: string; role?: string };
+type NavWorkspace = { id: string; name: string; kind?: string; role?: string };
 
 /** The entries of one workspace; "Inbox" (route `inbox`) counts what waits for you (review
  * plus unassigned; a letter still being read waits for nobody).
@@ -238,9 +252,6 @@ function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
   const params = { workspaceId: workspace.id };
   return (
     <>
-      <p className="nav-section">
-        <span className="nav-section-name">{workspace.name}</span>
-      </p>
       <NavItem
         to="/w/$workspaceId/taken"
         params={params}
@@ -438,10 +449,6 @@ export function Shell({ children, workspace }: { children: ReactNode; workspace?
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { data: me } = useQuery(meQuery);
-  // With exactly one workspace there is nothing to choose (`/` goes straight to it), so the
-  // entry is left out. Hidden while loading, so it never shows and then disappears.
-  const workspaces = useQuery(workspacesQuery);
-  const showWorkspaces = workspaces.data ? workspaces.data.length !== 1 : workspaces.isError;
   const nav = useNavPane();
   const navId = useId();
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -488,10 +495,23 @@ export function Shell({ children, workspace }: { children: ReactNode; workspace?
         >
           <Icon name="menu" />
         </Button>
-        <Link to="/" className="brand">
-          <BrandMark />
-          <span>Brievie</span>
-        </Link>
+        {workspace ? (
+          // The start of this workspace, not `/` (which looked like a dead click, S 2.1).
+          <Link
+            to="/w/$workspaceId/mijn-post"
+            params={{ workspaceId: workspace.id }}
+            className="brand"
+            aria-label={t`Brievie, naar Mijn post`}
+          >
+            <BrandMark />
+            <span>Brievie</span>
+          </Link>
+        ) : (
+          <Link to="/" className="brand">
+            <BrandMark />
+            <span>Brievie</span>
+          </Link>
+        )}
         {workspace ? <SearchField key={workspace.id} workspaceId={workspace.id} /> : null}
         <div className="topbar-end">
           <AccountMenu me={me} onLogout={() => logout.mutate()} workspaceId={workspace?.id} />
@@ -501,8 +521,12 @@ export function Shell({ children, workspace }: { children: ReactNode; workspace?
         <div className="navpane" id={navId} ref={paneRef}>
           {/* A pane over the page closes by itself: every page change draws a new shell. */}
           <nav aria-label={t`Hoofdmenu`} className="nav">
-            {workspace ? <WorkspaceNav workspace={workspace} /> : null}
-            {showWorkspaces ? <NavItem to="/" exact icon="grid" label={t`Werkruimtes`} /> : null}
+            {workspace ? <WorkspaceSwitcher current={workspace} /> : null}
+            {workspace ? (
+              <WorkspaceNav workspace={workspace} />
+            ) : (
+              <NavItem to="/werkruimtes" icon="grid" label={t`Werkruimtes`} />
+            )}
             <NavItem to="/koppel-app" icon="phone" label={t`Apparaten`} />
           </nav>
         </div>

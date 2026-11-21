@@ -1,6 +1,9 @@
+import { useQuery } from "@tanstack/react-query";
 import { createRoute, notFound, Outlet } from "@tanstack/react-router";
 import { workspacesQuery } from "../api/queries";
+import { PageTitleSuffix } from "../components/page";
 import { requireUser } from "../guards";
+import { rememberWorkspace } from "../last-workspace";
 import { searchInWorkspace } from "../search-term";
 import { undoInWorkspace } from "../undo-trash";
 import { rootRoute } from "./root";
@@ -16,6 +19,7 @@ export const workspaceRoute = createRoute({
     if (!workspace) throw notFound();
     searchInWorkspace(workspace.id);
     undoInWorkspace(workspace.id);
+    rememberWorkspace(workspace.id);
     return { workspace };
   },
   component: WorkspaceOutlet,
@@ -26,5 +30,12 @@ export const workspaceRoute = createRoute({
  * it opened) shows in B (spec S 4.3; the old switch looked dead, S 2.1). */
 function WorkspaceOutlet() {
   const { workspace } = workspaceRoute.useRouteContext();
-  return <Outlet key={workspace.id} />;
+  // With several workspaces the tab's title names this one, so two tabs are told apart.
+  const { data: list } = useQuery(workspacesQuery);
+  const suffix = list && list.length > 1 ? workspace.name : "";
+  return (
+    <PageTitleSuffix value={suffix}>
+      <Outlet key={workspace.id} />
+    </PageTitleSuffix>
+  );
 }
