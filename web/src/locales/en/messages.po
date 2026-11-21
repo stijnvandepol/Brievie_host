@@ -102,6 +102,10 @@ msgstr "{count, plural, one {# letter loaded, there are more} other {# letters l
 msgid "{count, plural, one {# brief gevonden} other {# brieven gevonden}}"
 msgstr "{count, plural, one {# letter found} other {# letters found}}"
 
+#: src/routes/tasks.tsx
+msgid "{count, plural, one {Er wacht nog # brief op nakijken. Daar kunnen nieuwe taken uit komen.} other {Er wachten nog # brieven op nakijken. Daar kunnen nieuwe taken uit komen.}}"
+msgstr "{count, plural, one {# letter is still waiting to be checked. New tasks may come from it.} other {# letters are still waiting to be checked. New tasks may come from them.}}"
+
 #: src/routes/trash.tsx
 msgid "{days, plural, one {Nog # dag} other {Nog # dagen}}"
 msgstr "{days, plural, one {# day left} other {# days left}}"
@@ -335,10 +339,26 @@ msgstr "Departments"
 msgid "afgerond"
 msgstr "completed"
 
+#: src/routes/tasks.tsx
+msgid "Afgerond"
+msgstr "Done"
+
 #. placeholder {0}: day.format(new Date(task.completed_at))
 #: src/components/task-list.tsx
 msgid "Afgerond op {0}"
 msgstr "Completed on {0}"
+
+#: src/routes/tasks.tsx
+msgid "Afgevinkt door {who} op {when}"
+msgstr "Ticked off by {who} on {when}"
+
+#: src/routes/tasks.tsx
+msgid "Afgevinkt op {when}"
+msgstr "Ticked off on {when}"
+
+#: src/routes/tasks.tsx
+msgid "Afgevinkt: {description}"
+msgstr "Ticked off: {description}"
 
 #: src/routes/duplicate.tsx
 msgid "afzender"
@@ -430,9 +450,17 @@ msgstr "End all sessions?"
 msgid "Alle soorten"
 msgstr "All kinds"
 
+#: src/routes/tasks.tsx
+msgid "Alle taken"
+msgstr "All tasks"
+
 #: src/routes/ai.tsx
 msgid "Alleen de beheerder van deze werkruimte kan dit veranderen."
 msgstr "Only the admin of this workspace can change this."
+
+#: src/routes/tasks.tsx
+msgid "Alleen de eerste 500 taken worden getoond."
+msgstr "Only the first 500 tasks are shown."
 
 #: src/routes/trash.tsx
 msgid "Alleen de nieuwste {LIST_CAP} worden getoond."
@@ -716,6 +744,16 @@ msgstr "Letter"
 msgid "Brief {position}"
 msgstr "Letter {position}"
 
+#: src/components/task-row.tsx
+#: src/routes/tasks.tsx
+msgid "Brief bekijken"
+msgstr "View letter"
+
+#: src/components/task-row.tsx
+#: src/routes/tasks.tsx
+msgid "Brief bekijken: {description}"
+msgstr "View letter: {description}"
+
 #: src/components/audit-codes.ts
 msgid "Brief definitief verwijderd"
 msgstr "Letter deleted permanently"
@@ -860,6 +898,14 @@ msgstr "Date"
 msgid "Datum brief"
 msgstr "Letter date"
 
+#: src/components/task-row.tsx
+msgid "Datum nodig"
+msgstr "Needs a date"
+
+#: src/components/task-row.tsx
+msgid "Datum zelf ingevuld"
+msgstr "Date filled in by hand"
+
 #: src/components/rule-templates.tsx
 msgid "De acties: een label of een naam op de brief. Eerst als voorstel dat jij bevestigt, tenzij je de regel automatisch laat toepassen."
 msgstr "The actions: a label or a name on the letter. First as a suggestion that you confirm, unless you let the rule apply automatically."
@@ -903,6 +949,10 @@ msgstr "The letter has been restored."
 #: src/routes/document.tsx
 msgid "De brief komt terug op Te doen, bij Controleren. De taken die de AI maakte en die nog open staan, verdwijnen. Je controleert de brief daarna in de app."
 msgstr "The letter goes back to To do, under Check. The open tasks that the AI made disappear. You then check the letter in the app."
+
+#: src/components/task-row.tsx
+msgid "De brief noemt een termijn: ‘{term}’. Vul de datum in."
+msgstr "The letter names a deadline: ‘{term}’. Fill in the date."
 
 #: src/components/rule-sentence.ts
 msgid "de brief op naam van {name} staat"
@@ -1183,6 +1233,10 @@ msgstr "Nothing has happened yet."
 #: src/routes/rule-editor.tsx
 msgid "Er is nog niets opgeslagen."
 msgstr "Nothing has been saved yet."
+
+#: src/routes/tasks.tsx
+msgid "Er ligt niets op te pakken."
+msgstr "There is nothing to pick up."
 
 #: src/components/device-table.tsx
 msgid "Er zijn nog geen apparaten gekoppeld."
@@ -1471,6 +1525,14 @@ msgstr "Someone new"
 msgid "Iemand uitnodigen"
 msgstr "Invite someone"
 
+#: src/routes/tasks.tsx
+msgid "Ik doe dit"
+msgstr "I'll do it"
+
+#: src/routes/tasks.tsx
+msgid "Ik doe dit: {description}"
+msgstr "I'll do it: {description}"
+
 #: src/routes/invitation.tsx
 msgid "Ik heb al een account"
 msgstr "I already have an account"
@@ -1573,6 +1635,10 @@ msgstr "is exactly"
 msgid "Jaaropgave"
 msgstr "Annual statement"
 
+#: src/routes/tasks.tsx
+msgid "Je account hangt nog niet aan een naam. Daarom zie je hier alleen taken die iemand aan je geeft. Vraag een beheerder om je te koppelen bij Personen."
+msgstr "Your account is not linked to a name yet. That is why you only see tasks someone hands to you here. Ask an admin to link you under Persons."
+
 #: src/routes/members.tsx
 msgid "Je bent de enige beheerder. Maak eerst iemand anders beheerder als je wilt stoppen."
 msgstr "You are the only admin. Make someone else admin first if you want to stop."
@@ -1601,6 +1667,14 @@ msgstr "You use an external AI service. The names on this page go along with eve
 msgid "Je hebt {total} brieven"
 msgstr "You have {total} letters"
 
+#: src/routes/tasks.tsx
+msgid "Je hebt de laatste 30 dagen niets afgevinkt."
+msgstr "You have not ticked anything off in the last 30 days."
+
+#: src/routes/tasks.tsx
+msgid "Je hebt geen open taken. Nieuwe taken komen hier vanzelf zodra je post is nagekeken."
+msgstr "You have no open tasks. New tasks appear here by themselves once your mail has been checked."
+
 #: src/routes/automations.tsx
 msgid "Je hebt nog geen regels."
 msgstr "You have no rules yet."
@@ -1612,6 +1686,10 @@ msgstr "You get a link and a QR code. Whoever opens it creates an account or sig
 #: src/routes/members.tsx
 msgid "Je kunt daarna niet meer bij {workspaceName}. De post blijft hier voor de andere leden."
 msgstr "After this you can no longer reach {workspaceName}. The mail stays here for the other members."
+
+#: src/routes/tasks.tsx
+msgid "Je kunt taken bekijken, maar niet afvinken."
+msgstr "You can view tasks, but not tick them off."
 
 #: src/routes/invitation.tsx
 msgid "Je logt in met je account van deze server."
@@ -1749,6 +1827,10 @@ msgstr "Choose at least 12 characters."
 #: src/components/reset-link-dialog.tsx
 msgid "Klaar"
 msgstr "Done"
+
+#: src/components/task-row.tsx
+msgid "Klaar: {description}"
+msgstr "Done: {description}"
 
 #: src/routes/labels.tsx
 msgid "Kleur"
@@ -2067,6 +2149,7 @@ msgid "Naar de startpagina"
 msgstr "Go to the start page"
 
 #: src/routes/duplicate.tsx
+#: src/routes/tasks.tsx
 msgid "Naar Te doen"
 msgstr "Go to To do"
 
@@ -2192,6 +2275,7 @@ msgid "Onbekende browser"
 msgstr "Unknown browser"
 
 #: src/components/undo-bar.tsx
+#: src/routes/tasks.tsx
 msgid "Ongedaan maken"
 msgstr "Undo"
 
@@ -2227,9 +2311,17 @@ msgstr "Address to {name}?"
 msgid "Op naam zetten van"
 msgstr "Address to"
 
+#: src/routes/tasks.tsx
+msgid "Op te pakken"
+msgstr "To pick up"
+
 #: src/routes/persons.tsx
 msgid "Op wiens naam brieven binnenkomen, ook iemand zonder account, zoals een kind. Wie zelf inlogt, staat bij Leden."
 msgstr "Whose name letters arrive in, including someone without an account, such as a child. People who sign in themselves are under Members."
+
+#: src/routes/tasks.tsx
+msgid "Open"
+msgstr "Open"
 
 #: src/routes/pair-app.tsx
 msgid "Open de app op je telefoon en scan de code. De telefoon moet op hetzelfde netwerk zitten als deze server."
@@ -2610,8 +2702,13 @@ msgstr "Language of the summary and the tasks the AI makes"
 
 #: src/routes/document.tsx
 #: src/routes/duplicate.tsx
+#: src/routes/tasks.tsx
 msgid "Taken"
 msgstr "Tasks"
+
+#: src/routes/tasks.tsx
+msgid "Taken die bij jou horen. Taken van je afdeling en post zonder naam staan bij Op te pakken."
+msgstr "Tasks that are yours. Tasks of your department and mail without a name are under To pick up."
 
 #: src/components/page.tsx
 #: src/routes/duplicate.tsx
@@ -2679,6 +2776,14 @@ msgstr "Home and business"
 msgid "Tijdstip"
 msgstr "Time"
 
+#: src/routes/tasks.tsx
+msgid "Toch niet klaar"
+msgstr "Not done after all"
+
+#: src/routes/tasks.tsx
+msgid "Toch niet klaar: {description}"
+msgstr "Not done after all: {description}"
+
 #: src/routes/rule-editor.tsx
 msgid "Toepassen"
 msgstr "Apply"
@@ -2724,6 +2829,10 @@ msgstr "Type at least two characters."
 #: src/routes/automations.tsx
 msgid "Uit"
 msgstr "Off"
+
+#: src/components/task-row.tsx
+msgid "Uit de brief: ‘{quote}’"
+msgstr "From the letter: ‘{quote}’"
 
 #: src/routes/rule-editor.tsx
 msgid "Uit: de regel doet niets, maar blijft bewaard."
@@ -2794,6 +2903,10 @@ msgstr "Upload"
 #: src/routes/search.tsx
 msgid "Van"
 msgstr "From"
+
+#: src/components/task-row.tsx
+msgid "Van {sender}"
+msgstr "From {sender}"
 
 #: src/task-time.ts
 msgid "Vandaag"
@@ -2995,6 +3108,10 @@ msgstr "What the AI read"
 msgid "Wat er gebeurt met een brief die past: een label erop, of op naam van een persoon."
 msgstr "What happens to a letter that matches: a label on it, or addressed to a person."
 
+#: src/routes/tasks.tsx
+msgid "Wat je met je post moet doen, op datum. Je hoeft de brief er niet voor te openen."
+msgstr "What to do with your mail, by date. You do not need to open the letter for it."
+
 #. placeholder {0}: workspace.name
 #: src/routes/settings.tsx
 msgid "Wat leden in {0} mogen doen, en het logboek van wat er is gebeurd. Alleen beheerders zien deze pagina."
@@ -3008,6 +3125,10 @@ msgstr "What to do"
 msgid "We kunnen de server niet bereiken. Controleer je verbinding en probeer het opnieuw."
 msgstr "We can't reach the server. Check your connection and try again."
 
+#: src/routes/tasks.tsx
+msgid "Weer open: {description}"
+msgstr "Open again: {description}"
+
 #: src/routes/duplicate.tsx
 msgid "Welke brief houd je?"
 msgstr "Which letter do you keep?"
@@ -3015,6 +3136,10 @@ msgstr "Which letter do you keep?"
 #: src/routes/ai.tsx
 msgid "Welke dienst?"
 msgstr "Which service?"
+
+#: src/routes/tasks.tsx
+msgid "Welke taken"
+msgstr "Which tasks"
 
 #: src/routes/invitation.tsx
 msgid "Welkom bij {workspaceName}"

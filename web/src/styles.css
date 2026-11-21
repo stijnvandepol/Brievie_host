@@ -3192,3 +3192,124 @@ a.menu-item:hover {
   padding: 0;
   list-style: none;
 }
+
+/* Mijn taken (spec S 6, S 13). */
+.segmented {
+  display: inline-flex;
+  gap: 2px;
+  margin-bottom: var(--s-m);
+  padding: 2px;
+  border: 1px solid var(--neutral-stroke-accessible);
+  border-radius: var(--radius-medium);
+}
+
+.segment {
+  padding: var(--s-xs) var(--s-m);
+  border: 0;
+  border-radius: var(--radius-medium);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.segment[data-selected] {
+  background: var(--brand-bg);
+  color: var(--on-brand);
+}
+
+.segment[data-focus-visible],
+.tab[data-focus-visible] {
+  outline: 2px solid var(--brand-bg);
+  outline-offset: 2px;
+}
+
+.tab-list {
+  display: flex;
+  gap: var(--s-m);
+  margin-bottom: var(--s-m);
+  border-bottom: 1px solid var(--neutral-stroke-accessible);
+}
+
+.tab {
+  padding: var(--s-xs) 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.tab[data-selected] {
+  border-bottom-color: var(--brand-bg);
+  font-weight: var(--weight-semibold);
+}
+
+.task-group {
+  margin-bottom: var(--s-l);
+}
+
+.task-group-title {
+  margin: 0 0 var(--s-s);
+  font-size: var(--subtitle-size);
+}
+
+.task-group-count {
+  color: var(--neutral-fg2);
+  font-weight: normal;
+}
+
+.task-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task-row {
+  display: flex;
+  gap: var(--s-m);
+  align-items: flex-start;
+  padding: var(--s-s) 0;
+  border-bottom: 1px solid var(--neutral-stroke2);
+}
+
+.task-check {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  flex: none;
+}
+
+.task-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.task-body p {
+  margin: 0 0 2px;
+}
+
+.task-action {
+  font-weight: var(--weight-semibold);
+}
+
+.task-done .task-action {
+  text-decoration: line-through;
+}
+
+.task-late {
+  color: var(--warning-fg);
+  font-weight: var(--weight-semibold);
+}
+
+.task-amount {
+  white-space: nowrap;
+}
+
+.task-needs-date {
+  margin: var(--s-xs) 0;
+}
+
+.task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-m);
+  align-items: center;
+  margin-top: var(--s-xs);
+}
