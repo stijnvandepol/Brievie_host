@@ -1751,3 +1751,8 @@ Finance's letter, with the owner as control.
   A queued export job for someone who is no member any more (their row normally goes
   with them) reads and writes nothing and marks the export failed. `export_context(...,
   reader_id=None)` is the system's bookkeeping and the future full copy only.
+- **Rule tests and manual runs act as their member (Task 21; P5 and R7 as recorded on
+  2026-11-20).** `testRule` counts and shows only letters the admin sees, a manual run
+  touches only those, and `listRules` counts only runs on visible letters. The rules
+  after processing and confirming run as the system and reach every letter. A job with an
+  empty actor sees no letter and no row of one, also while "Iedereen ziet alle post" is on.
