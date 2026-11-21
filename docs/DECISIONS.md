@@ -1972,3 +1972,6 @@ M3). "Iedereen ziet alle post" stays on everywhere until Task 40, so departments
   off. Members keep creating and editing persons without an account (that sends post to
   whoever sorts it, not to themselves). Cost: a member asks an admin to correct the
   spelling of their own name.
+- **Off ends the hour (finding 4).** Switching emergency access off removes every running
+  emergency reader row of the workspace in the same transaction and releases any
+  assignment that rested on it.

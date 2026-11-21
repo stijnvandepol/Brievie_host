@@ -73,6 +73,11 @@ def set_emergency_access(
             return locked
         locked.emergency_access = enabled
         locked.save(update_fields=["emergency_access", "updated_at"])
+        if not enabled:
+            # Off means off: an hour that is running ends with the switch.
+            from apps.documents import visibility
+
+            visibility.end_emergency_access(locked.id)
         code = (
             AuditCode.EMERGENCY_ACCESS_SWITCHED_ON
             if enabled

@@ -735,6 +735,18 @@ def open_emergency(
     return EmergencyResult(opened_count=len(opened), expires_at=expires_at)
 
 
+def end_emergency_access(workspace_id: UUID) -> int:
+    """Emergency access was switched off: every running hour ends now, in the caller's
+    transaction, and an assignment that rested on it goes. The number of rows removed."""
+    with workspace_context(workspace_id, actor=SYSTEM), transaction.atomic():
+        removed, _rows = DocumentReader.objects.filter(
+            workspace_id=workspace_id, reason=DocumentReader.Reason.EMERGENCY
+        ).delete()
+        if removed:
+            _release_assignees(workspace_id, None)
+        return removed
+
+
 def _sees_without_emergency(document: Document, user_id: UUID) -> bool:
     """Whether the user would see the letter without their emergency rows: the rows are
     taken away inside a savepoint that is rolled back, and the policy's own condition

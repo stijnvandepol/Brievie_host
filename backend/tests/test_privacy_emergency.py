@@ -345,3 +345,25 @@ def test_emptying_the_trash_skips_letters_seen_only_through_emergency_access() -
     assert r.status_code == 200, r.json()
     assert r.json()["document_count"] == 0
     assert _trash_state(h, doc) == (True, False)
+
+
+def test_switching_emergency_access_off_ends_a_running_hour() -> None:
+    """Security review of PR #38, finding 4."""
+    from apps.accounts.models import User
+
+    h = home()
+    _on(h)
+    User.objects.filter(id=h.anne.id).update(is_server_admin=True)
+    doc = private_letter(h.workspace, addressees=[h.persons["Bob"]])
+    admin = _admin(h)
+    _open(admin, h.persons["Bob"])
+    assert _get(admin, doc) == 200
+    r = admin.put(
+        f"/api/v1/workspaces/{h.workspace.id}/emergency-access",
+        {"enabled": False},
+        content_type=JSON,
+    )
+    assert r.status_code == 200, r.json()
+    assert _get(admin, doc) == 404
+    with as_actor(h.workspace, SYSTEM):
+        assert not DocumentReader.objects.filter(reason="emergency").exists()
