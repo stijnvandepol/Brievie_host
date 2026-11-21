@@ -2477,3 +2477,69 @@ Spec `docs/superpowers/specs/2026-11-21-mensen-en-accounts-design.md`, plan
 - **Re-review: deleting a person stops its open invitations** (reason `person_deleted`,
   locked after the rules and before the person): with the person gone an old link would
   have worked as a plain invitation with its role.
+
+## 2026-11-21: Navigation, Mijn post, Ongelezen and Blijft liggen
+
+Design `superpowers/specs/2026-11-21-navigatie-en-persoonlijke-inbox-design.md`, plan
+`superpowers/plans/2026-11-21-host-navigatie-en-persoonlijke-inbox.md` (server and web;
+the iPhone part is built in `Brievie_ios`). No new dependency.
+
+**The owner's decisions (B1-B7, the design's recommendations).** B1: the menu item is
+"Mijn post" (EN "My post") and it is the start page. B2: Mijn post holds only post on the
+member's own name; a filter "Ook mijn afdeling" (home: "Ook mijn groep") adds their
+departments (`include_departments`). B3: "Blijft liggen" for organisations only, 2 days
+in the Inbox and 5 days not opened (calendar days, Europe/Amsterdam), adjustable by an
+admin (1-30 and 1-60 days), seen by sorters and admins. B4: a letter is read when its
+member opens it (web letter page, app reader) or scanned it, not by checking it in the
+Inbox. B5 is the app's. B6: AI, Apparaten and "Wie kan mijn post zien?" move under
+Instellingen; their old addresses keep working. B7: a notice about a workspace shows
+only in that workspace.
+
+**Rulings of the design (N1-N10)** stand as written there: explicit read call (never a
+`GET`); `Membership.unread_from` as the start (the migration's moment for existing
+members, the moment of joining for new ones); the marks are their own table, never
+history or audit; Inbox rows carry no unread mark; a switch lands on the other
+workspace's Mijn post; the switcher shows no counts of other workspaces; only the
+assignee or an admin hands on a taken task; lingering counts only letters the viewer
+sees; the app opens on Mijn post; AI, devices and "Wie kan mijn post zien?" move into
+Instellingen with their routes kept.
+
+**Rulings made while building.**
+
+- **Read marks (`DocumentReadMark`).** Forced RLS, the letter's three policies (a mark of
+  a letter the member no longer sees is invisible to them too) and a restrictive own-row
+  policy `read_mark_own` (`user_id` = the actor, or the system) for every command, with
+  `WITH CHECK`: a member can neither read, write, move nor delete anybody else's mark.
+  The back-up check refuses a restore without that policy. Written only by
+  `apps.documents.reading`; `forget_member` removes a leaving member's marks; the purge
+  takes them with the letter. No mark in history, audit, the member's export or a log.
+- **Marking read is no letter write.** It needs no role above viewer and no
+  `require_editable`: a viewer and an admin reading through emergency access mark their
+  own state. An emergency-only opening never counts as an addressee's.
+- **Mijn post** is the member's persons as "Mijn taken" sees them: their own person and
+  the persons without an account they manage ("Beheerd door"); departments only with
+  `include_departments`. A member without a person gets an empty list and
+  `has_person: false` on `getMenuCounts`.
+- **"Opened by an addressee" (`Document.addressee_opened_at`)** is set once, as the
+  system, at the first mark of a member whose post the letter is; it is recomputed only
+  when the letter's addressee list really changes (same addressees again keep it), from
+  the marks of the members it is now addressed to. Existing confirmed letters with
+  addressees count as opened from their last change (backfill), so day one shows no
+  flood. No nightly repair: its one writer path is the addressee sync. Cost if wrong: a
+  letter whose addressees were changed outside `addressee_scope` keeps its old state
+  until its addressees change again.
+- **"Nog niet geopend" counts from the confirmation** (`confirmed_at`; a done letter
+  without one from its arrival). A letter lingers from the day it is that many calendar
+  days old (`age_days >= days`). Admins always see the signal in an organisation with
+  it on; flagged sorters too; viewers never, also when flagged.
+- **Assignment.** `assignment.allowed` is the one rule; the admin role is read under the
+  caller's own membership lock (`locks.lock_own_role`, lock order: own membership, then
+  the task), so a demoted admin is refused. `can_take` only on a free task (an admin
+  hands a colleague's task to themselves with "Geef aan…"); a task on a letter the caller
+  holds emergency access to offers nothing (read-only).
+- **Notices per workspace.** `notify` refuses a workspace code without its workspace
+  and an account code with one, so a new caller cannot forget it; old notices stay
+  account-wide.
+- **Database defaults** for the new columns of `workspaces_workspace` and
+  `workspaces_membership`, as `summary_language`: a raw insert (a seed, the measurement)
+  keeps working; the models keep Python defaults (no `RETURNING`).

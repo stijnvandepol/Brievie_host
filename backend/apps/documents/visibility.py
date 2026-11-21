@@ -37,7 +37,14 @@ from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
-from apps.documents.models import LIVE, Document, DocumentEvent, DocumentReader, DocumentShare
+from apps.documents.models import (
+    LIVE,
+    Document,
+    DocumentEvent,
+    DocumentReader,
+    DocumentReadMark,
+    DocumentShare,
+)
 from apps.people.models import DepartmentMember, Person
 from apps.workspaces.context import SYSTEM, current_actor, system_actor, workspace_context
 from apps.workspaces.locks import lock_own_membership
@@ -717,10 +724,11 @@ def private_post_readers() -> set[UUID]:
 
 
 def forget_member(workspace_id: UUID, user_id: UUID) -> None:
-    """A member leaves: their reader rows, shares and department memberships in this
-    workspace go, as the system. Nothing else changes: the readers of every letter are
-    then the old ones without this user."""
+    """A member leaves: their reader rows, shares, department memberships and read marks
+    ("Ongelezen", navigation S 6.3) in this workspace go, as the system. Nothing else
+    changes: the readers of every letter are then the old ones without this user."""
     with transaction.atomic(), system_actor():
+        DocumentReadMark.objects.filter(workspace_id=workspace_id, user_id=user_id).delete()
         DocumentReader.objects.filter(workspace_id=workspace_id, user_id=user_id).delete()
         DocumentShare.objects.filter(workspace_id=workspace_id, user_id=user_id).delete()
         DepartmentMember.objects.filter(workspace_id=workspace_id, user_id=user_id).delete()

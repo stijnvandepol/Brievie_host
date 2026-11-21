@@ -157,3 +157,15 @@ def test_get_document_does_not_mark(client: Client) -> None:
     r = client.get(f"/api/v1/workspaces/{h.workspace.id}/documents/{document.id}")
     assert r.status_code == 200
     assert _marks(h.workspace.id, document) == []
+
+
+def test_leaving_member_marks_go() -> None:
+    from apps.documents import visibility
+
+    h = household()
+    document = letter(h.workspace, on=[h.persons["Piet"]])
+    _mark(h, h.piet.id, document)
+    _mark(h, h.anne.id, document)
+    with as_actor(h.workspace, h.anne.id):
+        visibility.forget_member(h.workspace.id, h.piet.id)
+    assert _marks(h.workspace.id, document) == [h.anne.id]

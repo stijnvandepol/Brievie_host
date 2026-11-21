@@ -103,7 +103,7 @@ def _page_paths(workspace_id: UUID, document_id: UUID) -> list[str] | None:
 def _delete_rows(workspace_id: UUID, document_id: UUID) -> bool:
     """Step 3: the letter's tasks (their key is SET_NULL, they would outlive it), then the
     letter; the cascade takes pages, extractions, links, events, suggestions, shares,
-    reader rows and rule runs. False when it is gone or no longer marked."""
+    reader rows, read marks and rule runs. False when it is gone or no longer marked."""
     with workspace_context(workspace_id, actor=SYSTEM), transaction.atomic():
         # No key, as every document lock (tests/test_privacy_locks.py); the DELETE below
         # takes the full row lock itself, in this transaction.

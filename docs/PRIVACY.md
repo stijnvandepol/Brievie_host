@@ -289,6 +289,23 @@ for it; see the table above.
 - Reminders on the phone hold no letter text unless the member turned that on (the app's
   rule); no log line holds a task's description, amount or quote.
 
+## Ongelezen and "Blijft liggen" (what you have read)
+
+- Brievie keeps, per member and letter, that the member has read it: opened it on the
+  letter page or in the app's reader, scanned or uploaded it, or marked it read. A plain
+  look at a list, a refresh in the background or a script does not count. This mark is
+  personal data about reading behaviour and is used for exactly two things: the member's
+  own "Ongelezen" (bold rows, the number at Mijn post), and, in an organisation, the
+  absence of any addressee's opening for the sorters and admins ("Nog niet geopend"),
+  which tells them that the addressee (or, with several, none of them) has not opened the
+  letter yet. It never says when someone opened a letter, nor which of several addressees
+  did, and nobody else ever sees a member's own marks: the database lets each member read
+  only their own rows. At home "Blijft liggen" does not exist.
+- The marks are never in the letter's history, the log, an export or a log line. They go
+  with the letter when it is purged, and for one member when they leave the workspace.
+  "Blijft liggen" lists and counts only letters the viewer may read: a private letter they
+  may not read is in no list and no number.
+
 ## Privé-post (private letters)
 
 - A letter can be private: only its readers see it (whoever it is addressed to with an

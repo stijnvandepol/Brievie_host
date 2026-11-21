@@ -119,6 +119,13 @@ the translation. Add a line before introducing a new domain term.
 | Datum nodig, Datum invullen | needs a date (`needs_deadline`, `term_quote`), set a date (`setTaskDeadline`) |
 | Afgerond, Afgevinkt door | done (`status=done`), completed by (`completed_by`) |
 | Ik doe dit, Geef aan…, Niet meer aan mij | assign to self, hand over, release (`assignTask`) |
+| Vrijgeven (beheerder, taak van een ander) | release (`assignTask`, `can_release`) |
+| Mijn post | my post (`listDocuments?addressed_to_me=true`); the start page |
+| Ook mijn afdeling / Ook mijn groep | include departments (`include_departments`) |
+| Ongelezen (per lid, per brief) | unread (`DocumentReadMark`, `unread`); not "Nieuw", which is the letter's own "not yet checked" |
+| Markeer als gelezen / ongelezen, Alles gelezen | mark read / unread (`markDocumentRead`, `markDocumentUnread`, `markDocumentsRead`) |
+| Blijft liggen, In de Inbox te lang, Nog niet geopend | lingering (`listLingeringLetters`, `lingering_enabled`), too long in the Inbox, not opened (`addressee_opened_at`) |
+| Werkruimte kiezen, Alle werkruimtes | workspace switcher (`/werkruimtes`) |
 
 ## English in the interface
 
@@ -194,7 +201,11 @@ the request that creates the workspace and keep that name.
 | Alle taken | All tasks | |
 | Datum nodig / Datum invullen | Needs a date / Set a date | |
 | Afgerond / Afgevinkt door Anne | Done / Ticked off by Anne | "Toch niet klaar": "Not done after all". |
-| Geef aan… / Niet meer aan mij | Hand over… / Not mine any more | |
+| Geef aan… / Niet meer aan mij | Hand over… / Not mine any more | Vrijgeven (an admin, on someone else's task): "Release". |
+| Mijn post | My post | The start page; "Ook mijn afdeling": "Include my department" (home: "Ook mijn groep", "Include my group"). |
+| Ongelezen | Unread | Per member. Markeer als gelezen / ongelezen: "Mark as read" / "Mark as unread"; Alles gelezen: "Mark all read"; Alleen ongelezen: "Unread only". |
+| Blijft liggen | Lying too long | "ligt er 4 dagen": "waiting 4 days"; In de Inbox te lang: "Too long in the Inbox"; Nog niet geopend: "Not opened yet". |
+| Werkruimte kiezen / Alle werkruimtes | Choose workspace / All workspaces | |
 | herstellink | reset link | |
 | back-up | backup | |
 | logboek | log | Serverlogboek: Server log. |
