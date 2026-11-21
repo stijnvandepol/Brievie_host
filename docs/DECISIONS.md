@@ -2112,3 +2112,14 @@ installation starts in own post.
   gescand", "is gedeeld", "ziet alle post", "beheerder, leest alle post", "noodtoegang tot
   14:30" (Dutch time). A member who sees the letter learns who else does: that is the
   page's purpose. Merge point M4.
+
+### Security review of PR #39 (2026-11-21)
+
+- **A confirmation token is bound to its change (finding 2).** The preview token was the
+  SHA-256 of the switches and the members' facts, which a member can work out from
+  `listMembers` and `getVisibility`, and a preview of a narrowing then confirmed a
+  widening. It is now an HMAC (`django.utils.crypto.salted_hmac`, the key derived from
+  `SECRET_KEY` with a fixed purpose label, no new setting) over the workspace, the admin
+  who previewed, the change itself (the proposal, or the member change with only the
+  fields its kind uses) and the state's fingerprint. Another proposal, another admin,
+  another workspace or a changed state: 409 `preview_outdated`.

@@ -14,6 +14,7 @@ import random
 import uuid
 from collections import Counter
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 import pytest
@@ -34,7 +35,12 @@ from apps.workspaces import members, visibility_settings
 from apps.workspaces.context import SYSTEM
 from apps.workspaces.models import Membership, Workspace
 from apps.workspaces.visibility_rules import LetterFacts, expected_sight
-from apps.workspaces.visibility_settings import Proposal
+from apps.workspaces.visibility_settings import (
+    MemberChange,
+    Proposal,
+    member_change_key,
+    proposal_key,
+)
 from tests.documents_support import pair
 from tests.test_leak_document_operations import (
     DOCUMENT_OPERATION_CASES,
@@ -99,7 +105,34 @@ def check_policy(o: Office, why: object) -> dict[str, set[str]]:
 
 # --- every row, through its real service --------------------------------------------------
 
-type Step = Callable[[Office, Client, bool, str], object]
+type Run = Callable[[Office, Client, bool, str], object]
+type Key = Callable[[Office], tuple[uuid.UUID, str]]
+
+
+@dataclass(frozen=True)
+class Step:
+    """A row's real service call, and who previews it and what (its token binds both)."""
+
+    run: Run
+    key: Key
+
+
+def _member_key(
+    kind: str, *, user: str = "", person: str = "", role: str = "", sorts_post: bool = False
+) -> Key:
+    """The key an admin's preview of this member change has (Anne previews)."""
+
+    def key(o: Office) -> tuple[uuid.UUID, str]:
+        change = MemberChange(
+            kind=kind,
+            user_id=o.users[user].id if user else None,
+            person_id=o.persons[person].id if person else None,
+            role=role,
+            sorts_post=sorts_post,
+        )
+        return o.admin.id, member_change_key(change)
+
+    return key
 
 
 def _admin(o: Office) -> AuditActor:
@@ -107,14 +140,15 @@ def _admin(o: Office) -> AuditActor:
 
 
 def _switch(**values: bool | str) -> Step:
-    def step(o: Office, _client: Client, confirmed: bool, token: str) -> object:
-        proposal = Proposal(
-            kind=str(values["kind"]) if "kind" in values else None,
-            everyone_sees_all=_flag(values, "everyone_sees_all"),
-            departments_enabled=_flag(values, "departments_enabled"),
-            admins_read_all=_flag(values, "admins_read_all"),
-            apply_preset=bool(values.get("apply_preset", False)),
-        )
+    proposal = Proposal(
+        kind=str(values["kind"]) if "kind" in values else None,
+        everyone_sees_all=_flag(values, "everyone_sees_all"),
+        departments_enabled=_flag(values, "departments_enabled"),
+        admins_read_all=_flag(values, "admins_read_all"),
+        apply_preset=bool(values.get("apply_preset", False)),
+    )
+
+    def run(o: Office, _client: Client, confirmed: bool, token: str) -> object:
         return visibility_settings.change(
             workspace=o.workspace,
             proposal=proposal,
@@ -123,7 +157,7 @@ def _switch(**values: bool | str) -> Step:
             preview_token=token,
         )
 
-    return step
+    return Step(run, lambda o: (o.admin.id, proposal_key(proposal)))
 
 
 def _flag(values: dict[str, bool | str], name: str) -> bool | None:
@@ -132,7 +166,7 @@ def _flag(values: dict[str, bool | str], name: str) -> bool | None:
 
 
 def _role(who: str, role: str) -> Step:
-    def step(o: Office, _client: Client, confirmed: bool, token: str) -> object:
+    def run(o: Office, _client: Client, confirmed: bool, token: str) -> object:
         return members.change_role(
             workspace=o.workspace,
             user_id=o.users[who].id,
@@ -142,11 +176,11 @@ def _role(who: str, role: str) -> Step:
             preview_token=token,
         )
 
-    return step
+    return Step(run, _member_key("role", user=who, role=role))
 
 
 def _sorts(who: str, value: bool) -> Step:
-    def step(o: Office, _client: Client, confirmed: bool, token: str) -> object:
+    def run(o: Office, _client: Client, confirmed: bool, token: str) -> object:
         return members.set_sorts_post(
             workspace=o.workspace,
             user_id=o.users[who].id,
@@ -156,11 +190,11 @@ def _sorts(who: str, value: bool) -> Step:
             preview_token=token,
         )
 
-    return step
+    return Step(run, _member_key("sorts_post", user=who, sorts_post=value))
 
 
 def _department(who: str, department: str, *, add: bool) -> Step:
-    def step(o: Office, _client: Client, confirmed: bool, token: str) -> object:
+    def run(o: Office, _client: Client, confirmed: bool, token: str) -> object:
         with as_actor(o.workspace, o.admin.id):
             if add:
                 return people.add_department_member(
@@ -178,13 +212,14 @@ def _department(who: str, department: str, *, add: bool) -> Step:
                 actor=_admin(o),
             )
 
-    return step
+    kind = "department_add" if add else "department_remove"
+    return Step(run, _member_key(kind, user=who, person=department))
 
 
 def _link(*, link: bool) -> Step:
     """Anne links Piet's person to Piet; Piet unlinks it himself (only he may, PB T12)."""
 
-    def step(o: Office, _client: Client, confirmed: bool, token: str) -> object:
+    def run(o: Office, _client: Client, confirmed: bool, token: str) -> object:
         actor = o.admin if link else o.plain
         with as_actor(o.workspace, actor.id):
             return people.link_member(
@@ -197,7 +232,10 @@ def _link(*, link: bool) -> Step:
                 preview_token=token,
             )
 
-    return step
+    if link:
+        return Step(run, _member_key("link", user="plain", person="Piet"))
+    unlink = _member_key("unlink", person="Piet")
+    return Step(run, lambda o: (o.plain.id, unlink(o)[1]))
 
 
 def _remove_femke(o: Office, client: Client, _confirmed: bool, _token: str) -> object:
@@ -212,6 +250,9 @@ def _remove_femke(o: Office, client: Client, _confirmed: bool, _token: str) -> o
 def _preview_removal(o: Office, _client: Client, _confirmed: bool, _token: str) -> object:
     members.removal_preview_step(workspace=o.workspace, user_id=o.finance.id, actor=_admin(o))
     return None
+
+
+_REMOVAL_KEY: Final = _member_key("remove", user="finance")
 
 
 STEPS: Final[dict[str, Step]] = {
@@ -238,12 +279,12 @@ STEPS: Final[dict[str, Step]] = {
     "admin made member, A off, nobody flagged": _role("plain", "member"),
     "sorter made viewer": _role("sorter", "viewer"),
     "one of several sorters removed": _sorts("sorter", False),
-    "member removed from the workspace": _remove_femke,
+    "member removed from the workspace": Step(_remove_femke, _REMOVAL_KEY),
     "kind switched without taking values": _switch(kind="home"),
     "Organisatie preset applied to Thuis": _switch(kind="business", apply_preset=True),
     "Thuis preset applied to Organisatie": _switch(kind="home", apply_preset=True),
 }
-PREVIEW_STEPS: Final[dict[str, Step]] = {"member removed from the workspace": _preview_removal}
+PREVIEW_STEPS: Final[dict[str, Run]] = {"member removed from the workspace": _preview_removal}
 
 
 def _setup(o: Office, row: Transition) -> None:
@@ -339,18 +380,21 @@ def test_transition(case: tuple[Transition, dict[str, bool]], client: Client) ->
     audit_before = _audit_counts(o)
 
     step = STEPS[row.name]
-    preview_step = PREVIEW_STEPS.get(row.name, step)
+    preview_step = PREVIEW_STEPS.get(row.name, step.run)
+    actor_id, change = step.key(o)
     result = visibility_settings.preview(
         o.workspace,
         lambda: preview_step(o, client, True, ""),
         narrowing=row.narrowing,
+        actor_id=actor_id,
+        change=change,
     )
     assert result.needs_confirmation == row.confirm(state)
     assert check_policy(o, (row.name, "after the preview")) == before
     assert _sight_notices(o) == (set(), set(), set())
     assert _audit_counts(o) == audit_before
 
-    step(o, client, True, result.preview_token)
+    step.run(o, client, True, result.preview_token)
 
     after = check_policy(o, (row.name, "after"))
     widened, narrowed, everyone = _sight_notices(o)
@@ -370,8 +414,14 @@ def test_transition(case: tuple[Transition, dict[str, bool]], client: Client) ->
         assert _private_viewers(o) == private
 
 
-def _token(o: Office) -> str:
-    return visibility_settings.fingerprint(visibility_settings.snapshot(o.workspace))
+def _token(o: Office, step: Step) -> str:
+    actor_id, change = step.key(o)
+    return visibility_settings.confirmation_token(
+        workspace_id=o.workspace.id,
+        actor_id=actor_id,
+        change=change,
+        before=visibility_settings.snapshot(o.workspace),
+    )
 
 
 @pytest.mark.parametrize("row", REVERSIBLE_TRANSITIONS, ids=lambda r: r.name)
@@ -384,8 +434,9 @@ def test_switch_back_restores_sight(row: Transition, client: Client) -> None:
         _setup(o, row)
         before = _sight(o)
         counts = _counts(o)
-        STEPS[row.name](o, client, True, _token(o))
-        STEPS[back.name](o, client, True, _token(o))
+        forward, backward = STEPS[row.name], STEPS[back.name]
+        forward.run(o, client, True, _token(o, forward))
+        backward.run(o, client, True, _token(o, backward))
         assert _sight(o) == before, (row.name, state)
         assert _counts(o)[1:] == counts[1:], (row.name, state)
 

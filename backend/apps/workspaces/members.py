@@ -36,7 +36,12 @@ from apps.workspaces.invitations import revoke_invitations_bound_to, revoke_invi
 from apps.workspaces.locks import lock_memberships as lock_memberships
 from apps.workspaces.models import Membership, Workspace
 from apps.workspaces.visibility_rules import UNASSIGNED
-from apps.workspaces.visibility_settings import notify_self_grant, sight_change
+from apps.workspaces.visibility_settings import (
+    MemberChange,
+    member_change_key,
+    notify_self_grant,
+    sight_change,
+)
 
 
 def _forbidden() -> ApiError:
@@ -126,7 +131,8 @@ def change_role(
             narrowing=Membership.RANK[role] < Membership.RANK[previous],
             confirmed=confirmed,
             preview_token=preview_token,
-            actor_name=actor.name,
+            actor=actor,
+            change=member_change_key(MemberChange(kind="role", user_id=user_id, role=role)),
         ):
             member.role = role
             stops_sorting = role == Membership.Role.VIEWER and member.sorts_post
@@ -196,7 +202,10 @@ def set_sorts_post(
             narrowing=not sorts_post,
             confirmed=confirmed,
             preview_token=preview_token,
-            actor_name=actor.name,
+            actor=actor,
+            change=member_change_key(
+                MemberChange(kind="sorts_post", user_id=user_id, sorts_post=sorts_post)
+            ),
         ) as sight:
             member.sorts_post = sorts_post
             member.save(update_fields=["sorts_post", "updated_at"])
@@ -299,7 +308,8 @@ def remove_member(
             narrowing=True,
             confirmed=False,
             preview_token="",
-            actor_name=actor.name,
+            actor=actor,
+            change=member_change_key(MemberChange(kind="remove", user_id=user_id)),
             ask_confirmation=False,
         ):
             persons = _unlink_and_unassign(workspace, user_id, actor)

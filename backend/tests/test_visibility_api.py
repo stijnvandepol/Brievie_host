@@ -16,6 +16,7 @@ from apps.tasks.models import Task
 from apps.workspaces.context import SYSTEM
 from apps.workspaces.models import Membership, Workspace
 from apps.workspaces.schemas import VisibilityIn
+from apps.workspaces.visibility_settings import fingerprint, snapshot
 from tests.visibility_support import Office, as_actor, office
 
 if TYPE_CHECKING:
@@ -307,3 +308,45 @@ def test_a_hidden_letter_answers_like_an_unknown_one_right_after_the_switch(
     assert r.json() == unknown.json()
     with as_actor(o.workspace, SYSTEM):
         assert Document.objects.filter(id=letter.id).exists()
+
+
+def test_a_token_confirms_only_its_own_change(client: Client) -> None:
+    o = office()
+    _as(client, o.admin)
+    narrowing = _preview(client, o, {"admins_read_all": False}).json()["preview_token"]
+    r = _update(
+        client, o, {"everyone_sees_all": True, "confirmed": True, "preview_token": narrowing}
+    )
+    assert r.status_code == 409
+    assert r.json()["code"] == "preview_outdated"
+    # Nor can a token be computed from what members may read: the state's fingerprint.
+    forged = fingerprint(snapshot(o.workspace))
+    r = _update(client, o, {"everyone_sees_all": True, "confirmed": True, "preview_token": forged})
+    assert r.status_code == 409
+    assert _switches(o) == (False, True, False)
+
+
+def test_a_token_belongs_to_the_admin_who_previewed(client: Client) -> None:
+    o = office()
+    Membership.objects.filter(workspace=o.workspace, user=o.hr).update(role="admin")
+    hans = _preview(_as(client, o.hr), o, {"everyone_sees_all": True}).json()["preview_token"]
+    r = _update(
+        _as(client, o.admin),
+        o,
+        {"everyone_sees_all": True, "confirmed": True, "preview_token": hans},
+    )
+    assert r.status_code == 409
+    assert r.json()["code"] == "preview_outdated"
+    assert _switches(o) == (False, True, False)
+
+
+def test_a_token_belongs_to_its_workspace(client: Client) -> None:
+    o = office()
+    other = office()
+    Membership.objects.create(workspace=other.workspace, user=o.admin, role="admin")
+    _as(client, o.admin)
+    token = _preview(client, other, {"everyone_sees_all": True}).json()["preview_token"]
+    r = _update(client, o, {"everyone_sees_all": True, "confirmed": True, "preview_token": token})
+    assert r.status_code == 409
+    assert r.json()["code"] == "preview_outdated"
+    assert _switches(o) == (False, True, False)

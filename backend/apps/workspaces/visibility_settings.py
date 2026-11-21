@@ -22,13 +22,14 @@ import json
 import threading
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Final
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from django.db import connection, transaction
 from django.db.models import Q
 from django.utils import timezone
+from django.utils.crypto import constant_time_compare, salted_hmac
 from django.utils.translation import gettext as _
 
 from apps.accounts.models import User
@@ -127,6 +128,51 @@ def fingerprint(policy: PolicySnapshot) -> str:
     return hashlib.sha256(json.dumps(canonical, sort_keys=True).encode()).hexdigest()
 
 
+# The purpose label of the preview token's key, derived from SECRET_KEY (no setting).
+_KEY_PURPOSE: Final = "brievie.workspaces.visibility.preview-confirmation"
+
+
+@dataclass(frozen=True)
+class MemberChange:
+    """A member change of sight; `kind` "" for none. Also what a preview of one is."""
+
+    kind: str = ""
+    user_id: UUID | None = None
+    person_id: UUID | None = None
+    role: str = ""
+    sorts_post: bool = False
+
+
+# The fields that make up each kind of member change (and so its token).
+_MEMBER_CHANGE_FIELDS: Final[dict[str, tuple[str, ...]]] = {
+    "role": ("user_id", "role"),
+    "sorts_post": ("user_id", "sorts_post"),
+    "department_add": ("user_id", "person_id"),
+    "department_remove": ("user_id", "person_id"),
+    "link": ("user_id", "person_id"),
+    "unlink": ("person_id",),
+    "remove": ("user_id",),
+    "invite_admin": (),
+}
+
+
+def member_change_key(change: MemberChange) -> str:
+    """The change in a canonical form: its kind and only the fields that kind uses."""
+    fields = {name: getattr(change, name) for name in _MEMBER_CHANGE_FIELDS[change.kind]}
+    return json.dumps({"member_change": change.kind, **fields}, sort_keys=True, default=str)
+
+
+def confirmation_token(
+    *, workspace_id: UUID, actor_id: UUID | None, change: str, before: PolicySnapshot
+) -> str:
+    """The token a confirmation sends back: an HMAC (key derived from SECRET_KEY) over the
+    workspace, the admin who previewed, the change itself and the state it was computed
+    from. It confirms exactly that change, by that admin, in that state; nobody can make
+    one without the server."""
+    value = json.dumps([str(workspace_id), str(actor_id or ""), change, fingerprint(before)])
+    return salted_hmac(_KEY_PURPOSE, value, algorithm="sha256").hexdigest()
+
+
 # --- confirmation and notices ---------------------------------------------------------
 
 
@@ -166,15 +212,22 @@ def require_confirmation(
     narrowing: bool,
     confirmed: bool,
     preview_token: str,
+    workspace_id: UUID,
+    actor_id: UUID | None,
+    change: str,
 ) -> None:
     """409 `confirmation_required` when somebody gains sight and the admin did not
-    confirm; 409 `preview_outdated` when the confirmation was given for another state
-    than `before` (another admin changed something in between)."""
+    confirm; 409 `preview_outdated` when the token was not given for this change by this
+    admin in this workspace in the state `before` (another admin changed something in
+    between, or the token belongs to another preview)."""
     if previewing() or not needs_confirmation(changes, before=before, narrowing=narrowing):
         return
     if not confirmed:
         raise confirmation_required()
-    if preview_token != fingerprint(before):
+    expected = confirmation_token(
+        workspace_id=workspace_id, actor_id=actor_id, change=change, before=before
+    )
+    if not constant_time_compare(preview_token, expected):
         raise preview_outdated()
 
 
@@ -279,7 +332,8 @@ def sight_change(
     narrowing: bool,
     confirmed: bool,
     preview_token: str,
-    actor_name: str,
+    actor: AuditActor,
+    change: str,
     ask_confirmation: bool = True,
 ) -> Iterator[SightChange]:
     """The steps of S 4.4 around one write: the caller holds `lock_memberships`, writes
@@ -299,12 +353,15 @@ def sight_change(
             narrowing=narrowing,
             confirmed=confirmed,
             preview_token=preview_token,
+            workspace_id=workspace.id,
+            actor_id=actor.user_id,
+            change=change,
         )
     notify_changes(
         workspace,
         result.changes,
         names=_names(result.before, after),
-        actor_name=actor_name,
+        actor_name=actor.name,
         admins_gained_all=any(ALL_AS_ADMIN in c.gains for c in result.changes),
     )
     if any(c.loses for c in result.changes):
@@ -407,7 +464,8 @@ def preview(
     apply: Callable[[], object],
     *,
     narrowing: bool,
-    viewer_id: UUID | None = None,
+    actor_id: UUID | None,
+    change: str,
 ) -> PreviewResult:
     """Run `apply` (a change of sight) inside a savepoint that is rolled back, and say
     what it would do: who gains and who loses, how many letters change viewers, whether
@@ -424,7 +482,7 @@ def preview(
             apply()
             after = snapshot(workspace)
             after_map = _viewer_map(workspace.id, one_by_one)
-            sentences = describe(policy_facts(workspace, after, viewer_id), audience="summary")
+            sentences = describe(policy_facts(workspace, after, actor_id), audience="summary")
             transaction.set_rollback(True)
     finally:
         _previewing.depth -= 1
@@ -434,7 +492,9 @@ def preview(
         letter_count=_changed_letters(before_map, after_map),
         needs_confirmation=needs_confirmation(changes, before=before, narrowing=narrowing),
         sentences=sentences,
-        preview_token=fingerprint(before),
+        preview_token=confirmation_token(
+            workspace_id=workspace.id, actor_id=actor_id, change=change, before=before
+        ),
         after=after,
     )
 
@@ -460,6 +520,11 @@ class Proposal:
 
 
 SWITCH_FIELDS: Final = ("kind", *ADMIN_PRESET_FIELDS)
+
+
+def proposal_key(proposal: Proposal) -> str:
+    """The proposal in a canonical form (its token binds it)."""
+    return json.dumps({"settings": asdict(proposal)}, sort_keys=True)
 
 
 def _validate(proposal: Proposal) -> None:
@@ -498,7 +563,7 @@ def _require_admin(locked: list[Membership], actor: AuditActor) -> None:
         raise _forbidden()
 
 
-def preview_change(*, workspace: Workspace, proposal: Proposal, viewer_id: UUID) -> PreviewResult:
+def preview_change(*, workspace: Workspace, proposal: Proposal, actor_id: UUID) -> PreviewResult:
     """What `change` would do with this proposal, without doing it."""
     _validate(proposal)
 
@@ -506,7 +571,9 @@ def preview_change(*, workspace: Workspace, proposal: Proposal, viewer_id: UUID)
         locked = Workspace.objects.select_for_update().get(id=workspace.id)
         _apply_proposal(locked, proposal)
 
-    return preview(workspace, apply, narrowing=False, viewer_id=viewer_id)
+    return preview(
+        workspace, apply, narrowing=False, actor_id=actor_id, change=proposal_key(proposal)
+    )
 
 
 def change(
@@ -533,7 +600,8 @@ def change(
             narrowing=False,
             confirmed=confirmed,
             preview_token=preview_token,
-            actor_name=actor.name,
+            actor=actor,
+            change=proposal_key(proposal),
         ):
             changed = _apply_proposal(locked, proposal)
             target = AuditTarget(TargetKind.WORKSPACE, locked.id, locked.name)
@@ -597,17 +665,6 @@ def post_access(membership: Membership) -> list[str]:
     return describe(facts, audience="member")
 
 
-@dataclass(frozen=True)
-class MemberChange:
-    """A planned member change to preview (`previewVisibilityChange`); `kind` "" for none."""
-
-    kind: str = ""
-    user_id: UUID | None = None
-    person_id: UUID | None = None
-    role: str = ""
-    sorts_post: bool = False
-
-
 def _incomplete() -> ApiError:
     return ApiError(
         422, "validation_error", _("Zeg om welk lid, welke persoon of welke rol het gaat.")
@@ -622,6 +679,8 @@ def _member_step(
     from apps.workspaces import members
 
     user_id, person_id = change.user_id, change.person_id
+    if change.kind == "invite_admin":
+        return (lambda: _placeholder_admin(workspace), False)
     if change.kind == "role":
         if user_id is None or not change.role:
             raise _incomplete()
@@ -698,6 +757,32 @@ def _member_step(
     )
 
 
+def _placeholder_admin(workspace: Workspace) -> None:
+    """An invited admin as if they had joined, for the preview only (rolled back)."""
+    user = User.objects.create(email=f"{uuid4()}@preview.invalid", name=_("Nieuwe beheerder"))
+    Membership.objects.create(user=user, workspace=workspace, role=Membership.Role.ADMIN)
+
+
+def invited_admin_changes(workspace: Workspace) -> tuple[PolicySnapshot, list[Change]]:
+    """What an admin who joins now would change (pure: a member added to the snapshot)."""
+    before = snapshot(workspace)
+    newcomer = MemberFacts(
+        user_id=UUID(int=0),
+        name="",
+        role=Membership.Role.ADMIN,
+        sorts_post=False,
+        person_ids=frozenset(),
+        department_ids=frozenset(),
+    )
+    after = PolicySnapshot(
+        switches=before.switches,
+        members=(*before.members, newcomer),
+        person_names=before.person_names,
+        department_names=before.department_names,
+    )
+    return before, diff(before, after)
+
+
 def preview_request(
     *, workspace: Workspace, proposal: Proposal, member_change: MemberChange, actor: AuditActor
 ) -> PreviewResult:
@@ -706,13 +791,19 @@ def preview_request(
     if actor.user_id is None:
         raise _forbidden()
     if not member_change.kind:
-        return preview_change(workspace=workspace, proposal=proposal, viewer_id=actor.user_id)
+        return preview_change(workspace=workspace, proposal=proposal, actor_id=actor.user_id)
     step, narrowing = _member_step(workspace, member_change, actor)
 
     def apply() -> None:
         step()
 
-    return preview(workspace, apply, narrowing=narrowing, viewer_id=actor.user_id)
+    return preview(
+        workspace,
+        apply,
+        narrowing=narrowing,
+        actor_id=actor.user_id,
+        change=member_change_key(member_change),
+    )
 
 
 def in_words(result: PreviewResult) -> list[Change]:

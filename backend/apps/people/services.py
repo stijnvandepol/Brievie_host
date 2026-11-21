@@ -26,7 +26,12 @@ from apps.workspaces.context import system_actor
 from apps.workspaces.locks import lock_memberships
 from apps.workspaces.models import Membership, Workspace
 from apps.workspaces.visibility_rules import department_category, person_category
-from apps.workspaces.visibility_settings import notify_self_grant, sight_change
+from apps.workspaces.visibility_settings import (
+    MemberChange,
+    member_change_key,
+    notify_self_grant,
+    sight_change,
+)
 
 _NAME_UNIQUE = "people_person_name_unique"
 _USER_UNIQUE = "people_person_user_unique"
@@ -530,7 +535,12 @@ def link_member(
             narrowing=user_id is None,
             confirmed=confirmed,
             preview_token=preview_token,
-            actor_name=actor.name,
+            actor=actor,
+            change=member_change_key(
+                MemberChange(kind="link", user_id=user_id, person_id=person.id)
+                if user_id is not None
+                else MemberChange(kind="unlink", person_id=person.id)
+            ),
         ) as sight:
             person.user_id = user_id
             _save(person)
@@ -627,7 +637,10 @@ def add_department_member(
             narrowing=False,
             confirmed=confirmed,
             preview_token=preview_token,
-            actor_name=actor.name,
+            actor=actor,
+            change=member_change_key(
+                MemberChange(kind="department_add", user_id=user_id, person_id=department.id)
+            ),
         ) as sight:
             DepartmentMember.objects.create(
                 workspace=workspace, department=department, user_id=user_id, is_lead=is_lead
@@ -668,7 +681,10 @@ def remove_department_member(
             narrowing=True,
             confirmed=False,
             preview_token="",
-            actor_name=actor.name,
+            actor=actor,
+            change=member_change_key(
+                MemberChange(kind="department_remove", user_id=user_id, person_id=department.id)
+            ),
         ):
             DepartmentMember.objects.filter(department=department, user_id=user_id).delete()
             visibility.recompute_where(workspace_id=workspace.id, person_id=department.id)
