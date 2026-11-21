@@ -135,6 +135,10 @@ msgstr "Emergency access used"
 msgid "Privépost zonder lezers"
 msgstr "Private mail without readers"
 
+#: apps/accounts/models.py
+msgid "Privépost zonder lezers, brief niet genoemd"
+msgstr "Private post without readers, letter not named"
+
 #: apps/accounts/notices.py
 #, python-format
 msgid "%(name)s heeft op %(date)s een herstellink voor je wachtwoord gemaakt."
@@ -199,6 +203,11 @@ msgstr "On %(date)s, %(name)s used emergency access to open %(count)s letters of
 #, python-format
 msgid "Er is post die privé had moeten worden, maar niemand zou hem kunnen lezen. Hij is zichtbaar gebleven voor iedereen in %(workspace)s (document %(document_id)s)."
 msgstr "Some mail should have become private, but nobody would have been able to read it. It stayed visible to everyone in %(workspace)s (document %(document_id)s)."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Er is post in %(workspace)s die privé had moeten worden, maar niemand zou hem kunnen lezen. Hij is zichtbaar gebleven voor wie hem mag zien."
+msgstr "Some post in %(workspace)s should have become private, but nobody could have read it. It stayed visible to those who may see it."
 
 #: apps/accounts/passwords.py
 #, python-format

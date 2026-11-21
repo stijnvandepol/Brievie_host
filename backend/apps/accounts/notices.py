@@ -60,6 +60,10 @@ MESSAGES: dict[str, Promise] = {
         "Er is post die privé had moeten worden, maar niemand zou hem kunnen lezen. Hij is "
         "zichtbaar gebleven voor iedereen in %(workspace)s (document %(document_id)s)."
     ),
+    Code.PRIVATE_WITHOUT_READERS_UNNAMED: _(
+        "Er is post in %(workspace)s die privé had moeten worden, maar niemand zou hem "
+        "kunnen lezen. Hij is zichtbaar gebleven voor wie hem mag zien."
+    ),
 }
 
 
@@ -80,6 +84,7 @@ NOTICE_VALUE_KEYS: Final[dict[str, frozenset[str]]] = {
     Code.EMERGENCY_ACCESS_SWITCHED_OFF: frozenset({"workspace"}),
     Code.EMERGENCY_ACCESS_USED: frozenset({"count", "person"}),
     Code.PRIVATE_WITHOUT_READERS: frozenset({"workspace", "document_id"}),
+    Code.PRIVATE_WITHOUT_READERS_UNNAMED: frozenset({"workspace"}),
 }
 
 

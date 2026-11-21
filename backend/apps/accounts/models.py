@@ -147,6 +147,11 @@ class AccountNotice(BaseModel):
         EMERGENCY_ACCESS_SWITCHED_OFF = "emergency_access_switched_off", _("Noodtoegang uitgezet")
         EMERGENCY_ACCESS_USED = "emergency_access_used", _("Noodtoegang gebruikt")
         PRIVATE_WITHOUT_READERS = "private_without_readers", _("Privépost zonder lezers")
+        # The same, for an admin who may not see the letter: it is not named.
+        PRIVATE_WITHOUT_READERS_UNNAMED = (
+            "private_without_readers_unnamed",
+            _("Privépost zonder lezers, brief niet genoemd"),
+        )
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notices")
     code = models.CharField(max_length=40, choices=Code.choices)

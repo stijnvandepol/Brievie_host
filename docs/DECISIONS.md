@@ -1980,3 +1980,8 @@ M3). "Iedereen ziet alle post" stays on everywhere until Task 40, so departments
   are required arguments; a call on nobody's behalf states it (`ACTING_AS_SYSTEM`, or
   `None` for the label services). A caller that forgets its role does not compile under
   mypy instead of acting as an admin.
+- **The "nobody could read it" notice names the letter only to who may see it (finding
+  5).** Admins who see the letter (it stays visible by the switches) get
+  `private_without_readers` with its id. When no admin sees it, every admin gets the new
+  `private_without_readers_unnamed`: that it happened in the workspace, no id; its readers
+  see the `private_skipped` line on the letter itself.

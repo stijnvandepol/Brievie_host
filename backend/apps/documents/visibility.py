@@ -438,15 +438,31 @@ def _private_skipped(
     if told:
         return
     workspace = Workspace.objects.get(id=document.workspace_id)
-    for membership in Membership.objects.filter(
-        workspace_id=document.workspace_id, role=Membership.Role.ADMIN
-    ).select_related("user"):
+    admins = list(
+        Membership.objects.filter(
+            workspace_id=document.workspace_id, role=Membership.Role.ADMIN
+        ).select_related("user")
+    )
+    # The letter stays visible by the switches: only an admin who sees it learns which
+    # letter it is. When none does, every admin hears that it happened, without the id
+    # (the letter's readers see the history line on it).
+    seen = viewers([document.id]).get(document.id, frozenset())
+    named = [m for m in admins if m.user_id in seen]
+    for membership in named:
         notify(
             membership.user,
             "private_without_readers",
             actor_name="Brievie",
             values={"document_id": str(document.id), "workspace": workspace.name},
         )
+    if not named:
+        for membership in admins:
+            notify(
+                membership.user,
+                "private_without_readers_unnamed",
+                actor_name="Brievie",
+                values={"workspace": workspace.name},
+            )
 
 
 def can_make_public(document: Document, user_id: UUID) -> bool:

@@ -268,3 +268,30 @@ def test_losing_a_non_private_letter_by_organising_is_not_409(client: Client) ->
     )
     assert r.status_code == 200, r.json()
     assert r.json()["can_read"] is False
+
+
+# Security review of PR #38, finding 5: the notice names the letter only to an admin who
+# may see it.
+
+
+def test_an_admin_who_does_not_see_the_letter_is_told_without_its_id() -> None:
+    o = office()  # E off, A off: Anne does not see a letter on Jan's name
+    doc = letter(o.workspace, on=[o.persons["Jan"]])
+    with as_actor(o.workspace, SYSTEM):
+        assert visibility.make_private(doc, actor=AuditActor.system(), origin="rule") == (
+            "nobody_could_read"
+        )
+    assert not AccountNotice.objects.filter(code="private_without_readers").exists()
+    (notice,) = AccountNotice.objects.filter(user=o.admin, code="private_without_readers_unnamed")
+    assert notice.values == {"workspace": "Kantoor"}
+
+
+def test_an_admin_who_sees_the_letter_is_told_its_id() -> None:
+    o = office()
+    o.state(e=False, d=True, a=True)
+    doc = letter(o.workspace, on=[o.persons["Jan"]])
+    with as_actor(o.workspace, SYSTEM):
+        visibility.make_private(doc, actor=AuditActor.system(), origin="rule")
+    (notice,) = AccountNotice.objects.filter(user=o.admin, code="private_without_readers")
+    assert notice.values["document_id"] == str(doc.id)
+    assert not AccountNotice.objects.filter(code="private_without_readers_unnamed").exists()
