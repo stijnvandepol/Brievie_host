@@ -21,7 +21,10 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures"
         ),
         ("Betaal uiterlijk 14 dagen na ontvangst.", "uiterlijk 14 dagen na ontvangst"),
         ("Betalen vóór: 01-12-2026. Daarna volgt een herinnering.", "vóór: 01-12-2026"),
-        ("Zie   de\nbijlage. U heeft tot 1 december om te reageren!", "tot 1 december om te reageren"),
+        (
+            "Zie   de\nbijlage. U heeft tot 1 december om te reageren!",
+            "tot 1 december om te reageren",
+        ),
         ("Geen datum hier.", ""),
         ("", ""),
     ],
