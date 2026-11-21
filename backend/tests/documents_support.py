@@ -5,6 +5,7 @@ import hashlib
 import json
 import uuid
 from datetime import timedelta
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -13,10 +14,11 @@ from django.utils import timezone
 
 from apps.accounts.models import User
 from apps.devices.services import create_pairing_code, pair_device
-from apps.documents.models import Document
+from apps.documents.models import Document, DuplicateCandidate
 from apps.people.models import Person
 from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
+from tests.visibility_support import as_actor
 
 if TYPE_CHECKING:
     from tests.helpers import Response
@@ -139,4 +141,18 @@ def make_person(workspace: Workspace, name: str, *, archived: bool = False) -> P
             workspace=workspace,
             display_name=name,
             archived_at=timezone.now() if archived else None,
+        )
+
+
+def pair(first: Document, second: Document, *, state: str = "open") -> DuplicateCandidate:
+    """A duplicate pair of two letters in `state`, ids ordered, written as the system."""
+    low, high = sorted((first, second), key=lambda d: d.id)
+    with as_actor(low.workspace, SYSTEM):
+        return DuplicateCandidate.objects.create(
+            workspace_id=low.workspace_id,
+            first=low,
+            second=high,
+            state=state,
+            text_similarity=Decimal("0.950"),
+            number_overlap=Decimal("1.000"),
         )

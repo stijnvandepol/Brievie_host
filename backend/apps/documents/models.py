@@ -372,7 +372,7 @@ class DocumentLabel(WorkspaceModel):
 class DocumentEvent(WorkspaceModel):
     """One change in a document's history. Names are copied so they outlive a delete."""
 
-    same_workspace_fields = ("document", "person", "label", "rule", "undoes")
+    same_workspace_fields = ("document", "person", "label", "rule", "undoes", "related_document")
 
     class Kind(models.TextChoices):
         LABEL_ADDED = "label_added"
@@ -395,6 +395,11 @@ class DocumentEvent(WorkspaceModel):
         # Moved to the trash, and put back from it (never undoable through an undo).
         TRASHED = "trashed"
         RESTORED = "restored"
+        # Duplicate letters: united into this letter (on the kept one), "two letters"
+        # (on both), and a task the merge moved (on both).
+        MERGED = "merged"
+        DUPLICATE_DISMISSED = "duplicate_dismissed"
+        TASK_MOVED = "task_moved"
 
     class Origin(models.TextChoices):
         USER = "user"
@@ -407,6 +412,8 @@ class DocumentEvent(WorkspaceModel):
         NAME_MATCH = "name_match"
         # The autopilot applied a rule's label proposal (`rule` names the rule).
         RULE_AUTOPILOT = "rule_autopilot"
+        # A person merged two scans of one letter (never undoable through an undo).
+        MERGE = "merge"
 
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="events")
     kind = models.CharField(max_length=30, choices=Kind.choices)
@@ -433,6 +440,11 @@ class DocumentEvent(WorkspaceModel):
     )
     # A short reason given with the event (emergency access), BSN-masked.
     note = models.TextField(blank=True, default="")
+    # The other letter of a duplicate pair (merge, dismiss, a moved task); null once
+    # that letter is purged.
+    related_document = models.ForeignKey(
+        Document, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
 
     class Meta:
         ordering: ClassVar[list[str]] = ["-created_at", "-id"]
@@ -569,6 +581,58 @@ class DocumentSuggestion(WorkspaceModel):
 
     def __str__(self) -> str:
         return f"{self.document_id} {self.action} {self.state}"
+
+
+class DuplicateCandidate(WorkspaceModel):
+    """Two letters that are probably one letter scanned twice: one row per pair, ever.
+
+    Stored ordered (`first_id < second_id`). Readable and writable only for an actor who
+    reads both letters (`rls.restrict_to_visible_document_pair`); member reads go through
+    `apps.documents.duplicates.visible_pairs`. The purge of either letter removes the row.
+    A `dismissed` row is the memory of "two letters": the pair is never proposed again.
+    """
+
+    same_workspace_fields = ("first", "second", "kept")
+
+    class State(models.TextChoices):
+        OPEN = "open"
+        MERGED = "merged"
+        DISMISSED = "dismissed"
+        # A re-check after a person's confirm found a guard.
+        WITHDRAWN = "withdrawn"
+
+    first = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="+")
+    second = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="+")
+    state = models.CharField(max_length=20, choices=State.choices, default=State.OPEN)
+    # The scores at detection.
+    text_similarity = models.DecimalField(max_digits=4, decimal_places=3)
+    number_overlap = models.DecimalField(max_digits=4, decimal_places=3)
+    kept = models.ForeignKey(
+        Document, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.CheckConstraint(
+                condition=models.Q(first__lt=models.F("second")),
+                name="documents_duplicate_ordered",
+            ),
+            models.UniqueConstraint(fields=["first", "second"], name="documents_duplicate_pair"),
+        ]
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(
+                fields=["workspace", "first", "second"],
+                condition=models.Q(state="open"),
+                name="documents_duplicate_open",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.first_id} ~ {self.second_id} ({self.state})"
 
 
 class MemberExport(WorkspaceModel):
