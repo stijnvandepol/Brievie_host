@@ -6,7 +6,8 @@ import pytest
 from django.test import Client
 
 from apps.accounts.models import AccountNotice, User, UserSession
-from apps.accounts.notices import can_dismiss, notice_message, notify
+from apps.accounts.notices import WORKSPACE_CODES, can_dismiss, notice_message, notify
+from apps.workspaces.models import Workspace
 from tests.factories import TEST_PASSWORD, UserFactory
 from tests.helpers import post_json
 
@@ -20,8 +21,15 @@ def signed_in(user: User) -> Client:
     return client
 
 
+def _workspace_for(code: str) -> uuid.UUID | None:
+    """A workspace for a code about one (navigation S 8), none for an account code."""
+    if code not in WORKSPACE_CODES:
+        return None
+    return Workspace.objects.create(name="Thuis", kind="home").id
+
+
 def notice_on(user: User, code: str, when: datetime, **values: str) -> AccountNotice:
-    notify(user, code, actor_name="Anne", values=values)
+    notify(user, code, actor_name="Anne", values=values, workspace_id=_workspace_for(code))
     notice = AccountNotice.objects.filter(user=user).latest("created_at")
     AccountNotice.objects.filter(pk=notice.pk).update(created_at=when)
     notice.refresh_from_db()
@@ -49,6 +57,7 @@ def test_notices_are_listed_once_and_marked_seen() -> None:
         "message": "Anne heeft op 3 mei je apparaat \u2018iPhone\u2019 ingetrokken.",
         "created_at": body[1]["created_at"],
         "can_dismiss": True,
+        "workspace_id": None,
     }
     assert seen(client, [str(older.id), str(newer.id)]) == 204
     assert client.get("/api/v1/me/notices").json() == []
@@ -102,7 +111,7 @@ def test_every_notice_has_a_sentence(code: str, values: dict[str, str], text: st
 def test_every_code_has_a_message() -> None:
     user = UserFactory.create()
     for code in AccountNotice.Code.values:
-        notify(user, code, actor_name="Anne")
+        notify(user, code, actor_name="Anne", workspace_id=_workspace_for(code))
     for notice in AccountNotice.objects.filter(user=user):
         assert notice_message(notice)
 
@@ -180,3 +189,54 @@ def test_notices_refuse_a_bearer_token() -> None:
     r = Client().get("/api/v1/me/notices", headers={"Authorization": f"Bearer {token}"})
 
     assert r.status_code == 401
+
+
+# Navigation plan Task 8 (spec S 8, B7): a notice about a workspace says which.
+
+
+def test_workspace_notice_carries_its_workspace() -> None:
+    user = UserFactory.create()
+    workspace = Workspace.objects.create(name="Kantoor", kind="business")
+    notify(
+        user,
+        "emergency_access_switched_on",
+        actor_name="Anne",
+        values={"workspace": "Kantoor"},
+        workspace_id=workspace.id,
+    )
+    (body,) = signed_in(user).get("/api/v1/me/notices").json()
+    assert body["workspace_id"] == str(workspace.id)
+
+
+def test_account_notice_has_none() -> None:
+    user = UserFactory.create()
+    notify(user, "sessions_ended", actor_name="Anne")
+    (body,) = signed_in(user).get("/api/v1/me/notices").json()
+    assert body["workspace_id"] is None
+
+
+def test_codes_about_a_workspace_pass_it() -> None:
+    user = UserFactory.create()
+    workspace = Workspace.objects.create(name="Kantoor", kind="business")
+    for code in AccountNotice.Code.values:
+        wrong = None if code in WORKSPACE_CODES else workspace.id
+        with pytest.raises(ValueError, match="workspace"):
+            notify(user, code, actor_name="Anne", workspace_id=wrong)
+    assert not AccountNotice.objects.filter(user=user).exists()
+
+
+def test_every_workspace_code_is_one_the_services_send_with_a_workspace() -> None:
+    # The workspace codes name a workspace or happen inside one; the rest are about the
+    # account (passwords, sessions, devices, server rights, the second factor).
+    account = set(AccountNotice.Code.values) - WORKSPACE_CODES
+    assert account == {
+        "password_reset_created",
+        "password_reset_completed",
+        "password_reset_by_command",
+        "sessions_ended",
+        "device_revoked",
+        "device_paired",
+        "second_factor_cleared",
+        "server_admin_granted",
+        "server_admin_revoked",
+    }

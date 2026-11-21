@@ -2678,6 +2678,14 @@
           "message": {
             "title": "Message",
             "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [

@@ -543,6 +543,7 @@ def _private_skipped(
             "private_without_readers",
             actor_name="Brievie",
             values={"document_id": str(document.id), "workspace": workspace.name},
+            workspace_id=workspace.id,
         )
     if not named:
         for membership in admins:
@@ -551,6 +552,7 @@ def _private_skipped(
                 "private_without_readers_unnamed",
                 actor_name="Brievie",
                 values={"workspace": workspace.name},
+                workspace_id=workspace.id,
             )
 
 
@@ -837,6 +839,7 @@ def open_emergency(
                     "emergency_access_used",
                     actor_name=actor.name,
                     values={"person": person.display_name, "count": str(len(opened))},
+                    workspace_id=workspace.id,
                 )
     return EmergencyResult(opened_count=len(opened), expires_at=expires_at)
 

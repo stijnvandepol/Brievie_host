@@ -675,6 +675,7 @@ def link_member(
                 category=person_category(person.id),
                 names=sight.before,
                 actor_name=actor.name,
+                workspace_id=workspace.id,
             )
         return _annotated(workspace, person.id)
 
@@ -863,6 +864,7 @@ def set_manager(
                 category=person_category(person.id),
                 names=sight.before,
                 actor_name=actor.name,
+                workspace_id=workspace.id,
             )
         return _annotated(workspace, person.id)
 
@@ -957,6 +959,7 @@ def add_department_member(
                 category=department_category(department.id),
                 names=sight.before,
                 actor_name=actor.name,
+                workspace_id=workspace.id,
             )
         return _annotated(workspace, department.id)
 

@@ -110,5 +110,6 @@ def set_emergency_access(
                 str(code),
                 actor_name=user.name,
                 values={"workspace": locked.name},
+                workspace_id=locked.id,
             )
         return locked

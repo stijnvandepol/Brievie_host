@@ -93,6 +93,9 @@ class NoticeOut(Schema):
     created_at: datetime
     # False for the "password was reset" notice in the session that the reset started.
     can_dismiss: bool = True
+    # The workspace the notice is about (show it there only); null for one about the
+    # account itself, shown everywhere.
+    workspace_id: UUID | None = None
 
 
 class NoticesSeenIn(InputSchema):

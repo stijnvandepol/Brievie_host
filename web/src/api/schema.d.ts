@@ -3625,6 +3625,11 @@ export interface components {
             id: string;
             /** Message */
             message: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             */
+            workspace_id?: string | null;
         };
         /** NoticesSeenIn */
         NoticesSeenIn: {
