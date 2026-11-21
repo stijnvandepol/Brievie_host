@@ -1,0 +1,2672 @@
+msgid ""
+msgstr "Content-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\nLanguage: en\nPlural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: apps/accounts/account_state.py
+msgid "Er is altijd minstens één serverbeheerder nodig. Dit account kan daarom niet weg."
+msgstr "There must always be at least one server admin. That is why this account cannot be removed."
+
+#: apps/accounts/auth.py
+msgid "Je sessie is niet meer geldig voor deze pagina. Ververs de pagina en probeer het opnieuw."
+msgstr "Your session is no longer valid for this page. Refresh the page and try again."
+
+#: apps/accounts/authority.py
+msgid "We kunnen dit account niet vinden."
+msgstr "We can't find this account."
+
+#: apps/accounts/authority.py
+msgid "Je eigen account regel je bij je eigen instellingen."
+msgstr "You manage your own account in your own settings."
+
+#: apps/accounts/authority.py
+msgid "Dit kan alleen de serverbeheerder, omdat dit account ook buiten deze werkruimte bestaat."
+msgstr "Only the server admin can do this, because this account also exists outside this workspace."
+
+#: apps/accounts/authority.py apps/workspaces/settings_service.py
+msgid "Dit kan alleen de serverbeheerder."
+msgstr "Only the server administrator can do this."
+
+#: apps/accounts/management/commands/reset_password.py apps/accounts/management/commands/set_server_admin.py
+msgid "Er is geen account met dit e-mailadres."
+msgstr "There is no account with this email address."
+
+#: apps/accounts/management/commands/reset_password.py
+msgid "Nieuw wachtwoord: "
+msgstr "New password: "
+
+#: apps/accounts/management/commands/reset_password.py
+msgid "Nog een keer: "
+msgstr "Once more: "
+
+#: apps/accounts/management/commands/reset_password.py
+msgid "De wachtwoorden zijn niet gelijk. Er is niets veranderd."
+msgstr "The passwords do not match. Nothing has changed."
+
+#: apps/accounts/management/commands/reset_password.py
+msgid "Het wachtwoord is ingesteld. Alle sessies van dit account zijn beëindigd."
+msgstr "The password is set. All sessions of this account have been ended."
+
+#: apps/accounts/management/commands/set_server_admin.py
+msgid "Dit account is uitgeschakeld. Nodig de persoon eerst opnieuw uit."
+msgstr "This account is switched off. Invite the person again first."
+
+#: apps/accounts/management/commands/set_server_admin.py
+msgid "Er is altijd minstens één serverbeheerder nodig."
+msgstr "There must always be at least one server admin."
+
+#: apps/accounts/management/commands/set_server_admin.py
+#, python-format
+msgid "%(name)s is geen serverbeheerder meer."
+msgstr "%(name)s is no longer a server admin."
+
+#: apps/accounts/management/commands/set_server_admin.py
+#, python-format
+msgid "%(name)s is nu serverbeheerder."
+msgstr "%(name)s is now a server admin."
+
+#: apps/accounts/models.py
+msgid "Wachtwoord"
+msgstr "Password"
+
+#: apps/accounts/models.py apps/audit/codes.py
+msgid "Inloggen via organisatie"
+msgstr "Sign in through your organization"
+
+#: apps/accounts/models.py
+msgid "Inloggen"
+msgstr "Sign in"
+
+#: apps/accounts/models.py
+msgid "Installatie"
+msgstr "Setup"
+
+#: apps/accounts/models.py apps/audit/codes.py
+msgid "Uitnodiging"
+msgstr "Invitation"
+
+#: apps/accounts/models.py
+msgid "Wachtwoord opnieuw ingesteld"
+msgstr "Password reset"
+
+#: apps/accounts/models.py apps/audit/codes.py
+msgid "Herstellink gemaakt"
+msgstr "Reset link created"
+
+#: apps/accounts/models.py
+msgid "Wachtwoord opnieuw ingesteld op de server"
+msgstr "Password reset on the server"
+
+#: apps/accounts/models.py
+msgid "Sessies beëindigd"
+msgstr "Sessions ended"
+
+#: apps/accounts/models.py
+msgid "Apparaat ingetrokken"
+msgstr "Device revoked"
+
+#: apps/accounts/models.py apps/audit/codes.py
+msgid "Apparaat gekoppeld"
+msgstr "Device paired"
+
+#: apps/accounts/models.py
+msgid "Tweestapsverificatie gewist"
+msgstr "Two-step verification cleared"
+
+#: apps/accounts/models.py apps/audit/codes.py
+msgid "Serverbeheerder gemaakt"
+msgstr "Made server admin"
+
+#: apps/accounts/models.py apps/audit/codes.py
+msgid "Geen serverbeheerder meer"
+msgstr "No longer server admin"
+
+#: apps/accounts/models.py apps/audit/codes.py
+msgid "Noodtoegang aangezet"
+msgstr "Emergency access switched on"
+
+#: apps/accounts/models.py apps/audit/codes.py
+msgid "Noodtoegang uitgezet"
+msgstr "Emergency access switched off"
+
+#: apps/accounts/models.py apps/audit/codes.py
+msgid "Noodtoegang gebruikt"
+msgstr "Emergency access used"
+
+#: apps/accounts/models.py
+msgid "Privépost zonder lezers"
+msgstr "Private mail without readers"
+
+#: apps/accounts/models.py
+msgid "Privépost zonder lezers, brief niet genoemd"
+msgstr "Private post without readers, letter not named"
+
+#: apps/accounts/models.py
+msgid "Je ziet meer post"
+msgstr "You see more post"
+
+#: apps/accounts/models.py
+msgid "Je ziet minder post"
+msgstr "You see less post"
+
+#: apps/accounts/models.py
+msgid "Beheerders lezen alle post"
+msgstr "Admins read all post"
+
+#: apps/accounts/models.py
+msgid "Iemand gaf zichzelf toegang"
+msgstr "Someone gave themselves access"
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "%(name)s heeft op %(date)s een herstellink voor je wachtwoord gemaakt."
+msgstr "%(name)s created a link to reset your password on %(date)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je wachtwoord is op %(date)s opnieuw ingesteld door %(name)s."
+msgstr "Your password was reset by %(name)s on %(date)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je wachtwoord is op %(date)s opnieuw ingesteld op de server."
+msgstr "Your password was reset on the server on %(date)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "%(name)s heeft op %(date)s je sessies beëindigd."
+msgstr "%(name)s ended your sessions on %(date)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "%(name)s heeft op %(date)s je apparaat ‘%(device)s’ ingetrokken."
+msgstr "%(name)s revoked your device ‘%(device)s’ on %(date)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Op %(date)s is het apparaat ‘%(device)s’ aan je account gekoppeld. Was jij dat niet? Trek het in bij Apparaten en wijzig je wachtwoord."
+msgstr "On %(date)s the device ‘%(device)s’ was paired with your account. Wasn't that you? Revoke it under Devices and change your password."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je bent op %(date)s serverbeheerder gemaakt op de server."
+msgstr "You were made a server admin on the server on %(date)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je bent op %(date)s geen serverbeheerder meer. Dat is op de server geregeld."
+msgstr "You are no longer a server admin since %(date)s. This was arranged on the server."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "%(name)s heeft op %(date)s je tweestapsverificatie gewist."
+msgstr "%(name)s cleared your two-step verification on %(date)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "%(name)s heeft op %(date)s noodtoegang voor de beheerder aangezet in %(workspace)s."
+msgstr "%(name)s switched on emergency access for the admin in %(workspace)s on %(date)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "%(name)s heeft op %(date)s noodtoegang voor de beheerder uitgezet in %(workspace)s."
+msgstr "%(name)s switched off emergency access for the admin in %(workspace)s on %(date)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "%(name)s heeft op %(date)s met noodtoegang %(count)s brieven van %(person)s geopend. De reden staat bij elke brief."
+msgstr "On %(date)s, %(name)s used emergency access to open %(count)s letters of %(person)s. The reason is noted with each letter."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Er is post die privé had moeten worden, maar niemand zou hem kunnen lezen. Hij is zichtbaar gebleven voor iedereen in %(workspace)s (document %(document_id)s)."
+msgstr "Some mail should have become private, but nobody would have been able to read it. It stayed visible to everyone in %(workspace)s (document %(document_id)s)."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Er is post in %(workspace)s die privé had moeten worden, maar niemand zou hem kunnen lezen. Hij is zichtbaar gebleven voor wie hem mag zien."
+msgstr "Some post in %(workspace)s should have become private, but nobody could have read it. It stayed visible to those who may see it."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je kunt nu alle post zien die niet privé is. Dat heeft %(name)s op %(date)s ingesteld."
+msgstr "You can now see all post that is not private. %(name)s set this on %(date)s."
+
+#: apps/accounts/notices.py
+msgid "Je ziet de post van anderen niet meer."
+msgstr "You no longer see other people's post."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "De beheerders kunnen nu alle post lezen die niet privé is, ook de jouwe. Dat heeft %(name)s op %(date)s ingesteld."
+msgstr "The admins can now read all post that is not private, yours too. %(name)s set this on %(date)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "%(name)s heeft zichzelf toegang gegeven tot post zonder naam."
+msgstr "%(name)s gave themselves access to unnamed post."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je kunt als beheerder nu alle post zien die niet privé is. Dat heeft %(name)s op %(date)s ingesteld."
+msgstr "As an admin you can now see all post that is not private. %(name)s set this on %(date)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je ziet nu ook de post van %(department)s. Dat heeft %(name)s op %(date)s ingesteld."
+msgstr "You now also see the post for %(department)s. %(name)s set this on %(date)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je ziet nu ook de post van %(person)s. Dat heeft %(name)s op %(date)s ingesteld."
+msgstr "You now also see the post for %(person)s. %(name)s set this on %(date)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je ziet nu post zonder naam, om er een naam op te zetten. Dat heeft %(name)s op %(date)s ingesteld."
+msgstr "You now see unnamed post, to put a name on it. %(name)s set this on %(date)s."
+
+#: apps/accounts/notices.py
+msgid "Je leest als beheerder niet meer alle post."
+msgstr "As an admin you no longer read all post."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je ziet de post van %(department)s niet meer."
+msgstr "You no longer see the post for %(department)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je ziet de post van %(person)s niet meer."
+msgstr "You no longer see the post for %(person)s."
+
+#: apps/accounts/notices.py
+msgid "Je ziet post zonder naam niet meer."
+msgstr "You no longer see unnamed post."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "%(name)s heeft zichzelf toegang gegeven tot de post van %(department)s."
+msgstr "%(name)s gave themselves access to the post for %(department)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "%(name)s heeft zichzelf toegang gegeven tot de post van %(person)s."
+msgstr "%(name)s gave themselves access to the post for %(person)s."
+
+#: apps/accounts/passwords.py
+#, python-format
+msgid "Dit wachtwoord is te kort. Gebruik minstens %(min)d tekens."
+msgstr "This password is too short. Use at least %(min)d characters."
+
+#: apps/accounts/passwords.py
+#, python-format
+msgid "Gebruik minstens %(min)d tekens."
+msgstr "Use at least %(min)d characters."
+
+#: apps/accounts/passwords.py
+msgid "Dit wachtwoord lijkt te veel op je naam of e-mailadres."
+msgstr "This password is too similar to your name or email address."
+
+#: apps/accounts/passwords.py
+msgid "Het wachtwoord mag niet te veel op je naam of e-mailadres lijken."
+msgstr "The password must not be too similar to your name or email address."
+
+#: apps/accounts/passwords.py
+msgid "Dit wachtwoord is te algemeen. Kies een ander."
+msgstr "This password is too common. Choose another one."
+
+#: apps/accounts/passwords.py
+msgid "Kies geen wachtwoord dat veel mensen gebruiken."
+msgstr "Don't choose a password that many people use."
+
+#: apps/accounts/passwords.py
+msgid "Dit wachtwoord bevat alleen cijfers. Gebruik ook letters."
+msgstr "This password has only digits. Use letters too."
+
+#: apps/accounts/passwords.py
+msgid "Gebruik niet alleen cijfers."
+msgstr "Don't use only digits."
+
+#: apps/accounts/resets.py
+msgid "Dit account staat uit. Zet het eerst weer aan."
+msgstr "This account is switched off. Switch it on again first."
+
+#: apps/accounts/resets.py
+msgid "Deze herstellink werkt niet meer. Vraag een nieuwe."
+msgstr "This reset link no longer works. Ask for a new one."
+
+#: apps/accounts/services.py
+msgid "Vul je naam in."
+msgstr "Enter your name."
+
+#: apps/accounts/services.py
+msgid "Brievie is al ingesteld."
+msgstr "Brievie is already set up."
+
+#: apps/accounts/services.py
+msgid "De installatiecode klopt niet. Je vindt hem in het log van de server."
+msgstr "The setup code is not correct. You can find it in the server log."
+
+#: apps/accounts/services.py apps/workspaces/management/commands/create_workspace.py
+msgid "Geef de werkruimte een naam."
+msgstr "Give the workspace a name."
+
+#: apps/accounts/services.py
+msgid "Het e-mailadres of wachtwoord klopt niet."
+msgstr "The email address or password is not correct."
+
+#: apps/accounts/services.py apps/accounts/signin_limits.py apps/common/errors.py
+msgid "Te veel pogingen. Probeer het later opnieuw."
+msgstr "Too many attempts. Try again later."
+
+#: apps/accounts/services.py
+msgid "Deze sessie bestaat niet meer."
+msgstr "This session no longer exists."
+
+#: apps/accounts/services.py
+msgid "Je wachtwoord klopt niet."
+msgstr "Your password is not correct."
+
+#: apps/accounts/services.py
+msgid "Je huidige wachtwoord klopt niet."
+msgstr "Your current password is not correct."
+
+#: apps/accounts/sessions.py
+msgid "Onbekende browser"
+msgstr "Unknown browser"
+
+#: apps/accounts/sessions.py
+#, python-format
+msgid "%(browser)s op %(system)s"
+msgstr "%(browser)s on %(system)s"
+
+#: apps/audit/api.py
+msgid "Deze gebeurtenis kennen we niet."
+msgstr "We don't know this event."
+
+#: apps/audit/api.py
+msgid "De begindatum ligt na de einddatum."
+msgstr "The start date is after the end date."
+
+#: apps/audit/api.py
+#, python-format
+msgid "Vraag tussen 1 en %(max)d gebeurtenissen tegelijk op."
+msgstr "Ask for between 1 and %(max)d events at a time."
+
+#: apps/audit/api.py
+msgid "Alleen een serverbeheerder mag dit doen."
+msgstr "Only a server admin may do this."
+
+#: apps/audit/api.py
+#, python-format
+msgid "Let op: alleen de nieuwste %(count)d gebeurtenissen staan in dit bestand."
+msgstr "Note: only the newest %(count)d events are in this file."
+
+#: apps/audit/codes.py
+msgid "Ingelogd"
+msgstr "Signed in"
+
+#: apps/audit/codes.py
+msgid "Inloggen mislukt"
+msgstr "Sign-in failed"
+
+#: apps/audit/codes.py
+msgid "Inloggen tijdelijk geblokkeerd"
+msgstr "Sign-in temporarily blocked"
+
+#: apps/audit/codes.py
+msgid "Tweestapsverificatie aangezet"
+msgstr "Two-step verification switched on"
+
+#: apps/audit/codes.py
+msgid "Tweestapsverificatie uitgezet"
+msgstr "Two-step verification switched off"
+
+#: apps/audit/codes.py
+msgid "Tweestapsverificatie gewist door beheerder"
+msgstr "Two-step verification cleared by an admin"
+
+#: apps/audit/codes.py
+msgid "Wachtwoord gewijzigd"
+msgstr "Password changed"
+
+#: apps/audit/codes.py
+msgid "Uitgelogd"
+msgstr "Signed out"
+
+#: apps/audit/codes.py
+msgid "Apparaat ontkoppeld"
+msgstr "Device unpaired"
+
+#: apps/audit/codes.py
+msgid "Apparaat verlopen"
+msgstr "Device expired"
+
+#: apps/audit/codes.py
+msgid "Instellingen voor inloggen via organisatie gewijzigd"
+msgstr "Settings for signing in through your organization changed"
+
+#: apps/audit/codes.py
+msgid "Werkruimte gemaakt"
+msgstr "Workspace created"
+
+#: apps/audit/codes.py
+msgid "Uitnodiging gemaakt"
+msgstr "Invitation created"
+
+#: apps/audit/codes.py
+msgid "Uitnodiging ingetrokken"
+msgstr "Invitation revoked"
+
+#: apps/audit/codes.py
+msgid "Uitnodiging aangenomen"
+msgstr "Invitation accepted"
+
+#: apps/audit/codes.py
+msgid "Rol gewijzigd"
+msgstr "Role changed"
+
+#: apps/audit/codes.py
+msgid "Lid verwijderd"
+msgstr "Member removed"
+
+#: apps/audit/codes.py
+msgid "Lid vertrokken"
+msgstr "Member left"
+
+#: apps/audit/codes.py
+msgid "Instelling gewijzigd"
+msgstr "Setting changed"
+
+#: apps/audit/codes.py
+msgid "Standaard Thuis of Organisatie overgenomen"
+msgstr "Home or Business defaults taken over"
+
+#: apps/audit/codes.py
+msgid "Verdeelt post gewijzigd"
+msgstr "Sorts post changed"
+
+#: apps/audit/codes.py
+msgid "Regel gemaakt"
+msgstr "Rule created"
+
+#: apps/audit/codes.py
+msgid "Regel gewijzigd"
+msgstr "Rule changed"
+
+#: apps/audit/codes.py
+msgid "Regel verwijderd"
+msgstr "Rule deleted"
+
+#: apps/audit/codes.py
+msgid "Regel met de hand uitgevoerd"
+msgstr "Rule run by hand"
+
+#: apps/audit/codes.py
+msgid "Label verwijderd"
+msgstr "Label deleted"
+
+#: apps/audit/codes.py
+msgid "Persoon verwijderd"
+msgstr "Person deleted"
+
+#: apps/audit/codes.py
+msgid "Zichtbaarheid gewijzigd"
+msgstr "Visibility changed"
+
+#: apps/audit/codes.py
+msgid "Persoon gekoppeld aan een account"
+msgstr "Person linked to an account"
+
+#: apps/audit/codes.py
+msgid "Persoon losgekoppeld van een account"
+msgstr "Person unlinked from an account"
+
+#: apps/audit/codes.py
+msgid "Lid aan afdeling toegevoegd"
+msgstr "Member added to department"
+
+#: apps/audit/codes.py
+msgid "Lid uit afdeling gehaald"
+msgstr "Member removed from department"
+
+#: apps/audit/codes.py
+msgid "Leidinggevende van afdeling gewijzigd"
+msgstr "Department lead changed"
+
+#: apps/audit/codes.py
+msgid "Export gemaakt"
+msgstr "Export created"
+
+#: apps/audit/codes.py
+msgid "Export gedownload"
+msgstr "Export downloaded"
+
+#: apps/audit/codes.py
+msgid "Brief naar de prullenbak"
+msgstr "Letter moved to the trash"
+
+#: apps/audit/codes.py
+msgid "Brief teruggezet"
+msgstr "Letter restored"
+
+#: apps/audit/codes.py
+msgid "Brief definitief verwijderd"
+msgstr "Letter deleted permanently"
+
+#: apps/audit/codes.py
+msgid "Gebruiker"
+msgstr "User"
+
+#: apps/audit/codes.py
+msgid "Apparaat"
+msgstr "Device"
+
+#: apps/audit/codes.py
+msgid "Systeem"
+msgstr "System"
+
+#: apps/audit/codes.py
+msgid "Sessie"
+msgstr "Session"
+
+#: apps/audit/codes.py
+msgid "Regel"
+msgstr "Rule"
+
+#: apps/audit/codes.py
+msgid "Label"
+msgstr "Label"
+
+#: apps/audit/codes.py apps/people/models.py
+msgid "Persoon"
+msgstr "Person"
+
+#: apps/audit/codes.py
+msgid "Document"
+msgstr "Document"
+
+#: apps/audit/codes.py
+msgid "Werkruimte"
+msgstr "Workspace"
+
+#: apps/audit/codes.py
+msgid "Export"
+msgstr "Export"
+
+#: apps/backup/errors.py
+msgid "De naam van een back-up van vóór het bijwerken ziet eruit als pre-update-0.3.0."
+msgstr "The name of a backup from before an update looks like pre-update-0.3.0."
+
+#: apps/backup/errors.py
+msgid "De noodback-up voor het bijwerken kon niet worden klaargezet."
+msgstr "The emergency backup before the update could not be prepared."
+
+#: apps/backup/errors.py
+msgid "Er is nog geen back-up ingesteld."
+msgstr "No backup has been set up yet."
+
+#: apps/backup/errors.py
+msgid "Je kunt maar één bestemming instellen: een map of een adres. Haal er één weg."
+msgstr "You can set only one destination: a folder or an address. Remove one of them."
+
+#: apps/backup/errors.py
+msgid "De back-updienst kan niet schrijven op deze bestemming. Kijk in SELFHOST.md hoe je de schijf klaarzet."
+msgstr "The backup service cannot write to this destination. See SELFHOST.md for how to prepare the disk."
+
+#: apps/backup/errors.py
+msgid "De bestemming voor de back-up is nog niet klaar voor gebruik."
+msgstr "The backup destination is not ready for use yet."
+
+#: apps/backup/errors.py
+msgid "De back-up staat op dezelfde schijf als de gegevens. Kies een andere schijf."
+msgstr "The backup is on the same disk as the data. Choose another disk."
+
+#: apps/backup/errors.py
+msgid "Op deze bestemming staat al een back-up."
+msgstr "There is already a backup at this destination."
+
+#: apps/backup/errors.py
+msgid "Het adres van de back-up bevat een gebruikersnaam of wachtwoord. Haal die eruit."
+msgstr "The backup address contains a user name or password. Remove it."
+
+#: apps/backup/errors.py
+msgid "Dit soort bestemming wordt niet ondersteund."
+msgstr "This kind of destination is not supported."
+
+#: apps/backup/errors.py
+msgid "Op de bestemming is geen back-up gevonden."
+msgstr "No backup was found at the destination."
+
+#: apps/backup/errors.py
+msgid "Het wachtwoord van de back-up klopt niet."
+msgstr "The backup password is not correct."
+
+#: apps/backup/errors.py
+msgid "De back-up is vergrendeld door een ander proces."
+msgstr "The backup is locked by another process."
+
+#: apps/backup/errors.py
+msgid "De bestemming van de back-up is niet bereikbaar."
+msgstr "The backup destination cannot be reached."
+
+#: apps/backup/errors.py
+msgid "Er is geen ruimte meer op de bestemming van de back-up."
+msgstr "There is no space left at the backup destination."
+
+#: apps/backup/errors.py
+msgid "De back-up is gemaakt, maar is niet compleet: een of meer bestanden konden niet worden gelezen."
+msgstr "The backup was made, but it is not complete: one or more files could not be read."
+
+#: apps/backup/errors.py
+msgid "De database kon niet worden veiliggesteld."
+msgstr "The database could not be saved."
+
+#: apps/backup/errors.py
+msgid "De back-upgebruiker van de database ontbreekt of heeft te weinig rechten."
+msgstr "The database's backup user is missing or does not have enough rights."
+
+#: apps/backup/errors.py
+msgid "De PostgreSQL-programma's zijn ouder dan de database."
+msgstr "The PostgreSQL programs are older than the database."
+
+#: apps/backup/errors.py
+msgid "Er is geen wachtwoord voor de back-up ingesteld."
+msgstr "No backup password has been set."
+
+#: apps/backup/errors.py
+msgid "Er is al een back-up of herstel bezig."
+msgstr "A backup or restore is already running."
+
+#: apps/backup/errors.py
+msgid "De kopie van de instellingen bevat een geheim."
+msgstr "The copy of the settings contains a secret."
+
+#: apps/backup/errors.py
+msgid "De inhoudsopgave van de back-up kon niet worden gelezen."
+msgstr "The backup's table of contents could not be read."
+
+#: apps/backup/errors.py
+msgid "Deze back-up komt van een nieuwere versie van Brievie."
+msgstr "This backup comes from a newer version of Brievie."
+
+#: apps/backup/errors.py
+msgid "Deze back-up is niet gevonden. Typ ./brievie status --list om te zien welke back-ups er zijn."
+msgstr "This backup was not found. Type ./brievie status --list to see which backups there are."
+
+#: apps/backup/errors.py
+msgid "De hoofdsleutel hoort niet bij deze back-up."
+msgstr "The master key does not belong to this backup."
+
+#: apps/backup/errors.py
+msgid "Deze back-up heeft een apart wachtwoord en nog geen werkruimtes, dus Brievie kan niet controleren of de hoofdsleutel klopt."
+msgstr "This backup has a separate password and no workspaces yet, so Brievie cannot check whether the master key is right."
+
+#: apps/backup/errors.py
+msgid "Het herstel is niet gelukt."
+msgstr "The restore did not succeed."
+
+#: apps/backup/errors.py
+msgid "De naam van de back-upmap bevat een aanhalingsteken of een regeleinde. Kies een map met een gewone naam."
+msgstr "The name of the backup folder contains a quotation mark or a line break. Choose a folder with an ordinary name."
+
+#: apps/backup/errors.py
+msgid "De hoofdsleutel moet 64 tekens hebben: cijfers en de letters a tot en met f."
+msgstr "The master key must have 64 characters: digits and the letters a to f."
+
+#: apps/backup/errors.py
+msgid "Het aparte wachtwoord van de back-up bevat een aanhalingsteken of een regeleinde. Zo'n wachtwoord past niet in de instellingen."
+msgstr "The separate backup password contains a quotation mark or a line break. Such a password does not fit in the settings."
+
+#: apps/backup/errors.py
+msgid "De servernaam in BRIEVIE_HOSTNAME is niet bruikbaar: haal regeleindes en andere stuurtekens weg, en houd hem korter dan 254 tekens."
+msgstr "The server name in BRIEVIE_HOSTNAME cannot be used: remove line breaks and other control characters, and keep it shorter than 254 characters."
+
+#: apps/backup/errors.py
+msgid "Het terugzetten van de documenten is afgebroken, dus de documenten zijn nu niet compleet. Voer deze stap gewoon opnieuw uit."
+msgstr "Putting back the documents was interrupted, so the documents are not complete now. Simply run this step again."
+
+#: apps/backup/errors.py
+msgid "Brievie weigert deze map te wissen of te overschrijven, omdat dat niet veilig is."
+msgstr "Brievie refuses to erase or overwrite this folder, because that is not safe."
+
+#: apps/backup/errors.py
+msgid "Brievie wist en herstelt alleen in de vaste mappen /data/documents, /data/authority en /data/backup-config. Deze map hoort daar niet bij."
+msgstr "Brievie only erases and restores in the fixed folders /data/documents, /data/authority and /data/backup-config. This folder is not one of them."
+
+#: apps/backup/errors.py
+msgid "In de map voor het herstel staan al bestanden. Kies een nieuwe of lege map."
+msgstr "The folder for the restore already has files in it. Choose a new or empty folder."
+
+#: apps/backup/errors.py
+msgid "In een map waar het herstel bestanden terugzet, staat een snelkoppeling of een ander bijzonder bestand. Brievie zet daar niets overheen. Herstel met --replace, dan worden de mappen eerst leeggemaakt."
+msgstr "A folder the restore puts files back into holds a shortcut or another special file. Brievie does not overwrite it. Restore with --replace to empty the folders first."
+
+#: apps/backup/errors.py
+msgid "De opslag van Caddy is niet gekoppeld, dus het certificaat kan niet worden teruggezet. Voer deze stap uit via ./brievie."
+msgstr "Caddy's storage is not mounted, so the certificate cannot be put back. Run this step through ./brievie."
+
+#: apps/backup/errors.py
+msgid "De klok van de server of van een back-up klopt niet; er wordt niets opgeruimd."
+msgstr "The clock of the server or of a backup is wrong; nothing is cleaned up."
+
+#: apps/backup/errors.py
+msgid "De back-up is gemaakt, maar niet alle oude back-ups konden worden opgeruimd."
+msgstr "The backup was made, but not all old backups could be cleaned up."
+
+#: apps/backup/errors.py
+msgid "De kopie van de instellingen ontbreekt, dus deze back-up zou niet terug te zetten zijn. Typ ./brievie start."
+msgstr "The copy of the settings is missing, so this backup could not be restored. Type ./brievie start."
+
+#: apps/backup/errors.py
+msgid "Deze opdracht wist of overschrijft gegevens en werkt alleen in de container van Brievie. Gebruik ./brievie."
+msgstr "This command erases or overwrites data and only works in Brievie's container. Use ./brievie."
+
+#: apps/backup/errors.py
+msgid "Afgebroken door herstel."
+msgstr "Interrupted by a restore."
+
+#: apps/backup/errors.py
+msgid "De vorige back-up is afgebroken. Er is een nieuwe gestart."
+msgstr "The previous backup was interrupted. A new one has started."
+
+#: apps/backup/errors.py
+msgid "Er ging iets mis. Probeer het later opnieuw."
+msgstr "Something went wrong. Try again later."
+
+#: apps/backup/errors.py
+msgid "Het back-upprogramma gaf een fout."
+msgstr "The backup program gave an error."
+
+#: apps/backup/management/commands/backup.py
+msgid "--safety hoort bij een back-up, niet bij --check."
+msgstr "--safety belongs with a backup, not with --check."
+
+#: apps/backup/management/commands/backup.py
+msgid "--label hoort bij --safety."
+msgstr "--label belongs with --safety."
+
+#: apps/backup/management/commands/backup.py
+msgid "Controle gestart…"
+msgstr "Check started…"
+
+#: apps/backup/management/commands/backup.py
+msgid "Back-up gestart…"
+msgstr "Backup started…"
+
+#: apps/backup/management/commands/backup.py
+msgid "De back-up is niet opgepakt. Draait de back-updienst (keeper)?"
+msgstr "The backup was not picked up. Is the backup service (keeper) running?"
+
+#: apps/backup/management/commands/backup.py
+msgid "De back-up is nog bezig. Kijk later met backup_status of hij gelukt is."
+msgstr "The backup is still running. Check later with backup_status whether it succeeded."
+
+#: apps/backup/management/commands/backup.py apps/backup/management/commands/update_backup.py
+msgid "De back-up is niet gelukt."
+msgstr "The backup did not succeed."
+
+#: apps/backup/management/commands/backup.py
+msgid "De controle is gelukt."
+msgstr "The check succeeded."
+
+#: apps/backup/management/commands/backup.py
+#, python-format
+msgid "De back-up is gelukt (%(size)s)."
+msgstr "The backup succeeded (%(size)s)."
+
+#: apps/backup/management/commands/backup_init.py
+msgid "De back-up is ingesteld."
+msgstr "The backup is set up."
+
+#: apps/backup/management/commands/backup_status.py
+msgid "niet ingesteld"
+msgstr "not set up"
+
+#: apps/backup/management/commands/backup_status.py
+msgid "map (schijf)"
+msgstr "folder (disk)"
+
+#: apps/backup/management/commands/backup_status.py
+msgid "REST-server"
+msgstr "REST server"
+
+#: apps/backup/management/commands/backup_status.py
+msgid "S3-opslag"
+msgstr "S3 storage"
+
+#: apps/backup/management/commands/backup_status.py
+msgid "onjuist ingesteld"
+msgstr "set up incorrectly"
+
+#: apps/backup/management/commands/backup_status.py
+msgid "nog nooit"
+msgstr "never"
+
+#: apps/backup/management/commands/backup_status.py
+#, python-format
+msgid "Brievie: %(v)s"
+msgstr "Brievie: %(v)s"
+
+#: apps/backup/management/commands/backup_status.py
+#, python-format
+msgid "PostgreSQL: %(v)s"
+msgstr "PostgreSQL: %(v)s"
+
+#: apps/backup/management/commands/backup_status.py
+#, python-format
+msgid "pg_dump: %(v)s"
+msgstr "pg_dump: %(v)s"
+
+#: apps/backup/management/commands/backup_status.py
+#, python-format
+msgid "restic: %(v)s"
+msgstr "restic: %(v)s"
+
+#: apps/backup/management/commands/backup_status.py
+#, python-format
+msgid "Bestemming: %(v)s"
+msgstr "Destination: %(v)s"
+
+#: apps/backup/management/commands/backup_status.py
+#, python-format
+msgid "Laatste geslaagde back-up: %(v)s"
+msgstr "Last successful backup: %(v)s"
+
+#: apps/backup/management/commands/backup_status.py
+#, python-format
+msgid "Laatste geslaagde back-up: %(when)s (%(size)s)"
+msgstr "Last successful backup: %(when)s (%(size)s)"
+
+#: apps/backup/management/commands/backup_status.py
+#, python-format
+msgid "Let op: %(reason)s"
+msgstr "Note: %(reason)s"
+
+#: apps/backup/management/commands/backup_status.py
+#, python-format
+msgid "Laatste geslaagde controle: %(v)s"
+msgstr "Last successful check: %(v)s"
+
+#: apps/backup/management/commands/backup_status.py
+#, python-format
+msgid "Laatste fout: %(when)s: %(reason)s"
+msgstr "Last error: %(when)s: %(reason)s"
+
+#: apps/backup/management/commands/backup_status.py
+#, python-format
+msgid "Laatst afgebroken: %(when)s: %(reason)s"
+msgstr "Last interrupted: %(when)s: %(reason)s"
+
+#: apps/backup/management/commands/backup_status.py
+msgid "Er staan nog geen back-ups op de bestemming."
+msgstr "There are no backups at the destination yet."
+
+#: apps/backup/management/commands/backup_status.py
+msgid "ja"
+msgstr "yes"
+
+#: apps/backup/management/commands/backup_status.py
+msgid "nee"
+msgstr "no"
+
+#: apps/backup/management/commands/backup_status.py
+#, python-format
+msgid "%(run)s  %(when)s  compleet: %(complete)s"
+msgstr "%(run)s  %(when)s  complete: %(complete)s"
+
+#: apps/backup/management/commands/backup_status.py
+msgid "controle"
+msgstr "check"
+
+#: apps/backup/management/commands/backup_status.py
+msgid "back-up"
+msgstr "backup"
+
+#: apps/backup/management/commands/backup_status.py
+#, python-format
+msgid "Wacht op de back-updienst: %(what)s, aangevraagd %(when)s"
+msgstr "Waiting for the backup service: %(what)s, requested %(when)s"
+
+#: apps/backup/management/commands/backup_status.py
+#, python-format
+msgid "Bezig: %(what)s, gestart %(when)s"
+msgstr "Running: %(what)s, started %(when)s"
+
+#: apps/backup/management/commands/restore_check.py
+#, python-format
+msgid "De back-up %(run)s is compleet: de database en de bestanden zijn er allebei."
+msgstr "Backup %(run)s is complete: both the database and the files are there."
+
+#: apps/backup/management/commands/restore_fetch.py
+msgid "Geef de eigenaar op als UID:GID, bijvoorbeeld 1000:1000."
+msgstr "Give the owner as UID:GID, for example 1000:1000."
+
+#: apps/backup/management/commands/restore_fetch.py
+#, python-format
+msgid "Deze instellingen zijn niet uit de back-up overgenomen; deze installatie zet ze zelf: %(keys)s."
+msgstr "These settings were not taken from the backup; this installation sets them itself: %(keys)s."
+
+#: apps/backup/management/commands/restore_files.py
+#, python-format
+msgid "Opgeruimd na het terugzetten: %(count)d onderdelen die geen gewoon bestand of map waren (zoals snelkoppelingen)."
+msgstr "Cleaned up after putting back: %(count)d items that were not an ordinary file or folder (such as shortcuts)."
+
+#: apps/backup/management/commands/restore_files.py
+msgid "De back-up heeft geen eigen certificaat; Caddy houdt zijn huidige certificaat."
+msgstr "The backup has no certificate of its own; Caddy keeps its current certificate."
+
+#: apps/backup/management/commands/sweep_storage.py
+msgid "Geen losse bestanden gevonden."
+msgstr "No stray files found."
+
+#: apps/backup/management/commands/sweep_storage.py
+#, python-format
+msgid "%(count)d losse bestanden gevonden (%(size)s), %(deleted)d verwijderd."
+msgstr "%(count)d stray files found (%(size)s), %(deleted)d deleted."
+
+#: apps/backup/management/commands/sweep_storage.py
+#, python-format
+msgid "%(count)d losse bestanden gevonden (%(size)s). Voeg --delete toe om ze te verwijderen."
+msgstr "%(count)d stray files found (%(size)s). Add --delete to delete them."
+
+#: apps/backup/management/commands/update_backup.py
+#, python-format
+msgid "De noodback-up is gemaakt (%(size)s)."
+msgstr "The emergency backup has been made (%(size)s)."
+
+#: apps/backup/management/commands/verify_restore.py
+#, python-format
+msgid "Het herstel is niet compleet: %(count)d probleem gevonden."
+msgid_plural "Het herstel is niet compleet: %(count)d problemen gevonden."
+msgstr[0] "The restore is not complete: %(count)d problem found."
+msgstr[1] "The restore is not complete: %(count)d problems found."
+
+#: apps/backup/management/commands/verify_restore.py
+msgid "Het herstel is gecontroleerd. Alles klopt."
+msgstr "The restore has been checked. Everything is correct."
+
+#: apps/backup/sheet.py
+msgid "Typ ./brievie restore. Brievie vraagt dan om twee dingen: deze sleutel en het aparte wachtwoord."
+msgstr "Type ./brievie restore. Brievie then asks for two things: this key and the separate password."
+
+#: apps/backup/sheet.py
+msgid "Typ ./brievie restore en geef deze sleutel als er om gevraagd wordt."
+msgstr "Type ./brievie restore and give this key when you are asked for it."
+
+#: apps/backup/sheet.py
+msgid "Installeer Brievie op de nieuwe computer."
+msgstr "Install Brievie on the new computer."
+
+#: apps/backup/sheet.py
+msgid "Sluit de back-upschijf aan. Gebruik je een back-up op afstand? Zorg dan dat je het adres van die back-up bij de hand hebt."
+msgstr "Connect the backup disk. Do you use a remote backup? Then make sure you have the address of that backup at hand."
+
+#: apps/backup/sheet.py
+msgid "Wacht tot je „Herstel gelukt.” ziet. Open Brievie daarna zoals je gewend bent."
+msgstr "Wait until you see “Restore succeeded.”. Then open Brievie as you are used to."
+
+#: apps/backup/sheet.py
+msgid "Nog niet ingesteld"
+msgstr "Not set up yet"
+
+#: apps/backup/templates/backup/recovery_sheet.html
+msgid "Herstelblad Brievie"
+msgstr "Brievie recovery sheet"
+
+#: apps/backup/templates/backup/recovery_sheet.html
+msgid "Print dit blad. Bewaar het op een andere plek dan deze computer."
+msgstr "Print this sheet. Keep it in a different place from this computer."
+
+#: apps/backup/templates/backup/recovery_sheet.html
+msgid "Naam van deze Brievie"
+msgstr "Name of this Brievie"
+
+#: apps/backup/templates/backup/recovery_sheet.html
+msgid "Gemaakt op"
+msgstr "Created on"
+
+#: apps/backup/templates/backup/recovery_sheet.html
+msgid "Plek van de back-up"
+msgstr "Location of the backup"
+
+#: apps/backup/templates/backup/recovery_sheet.html
+msgid "Vingerafdruk van het certificaat"
+msgstr "Fingerprint of the certificate"
+
+#: apps/backup/templates/backup/recovery_sheet.html
+msgid "Je sleutel"
+msgstr "Your key"
+
+#: apps/backup/templates/backup/recovery_sheet.html
+msgid "Apart wachtwoord van de back-up"
+msgstr "Separate backup password"
+
+#: apps/backup/templates/backup/recovery_sheet.html
+msgid "Zonder deze sleutel en het aparte wachtwoord kan niemand de back-up openen. De makers van Brievie ook niet."
+msgstr "Without this key and the separate password nobody can open the backup. Not even the makers of Brievie."
+
+#: apps/backup/templates/backup/recovery_sheet.html
+msgid "Zonder deze sleutel kan niemand de back-up openen. De makers van Brievie ook niet."
+msgstr "Without this key nobody can open the backup. Not even the makers of Brievie."
+
+#: apps/backup/templates/backup/recovery_sheet.html
+msgid "Zo herstel je Brievie"
+msgstr "How to restore Brievie"
+
+#: apps/backup/verify.py
+msgid "De database mist de functies voor wie welke post ziet."
+msgstr "The database lacks the functions for who sees which post."
+
+#: apps/backup/verify.py
+#, python-format
+msgid "De database mist de regels voor wie welke post ziet in tabel %(table)s."
+msgstr "The database lacks the rules for who sees which post in table %(table)s."
+
+#: apps/backup/verify.py
+#, python-format
+msgid "Pagina %(index)s van document %(document)s in werkruimte %(workspace)s ligt buiten de opslag."
+msgstr "Page %(index)s of document %(document)s in workspace %(workspace)s is outside the storage."
+
+#: apps/backup/verify.py
+#, python-format
+msgid "Pagina %(index)s van document %(document)s in werkruimte %(workspace)s ontbreekt in de opslag."
+msgstr "Page %(index)s of document %(document)s in workspace %(workspace)s is missing from the storage."
+
+#: apps/backup/verify.py
+#, python-format
+msgid "Pagina %(index)s van document %(document)s in werkruimte %(workspace)s is geen gewoon bestand in de opslag."
+msgstr "Page %(index)s of document %(document)s in workspace %(workspace)s is not an ordinary file in the storage."
+
+#: apps/backup/verify.py
+#, python-format
+msgid "Werkruimte %(id)s ontbreekt in de database."
+msgstr "Workspace %(id)s is missing from the database."
+
+#: apps/backup/verify.py
+#, python-format
+msgid "Werkruimte %(id)s staat niet in de inhoudsopgave van de back-up."
+msgstr "Workspace %(id)s is not in the backup's table of contents."
+
+#: apps/backup/verify.py
+#, python-format
+msgid "Werkruimte %(id)s heeft %(found)s documenten, de back-up had er %(expected)s."
+msgstr "Workspace %(id)s has %(found)s documents, the backup had %(expected)s."
+
+#: apps/backup/verify.py
+#, python-format
+msgid "Werkruimte %(id)s heeft %(found)s pagina's, de back-up had er %(expected)s."
+msgstr "Workspace %(id)s has %(found)s pages, the backup had %(expected)s."
+
+#: apps/backup/verify.py
+#, python-format
+msgid "Werkruimte %(id)s heeft geen sleutel."
+msgstr "Workspace %(id)s has no key."
+
+#: apps/backup/verify.py
+#, python-format
+msgid "De sleutel van werkruimte %(id)s past niet bij de hoofdsleutel."
+msgstr "The key of workspace %(id)s does not match the master key."
+
+#: apps/backup/verify.py
+#, python-format
+msgid "Pagina %(index)s van document %(document)s in werkruimte %(workspace)s kon niet worden geopend."
+msgstr "Page %(index)s of document %(document)s in workspace %(workspace)s could not be opened."
+
+#: apps/backup/verify.py
+msgid "Het certificaat van de server is niet gecontroleerd: geef de map met de certificaatautoriteit op."
+msgstr "The server's certificate was not checked: give the folder with the certificate authority."
+
+#: apps/backup/verify.py
+msgid "Het certificaat van de server ontbreekt."
+msgstr "The server's certificate is missing."
+
+#: apps/backup/verify.py
+msgid "Het certificaat van de server is niet hetzelfde als in de back-up."
+msgstr "The server's certificate is not the same as in the backup."
+
+#: apps/common/checks.py
+msgid "Choose a new password, see 'Run the whole stack' in the README."
+msgstr "Choose a new password, see 'Run the whole stack' in the README."
+
+#: apps/common/errors.py
+msgid "Dit verzoek klopt niet."
+msgstr "This request is not correct."
+
+#: apps/common/errors.py apps/devices/auth.py
+msgid "Je bent niet ingelogd."
+msgstr "You are not signed in."
+
+#: apps/common/errors.py
+msgid "Je mag dit niet doen."
+msgstr "You are not allowed to do this."
+
+#: apps/common/errors.py
+msgid "We kunnen dit niet vinden."
+msgstr "We can't find this."
+
+#: apps/common/errors.py
+msgid "Dit kan hier niet."
+msgstr "This is not possible here."
+
+#: apps/common/errors.py
+msgid "Dit verzoek mist een lengte. Probeer het opnieuw."
+msgstr "This request is missing a length. Try again."
+
+#: apps/common/errors.py
+msgid "Dit verzoek is te groot."
+msgstr "This request is too large."
+
+#: apps/common/errors.py
+msgid "Stuur de gegevens als JSON."
+msgstr "Send the data as JSON."
+
+#: apps/common/errors.py
+msgid "Er ging iets mis."
+msgstr "Something went wrong."
+
+#: apps/common/errors.py
+msgid "Er ging iets mis op de server. Probeer het later opnieuw."
+msgstr "Something went wrong on the server. Try again later."
+
+#: apps/common/errors.py
+msgid "Dit lukte niet door een andere wijziging. Probeer het opnieuw."
+msgstr "This did not work because of another change. Try again."
+
+#: apps/common/errors.py
+msgid "Stuur de brief als formulier met bestanden (multipart/form-data)."
+msgstr "Send the letter as a form with files (multipart/form-data)."
+
+#: apps/common/input_errors.py
+msgid "een naam"
+msgstr "a name"
+
+#: apps/common/input_errors.py
+msgid "een afzender"
+msgstr "a sender"
+
+#: apps/common/input_errors.py
+msgid "een samenvatting"
+msgstr "a summary"
+
+#: apps/common/input_errors.py
+msgid "een omschrijving"
+msgstr "a description"
+
+#: apps/common/input_errors.py
+msgid "een notitie"
+msgstr "a note"
+
+#: apps/common/input_errors.py
+msgid "een e-mailadres"
+msgstr "an email address"
+
+#: apps/common/input_errors.py
+msgid "een wachtwoord"
+msgstr "a password"
+
+#: apps/common/input_errors.py
+msgid "een voorwaarde"
+msgstr "a condition"
+
+#: apps/common/input_errors.py
+msgid "voorwaarden"
+msgstr "conditions"
+
+#: apps/common/input_errors.py
+msgid "acties"
+msgstr "actions"
+
+#: apps/common/input_errors.py
+msgid "taken"
+msgstr "tasks"
+
+#: apps/common/input_errors.py
+msgid "labels"
+msgstr "labels"
+
+#: apps/common/input_errors.py
+msgid "personen"
+msgstr "persons"
+
+#: apps/common/input_errors.py
+msgid "schrijfwijzen"
+msgstr "spellings"
+
+#: apps/common/input_errors.py
+msgid "regels"
+msgstr "rules"
+
+#: apps/common/input_errors.py
+msgid "meldingen"
+msgstr "notifications"
+
+#: apps/common/input_errors.py apps/workspaces/invitations.py apps/workspaces/members.py
+msgid "Kies een rol: beheerder, lid of meekijker."
+msgstr "Choose a role: admin, member or viewer."
+
+#: apps/common/input_errors.py
+msgid "Een uitnodiging is 1, 7 of 30 dagen geldig."
+msgstr "An invitation is valid for 1, 7 or 30 days."
+
+#: apps/common/input_errors.py
+msgid "Kies Thuis of Zakelijk."
+msgstr "Choose Home or Business."
+
+#: apps/common/input_errors.py
+msgid "De gegevens kloppen niet. Controleer wat je hebt ingevuld."
+msgstr "The details are not correct. Check what you entered."
+
+#: apps/common/input_errors.py
+#, python-format
+msgid "Dit is te lang: %(field)s heeft hoogstens %(max)d tekens."
+msgstr "This is too long: %(field)s has at most %(max)d characters."
+
+#: apps/common/input_errors.py
+#, python-format
+msgid "Vul %(field)s in."
+msgstr "Enter %(field)s."
+
+#: apps/common/input_errors.py
+#, python-format
+msgid "Dit is te kort: %(field)s heeft minstens %(min)d tekens."
+msgstr "This is too short: %(field)s has at least %(min)d characters."
+
+#: apps/common/input_errors.py
+#, python-format
+msgid "Dit zijn er te veel: hoogstens %(max)d %(items)s."
+msgstr "These are too many: at most %(max)d %(items)s."
+
+#: apps/common/input_errors.py
+#, python-format
+msgid "Dit zijn er te weinig: minstens %(min)d %(items)s."
+msgstr "These are too few: at least %(min)d %(items)s."
+
+#: apps/common/input_errors.py
+msgid "Deze datum bestaat niet. Schrijf hem als jjjj-mm-dd."
+msgstr "This date does not exist. Write it as yyyy-mm-dd."
+
+#: apps/common/input_errors.py
+msgid "Een id klopt niet."
+msgstr "An id is not correct."
+
+#: apps/common/management/commands/derive_backup_password.py
+msgid "BRIEVIE_MASTER_KEY in deploy/.env ontbreekt of is geen 64 tekens lang (cijfers en a tot en met f). Zonder de juiste sleutel zijn de documenten niet te lezen."
+msgstr "BRIEVIE_MASTER_KEY in deploy/.env is missing or not 64 characters long (digits and a to f). Without the right key the documents cannot be read."
+
+#: apps/common/names.py
+msgid "Een naam mag geen tekens bevatten die de leesrichting van de tekst omdraaien."
+msgstr "A name may not contain characters that reverse the direction of the text."
+
+#: apps/devices/services.py
+msgid "Vul eerst je wachtwoord opnieuw in."
+msgstr "Enter your password again first."
+
+#: apps/devices/services.py
+msgid "Geef het apparaat een naam."
+msgstr "Give the device a name."
+
+#: apps/devices/services.py
+msgid "Deze koppelcode klopt niet of is verlopen. Maak een nieuwe code aan."
+msgstr "This pairing code is not correct or has expired. Create a new code."
+
+#: apps/devices/services.py
+msgid "Het koppelen duurde te lang. Probeer het opnieuw."
+msgstr "Pairing took too long. Try again."
+
+#: apps/devices/services.py
+msgid "We kunnen dit apparaat niet vinden."
+msgstr "We can't find this device."
+
+#: apps/devices/services.py
+msgid "Deze server gebruikt geen eigen certificaat."
+msgstr "This server does not use a certificate of its own."
+
+#: apps/documents/api.py
+msgid "De gegevens bij deze upload kloppen niet."
+msgstr "The details of this upload are not correct."
+
+#: apps/documents/duplicates.py
+msgid "We kunnen deze dubbele brieven niet vinden."
+msgstr "We can't find these duplicate letters."
+
+#: apps/documents/duplicates.py
+msgid "Over deze twee brieven is al gekozen."
+msgstr "A choice has already been made about these two letters."
+
+#: apps/documents/duplicates.py
+msgid "Deze twee brieven zijn niet voor dezelfde mensen zichtbaar. Kies 'Het zijn twee brieven', of laat ze eerst voor dezelfde mensen zichtbaar zijn."
+msgstr "These two letters are not visible to the same people. Choose 'They are two letters', or first make them visible to the same people."
+
+#: apps/documents/duplicates.py
+msgid "Kies een van de twee brieven om te houden."
+msgstr "Choose one of the two letters to keep."
+
+#: apps/documents/duplicates.py apps/documents/review.py apps/documents/services.py
+msgid "Dit document wordt nog verwerkt. Probeer het zo opnieuw."
+msgstr "This document is still being processed. Try again in a moment."
+
+#: apps/documents/export.py
+#, python-format
+msgid "Gemaakt op %(date)s met Brievie."
+msgstr "Made on %(date)s with Brievie."
+
+#: apps/documents/export.py
+#, python-format
+msgid "Aantal brieven: %(documents)d"
+msgstr "Number of letters: %(documents)d"
+
+#: apps/documents/export.py
+#, python-format
+msgid "Aantal pagina's: %(pages)d"
+msgstr "Number of pages: %(pages)d"
+
+#: apps/documents/export.py
+msgid "De map pagina's: elke brief heeft een eigen map met een foto per pagina."
+msgstr "The folder pages: each letter has its own folder with a photo per page."
+
+#: apps/documents/export.py
+msgid "brievie-export.json: de gegevens van elke brief, zoals afzender, samenvatting, labels, personen en taken."
+msgstr "brievie-export.json: the details of each letter, such as sender, summary, labels, persons and tasks."
+
+#: apps/documents/export.py
+msgid "Let op: in de tekst en de gegevens is het BSN weggehaald. Op de foto's van de pagina's is het BSN wel te lezen."
+msgstr "Note: the BSN has been removed from the text and the details. On the photos of the pages the BSN can still be read."
+
+#: apps/documents/export.py
+msgid "Dit bestand is niet versleuteld zodra je het hebt gedownload. Bewaar het op een veilige plek en verwijder het als je het niet meer nodig hebt."
+msgstr "This file is not encrypted once you have downloaded it. Keep it in a safe place and delete it when you no longer need it."
+
+#: apps/documents/intake.py
+msgid "Er bestaat al een ander document met dit kenmerk."
+msgstr "Another document with this reference already exists."
+
+#: apps/documents/intake.py
+msgid "Deze brief staat in de prullenbak en wordt nu voorgoed gewist."
+msgstr "This letter is in the trash and is being erased for good right now."
+
+#: apps/documents/intake.py
+msgid "Deze brief staat in de prullenbak. Zet hem daar terug als je hem weer wilt zien."
+msgstr "This letter is in the trash. Restore it from there if you want to see it again."
+
+#: apps/documents/intake.py
+msgid "Het aantal pagina's klopt niet."
+msgstr "The number of pages is not correct."
+
+#: apps/documents/intake.py
+#, python-format
+msgid "Je kunt maximaal %(count)s pagina's in één keer sturen."
+msgstr "You can send at most %(count)s pages at once."
+
+#: apps/documents/intake.py
+msgid "De tekst van een pagina is te lang."
+msgstr "The text of a page is too long."
+
+#: apps/documents/intake.py
+msgid "Een pagina is geen bruikbare JPEG-afbeelding."
+msgstr "A page is not a usable JPEG image."
+
+#: apps/documents/intake.py
+msgid "Een pagina is onderweg beschadigd. Probeer het opnieuw."
+msgstr "A page was damaged on the way. Try again."
+
+#: apps/documents/member_export.py
+msgid "We kunnen deze export niet vinden."
+msgstr "We can't find this export."
+
+#: apps/documents/member_export.py
+msgid "In deze werkruimte staat exporteren uit. Vraag de beheerder."
+msgstr "Exporting is switched off in this workspace. Ask the admin."
+
+#: apps/documents/member_export.py
+msgid "Je export wordt nog gemaakt. Probeer het zo nog eens."
+msgstr "Your export is still being made. Try again in a moment."
+
+#: apps/documents/member_export.py
+#, python-format
+msgid "Brievie: de post van %(name)s"
+msgstr "Brievie: the mail of %(name)s"
+
+#: apps/documents/models.py
+msgid "Een map heeft een naam nodig."
+msgstr "A folder needs a name."
+
+#: apps/documents/models.py
+msgid "Een mapnaam mag geen / bevatten."
+msgstr "A folder name may not contain /."
+
+#: apps/documents/models.py
+msgid "Wordt verwerkt"
+msgstr "Processing"
+
+#: apps/documents/models.py
+msgid "Te controleren"
+msgstr "To check"
+
+#: apps/documents/models.py
+msgid "Klaar"
+msgstr "Done"
+
+#: apps/documents/models.py
+msgid "Verwerken mislukt"
+msgstr "Processing failed"
+
+#: apps/documents/models.py
+msgid "Scan"
+msgstr "Scan"
+
+#: apps/documents/models.py
+msgid "Upload"
+msgstr "Upload"
+
+#: apps/documents/models.py
+msgid "Mail"
+msgstr "Email"
+
+#: apps/documents/models.py
+msgid "Watch-map"
+msgstr "Watch folder"
+
+#: apps/documents/models.py
+msgid "Factuur"
+msgstr "Invoice"
+
+#: apps/documents/models.py
+msgid "Aanslag"
+msgstr "Tax assessment"
+
+#: apps/documents/models.py
+msgid "Beschikking"
+msgstr "Decision"
+
+#: apps/documents/models.py
+msgid "Rekening"
+msgstr "Bill"
+
+#: apps/documents/models.py
+msgid "Herinnering"
+msgstr "Reminder"
+
+#: apps/documents/models.py
+msgid "Aanmaning"
+msgstr "Payment demand"
+
+#: apps/documents/models.py
+msgid "Polis"
+msgstr "Policy"
+
+#: apps/documents/models.py
+msgid "Jaaropgave"
+msgstr "Annual statement"
+
+#: apps/documents/models.py
+msgid "Loonstrook"
+msgstr "Payslip"
+
+#: apps/documents/models.py apps/tasks/models.py
+msgid "Keuring"
+msgstr "Inspection"
+
+#: apps/documents/models.py
+msgid "Contract"
+msgstr "Contract"
+
+#: apps/documents/models.py
+msgid "Bonnetje"
+msgstr "Receipt"
+
+#: apps/documents/models.py
+msgid "Informatie"
+msgstr "Information"
+
+#: apps/documents/models.py apps/tasks/models.py
+msgid "Overig"
+msgstr "Other"
+
+#: apps/documents/models.py
+msgid "Normaal"
+msgstr "Normal"
+
+#: apps/documents/models.py
+msgid "Privé"
+msgstr "Private"
+
+#: apps/documents/organise.py
+#, python-format
+msgid "Een document staat op naam van hoogstens %(max)d personen."
+msgstr "A document is addressed to at most %(max)d persons."
+
+#: apps/documents/organise.py apps/people/services.py apps/workspaces/invitations.py
+msgid "We kunnen deze persoon niet vinden."
+msgstr "We can't find this person."
+
+#: apps/documents/organise.py apps/documents/services.py
+msgid "Een gearchiveerde persoon kun je niet aan een document toevoegen."
+msgstr "You can't add an archived person to a document."
+
+#: apps/documents/organise.py
+#, python-format
+msgid "Een document heeft hoogstens %(max)d labels."
+msgstr "A document has at most %(max)d labels."
+
+#: apps/documents/organise.py
+msgid "We kunnen deze gebeurtenis niet vinden."
+msgstr "We can't find this event."
+
+#: apps/documents/organise.py
+msgid "Deze wijziging kun je niet meer terugdraaien."
+msgstr "This change can no longer be undone."
+
+#: apps/documents/retention.py
+msgid "Deze brief moet nog bewaard worden. Je kunt hem nu niet wissen."
+msgstr "This letter still has to be kept. You can't erase it now."
+
+#: apps/documents/review.py apps/documents/services.py apps/documents/trash.py
+msgid "We kunnen dit document niet vinden."
+msgstr "We can't find this document."
+
+#: apps/documents/review.py
+msgid "Dit document kun je nu niet bevestigen."
+msgstr "You can't confirm this document right now."
+
+#: apps/documents/review.py
+msgid "Het bedrag klopt niet. Schrijf het als 1234,56."
+msgstr "That amount is not valid. Write it as 1234.56."
+
+#: apps/documents/review.py apps/documents/services.py
+msgid "Kies privé of zichtbaar voor iedereen."
+msgstr "Choose private or visible to everyone."
+
+#: apps/documents/review.py apps/rules/definition.py
+msgid "Dit soort document kennen we niet."
+msgstr "We don't know this kind of document."
+
+#: apps/documents/review.py
+msgid "Een briefdatum ligt tussen 1 januari 1900 en een jaar na vandaag."
+msgstr "A letter date is between 1 January 1900 and one year from today."
+
+#: apps/documents/review.py
+msgid "Dit soort taak kennen we niet."
+msgstr "We don't know this kind of task."
+
+#: apps/documents/review.py
+msgid "Een taak heeft een omschrijving nodig."
+msgstr "A task needs a description."
+
+#: apps/documents/review.py
+msgid "De bron van de datum klopt niet."
+msgstr "The source of the date is not correct."
+
+#: apps/documents/review.py
+msgid "Bij deze datum hoort de zin uit het document waar hij staat."
+msgstr "This date needs the sentence from the document where it appears."
+
+#: apps/documents/search.py apps/documents/services.py
+msgid "Deze stand van de inbox kennen we niet."
+msgstr "We don't know this inbox state."
+
+#: apps/documents/search.py
+msgid "Deze soort brief kennen we niet."
+msgstr "We don't know this kind of letter."
+
+#: apps/documents/search.py
+msgid "De begindatum moet vóór de einddatum liggen."
+msgstr "The start date must be before the end date."
+
+#: apps/documents/services.py
+msgid "We kunnen deze map niet vinden."
+msgstr "We can't find this folder."
+
+#: apps/documents/services.py
+msgid "Er is al een map met deze naam op deze plek."
+msgstr "There is already a folder with this name in this place."
+
+#: apps/documents/services.py
+msgid "Deze brief staat in de prullenbak."
+msgstr "This letter is in the trash."
+
+#: apps/documents/services.py
+msgid "We kunnen deze pagina niet vinden."
+msgstr "We can't find this page."
+
+#: apps/documents/services.py
+msgid "Dit document hoeft niet opnieuw verwerkt te worden."
+msgstr "This document does not need to be processed again."
+
+#: apps/documents/services.py
+msgid "Dit document kun je niet opnieuw controleren."
+msgstr "You can't check this document again."
+
+#: apps/documents/services.py
+msgid "We kunnen dit voorstel niet vinden."
+msgstr "We can't find this suggestion."
+
+#: apps/documents/upload_limits.py
+msgid "Er zijn net heel veel brieven verstuurd. Wacht even, dan gaat het vanzelf verder."
+msgstr "A lot of letters were just sent. Wait a moment, it will continue by itself."
+
+#: apps/documents/visibility.py
+msgid "ziet alle post"
+msgstr "sees all post"
+
+#: apps/documents/visibility.py
+msgid "beheerder, leest alle post"
+msgstr "admin, reads all post"
+
+#: apps/documents/visibility.py
+#, python-format
+msgid "op naam van %(person)s"
+msgstr "addressed to %(person)s"
+
+#: apps/documents/visibility.py
+#, python-format
+msgid "afdeling %(department)s"
+msgstr "department %(department)s"
+
+#: apps/documents/visibility.py
+msgid "verdeelt post"
+msgstr "sorts post"
+
+#: apps/documents/visibility.py
+msgid "heeft de brief gescand"
+msgstr "scanned the letter"
+
+#: apps/documents/visibility.py
+msgid "is gedeeld"
+msgstr "shared with them"
+
+#: apps/documents/visibility.py
+#, python-format
+msgid "noodtoegang tot %(time)s"
+msgstr "emergency access until %(time)s"
+
+#: apps/documents/visibility.py apps/people/services.py apps/workspaces/members.py
+msgid "We kunnen dit lid niet vinden."
+msgstr "We can't find this member."
+
+#: apps/documents/visibility.py
+msgid "Alleen iemand op wiens naam deze brief staat, kan hem weer voor iedereen zichtbaar maken."
+msgstr "Only someone this letter is addressed to can make it visible to everyone again."
+
+#: apps/documents/visibility.py
+msgid "Dan kun je deze brief zelf niet meer lezen."
+msgstr "You would no longer be able to read this letter yourself."
+
+#: apps/documents/visibility.py
+msgid "Noodtoegang staat uit in deze werkruimte."
+msgstr "Emergency access is off in this workspace."
+
+#: apps/documents/visibility.py
+#, python-format
+msgid "Geef een reden van %(min)d tot %(max)d tekens."
+msgstr "Give a reason of %(min)d to %(max)d characters."
+
+#: apps/documents/visibility.py
+msgid "Met noodtoegang kun je deze brief alleen lezen."
+msgstr "With emergency access you can only read this letter."
+
+#: apps/labels/presets.py
+msgid "Belastingdienst"
+msgstr "Belastingdienst"
+
+#: apps/labels/presets.py
+msgid "Zorg"
+msgstr "Healthcare"
+
+#: apps/labels/presets.py
+msgid "Verzekering"
+msgstr "Insurance"
+
+#: apps/labels/presets.py apps/rules/templates.py
+msgid "Wonen"
+msgstr "Housing"
+
+#: apps/labels/presets.py
+msgid "Energie en water"
+msgstr "Energy and water"
+
+#: apps/labels/presets.py
+msgid "Auto"
+msgstr "Car"
+
+#: apps/labels/presets.py
+msgid "Bank"
+msgstr "Bank"
+
+#: apps/labels/presets.py
+msgid "Inkomen"
+msgstr "Income"
+
+#: apps/labels/presets.py
+msgid "Gemeente"
+msgstr "Municipality"
+
+#: apps/labels/presets.py
+msgid "Abonnementen"
+msgstr "Subscriptions"
+
+#: apps/labels/presets.py
+msgid "Inkoop"
+msgstr "Purchases"
+
+#: apps/labels/presets.py
+msgid "Verkoop"
+msgstr "Sales"
+
+#: apps/labels/presets.py
+msgid "Personeel"
+msgstr "Staff"
+
+#: apps/labels/presets.py
+msgid "Contracten"
+msgstr "Contracts"
+
+#: apps/labels/presets.py
+msgid "KVK en overheid"
+msgstr "KVK and government"
+
+#: apps/labels/presets.py
+msgid "Huisvesting"
+msgstr "Premises"
+
+#: apps/labels/services.py
+msgid "We kunnen dit label niet vinden."
+msgstr "We can't find this label."
+
+#: apps/labels/services.py
+msgid "Een label heeft een naam nodig."
+msgstr "A label needs a name."
+
+#: apps/labels/services.py
+#, python-format
+msgid "Een labelnaam is hoogstens %(max)d tekens."
+msgstr "A label name has at most %(max)d characters."
+
+#: apps/labels/services.py
+msgid "Deze kleur kennen we niet."
+msgstr "We don't know this color."
+
+#: apps/labels/services.py
+msgid "Er is al een label met deze naam."
+msgstr "There is already a label with this name."
+
+#: apps/labels/services.py
+msgid "Kies een afdeling."
+msgstr "Choose a department."
+
+#: apps/labels/services.py apps/people/services.py apps/workspaces/deps.py apps/workspaces/members.py apps/workspaces/visibility_settings.py
+msgid "Je mag dit niet doen in deze werkruimte."
+msgstr "You are not allowed to do this in this workspace."
+
+#: apps/labels/services.py
+msgid "Deze werkruimte heeft het grootste aantal labels. Verwijder er eerst een."
+msgstr "This workspace has the largest number of labels. Delete one first."
+
+#: apps/labels/services.py
+#, python-format
+msgid "De regel '%(rule)s' gebruikt dit label. Pas die regel eerst aan."
+msgstr "The rule '%(rule)s' uses this label. Change that rule first."
+
+#: apps/people/models.py
+msgid "Afdeling"
+msgstr "Department"
+
+#: apps/people/services.py
+msgid "Een BSN bewaren we nooit, dus het kan niet in een naam staan. Post herkennen we aan de naam, niet aan het BSN. Laat het nummer weg."
+msgstr "We never store a BSN, so it cannot be in a name. We recognize mail by the name, not by the BSN. Leave the number out."
+
+#: apps/people/services.py
+msgid "Een persoon heeft een naam nodig."
+msgstr "A person needs a name."
+
+#: apps/people/services.py
+#, python-format
+msgid "Een naam is hoogstens %(max)d tekens."
+msgstr "A name has at most %(max)d characters."
+
+#: apps/people/services.py
+msgid "Een schrijfwijze van een naam heeft een zichtbaar teken nodig."
+msgstr "A spelling of a name needs a visible character."
+
+#: apps/people/services.py
+#, python-format
+msgid "Een schrijfwijze van een naam is %(min)d tot %(max)d tekens."
+msgstr "A spelling of a name has %(min)d to %(max)d characters."
+
+#: apps/people/services.py
+#, python-format
+msgid "Een persoon heeft hoogstens %(max)d schrijfwijzen."
+msgstr "A person has at most %(max)d spellings."
+
+#: apps/people/services.py
+#, python-format
+msgid "De naam '%(name)s' hoort al bij %(person)s. Twee personen kunnen niet dezelfde naam hebben."
+msgstr "The name '%(name)s' already belongs to %(person)s. Two persons cannot have the same name."
+
+#: apps/people/services.py
+msgid "Er is al een persoon met deze naam."
+msgstr "There is already a person with this name."
+
+#: apps/people/services.py
+msgid "Dit lid hoort al bij een andere persoon."
+msgstr "This member already belongs to another person."
+
+#: apps/people/services.py
+msgid "Kies een persoon of een afdeling."
+msgstr "Choose a person or a department."
+
+#: apps/people/services.py
+msgid "Deze werkruimte heeft het grootste aantal personen. Verwijder er eerst een."
+msgstr "This workspace has the largest number of persons. Delete one first."
+
+#: apps/people/services.py
+msgid "Deze persoon staat nog op een brief in de prullenbak. Na het wissen van die brief kun je de persoon verwijderen. Archiveren kan nu al."
+msgstr "This person is still on a letter in the trash. Once that letter is erased you can delete the person. You can archive them now."
+
+#: apps/people/services.py
+msgid "Deze persoon is nog in gebruik. Je kunt de persoon wel archiveren."
+msgstr "This person is still in use. You can archive the person instead."
+
+#: apps/people/services.py
+#, python-format
+msgid "De regel '%(rule)s' gebruikt deze persoon. Pas die regel eerst aan."
+msgstr "The rule '%(rule)s' uses this person. Change that rule first."
+
+#: apps/people/services.py apps/workspaces/deps.py apps/workspaces/locks.py apps/workspaces/settings_service.py
+msgid "We kunnen deze werkruimte niet vinden."
+msgstr "We can't find this workspace."
+
+#: apps/people/services.py
+msgid "Een afdeling koppel je niet aan één account. Voeg leden toe."
+msgstr "A department is not linked to one account. Add members instead."
+
+#: apps/people/services.py
+#, python-format
+msgid "Alleen %(name)s kan deze koppeling losmaken."
+msgstr "Only %(name)s can remove this link."
+
+#: apps/people/services.py
+msgid "Dit is geen afdeling."
+msgstr "This is not a department."
+
+#: apps/people/services.py
+msgid "Je kunt jezelf geen toegang geven tot privé-post. Gebruik een uitnodiging of noodtoegang."
+msgstr "You cannot give yourself access to private post. Use an invitation or emergency access."
+
+#: apps/pipeline/api.py
+msgid "Lees eerst wat er naar de AI-dienst gaat en geef akkoord."
+msgstr "First read what goes to the AI service and give your consent."
+
+#: apps/pipeline/api.py
+msgid "Lees eerst wat de autopilot doet en geef akkoord."
+msgstr "First read what the autopilot does and give your consent."
+
+#: apps/pipeline/api.py
+msgid "Zet eerst AI aan voor deze werkruimte."
+msgstr "Switch on AI for this workspace first."
+
+#: apps/pipeline/api.py
+msgid "De beheerder van deze server staat de autopilot niet toe."
+msgstr "The admin of this server does not allow the autopilot."
+
+#: apps/pipeline/api.py
+msgid "De autopilot kan nu niet worden aangezet."
+msgstr "The autopilot cannot be switched on right now."
+
+#: apps/pipeline/api.py
+msgid "Vul de naam van het model in."
+msgstr "Enter the name of the model."
+
+#: apps/pipeline/api.py
+msgid "De naam van het model is te lang."
+msgstr "The name of the model is too long."
+
+#: apps/pipeline/api.py
+msgid "Vul de sleutel van de AI-dienst in."
+msgstr "Enter the key of the AI service."
+
+#: apps/pipeline/api.py
+msgid "Het adres van een externe AI-dienst moet met https:// beginnen."
+msgstr "The address of an external AI service must start with https://."
+
+#: apps/pipeline/api.py
+msgid "Dit adres ligt niet op je eigen netwerk."
+msgstr "This address is not on your own network."
+
+#: apps/pipeline/api.py
+msgid "Dit adres van de AI-dienst klopt niet."
+msgstr "This address of the AI service is not correct."
+
+#: apps/pipeline/api.py
+msgid "Deze AI-instelling klopt niet."
+msgstr "This AI setting is not correct."
+
+#: apps/pipeline/management/commands/configure_ai.py
+msgid "De AI op je eigen netwerk leest de tekst van elke brief. Er gaat niets naar een dienst buiten je netwerk."
+msgstr "The AI on your own network reads the text of every letter. Nothing goes to a service outside your network."
+
+#: apps/pipeline/management/commands/configure_ai.py
+#, python-format
+msgid "Je hebt %(flag)s meegegeven: daarmee ga je hiermee akkoord."
+msgstr "You passed %(flag)s: with it you agree to this."
+
+#: apps/pipeline/management/commands/configure_ai.py
+#, python-format
+msgid "AI is niet aangezet. Er is geen toetsenbord om akkoord te geven. Geef in een script %(flag)s mee als je akkoord gaat."
+msgstr "AI has not been switched on. There is no keyboard to give consent. In a script, pass %(flag)s if you agree."
+
+#: apps/pipeline/management/commands/configure_ai.py
+#, python-format
+msgid "Typ \"%(word)s\" om AI aan te zetten: "
+msgstr "Type \"%(word)s\" to switch on AI: "
+
+#: apps/pipeline/management/commands/configure_ai.py
+msgid "AI is niet aangezet. Je hebt geen akkoord gegeven."
+msgstr "AI has not been switched on. You did not give your consent."
+
+#: apps/pipeline/models.py
+msgid "Uit"
+msgstr "Off"
+
+#: apps/pipeline/models.py
+msgid "Externe dienst"
+msgstr "External service"
+
+#: apps/pipeline/models.py
+msgid "Op het eigen netwerk"
+msgstr "On your own network"
+
+#: apps/pipeline/models.py
+msgid "OpenAI-compatibel"
+msgstr "OpenAI-compatible"
+
+#: apps/pipeline/models.py
+msgid "Claude (Anthropic)"
+msgstr "Claude (Anthropic)"
+
+#: apps/pipeline/settings_service.py
+msgid "Frankrijk (Europese Unie)"
+msgstr "France (European Union)"
+
+#: apps/pipeline/settings_service.py
+msgid "Verenigde Staten"
+msgstr "United States"
+
+#: apps/pipeline/settings_service.py
+msgid "Je zet de AI-autopilot aan. Lees dit eerst.\n\nBrievie zet brieven dan zelf onder personen en labels. Zet je ook \"Brieven zelf bevestigen\" aan? Dan bevestigt Brievie brieven ook zelf, zonder dat iemand eerst kijkt.\n\nEen label dat een regel voorstelt, zet Brievie er dan ook zelf op. Maar alleen als de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is van hetzelfde label. Staat het woord alleen verderop in de brief en is de AI niet zeker? Dan blijft het een voorstel.\n\nEen regel op \"Automatisch toepassen\" zet een label altijd zelf op.\n\nDe AI leest wat er in de brief staat en gelooft dat. Maar een brief kan fout zijn, of je misleiden. Dan klopt ook de afzender, de datum of de taak niet.\n\nBrievie bevestigt een brief alleen als het de afzender, de datum en elke termijn in de brief zelf heeft gevonden. Noemt de brief een termijn die Brievie niet in een taak met een datum kan zetten? Dan laat Brievie de brief voor jou staan.\n\nToch kan Brievie iets missen. Is een brief belangrijk? Lees dan zelf de brief.\n\nAlles wat Brievie zelf doet, krijgt het kenmerk \"Automatisch door AI\" (een label van een regel: \"Automatisch door regel\"). Je kunt het terugdraaien. Of je controleert de brief zelf met \"Zelf controleren\".\n"
+msgstr "You are switching on the AI autopilot. Read this first.\n\nBrievie then puts letters under persons and labels by itself. Do you also switch on \"Confirm letters automatically\"? Then Brievie also confirms letters by itself, without anyone looking first.\n\nA label that a rule suggests is then also added by Brievie itself. But only if the rule found the word in the sender or at the top of the letter, or if the AI is sure of the same label. Is the word only further down in the letter and is the AI not sure? Then it stays a suggestion.\n\nA rule set to \"Apply automatically\" always adds its label by itself.\n\nThe AI reads what is in the letter and believes it. But a letter can be wrong, or mislead you. Then the sender, the date or the task is wrong too.\n\nBrievie only confirms a letter if it found the sender, the date and every deadline in the letter itself. Does the letter name a deadline that Brievie cannot put in a task with a date? Then Brievie leaves the letter for you.\n\nStill, Brievie can miss something. Is a letter important? Then read the letter yourself.\n\nEverything Brievie does by itself is marked \"Automatically by AI\" (a label from a rule: \"Automatically by rule\"). You can undo it. Or you check the letter yourself with \"Check it yourself\".\n"
+
+#: apps/pipeline/settings_service.py
+msgid "onbekend. Zoek zelf op in welk land deze dienst staat."
+msgstr "unknown. Look up yourself in which country this service is."
+
+#: apps/pipeline/settings_service.py
+#, python-format
+msgid "Je zet AI aan voor werkruimte %(workspace)s. Lees dit eerst.\n\nDit gaat naar de AI-dienst, bij elke brief:\n- De tekst van elke brief. Een BSN is daarin vervangen door [BSN]. Andere gegevens staan er gewoon in, ook over geld, gezondheid en andere mensen.\n- De namen van de labels in deze werkruimte.\n- De namen van de personen in deze werkruimte, ook andere schrijfwijzen van hun naam.\n\nDit gaat er nooit naartoe:\n- De foto's of scans van de pagina's.\n- Je regels en de interne nummers van brieven, labels en personen.\n\nHier gaat het naartoe:\n- Dienst: %(service)s, model %(model)s\n- Land: %(country)s\n\nLet op:\n- Wat de dienst met de tekst doet en hoe lang de dienst die bewaart, staat in de voorwaarden van de dienst zelf. Brievie heeft daar geen invloed op.\n- Jij beslist dit voor iedereen van wie post in deze werkruimte staat. Vertel het hun.\n- Brievie legt vast dat je akkoord bent, en wanneer. Elk lid van de werkruimte kan zien dat AI aan staat.\n- Je kunt AI altijd weer uitzetten. Wat al verstuurd is, haal je daarmee niet terug.\n"
+msgstr "You are switching on AI for workspace %(workspace)s. Read this first.\n\nThis goes to the AI service, with every letter:\n- The text of every letter. A BSN in it is replaced by [BSN]. Other details are simply in it, including about money, health and other people.\n- The names of the labels in this workspace.\n- The names of the persons in this workspace, including other spellings of their name.\n\nThis never goes there:\n- The photos or scans of the pages.\n- Your rules and the internal numbers of letters, labels and persons.\n\nThis is where it goes:\n- Service: %(service)s, model %(model)s\n- Country: %(country)s\n\nNote:\n- What the service does with the text and how long it keeps it is in the service's own terms. Brievie has no influence on that.\n- You decide this for everyone whose mail is in this workspace. Tell them.\n- Brievie records that you agreed, and when. Every member of the workspace can see that AI is on.\n- You can always switch AI off again. That does not take back what has already been sent.\n"
+
+#: apps/rules/definition.py
+msgid "Kies of alle voorwaarden moeten kloppen of een van de voorwaarden."
+msgstr "Choose whether all conditions must match or one of the conditions."
+
+#: apps/rules/definition.py
+#, python-format
+msgid "Een regel heeft %(min)d tot %(max)d voorwaarden."
+msgstr "A rule has %(min)d to %(max)d conditions."
+
+#: apps/rules/definition.py
+#, python-format
+msgid "Een regel heeft %(min)d tot %(max)d acties."
+msgstr "A rule has %(min)d to %(max)d actions."
+
+#: apps/rules/definition.py
+msgid "Privé maken kan alleen in een regel die automatisch werkt."
+msgstr "Make private only works in a rule that applies itself."
+
+#: apps/rules/definition.py
+msgid "Een voorwaarde gaat over iets wat we niet kennen."
+msgstr "A condition is about something we don't know."
+
+#: apps/rules/definition.py
+msgid "Een voorwaarde heeft een vergelijking die bij dit veld niet past."
+msgstr "A condition has a comparison that does not fit this field."
+
+#: apps/rules/definition.py
+#, python-format
+msgid "De tekst van een voorwaarde is %(min)d tot %(max)d tekens."
+msgstr "The text of a condition is %(min)d to %(max)d characters."
+
+#: apps/rules/definition.py
+msgid "Een BSN bewaren we nooit, dus je kunt het niet in een regel gebruiken. Laat het nummer weg."
+msgstr "We never store a BSN, so you can't use it in a rule. Leave the number out."
+
+#: apps/rules/definition.py
+msgid "Deze bron kennen we niet."
+msgstr "We don't know this source."
+
+#: apps/rules/definition.py
+msgid "Een voorwaarde noemt een label dat we niet kunnen vinden."
+msgstr "A condition names a label we can't find."
+
+#: apps/rules/definition.py
+msgid "Bij 'op naam van niemand' hoort geen persoon."
+msgstr "'Addressed to nobody' takes no person."
+
+#: apps/rules/definition.py
+msgid "Een voorwaarde noemt een persoon die we niet kunnen vinden."
+msgstr "A condition names a person we can't find."
+
+#: apps/rules/definition.py
+msgid "Deze actie kennen we niet."
+msgstr "We don't know this action."
+
+#: apps/rules/definition.py
+msgid "Een actie 'privé maken' noemt geen label en geen persoon."
+msgstr "A 'make private' action names no label and no person."
+
+#: apps/rules/definition.py
+msgid "Een actie 'label toevoegen' noemt alleen een label."
+msgstr "An 'add label' action names only a label."
+
+#: apps/rules/definition.py
+msgid "Een actie noemt een label dat we niet kunnen vinden."
+msgstr "An action names a label we can't find."
+
+#: apps/rules/definition.py
+msgid "Een actie 'op naam zetten' noemt alleen een persoon."
+msgstr "An 'address to' action names only a person."
+
+#: apps/rules/definition.py
+msgid "Een actie noemt een persoon die we niet kunnen vinden."
+msgstr "An action names a person we can't find."
+
+#: apps/rules/definition.py
+msgid "Deze persoon is gearchiveerd. Zet de persoon eerst terug, of kies een ander."
+msgstr "This person is archived. Restore the person first, or choose another one."
+
+#: apps/rules/presets.py
+#, python-format
+msgid "Label %(name)s"
+msgstr "Label %(name)s"
+
+#: apps/rules/services.py
+msgid "We kunnen deze regel niet vinden."
+msgstr "We can't find this rule."
+
+#: apps/rules/services.py
+msgid "Een regel heeft een naam nodig."
+msgstr "A rule needs a name."
+
+#: apps/rules/services.py
+msgid "Kies of de regel een voorstel doet of het zelf doet."
+msgstr "Choose whether the rule makes a suggestion or does it by itself."
+
+#: apps/rules/services.py
+#, python-format
+msgid "Je kunt hoogstens %(max)d regels maken."
+msgstr "You can create at most %(max)d rules."
+
+#: apps/rules/services.py
+msgid "Noem elke regel precies één keer."
+msgstr "Name every rule exactly once."
+
+#: apps/rules/services.py
+msgid "Deze regel kunnen we niet lezen."
+msgstr "We can't read this rule."
+
+#: apps/rules/services.py
+msgid "Deze regel staat uit. Zet hem eerst aan."
+msgstr "This rule is switched off. Switch it on first."
+
+#: apps/rules/templates.py
+msgid "Typ de naam van de afzender, zoals die op de brief staat."
+msgstr "Type the name of the sender as it appears on the letter."
+
+#: apps/rules/templates.py
+msgid "Het woord mag overal in de brief staan: ook een brief die het woord alleen noemt, krijgt het voorstel."
+msgstr "The word may be anywhere in the letter: a letter that only mentions the word gets the suggestion too."
+
+#: apps/rules/templates.py
+msgid "Label op afzender"
+msgstr "Label by sender"
+
+#: apps/rules/templates.py
+msgid "Stelt een label voor op alle post van één afzender, bijvoorbeeld het label Zorg op post van je zorgverzekeraar."
+msgstr "Suggests a label for all mail from one sender, for example the label Healthcare for mail from your health insurer."
+
+#: apps/rules/templates.py
+msgid "Kies het label dat de brief krijgt."
+msgstr "Choose the label the letter gets."
+
+#: apps/rules/templates.py
+msgid "Preciezer dan een woord in de brief: alleen post die van deze afzender komt, past."
+msgstr "More precise than a word in the letter: only mail that comes from this sender matches."
+
+#: apps/rules/templates.py
+msgid "Label op een woord in de brief"
+msgstr "Label by a word in the letter"
+
+#: apps/rules/templates.py
+msgid "Stelt een label voor op post waarin een bepaald woord staat, bijvoorbeeld het label Auto als er APK in staat."
+msgstr "Suggests a label for mail that contains a certain word, for example the label Car if it says APK."
+
+#: apps/rules/templates.py
+msgid "Label op een woord"
+msgstr "Label by a word"
+
+#: apps/rules/templates.py
+msgid "Typ het woord waar de brief om draait."
+msgstr "Type the word the letter is about."
+
+#: apps/rules/templates.py
+msgid "Weet je van wie de post komt? Kies dan liever 'Label op afzender'."
+msgstr "Do you know who the mail comes from? Then choose 'Label by sender' instead."
+
+#: apps/rules/templates.py
+msgid "Alles van deze afzender voor dezelfde persoon"
+msgstr "Everything from this sender for the same person"
+
+#: apps/rules/templates.py
+msgid "Stelt voor om alle post van één afzender op naam van dezelfde persoon te zetten, bijvoorbeeld de post van DUO voor je kind."
+msgstr "Suggests addressing all mail from one sender to the same person, for example the mail from DUO for your child."
+
+#: apps/rules/templates.py
+msgid "Afzender voor één persoon"
+msgstr "Sender for one person"
+
+#: apps/rules/templates.py
+msgid "Kies voor wie de post is."
+msgstr "Choose who the mail is for."
+
+#: apps/rules/templates.py
+msgid "Op naam zetten op een woord in de brief"
+msgstr "Address by a word in the letter"
+
+#: apps/rules/templates.py
+msgid "Stelt voor om post op naam van een persoon te zetten als er een bepaald woord in staat, bijvoorbeeld de naam van de school van je kind."
+msgstr "Suggests addressing mail to a person if it contains a certain word, for example the name of your child's school."
+
+#: apps/rules/templates.py
+msgid "Op naam op een woord"
+msgstr "Address by a word"
+
+#: apps/rules/templates.py
+msgid "Typ een woord of naam die alleen in post voor deze persoon staat."
+msgstr "Type a word or name that only appears in mail for this person."
+
+#: apps/rules/templates.py
+msgid "Facturen van een leverancier"
+msgstr "Invoices from a supplier"
+
+#: apps/rules/templates.py
+msgid "Stelt een label voor op facturen van één leverancier, bijvoorbeeld een eigen label per leverancier naast Inkoop."
+msgstr "Suggests a label for invoices from one supplier, for example a label of your own per supplier next to Purchases."
+
+#: apps/rules/templates.py
+msgid "Alleen facturen."
+msgstr "Invoices only."
+
+#: apps/rules/templates.py
+msgid "Kies het label voor deze leverancier."
+msgstr "Choose the label for this supplier."
+
+#: apps/rules/templates.py
+msgid "Beide voorwaarden moeten kloppen. Het soort post en de afzender zijn bekend als de AI de brief heeft gelezen, of zodra jij hem bevestigt."
+msgstr "Both conditions must match. The kind of mail and the sender are known once the AI has read the letter, or as soon as you confirm it."
+
+#: apps/rules/templates.py
+msgid "De WOZ-beschikking van de gemeente"
+msgstr "The WOZ decision from the municipality"
+
+#: apps/rules/templates.py
+msgid "Stelt het label Wonen voor op post van de gemeente waarin het woord WOZ staat. Beide voorwaarden moeten kloppen."
+msgstr "Suggests the label Housing for mail from the municipality that contains the word WOZ. Both conditions must match."
+
+#: apps/rules/templates.py
+msgid "WOZ van de gemeente"
+msgstr "WOZ from the municipality"
+
+#: apps/rules/templates.py
+msgid "De afzender heeft het woord gemeente in zijn naam."
+msgstr "The sender has the word gemeente in its name."
+
+#: apps/rules/templates.py
+msgid "En het woord WOZ staat in de brief."
+msgstr "And the word WOZ is in the letter."
+
+#: apps/rules/templates.py
+msgid "Twee voorwaarden samen zijn preciezer dan één: een brief van je verzekeraar die de WOZ-waarde alleen noemt, past niet."
+msgstr "Two conditions together are more precise than one: a letter from your insurer that only mentions the WOZ value does not match."
+
+#: apps/rules/templates.py
+msgid "Herinneringen en aanmaningen"
+msgstr "Reminders and payment demands"
+
+#: apps/rules/templates.py
+msgid "Stelt een label voor op elke herinnering of aanmaning, zodat je ze snel terugvindt."
+msgstr "Suggests a label for every reminder or payment demand, so you find them again quickly."
+
+#: apps/rules/templates.py
+msgid "Kies het label, bijvoorbeeld een eigen label Betalen."
+msgstr "Choose the label, for example a label of your own called Pay."
+
+#: apps/rules/templates.py
+msgid "Een van de voorwaarden is genoeg. Het soort post is bekend als de AI de brief heeft gelezen, of zodra jij hem bevestigt."
+msgstr "One of the conditions is enough. The kind of mail is known once the AI has read the letter, or as soon as you confirm it."
+
+#: apps/tasks/assignment.py
+msgid "Deze taak hoort niet bij een brief en kan niet worden gegeven."
+msgstr "This task does not belong to a letter and cannot be handed over."
+
+#: apps/tasks/assignment.py
+msgid "Deze persoon mag de brief niet lezen. Kies iemand anders."
+msgstr "This person may not read the letter. Choose someone else."
+
+#: apps/tasks/models.py
+msgid "Betalen"
+msgstr "Pay"
+
+#: apps/tasks/models.py
+msgid "Reageren"
+msgstr "Respond"
+
+#: apps/tasks/models.py
+msgid "Bezwaar maken"
+msgstr "File an objection"
+
+#: apps/tasks/models.py
+msgid "Aanvragen"
+msgstr "Apply"
+
+#: apps/tasks/models.py
+msgid "Opzeggen"
+msgstr "Cancel contract"
+
+#: apps/tasks/models.py
+msgid "Verlengen"
+msgstr "Renew"
+
+#: apps/tasks/models.py
+msgid "Aangifte"
+msgstr "File a return"
+
+#: apps/tasks/models.py
+msgid "Staat in het document"
+msgstr "In the document"
+
+#: apps/tasks/models.py
+msgid "Berekend"
+msgstr "Calculated"
+
+#: apps/tasks/models.py
+msgid "Zelf ingevuld"
+msgstr "Entered by hand"
+
+#: apps/tasks/models.py
+msgid "Open"
+msgstr "Open"
+
+#: apps/tasks/models.py
+msgid "Afgerond"
+msgstr "Done"
+
+#: apps/tasks/services.py
+msgid "We kunnen deze taak niet vinden."
+msgstr "We can't find this task."
+
+#: apps/tasks/services.py
+msgid "De status moet open, done of all zijn."
+msgstr "The status must be open, done or all."
+
+#: apps/tasks/services.py
+msgid "Die datum ligt voor de datum van de brief."
+msgstr "That date is before the date of the letter."
+
+#: apps/tasks/services.py
+msgid "Kies mine, to_pick_up of all."
+msgstr "Choose mine, to_pick_up or all."
+
+#: apps/tasks/services.py
+msgid "De status moet open of done zijn."
+msgstr "The status must be open or done."
+
+#: apps/updates/management/commands/check_health.py
+msgid "De server antwoordt niet goed na het bijwerken."
+msgstr "The server does not answer properly after the update."
+
+#: apps/updates/management/commands/record_update.py apps/updates/release.py
+msgid "Een versie ziet eruit als 0.3.0."
+msgstr "A version looks like 0.3.0."
+
+#: apps/updates/management/commands/record_update.py
+#, python-format
+msgid "Vastgelegd: %(from)s → %(to)s"
+msgstr "Recorded: %(from)s → %(to)s"
+
+#: apps/updates/management/commands/update_plan.py
+#, python-format
+msgid "Versie %(version)s is overgeslagen: de gegevens van die versie (deploy/release.json) kloppen niet. Typ ./brievie update met een versie als je die toch wilt proberen."
+msgstr "Version %(version)s was skipped: the details of that version (deploy/release.json) are not correct. Type ./brievie update with a version if you want to try it anyway."
+
+#: apps/updates/management/commands/update_preflight.py
+#, python-format
+msgid "Er is te weinig vrije ruimte om bij te werken: nodig %(needed)s, vrij %(free)s. Er is niets veranderd."
+msgstr "There is too little free space to update: %(needed)s needed, %(free)s free. Nothing has changed."
+
+#: apps/updates/management/commands/update_status.py
+msgid "Nog nooit bijgewerkt met ./brievie update"
+msgstr "Never updated with ./brievie update"
+
+#: apps/updates/management/commands/update_status.py
+#, python-format
+msgid "Laatst bijgewerkt: %(from)s → %(to)s op %(when)s"
+msgstr "Last updated: %(from)s → %(to)s on %(when)s"
+
+#: apps/updates/release.py
+msgid "Er is niets veranderd."
+msgstr "Nothing has changed."
+
+#: apps/updates/release.py
+msgid "Deze installatie is van vóór de versienummers. Werk één keer met de hand bij: git fetch --tags, git checkout v{target}, ./brievie start. Daarna werkt ./brievie update."
+msgstr "This installation is from before the version numbers. Update by hand once: git fetch --tags, git checkout v{target}, ./brievie start. After that ./brievie update works."
+
+#: apps/updates/release.py
+msgid "Een oudere versie installeren kan niet. Terug ga je met een herstel van de back-up van vóór het bijwerken."
+msgstr "Installing an older version is not possible. You go back by restoring the backup from before the update."
+
+#: apps/updates/release.py
+msgid "Versie {target} bestaat niet: er is geen tag v{target} met een release.json."
+msgstr "Version {target} does not exist: there is no tag v{target} with a release.json."
+
+#: apps/updates/release.py
+msgid "De gegevens van versie {target} (deploy/release.json) kloppen niet."
+msgstr "The details of version {target} (deploy/release.json) are not correct."
+
+#: apps/updates/release.py
+msgid "De tag v{target} hoort niet bij versie {target}: zijn release.json noemt een andere versie."
+msgstr "The tag v{target} does not belong to version {target}: its release.json names another version."
+
+#: apps/updates/release.py
+msgid "Versie {target} moet op een nieuwere manier worden bijgewerkt dan deze versie kent. Lees \"Voor je bijwerkt\" in CHANGELOG.md."
+msgstr "Version {target} must be updated in a newer way than this version knows. Read \"Before you update\" in CHANGELOG.md."
+
+#: apps/updates/release.py
+msgid "Versie {target} gebruikt een andere hoofdversie van PostgreSQL dan deze server ({postgres_major}). Die overstap kan ./brievie update nog niet maken. Lees \"Voor je bijwerkt\" in CHANGELOG.md."
+msgstr "Version {target} uses a different major version of PostgreSQL than this server ({postgres_major}). ./brievie update cannot make that switch yet. Read \"Before you update\" in CHANGELOG.md."
+
+#: apps/updates/release.py
+msgid "Van versie {installed} kun je niet in één keer naar {target}. Werk eerst bij naar {go_first}: ./brievie update {go_first}"
+msgstr "From version {installed} you cannot go to {target} in one step. First update to {go_first}: ./brievie update {go_first}"
+
+#: apps/updates/release.py
+msgid "Van versie {installed} is er geen weg naar {target} met ./brievie update. Lees \"Voor je bijwerkt\" in CHANGELOG.md."
+msgstr "From version {installed} there is no way to {target} with ./brievie update. Read \"Before you update\" in CHANGELOG.md."
+
+#: apps/workspaces/invitations.py
+msgid "Deze persoon is al gekoppeld aan een lid."
+msgstr "This person is already linked to a member."
+
+#: apps/workspaces/invitations.py
+msgid "Een uitnodiging werkt 1, 7 of 30 dagen."
+msgstr "An invitation works for 1, 7 or 30 days."
+
+#: apps/workspaces/invitations.py
+msgid "Vul het e-mailadres van deze persoon in. Alleen dat adres kan de uitnodiging gebruiken."
+msgstr "Enter the email address of this person. Only that address can use the invitation."
+
+#: apps/workspaces/invitations.py
+msgid "Iemand met dit e-mailadres is al lid."
+msgstr "Someone with this email address is already a member."
+
+#: apps/workspaces/invitations.py
+msgid "Vul een geldig e-mailadres in."
+msgstr "Fill in a valid email address."
+
+#: apps/workspaces/invitations.py
+msgid "We kunnen deze uitnodiging niet vinden."
+msgstr "We can't find this invitation."
+
+#: apps/workspaces/invitations.py
+msgid "Deze uitnodiging werkt niet meer. Vraag een nieuwe."
+msgstr "This invitation no longer works. Ask for a new one."
+
+#: apps/workspaces/invitations.py
+msgid "Er is al een account met dit e-mailadres. Kies ‘Ik heb al een account’."
+msgstr "There is already an account with this email address. Choose ‘I already have an account’."
+
+#: apps/workspaces/invitations.py
+msgid "Deze uitnodiging is voor een ander e-mailadres."
+msgstr "This invitation is for a different email address."
+
+#: apps/workspaces/invitations.py
+msgid "Je bent al lid van deze werkruimte."
+msgstr "You are already a member of this workspace."
+
+#: apps/workspaces/invitations.py
+msgid "Kies een nieuw account of een bestaand account."
+msgstr "Choose a new account or an existing account."
+
+#: apps/workspaces/invitations.py
+msgid "Deze persoon is intussen aan iemand anders gekoppeld. Vraag een nieuwe uitnodiging."
+msgstr "This person has been linked to someone else in the meantime. Ask for a new invitation."
+
+#: apps/workspaces/management/commands/create_workspace.py
+msgid "Kies als soort home (Thuis) of business (Organisatie)."
+msgstr "Choose home or business as the kind."
+
+#: apps/workspaces/management/commands/create_workspace.py
+msgid "Dit e-mailadres klopt niet."
+msgstr "This email address is not right."
+
+#: apps/workspaces/management/commands/create_workspace.py
+#, python-format
+msgid "Werkruimte %(name)s is gemaakt. %(admin)s is beheerder."
+msgstr "Workspace %(name)s has been created. %(admin)s is its admin."
+
+#: apps/workspaces/management/commands/create_workspace.py
+#, python-format
+msgid "Werkruimte %(name)s is gemaakt. Stuur deze link naar %(email)s; die wordt de eerste beheerder. De link werkt 7 dagen en wordt maar één keer getoond:"
+msgstr "Workspace %(name)s has been created. Send this link to %(email)s, who becomes the first admin. The link works for 7 days and is shown only once:"
+
+#: apps/workspaces/members.py
+msgid "Een werkruimte heeft altijd minstens één beheerder. Maak eerst iemand anders beheerder."
+msgstr "A workspace always has at least one admin. Make someone else admin first."
+
+#: apps/workspaces/members.py
+msgid "Iemand met Alleen lezen kan geen post verdelen."
+msgstr "Someone with Read only cannot sort post."
+
+#: apps/workspaces/members.py
+msgid "Dit account is serverbeheerder. Alleen een serverbeheerder kan het uit zijn laatste werkruimte halen."
+msgstr "This account is a server admin. Only a server admin can remove it from its last workspace."
+
+#: apps/workspaces/models.py
+msgid "Thuis"
+msgstr "Home"
+
+#: apps/workspaces/models.py
+msgid "Organisatie"
+msgstr "Business"
+
+#: apps/workspaces/models.py
+msgid "Beheerder"
+msgstr "Admin"
+
+#: apps/workspaces/models.py
+msgid "Lid"
+msgstr "Member"
+
+#: apps/workspaces/models.py
+msgid "Alleen lezen"
+msgstr "Read only"
+
+#: apps/workspaces/policy_text.py
+#, python-format
+msgid "%(first)s en %(last)s"
+msgstr "%(first)s and %(last)s"
+
+#: apps/workspaces/policy_text.py
+msgid "alle post die niet privé is"
+msgstr "all post that is not private"
+
+#: apps/workspaces/policy_text.py
+msgid "alle post als beheerder"
+msgstr "all post as an admin"
+
+#: apps/workspaces/policy_text.py
+msgid "post zonder naam"
+msgstr "unnamed post"
+
+#: apps/workspaces/policy_text.py
+#, python-format
+msgid "post van %(department)s"
+msgstr "post for %(department)s"
+
+#: apps/workspaces/policy_text.py
+#, python-format
+msgid "post van %(person)s"
+msgstr "post for %(person)s"
+
+#: apps/workspaces/policy_text.py
+#, python-format
+msgid "Tekst van brieven gaat naar %(supplier)s."
+msgstr "The text of letters goes to %(supplier)s."
+
+#: apps/workspaces/policy_text.py
+msgid "Brieven worden gelezen door AI op je eigen netwerk."
+msgstr "Letters are read by AI on your own network."
+
+#: apps/workspaces/policy_text.py
+msgid "Brieven worden niet door AI gelezen."
+msgstr "Letters are not read by AI."
+
+#: apps/workspaces/policy_text.py
+msgid "Iedereen in Brievie ziet alle post, behalve post die privé is."
+msgstr "Everyone in Brievie sees all post, except post that is private."
+
+#: apps/workspaces/policy_text.py
+msgid "Ieder ziet zijn eigen post en die van zijn groepen."
+msgstr "Everyone sees their own post and that of their groups."
+
+#: apps/workspaces/policy_text.py
+msgid "Ieder ziet zijn eigen post en die van zijn afdelingen."
+msgstr "Everyone sees their own post and that of their departments."
+
+#: apps/workspaces/policy_text.py
+msgid "Ieder ziet zijn eigen post."
+msgstr "Everyone sees their own post."
+
+#: apps/workspaces/policy_text.py
+msgid "Er zijn nog geen groepen."
+msgstr "There are no groups yet."
+
+#: apps/workspaces/policy_text.py
+msgid "Er zijn nog geen afdelingen."
+msgstr "There are no departments yet."
+
+#: apps/workspaces/policy_text.py
+#, python-format
+msgid "Post zonder naam zien: %(names)s (verdeelt post)."
+msgstr "Unnamed post is seen by: %(names)s (sorts post)."
+
+#: apps/workspaces/policy_text.py
+msgid "Post zonder naam zie jij, tot je iemand aanwijst die post verdeelt."
+msgstr "You see unnamed post, until you choose someone who sorts post."
+
+#: apps/workspaces/policy_text.py
+#, python-format
+msgid "Post zonder naam zien de beheerders: %(names)s."
+msgstr "Unnamed post is seen by the admins: %(names)s."
+
+#: apps/workspaces/policy_text.py
+msgid "Beheerders lezen alle post die niet privé is."
+msgstr "Admins read all post that is not private."
+
+#: apps/workspaces/policy_text.py
+msgid "Beheerders lezen geen post die niet voor hen is."
+msgstr "Admins read no post that is not for them."
+
+#: apps/workspaces/policy_text.py
+msgid "Zorgpost is privé."
+msgstr "Care post is private."
+
+#: apps/workspaces/policy_text.py
+msgid "Je bent beheerder."
+msgstr "You are an admin."
+
+#: apps/workspaces/policy_text.py
+msgid "Noodtoegang staat aan."
+msgstr "Emergency access is on."
+
+#: apps/workspaces/policy_text.py
+msgid "Er is nog geen back-up."
+msgstr "There is no backup yet."
+
+#: apps/workspaces/policy_text.py
+msgid "Iedereen in Brievie ziet alle post, behalve privé-post."
+msgstr "Everyone in Brievie sees all post, except private post."
+
+#: apps/workspaces/policy_text.py
+msgid "Je post zien: jij en de anderen op wier naam de brief ook staat, de mensen van een groep als hij op naam van die groep staat, wie de brief scant (tot hij klaar is) en met wie hij gedeeld is."
+msgstr "Your post is seen by: you and the others the letter is also addressed to, the people in a group when it is addressed to that group, whoever scans the letter (until it is done) and whoever it is shared with."
+
+#: apps/workspaces/policy_text.py
+msgid "Je post zien: jij en de anderen op wier naam de brief ook staat, de mensen van een afdeling als hij op naam van die afdeling staat, wie de brief scant (tot hij klaar is) en met wie hij gedeeld is."
+msgstr "Your post is seen by: you and the others the letter is also addressed to, the people in a department when it is addressed to that department, whoever scans the letter (until it is done) and whoever it is shared with."
+
+#: apps/workspaces/policy_text.py
+msgid "Je post zien: jij en de anderen op wier naam de brief ook staat, wie de brief scant (tot hij klaar is) en met wie hij gedeeld is."
+msgstr "Your post is seen by: you and the others the letter is also addressed to, whoever scans the letter (until it is done) and whoever it is shared with."
+
+#: apps/workspaces/policy_text.py
+#, python-format
+msgid "De beheerders %(names)s lezen alle post die niet privé is."
+msgstr "The admins %(names)s read all post that is not private."
+
+#: apps/workspaces/policy_text.py
+msgid "De beheerders lezen je post niet."
+msgstr "The admins do not read your post."
+
+#: apps/workspaces/policy_text.py
+msgid "Privé-post zien alleen: de mensen op wier naam hij staat, de mensen van een groep op wier naam hij staat, wie de brief scande of privé maakte, en met wie hij gedeeld is."
+msgstr "Private post is seen only by: the people it is addressed to, the people in a group it is addressed to, whoever scanned the letter or made it private, and whoever it is shared with."
+
+#: apps/workspaces/policy_text.py
+msgid "Privé-post zien alleen: de mensen op wier naam hij staat, de mensen van een afdeling op wier naam hij staat, wie de brief scande of privé maakte, en met wie hij gedeeld is."
+msgstr "Private post is seen only by: the people it is addressed to, the people in a department it is addressed to, whoever scanned the letter or made it private, and whoever it is shared with."
+
+#: apps/workspaces/policy_text.py
+msgid "Noodtoegang staat aan. De beheerders kunnen je post openen. Ze moeten een reden geven, en jij krijgt dan een melding."
+msgstr "Emergency access is on. The admins can open your post. They must give a reason, and you then get a notice."
+
+#: apps/workspaces/policy_text.py
+msgid "Noodtoegang staat uit."
+msgstr "Emergency access is off."
+
+#: apps/workspaces/policy_text.py
+#, python-format
+msgid "Wie de server zelf beheert, kan technisch bij alle gegevens. Dat is %(names)s."
+msgstr "Whoever manages the server itself can technically reach all data. That is %(names)s."
+
+#: apps/workspaces/visibility_settings.py
+msgid "Bevestig eerst dat deze mensen meer post gaan zien."
+msgstr "First confirm that these people will see more post."
+
+#: apps/workspaces/visibility_settings.py
+msgid "Er is intussen iets veranderd. Bekijk de wijziging opnieuw."
+msgstr "Something has changed in the meantime. Look at the change again."
+
+#: apps/workspaces/visibility_settings.py
+msgid "Kies Thuis of Organisatie."
+msgstr "Choose Home or Business."
+
+#: apps/workspaces/visibility_settings.py
+msgid "Zeg om welk lid, welke persoon of welke rol het gaat."
+msgstr "Say which member, person or role this is about."
+
+#: apps/workspaces/visibility_settings.py
+msgid "Nieuwe beheerder"
+msgstr "New admin"
+
+#: brievie/api.py
+msgid "De database is niet bereikbaar. Probeer het later opnieuw."
+msgstr "The database cannot be reached. Try again later."

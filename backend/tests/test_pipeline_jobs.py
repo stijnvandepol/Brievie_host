@@ -12,19 +12,19 @@ from apps.documents.models import Document
 from apps.pipeline import jobs
 from apps.pipeline.errors import PermanentError, PipelineError, RetryableError
 from apps.pipeline.steps import mark_failed, run_pipeline
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 
 
 def make_document(workspace: Workspace, **fields: object) -> Document:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Document.objects.create(
             workspace=workspace, client_id=uuid.uuid4(), page_count=1, ocr_text="tekst", **fields
         )
 
 
 def status_of(workspace: Workspace, document: Document) -> tuple[str, str]:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         fresh = Document.objects.get(id=document.id)
     return fresh.status, fresh.failure_code
 
@@ -154,7 +154,7 @@ def test_stalled_jobs_are_retried_periodically() -> None:
 
 
 def age(workspace: Workspace, document: Document, minutes: int) -> None:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         Document.objects.filter(id=document.id).update(
             updated_at=timezone.now() - timedelta(minutes=minutes)
         )

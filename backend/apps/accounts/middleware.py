@@ -8,7 +8,8 @@ from django.db import DatabaseError, transaction
 from django.http import HttpRequest, HttpResponseBase
 from django.utils import timezone
 
-from apps.accounts.models import UserSession
+from apps.accounts.language import activate_account_language
+from apps.accounts.models import User, UserSession
 from apps.accounts.sessions import is_past_its_limits, touch_session
 
 logger = logging.getLogger(__name__)
@@ -58,3 +59,21 @@ class UserSessionMiddleware:
     def sign_out(request: HttpRequest) -> None:
         request.session.flush()
         request.user = AnonymousUser()
+
+
+class AccountLanguageMiddleware:
+    """A signed-in web session answers in the account's chosen language.
+
+    After `UserSessionMiddleware` (a session it signs out has no account) and after
+    `LocaleMiddleware`, whose `Accept-Language` choice it overrides. A device token is
+    only known inside the API's authentication: `DeviceTokenAuth` does the same there.
+    """
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponseBase]) -> None:
+        self.get_response = get_response
+
+    def __call__(self, request: HttpRequest) -> HttpResponseBase:
+        user = request.user
+        if isinstance(user, User) and user.is_authenticated:
+            activate_account_language(request, user)
+        return self.get_response(request)

@@ -8,13 +8,13 @@ from apps.audit.codes import ALLOWED_VALUES, NAMED_TARGETS, AuditCode, TargetKin
 from apps.audit.models import ServerAuditEvent, WorkspaceAuditEvent
 from apps.audit.services import AuditActor, AuditTarget, actor_from_request, record
 from apps.devices.models import Device
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 from tests.factories import UserFactory
 
 
 def workspace_rows(workspace: Workspace) -> list[WorkspaceAuditEvent]:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return list(WorkspaceAuditEvent.objects.all())
 
 
@@ -49,7 +49,7 @@ def test_record_writes_a_workspace_row_in_its_own_context(ws_a: Workspace, ws_b:
 def test_record_nested_in_another_workspace_context_writes_to_its_own(
     ws_a: Workspace, ws_b: Workspace
 ) -> None:
-    with workspace_context(ws_b.id):
+    with workspace_context(ws_b.id, actor=SYSTEM):
         record(AuditCode.RULE_DELETED, actor=AuditActor.system(), workspace_id=ws_a.id)
         assert WorkspaceAuditEvent.objects.count() == 0
     assert len(workspace_rows(ws_a)) == 1
@@ -206,6 +206,7 @@ def test_the_list_of_codes_is_the_closed_list_of_d11() -> None:
         "server_admin_granted",
         "server_admin_revoked",
         "sso_settings_changed",
+        "workspace_created",
         "invitation_created",
         "invitation_revoked",
         "invitation_accepted",
@@ -213,6 +214,8 @@ def test_the_list_of_codes_is_the_closed_list_of_d11() -> None:
         "member_removed",
         "member_left",
         "workspace_setting_changed",
+        "workspace_preset_applied",
+        "post_sorter_changed",
         "rule_created",
         "rule_changed",
         "rule_deleted",
@@ -224,11 +227,15 @@ def test_the_list_of_codes_is_the_closed_list_of_d11() -> None:
         "person_unlinked",
         "department_member_added",
         "department_member_removed",
+        "department_lead_changed",
         "emergency_access_switched_on",
         "emergency_access_switched_off",
         "emergency_access_used",
         "export_created",
         "export_downloaded",
+        "document_trashed",
+        "document_restored",
+        "document_purged",
     }
 
 

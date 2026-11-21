@@ -6,7 +6,7 @@ from django.test import override_settings
 from apps.documents.models import Document, DocumentAddressee, DocumentEvent, DocumentLabel
 from apps.pipeline.models import AISettings
 from apps.tasks.models import Task
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 
 
@@ -26,7 +26,7 @@ def test_every_autopilot_flag_defaults_to_false(model: type[Model], field: str) 
 
 
 def test_a_new_ai_settings_row_has_both_switches_off(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         row = AISettings.objects.create(workspace=ws_a)
         row.refresh_from_db()
     assert (row.auto_organise, row.auto_confirm) == (False, False)

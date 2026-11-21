@@ -9,7 +9,8 @@ from uuid import UUID
 
 from django.db import transaction
 
-from apps.documents import organise, suggestions
+from apps.audit.services import AuditActor
+from apps.documents import organise, suggestions, visibility
 from apps.documents.models import (
     Document,
     DocumentAddressee,
@@ -20,7 +21,7 @@ from apps.documents.models import (
 from apps.documents.organise import ADDRESSEES_MAX, LABELS_MAX
 from apps.labels.models import Label
 from apps.people.models import Person
-from apps.rules.engine import Evaluation, PlannedAction
+from apps.rules.engine import MAKE_PRIVATE, Evaluation, PlannedAction
 from apps.rules.models import Rule, RuleRun
 
 _ADD_LABEL = DocumentSuggestion.Action.ADD_LABEL
@@ -42,7 +43,7 @@ def execute(document: Document, evaluation: Evaluation, *, trigger: str) -> None
     planned = evaluation.planned
     if not planned:
         return
-    with transaction.atomic():
+    with transaction.atomic(), visibility.addressee_scope(document):
         # Locked: a rule deleted meanwhile is skipped here, and cannot be deleted before
         # its run and events are written (that would break the commit). `no_key` blocks a
         # delete but not another run's foreign-key checks; id order avoids a deadlock
@@ -56,10 +57,10 @@ def execute(document: Document, evaluation: Evaluation, *, trigger: str) -> None
         # Filtered by workspace as well as by RLS: a stored id may name another workspace's row.
         workspace_id = document.workspace_id
         labels = Label.objects.filter(workspace_id=workspace_id).in_bulk(
-            [p.target_id for p in planned if p.action == _ADD_LABEL]
+            [p.target_id for p in planned if p.action == _ADD_LABEL and p.target_id]
         )
         persons = Person.objects.filter(workspace_id=workspace_id).in_bulk(
-            [p.target_id for p in planned if p.action != _ADD_LABEL]
+            [p.target_id for p in planned if p.action == _ADD_ADDRESSEE and p.target_id]
         )
         applied = {(p.action, p.target_id) for p in planned if p.mode == Rule.Mode.AUTO}
         room: dict[str, int] = {
@@ -70,18 +71,31 @@ def execute(document: Document, evaluation: Evaluation, *, trigger: str) -> None
         outcomes: dict[UUID, str] = {}
         for action in planned:
             rule = rules.get(action.rule_id)
+            if rule is None:
+                continue
+            if action.action == MAKE_PRIVATE:
+                # Ruling d: nobody to read it, nothing changes, so no run is recorded.
+                if _make_private(document, rule):
+                    outcomes[rule.id] = RuleRun.Outcome.APPLIED
+                continue
             target = _target(action, labels, persons)
-            if rule is None or target is None or room[action.action] <= 0:
+            if target is None or action.target_id is None or room[action.action] <= 0:
                 continue
             if suggestions.is_dismissed(document, action.action, action.target_id):
                 continue
-            if action.mode == Rule.Mode.AUTO:
+            # On a private letter an addressee is only proposed: an automatic action never
+            # widens its readers (PB T10). The letter may have become private in this run.
+            auto = action.mode == Rule.Mode.AUTO and not (
+                action.action == _ADD_ADDRESSEE
+                and document.visibility == Document.Visibility.RESTRICTED
+            )
+            if auto:
                 if _apply(document, action, target, rule):
                     room[action.action] -= 1
                     outcomes[rule.id] = RuleRun.Outcome.APPLIED
-            elif (action.action, action.target_id) not in applied and _propose(
-                document, action, target, rule
-            ):
+            elif (
+                (action.action, action.target_id) not in applied or action.mode == Rule.Mode.AUTO
+            ) and _propose(document, action, target, rule):
                 outcomes.setdefault(rule.id, RuleRun.Outcome.PROPOSED)
         # A letter processed again had its open proposals cleared and made anew; the
         # rule proposed it before, so it counts once.
@@ -104,9 +118,20 @@ def execute(document: Document, evaluation: Evaluation, *, trigger: str) -> None
             )
 
 
+def _make_private(document: Document, rule: Rule) -> bool:
+    """The rule action "privé maken", as the system (a request's user still gets a share:
+    `make_private` takes the current actor). False when nothing changed."""
+    result = visibility.make_private(
+        document, actor=AuditActor.system(), origin=DocumentEvent.Origin.RULE, rule=rule
+    )
+    return result == "made_private"
+
+
 def _target(
     action: PlannedAction, labels: dict[UUID, Label], persons: dict[UUID, Person]
 ) -> Label | Person | None:
+    if action.target_id is None:
+        return None
     if action.action == _ADD_LABEL:
         return labels.get(action.target_id)
     person = persons.get(action.target_id)
@@ -121,7 +146,7 @@ def _apply(document: Document, action: PlannedAction, target: Label | Person, ru
         added = organise.add_label(document, target, actor=None, origin=origin, rule=rule)
     else:
         added = organise.add_addressee(document, target, actor=None, origin=origin, rule=rule)
-    if added:
+    if added and action.target_id is not None:
         suggestions.mark_accepted(document, action.action, action.target_id)
     return added
 
@@ -131,6 +156,8 @@ def _propose(document: Document, action: PlannedAction, target: Label | Person, 
 
     Re-proposing what the rule already proposed is no new proposal, so it adds no run.
     """
+    if action.target_id is None:
+        return False
     before = suggestions.open_row(document, action.action, action.target_id)
     row = suggestions.propose(
         document,

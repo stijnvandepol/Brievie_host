@@ -7,7 +7,7 @@ from django.test import Client
 
 from apps.common.management.commands.export_openapi import render_schema
 from apps.documents.models import DocumentAddressee, DocumentEvent
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.documents_support import admin_of, documents_url, make_document, make_person
 from tests.factories import UserFactory
@@ -76,7 +76,7 @@ def test_processing_document_is_409(client_a: Client, ws_a: Workspace) -> None:
 
     assert r.status_code == 409
     assert r.json()["code"] == "document_processing"
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert not DocumentAddressee.objects.exists()
 
 
@@ -90,7 +90,7 @@ def test_viewer_cannot_set_addressees(client: Client, ws_a: Workspace) -> None:
     r = put_addressees(client, ws_a.id, document.id, [papa.id])
 
     assert r.status_code == 403
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert not DocumentEvent.objects.exists()
 
 
@@ -133,7 +133,13 @@ def test_inbox_counts(client_a: Client, ws_a: Workspace) -> None:
     r = client_a.get(counts_url(ws_a.id))
 
     assert r.status_code == 200
-    assert r.json() == {"new": 1, "review": 2, "unassigned": 1, "automatic": 0}
+    assert r.json() == {
+        "new": 1,
+        "review": 2,
+        "unassigned": 1,
+        "automatic": 0,
+        "duplicate": 0,
+    }
 
 
 @pytest.mark.parametrize("query", [{"inbox_state": "done"}, {"person_id": "geen-uuid"}])
@@ -183,4 +189,5 @@ def test_other_workspace_is_404_on_every_new_endpoint(
         "review": 0,
         "unassigned": 0,
         "automatic": 0,
+        "duplicate": 0,
     }

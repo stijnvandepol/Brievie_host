@@ -425,6 +425,7 @@ def test_verify_reports_a_stored_path_that_leaves_the_storage(
         target.write_bytes((storage_root() / storage_path).read_bytes())
     with psycopg.connect(owner_conninfo) as conn:
         conn.execute("SELECT set_config(%s, %s, true)", [SETTING_NAME, str(ws_b.id)])
+        conn.execute("SELECT set_config('brievie.actor', 'system', true)")
         conn.execute(
             "UPDATE documents_documentpage SET storage_path = %s WHERE document_id = %s",
             [escaped, document_id],

@@ -129,7 +129,7 @@ def test_restic_is_pinned() -> None:
 def test_pg_client_major_matches_the_server() -> None:
     # pg_dump refuses a server newer than itself: client and server move together.
     # Every image reference counts; "@postgres:5432" in a URL is a host and port.
-    # Only CI's backend job starts a PostgreSQL image; its stack job uses compose.
+    # Only CI's backend jobs start a PostgreSQL image; its stack job uses compose.
     image = r"(?<!@)\bpostgres:(\d+)"
     compose = re.findall(image, COMPOSE)
     ci = re.findall(image, CI)
@@ -375,7 +375,7 @@ def test_every_action_in_the_workflows_is_pinned_to_a_commit() -> None:
 def test_ci_runs_the_real_restic_tests_with_the_images_restic() -> None:
     pinned = re.search(r"restic/restic:[0-9.]+@sha256:[0-9a-f]{64}", DOCKERFILE)
     assert pinned
-    backend = CI.split("\n  backend:\n", 1)[1].split("\n  web:\n", 1)[0]
+    backend = CI.split("\n  backend-tests:\n", 1)[1].split("\n  backend-static:\n", 1)[0]
     assert pinned.group(0) in backend
     assert backend.index(pinned.group(0)) < backend.index("run: uv run pytest")
     assert "restic version" in backend

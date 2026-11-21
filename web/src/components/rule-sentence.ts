@@ -182,6 +182,8 @@ function actionSentence(action: Action, labels: LabelOut[], persons: PersonOut[]
     const name = labels.find((label) => label.id === action.label_id)?.name ?? gone;
     return t`label ${name}`;
   }
+  if (action.type === "make_private") return t`maak de brief privé`;
+  if (action.type !== "add_addressee") return t`een actie die deze versie niet kent`;
   const name = persons.find((person) => person.id === action.person_id)?.display_name ?? gone;
   return t`op naam van ${name}`;
 }

@@ -10,13 +10,14 @@ from collections.abc import Collection, Sequence
 from uuid import UUID
 
 from django.db import transaction
-from django.db.models import QuerySet
+from django.db.models import Case, Exists, OuterRef, Q, QuerySet, Value, When
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from apps.accounts.models import User
+from apps.audit.services import AuditActor
 from apps.common.errors import ApiError
-from apps.documents import suggestions
+from apps.documents import suggestions, visibility
 from apps.documents.models import (
     Document,
     DocumentAddressee,
@@ -28,6 +29,7 @@ from apps.labels.models import Label
 from apps.labels.services import label_not_found
 from apps.people.models import Person
 from apps.rules.models import Rule
+from apps.workspaces.models import Workspace
 
 ADDRESSEES_MAX = 10
 LABELS_MAX = 30
@@ -37,10 +39,16 @@ UNDOABLE_ORIGINS = (
     DocumentEvent.Origin.RULE,
     DocumentEvent.Origin.AI,
     DocumentEvent.Origin.NAME_MATCH,
+    DocumentEvent.Origin.RULE_AUTOPILOT,
 )
 # Origins whose links are marked `automatic`: the autopilot put them there. Such a change
 # is undoable only while its link is still `automatic` (a person's confirm takes it over).
-AUTOMATIC_ORIGINS = (DocumentEvent.Origin.AI, DocumentEvent.Origin.NAME_MATCH)
+# A rule's label proposal the autopilot applied has its own origin, `rule_autopilot`.
+AUTOMATIC_ORIGINS = (
+    DocumentEvent.Origin.AI,
+    DocumentEvent.Origin.NAME_MATCH,
+    DocumentEvent.Origin.RULE_AUTOPILOT,
+)
 
 _ADD_LABEL = DocumentSuggestion.Action.ADD_LABEL
 _ADD_ADDRESSEE = DocumentSuggestion.Action.ADD_ADDRESSEE
@@ -60,6 +68,7 @@ def set_addressees(
     archived person cannot be newly added. Persons in `suggested_ids` are added with
     origin `suggestion` (the user took a proposal).
     """
+    _require_scope(document)
     wanted = list(dict.fromkeys(person_ids))
     if len(wanted) > ADDRESSEES_MAX:
         raise ApiError(
@@ -98,6 +107,8 @@ def set_addressees(
                     person=link.person,
                 )
                 suggestions.mark_dismissed(document, _ADD_ADDRESSEE, link.person_id)
+        if any(link.automatic and link.person_id not in persons for link in links):
+            sync_automatic([document.id])
         for person_id in wanted:
             add_addressee(
                 document,
@@ -120,6 +131,7 @@ def add_addressee(
 
     `rule` is the rule that made the change (origin `rule`).
     """
+    _require_scope(document)
     with transaction.atomic():
         if DocumentAddressee.objects.filter(document=document, person=person).exists():
             return False
@@ -129,6 +141,8 @@ def add_addressee(
             person=person,
             automatic=origin in AUTOMATIC_ORIGINS,
         )
+        if origin in AUTOMATIC_ORIGINS:
+            sync_automatic([document.id])
         _write_event(
             document, DocumentEvent.Kind.ADDRESSEE_ADDED, actor, origin, person=person, rule=rule
         )
@@ -162,13 +176,17 @@ def set_labels(
         if len(labels) != len(wanted):
             raise label_not_found()
         links = DocumentLabel.objects.filter(document=document).select_related("label")
+        removed_automatic = False
         for link in links.order_by("created_at", "id"):
             if link.label_id not in labels:
                 link.delete()
+                removed_automatic = removed_automatic or link.automatic
                 _write_event(
                     document, DocumentEvent.Kind.LABEL_REMOVED, actor, origin, label=link.label
                 )
                 suggestions.mark_dismissed(document, _ADD_LABEL, link.label_id)
+        if removed_automatic:
+            sync_automatic([document.id])
         for label_id in wanted:
             add_label(
                 document,
@@ -189,7 +207,7 @@ def add_label(
 ) -> bool:
     """Put `label` on the document; False when it was already there.
 
-    `rule` is the rule that made the change (origin `rule`).
+    `rule` is the rule that made the change (origin `rule` or `rule_autopilot`).
     """
     with transaction.atomic():
         if DocumentLabel.objects.filter(document=document, label=label).exists():
@@ -200,15 +218,34 @@ def add_label(
             label=label,
             automatic=origin in AUTOMATIC_ORIGINS,
         )
+        if origin in AUTOMATIC_ORIGINS:
+            sync_automatic([document.id])
         _write_event(
             document, DocumentEvent.Kind.LABEL_ADDED, actor, origin, label=label, rule=rule
         )
+        if label.system_key == ZORG and _care_is_private(document):
+            # The Zorg label arriving makes the letter private (S 4.6, PB T17); a proposal
+            # of it does not. Nobody to read it: it stays visible (ruling d).
+            visibility.make_private(
+                document,
+                actor=AuditActor.for_user(actor) if actor is not None else AuditActor.system(),
+                origin=origin,
+                rule=rule,
+            )
         return True
 
 
+ZORG = "zorg"
+
+
+def _care_is_private(document: Document) -> bool:
+    return Workspace.objects.filter(id=document.workspace_id, care_is_private=True).exists()
+
+
 def record_label_deleted(label: Label, *, actor_id: UUID | None) -> None:
-    """Before a label is deleted (its links go with it): a `label_removed` line, with the
-    label's name, in the history of every document that has it.
+    """Before a label is deleted: a `label_removed` line, with the label's name, in the
+    history of every document that has it; then its links go, and the automatic flag of
+    the letters that had it as an automatic link follows.
 
     The documents are not locked: nothing else is changed on them, and a rule that runs
     holds the label's row, which the caller has locked. One INSERT for all of them; the
@@ -234,11 +271,26 @@ def record_label_deleted(label: Label, *, actor_id: UUID | None) -> None:
                 .values_list("document_id", flat=True)
             ]
         )
+        links = DocumentLabel.objects.filter(label=label, workspace_id=label.workspace_id)
+        automatic = list(links.filter(automatic=True).values_list("document_id", flat=True))
+        links.delete()
+        sync_automatic(automatic)
 
 
-def record_task_event(document: Document, kind: str, actor: User) -> None:
-    """History entry for ticking a task off or reopening it (`task_completed`, `task_reopened`)."""
-    _write_event(document, kind, actor, DocumentEvent.Origin.USER)
+def record_task_event(
+    document: Document,
+    kind: str,
+    actor: User | None,
+    origin: str = DocumentEvent.Origin.USER,
+    *,
+    person_name: str = "",
+) -> None:
+    """History entry for a change of one of the letter's tasks: ticked off or reopened
+    (`task_completed`, `task_reopened`; origin `merge` when a merge completed a twin
+    task), given to a member or released (`task_assigned`, `task_unassigned`, with the
+    member's name; origin `system` and no actor when the server released it), or dated
+    (`task_deadline_set`)."""
+    _write_event(document, kind, actor, origin, person_name=person_name)
 
 
 _UNDOABLE = (DocumentEvent.Kind.LABEL_ADDED, DocumentEvent.Kind.ADDRESSEE_ADDED)
@@ -278,6 +330,7 @@ def undo_event(*, document: Document, event_id: UUID, actor: User) -> None:
             if label_id is None or label_link is None or _taken_over(event, label_link.automatic):
                 raise _not_undoable()
             label_link.delete()
+            sync_automatic([document.id])
             _write_event(
                 document,
                 DocumentEvent.Kind.LABEL_REMOVED,
@@ -298,7 +351,9 @@ def undo_event(*, document: Document, event_id: UUID, actor: User) -> None:
         )
         if person_id is None or person_link is None or _taken_over(event, person_link.automatic):
             raise _not_undoable()
+        _require_scope(document)
         person_link.delete()
+        sync_automatic([document.id])
         _write_event(
             document,
             DocumentEvent.Kind.ADDRESSEE_REMOVED,
@@ -308,6 +363,13 @@ def undo_event(*, document: Document, event_id: UUID, actor: User) -> None:
             undoes=event,
         )
         suggestions.mark_dismissed(document, _ADD_ADDRESSEE, person_id)
+
+
+def _require_scope(document: Document) -> None:
+    """Addressees change only inside `visibility.addressee_scope`, whose end syncs
+    `addressee_ids` and the readers (P3): no caller can forget it."""
+    if not visibility.in_addressee_scope(document.id):
+        raise RuntimeError("addressee change outside addressee_scope")
 
 
 def _taken_over(event: DocumentEvent, automatic: bool) -> bool:
@@ -326,6 +388,21 @@ def confirm_automatic_links(document: Document) -> None:
     )
     DocumentAddressee.objects.filter(document=document, automatic=True).update(
         automatic=False, updated_at=now
+    )
+    sync_automatic([document.id])
+
+
+def sync_automatic(document_ids: Collection[UUID]) -> None:
+    """`Document.has_automatic_link` := whether an automatic label or addressee link is on
+    the letter. The only writer of the flag; every change of a link's `automatic` or of an
+    automatic link's existence calls it, in the same transaction."""
+    if not document_ids:
+        return
+    automatic = Q(
+        Exists(DocumentLabel.objects.filter(document_id=OuterRef("pk"), automatic=True))
+    ) | Q(Exists(DocumentAddressee.objects.filter(document_id=OuterRef("pk"), automatic=True)))
+    Document.objects.filter(id__in=list(document_ids)).update(
+        has_automatic_link=Case(When(automatic, then=Value(True)), default=Value(False))
     )
 
 
@@ -374,6 +451,61 @@ def record_reopened(document: Document, *, actor: User) -> None:
     )
 
 
+def record_trashed(
+    document: Document,
+    *,
+    actor: User | None,
+    origin: str = DocumentEvent.Origin.USER,
+    related_document: Document | None = None,
+) -> None:
+    """The history line for moving the letter to the trash: origin `user`, or `merge` with
+    the kept letter as `related_document` when a merge discarded it."""
+    _write_event(
+        document, DocumentEvent.Kind.TRASHED, actor, origin, related_document=related_document
+    )
+
+
+def record_merged(document: Document, *, actor: User, related_document: Document) -> None:
+    """On the kept letter: a person merged `related_document` (now in the trash) into it."""
+    _write_event(
+        document,
+        DocumentEvent.Kind.MERGED,
+        actor,
+        DocumentEvent.Origin.USER,
+        related_document=related_document,
+    )
+
+
+def record_duplicate_dismissed(
+    document: Document, *, actor: User, related_document: Document
+) -> None:
+    """On both letters of a pair: a person said they are two letters."""
+    _write_event(
+        document,
+        DocumentEvent.Kind.DUPLICATE_DISMISSED,
+        actor,
+        DocumentEvent.Origin.USER,
+        related_document=related_document,
+    )
+
+
+def record_task_moved(document: Document, *, actor: User, related_document: Document) -> None:
+    """On both letters of a merge: an open task moved from the discarded letter to the kept
+    one (`related_document` is the other letter)."""
+    _write_event(
+        document,
+        DocumentEvent.Kind.TASK_MOVED,
+        actor,
+        DocumentEvent.Origin.MERGE,
+        related_document=related_document,
+    )
+
+
+def record_restored(document: Document, *, actor: User) -> None:
+    """The history line for putting the letter back from the trash."""
+    _write_event(document, DocumentEvent.Kind.RESTORED, actor, DocumentEvent.Origin.USER)
+
+
 def _origin_for(target_id: UUID, origin: str, suggested_ids: Collection[UUID]) -> str:
     return DocumentEvent.Origin.SUGGESTION if target_id in suggested_ids else origin
 
@@ -388,6 +520,8 @@ def _write_event(
     label: Label | None = None,
     rule: Rule | None = None,
     undoes: DocumentEvent | None = None,
+    related_document: Document | None = None,
+    person_name: str = "",
 ) -> None:
     DocumentEvent.objects.create(
         workspace_id=document.workspace_id,
@@ -396,10 +530,11 @@ def _write_event(
         origin=origin,
         actor=actor,
         person=person,
-        person_name=person.display_name if person is not None else "",
+        person_name=person.display_name if person is not None else person_name,
         label=label,
         label_name=label.name if label is not None else "",
         rule=rule,
         rule_name=rule.name if rule is not None else "",
         undoes=undoes,
+        related_document=related_document,
     )

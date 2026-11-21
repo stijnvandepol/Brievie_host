@@ -22,9 +22,10 @@ export const SERVER_CODES = [
   "server_admin_granted",
   "server_admin_revoked",
   "sso_settings_changed",
+  "workspace_created",
 ] as const;
 
-/** What a workspace log holds: members, settings, rules, labels, people and exports. */
+/** What a workspace log holds: members, settings, rules, labels, people, exports and the trash. */
 export const WORKSPACE_CODES = [
   "invitation_created",
   "invitation_revoked",
@@ -33,6 +34,8 @@ export const WORKSPACE_CODES = [
   "member_removed",
   "member_left",
   "workspace_setting_changed",
+  "workspace_preset_applied",
+  "post_sorter_changed",
   "rule_created",
   "rule_changed",
   "rule_deleted",
@@ -44,11 +47,15 @@ export const WORKSPACE_CODES = [
   "person_unlinked",
   "department_member_added",
   "department_member_removed",
+  "department_lead_changed",
   "emergency_access_switched_on",
   "emergency_access_switched_off",
   "emergency_access_used",
   "export_created",
   "export_downloaded",
+  "document_trashed",
+  "document_restored",
+  "document_purged",
 ] as const;
 
 export const AUDIT_CODES = [...SERVER_CODES, ...WORKSPACE_CODES] as const;
@@ -91,6 +98,8 @@ function knownLabel(code: AuditCodeName): string {
       return t`Geen serverbeheerder meer`;
     case "sso_settings_changed":
       return t`Instellingen voor inloggen via organisatie gewijzigd`;
+    case "workspace_created":
+      return t`Werkruimte gemaakt`;
     case "invitation_created":
       return t`Uitnodiging gemaakt`;
     case "invitation_revoked":
@@ -105,6 +114,10 @@ function knownLabel(code: AuditCodeName): string {
       return t`Lid vertrokken`;
     case "workspace_setting_changed":
       return t`Instelling gewijzigd`;
+    case "workspace_preset_applied":
+      return t`Standaard Thuis of Organisatie overgenomen`;
+    case "post_sorter_changed":
+      return t`Verdeelt post gewijzigd`;
     case "rule_created":
       return t`Regel gemaakt`;
     case "rule_changed":
@@ -127,6 +140,8 @@ function knownLabel(code: AuditCodeName): string {
       return t`Lid aan afdeling toegevoegd`;
     case "department_member_removed":
       return t`Lid uit afdeling gehaald`;
+    case "department_lead_changed":
+      return t`Leidinggevende van afdeling gewijzigd`;
     case "emergency_access_switched_on":
       return t`Noodtoegang aangezet`;
     case "emergency_access_switched_off":
@@ -137,6 +152,12 @@ function knownLabel(code: AuditCodeName): string {
       return t`Export gemaakt`;
     case "export_downloaded":
       return t`Export gedownload`;
+    case "document_trashed":
+      return t`Brief naar de prullenbak`;
+    case "document_restored":
+      return t`Brief teruggezet`;
+    case "document_purged":
+      return t`Brief definitief verwijderd`;
   }
 }
 

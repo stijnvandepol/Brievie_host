@@ -6,7 +6,7 @@ from apps.accounts.models import User
 from apps.audit.models import ServerAuditEvent, WorkspaceAuditEvent
 from apps.devices.models import Device
 from apps.devices.services import create_pairing_code, pair_device
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.factories import UserFactory
 
@@ -47,7 +47,7 @@ def role_of(ws: Workspace, user: User) -> str | None:
 
 
 def workspace_rows(ws: Workspace, code: str) -> list[WorkspaceAuditEvent]:
-    with workspace_context(ws.id):
+    with workspace_context(ws.id, actor=SYSTEM):
         return list(WorkspaceAuditEvent.objects.filter(code=code).order_by("created_at", "id"))
 
 

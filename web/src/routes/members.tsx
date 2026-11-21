@@ -25,6 +25,7 @@ import { ErrorAlert, focusPageHeading, PageHeader, Shell, usePageTitle } from ".
 import { ResetLinkDialog } from "../components/reset-link-dialog";
 import { RoleDialog, roleLabel } from "../components/role-dialog";
 import { Badge, EmptyState, Loading, Persona } from "../components/ui";
+import { dateFormat } from "../format";
 import { workspaceRoute } from "./workspace";
 
 type Member = components["schemas"]["MemberOut"];
@@ -215,7 +216,7 @@ function MemberRow({
 
 type Invitation = components["schemas"]["InvitationOut"];
 
-const dateTime = new Intl.DateTimeFormat("nl-NL", { dateStyle: "long", timeStyle: "short" });
+const dateTime = dateFormat({ dateStyle: "long", timeStyle: "short" });
 
 /** What an invitation is for, as its maker knows it: the person, the note or the address. */
 function invitationName(invitation: Invitation): string {

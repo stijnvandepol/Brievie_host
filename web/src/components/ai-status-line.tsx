@@ -2,11 +2,12 @@ import { t } from "@lingui/core/macro";
 import { useQuery } from "@tanstack/react-query";
 import { aiStatusQuery } from "../api/queries";
 import type { components } from "../api/schema";
+import { dateFormat } from "../format";
 import { Icon } from "./icons";
 
 type AiStatus = components["schemas"]["AiStatusOut"];
 
-const day = new Intl.DateTimeFormat("nl-NL", { dateStyle: "long" });
+const day = dateFormat({ dateStyle: "long" });
 
 /** The service as a member knows it: its name and country, or else only its address. */
 function serviceName(supplier: string | null | undefined, host: string): string {

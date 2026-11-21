@@ -26,10 +26,19 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  backend:
+  # The backend suite takes ~22 minutes on one runner, so it is split over parallel shards,
+  # each with its own PostgreSQL. A shard is a set of test FILES (tests/sharding.py, weights
+  # in tests/shard_weights.json); the job `backend` below waits for all of them and checks
+  # that together they ran every test once.
+  backend-tests:
     if: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
+    name: backend-tests (${{ matrix.shard }}/6)
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
     services:
       postgres:
         image: postgres:18
@@ -80,6 +89,66 @@ jobs:
           docker rm "$id"
           sudo install -m 0755 "$RUNNER_TEMP/restic" /usr/local/bin/restic
           restic version
+      # Coverage is reported, not enforced: the minimum goes in pyproject.toml
+      # ([tool.coverage.report] fail_under), the one place for it. Each shard writes its own
+      # data file; `backend` combines them.
+      - name: Tests (shard ${{ matrix.shard }} of 6)
+        env:
+          COVERAGE_FILE: .coverage.shard${{ matrix.shard }}
+        run: uv run pytest -p tests.sharding --shard ${{ matrix.shard }}/6 --shard-report shard-${{ matrix.shard }}.json --durations=25 --cov
+      - name: Keep the shard's coverage data and test count
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: backend-shard-${{ matrix.shard }}
+          path: |
+            backend/.coverage.shard${{ matrix.shard }}
+            backend/shard-${{ matrix.shard }}.json
+          include-hidden-files: true
+          if-no-files-found: error
+
+  # Everything that judges the code without running the tests, in parallel with the shards.
+  backend-static:
+    if: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      PGHOST: localhost
+      PGPASSWORD: postgres
+      POSTGRES_USER: postgres
+      BRIEVIE_OWNER_PASSWORD: ci-owner
+      BRIEVIE_APP_PASSWORD: ci-app
+      DATABASE_URL: postgres://brievie_app:ci-app@localhost:5432/brievie
+      DATABASE_OWNER_URL: postgres://brievie_owner:ci-owner@localhost:5432/brievie
+      BRIEVIE_BACKUP_DB_PASSWORD: ci-backup
+      DATABASE_BACKUP_URL: postgres://brievie_backup:ci-backup@localhost:5432/brievie
+      # At least 50 characters: the settings refuse shorter keys.
+      SECRET_KEY: ci-only-not-secret-ci-only-not-secret-ci-only-not-secret
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: "0.13.8"
+      - name: Create database roles
+        run: bash ../deploy/postgres-init/01-roles.sh
+      - run: uv sync --frozen
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy .
@@ -87,9 +156,57 @@ jobs:
         run: uv run python manage.py makemigrations --check --dry-run
       - name: OpenAPI contract is up to date
         run: uv run python manage.py export_openapi --check
-      # Coverage is reported, not enforced: the minimum goes in pyproject.toml
-      # ([tool.coverage.report] fail_under), the one place for it.
-      - run: uv run pytest --cov --cov-report=term-missing:skip-covered --cov-report=xml
+      - name: English catalogue is complete and up to date
+        run: uv run python manage.py update_messages --check
+
+  # The required check `backend`: green only when every shard and the static checks are
+  # green and the shards together ran the whole suite once. `!cancelled()` plus the first
+  # step: a skipped job would count as passed for the required check.
+  backend:
+    if: ${{ !cancelled() && github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
+    needs: [backend-tests, backend-static]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Every shard and the static checks passed
+        working-directory: .
+        env:
+          RESULTS: ${{ needs.backend-tests.result }} ${{ needs.backend-static.result }}
+        run: |
+          echo "$RESULTS"
+          [ "$RESULTS" = "success success" ]
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: "0.13.8"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: backend-shard-*
+          path: backend/shards
+          merge-multiple: true
+      - run: uv sync --frozen
+      - name: The shards together ran every test exactly once
+        run: |
+          python3 - <<'PY'
+          import glob, json
+          reports = [json.load(open(f)) for f in sorted(glob.glob("shards/shard-*.json"))]
+          assert sorted(r["shard"] for r in reports) == [1, 2, 3, 4, 5, 6], reports
+          assert len({r["total"] for r in reports}) == 1, reports
+          selected = sum(r["selected"] for r in reports)
+          total = reports[0]["total"]
+          print(f"shards ran {selected} of {total} collected tests")
+          assert selected == total > 0, (selected, total)
+          PY
+      - name: Combine the coverage of the shards
+        run: |
+          uv run coverage combine shards/.coverage.shard*
+          uv run coverage report
+          uv run coverage xml
       - name: Keep the coverage report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

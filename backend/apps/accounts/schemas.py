@@ -13,9 +13,16 @@ class UserOut(Schema):
     id: UUID
     email: str
     name: str
+    # The chosen language of the interface and the server's messages: "nl", "en", or ""
+    # when the account has not chosen (then the caller's Accept-Language decides).
     language: str
     explanation_language: str
     is_server_admin: bool = False
+
+
+class LanguageIn(InputSchema):
+    # "" removes the choice: the caller's Accept-Language decides again.
+    language: Literal["", "nl", "en"]
 
 
 class SetupStatusOut(Schema):
@@ -67,6 +74,10 @@ class SessionOut(Schema):
     browser: str
     # The session this request came with.
     current: bool
+
+
+class ReauthenticateIn(InputSchema):
+    password: str = Field(max_length=128)
 
 
 class PasswordChangeIn(InputSchema):

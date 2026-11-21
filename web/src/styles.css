@@ -554,6 +554,12 @@ q {
   text-align: center;
 }
 
+/* Something in "Mijn taken" is late: the count says so in colour, the label in words. */
+.nav-count-warning {
+  background: var(--warning-icon);
+  color: #fff;
+}
+
 .nav-divider {
   width: 100%;
   margin: var(--s-xs) 0;
@@ -2023,6 +2029,49 @@ input[type="checkbox"]:checked:disabled {
   justify-content: center;
 }
 
+.split-main {
+  flex-direction: column;
+  gap: var(--s-l);
+}
+
+/* The language switch above the form of the screens before sign-in. */
+.language-switch {
+  align-self: flex-end;
+  display: inline-flex;
+  gap: var(--s-xs);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.language-option {
+  min-height: 32px;
+  padding: 0 var(--s-m);
+  border: 1px solid transparent;
+  border-radius: var(--radius-medium);
+  background: transparent;
+  color: var(--neutral-fg2);
+  font: inherit;
+  font-size: var(--caption-size);
+  cursor: pointer;
+}
+
+.language-option:hover {
+  background: var(--neutral-bg1-hover);
+}
+
+.language-option[aria-pressed="true"] {
+  border-color: var(--neutral-stroke1);
+  background: var(--neutral-bg1);
+  color: var(--neutral-fg1);
+  font-weight: var(--weight-semibold);
+}
+
+.language-option:focus-visible {
+  outline: 2px solid var(--brand-stroke1);
+  outline-offset: 1px;
+}
+
 .split-content {
   width: 100%;
   max-width: 440px;
@@ -2955,6 +3004,8 @@ a.menu-item:hover {
 
 .panel-actions {
   display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-s);
   padding: var(--s-s) var(--s-l) var(--s-m);
 }
 
@@ -2962,4 +3013,303 @@ a.menu-item:hover {
   margin-top: 0;
   align-items: center;
   min-height: var(--control-height);
+}
+
+/* Search: the field in the app bar and the results page */
+
+.search-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 1 420px;
+  min-width: 0;
+  margin-left: var(--s-m);
+}
+
+.search-field-over {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 0 var(--s-xs);
+  flex: none;
+  background: var(--chrome-bg);
+}
+
+.search-form {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.search-icon {
+  position: absolute;
+  left: var(--s-s);
+  pointer-events: none;
+  color: var(--neutral-fg3);
+}
+
+.search-field-over .search-icon {
+  left: calc(var(--s-xs) + var(--s-s));
+}
+
+.search-input {
+  width: 100%;
+  height: 32px;
+  padding-left: 36px;
+}
+
+.search-close {
+  flex: none;
+  margin-left: var(--s-xs);
+}
+
+.search-status {
+  margin: var(--s-m) 0 var(--s-xs);
+  color: var(--neutral-fg2);
+}
+
+.letter-fragment {
+  margin: var(--s-xxs) 0 0;
+  color: var(--neutral-fg2);
+  font-weight: var(--weight-regular, 400);
+  overflow-wrap: anywhere;
+}
+
+.filter-period {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  max-width: none;
+}
+
+.filter-period legend {
+  padding: 0;
+  color: var(--neutral-fg2);
+  font-size: var(--caption-size);
+  line-height: var(--caption-line);
+  font-weight: var(--weight-semibold);
+}
+
+.filter-period-fields {
+  display: flex;
+  gap: var(--s-s);
+}
+
+.filter-period-fields label {
+  display: flex;
+  align-items: center;
+  gap: var(--s-xs);
+}
+
+.empty-steps {
+  margin: 0;
+  padding-left: var(--s-l);
+  text-align: left;
+}
+
+/* Duplicates: "Dubbel?" on Te doen and the side-by-side page "Mogelijk dubbel" */
+
+.duplicate-list {
+  margin: 0;
+  padding: 0 var(--s-l) var(--s-m);
+  list-style: none;
+}
+
+.duplicate-list li + li {
+  border-top: 1px solid var(--neutral-stroke2);
+}
+
+.duplicate-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-xs) var(--s-m);
+  padding: var(--s-s) 0;
+}
+
+.duplicate-letters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-xxs);
+}
+
+.duplicate-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-l);
+  margin-top: var(--s-m);
+}
+
+/* Stacked on a phone. */
+@media (max-width: 639px) {
+  .duplicate-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.duplicate-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.duplicate-page {
+  display: block;
+  width: calc(100% - 2 * var(--s-l));
+  max-width: 420px;
+  height: auto;
+  margin: 0 var(--s-l);
+  aspect-ratio: auto 210 / 297;
+  background: var(--neutral-bg1);
+  box-shadow: var(--shadow4);
+}
+
+.keep-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-s);
+  margin: auto var(--s-l) var(--s-m);
+  padding-top: var(--s-s);
+  min-height: var(--control-height);
+  cursor: pointer;
+}
+
+.keep-choice[data-selected] .radio-indicator {
+  border-color: var(--brand-bg);
+  box-shadow: inset 0 0 0 3px var(--neutral-bg1);
+  background: var(--brand-bg);
+}
+
+.keep-choice[data-focus-visible] .radio-indicator {
+  outline: 2px solid var(--focus-stroke);
+  outline-offset: 2px;
+}
+
+.plain-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Mijn taken (spec S 6, S 13). */
+.segmented {
+  display: inline-flex;
+  gap: 2px;
+  margin-bottom: var(--s-m);
+  padding: 2px;
+  border: 1px solid var(--neutral-stroke-accessible);
+  border-radius: var(--radius-medium);
+}
+
+.segment {
+  padding: var(--s-xs) var(--s-m);
+  border: 0;
+  border-radius: var(--radius-medium);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.segment[data-selected] {
+  background: var(--brand-bg);
+  color: var(--on-brand);
+}
+
+.segment[data-focus-visible],
+.tab[data-focus-visible] {
+  outline: 2px solid var(--brand-bg);
+  outline-offset: 2px;
+}
+
+.tab-list {
+  display: flex;
+  gap: var(--s-m);
+  margin-bottom: var(--s-m);
+  border-bottom: 1px solid var(--neutral-stroke-accessible);
+}
+
+.tab {
+  padding: var(--s-xs) 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.tab[data-selected] {
+  border-bottom-color: var(--brand-bg);
+  font-weight: var(--weight-semibold);
+}
+
+.task-group {
+  margin-bottom: var(--s-l);
+}
+
+.task-group-title {
+  margin: 0 0 var(--s-s);
+  font-size: var(--subtitle-size);
+}
+
+.task-group-count {
+  color: var(--neutral-fg2);
+  font-weight: normal;
+}
+
+.task-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task-row {
+  display: flex;
+  gap: var(--s-m);
+  align-items: flex-start;
+  padding: var(--s-s) 0;
+  border-bottom: 1px solid var(--neutral-stroke2);
+}
+
+.task-check {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  flex: none;
+}
+
+.task-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.task-body p {
+  margin: 0 0 2px;
+}
+
+.task-action {
+  font-weight: var(--weight-semibold);
+}
+
+.task-done .task-action {
+  text-decoration: line-through;
+}
+
+.task-late {
+  color: var(--warning-fg);
+  font-weight: var(--weight-semibold);
+}
+
+.task-amount {
+  white-space: nowrap;
+}
+
+.task-needs-date {
+  margin: var(--s-xs) 0;
+}
+
+.task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-m);
+  align-items: center;
+  margin-top: var(--s-xs);
 }

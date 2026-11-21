@@ -49,8 +49,9 @@ def test_owner_role_requires_the_owner_url(monkeypatch: pytest.MonkeyPatch) -> N
         runpy.run_path(str(Path(brievie.settings.__file__)))
 
 
-def test_only_dutch_is_offered(fresh_settings: dict[str, object]) -> None:
-    assert fresh_settings["LANGUAGES"] == [("nl", "Nederlands")]
+def test_dutch_and_english_are_offered_dutch_first(fresh_settings: dict[str, object]) -> None:
+    assert fresh_settings["LANGUAGES"] == [("nl", "Nederlands"), ("en", "English")]
+    assert fresh_settings["LANGUAGE_CODE"] == "nl"
 
 
 def test_public_urls_must_be_https(monkeypatch: pytest.MonkeyPatch) -> None:

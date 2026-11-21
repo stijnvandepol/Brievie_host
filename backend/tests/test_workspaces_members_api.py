@@ -1,7 +1,7 @@
 from django.test import Client
 
 from apps.people.models import Person
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.factories import UserFactory
 
@@ -14,7 +14,7 @@ def test_list_members_names_their_person(client: Client, ws_a: Workspace) -> Non
     admin = Membership.objects.get(workspace=ws_a, role="admin").user
     viewer = UserFactory.create(name="Zoë Viewer")
     Membership.objects.create(user=viewer, workspace=ws_a, role="viewer")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         admin_person = Person.objects.get(user=admin)
     client.force_login(viewer)
 
@@ -28,6 +28,8 @@ def test_list_members_names_their_person(client: Client, ws_a: Workspace) -> Non
         "role": "admin",
         "person_id": str(admin_person.id),
         "can_manage_account": False,
+        "sorts_post": False,
+        "department_ids": [],
     }
     assert by_user[str(viewer.id)]["person_id"] is None
     assert by_user[str(viewer.id)]["role"] == "viewer"

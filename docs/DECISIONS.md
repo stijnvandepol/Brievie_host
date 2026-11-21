@@ -881,7 +881,11 @@ DELETE" that "AI settings in the web interface" left open is done for the consen
    longer allowed) gets the same sentence. Completing a reset ends every session of the
    account, **revokes every paired device** (a reset is what one does after a suspected
    break-in; the member pairs the phone again) and every other open link, and leaves a
-   notice. The same holds for `manage.py reset_password`. What the log cannot prove: the
+   notice. The same holds for `manage.py reset_password`. **Binding for private post
+   (1d-B), decided by the owner on 2026-11-19:** once a member can have private letters,
+   only the server admin makes a reset link for that member; a workspace admin gets 403.
+   A reset link is a way into the account, so whoever makes one could read that member's
+   private post. What the log cannot prove: the
    completion row has no asserted actor (nobody proved it was the member) and carries the
    maker's id as `reset_by`. Said plainly: after an admin's reset the admin can sign in
    with the new password and dismiss the notice from that later session. Only the session
@@ -1143,7 +1147,35 @@ Design: `docs/superpowers/specs/2026-11-19-ai-autopilot-design.md`. Opt-in per w
    - A person's confirm with `sets_organisation` clears `automatic` on the links that stay, and the autopilot's change is then no longer undoable (`can_undo` and `undo_event` both check the link's flag). A hand edit leaves the flag. A person's review of an AI-confirmed letter is never a repeat (409 `document_not_reviewable`).
    - The switches reset when AI goes off, the mode changes (external <-> local), or consent is granted for another address. Another model in the same mode at the same address keeps them.
    - `TaskItemOut.created_by_ai` (additive, default false), so a task list can show the mark.
-   - Follow-ups: work out relative terms with `needs_attention`; a per-workspace prohibition for the enterprise layer; `updateAiSettings` still accepts a device token while `updateAiAutopilot` does not (session only); iOS follows. Before private post (phase 1d part B) an automatic addressee link must not by itself grant reading rights. iOS must show the mark "Automatisch door AI" (documents and tasks) before the autopilot is used in households that only use the app.
+   - Follow-ups: work out relative terms with `needs_attention`; a per-workspace prohibition for the enterprise layer; ~~`updateAiSettings` still accepts a device token~~ (closed 2026-11-20, security review: session only). Before private post (phase 1d part B) an automatic addressee link must not by itself grant reading rights. iOS must show the mark "Automatisch door AI" (documents and tasks) before the autopilot is used in households that only use the app.
+
+## 2026-11-20: Who sees which letter: measured before it is built (merge point M0)
+
+Plan: `docs/superpowers/plans/2026-11-20-host-wie-ziet-wat.md`, Tasks 1–2; spec S 4.9.5.
+
+- **P1, the threshold.** Pass = every list's median <= 250 ms, per state (E on; E off with D on; E off with D off), actor (plain member, department member, flagged sorter, admin) and list (`list_documents` plain, unassigned and on the actor's own person, `inbox_counts`, `list_persons`, `list_labels`, `list_tasks(status="all")`), on a GitHub-hosted `ubuntu-latest` runner with the `postgres:18` service at default settings, 5 timed runs after one first run; the preview's letter count <= 2 s. A list that fails with the plain policy but passes with the member filter passes (the filter ships in Task 11). A fail stops the plan before Task 3, with the options of Task 2 for the owner.
+- **P2, a scratch schema.** The measurement adds the columns, tables, functions and policies of S 4.9 to the migrated test database itself (`tests/perf/scratch_schema.py`), from the SQL that ships (`apps.workspaces.visibility_sql`, the real `enable_rls`), so a failed measurement costs no product migration. Task 11 measures again on the real schema and removes it.
+- **Its own workflow, not a job of ci.yml** (`.github/workflows/visibility-perf.yml`, job `visibility-perf`). It runs when what it measures changes (the visibility SQL, `rls.py`, `context.py`, the list services, any migration, `tests/perf`, `uv.lock`, the workflow), on demand, and on Sunday 05:37 UTC (a new `postgres:18` image can change a plan). Not a required check: a path-filtered required check would block every pull request that skips it. Dropped: the plan's "every pull request" (minutes of runner time for changes that cannot move the numbers) and a per-job path filter inside ci.yml (needs a third-party action). A scheduled failure opens no issue (`audit-failed` is about security audits); GitHub mails the failure.
+- **How it measures.** One committed world per run (`tests/perf/data.py`: a fixed seed, every `NOT NULL` column explicit, about 1,500 characters of OCR text a letter, `VACUUM (ANALYZE)` afterwards); each measurement inside the test's transaction as the non-superuser owner role with `brievie.workspace_id` and `brievie.actor` set transaction-local, as a request has them; the real service functions, timed in Python (ORM included). "First" is the first run of that query in the measurement: a new plan, but caches are not emptied, so it is no cold-cache number. p95 is by nearest rank over the five runs (the slowest). Every query of one extra run is explained with `ANALYZE, BUFFERS` (artifact), and the report names the node with the most time of its own (JIT counts as a node).
+- **The member filter as measured** is not the plan's "addressee arm only", which would hide the scanner's and the reader rows' letters, but `addressee_ids && my_post_ids OR scanned_by_id = actor OR id = ANY(the actor's reader rows)`: a superset of what the policy shows such a member (checked: the result must equal the plain run), with every arm on an index so PostgreSQL can combine them in a BitmapOr. Task 11's `Q(visibility="restricted")` arm has no index and would turn the filter into a scan again.
+- **The reader-row arm last.** `document_condition` writes S 4.9.3's arms with the reader-row `EXISTS` at the end: PostgreSQL evaluates an OR's arms in the order written, and that arm is the only one that probes a table per row. Same truth table (Task 7's tests check it); the probe then runs only for letters the cheap arms leave out. Matters most for `inbox_counts` and the preview, which read every letter.
+- **Measured, first run** (run 44655424309, PR #26, `ubuntu-latest` 4 CPUs, PostgreSQL 18.7 at defaults, so `jit = on`): FAIL, 56 of 84 lists over 250 ms, preview 97.6 s. Planning took <= 2.7 ms everywhere; the time is JIT compilation and execution:
+
+  | list | median | JIT | execution without JIT | what dominates |
+  |---|---:|---:|---:|---|
+  | `inbox_counts` | 1,415–1,959 ms | 1,290–1,365 ms | 110 ms (own post) to 620 ms (E, sorter) | three correlated subqueries per letter; "has an addressee" checks the letter's policy once more per link |
+  | `list_persons` | 828–879 ms | 300–310 ms | ~550 ms | 105,000 addressee links, each checked against its letter's policy (`document_count`) |
+  | `list_labels` | 509–638 ms | 350–375 ms | ~180 ms | a hashed subplan over every visible letter |
+  | `list_tasks(all)` | 462–498 ms | 380–400 ms | ~70–100 ms | the per-task letter check |
+  | `list_documents` | 216–258 ms | none (cost under the threshold) | same | `has_addressee` annotated on every list: a hashed subplan over all addressee links and all visible letters (~190 ms) for 200 rows |
+  | `list_documents` unassigned, E off, not sorting | 286–331 ms | none | same | walking all letters newest first, each through the policy and an anti-join, to find 22–24 |
+  | `list_documents` on own person | 37–39 ms | none | same | |
+
+  The member filter did not use the GIN index and made the unassigned list slower (419–469 ms). The data build rewrote every letter once (`UPDATE … addressee_ids`), which left `documents_document` twice its size (49,000 pages); a server that grows letter by letter does not look like that. Fixed: `addressee_ids` is written with the letter.
+- **JIT off, for the app's connections** (`brievie/settings.py`: libpq `options = -c jit=off` on the default connection, so requests, the worker, `migrate` and the tests). PostgreSQL compiles a query once its estimated cost passes `jit_above_cost` (100,000); the policies are inlined into every list query and their estimates pass that by far (cost 0.5–11 million for queries that run in 70–600 ms), so every list paid 0.3–1.3 s of compilation for nothing. JIT pays for long analytical queries, which Brievie does not run on a request; OLTP installations commonly switch it off (not verified here against a named project). Set at connection start: no extra round trip, no server or database setting to migrate on existing installations, nothing for the back-up role (`pg_dump` is not affected either way). Dropped: `ALTER DATABASE … SET jit` (the owner role does not own the database on every installation, and only new sessions see it), `ALTER ROLE` (needs a superuser), a per-request `SET` (a round trip), raising `jit_above_cost` (the estimates grow with the data; a threshold is a guess). The measurement checks it runs with `jit = off` and reports every list with `jit = on` beside it.
+- **Proposed forms, measured beside the services** (`tests/perf/candidates.py`, same result required on every run): lists annotate `has_addressee`/`has_automatic` only where a filter reads them; "unassigned" is `status = 'done' AND addressee_ids = '{}'` on a partial index `documents_document_unassigned (workspace_id, created_at DESC)`; a person filter is `addressee_ids @> ARRAY[person]` (GIN); `inbox_counts` is one pass with `addressee_ids = '{}'` and the automatic links as two uncorrelated `IN` subqueries; `list_persons` counts with one grouped query over the visible letters (`unnest(addressee_ids)`), not per link. If they pass, Task 11 makes them the services and Task 7 adds the index.
+- **The preview, grouped** (`visibility_sql.viewer_groups_sql`): without reader rows, a non-private letter's viewers depend only on its `addressee_ids` and, while not done, its scanner. The condition runs once per group of alike letters and member, not per letter and member; letters with an unexpired reader row are asked one by one (`viewer_pairs_sql`), private letters never change with the switches. The measurement checks the grouped count equals the per-letter count of the first design.
+- **Ruling: proceed after measurement run 44747946602** (commit db14375, JIT off): every list passes with the candidate forms except `inbox_counts` (candidate 259–291 ms on a slow runner; 213 ms the run before). The plan adopts the `MATERIALIZED` member CTEs of `visibility_sql` (Tasks 8, 37), the grouped `list_labels` count (Task 11) and the forms of `tests/perf/candidates.py` wherever a list is built; `inbox_counts` takes the candidate form plus one cheap improvement in its task. The 250 ms threshold stays.
 
 ## 2026-11-20: Fixes from the exploratory API test of 19 November
 
@@ -1165,3 +1197,973 @@ Design: `docs/superpowers/specs/2026-11-19-ai-autopilot-design.md`. Opt-in per w
   - Finding #15: archiving a person deletes their open proposals for good; restoring does not bring them back (intended in the code, not yet a product decision).
   - Finding #18: the audit log keeps a deleted person's name but only the id of a deleted label or rule; choose one line.
   - Also skipped from the same test: #12 (task events do not say which task: needs a field and a migration), #13 (rule counts after undo or "no"), #16 (an admin may archive their own linked person), #17 (folders differing only in case: needs a constraint and existing duplicates), #22 (a malformed id in a path is 422, not 404).
+
+## 2026-11-20: Who sees which letter: the actor (plan Tasks 3–4)
+
+- **A second transaction-local setting, `brievie.actor`**, beside `brievie.workspace_id`: a user's id, `system` or empty (`NOBODY`). `public.brievie_actor_id()` gives a user actor's id (NULL for anything else, never an error) and `public.brievie_is_system()` the exact word `system`; both `LANGUAGE sql STABLE`, `search_path` pinned, owned by the schema owner, executable by `brievie_app` (migration `workspaces/0005`). Every `workspace_context` names its actor; a request runs as its user (session or device token), never as the system. Audit rows, AI settings and invitation lookups run as `NOBODY`: their tables have no letter policy, and an empty actor sees no letter (R6).
+- **Running as the system is a closed list of files** (`tests/test_actor_callers.py`: `system_actor(` or `actor=SYSTEM`), and only `apps/workspaces/context.py` writes the setting. A new caller is added there in the same commit.
+- **A manual rule run runs as the member who started it** (R7): the job carries `user_id`, checks the membership first ("Rule run skipped: the member left") and queues its next batch with the same id. A job queued before this change has no `user_id` and does nothing ("Rule run skipped: started before the update", P5): failing closed costs one click of the admin, guessing an actor could show letters to nobody's account. `run_rule` refuses an actor without a user.
+- **One lock order (plan Task 5, PB T6).** A request that organises a letter first holds its own membership row `FOR SHARE` (`apps.workspaces.locks.lock_own_membership`; 404 `workspace_not_found` when the member was removed meanwhile), then the document. A membership change takes the workspace's memberships `FOR UPDATE`, so it waits for the request or the request finds the member gone; the two never hold each other's rows. Every row lock on a `Document` or `Person` is `FOR NO KEY UPDATE` (a source scan checks it): a foreign-key check on the letter (`FOR KEY SHARE`, every event, label link or task insert) then never waits for it. `Workspace` locks in `create_rule` and `apply_presets` stay `FOR UPDATE`: those transactions take no other row lock afterwards, so they cannot be part of a cycle. The organising services read the member from the actor (`current_actor()`); the system has no membership to hold.
+- **Switches as fields first (plan Task 6).** `Workspace.everyone_sees_all`, `departments_enabled`, `admins_read_all`, `care_is_private`, `emergency_access`, `Membership.sorts_post`, `Person.kind` with `DepartmentMember` (forced RLS) and `Task.created_by`, none with `db_default` (Django would insert with `RETURNING`, which reads the new row through the SELECT policies). Every existing workspace migrates to E on, D off, A on whatever its kind (S 4.16), and until the presets of Task 40 every new workspace starts that way too, also an Organisatie (P8): no installation can reach "own post" before every path that could show a hidden letter is closed. The kind's labels become "Organisatie" and the viewer role "Alleen lezen" (R29).
+- **Two policy layers (plan Task 7, S 4.9.3).** The permissive `workspace_isolation` stays the only permissive policy on every workspace table; on top, restrictive `document_visibility`, `document_visibility_update` and `document_visibility_delete` narrow reads, updates and deletes alike (an `UPDATE`/`DELETE` without a `WHERE` that reads a column applies no SELECT policy, so they need their own). The letter's condition is `visibility_sql.POLICY_CONDITION`, rendered from the one template that `viewers()` will use too. No `WITH CHECK`: PostgreSQL then checks an update's new row with the same condition, so a write that would hide the letter from the actor fails with 42501 rather than passing ("whoever makes it private stays a reader"). Every table with a letter key follows its letter (`EXISTS` on the document, the coverage test compares the database's foreign keys with Django's); a task without a letter is seen by the system, whoever sees all post, its assignee and its maker (R39). `documents_documentreader` has only `reader_scope` (a user sees their own rows, only the system writes them) and no child policy: the document policy reads it, a policy back would be a circle.
+- **An empty actor and a non-member see no letter (R6)**, also with "Iedereen ziet alle post" on; PB's "an empty actor sees public letters" is gone. Reader rows stay for private letters, shares and emergency access only (R33); `addressee_ids` (GIN) makes non-private sight an array overlap and is filled from the links by the migration. The partial index `documents_document_unassigned` (letters `done` without an addressee, newest first) ships here, as measured.
+- **`WorkspaceModel.save` reads a hidden related letter's workspace as the system**: a user who may write a history row on a letter they cannot see (the write order of Task 9) would otherwise be refused as "another workspace". The workspace policy still binds, so a row of another workspace stays invisible and is refused as before.
+- **The scratch schema goes with Task 7, not Task 11**: once the migrations carry the functions, policies and indexes, installing them a second time fails; the measurement now runs on the migrated schema. Task 11 keeps the member filter and the new table.
+- **One writer for `addressee_ids` and reader rows (plan Task 8, P3).** `apps.documents.visibility.addressee_scope(document)` wraps every outermost service that may change a letter's addressees (set, accept, undo, confirm, the pipeline's organising with the autopilot, a rule run, the autopilot on its own); `organise` raises `RuntimeError` for an addressee change outside a scope, so no caller can forget the sync. The outermost scope syncs once at its end, as the system, in the same transaction; a scope that raises syncs nothing. Reader rows: `share` for the shares of every letter (R44), `addressee` and `department` for private letters only, current members only, emergency rows untouched. `viewers()` runs the policy's own condition per member (`viewer_pairs_sql`, its `MATERIALIZED` member CTEs as measured), so there is no second copy of the rule. The nightly `verify_visibility` (03:40) repairs every `addressee_ids` that differs from the links and every reader set, and logs two counts only.
+- **`django.contrib.postgres` in `INSTALLED_APPS`**: `ArrayField` and `GinIndex` need it (system check `postgres.E005`). Part of Django, not a new dependency.
+- **The write order (plan Task 9, S 4.9.3).** A confirm first looks the letter up as the system after the membership lock, so a repeat by someone who handed it over answers the same (200, `can_read: false`); any other review of a letter the caller cannot see is 404 like an unknown id. Then, as the caller: every field but the status, labels and addressees, the dismissals, the history, the tasks (`created_by`) and the rules at confirm; the scope's end syncs `addressee_ids` and the readers as the system; last, as the system, `status`, `confirmed_by` and `confirmed_at`. Every organising endpoint (confirm, addressees, labels, accept, dismiss, undo, reopen) answers through `document_out_for`: `can_read` is computed last, as the caller, and when false the answer holds the id, `client_id`, `created_at` and status only. `DocumentOut.can_read` is additive (default true). The web does not act on `can_read: false` yet (Task 44 adds the hand-over sentence before the tap); with every workspace still on "Iedereen ziet alle post" no answer has it.
+- **A repeat confirm is recognised for its confirmer only** (security review of Task 9): the lookup as the system answers the repeat only when `confirmed_by` is the caller, so it is no oracle for a letter someone else confirmed; anyone else gets the caller-scoped lookup (404 when hidden). The `can_read: false` answer keeps `client_id` and `created_at`: only the member who just handed the letter over gets it, and both came from that member's own upload or screen.
+- **Writes the user cannot see (plan Task 10, PB T9).** Deleting a person, label or rule and archiving a person authorise as the caller, then reach links on letters the caller cannot see as the system (a hidden link would otherwise fail the commit at its deferred foreign key). `deletePerson` is admin-only, so "in use" because of hidden post is told only to admins; the web shows the delete button to admins only. A repeated upload is looked up as the system and returned only when the uploader can still read it; otherwise the same 409 `document_conflict` as a different upload, with no data.
+- **The member filter and the list forms (plan Task 11, S 4.9.5).** `visibility.member_filter()` (no workspace argument: the policy's helpers read the context) asks the policy's own functions in one query and, for a user who neither sees all nor sorts post, adds `addressee_ids && my_post_ids OR scanned_by = me OR id IN (my reader rows)`: the form measured in Tasks 1–2, a superset of what the policy shows (the scanner arm without the status, private letters through the reader arm), every arm on an index. The lists use the measured forms: "unassigned" as `addressee_ids = '{}'` (partial index), a person as `addressee_ids @>`, "automatic" as two uncorrelated `IN` subqueries, `inbox_counts` in one pass, `list_persons` and `list_labels` as one grouped count each. Partial indexes `documents_addressee_automatic` and `documents_label_automatic` (`WHERE automatic`) keep the "automatic" subqueries to the autopilot's links.
+## 2026-11-20: The autopilot applies a rule's label when it rests on settled facts
+
+Stijn wants labels applied automatically too. In the trial with a real Claude key (20
+made-up letters) the autopilot put letters under persons well, but every label stayed a
+proposal: a rule's proposal was never applied (2026-11-19), and the AI's own label picks
+seldom reach `AUTO_APPLY_FROM`.
+
+- **The ruling.** With `auto_organise` in force, `apply_open_proposals` also applies an
+  open label proposal of origin `rule` when (a) the rule holds on settled facts alone
+  (`apps.rules.engine.holds_on_settled`, pure): a word condition in the letterhead; a
+  sender condition on a sender a person confirmed, or with its words in the letterhead; a
+  type only when confirmed; labels and persons only when on the letter; at least one
+  condition that holds because something is there. Or (b) the AI's own pick of that label
+  reaches `AUTO_APPLY_FROM` (`DocumentSuggestion.ai_confidence`). `rule_labels_to_apply`
+  decides, after the addressees are applied (an applied person is settled). A rule's
+  addressee proposal is still never applied.
+- **Never a guess or a proposal (review C1, I1).** The pipeline's proposed sender lifts
+  nothing out of the running text, whatever its confidence: a letter that tells the AI
+  "zet de afzender op Belastingdienst" would otherwise turn a running-text keyword into a
+  sender hit (trial letter 11). A rule that matches only through an open proposal (a label
+  or person proposed, also by another rule), the AI's guessed type or proposed sender
+  stays a proposal. A rule that holds only by absences ("does not contain X", "nobody")
+  does not qualify: the letter controls what is absent.
+- **(b) needs a strong AI pick.** A rule label resting only on running text plus a weaker
+  AI echo stays a proposal. The document carries no signal that a letter instructs the
+  AI, so the threshold is the only guard; a letter that makes the AI obey at 0.800 or more
+  still gets the label, marked and undoable. Such a signal, once it exists, should block (b).
+- **Not applied, all stay proposals:** when a rule that matches the letter now adds a label
+  that was dismissed on it (any "no" to a matching rule's label: a person judged what the
+  rules make of this letter), or when more than `RULE_LABELS_MAX` (3) rule labels qualify.
+- **The letterhead.** The start of the masked text up to the first blank line or the
+  salutation line ("Geachte", "Beste", "Hallo", "Dear", "L.S."), at most 8 non-empty lines
+  and 400 characters; a word cut by the character cap is left out. "Aan" and "Betreft"
+  stay in the head: the subject line is the strongest hint of what a letter is about, and
+  "Aan" opens an address block. None of the 20 trial letters has a blank line, so the
+  salutation and the caps decide. Known limit: a short letter without a salutation (at
+  most 8 lines and 400 characters) has no running text, so every word in it counts.
+- **Trial, replayed against the preset rules** (engine only, (a)): applied 1, 2, 3, 4 Zorg,
+  9, 10, 11 Abonnementen, 13, 15, 20 Gemeente, each a label the answer sheet accepts. Stays
+  a proposal: 5 Abonnementen ("contributie" in a debt collector's text: a wrong label),
+  11 Belastingdienst (the letter's instruction), 18 Abonnementen (now after the
+  salutation), and 4 Verzekering, 6 Auto, 7 Zorg, 12 Wonen, 17 Wonen (right labels whose
+  word stands only in the running text).
+- **Letters 11 and 20 against the brief.** The brief expected both to stay proposals.
+  Letter 20's "Label Gemeente" rests on "Waterschap", the sender and the first line;
+  letter 11's "Label Abonnementen" on its subject line. Both are applied, and the answer
+  sheet accepts both; only letter 11's "Belastingdienst" (running text) stays, also when
+  the AI obeys the letter's sender instruction. Kept on the coordinator's ruling; reported
+  to Stijn.
+- **History, mark and undo.** History origin `rule_autopilot` (new, additive; `rule`
+  names the rule), no actor, an `automatic` link. Undo works as for the AI's changes and
+  dismisses the label; a person's confirm with `sets_organisation` takes it over and ends
+  the undo, as CLAUDE.md requires. This replaces the brief's "reuse `rule`": with `rule`
+  the history could not tell it from a rule's own change. `DocumentSummaryOut.
+  auto_rule_label_ids` (additive) names these labels, read from the accepted rule
+  proposals: the badge says "Automatisch door regel" when only a rule's label was put on,
+  "Automatisch door AI" when the AI chose something. The list filter, which counts both,
+  is now "Automatisch door Brievie".
+- **Notice version (review I3).** The notice now says rule labels are applied, which the
+  administrators who switched the autopilot on before did not agree to.
+  `AISettings.autopilot_notice_version` (rows that existed: 1; new rows: 0) records the
+  version agreed to; `AUTOPILOT_NOTICE_VERSION` is 2. Rule labels are applied only from
+  version 2 (`RULE_LABELS_FROM_NOTICE`); below that the autopilot does what the old notice
+  said. `getAiAutopilot.notice_outdated` (additive) is true while a switch is on under an
+  older version; the web then shows the new notice to agree to, and `updateAiAutopilot`
+  with the same switches and `acknowledged` stores the version. `configure_autopilot`
+  stays the only writer; agreeing again changes no switch, so it writes no audit row (the
+  closed list has no code for it). Dropped: switching every workspace off in a data
+  migration (it would undo a choice to fix a wording).
+- **AI agreement is kept on the proposal row.** One row per change, and a rule's proposal
+  takes the AI's row over, so `DocumentSuggestion.ai_confidence` (default 0) keeps the
+  highest confidence of the AI's own picks. Not in the API. Migration `documents 0011`
+  (after main's `0010_search`) with the new history origin; `pipeline 0005`.
+- **A rule set to apply** (mode `auto`) is unchanged: it applies always, autopilot or not,
+  with origin `rule`, and its link is not `automatic`. The rule editor's switch, the
+  autopilot switch and the server notice say how the two work together.
+- **The `automatic` counter of `getInboxCounts`** counts what the list filter
+  `automatic=true` keeps, with the same predicate: confirmed by the AI, or a link still
+  marked automatic. The trial's 19 was right (12 confirmed and 19 with an automatic person
+  are 19 letters together). Unchanged; rule labels the autopilot applied count too.
+
+## 2026-11-20: Search for letters
+
+Design: `docs/superpowers/specs/2026-11-20-search-design.md`.
+
+- **PostgreSQL, not a search service.** Full-text search with the `dutch` configuration (stems: betaling finds betalen; word beginnings with `word:*`) on a generated `search_vector` (sender weight A, summary B, text C) with a GIN index, and `pg_trgm` word similarity for typos. It is in the database we already run, follows the same row-level security and back-up, and adds no container (no Redis, no Elasticsearch, no Meilisearch). Dropped: trigram only (no Dutch stems, a large index on the whole text, poor ranking); full-text only (a misspelt sender finds nothing).
+- **The measurement and what it changed.** Throw-away database, 10,000 generated Dutch letters of 180 to 420 words, PostgreSQL 18 on a Mac, warm, median of 7 runs of the service function including the fragment and the prefetch.
+  - First version: one query (the text index OR the label and person name subqueries, every match ranked): about 550 ms for any term, because the OR could not use the text index and ranking read every letter. Its typo fallback, word similarity over the whole text: 6 to 10 seconds.
+  - As built: exact search 33 to 50 ms (a rare word, a word in most letters, a stem, a word beginning, two words, a sender); typo fallback 230 to 300 ms, and it only runs when nothing matched exactly.
+  - After words combine across text and names (same database, one label on 2,000 letters and one person on 2,000, overlapping on 1,000): the same exact searches 35 to 60 ms; a word in most letters plus the label 57 ms; the label alone 60 ms; label plus person 81 ms; a text word plus person plus label 95 ms (the slowest, close to the 100 ms aim: each name word adds a row filter over the driver's matches).
+  - Sizes: table 32 MB; full-text GIN index 6.4 MB; trigram index on sender 4.4 MB, on summary 2.3 MB. The trigram index on the letter text, dropped, was 17 MB.
+  - Decisions from it: the exact step is two indexed id lookups (the text index; label and person names), each the newest `MAX_CANDIDATES` (1000) matches, and then one ranking of only those letters. A word that is in most letters therefore ranks the newest 1000 matches, not all of them. Typos are found in the sender and the summary only, with a trigram index on each. A word list per workspace, so a typo in the letter text can be corrected, is a follow-up.
+- **POST, not a `q` on the list.** `POST /workspaces/{id}/documents/search` (`searchDocuments`): the term can be a name or a number, and a body keeps it out of URLs, access logs and browser history. The list has no paging and no fragment either. The web keeps the term in memory (a small store, `web/src/search-term.ts`), not in the address, the router or history state or the browser's storage, and forgets it on signing out, on a session that ended and on a switch of workspace. Paging is offset-based and stops at offset 1000: search is for finding, not for walking the archive. Throttled `30/1m` per caller.
+- **A BSN cannot be searched.** `clean_term` normalises the term (NFKC; soft hyphens and zero-width characters removed), runs `mask_bsns` on it and removes every `[BSN]` it produced; the literal `[BSN]` is removed too. `search_words` then turns every other dropped character into a space and removes any run of adjacent digit groups with exactly nine digits that passes the elfproef (`privacy.passes_elfproef`), so "111/222/333" or "111–222–333" cannot slip past the separators `mask_bsns` knows. Nine digits that fail the elfproef stay: they are a reference number, not a BSN. The words "bsn" and "burgerservicenummer" are dropped as well: stored text holds `[BSN]` for every masked number, whose lexeme is `bsn`, so they would only find the letters where a BSN was masked. The answer says so (`bsn_removed`) and the web shows a sentence. A term with nothing left finds nothing. A term shorter than two characters finds nothing; one over 200 characters is refused (422).
+- **No audit row for a search.** A term in the audit log would put a name or a number where the privacy rule forbids it, and a search changes nothing. Brievie also does not log the term or put it in an error message; the tsquery is built from quoted lexemes and passed as a query parameter, so no input is read as SQL or tsquery syntax. Honestly: psycopg binds on the client side, so the statement PostgreSQL receives holds the term, and PostgreSQL logs a statement that fails (its default `log_min_error_statement = error`). A cancelled or broken search therefore puts the term in the PostgreSQL log, as any failing statement with letter text already does. The owner role cannot change that setting (superuser only).
+- **Words combine across text and names.** Every word must be found, each in its own place: in the sender, summary or text (a word beginning, Dutch stems), or in the name of one of the letter's labels, or the name or a name variant of one of its persons. "aanslag papa" finds the assessment addressed to Papa. The first version wanted every word in the text or every word in names, which found nothing for that term. Kept indexed: per word the matching labels and persons are looked up first (small tables). The words in no name at all must be in the text and drive one lookup on the text index; when every word is in some name, the first word drives two lookups (the text index; its labels and persons). Each lookup applies the other words as row filters and keeps the newest `MAX_CANDIDATES`; the union is ranked once, with `ts_rank_cd` against all words joined with OR (more words in the text rank higher) plus `NAME_BOOST` for every word the letter matches through a name. Label and person names match on any part of the name; text only on the beginning of a word ("dienst" does not find "belastingdienst").
+- **One visibility seam.** `apps.documents.visibility.visible_documents(membership)` returns the documents a member may see (today: the workspace's documents; row-level security still applies). The list, the inbox counts, a document's detail and search all start from it, so rights per department and private post change one function. Label and person names are matched through the same queryset, so a hit is always a visible letter. **Not on the seam yet:** the member export's own rule (`member_export`, letters addressed to the member), the export job (`export.py`), the rule preview and the rules jobs (`apps/rules`), the dedupe of an upload on its `client_id` (`intake.py`), and the locked lookups behind changes (`select_for_update` in `services`, `review` and the pipeline), which write rather than read for a member. They must move to or be checked against the seam when rights per document arrive.
+- **`django.contrib.postgres` in `INSTALLED_APPS`.** Part of Django; it gives the search and trigram lookups and the `GinIndex` and `TrigramExtension` the migration uses. No new dependency.
+- **No system checks in commands that may run without PostgreSQL.** Django 6.1 runs model checks against every database, and the check of the generated `search_vector` asks the server version, so a command that runs them needs a connection. The commands `./brievie` starts in a new container (`run --no-deps`, `docker run`; restore runs some while PostgreSQL is down) set `requires_system_checks = []`; `tests/test_commands_without_database.py` reads that list from the wrapper. Kept the generated column: dropping it for a trigger or a computed query would only move the cost.
+- **`pg_trgm` is created by the owner role.** The migration (`0010_search`) runs `TrigramExtension()`; `pg_trgm` is a trusted extension, so the non-superuser owner role may create it (verified on PostgreSQL 18).
+- **Follow-ups.** Keeping the term out of the PostgreSQL log: server-side binding (psycopg `server_side_binding`) for the search queries, or `log_min_error_statement` for the search path (set by an administrator, it is superuser-only); a word list per workspace to correct typos in the letter text; iOS screens (the endpoint is the same); highlighting the hit on the document page; moving the reads listed above onto the seam.
+
+## 2026-11-20: Search joins the visibility rules (merge of search into "Wie ziet wat", merge point M1)
+
+- **One seam, the policy behind it.** `visibility.visible_documents(membership)` is the start of every member-facing read of letters: the list, the inbox counts, a letter's detail, pages and history, and search (its exact step, its typo fallback, its label and person filters and its fragments). It filters on the member's workspace and adds `member_filter()` (S 4.9.5: only an index hint, no result changes); the restrictive document policies decide with the request's actor. It raises `RuntimeError` when the actor is not that member (the system, another user or nobody): as the system the policies would show every letter, so that is a programming error and fails closed. The services take the `Membership` (search's form); the workspace-taking `_documents` helper is gone.
+- **Search answers as if a hidden letter did not exist.** Every step reads through the seam, so a letter the caller may not read is not found by text, sender, summary, label or person name, not through `label_id` or `person_id`, and changes neither `next_offset` nor `fuzzy` (the fallback runs exactly when no visible letter matched). Label and person names stay a directory (S 4.1), as they already are in the lists. `tests/test_search_visibility.py` checks it in all 16 switch states for every kind of member against `Office.visible`; query timing is not made constant.
+- **The search's "Not on the seam yet" list is covered by the policies here.** The member export, the export job, the rule preview and jobs, the upload dedupe and the locked lookups run under forced RLS with an explicit actor (plan Tasks 4, 9, 10); they need no member filter.
+  Since the trash (see "Trash for letters" below) those off-seam paths also filter `models.LIVE`: the policies say who sees a letter, not whether it is in the trash.
+- **Migrations renumbered after main's `documents/0010_search` and `0011_autopilot_rule_labels`**: `0012_visibility` (was 0010) and `0013_automatic_link_indexes` (was 0011); `rules/0004` and `tasks/0004` point at `0012_visibility`. Main's migrations are already in installations, so they stay first.
+- **Search measured on the 100,000-letter world, not gated.** The visibility job also times search (`search_sender`: a word in every sender plus a rare one; `search_common_word`: a word in every summary) for every state and actor, and checks the member filter changes no hit; it shows a time over 250 ms as "over, not gated", because P1 is about the lists of S 4.9.5. First run: the member filter makes search faster (own post, plain member: 108 ms against 385 ms with "Iedereen ziet alle post"); a word in every sender plus a rare word takes about 390 ms for whoever sees all, against 33 to 60 ms on main's 10,000 letters. That is search's own planning (a sequential scan of every letter's vector), an open item for search, not for visibility.
+- **Not done: moving the text and search vector out of the letter table's main pages.** `toast_tuple_target = 128` made every list and the preview 1.3 to 4 times slower (the policy then reads out-of-line values); dropped before it shipped. The owner then chose the search vector in its own one-to-one table (trigger-kept, the letter's policies): measured at 100,000 letters, `inbox_counts` stayed at 250 to 285 ms, so the wider row was not the main cost, and `search_sender` for a sorter got slower (about 565 against 390 ms). Per the owner's ruling for that outcome, reverted for the fallback below.
+- **`Document.has_automatic_link`, written only by `apps.documents.organise` (`sync_automatic`, migration `documents/0014`).** The fallback of the owner's ruling. The "automatic" arm of `inbox_counts` and of the "automatic" list looked up each letter's automatic links, and every link went through its letter's policy again (about 100 ms at 100,000 letters). The flag holds "an automatic label or addressee link is on the letter": `add_label`/`add_addressee` with an automatic origin, `set_labels`/`set_addressees` removing an automatic link, `undo_event`, `confirm_automatic_links` and `record_label_deleted` (which now removes the label's links itself) call it in the same transaction. Filled from the links per workspace as the system; reversible (drops the column). The search vector stays a generated column on the letter. Cost if wrong: a writer that forgets the call leaves a letter in or out of "Automatisch" until its next change; `tests/test_document_automatic_flag.py` checks the flag against the links after each path.
+## 2026-11-20: Fixes from the security review
+
+Three read-only reviews of main at `3fa9c19` (identity, data and operations, content
+plane). One line per finding is in the pull request; the choices are here.
+
+- **AI settings are web-session only (High).** `updateAiSettings` and `previewAiSettings`
+  now take `auth=session_auth`, like `updateAiAutopilot`. Attack: with the bearer token of
+  an administrator's phone, `PUT /workspaces/{id}/ai` with an external address and the same
+  `consent_address` sent every later letter to that address; the "consent" was the
+  attacker's own echo. This narrows two released operations, which the contract test
+  otherwise forbids: `test_openapi_contract.NARROWED_TO_THE_WEB_SESSION` names them. The
+  iOS app does not call either (checked: only the bundled `openapi.json` names them), so
+  nothing in the field breaks. If the app ever adds AI settings it must use the web: the app
+  treats every 401 `not_authenticated` as a revoked device and forgets the pairing.
+- **BSN masking knows more printed forms (Medium, both reviews).** Reproduced on main:
+  `111  222  333`, `BSN: 111 222  333`, `111 222\n333`, narrow/thin spaces, `111/222/333`,
+  `111,222,333` and `BSN 12345678` came through unchanged. `privacy._SEP` is now a run of 1
+  to 3 separators: any whitespace (line breaks, no-break, thin, narrow and figure spaces),
+  `. / , _ -`, the dashes U+2010 to U+2015, the minus sign, the soft hyphen and zero-width
+  characters. Close after the word "BSN" (30 characters, as before) any grouping of 8 or 9
+  digits is masked: an old sofinummer is printed without its leading zero. Every quantifier
+  is bounded and nothing nests, and the label windows are merged and walked with one
+  pointer, so masking is linear (it was labels x numbers: review L3, a test now bounds it).
+  Masking a number too many stays the safe side: a labelled date ("BSN onbekend, geboren
+  01-02-1980") is masked too. **Stated limit:** without the word "BSN", only the layouts
+  3-3-3, 4-2-3 and 2-2-2-3 and nine plain digits are recognised, and only when they pass the
+  elfproef; "111;222;333" or "11 1222 333" without a label still pass. Search keeps its own
+  wider net (`_without_bsn_digits`). **Follow-up:** text stored before this fix keeps what
+  the old mask missed; a `remask_bsns` command per workspace (`Document.ocr_text`,
+  `DocumentPage.ocr_text`, summaries) is needed before the next release note says
+  otherwise.
+- **Pairing a phone needs a recent sign-in and leaves a notice (identity M2).** Attack: a
+  moment at a victim's open browser was enough to make a pairing code and pair a phone,
+  whose token outlives a later password change (devices are kept on purpose) and is used
+  for 180 idle days; nothing told the owner. Chosen: (1) `createPairingCode` answers 403
+  `reauthentication_required` unless the session signed in or typed the password again
+  within `sessions.REAUTHENTICATION_WINDOW` (15 minutes, longer than a code lives, so the
+  code right after accepting an invitation or after setup needs nothing extra); the new
+  session-only `reauthenticate` (`POST /auth/reauthenticate`, `{password}`) checks the
+  password through `authenticate`, so wrong ones count for the same lockouts as signing in,
+  and stamps `UserSession.reauthenticated_at`. The web asks for the password on "Apparaten"
+  and then makes the code. Part C's second factor can satisfy the same check later. (2)
+  Every pairing (code or proof) leaves the owner an `AccountNotice` `device_paired` naming
+  the device, with what to do when it was not them. There is no flow where an administrator
+  pairs a phone for a member (a code is always for the caller's own account), so nothing
+  else changed. Dropped: a `current_password` on `createPairingCode` itself (a request body
+  on a released operation that had none), and revoking devices on a password change (the
+  documented promise "je gekoppelde telefoon blijft werken"). Limits: within the window a
+  stolen fresh cookie can still pair, and the notice can be dismissed from the same browser;
+  the "Nieuwe code" on the invitation page after 15 minutes shows the sentence and the
+  person goes to Apparaten.
+- **Wrong passwords are limited per account too (identity M1).** Attack: axes locked an
+  email per client address and `LOGIN_FAILURES` counted per address, so rotating addresses
+  (an IPv6 /64 is one VPS) left guessing bounded only by the hashing speed. Chosen:
+  `apps.accounts.signin_limits`, one count per account in `SignInFailures` (a hash of the
+  normalised email; unknown addresses are counted alike, so the answer reveals nothing).
+  Ten wrong passwords are free; then each attempt waits 15 seconds after the last wrong
+  one, doubling to at most 15 minutes, which bounds guessing to roughly a hundred tries a
+  day per account. The count starts again after a sign-in or a day without wrong
+  passwords. Why a capped slow-down and not a lock: an attacker who fails once every 15
+  minutes keeps the account slowed but never locked for long, and a browser that signed in
+  to the account before carries a signed, HttpOnly cookie (`brievie_known`, 180 days, up to
+  five accounts) and is never slowed by the account count (axes still limits it per
+  address), so the owner is not locked out of their own browsers (the device-cookie scheme
+  of OWASP). The check, the password check and the count run under a transaction-level
+  advisory lock per account, so a burst of parallel requests cannot all pass before the
+  first failure is counted (one of the review's notes). The invitation path with an
+  existing account (`verify_password`) counts the same way. The address limits now count
+  an IPv6 client per /64 (`net.address_bucket`); axes keeps its exact address. Dropped: a
+  per-account notice after a slow-down (a notice per attack would train people to ignore
+  it); a fixed lock (a cheap denial of service).
+- **Uploads are limited per member and per workspace (content-plane M2, data L3).**
+  Attack: any member, or a stolen phone of one, scripted `createDocument` with fresh
+  `client_id`s; every upload stores up to 32 MB and queues a paid AI call on the one
+  `pipeline` worker that all workspaces share, so other workspaces' letters waited for
+  hours. `apps.documents.upload_limits` answers 429 `too_many_uploads` (Dutch sentence,
+  `Retry-After`) past `BRIEVIE_UPLOADS_PER_MEMBER` (60 per 10 minutes, per member per
+  workspace) or `BRIEVIE_UPLOADS_PER_WORKSPACE` (600 per hour); both are settings, so a
+  mail room can raise them. Checked after the membership check, so an outsider cannot use
+  up a workspace's count, with a fresh throttle per check (Ninja keeps state on the
+  instance). The app already retries a 429 with its back-off. **Follow-up:** fairness on
+  the worker itself (Procrastinate takes jobs first in, first out): a cap on queued
+  `process_document` jobs per workspace, or a queue lock per workspace (`queueing_lock`)
+  with a re-queue, is more than a small change and needs a measurement on the worker.
+- **The AI key is bound to its address (data M2).** Attack: anyone who can write
+  `pipeline_aisettings` (the keeper holds `brievie_app` credentials and may set the
+  workspace GUC; or a stolen app password, or an SQL injection) rewrote `base_url` and
+  `consented_base_url` together and left `api_key_sealed` alone; the worker opened the key
+  and sent it to the new host in `Authorization`. Now the key is sealed with the AAD
+  `ai-api-key-v2|<workspace id>|<base_url>`, so it opens only for that workspace at exactly
+  that address: a changed address or a blob copied from another workspace gives
+  `ai_not_configured`, never the key on the wire. `configure` keeps a stored key only when
+  it opens for the target address, and `status().has_api_key` is false for a key that does
+  not open, so the form asks for it. **Upgrade:** keys sealed before (AAD `ai-api-key`) do
+  not open any more; an administrator types the key once again. No fallback to the old
+  AAD: an attacker could replay an old blob with a new address. No re-seal in a migration:
+  the migrate container has no master key.
+- **Low findings fixed in this round.** A page image with a second frame header is refused
+  (`jpeg_size`: decoders differ in which header they use, so a small second one hid an
+  oversized first one). `linkPersonToMember` is web-session only (it decides whose post a
+  person's letters are, and later who may read them); the contract test names it with the
+  AI settings as deliberately narrowed, and no app calls it. A proposal of an AI on the own network names its
+  reader `local` instead of the host (`ProposalOut.provider` reaches every member, while
+  `status` already hid the local address); proposals stored before keep their host. A workspace holds at most 500 persons
+  and 200 labels made by hand (409 `too_many_persons` / `too_many_labels`): the AI sees only
+  the first 50 persons and 100 labels, and name matching walks every person on every letter
+  on the shared worker. Persons made for members and preset labels are not counted against
+  the moment they are made, only against the next one made by hand. Our throttles keep Ninja's per-request
+  state (`key`, `history`, `now`) per thread (`throttling._PerThreadState`), so two
+  requests on gunicorn's threads no longer write one client's history under another's key.
+  Still not atomic across the two worker processes (read, then write the database cache):
+  a burst counts lower than it is. The per-account sign-in count uses an atomic upsert
+  under a lock; the other limits guard secrets of 40 to 256 bits.
+- **CLAUDE.md drift (content-plane L7): not valid at `3fa9c19`.** The report quotes "the
+  autopilot never applies a rule's proposal"; `git show 3fa9c19:CLAUDE.md` already
+  describes `rule_labels_to_apply` and `rule_autopilot` (updated in 14a6a5c), and the code
+  and DECISIONS agree with it. CLAUDE.md now also names this round's rules (AI key binding,
+  sign-in limits, pairing, masking).
+
+### Follow-ups from the review (not built in this round)
+
+- **Hash session keys at rest (data M1).** Attack: Django's database session store and
+  `UserSession.session_key` hold the cookie value in clear; the keeper reads every table
+  (`pg_read_all_data`) and `pg_dump` copies both into each back-up. Whoever has the keeper,
+  or a back-up plus its password, sets the `sessionid` cookie of an administrator and reads
+  decrypted page images, which breaks "a stolen keeper cannot decrypt documents". Approach:
+  a `SessionStore` subclass of `django.contrib.sessions.backends.db.SessionStore` that
+  stores `sha256(session_key)` as the row key (override `_get_session_from_db`, `exists`,
+  `save`, `delete`, `create` so they hash before touching the table; the cookie keeps the
+  raw key) and `UserSession.session_key` as the same hash (`record_session`,
+  `rekey_session`, the middleware and `end_sessions` look up by hash). Migration: hash the
+  existing keys in place (sessions survive). Cheaper first step: `pg_dump
+  --exclude-table-data` for `django_session`, `accounts_usersession` and `brievie_cache`,
+  and explicit `GRANT SELECT` for the keeper instead of `pg_read_all_data`. Test: after
+  `start_session`, no `Session` row has the cookie's key.
+- **Verify a signature before `./brievie update` builds a tag (data M4).** Attack: a stolen
+  maintainer token or a hijacked `origin` pushes `v9.9.9`; every server that runs the
+  documented `./brievie update` builds it and hands over to its wrapper, as root with the
+  master key and the superuser URL. Approach: sign release tags with SSH keys, ship
+  `deploy/allowed_signers` in the repository, and before `git archive` run `git -c
+  gpg.format=ssh -c gpg.ssh.allowedSignersFile=deploy/allowed_signers verify-tag
+  "v$update_to"`, refusing on failure; also refuse when the tag's own `allowed_signers`
+  differs from the running one (a key change goes through a release signed by an old key).
+  Later: check the release workflow's provenance attestation (`gh attestation verify`) for
+  an image. Test: a fixture remote with an unsigned tag; `./brievie update` stops before
+  `docker build`.
+- **Also open:** re-masking text stored before the BSN fix (`remask_bsns` per workspace);
+  worker fairness across workspaces; rules in mode `auto` acting on unconfirmed AI facts
+  (content L1: decide `auto` on settled facts, as the autopilot does); resolving AI hosts
+  at configure time and before each call (content L2, SSRF and "local" names that resolve
+  publicly); the reads still off the visibility seam (content L3, before rights per
+  document); the invitation link that tells whether an address has an account (identity
+  L2, documented as intended); HSTS and trusting the private CA in browsers (identity L3,
+  deployment docs); `pg_restore --no-owner --no-privileges --role` and a TOC allow-list
+  (data L1); master-key rotation (data L4); `cap_drop`, `no-new-privileges`, read-only
+  roots and digest-pinned images (data L5); `CREATEDB` for the owner only in dev and CI
+  (data L6). Each touches deployment or behaviour beyond a small, safe change.
+
+- **Search and the stronger BSN masking (merge of the security fixes).** The search vector is generated by PostgreSQL from the stored sender, summary and text, which are masked before they are stored; text stored after the fix is masked with the new separators and labelled 8-digit numbers, and re-masking older text (the open `remask_bsns`) recomputes the vector with it. The term goes through the same `mask_bsns` before searching.
+
+## 2026-11-20: Trash for letters
+
+Design: `docs/superpowers/specs/2026-11-20-trash-design.md` (rulings 1 to 21); plan
+`docs/superpowers/plans/2026-11-20-trash.md`. Soft delete with `Document.trashed_at` (+
+`trashed_by`), restore within 30 days, then a purge of the rows and the sealed page files.
+For Thuis and Zakelijk alike; a retention term per letter is later.
+
+- **`purge_started_at`, files before rows (7).** The purge decision is a row state: from it
+  on the letter is listed nowhere and cannot be restored. The job removes the files, then
+  the rows, so no crash leaves a restorable letter without pages or sealed files nobody
+  owns. Cost if wrong: one nullable column.
+- **Purge-now and emptying are web-session only and only from the trash (8).** A stolen
+  device token cannot destroy post, and only a deliberate second step skips the 30 days.
+- **30 days is a constant (`trash.TRASH_RETENTION`), not a setting (9).**
+- **A change of a trashed letter answers 404 `document_not_found`; only reads answer
+  `document_in_trash` (10)**, and only to a member who may see it in the trash: one answer
+  for "trashed" and "not yours" reveals nothing.
+- **An upload with the `client_id` of a trashed letter: 409 `document_trashed`, never an
+  automatic restore (11)**, and only when the pages are the same and the uploader may read
+  it; otherwise `document_conflict`, as before.
+- **The purge holds `backup_lock` (12)**: a back-up or restore never captures half a purge.
+  A busy lock skips the run; the hourly job (`41 * * * *`) finishes it.
+- **Tasks go with the letter on purge, done ones too (13).** A task without its letter
+  names something that no longer exists.
+- **No detail or page view of a trashed letter (14).** The row is enough to recognise it.
+- **The undo bar has no timer (15)** (WCAG 2.2.1): it closes on "Sluiten", another trash,
+  a switch of workspace or signing out.
+- **`emptyTrash` takes `up_to` (16)**, the newest `trashed_at` the admin was shown: a letter
+  trashed during the question is not emptied.
+- **`move_to_trash(document, *, user, actor, reason)` is the building block (17)**: the
+  duplicate merge will call it with `reason="duplicate"`.
+- **One hook for a retention term: `apps.documents.retention.check_removal` (18).** It
+  allows everything today and is asked at four places (trash, purge-now, empty, expiry) on
+  the locked row before anything changes. A refusal is 409 `document_retained` in a
+  request and a skipped letter in empty and expiry.
+- **The back-up sentence is in the confirm questions (19)**, not only in PRIVACY: "voorgoed"
+  is honest only with it. The web says that a back-up made earlier still holds the letter
+  until that back-up expires (with the current retention: monthly snapshots up to a year).
+- **The trash reads through the seam, also for an admin (20).** List, count, restore,
+  purge-now and empty start from `visibility.trashed_documents(membership)`, built on the
+  same body as `visible_documents`. An admin who may not read a private trashed letter
+  cannot see, purge or empty it; it goes after 30 days.
+- **Only the purge runs as the system (21).** `apps/documents/purge.py` is in
+  `ALLOWED_SYSTEM_CALLERS`; trash, restore, purge-now and empty run as the caller and only
+  mark.
+- **Guarded removal.** `apps/documents/page_files.py` is the only code that removes a
+  letter's files. It judges every stored path first (exactly
+  `<workspace>/<letter>/<n>.page`, all or nothing), judges the storage root as the sweep
+  does (never a home directory, `/`, a link or the back-up mount), walks with
+  `O_DIRECTORY | O_NOFOLLOW`, unlinks only regular files and refuses on its own. Its tests
+  make and remove files only under `tmp_path`. A letter whose removal is refused stays
+  marked and hidden and is tried again every hour (logged with ids and the error type).
+- **Web.** Page "Prullenbak" (`/w/<id>/prullenbak`) below "Alle post" for every role;
+  "Verwijderen" on a letter for a member or admin (a primary, not a danger, question: it can
+  be undone), then "Alle post" with the undo bar. "Te doen" and "Alle post" keep their
+  names. A restore from the trash page shows "De brief is teruggezet."; history lines name
+  who did it ("door jou", or "door Brievie" when nobody did, for the later merge). The
+  web's calls live in `web/src/api/trash.ts`; after each it reads documents, inbox counts,
+  trash, persons and labels again (search keeps no cache; tasks come with the letters).
+
+## 2026-11-21: Duplicate letters
+
+Design: `docs/superpowers/specs/2026-11-20-duplicates-design.md`; plan
+`docs/superpowers/plans/2026-11-21-duplicates.md`. On arrival Brievie looks for the same
+letter scanned before, stores a pair (`DuplicateCandidate`), shows it under "Te doen" as
+"Dubbel?" to a member who sees both letters, and that member merges them (the other letter
+to the trash) or says "Het zijn twee brieven" for good.
+
+Rulings of the design (numbers as there):
+
+- **Its own pair model, not a `DocumentSuggestion` kind (1).** A pair belongs to two letters
+  and needs "both readable" as its visibility rule.
+- **Detection in the pipeline's last transaction, as the system, before the autopilot (2).**
+  The rail is the caller's (`steps._confirm_guarded`); `decide_confirmation` and
+  `mentions_term` stay pure and unchanged. A failed detection blocks the confirm too.
+- **Guards only when both values are strong (3)**: confirmed, or confidence >=
+  `NEEDS_ATTENTION_BELOW` (0.85). Weak differences are shown, marked uncertain, not blocking.
+- **Every member read of a pair through `duplicates.visible_pairs` (4)**, on top of
+  `visible_documents`, with a restrictive RLS policy on both letters behind it
+  (`rls.restrict_to_visible_document_pair`). Not listed, not counted, no chip, 404 like a
+  missing one.
+- **A merge never changes who sees a letter (5)**: different viewers (or one private letter)
+  refuse it with 409 `duplicate_visibility_differs`, checked before and after uniting the
+  addressees. The postkamer case goes to the postkamer design.
+- **No audit code of its own (6).** The merge's trash writes `document_trashed`
+  (`reason: duplicate`, ids only).
+- **A done task on the discarded scan completes its open twin on the kept letter only with
+  the checkbox "Taak ook afronden", on by default (7)**, and only a task that was on the
+  kept letter before the merge.
+- **One row per pair forever; only arrivals are compared, 180 days, at most 3 open pairs per
+  letter (8).** An archive sweep is later. The cap holds per arrival: an older letter can
+  gain a pair from each later arrival. A re-try of failed processing runs the pipeline and
+  so searches again (a pair is unique, nothing doubles). Two scans whose last pipeline
+  transactions overlap each see the other as `processing` and are not paired; accepted
+  (a narrow window, no sweep yet; the archive sweep will close it).
+- **Numbers in the text are a feature (9)**: template letters are textually near-identical;
+  their dates, amounts and references differ.
+- **The discarded letter's history says `trashed` with origin `merge` and the merging user;
+  `move_to_trash` refuses `user=None` (10, trash review M8).** `move_to_trash` derives the
+  origin from `reason` (`user` -> `user`, `duplicate` -> `merge`). Brievie trashes nothing
+  on its own; a future system trash brings its own origin.
+- **A pair with a letter in the trash is hidden, not withdrawn (11)**, and returns on
+  restore. The restore after a merge brings the letter back on its own; the pair stays
+  `merged`, the moved tasks stay on the kept letter.
+- **Labels and addressees a merge adds are a person's choice (12)**: origin `merge`, not
+  automatic, not undoable through the history.
+
+Owner decisions of 21-11: an open pair blocks the AI's auto-confirm (CLAUDE.md autopilot
+line); different visibility refuses the merge; the twin task only through "Taak ook
+afronden"; guards only when both values are strong; compare only on arrival (180 days, 3
+open pairs per letter), no audit code of its own.
+
+Measured (`backend/tests/perf/test_duplicates_measure.py`, `BRIEVIE_PERF=1`, as
+`brievie_owner` under forced RLS; Darwin arm64, 8 CPUs, PostgreSQL 18.7 in Docker,
+`shared_buffers` 128MB, `work_mem` 4MB, jit off; 2,000 generated letters, 300 positive pairs
+with an OCR noise model, 300 hard negatives, 10,000 random pairs):
+
+- **Candidate query: the letter's long digit runs, not its words.** The design's query (the
+  16 longest lexemes, OR'ed against `search_vector`) found the original for 34% (103/300)
+  of the rescans, recall 0.310 at 0.80/0.70, and took 89 ms at 10,000 and 799 ms at 100,000
+  letters: template words match every letter of a sender. The query now takes the letter's
+  digit runs of 6 or more digits (client, invoice, meter numbers, references) as its terms,
+  the longest 16, and its longest words only when it has no such number (never `bsn`). It
+  finds the original for 0.993 (298/300) of the rescans.
+- **`NUMBERS_SHARED_FROM = 0.60`, not the design's 0.70; `TEXT_SIMILAR_FROM = 0.80` as
+  designed.** At 0.80/0.70: recall 0.893, hard negatives 0, random 0. At 0.80/0.60: **recall
+  0.950 (285/300), hard negatives 0.7% (2/300, both reminders of the same invoice), random 0**
+  (highest random similarity 0.794). At 0.80/0.50: recall 0.960, hard negatives 1.3%. 0.60
+  meets the aim (recall >= 0.95, hard negatives <= 2%, random 0); a reminder that slips
+  through is still only a proposal with "Let op: datum verschilt" on top.
+- **Speed aim per size instead of one aim.** `detect` per arrival (warm, median of 7): **15-17
+  ms at 10,000 letters (aim < 50 ms)**, **84-95 ms at 100,000 letters (aim < 150 ms)**; the
+  design's < 50 ms at 100,000 is not met. Detection is one step of a background job per
+  arrival, and homes and small offices stay far below 10,000 letters (the 100,000 corpus puts
+  45,000 letters in one 180-day window).
+- **Why it is not faster: forced RLS keeps `@@` off the GIN index.** `@@` (`ts_match_vq`) is
+  not leakproof, so PostgreSQL evaluates it above the RLS barrier, never as an index
+  condition: the scan reads every letter of the 180-day window through
+  `documents_document_recent` and filters. The same statement as a superuser (RLS bypassed)
+  takes 0.27 ms through the GIN index; under RLS ~90 ms at 100,000. Binding the `tsquery`
+  as a constant changes nothing. Making `ts_match_vq` leakproof needs a superuser and would
+  weaken RLS for everything; a `SECURITY DEFINER` function does not help (RLS is forced on
+  the owner).
+- **Follow-up: approach 3, a number table with leakproof equality**, when an installation
+  nears 100,000 letters in 180 days: the letter's long digit runs in their own table with a
+  btree on `(workspace_id, number)`; text equality is leakproof, so the index drives the
+  candidate query under RLS. Isolated to `duplicates.candidates`.
+- **Search has the same limit.** `searchDocuments` uses `@@` under the same forced RLS, so
+  it does not use the GIN index either (its numbers were measured at 10,000 letters).
+
+Built in batch C:
+
+- **API.** `listDuplicates`, `getDuplicate`, `mergeDuplicate`, `dismissDuplicate`
+  (`apps/documents/duplicates_api.py`), all from `visible_pairs`. Additive:
+  `InboxCountsOut.duplicate`, `DocumentSummaryOut.open_duplicate_count` (lists, detail, the
+  merge answer and search hits) and `DocumentEventOut.related_document_id`. A viewer gets an
+  empty list, zero counts, 404 on `getDuplicate` and 403 on merge and dismiss: a viewer
+  cannot decide, so a count would be a task they cannot do.
+- **Twin tasks match on type and deadline (final review I2).** `duplicates.twin_key`, used
+  by the merge (does an open task move?) and by `task_twins` ("Taak ook afronden"):
+  separate AI runs or reviews word one payment differently, so the description and the
+  deadline's source are left out. A task has no amount of its own (the letters' amounts
+  are compared as facts), so the owner's "plus the amount when both have one" has nothing
+  to compare yet. Two tasks of one type with the same deadline on two scans are one task;
+  different deadlines (instalments) stay two.
+- **History never names a letter the reader cannot read (final review I1).**
+  `list_document_events` checks `related_document` against
+  `visibility.readable_documents` (the trash counted): a `duplicate_dismissed` line about
+  such a letter is left out, any other line (`merged`, `task_moved`, `trashed` by a merge)
+  answers `related_document_id` null.
+- **One place completes a task.** The merge completes a twin through
+  `tasks.services.complete_task` (which gained `origin`, default `user`).
+- **Web.** "Te doen" shows a block "Dubbel?" with its count (hidden at 0) and a chip
+  "Dubbel?" on a letter with an open pair; the page "Mogelijk dubbel"
+  (`/w/<id>/dubbel/<pair>`) puts both letters side by side (stacked on a phone), marks
+  "Verschilt" and "Verschilt misschien (slecht leesbaar)", keeps the chosen letter (the
+  suggested one preselected), and confirms "Samenvoegen?" with the checkbox "Taak ook
+  afronden" (a native checkbox, as the other checkboxes of the web). After a merge the kept
+  letter opens with the trash's undo bar for the other one; after "Het zijn twee brieven"
+  "Te doen" says "Goed. We vragen het niet meer voor deze twee brieven." once.
+
+## 2026-11-21: English next to Dutch
+
+The server and the web interface speak Dutch and English. Dutch stays the source
+language (the msgids) and the default; this supersedes "no `.po` files until a second
+language arrives" (2026-11-13).
+
+- **Server catalogue.** `backend/locale/en/LC_MESSAGES/django.po` and its compiled
+  `django.mo`, both committed. They are written by `manage.py update_messages`
+  (`make messages`; `apps.common.catalogue`): it reads the msgids with `ast` from every
+  gettext call and `{% translate %}` tag, merges them into the `.po` and writes the
+  `.mo` itself. No GNU gettext anywhere (not on the Mac, in CI or in the image) and no
+  build step in the Dockerfile: `COPY backend/` carries the `.mo`. Dropped: Django's
+  `makemessages`/`compilemessages` (need xgettext/msgfmt), and compiling in the image
+  (a stale or missing `.mo` would only show in production). CI runs
+  `update_messages --check`; tests fail when a Dutch text has no English, a translation
+  loses a placeholder, a file is stale, or a gettext call has a non-literal msgid. No
+  new dependency.
+- **Web catalogue.** Lingui locale `en` (`web/src/locales/en/messages.po`); both
+  catalogues are loaded up front (small). A test fails when `en` misses a message of `nl`.
+- **Which language.** Before sign-in: `Accept-Language` (Django's `LocaleMiddleware`;
+  Dutch when it names neither). The web sends its active language as `Accept-Language`
+  on every call; it starts from a choice kept in the browser (`localStorage`, set by the
+  switch on the setup, sign-in, invitation and reset screens), else the browser's
+  language. Once the caller is known the account's choice `User.language` wins
+  (`AccountLanguageMiddleware` for a session, `DeviceTokenAuth` for a device), set
+  through `PUT /api/v1/me/language` (`updateMyLanguage`, session or device). `""` means
+  no choice: the header decides. The existing field held the default `nl` for everyone
+  without anyone choosing it, so migration 0012 empties it; a stored `nl` would
+  otherwise override an English iPhone. `UserOut.language` keeps its type (string, now
+  `""`, `nl` or `en`).
+- **Not translated.** Letter content, names of persons and labels a user made. Start-set
+  labels and their preset rules are created in the language of the request that creates
+  the workspace (or adds the start set) and keep that name. Management command output,
+  the recovery sheet (forced `nl`), the `./brievie` wrapper and `docs/` stay Dutch for
+  now; their msgids are in the catalogue anyway, so the check stays simple.
+- **AI summaries.** `Workspace.summary_language` (`nl`/`en`, default `nl`), admin-only in
+  the workspace settings (additive, audited, session-only like the rest). It changes only
+  the two places of the prompt that ask for the language of the summary and the task
+  descriptions; the Dutch prompt is byte for byte the old one, the instructions stay
+  Dutch and every other value and quote comes from the letter as it is. `mentions_term`
+  and the deadline rules read the letter text, never the summary (tested). The spec's
+  per-member explanation language (`User.explanation_language`, unused) would need a
+  summary per member; per workspace is the step that fits one stored summary.
+- **Formatting.** Web dates follow the language: `nl-NL`, or the browser's English region
+  (else `en-GB`).
+- **Glossary.** `docs/GLOSSARY.md` "English in the interface", kept equal to the iPhone
+  app's `docs/GLOSSARY-en.md`: "mail" for the collection ("All mail"), "letter" for one.
+- **Rule for later work.** Every new user-facing text needs both languages: Dutch in the
+  code, English in the catalogue (`make messages` / `pnpm extract`). The tests above fail
+  otherwise.
+
+## 2026-11-21: Who sees which letter: every leak path tested in own post (plan Tasks 12–23)
+
+Each path of S 4.10 is tested in `office()` in state E off, D on, A off (set by tests only:
+no user can switch "Iedereen ziet alle post" off yet), as a member who must not see
+Finance's letter, with the owner as control.
+
+- **`inbox_state = "unassigned"` keeps its meaning "no addressee at all" (P4, Task 12).**
+  A letter on an addressee nobody reads through (a person without an account, a
+  department without members) reaches the sorters through the policy and shows in their
+  list with its name; the chip "Zonder naam" and the badge count only letters without
+  any addressee. S 4.5's wider set would change the contract and the iPhone's filter.
+- **Tasks follow their letter; a letterless task its maker and assignee (P11, Task 15).**
+  `listTasks`, `completeTask` and `reopenTask` read as the member, so a task of a letter
+  the member cannot see is absent from the list and 404 `task_not_found` like an unknown
+  id. An assignee widens only a task without a letter: a task on a letter follows the
+  letter whoever it is assigned to. No task-create or task-assign endpoint exists, so
+  `assignee_cannot_read` is not built; when one comes, an assignment lapses (or is
+  refused) once the assignee may no longer read the letter. A letter purged from the
+  trash takes its tasks with it (as the system), so none becomes letterless.
+- **Notice values from a fixed list (Task 18, S 4.14).** `accounts.notices.NOTICE_VALUE_KEYS`
+  names, per notice code, the value keys it may carry; `notify` raises `ValueError` for any
+  other. The union is `workspace`, `person`, `department`, `category`, `count`,
+  `document_id`, `member`, `setting` and `device`: a letter by its id, everything else by
+  a directory name. `device` is added to the plan's list: the existing device notices
+  carry the device's name, which is no letter content.
+- **The own export reads as the member (Task 20, S 4.18, PB decision 26).**
+  `member_document_ids` keeps the letters on a person linked to the member and adds the
+  private letters they read through an unexpired share, addressee or department reader
+  row; never a department's open post, never what a switch or emergency access shows.
+  A queued export job for someone who is no member any more (their row normally goes
+  with them) reads and writes nothing and marks the export failed. `export_context(...,
+  reader_id=None)` is the system's bookkeeping and the future full copy only.
+- **Rule tests and manual runs act as their member (Task 21; P5 and R7 as recorded on
+  2026-11-20).** `testRule` counts and shows only letters the admin sees, a manual run
+  touches only those, and `listRules` counts only runs on visible letters. The rules
+  after processing and confirming run as the system and reach every letter. A job with an
+  empty actor sees no letter and no row of one, also while "Iedereen ziet alle post" is on.
+- **One seam for every query that shows letters (Task 23).** `visibility.visible_documents(membership)`
+  (with `trashed_documents` and `readable_documents`) is where the list, counts, detail,
+  pages, history, search, the trash and duplicate pairs start; it takes the membership,
+  not the workspace (recorded with the search merge). `tests/test_visibility_seams.py`
+  fails when a member-facing documents module reads `Document.objects` outside the
+  known by-id write locks, when raw SQL on the letter table appears in a module not on
+  its list, or when a table with a letter key lacks the visibility policies. `testRule`
+  keeps its own query: it reads as the admin under the policies (Task 21 tests it), and
+  its query-count tests run as the system, which the seam refuses. The trash contract is
+  written on `Task.document`: a purge deletes the letter's tasks as the system first.
+- **Found while testing Task 20: the policy does not itself check membership.** A user
+  whose membership row is gone but whose person is still linked, who has reader rows, or
+  who scanned a letter not yet done, would still match those arms if code ran as them.
+  No path does: every request passes `workspace_member` first, every job checks the
+  membership, and removing a member unlinks their persons (Task 27 also removes their
+  reader rows, shares and department memberships). Closing it inside the policy (the
+  actor counted only while a member) needs a migration of the policies and a new
+  measurement; left to the owner, not built here.
+
+## 2026-11-21: Mijn taken (a personal to-do list made from your post)
+
+Spec `docs/superpowers/specs/2026-11-21-mijn-taken-design.md`, plan
+`docs/superpowers/plans/2026-11-21-host-mijn-taken.md`; rulings MT1–MT14 are the spec's
+section 16, recorded here as built.
+
+- **MT3: derived, never copied.** "Mijn taken" is a query over `Task` and its letter per
+  request; no table or cache holds a member's list. Trash, restore, hand-over, link
+  changes and confirm show on the next read.
+- **MT8: `amount` is a decimal string in the API, empty when unknown.** The model holds a
+  `Decimal` (`tasks_task_amount_not_negative`); a nullable decimal would render as `anyOf`.
+- **MT14: no backfill** of `amount` or `term_quote`: a guess is worse than nothing.
+- **New columns keep raw inserts working.** `Task.term_quote` (not null) has a database
+  default `''` (tasks 0005, `RunSQL`, as documents 0017); the other new columns are
+  nullable. The partial index `tasks_task_open` (`workspace_id`, `deadline`) `WHERE
+  status = 'open'` serves the list and the counts.
+- **History origin `system`** (new): an assignment the server released because the
+  assignee may no longer read the letter; no actor.
+- **MT5, MT6: assign, hand over, release; an assignment never outlives sight.**
+  `assignTask` gives a task on a letter only to a member who can read it (`viewers()`,
+  viewers left out): 422 `assignee_cannot_read`; a task without a letter is not given
+  (422 `task_without_letter`). The check runs as the caller under the task's row lock, the
+  write as the system (`apps/tasks/assignment.py` joins the system callers). History, not
+  the audit log: `task_assigned` / `task_unassigned` with the actor and the member's name.
+  Every writer that narrows sight releases as the system (origin `system`, no actor):
+  the end of `visibility.addressee_scope` (addressees, readers, privacy), the nightly
+  `verify_visibility` (counted as `assignments_released`), demoting to viewer and removing
+  a member (`release_member`, also clearing letterless tasks as before), and unlinking a
+  person from a member. `tests/test_task_release_callers.py` fails a new narrowing writer
+  outside that list; "Wie ziet wat" T24, T27, T37 and T38 add theirs there.
+- **MT1, MT2: name and place.** "Mijn taken" (English "My tasks"), first in the
+  navigation above "Te doen", whose description now points to it. The start screen stays
+  "Te doen" (Q1 unanswered). "Op te pakken" is "To pick up" in English.
+- **MT4: whose task, one rule.** `apps.tasks.mine.reason_for` (pure) gives each visible
+  task one reason: `assigned`, `addressee`, `department`, `unassigned` (the sorter's post
+  nobody reads through, `brievie_covered_post_ids`), `other`. At home "Mijn taken" holds
+  the first four; an organisation keeps `department` and `unassigned` under "Op te
+  pakken". `services.my_tasks` builds the same rule as one filter on the member's facts
+  (read once per request through the visibility functions) and runs as the member under
+  the task policy. "Zonder naam" is said only for a letter without any addressee (P4); a
+  letter for Jan without an account says "Voor Jan". `for_names` leaves out the reader's
+  own persons ("Voor jou en Piet").
+- **MT7: `listMyTasks` next to `listTasks`.** `listTasks` keeps its meaning (the phone's
+  calendar trusts it) and only gains defaulted fields.
+- **MT9, MT10: groups and done.** "Binnen 7 dagen" is today up to today + 6, counted in
+  Europe/Amsterdam; "Afgerond" shows the last 30 days (200 rows), never deletes.
+- **MT11: task changes are letter history**, not audit rows.
+- **MT12: "Datum nodig".** At confirm an undated task stores the letter's term words
+  (`autopilot.term_phrase`, pure, the patterns of `mentions_term`); `setTaskDeadline`
+  fills in a manual date and keeps those words; a reconfirm recognises the dated task.
+- **MT13: reminders follow "mine"** (the app, `Brievie_ios`).
+- **"Waiting letters" is one count.** `documents.services.waiting_letters` counts review
+  and unnamed letters through `visible_documents` with a plain WHERE (on the seam list);
+  `inbox_counts`' aggregate would cost its ~165 ms again on every list.
+- **Web.** The list's query keys live under the documents key, so every existing refresh
+  of the letters refreshes the list; a ticked row stays with "Ongedaan maken" until the
+  page is left. "Datum invullen" uses the browser's date field (no new dependency).
+- **Measured at 100,000 letters (plan Task 10, `visibility-perf` run 44880951129, jit off,
+  medians in ms, budget 250).** Highest per list over the four actors:
+
+  | state | `list_my_tasks` | `list_my_tasks_to_pick_up` | `count_my_tasks` | `list_tasks_all` |
+  |---|---|---|---|---|
+  | E | 97 | 25 | 30 | 123 |
+  | own+D | 90 | 38 | 28 | 117 |
+  | own | 95 | 24 | 31 | 122 |
+
+  The first runs (up to 228 ms for a sorter's list, and `list_tasks_all` at 253 ms on a
+  slow runner) showed two costs, both fixed: the names around a task (three user joins
+  before the sort, now fetched for the shown rows only) and the waiting-letter count (an
+  OR the policy had to check on every letter, now two counts on partial indexes, with the
+  new `documents_document_review`). No `visible_documents` hint was needed.
+
+## 2026-11-21: Wie ziet wat, slice A2b (private letters, departments, emergency access)
+
+Plan `docs/superpowers/plans/2026-11-20-host-wie-ziet-wat.md`, Tasks 24-34 (merge point
+M3). "Iedereen ziet alle post" stays on everywhere until Task 40, so departments only sort.
+
+- **Private letters and shares (Task 24, PB T7/T8).** `documents.visibility` is the one
+  writer of visibility, shares and readers: `make_private` (history line, then shares and
+  readers as the system, then the flip as the current actor), `make_public`, `set_shares`
+  (on every letter, R44), `keep_own_access`, the grants and `forget_member`. A letter an
+  automatic action would make private without any reader stays visible: a
+  `private_skipped` line (its kind is the explanation; no stored sentence, so it follows
+  the reader's language) and one admin notice per letter. `keep_own_access` wraps the
+  `addressee_scope` in the services (addressees, undo, confirm), because the readers are
+  recomputed only at the scope's end; it answers 409 `would_lose_access` for a private
+  letter only. "Reads private post" counts reader rows on private letters only: a share of
+  a letter that is not private is no private post.
+- **Departments (Task 25, PB T11, S 4.5).** `addDepartmentMember`, `updateDepartmentMember`
+  (the lead, audit `department_lead_changed`) and `removeDepartmentMember` are admin and
+  web-session only (they administer people). Only an admin makes a department
+  (`createPerson` with `kind` "department"; a member gets 403); `kind` is read on create
+  only. A department with letters is in use; an empty one is deleted with its
+  memberships (S 4.5 over PB's "in use while it has members"). Name matching and the AI
+  are offered departments only while departments are on; an archived department is not
+  offered and cannot be newly put on a letter, its members keep its letters.
+- **Labels of a department (Task 26, S 4.6).** `Label.department` (nullable, `SET_NULL`).
+  `listLabels` leaves out, for a member who is no admin, the labels of departments they
+  are not in while departments are on; a label on a letter they see still comes with it.
+  Creating, renaming, moving or deleting a department's label needs an admin or a lead of
+  that department (403 `forbidden`); members keep managing labels for everyone.
+  `updateLabel` moves a label only when `department_id` is sent, so an older client never
+  moves one.
+- **Linking is a grant; removing a member (Task 27, PB T12/T13).** Linking a person needs
+  an admin, never to the admin's own account when the person has private post (409
+  `cannot_grant_self`); a linked person is unlinked or relinked only by its own member
+  (409 `cannot_unlink`; `linkPersonToMember` is now open to every role, the service
+  decides), or by removing the member. Every link or unlink recomputes the readers and
+  writes `access_granted` on the person's private letters. Removing a member removes
+  their reader rows, shares and department memberships (`access.on_member_removed`); an
+  invitation accepted for a person makes the new member its reader with the inviting
+  admin as the grant's actor, and one for a person with private post needs an address.
+  The removal itself is not wrapped in `system_actor()`: every step that must reach
+  letters the admin cannot see (releasing tasks, forgetting the member) runs as the system
+  on its own.
+- **Account actions follow who reads which post (Task 28, S 4.19; implements "6. Reset
+  links" above).** A workspace admin makes a reset link, ends sessions or lists and
+  revokes devices of a member only when the member belongs to that workspace alone and is
+  no server admin, reads no private letter there (emergency rows do not count), and the
+  admin reads all post there that is not private ("Iedereen ziet alle post", or
+  "Beheerders lezen alle post"). Otherwise 403 `server_admin_only` ("Dit kan alleen de
+  serverbeheerder."). A link made before the member became a reader stops working (the
+  rule is checked again at completion). `listMembers.can_manage_account` applies the
+  same conditions with one query for the readers.
+- **Zorg and the emergency-access switch (Task 29, PB T15).** `care_is_private` is a
+  workspace setting (`bool | None = None` in `updateWorkspaceSettings`, so an older client
+  never changes it; a change is audited and changes no existing letter).
+  `setEmergencyAccess` is the server admin's own operation (web session, no membership
+  needed, 403 `forbidden` for anyone else): audit `emergency_access_switched_on`/`_off` and
+  a notice to every member; the same value writes nothing. Both are shown to every member
+  in `getWorkspaceSettings`.
+- **Private by hand, by Zorg and at confirm (Task 30, PB T17/T18).** The Zorg label
+  arriving (by hand, by accepting it, by a rule, by the autopilot) makes a letter private
+  where `care_is_private` is on; a proposal of it does not. `setDocumentVisibility`:
+  `restricted` makes a letter private (or, already private, sets its shares);
+  `workspace` makes it visible again and then sets its shares to exactly the list sent,
+  on any letter (R44: an empty list removes them). `ConfirmIn.visibility` ("" leaves it)
+  runs inside the confirm's write order, before the rules; a refused `workspace`
+  (403 `cannot_make_public`) stores nothing. Lists and the letter carry `visibility` and
+  `reader_names`; search, the trash and duplicate pairs carry `visibility` only.
+- **Rules and private letters (Task 32, PB T10/T19).** An automatic rule never widens a
+  private letter's readers: its addressee action becomes a proposal there (the engine
+  knows `DocumentFacts.restricted`, the executor checks the letter again), which only the
+  letter's readers see; labels are still added. "Privé maken" is a new action type in
+  format version 1 (no version bump; an older server reads such a rule as unreadable and
+  skips it whole), only in a rule with mode `auto` (422 otherwise, also when such a rule
+  is switched to proposing). It makes the letter private as the system with the current
+  user as a reader: the confirmer at confirm, the starter of a manual run. With nobody to
+  read it, nothing changes and no run is recorded (ruling d). The web offers it only
+  while "Automatisch toepassen" is on and sends an action type it does not know back
+  unchanged.
+- **Emergency access (Task 33, PB T20, S 4.7).** `openEmergencyAccess` (admin, web session)
+  opens for one hour every letter on the person's or department's name the admin cannot
+  see at that moment, private or not (the set is asked of `viewers()`, so letters the
+  admin already sees are not counted or touched). It is read-only everywhere a letter or
+  its task changes: organising, sharing and visibility, confirm, reopen, retry (never
+  sent to the AI again), trash, merge, and completing, reopening, dating or assigning a
+  task answer 403 `emergency_read_only`. Whether someone sees a letter only through
+  emergency access is asked by taking their emergency rows away inside a savepoint that is
+  rolled back and running the policy's condition (`viewers`), so the answer is the
+  policy's own. The notice to the people concerned now says "brieven" (not only private
+  ones).
+- **The back-up check knows the visibility rules (Task 34, PB T21).** `verify_restore`
+  also checks, in its one read transaction, that the six helper functions exist, that the
+  letter table and every table with a letter key (the task table included) have their
+  three restrictive visibility policies, and that the reader table has `reader_scope`. A
+  back-up from before `workspaces.0007_visibility_functions` is not checked for them. A
+  problem names a table, never a person or a letter. **Merge point M3:** private letters,
+  shares, departments, department labels and emergency access are in; every workspace
+  still has "Iedereen ziet alle post" on, so departments only sort.
+- **Still open: the letter policy arms do not check membership** (recorded above with
+  Task 20). No task of this slice changes the policy; removing a member now also removes
+  their reader rows, shares and department memberships (Task 27), which closes the
+  reader-row arm in practice. Closing it inside the policy stays the owner's call (a
+  policy migration and a new measurement).
+
+### Security review of PR #38 (2026-11-21)
+
+- **The autopilot never widens a private letter's readers (finding 1).** On a letter that
+  is private (read from the database before every addressee: a rule of the same run may
+  have made it private, and a letter processed again may be private already) an AI or
+  name-match addressee stays a proposal. So does it when an open Zorg proposal could be
+  applied in the same run where Zorg makes letters private: addressees are applied before
+  labels, and a rule's Zorg proposal counts even though `rule_labels_to_apply` decides
+  only later (the autopilot blocks rather than guesses).
+- **Emergency access and the trash (finding 2).** A letter in the trash that the admin
+  sees through emergency access is listed in their trash read-only, as everywhere else
+  (the trash has the seam's rights, S 4.10); restoring it or purging it now answers 403
+  `emergency_read_only`, and emptying the trash leaves it where it is.
+- **Names that steer post are an admin's (finding 3).** `updatePerson` on a department,
+  or on a person linked to an account (the member's own included), needs an admin (403
+  `forbidden`). A name or variant decides through name matching, and with the autopilot
+  on through applying, whose post a letter becomes; a member adding "Belastingdienst" to
+  their own person would steer that post to themselves once "Iedereen ziet alle post" is
+  off. Members keep creating and editing persons without an account (that sends post to
+  whoever sorts it, not to themselves). Cost: a member asks an admin to correct the
+  spelling of their own name.
+- **Off ends the hour (finding 4).** Switching emergency access off removes every running
+  emergency reader row of the workspace in the same transaction and releases any
+  assignment that rested on it.
+- **No permission parameter fails open (finding 3, follow-up).** `actor_role` of
+  `create_person`, `update_person` and `link_member` and the label services' membership
+  are required arguments; a call on nobody's behalf states it (`ACTING_AS_SYSTEM`, or
+  `None` for the label services). A caller that forgets its role does not compile under
+  mypy instead of acting as an admin.
+- **The "nobody could read it" notice names the letter only to who may see it (finding
+  5).** Admins who see the letter (it stays visible by the switches) get
+  `private_without_readers` with its id. When no admin sees it, every admin gets the new
+  `private_without_readers_unnamed`: that it happened in the workspace, no id; its readers
+  see the `private_skipped` line on the letter itself.
+- **Emergency access never makes an assignee (finding 6).** Assignment candidates and the
+  release ask `visibility.regular_viewers` (sight without emergency rows, the policy's own
+  condition with those rows rolled back), so a task is never given to whoever holds
+  emergency access, and any assignment that rested on it is released by the next release
+  (the nightly check, switching emergency access off). The same helper decides what an
+  emergency opening counts as already seen (an hour running is renewed) and which admins
+  the "nobody could read it" notice may name.
+
+## 2026-11-21: Wie ziet wat, slice A2c (switching safely)
+
+Plan `docs/superpowers/plans/2026-11-20-host-wie-ziet-wat.md`, Tasks 35-41 (merge point
+M4). From here on "Iedereen ziet alle post" can be switched off, and an Organisatie
+installation starts in own post.
+
+- **The rule as data (Task 35, S 4.4).** `apps.workspaces.visibility_rules` is pure (no
+  Django, like the rules engine): a `PolicySnapshot` (switches, members with role, sorting
+  flag, persons and departments, the names of persons and departments) and per member the
+  kinds of post they see: `all`, `all_as_admin`, `person:<id>`, `department:<id>`,
+  `unassigned`. `all` and `all_as_admin` hold every other kind, so a member who sees all
+  gains nothing by a department and loses only the whole. `diff` says who gains and who
+  loses; `expected_sight` states S 4.1 per letter for the tests. The table of S 4.4 is test
+  data (`tests/visibility_transitions.py`), each row with its gains, losses and
+  confirmation written from the table's words, in every state where it applies.
+- **R34: post nobody reads goes to the sorters.** A letter with no person with an account
+  and no department with members (departments counting only while on) goes to the flagged
+  sorters, or to the admins when nobody is flagged; never to everyone, never to nobody.
+- **R35: departments switched off are kept.** Members, leads, labels, links and rules stay;
+  for sight a department then counts as nobody, so a letter only on departments goes to the
+  sorters; private letters keep their readers.
+- **R37: confirmation when anyone gains.** A change in which anybody gains sight needs
+  `confirmed` and the preview's token; a narrowing needs neither. Admins gaining all post
+  tells every member.
+- **P6: a sorter's fallback gain needs no confirmation after a narrowing.** An unlink, a
+  department member removed, a member removed, a demotion or an unflagged sorter sends post
+  nobody reads any more to the sorters; when every gain is such post going to a member who
+  sorted already, nobody confirms. When the admins become the sorters (the last flagged
+  sorter goes) and do not read all post, they gain new post: confirm ("yes when an admin
+  gains").
+- **P7: the last reader leaving sends the post to the sorters.** Removing the last member
+  of a department, or unlinking the last account of a person, makes its letters post
+  nobody reads: the sorters get them, with a `sight_widened` notice, though S 4.4's row
+  says "Gains: nobody".
+- **Changing the switches (Task 37, S 4.4, 4.13).** `apps.workspaces.visibility_settings`:
+  `change` (admin by the locked memberships, then the workspace row), `preview` (any
+  change of sight inside a savepoint that is rolled back, with confirmations and notices
+  left out), `require_confirmation`, `notify_changes`, and `sight_change`, the steps every
+  writer of sight runs around its own write: snapshot, write, snapshot, diff, confirm,
+  notices, and the release of every assignment whose assignee lost sight (switching off
+  ends what ran under it). The preview token is the SHA-256 of the switches and every
+  member's role, flag, persons and departments; a confirmation with another token is 409
+  `preview_outdated`, so it never covers another admin's change. The preview's letter
+  count groups alike letters (ruling M0) and asks letters with reader rows one by one,
+  private letters included (a member change can change their readers).
+  `lock_memberships` moved to the leaf module `workspaces.locks` (people's writers take it
+  too, Task 38).
+- **P9: every member reads the switches.** `getVisibility` answers any member with the
+  switches, who sorts post and their own "Wie kan mijn post zien?" sentences; those
+  sentences state the switches, so hiding the booleans protects nothing. An admin also
+  gets `summary`, the sentences of "Zo is Brievie nu ingesteld" (an added field: the head
+  of the "Wie ziet wat" page needs them, the member sentences say something else).
+- **P10: notices name the kind of post.** `sight_widened` and `sight_narrowed` carry
+  `category` (`all`, `all_as_admin`, `department`, `person`, `unassigned`) and the
+  department's or person's name (a directory, like department names; no letter content).
+  One notice per member and change, for the broadest kind. `admins_read_all_on` goes to
+  every member when admins gain all post. The sentence follows the category
+  (`accounts.notices.CATEGORY_MESSAGES`). A member who left is not told.
+- **The preset switch.** `apply_preset` takes the target kind's values (`presets.PRESETS`)
+  for every value the request leaves out, except emergency access (the server admin's);
+  one `workspace_setting_changed` row per value that really changed, `kind` included, and
+  one `workspace_preset_applied`. `add_start_set` adds the kind's labels and rules and
+  removes nothing.
+- **Every member change through the same steps (Task 38, S 4.4, 4.7).** `change_role`,
+  `remove_member`, the new `set_sorts_post` ("Verdeelt post", `updateMemberSortsPost`,
+  422 `viewer_cannot_sort`, audit `post_sorter_changed`), `add_department_member`,
+  `remove_department_member` and `link_member` take `lock_memberships` first (people's
+  writers too, instead of the caller's own membership: every change of sight in one lock
+  order, memberships before persons) and run `sight_change`. Making a sorter a viewer
+  clears the flag in the same transaction (with its own `post_sorter_changed` row). A
+  self-grant (an admin adding themselves to a department, linking themselves, flagging
+  themselves) tells the department's other members or the other admins (`self_grant`);
+  the audit rows stay the usual ones.
+- **Removing a member never asks for a confirmation.** S 4.4's row says "no", also when
+  the member was the only flagged sorter and the admins become the sorters; the sorters
+  who gain are told, the member who left is not. `previewVisibilityChange` with
+  `member_change` "remove" runs the removal's sight-moving part only (unlink, forget,
+  membership gone), not the account's deactivation.
+- **Unlinking and leaving a department end the member's own export.** Their export held
+  that person's letters and the department's private letters; it goes with the sight
+  (switching something off ends what ran under it).
+- **Accepting an invitation for a person asks nothing and tells nobody.** The admin
+  confirmed when making the invitation; taking `lock_memberships` there would invert the
+  lock order (invitation before memberships). Cost: the sorters are not told that a
+  person's post is the new member's now.
+- **Confirmation fields on old endpoints.** `updateMemberRole`, `linkPersonToMember` and
+  `addDepartmentMember` take `confirmed` and `preview_token` (defaults `false`, `""`): an
+  older client keeps working wherever nobody gains, and gets 409
+  `confirmation_required` where somebody would. The web sends both as defaults until its
+  preview dialog (Task 42); in an organisation a link or a department member then answers
+  with the 409's sentence. `MemberOut` gains `sorts_post` and `department_ids`.
+- **R40: one choice at installation, P8 ended (Task 40).** `create_workspace` gives a new
+  workspace its kind's values through `apps.workspaces.presets.apply_preset_settings`:
+  Thuis E on, D off, A on, Zorg private, no emergency access, own export allowed;
+  Organisatie E off, D on, A off, Zorg not private, emergency access on, no own export. An
+  Organisatie installation now starts in own post (P8 is over: every leak path was closed
+  in Tasks 12-34). Existing workspaces keep what they have. `setupServer` is unchanged and
+  still accepts `extra_labels`.
+- **A second workspace on the command line (S 5.2).** `manage.py create_workspace --name
+  --kind home|business --admin-email`: with an account for that address it becomes the
+  admin; without one the workspace has no member yet and its first admin is invited
+  (`Invitation` role admin, for that address only, 7 days, `created_by` empty,
+  "Serverbeheerder"), the link printed once. An invitation without a maker is usable only
+  as long as the workspace has no admin at all, so a maker-less invitation (a deleted
+  account's) never revives elsewhere. Server audit `workspace_created` (`kind`), actor the
+  system. An unknown kind: exit code 2 with a Dutch sentence. The link uses the first
+  `BRIEVIE_PUBLIC_URLS` entry (a path only without one).
+- **R41: a preset is a starting point.** Switching the kind later goes through
+  `updateVisibility` with `apply_preset` (Task 37); labels and rules are never removed.
+- **Who can see my post, and this letter (Task 41, S 4.15).** `getMyPostAccess` answers
+  any member (also with the app) with the sentences of "Wie kan mijn post zien?" for
+  them; `getVisibility` gives the same sentences beside the switches. `getDocumentAccess`
+  answers, for a letter the caller sees (through the seam; 404 `document_not_found` like
+  an unknown id otherwise, a case in the leak suite), every viewer by name with the
+  reasons that hold (`documents.visibility.viewer_reasons`, the S 4.1 arms on the snapshot
+  and the reader rows): "op naam van", "afdeling", "verdeelt post", "heeft de brief
+  gescand", "is gedeeld", "ziet alle post", "beheerder, leest alle post", "noodtoegang tot
+  14:30" (Dutch time). A member who sees the letter learns who else does: that is the
+  page's purpose. Merge point M4.
+
+### Security review of PR #39 (2026-11-21)
+
+- **A confirmation token is bound to its change (finding 2).** The preview token was the
+  SHA-256 of the switches and the members' facts, which a member can work out from
+  `listMembers` and `getVisibility`, and a preview of a narrowing then confirmed a
+  widening. It is now an HMAC (`django.utils.crypto.salted_hmac`, the key derived from
+  `SECRET_KEY` with a fixed purpose label, no new setting) over the workspace, the admin
+  who previewed, the change itself (the proposal, or the member change with only the
+  fields its kind uses) and the state's fingerprint. Another proposal, another admin,
+  another workspace or a changed state: 409 `preview_outdated`.
+- **An invitation moves sight like a member change (finding 1).** `createInvitation` with
+  role admin takes the memberships' lock (before the invitation, the lock order) and,
+  when the admin role would give the newcomer more sight than the same invitation as a
+  member (all post while "Beheerders lezen alle post" is on, or the unnamed post as a
+  fallback sorter while nobody is flagged), needs the confirmed preview of
+  `member_change` "invite_admin" (`confirmed`, `preview_token`, defaults `false`, `""`;
+  the preview lets a placeholder join as a member and shows what making it admin
+  changes, all rolled back; the token is over the state without the placeholder). A
+  Thuis workspace never asks. Consequence: in a fresh Organisatie (admins do not read
+  all post, nobody flagged) every admin invitation needs the confirmation, as a
+  promotion to admin does since Task 38; the web answers 409 there until its dialog
+  (Task 42).
+  Accepting an invitation now tells, inside its transaction, everybody whose sight changed
+  at that moment (`admins_read_all_on` to every member when an admin joins while admins
+  read all post; `sight_narrowed` to the sorters who no longer get the person's post);
+  the newcomer is not told. This replaces "accepting an invitation tells nobody" above;
+  still no memberships lock there. `on_member_added` releases the sorters' assignments on
+  the person's letters at once, and `test_task_release_callers` now checks per function
+  that every writer of sight releases (or runs `sight_change`). A renewed admin
+  invitation asks nothing again: it replaces one that was confirmed.
+- **The people writers use the locked role (finding 3).** `link_member` and the
+  department writers (`add_`, `remove_`, `update_department_member`) read the acting
+  member's role from the memberships they lock, not from the endpoint's earlier read: an
+  admin demoted in between gets 403 `forbidden`. `actor_role` of `link_member` counts only
+  for a call without a user, and only `ACTING_AS_SYSTEM` with a system actor is the
+  system; anything else without a user acts with no rights.
+- **The preview counts only what its admin can read (finding 4).** `letter_count` counted,
+  as the system, every letter whose viewers change, private ones included: an admin who
+  does not read all post learned exact counts per person or department by previewing a
+  link or a department member. Now it counts only letters the previewing admin can read
+  through the policy at that moment (for one who reads all post: every letter that is not
+  private, plus the private ones they read). The count says "letters you can read whose
+  viewers change"; it may be 0 where others' post moves.
+- **"Wie kan mijn post zien?" says only what is true (finding 5).** "Je post zien alleen
+  jij ..." left out other addressees, the scanner until the letter is done and shares;
+  "Privé-post zie alleen jij ..." left out the members of a department a private letter
+  is on, and who scanned it or made it private (they keep a share). The sentences now
+  list exactly those (Thuis: "groep"), and `tests/test_policy_text_truth.py` checks in all
+  16 states that every viewer `viewers()` gives for a member's letter is someone their
+  sentences name. S 4.15's example sentences are amended by these.
+- **Presets and `create_workspace` widen nobody's sight (checked with the review).** The
+  kind's values are applied only to a new workspace (no member but its first admin, or
+  none); a later preset switch goes through `updateVisibility` (preview, confirmation,
+  notices); the migration left existing workspaces as they were.

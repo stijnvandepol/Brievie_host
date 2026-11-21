@@ -11,7 +11,7 @@ from procrastinate.contrib.django.models import ProcrastinateJob
 from apps.common.management.commands.export_openapi import render_schema
 from apps.documents.models import Document, Extraction
 from apps.tasks.models import Task
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.documents_support import admin_of, documents_url, jpeg, upload
 from tests.factories import UserFactory
@@ -25,7 +25,7 @@ def client_a(client: Client, ws_a: Workspace) -> Client:
 
 
 def set_status(workspace: Workspace, document_id: str, status: str, code: str = "") -> None:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         Document.objects.filter(id=document_id).update(status=status, failure_code=code)
 
 
@@ -41,8 +41,10 @@ def test_list_is_newest_first_with_summary_fields(client_a: Client, ws_a: Worksp
     assert set(rows[0]) == {
         "id", "client_id", "status", "page_count", "created_at", "sender", "document_type",
         "letter_date", "addressee_ids", "label_ids", "inbox_state", "open_suggestion_count",
-        "confirmed_by_ai", "auto_label_ids", "auto_addressee_ids", "proposed_sender",
-        "proposed_document_type", "proposed_letter_date",
+        "confirmed_by_ai", "auto_label_ids", "auto_addressee_ids", "auto_rule_label_ids",
+        "proposed_sender",
+        "proposed_document_type", "proposed_letter_date", "open_duplicate_count",
+        "visibility", "reader_names",
     }  # fmt: skip
     assert rows[0]["page_count"] == 2
     assert rows[0]["status"] == "processing"
@@ -51,7 +53,7 @@ def test_list_is_newest_first_with_summary_fields(client_a: Client, ws_a: Worksp
 
 def test_detail_shows_proposals_and_tasks(client_a: Client, ws_a: Workspace) -> None:
     document_id = upload(client_a, ws_a.id, [jpeg()], texts=["vóór 1 december 2026"]).json()["id"]
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         document = Document.objects.get()
         Extraction.objects.create(
             workspace=ws_a, document=document, field="action_deadline", group=1,
@@ -205,7 +207,7 @@ def test_contract_describes_the_upload_metadata() -> None:
 def propose(
     workspace: Workspace, document_id: str, field: str, value: str, confidence: str
 ) -> None:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         Extraction.objects.create(
             workspace=workspace, document_id=document_id, field=field, value=value,
             quote=value, confidence=Decimal(confidence),
@@ -251,7 +253,7 @@ def test_a_letter_waiting_for_review_shows_the_proposed_sender_date_and_type(
 def test_a_confirmed_letter_shows_no_proposal(client_a: Client, ws_a: Workspace) -> None:
     document_id = upload(client_a, ws_a.id, [jpeg()]).json()["id"]
     propose(ws_a, document_id, "sender", "Belastingdienst", "0.9")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Document.objects.filter(id=document_id).update(
             status="done", confirmed_at=timezone.now(), sender=""
         )

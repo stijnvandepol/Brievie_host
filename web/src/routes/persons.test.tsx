@@ -71,7 +71,12 @@ describe("persons", () => {
     await user.click(screen.getByRole("button", { name: "Opslaan" }));
     expect(await screen.findByRole("rowheader", { name: /Oma/ })).toBeInTheDocument();
     expect(created).toEqual([
-      { display_name: "Oma", name_variants: ["J. de Vries", "Oma de Vries"], archived: false },
+      {
+        kind: "person",
+        display_name: "Oma",
+        name_variants: ["J. de Vries", "Oma de Vries"],
+        archived: false,
+      },
     ]);
   });
 
@@ -114,6 +119,7 @@ describe("persons", () => {
       display_name: "Papa",
       name_variants: ["P. de Vries"],
       archived: true,
+      kind: "person",
     });
   });
 
@@ -191,7 +197,11 @@ describe("persons", () => {
     // Anna is linked already, so her row has no control.
     expect(screen.getAllByRole("combobox")).toHaveLength(1);
     await user.selectOptions(select, "Bram");
-    await waitFor(() => expect(bodies).toEqual([{ user_id: members[1]?.user_id }]));
+    await waitFor(() =>
+      expect(bodies).toEqual([
+        { user_id: members[1]?.user_id, confirmed: false, preview_token: "" },
+      ]),
+    );
   });
 
   it("has no link control when every member has a person", async () => {
@@ -216,6 +226,18 @@ describe("persons", () => {
     renderApp(path);
     await screen.findByRole("rowheader", { name: /Papa/ });
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+  });
+
+  it("offers deleting a person only to an admin", async () => {
+    server.use(
+      http.get(`*${API}/workspaces`, () => HttpResponse.json([{ ...workspace, role: "member" }])),
+      ...loggedInHandlers(),
+      ...personHandlers(),
+    );
+    renderApp(path);
+    await screen.findByRole("rowheader", { name: /Papa/ });
+    expect(screen.getByRole("button", { name: /Wijzigen: Papa/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Verwijderen: Papa/ })).not.toBeInTheDocument();
   });
 });
 

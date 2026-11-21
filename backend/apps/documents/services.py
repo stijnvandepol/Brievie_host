@@ -7,11 +7,13 @@ from django.utils.translation import gettext as _
 from psycopg import errors as pg_errors
 
 from apps.accounts.models import User
+from apps.audit.services import AuditActor
 from apps.common import crypto
 from apps.common.errors import ApiError
-from apps.documents import organise, suggestions
+from apps.documents import duplicates, organise, suggestions, visibility
 from apps.documents.intake import page_aad
 from apps.documents.models import (
+    LIVE,
     Document,
     DocumentAddressee,
     DocumentEvent,
@@ -24,6 +26,7 @@ from apps.documents.models import (
 from apps.documents.schemas import (
     DocumentOut,
     DocumentSummaryOut,
+    DocumentVisibilityOut,
     PageOut,
     ProposalOut,
     SuggestionOut,
@@ -31,9 +34,11 @@ from apps.documents.schemas import (
 )
 from apps.documents.storage import default_storage
 from apps.pipeline.jobs import defer_processing
-from apps.tasks.models import Task
+from apps.tasks.models import Task, amount_text
+from apps.workspaces.context import current_actor
 from apps.workspaces.keys import workspace_key
-from apps.workspaces.models import Workspace
+from apps.workspaces.locks import lock_own_membership
+from apps.workspaces.models import Membership, Workspace
 
 _PATH_UNIQUE = "documents_folder_workspace_path_unique"
 
@@ -113,6 +118,19 @@ def _auto_label_ids(document: Document) -> list[UUID]:
     return [link.label_id for link in document.label_links.all() if link.automatic]
 
 
+def _auto_rule_label_ids(document: Document) -> list[UUID]:
+    """The automatic labels whose accepted proposal came from a rule (the autopilot applied
+    a rule's label). Read from the suggestions, so a list's prefetch is used."""
+    by_rule = {
+        s.label_id
+        for s in document.suggestions.all()
+        if s.label_id is not None
+        and s.state == DocumentSuggestion.State.ACCEPTED
+        and s.origin == DocumentSuggestion.Origin.RULE
+    }
+    return [label_id for label_id in _auto_label_ids(document) if label_id in by_rule]
+
+
 # The prefetch of a document's suggestions wherever several documents are shown: with
 # their persons, so `_open_suggestions` can leave out archived ones without a query each.
 SUGGESTIONS = models.Prefetch(
@@ -183,24 +201,10 @@ def _open_suggestions(document: Document) -> list[DocumentSuggestion]:
     return sorted(rows, key=lambda s: (not s.preselected, -s.confidence, s.created_at, s.id))
 
 
-def _has_addressee() -> models.Exists:
-    return models.Exists(DocumentAddressee.objects.filter(document=models.OuterRef("pk")))
-
-
-def _has_automatic_link() -> models.Q:
-    return models.Exists(
-        DocumentLabel.objects.filter(document=models.OuterRef("pk"), automatic=True)
-    ) | models.Exists(
-        DocumentAddressee.objects.filter(document=models.OuterRef("pk"), automatic=True)
-    )
-
-
 def _is_automatic() -> models.Q:
-    """The AI confirmed the document or put a label or addressee on it itself.
-
-    Needs the `has_automatic` annotation (an `Exists` cannot sit in an aggregate filter).
-    """
-    return models.Q(confirmed_by_ai=True) | models.Q(has_automatic=True)
+    """The AI confirmed the document or put a label or addressee on it itself (the stored
+    `has_automatic_link`, kept by `organise.sync_automatic`; DECISIONS 2026-11-20)."""
+    return models.Q(confirmed_by_ai=True) | models.Q(has_automatic_link=True)
 
 
 def _in_state(state: str) -> models.Q:
@@ -208,30 +212,31 @@ def _in_state(state: str) -> models.Q:
         return models.Q(status=Document.Status.PROCESSING)
     if state == InboxState.REVIEW:
         return models.Q(status__in=_REVIEW_STATUSES)
-    return models.Q(status=Document.Status.DONE, has_addressee=False)
+    # `addressee_ids` mirrors the links (one writer, checked nightly); this form uses the
+    # partial index `documents_document_unassigned`.
+    return models.Q(status=Document.Status.DONE, addressee_ids=[])
 
 
 def list_documents(
-    workspace: Workspace,
+    membership: Membership,
     *,
     inbox_state: str = "",
     person_id: UUID | None = None,
     label_id: UUID | None = None,
     automatic: bool = False,
 ) -> list[Document]:
-    """The newest documents of the workspace (at most 200; paging comes later), filtered.
+    """The newest documents the member sees (at most 200; paging comes later), filtered.
 
     `automatic` keeps the documents the autopilot confirmed or organised.
     """
     if inbox_state and inbox_state not in INBOX_STATES:
         raise ApiError(422, "validation_error", _("Deze stand van de inbox kennen we niet."))
-    documents = Document.objects.filter(workspace=workspace).annotate(
-        has_addressee=_has_addressee(), has_automatic=_has_automatic_link()
-    )
+    documents = visibility.visible_documents(membership)
     if inbox_state:
         documents = documents.filter(_in_state(inbox_state))
     if person_id is not None:
-        documents = documents.filter(addressee_links__person_id=person_id)
+        # The GIN index on `addressee_ids`.
+        documents = documents.filter(addressee_ids__contains=[person_id])
     if label_id is not None:
         documents = documents.filter(label_links__label_id=label_id)
     if automatic:
@@ -243,32 +248,99 @@ def list_documents(
     )
 
 
-def inbox_counts(workspace: Workspace) -> dict[str, int]:
-    """How many documents are in each inbox state, for the badges."""
-    documents = Document.objects.filter(workspace=workspace).annotate(
-        has_addressee=_has_addressee(), has_automatic=_has_automatic_link()
-    )
-    counts = documents.aggregate(
+def inbox_counts(membership: Membership) -> dict[str, int]:
+    """How many of the documents the member sees are in each inbox state, for the
+    badges: one pass."""
+    counts = visibility.visible_documents(membership).aggregate(
         **{state: models.Count("id", filter=_in_state(state)) for state in INBOX_STATES},
         automatic=models.Count("id", filter=_is_automatic()),
     )
-    return {name: int(counts[name]) for name in (*INBOX_STATES, "automatic")}
+    return {
+        **{name: int(counts[name]) for name in (*INBOX_STATES, "automatic")},
+        "duplicate": duplicates.count_pairs(membership),
+    }
 
 
-def get_document(*, workspace: Workspace, document_id: UUID) -> Document:
-    document = Document.objects.filter(workspace=workspace, id=document_id).first()
+def waiting_letters(membership: Membership) -> int:
+    """How many letters the member sees wait to be checked or named ("Te doen"'s review
+    and unassigned states), for the line on top of "Mijn taken"."""
+    letters = visibility.visible_documents(membership)
+    # Two counts, each on its own partial index (`documents_document_review`,
+    # `documents_document_unassigned`): the policy then runs only for the few matching
+    # letters. One OR of the two (or an aggregate filter) runs it for every letter.
+    return sum(
+        letters.filter(_in_state(state)).count()
+        for state in (InboxState.REVIEW, InboxState.UNASSIGNED)
+    )
+
+
+def get_document(*, membership: Membership, document_id: UUID) -> Document:
+    """A document the member sees, or 404 (one they may not see is not found either).
+
+    A letter in the member's own trash answers `document_in_trash`; one in the trash they
+    may not see, or whose purge started, is not found like any other.
+    """
+    document = visibility.visible_documents(membership).filter(id=document_id).first()
     if document is None:
+        if visibility.trashed_documents(membership).filter(id=document_id).exists():
+            raise ApiError(404, "document_in_trash", _("Deze brief staat in de prullenbak."))
         raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
     return document
 
 
-def document_summary_out(document: Document) -> DocumentSummaryOut:
+def document_access(
+    *, membership: Membership, document_id: UUID
+) -> list[tuple[UUID, str, list[str]]]:
+    """Who can see a letter the member sees, and why: (user id, name, reasons) by name.
+    404 like `get_document` for a letter the member may not see."""
+    document = get_document(membership=membership, document_id=document_id)
+    reasons = visibility.viewer_reasons(document)
+    names = dict(
+        Membership.objects.filter(
+            workspace_id=membership.workspace_id, user_id__in=list(reasons)
+        ).values_list("user_id", "user__name")
+    )
+    return sorted(
+        ((user_id, names.get(user_id, ""), why) for user_id, why in reasons.items()),
+        key=lambda row: (row[1].casefold(), str(row[0])),
+    )
+
+
+def document_summary_out(
+    document: Document, *, open_duplicate_count: int = 0, reader_names: list[str] | None = None
+) -> DocumentSummaryOut:
     """A row of a document list."""
-    return _summary_out(document, _open_suggestions(document))
+    return _summary_out(
+        document, _open_suggestions(document), open_duplicate_count, reader_names or []
+    )
+
+
+def document_summaries_out(
+    membership: Membership, documents: list[Document]
+) -> list[DocumentSummaryOut]:
+    """Rows of a document list for the member, with the open duplicate pairs they see in
+    full per letter (one query for all)."""
+    counts = duplicates.pair_counts(membership, [d.id for d in documents])
+    names = visibility.reader_names(documents)
+    return [
+        document_summary_out(
+            d, open_duplicate_count=counts.get(d.id, 0), reader_names=names.get(d.id, [])
+        )
+        for d in documents
+    ]
+
+
+def document_out_as(membership: Membership, document: Document) -> DocumentOut:
+    """`document_out` for the member, with the open duplicate pairs they see in full."""
+    counts = duplicates.pair_counts(membership, [document.id])
+    return document_out(document, open_duplicate_count=counts.get(document.id, 0))
 
 
 def _summary_out(
-    document: Document, open_suggestions: list[DocumentSuggestion]
+    document: Document,
+    open_suggestions: list[DocumentSuggestion],
+    open_duplicate_count: int = 0,
+    reader_names: list[str] | None = None,
 ) -> DocumentSummaryOut:
     proposed = _headline_proposals(document)
     return DocumentSummaryOut(
@@ -286,6 +358,7 @@ def _summary_out(
         open_suggestion_count=len(open_suggestions),
         confirmed_by_ai=document.confirmed_by_ai,
         auto_label_ids=_auto_label_ids(document),
+        auto_rule_label_ids=_auto_rule_label_ids(document),
         auto_addressee_ids=_auto_addressee_ids(document),
         proposed_sender="" if document.sender else proposed.get(Extraction.Field.SENDER, ""),
         proposed_document_type=""
@@ -294,15 +367,53 @@ def _summary_out(
         proposed_letter_date=None
         if document.letter_date
         else _iso_date(proposed.get(Extraction.Field.LETTER_DATE, "")),
+        open_duplicate_count=open_duplicate_count,
+        visibility=document.visibility,
+        reader_names=reader_names or [],
     )
 
 
-def document_out(document: Document) -> DocumentOut:
+def document_out_for(document: Document) -> DocumentOut:
+    """The answer of an organising endpoint: the full document while the caller still
+    sees it, else only its id and status with `can_read` false (S 4.9.3: `can_read` is
+    computed last, as the caller; nothing of the letter is read as the caller after)."""
+    if visibility.can_read(document.id):
+        return document_out(document)
+    return DocumentOut(
+        id=document.id,
+        client_id=document.client_id,
+        status=visibility.status_of(document.id) or document.status,
+        page_count=0,
+        created_at=document.created_at,
+        sender="",
+        document_type="",
+        letter_date=None,
+        failure_code="",
+        summary="",
+        summary_by_ai=False,
+        pages=[],
+        proposals=[],
+        tasks=[],
+        suggestions=[],
+        addressee_ids=[],
+        label_ids=[],
+        inbox_state="",
+        can_read=False,
+    )
+
+
+def document_out(document: Document, *, open_duplicate_count: int = 0) -> DocumentOut:
     """The document with its pages, proposals and tasks, as the API shows it."""
     models.prefetch_related_objects([document], SUGGESTIONS)
     open_suggestions = _open_suggestions(document)
+    names = visibility.reader_names([document]).get(document.id, [])
+    actor = current_actor()
     return DocumentOut(
-        **_summary_out(document, open_suggestions).model_dump(),
+        **_summary_out(document, open_suggestions, open_duplicate_count, names).model_dump(),
+        shared_user_ids=visibility.shared_user_ids(document),
+        can_make_public=document.visibility == Document.Visibility.RESTRICTED
+        and isinstance(actor, UUID)
+        and visibility.can_make_public(document, actor),
         failure_code=document.failure_code,
         summary=document.summary,
         summary_by_ai=document.summary_by_ai,
@@ -334,8 +445,14 @@ def document_out(document: Document) -> DocumentOut:
                 status=task.status,
                 completed_at=task.completed_at,
                 created_by_ai=task.created_by_ai,
+                amount=amount_text(task.amount),
+                term_quote=task.term_quote,
+                assigned_to_name=task.assigned_to.name if task.assigned_to is not None else "",
+                assigned_to_id=task.assigned_to_id,
             )
-            for task in document.tasks.order_by("deadline", "created_at", "id")
+            for task in document.tasks.select_related("assigned_to").order_by(
+                "deadline", "created_at", "id"
+            )
         ],
         suggestions=[
             SuggestionOut(
@@ -354,9 +471,10 @@ def document_out(document: Document) -> DocumentOut:
     )
 
 
-def read_page(*, workspace: Workspace, document_id: UUID, index: int) -> tuple[bytes, str]:
+def read_page(*, membership: Membership, document_id: UUID, index: int) -> tuple[bytes, str]:
     """The decrypted page file and its content type."""
-    document = get_document(workspace=workspace, document_id=document_id)
+    workspace = membership.workspace
+    document = get_document(membership=membership, document_id=document_id)
     page = DocumentPage.objects.filter(document=document, index=index).first()
     if page is None:
         raise ApiError(404, "page_not_found", _("We kunnen deze pagina niet vinden."))
@@ -370,11 +488,16 @@ def read_page(*, workspace: Workspace, document_id: UUID, index: int) -> tuple[b
 def retry_processing(*, workspace: Workspace, document_id: UUID) -> Document:
     """Queue a failed document for processing again."""
     with transaction.atomic():
+        _lock_own_membership(workspace)
         document = (
-            Document.objects.select_for_update().filter(workspace=workspace, id=document_id).first()
+            Document.objects.select_for_update(no_key=True)
+            .filter(LIVE, workspace=workspace, id=document_id)
+            .first()
         )
         if document is None:
             raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
+        # Never sent to the AI again by someone with emergency access only.
+        visibility.require_editable(document)
         if document.status != Document.Status.FAILED:
             raise ApiError(
                 409,
@@ -398,11 +521,15 @@ def reopen_document(*, workspace: Workspace, user: User, document_id: UUID) -> D
     Labels, addressees, proposals and suggestions stay, so the normal review follows.
     """
     with transaction.atomic():
+        lock_own_membership(workspace.id, user.id)
         document = (
-            Document.objects.select_for_update().filter(workspace=workspace, id=document_id).first()
+            Document.objects.select_for_update(no_key=True)
+            .filter(LIVE, workspace=workspace, id=document_id)
+            .first()
         )
         if document is None:
             raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
+        visibility.require_editable(document)
         if document.status != Document.Status.DONE or not document.confirmed_by_ai:
             raise ApiError(
                 409,
@@ -430,7 +557,8 @@ def set_document_addressees(
     """The document's addressees become exactly `person_ids`."""
     with transaction.atomic():
         document = _lock_for_organising(workspace, document_id)
-        organise.set_addressees(document=document, person_ids=person_ids, actor=user)
+        with visibility.keep_own_access(document), visibility.addressee_scope(document):
+            organise.set_addressees(document=document, person_ids=person_ids, actor=user)
     return document
 
 
@@ -463,7 +591,8 @@ def accept_suggestion(
                     "validation_error",
                     _("Een gearchiveerde persoon kun je niet aan een document toevoegen."),
                 )
-            organise.add_addressee(document, suggestion.person, actor=user, origin=origin)
+            with visibility.addressee_scope(document):
+                organise.add_addressee(document, suggestion.person, actor=user, origin=origin)
         suggestion.state = DocumentSuggestion.State.ACCEPTED
         suggestion.save(update_fields=["state", "updated_at"])
     return document
@@ -493,10 +622,21 @@ def _suggestion(document: Document, suggestion_id: UUID) -> DocumentSuggestion:
     return suggestion
 
 
+def _lock_own_membership(workspace: Workspace) -> None:
+    """The request's membership first (`apps.workspaces.locks`); the system has none."""
+    actor = current_actor()
+    if isinstance(actor, UUID):
+        lock_own_membership(workspace.id, actor)
+
+
 def _lock_for_organising(workspace: Workspace, document_id: UUID) -> Document:
-    """The document, locked; refused while it is still being processed."""
+    """The document, locked after the caller's membership (the lock order); refused while
+    it is still being processed."""
+    _lock_own_membership(workspace)
     document = (
-        Document.objects.select_for_update().filter(workspace=workspace, id=document_id).first()
+        Document.objects.select_for_update(no_key=True)
+        .filter(LIVE, workspace=workspace, id=document_id)
+        .first()
     )
     if document is None:
         raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
@@ -506,18 +646,26 @@ def _lock_for_organising(workspace: Workspace, document_id: UUID) -> Document:
             "document_processing",
             _("Dit document wordt nog verwerkt. Probeer het zo opnieuw."),
         )
+    visibility.require_editable(document)
     return document
 
 
-def list_document_events(*, workspace: Workspace, document_id: UUID) -> list[DocumentEvent]:
+def list_document_events(*, membership: Membership, document_id: UUID) -> list[DocumentEvent]:
     """The document's history, newest first.
 
     Annotated with `undone` (an undo event points at it), `still_linked` (its label or
     person is on the document now), `still_automatic` (that link is still marked
     automatic) and `superseded` (a later event concerns the same label or person), which
     `DocumentEventOut.can_undo` reads.
+
+    A line never tells the member about a letter they may not read (the trash counted):
+    a `duplicate_dismissed` line about such a letter is left out, and any other line
+    (`merged`, `task_moved`, `trashed` by a merge) loses its `related_document_id`.
     """
-    document = get_document(workspace=workspace, document_id=document_id)
+    document = get_document(membership=membership, document_id=document_id)
+    related_readable = models.Exists(
+        visibility.readable_documents(membership).filter(id=models.OuterRef("related_document_id"))
+    )
     label_linked = DocumentLabel.objects.filter(
         document_id=models.OuterRef("document_id"), label_id=models.OuterRef("label_id")
     )
@@ -527,9 +675,15 @@ def list_document_events(*, workspace: Workspace, document_id: UUID) -> list[Doc
     later = DocumentEvent.objects.filter(
         document_id=models.OuterRef("document_id"), created_at__gt=models.OuterRef("created_at")
     )
-    return list(
+    found: list[DocumentEvent] = list(
         DocumentEvent.objects.filter(document=document)
         .select_related("actor")
+        .annotate(related_readable=related_readable)
+        .exclude(
+            kind=DocumentEvent.Kind.DUPLICATE_DISMISSED,
+            related_document_id__isnull=False,
+            related_readable=False,
+        )
         .annotate(
             undone=models.Exists(DocumentEvent.objects.filter(undoes=models.OuterRef("pk"))),
             still_linked=models.Exists(label_linked) | models.Exists(person_linked),
@@ -540,6 +694,10 @@ def list_document_events(*, workspace: Workspace, document_id: UUID) -> list[Doc
         )
         .order_by("-created_at", "-id")
     )
+    for event in found:
+        if not getattr(event, "related_readable", False):
+            event.related_document_id = None
+    return found
 
 
 def undo_document_event(
@@ -548,5 +706,48 @@ def undo_document_event(
     """Reverse a change a rule made; the rule will not make it again on this document."""
     with transaction.atomic():
         document = _lock_for_organising(workspace, document_id)
-        organise.undo_event(document=document, event_id=event_id, actor=user)
+        with visibility.keep_own_access(document), visibility.addressee_scope(document):
+            organise.undo_event(document=document, event_id=event_id, actor=user)
     return document
+
+
+def set_document_visibility(
+    *,
+    workspace: Workspace,
+    user: User,
+    actor: AuditActor,
+    document_id: UUID,
+    visibility_value: str,
+    shared_user_ids: list[UUID],
+) -> DocumentVisibilityOut:
+    """ "Privé maken", "Voor iedereen zichtbaar maken" and "Delen met" (PB T17, R44).
+
+    `restricted`: a letter that is not private becomes private with these shares besides
+    the scanner and the caller; a private one gets exactly these shares. `workspace`: a
+    private letter becomes visible to everyone (403 `cannot_make_public` for someone not
+    addressed while an addressee reads it), then the shares become exactly these (also on
+    a letter that is not private). Anything else 422. The answer says whether the caller
+    still reads it (they may remove their own share)."""
+    if visibility_value not in Document.Visibility.values:
+        raise ApiError(422, "validation_error", _("Kies privé of zichtbaar voor iedereen."))
+    with transaction.atomic():
+        document = _lock_for_organising(workspace, document_id)
+        if visibility_value == Document.Visibility.RESTRICTED:
+            if document.visibility != Document.Visibility.RESTRICTED:
+                visibility.make_private(
+                    document, actor=actor, origin="user", share_user_ids=shared_user_ids
+                )
+            else:
+                visibility.set_shares(document, user_ids=shared_user_ids, actor=actor)
+        else:
+            visibility.make_public(document, actor=actor, user_id=user.id)
+            visibility.set_shares(document, user_ids=shared_user_ids, actor=actor)
+        readable = visibility.can_read(document.id)
+        return DocumentVisibilityOut(
+            visibility=visibility.visibility_of(document.id),
+            reader_names=visibility.reader_names([document]).get(document.id, [])
+            if readable
+            else [],
+            shared_user_ids=visibility.shared_user_ids(document) if readable else [],
+            can_read=readable,
+        )

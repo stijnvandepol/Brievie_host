@@ -13,7 +13,7 @@ from django.utils.translation import gettext as _
 from apps.common.errors import ApiError
 from apps.common.privacy import holds_bsn, mask_bsns
 from apps.documents.models import Document
-from apps.rules.engine import ACTIONS, OPERATORS, Action, Condition, RuleSpec
+from apps.rules.engine import ACTIONS, MAKE_PRIVATE, OPERATORS, Action, Condition, RuleSpec
 from apps.rules.models import Rule
 
 logger = logging.getLogger(__name__)
@@ -38,6 +38,7 @@ def validate(
     person_ids: Collection[UUID],
     kept_values: Collection[str] = (),
     archived_person_ids: Collection[UUID] = (),
+    mode: str = Rule.Mode.PROPOSE,
 ) -> None:
     """Refuse a definition that breaks a limit, with a Dutch sentence that names it.
 
@@ -73,6 +74,9 @@ def validate(
             person_ids=person_ids,
             archived_person_ids=archived_person_ids,
         )
+        if action[0] == MAKE_PRIVATE and mode != Rule.Mode.AUTO:
+            # Only an automatic rule: a proposal "make it private" does not exist.
+            raise _invalid(_("Privé maken kan alleen in een regel die automatisch werkt."))
 
 
 def _validate_condition(
@@ -132,6 +136,10 @@ def _validate_action(
     kind, label_id, person_id = action
     if kind not in ACTIONS:
         raise _invalid(_("Deze actie kennen we niet."))
+    if kind == MAKE_PRIVATE:
+        if label_id is not None or person_id is not None:
+            raise _invalid(_("Een actie 'privé maken' noemt geen label en geen persoon."))
+        return
     if kind == "add_label":
         if person_id is not None or label_id is None:
             raise _invalid(_("Een actie 'label toevoegen' noemt alleen een label."))
@@ -243,6 +251,8 @@ def _parse_action(item: object) -> Action | None:
     key = "label_id" if kind == "add_label" else "person_id"
     if kind not in ACTIONS or not isinstance(kind, str):
         return None
+    if kind == MAKE_PRIVATE:
+        return Action(type=kind, target_id=None)
     target = item.get(key)
     target_id = _uuid(target) if isinstance(target, str) else None
     if target_id is None:

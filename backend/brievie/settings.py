@@ -27,6 +27,9 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.staticfiles",
+    # ArrayField and GinIndex for `Document.addressee_ids` (S 4.9.2); the tsvector field
+    # and GIN indexes of search. Part of Django, no new dependency.
+    "django.contrib.postgres",
     "ninja",
     "axes",
     "procrastinate.contrib.django",
@@ -76,6 +79,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     # After authentication: signs out a session without a record or past its limits.
     "apps.accounts.middleware.UserSessionMiddleware",
+    # The account's own language choice wins over Accept-Language (LocaleMiddleware).
+    "apps.accounts.middleware.AccountLanguageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
@@ -120,6 +125,16 @@ DATABASES = {
     "default": DATABASE_OWNER if _use_owner_role and DATABASE_OWNER else env.db("DATABASE_URL")
 }
 DATABASES["default"]["ATOMIC_REQUESTS"] = True
+# No JIT compilation, for every connection the app, the migrate run and the tests open.
+# PostgreSQL compiles a query once its estimated cost passes jit_above_cost (100,000);
+# with the visibility policies inlined into every list query the estimates pass it
+# easily, and compiling then costs 0.3-1.3 s for queries that run in well under that
+# (measured, DECISIONS 2026-11-20). Set at connection start through libpq's `options`:
+# no extra round trip, and the server and database stay at their defaults.
+_db_options = DATABASES["default"].get("OPTIONS")
+_db_options = dict(_db_options) if isinstance(_db_options, dict) else {}
+_db_options["options"] = f"{_db_options.get('options', '')} -c jit=off".strip()
+DATABASES["default"]["OPTIONS"] = _db_options
 
 # The database cache is shared by all gunicorn workers (throttle counts).
 # `manage.py createcachetable` creates its table; the test run does so itself.
@@ -132,8 +147,11 @@ CACHES = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Dutch is the source language and the default; English has a catalogue in locale/
+# (apps.common.catalogue, `make messages`). Each language in its own name.
 LANGUAGE_CODE = "nl"
-LANGUAGES = [("nl", "Nederlands")]
+LANGUAGES = [("nl", "Nederlands"), ("en", "English")]
+LOCALE_PATHS = [BASE_DIR / "locale"]
 TIME_ZONE = "Europe/Amsterdam"
 USE_I18N = True
 USE_TZ = True
@@ -240,6 +258,11 @@ DATA_UPLOAD_MAX_MEMORY_SIZE: int = BRIEVIE_MAX_BODY_BYTES
 # limit; Caddy enforces the same one on that route.
 BRIEVIE_MAX_UPLOAD_BYTES: int = env.int("BRIEVIE_MAX_UPLOAD_BYTES", default=33554432)
 BRIEVIE_MAX_PAGES: int = env.int("BRIEVIE_MAX_PAGES", default=30)
+# Uploads per member of a workspace and per workspace (apps.documents.upload_limits):
+# a household scans a pile at once, a mail room more; one member must not fill the
+# worker's queue for every workspace. Ninja's rate format: count/period (s, m, h, d).
+BRIEVIE_UPLOADS_PER_MEMBER: str = env.str("BRIEVIE_UPLOADS_PER_MEMBER", default="60/10m")
+BRIEVIE_UPLOADS_PER_WORKSPACE: str = env.str("BRIEVIE_UPLOADS_PER_WORKSPACE", default="600/1h")
 BRIEVIE_MAX_PAGE_TEXT_CHARS: int = env.int("BRIEVIE_MAX_PAGE_TEXT_CHARS", default=20000)
 # Uploaded files stay in memory, whatever their size: a temporary file would be an
 # unencrypted copy of a page on disk. Set globally, because the session's CSRF check

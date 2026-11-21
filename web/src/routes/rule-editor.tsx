@@ -36,8 +36,28 @@ type ConditionRow = {
   example?: string;
   hint?: string;
 };
-/** `hint` and `labelName` come from an example rule: what to pick, and a label to offer. */
-type ActionRow = { key: number; type: string; id: string; hint?: string; labelName?: string };
+/**
+ * `hint` and `labelName` come from an example rule: what to pick, and a label to offer.
+ * `raw` keeps an action of a type this version does not know: it goes back unchanged.
+ */
+type ActionRow = {
+  key: number;
+  type: string;
+  id: string;
+  hint?: string;
+  labelName?: string;
+  raw?: RuleAction;
+};
+type RuleAction = components["schemas"]["RuleActionSchema"];
+
+/** "Privé maken": no label or person; only in a rule that applies itself (PB T19). */
+const MAKE_PRIVATE = "make_private";
+const KNOWN_ACTIONS = ["add_label", "add_addressee", MAKE_PRIVATE];
+
+/** Whether the row still needs a label or person picked. */
+function needsTarget(row: ActionRow): boolean {
+  return row.type !== MAKE_PRIVATE && KNOWN_ACTIONS.includes(row.type) && row.id === "";
+}
 
 /** `persons` are the active ones; `everyone` also holds the archived, to name a saved value. */
 type Choices = { labels: LabelOut[]; persons: PersonOut[]; everyone: PersonOut[] };
@@ -95,6 +115,7 @@ function defaultValue(field: string, op: string, { labels, persons }: Choices): 
 }
 
 function defaultAction(type: string, { labels, persons }: Choices): string {
+  if (type === MAKE_PRIVATE) return "";
   return type === "add_label" ? (labels[0]?.id ?? "") : (persons[0]?.id ?? "");
 }
 
@@ -247,6 +268,7 @@ function ActionEditor({
   number,
   choices,
   canRemove,
+  automatic,
   onChange,
   onRemove,
 }: {
@@ -255,11 +277,13 @@ function ActionEditor({
   number: number;
   choices: Choices;
   canRemove: boolean;
+  automatic: boolean;
   onChange: (row: ActionRow) => void;
   onRemove: () => void;
 }) {
   const queryClient = useQueryClient();
   const isLabel = row.type === "add_label";
+  const known = KNOWN_ACTIONS.includes(row.type);
   const hintId = useId();
   const hint = row.hint ? hintId : undefined;
   // An example's label the workspace does not have: offered, never made unasked.
@@ -286,29 +310,43 @@ function ActionEditor({
     },
   });
   return (
-    <fieldset className={row.id === "" ? "rule-row rule-row-fill" : "rule-row"}>
+    <fieldset className={needsTarget(row) ? "rule-row rule-row-fill" : "rule-row"}>
       <legend className="visually-hidden">{t`Actie ${number}`}</legend>
-      <SelectField
-        label={t`Actie`}
-        value={row.type}
-        options={[
-          { value: "add_label", text: t`Label toevoegen`, disabled: choices.labels.length === 0 },
-          {
-            value: "add_addressee",
-            text: t`Op naam zetten van`,
-            disabled: choices.persons.length === 0,
-          },
-        ]}
-        onChange={(type) => onChange({ key: row.key, type, id: defaultAction(type, choices) })}
-      />
-      <SelectField
-        label={isLabel ? t`Label` : t`Persoon`}
-        value={row.id}
-        options={isLabel ? labelOptions(choices, row.id) : personOptions(choices, row.id)}
-        describedBy={hint}
-        onChange={(id) => onChange({ ...row, id })}
-      />
-      {row.id === "" ? <Badge intent="warning">{t`Kies`}</Badge> : null}
+      {known ? (
+        <SelectField
+          label={t`Actie`}
+          value={row.type}
+          options={[
+            {
+              value: "add_label",
+              text: t`Label toevoegen`,
+              disabled: choices.labels.length === 0,
+            },
+            {
+              value: "add_addressee",
+              text: t`Op naam zetten van`,
+              disabled: choices.persons.length === 0,
+            },
+            // Offered only while the rule applies itself; shown when it is already chosen.
+            ...(automatic || row.type === MAKE_PRIVATE
+              ? [{ value: MAKE_PRIVATE, text: t`Privé maken` }]
+              : []),
+          ]}
+          onChange={(type) => onChange({ key: row.key, type, id: defaultAction(type, choices) })}
+        />
+      ) : (
+        <p className="rule-hint">{t`Een actie die deze versie van Brievie niet kent. Die blijft zoals hij is.`}</p>
+      )}
+      {known && row.type !== MAKE_PRIVATE ? (
+        <SelectField
+          label={isLabel ? t`Label` : t`Persoon`}
+          value={row.id}
+          options={isLabel ? labelOptions(choices, row.id) : personOptions(choices, row.id)}
+          describedBy={hint}
+          onChange={(id) => onChange({ ...row, id })}
+        />
+      ) : null}
+      {needsTarget(row) ? <Badge intent="warning">{t`Kies`}</Badge> : null}
       {missingLabel ? (
         <Button
           className="button-text"
@@ -403,6 +441,7 @@ function RuleForm({
           key: newKey(),
           type: action.type,
           id: (action.type === "add_label" ? action.label_id : action.person_id) ?? "",
+          raw: KNOWN_ACTIONS.includes(action.type) ? undefined : action,
         }))
       : (start?.actions ?? [{ key: newKey(), ...newAction(choices) }]),
   );
@@ -432,24 +471,30 @@ function RuleForm({
       stop,
       match,
       conditions: conditions.map(({ field, op, value }) => ({ field, op, value })),
-      actions: actions.map((action) =>
-        action.type === "add_label"
+      actions: actions.map((action): RuleAction => {
+        if (action.raw) return action.raw;
+        if (action.type === MAKE_PRIVATE)
+          return { type: action.type, label_id: null, person_id: null };
+        return action.type === "add_label"
           ? { type: action.type, label_id: action.id }
-          : { type: action.type, person_id: action.id },
-      ),
+          : { type: action.type, person_id: action.id };
+      }),
     };
   }
 
   const [blocked, setBlocked] = useState<string | null>(null);
+  // A rule that only proposes cannot make a letter private (the server refuses it too).
+  const privateNeedsAuto = mode !== "auto" && actions.some((row) => row.type === MAKE_PRIVATE);
 
   /** Whether the form can go to the server; else why not, as a sentence. */
   function check(): boolean {
+    if (privateNeedsAuto) return false;
     const empty =
       conditions.some(
         (row) =>
           (row.field === "label" || (row.field === "addressee" && row.op !== "is_empty")) &&
           row.value === "",
-      ) || actions.some((row) => row.id === "");
+      ) || actions.some(needsTarget);
     if (choices.labels.length === 0 && choices.persons.length === 0) {
       setBlocked(t`Maak eerst een label of voeg een persoon toe.`);
       return false;
@@ -642,6 +687,7 @@ function RuleForm({
             number={index + 1}
             choices={choices}
             canRemove={actions.length > 1}
+            automatic={mode === "auto"}
             onChange={(next) =>
               setActions(actions.map((other) => (other.key === row.key ? next : other)))
             }
@@ -666,11 +712,17 @@ function RuleForm({
           className="switch"
           isSelected={mode === "auto"}
           onChange={(on) => setMode(on ? "auto" : "propose")}
+          aria-describedby={`${formId}-mode-hint ${formId}-mode-autopilot`}
         >
           <span className="switch-track" aria-hidden="true" />
           {t`Automatisch toepassen`}
         </Switch>
-        <p className="switch-hint">{t`Uit: de regel doet een voorstel dat jij bevestigt.`}</p>
+        <p id={`${formId}-mode-hint`} className="switch-hint">
+          {t`Aan: de regel zet het label of de naam er altijd zelf op. Uit: de regel doet een voorstel dat jij bevestigt.`}
+        </p>
+        <p id={`${formId}-mode-autopilot`} className="switch-hint">
+          {t`Staat bij AI 'Brieven zelf onder personen en labels zetten' aan? Dan zet Brievie een voorgesteld label er toch zelf op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is van hetzelfde label. Staat het woord alleen verderop en is de AI niet zeker? Dan blijft het een voorstel.`}
+        </p>
         <Switch className="switch" isSelected={stop} onChange={setStop}>
           <span className="switch-track" aria-hidden="true" />
           {t`Stop daarna met de volgende regels`}
@@ -689,6 +741,11 @@ function RuleForm({
       {choices.persons.length === 0 ? (
         <MessageBar intent="info">{t`Voeg eerst een persoon toe.`}</MessageBar>
       ) : null}
+      {privateNeedsAuto ? (
+        <MessageBar intent="error" role="alert">
+          {t`Privé maken kan alleen in een regel die automatisch werkt. Zet Automatisch toepassen aan, of haal de actie weg.`}
+        </MessageBar>
+      ) : null}
       {blocked ? (
         <MessageBar intent="error" role="alert">
           {blocked}
@@ -697,7 +754,12 @@ function RuleForm({
       <ErrorAlert error={save.error ?? test.error ?? run.error} />
 
       <div className="form-actions">
-        <Button type="submit" className="button" isPending={save.isPending}>
+        <Button
+          type="submit"
+          className="button"
+          isPending={save.isPending}
+          isDisabled={privateNeedsAuto}
+        >
           <Icon name="save" />
           {t`Opslaan`}
         </Button>

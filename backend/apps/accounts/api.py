@@ -3,18 +3,20 @@ from uuid import UUID
 from django.http import HttpRequest, HttpResponse
 from ninja import Router, Status
 
-from apps.accounts import notices, resets, services, user_actions
+from apps.accounts import notices, resets, services, signin_limits, user_actions
 from apps.accounts.auth import session_auth
 from apps.accounts.models import User
 from apps.accounts.notices import NoticeView
 from apps.accounts.resets import IssuedReset
 from apps.accounts.schemas import (
+    LanguageIn,
     LoginIn,
     NoticeOut,
     NoticesSeenIn,
     PasswordChangeIn,
     PasswordResetIn,
     PasswordResetOut,
+    ReauthenticateIn,
     SessionOut,
     SetupIn,
     SetupOut,
@@ -61,10 +63,20 @@ def setup_server(request: HttpRequest, payload: SetupIn) -> Status[SetupOut]:
     auth=None,
     # Counts failed sign-ins only (see services.LOGIN_FAILURES).
     throttle=services.LOGIN_FAILURES,
+    description=(
+        "429 too_many_attempts with Retry-After: five wrong passwords for this email from "
+        "this address, thirty from this address, or, from a browser that never signed in "
+        "to this account, more than ten for the account from anywhere (then a wait that "
+        "doubles from 15 seconds to at most 15 minutes)."
+    ),
     operation_id="login",
 )
-def login(request: HttpRequest, payload: LoginIn) -> User:
-    return services.login(request, email=payload.email, password=payload.password)
+def login(request: HttpRequest, response: HttpResponse, payload: LoginIn) -> User:
+    user = services.login(request, email=payload.email, password=payload.password)
+    # This browser is known for the account from now on: never slowed by somebody
+    # else's wrong passwords (signin_limits).
+    signin_limits.remember_browser(request, response, payload.email)
+    return user
 
 
 @router.post(
@@ -82,6 +94,20 @@ def logout(request: HttpRequest) -> Status[None]:
 @router.get("/me", response={200: UserOut, **AUTH_ERRORS}, operation_id="getMe")
 def get_me(request: HttpRequest) -> User:
     return services.current_user(request)
+
+
+@router.put(
+    "/me/language",
+    response={200: UserOut, **SESSION_WRITE_ERRORS, **BODY_ERRORS},
+    description=(
+        "Choose the language of the interface and of the server's messages for the "
+        "caller's account (`nl`, `en`, or `` to follow Accept-Language again). The "
+        "choice wins over Accept-Language on every later request."
+    ),
+    operation_id="updateMyLanguage",
+)
+def update_my_language(request: HttpRequest, payload: LanguageIn) -> User:
+    return services.set_language(services.current_user(request), payload.language)
 
 
 WEB_SESSION_ONLY = "Web session only: a bearer token answers 401 not_authenticated."
@@ -123,6 +149,22 @@ def change_password(request: HttpRequest, payload: PasswordChangeIn) -> Status[N
     services.change_password(
         request, current_password=payload.current_password, new_password=payload.new_password
     )
+    return Status(204, None)
+
+
+@router.post(
+    "/auth/reauthenticate",
+    response={204: None, 400: ErrorOut, 429: ErrorOut, **SESSION_WRITE_ERRORS, **BODY_ERRORS},
+    auth=session_auth,
+    throttle=CallerThrottle("reauthenticate", "10/10m"),
+    description=WEB_SESSION_ONLY
+    + " Type the password again before an action that needs a recent sign-in (creating a"
+    " pairing code answers 403 reauthentication_required otherwise). 400 wrong_password;"
+    " wrong passwords count for the same lockout as signing in (429).",
+    operation_id="reauthenticate",
+)
+def reauthenticate(request: HttpRequest, payload: ReauthenticateIn) -> Status[None]:
+    services.reauthenticate(request, password=payload.password)
     return Status(204, None)
 
 

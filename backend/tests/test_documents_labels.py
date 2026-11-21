@@ -9,7 +9,7 @@ from django.test.utils import CaptureQueriesContext
 from apps.documents import organise
 from apps.documents.models import Document, DocumentEvent, DocumentLabel
 from apps.labels.models import Label
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 from tests.documents_support import admin_of, documents_url, make_document
 from tests.helpers import post_json
@@ -19,13 +19,22 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture
+def ws_a(ws_a: Workspace) -> Workspace:
+    """These tests use the Zorg label as any label: that it makes a letter private at
+    home (`care_is_private`, plan Task 30) has its own tests."""
+    Workspace.objects.filter(id=ws_a.id).update(care_is_private=False)
+    ws_a.care_is_private = False
+    return ws_a
+
+
+@pytest.fixture
 def client_a(client: Client, ws_a: Workspace) -> Client:
     client.force_login(admin_of(ws_a))
     return client
 
 
 def label(workspace: Workspace, key: str) -> Label:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Label.objects.get(workspace=workspace, system_key=key)
 
 
@@ -41,7 +50,7 @@ def put_labels(
 
 def events(workspace: Workspace, document: Document) -> list[tuple[str, str, uuid.UUID | None]]:
     """(kind, label_name, label_id) of the document's events, oldest first."""
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return [
             (e.kind, e.label_name, e.label_id)
             for e in DocumentEvent.objects.filter(document=document).order_by("created_at", "id")
@@ -68,7 +77,7 @@ def test_set_labels_exact_set_and_events(client_a: Client, ws_a: Workspace) -> N
         ("label_removed", "Zorg", zorg.id),
         ("label_added", "Auto", auto.id),
     ]
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         event = DocumentEvent.objects.filter(document=document).first()
         assert event is not None
         assert (event.origin, event.actor) == ("user", admin_of(ws_a))
@@ -78,7 +87,7 @@ def test_add_label_reports_whether_it_changed_anything(ws_a: Workspace) -> None:
     document = make_document(ws_a)
     zorg = label(ws_a, "zorg")
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         first = organise.add_label(document, zorg, actor=None, origin="rule")
         second = organise.add_label(document, zorg, actor=None, origin="rule")
 
@@ -97,7 +106,7 @@ def test_label_of_another_workspace_is_404(
 
     assert r.status_code == 404
     assert r.json()["code"] == "label_not_found"
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert list(DocumentLabel.objects.values_list("label_id", flat=True)) == [zorg.id]
     assert len(events(ws_a, document)) == 1
 
@@ -170,7 +179,7 @@ def test_deleting_a_label_writes_its_removed_lines_in_one_insert(
         with CaptureQueriesContext(connection) as queries:
             r = client_a.delete(f"/api/v1/workspaces/{ws_a.id}/labels/{label_id}")
         assert r.status_code == 204
-        with workspace_context(ws_a.id):
+        with workspace_context(ws_a.id, actor=SYSTEM):
             assert (
                 DocumentEvent.objects.filter(
                     label_name=f"Tijdelijk {count}", kind="label_removed"

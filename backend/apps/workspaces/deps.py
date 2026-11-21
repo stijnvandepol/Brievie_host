@@ -30,5 +30,5 @@ def workspace_member(
         raise ApiError(404, "workspace_not_found", _("We kunnen deze werkruimte niet vinden."))
     if not membership.has_role(min_role):
         raise ApiError(403, "forbidden", _("Je mag dit niet doen in deze werkruimte."))
-    enter_workspace_for_transaction(workspace_id)
+    enter_workspace_for_transaction(workspace_id, actor=membership.user_id)
     return membership

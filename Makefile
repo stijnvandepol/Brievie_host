@@ -7,7 +7,7 @@ PROJECT := $(or $(COMPOSE_PROJECT_NAME),$(shell sed -n 's/^[[:space:]]*\(export[
 COMPOSE := docker compose -p $(PROJECT) --project-directory deploy -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml
 BACKEND := cd backend &&
 
-.PHONY: dev down migrate test lint format typecheck openapi web-install web-test web-lint web-build web-api web-i18n
+.PHONY: dev down migrate test lint format typecheck openapi messages web-install web-test web-lint web-build web-api web-i18n
 
 ## Start PostgreSQL for local development and tests. init-env.sh only adds missing
 ## lines to an existing deploy/.env; ensure-backup-role.sh brings an existing database
@@ -41,6 +41,11 @@ typecheck:
 ## Write the OpenAPI schema (the contract with Brievie_ios) to docs/api/openapi.json.
 openapi:
 	$(BACKEND) uv run python manage.py export_openapi
+
+## Bring the English catalogue (backend/locale/en) up to date with the Dutch texts in the
+## code, and compile it; translate the empty msgstr lines and run it again.
+messages:
+	$(BACKEND) uv run python manage.py update_messages
 
 ## Web interface (web/): needs Node 24+ and pnpm.
 web-install:

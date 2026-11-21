@@ -258,6 +258,13 @@ describe("post", () => {
           { ...documentSummary, confirmed_by_ai: true },
           { ...documentSummary, id: "2", sender: "Gemeente", auto_label_ids: [belasting.id] },
           { ...documentSummary, id: "3", sender: "Bank" },
+          {
+            ...documentSummary,
+            id: "4",
+            sender: "Waterschap",
+            auto_label_ids: [belasting.id],
+            auto_rule_label_ids: [belasting.id],
+          },
         ]),
       ),
       ...documentHandlers(),
@@ -269,6 +276,9 @@ describe("post", () => {
     expect(text("Belastingdienst").getByText("Automatisch door AI")).toBeVisible();
     expect(text("Gemeente").getByText("Automatisch door AI")).toBeVisible();
     expect(text("Bank").queryByText("Automatisch door AI")).not.toBeInTheDocument();
+    // Only a rule's label, put on by the autopilot: not "door AI".
+    expect(text("Waterschap").getByText("Automatisch door regel")).toBeVisible();
+    expect(text("Waterschap").queryByText("Automatisch door AI")).not.toBeInTheDocument();
   });
 
   it("filters on letters the AI handled and keeps that in the URL", async () => {
@@ -283,18 +293,18 @@ describe("post", () => {
     );
     const user = userEvent.setup();
     const { router } = renderApp(`/w/${workspace.id}/post`);
-    const filter = await screen.findByRole("checkbox", { name: "Automatisch door AI" });
+    const filter = await screen.findByRole("checkbox", { name: "Automatisch door Brievie" });
     expect(filter).not.toBeChecked();
     expect(seen).not.toContain("true");
     await user.click(filter);
     await waitFor(() => expect(router.state.location.search).toEqual({ automatisch: true }));
     await waitFor(() => expect(seen).toContain("true"));
-    expect(screen.getByRole("checkbox", { name: "Automatisch door AI" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Automatisch door Brievie" })).toBeChecked();
   });
 
   it("reads the automatic filter from the URL", async () => {
     server.use(...loggedInHandlers(), ...documentHandlers());
     renderApp(`/w/${workspace.id}/post?automatisch=true`);
-    expect(await screen.findByRole("checkbox", { name: "Automatisch door AI" })).toBeChecked();
+    expect(await screen.findByRole("checkbox", { name: "Automatisch door Brievie" })).toBeChecked();
   });
 });

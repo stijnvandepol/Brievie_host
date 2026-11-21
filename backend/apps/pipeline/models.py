@@ -34,6 +34,9 @@ class AISettings(WorkspaceModel):
     # confirm it itself. Only in force while the mode is not `off` and the server allows it.
     auto_organise = models.BooleanField(default=False)
     auto_confirm = models.BooleanField(default=False)
+    # The version of the autopilot notice an administrator last agreed to (0: never).
+    # Rows from before version 2 hold 1: a rule's label is applied only from version 2.
+    autopilot_notice_version = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
         constraints: ClassVar[list[models.BaseConstraint]] = [

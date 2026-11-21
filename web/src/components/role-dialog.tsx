@@ -98,7 +98,8 @@ function RoleForm({
     mutationFn: async () => {
       const { error } = await api.PUT("/api/v1/workspaces/{workspace_id}/members/{user_id}/role", {
         params: { path: { workspace_id: workspaceId, user_id: member.user_id } },
-        body: { role },
+        // The confirmation dialog of "Wie ziet wat" comes with the web pages (plan Task 42).
+        body: { role, confirmed: false, preview_token: "" },
       });
       if (error !== undefined) throw new ApiFailure(error);
     },

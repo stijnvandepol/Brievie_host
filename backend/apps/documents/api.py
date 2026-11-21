@@ -13,21 +13,32 @@ from apps.audit.services import actor_from_request
 from apps.common.errors import ApiError
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.common.throttling import CallerThrottle
-from apps.documents import intake, member_export, review, services
+from apps.documents import intake, member_export, review, search, services, trash
 from apps.documents.models import DocumentEvent, Folder, MemberExport
 from apps.documents.schemas import (
     AddresseesIn,
     ConfirmIn,
+    DocumentAccessOut,
     DocumentEventOut,
     DocumentOut,
+    DocumentSearchIn,
+    DocumentSearchOut,
     DocumentSummaryOut,
+    DocumentViewerOut,
+    DocumentVisibilityIn,
+    DocumentVisibilityOut,
+    EmptyTrashIn,
+    EmptyTrashOut,
     FolderIn,
     FolderOut,
     InboxCountsOut,
     LabelsIn,
     MyExportOut,
+    TrashedDocumentOut,
+    TrashListOut,
     UploadMetadataIn,
 )
+from apps.documents.upload_limits import check_upload_limits
 from apps.workspaces.deps import workspace_member
 from apps.workspaces.models import Membership
 
@@ -68,6 +79,7 @@ def create_folder(request: HttpRequest, workspace_id: UUID, payload: FolderIn) -
         404: ErrorOut,
         409: ErrorOut,
         411: ErrorOut,
+        429: ErrorOut,
         **SESSION_WRITE_ERRORS,
         **BODY_ERRORS,
     },
@@ -76,7 +88,9 @@ def create_folder(request: HttpRequest, workspace_id: UUID, payload: FolderIn) -
         "Upload a scanned document as multipart/form-data: `metadata` is a JSON string "
         "(schema `UploadMetadataIn`), followed by one `page` file (image/jpeg) per page "
         "in page order. Repeating an upload with the same `client_id` and pages answers "
-        "200 with the existing document."
+        "200 with the existing document. 429 `too_many_uploads` with Retry-After when the "
+        "member or the workspace uploaded too much in a short time (by default 60 per "
+        "member per 10 minutes, 600 per workspace per hour)."
     ),
 )
 def create_document(
@@ -86,6 +100,8 @@ def create_document(
     page: File[list[UploadedFile]],
 ) -> Status[DocumentOut]:
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    user = current_user(request)
+    check_upload_limits(request, workspace_id=workspace_id, user_id=user.id)
     try:
         parsed = UploadMetadataIn.model_validate_json(metadata)
     except ValidationError:
@@ -95,7 +111,7 @@ def create_document(
         ) from None
     document, created = intake.create_document_from_upload(
         workspace=membership.workspace,
-        user=current_user(request),
+        user=user,
         metadata=parsed,
         pages=[file.read() for file in page],
     )
@@ -123,13 +139,57 @@ def list_documents(
 ) -> list[DocumentSummaryOut]:
     membership = workspace_member(request, workspace_id)
     documents = services.list_documents(
-        membership.workspace,
+        membership,
         inbox_state=inbox_state,
         person_id=person_id,
         label_id=label_id,
         automatic=automatic,
     )
-    return [services.document_summary_out(document) for document in documents]
+    return services.document_summaries_out(membership, documents)
+
+
+@router.post(
+    "/workspaces/{workspace_id}/documents/search",
+    response={
+        200: DocumentSearchOut,
+        404: ErrorOut,
+        429: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    throttle=CallerThrottle("document_search", "30/1m"),
+    operation_id="searchDocuments",
+    description=(
+        "Search the letters of the workspace by their text, sender, summary, label names "
+        "and person names; every word must match, as a word beginning (Dutch stems too). "
+        "Best first, then newest. The filters narrow the search; together they all apply. "
+        "When nothing matches exactly, letters with similar words are answered with "
+        "`fuzzy=true`. A BSN in `q` is removed before searching (`bsn_removed`). "
+        "`next_offset` is null on the last page (offset at most 1000). Each hit has a "
+        "fragment (`snippet`) with the matched words marked. The term is never logged. "
+        "422 `validation_error` for a term over 200 characters, an unknown `inbox_state` "
+        "or `document_type`, or `date_from` after `date_to`; 429 after 30 searches a minute."
+    ),
+)
+def search_documents(
+    request: HttpRequest, workspace_id: UUID, payload: DocumentSearchIn
+) -> DocumentSearchOut:
+    membership = workspace_member(request, workspace_id)
+    result = search.search_documents(
+        membership,
+        q=payload.q,
+        filters=search.SearchFilters(
+            document_type=payload.document_type,
+            label_id=payload.label_id,
+            person_id=payload.person_id,
+            inbox_state=payload.inbox_state,
+            date_from=payload.date_from,
+            date_to=payload.date_to,
+        ),
+        limit=payload.limit,
+        offset=payload.offset,
+    )
+    return search.search_out(result)
 
 
 @router.get(
@@ -139,7 +199,7 @@ def list_documents(
 )
 def get_inbox_counts(request: HttpRequest, workspace_id: UUID) -> InboxCountsOut:
     membership = workspace_member(request, workspace_id)
-    return InboxCountsOut(**services.inbox_counts(membership.workspace))
+    return InboxCountsOut(**services.inbox_counts(membership))
 
 
 @router.get(
@@ -149,8 +209,28 @@ def get_inbox_counts(request: HttpRequest, workspace_id: UUID) -> InboxCountsOut
 )
 def get_document(request: HttpRequest, workspace_id: UUID, document_id: UUID) -> DocumentOut:
     membership = workspace_member(request, workspace_id)
-    document = services.get_document(workspace=membership.workspace, document_id=document_id)
-    return services.document_out(document)
+    document = services.get_document(membership=membership, document_id=document_id)
+    return services.document_out_as(membership, document)
+
+
+@router.get(
+    "/workspaces/{workspace_id}/documents/{document_id}/access",
+    response={200: DocumentAccessOut, 404: ErrorOut, **AUTH_ERRORS},
+    operation_id="getDocumentAccess",
+    description="Who can see this letter, and why, sorted by name; for any member who sees"
+    " it (404 document_not_found otherwise, as for a letter that does not exist).",
+)
+def get_document_access(
+    request: HttpRequest, workspace_id: UUID, document_id: UUID
+) -> DocumentAccessOut:
+    membership = workspace_member(request, workspace_id)
+    rows = services.document_access(membership=membership, document_id=document_id)
+    return DocumentAccessOut(
+        viewers=[
+            DocumentViewerOut(user_id=user_id, name=name, reasons=reasons)
+            for user_id, name, reasons in rows
+        ]
+    )
 
 
 @router.get(
@@ -171,7 +251,7 @@ def get_document_page(
 ) -> HttpResponse:
     membership = workspace_member(request, workspace_id)
     data, content_type = services.read_page(
-        workspace=membership.workspace, document_id=document_id, index=index
+        membership=membership, document_id=document_id, index=index
     )
     response = HttpResponse(data, content_type=content_type)
     response["Cache-Control"] = "private, no-store"
@@ -201,6 +281,11 @@ def retry_document_processing(
         **BODY_ERRORS,
     },
     operation_id="confirmDocument",
+    description=(
+        "Store the review; the document becomes done. When the confirm hands the letter to"
+        " someone else (the caller no longer sees it), the answer has `can_read` false and"
+        " holds the id and status only. A repeat of the same review answers the same."
+    ),
 )
 def confirm_document(
     request: HttpRequest, workspace_id: UUID, document_id: UUID, payload: ConfirmIn
@@ -212,7 +297,7 @@ def confirm_document(
         document_id=document_id,
         data=payload,
     )
-    return services.document_out(document)
+    return services.document_out_for(document)
 
 
 @router.post(
@@ -228,7 +313,7 @@ def reopen_document(request: HttpRequest, workspace_id: UUID, document_id: UUID)
     document = services.reopen_document(
         workspace=membership.workspace, user=current_user(request), document_id=document_id
     )
-    return services.document_out(document)
+    return services.document_out_for(document)
 
 
 @router.put(
@@ -252,7 +337,7 @@ def set_document_addressees(
         document_id=document_id,
         person_ids=payload.person_ids,
     )
-    return services.document_out(document)
+    return services.document_out_for(document)
 
 
 @router.put(
@@ -276,7 +361,7 @@ def set_document_labels(
         document_id=document_id,
         label_ids=payload.label_ids,
     )
-    return services.document_out(document)
+    return services.document_out_for(document)
 
 
 @router.post(
@@ -301,7 +386,7 @@ def accept_suggestion(
         document_id=document_id,
         suggestion_id=suggestion_id,
     )
-    return services.document_out(document)
+    return services.document_out_for(document)
 
 
 @router.post(
@@ -320,7 +405,40 @@ def dismiss_suggestion(
     document = services.dismiss_suggestion(
         workspace=membership.workspace, document_id=document_id, suggestion_id=suggestion_id
     )
-    return services.document_out(document)
+    return services.document_out_for(document)
+
+
+@router.put(
+    "/workspaces/{workspace_id}/documents/{document_id}/visibility",
+    response={
+        200: DocumentVisibilityOut,
+        403: ErrorOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    operation_id="setDocumentVisibility",
+    description=(
+        "Make the letter private (`restricted`) or visible to everyone (`workspace`), and"
+        " share it: afterwards it is shared with exactly `shared_user_ids` (any letter)."
+        " 403 `cannot_make_public` for someone not addressed while an addressee reads it;"
+        " 404 `member_not_found` for a share with somebody who is no member. `can_read`"
+        " false when the caller removed their own share."
+    ),
+)
+def set_document_visibility(
+    request: HttpRequest, workspace_id: UUID, document_id: UUID, payload: DocumentVisibilityIn
+) -> DocumentVisibilityOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    return services.set_document_visibility(
+        workspace=membership.workspace,
+        user=current_user(request),
+        actor=actor_from_request(request),
+        document_id=document_id,
+        visibility_value=payload.visibility,
+        shared_user_ids=payload.shared_user_ids,
+    )
 
 
 @router.get(
@@ -332,7 +450,7 @@ def list_document_events(
     request: HttpRequest, workspace_id: UUID, document_id: UUID
 ) -> list[DocumentEvent]:
     membership = workspace_member(request, workspace_id)
-    return services.list_document_events(workspace=membership.workspace, document_id=document_id)
+    return services.list_document_events(membership=membership, document_id=document_id)
 
 
 @router.post(
@@ -356,7 +474,112 @@ def undo_document_event(
         document_id=document_id,
         event_id=event_id,
     )
+    return services.document_out_for(document)
+
+
+@router.post(
+    "/workspaces/{workspace_id}/documents/{document_id}/trash",
+    response={200: TrashedDocumentOut, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS},
+    operation_id="trashDocument",
+    description=(
+        "Move the letter to the trash (role member or admin; a viewer gets 403). It is gone"
+        " from every list, count, search and task list, and can be put back with"
+        " `restoreDocument` until `purge_after` (30 days); then it is purged for good."
+        " Trashing a letter in the trash again answers the same. 404 `document_not_found`"
+        " for a letter the caller does not see. Written to the log (`document_trashed`)."
+    ),
+)
+def trash_document(
+    request: HttpRequest, workspace_id: UUID, document_id: UUID
+) -> TrashedDocumentOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    document = trash.trash_document(
+        membership=membership,
+        user=current_user(request),
+        actor=actor_from_request(request),
+        document_id=document_id,
+    )
+    return trash.trashed_out(document)
+
+
+@router.post(
+    "/workspaces/{workspace_id}/documents/{document_id}/restore",
+    response={200: DocumentOut, 404: ErrorOut, **SESSION_WRITE_ERRORS},
+    operation_id="restoreDocument",
+    description=(
+        "Put a letter back from the trash, as it was (role member or admin). A letter that"
+        " is not in the trash answers unchanged. 404 `document_not_found` once its purge"
+        " started, or for a letter the caller does not see. Written to the log"
+        " (`document_restored`)."
+    ),
+)
+def restore_document(request: HttpRequest, workspace_id: UUID, document_id: UUID) -> DocumentOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    document = trash.restore_document(
+        membership=membership,
+        user=current_user(request),
+        actor=actor_from_request(request),
+        document_id=document_id,
+    )
     return services.document_out(document)
+
+
+@router.get(
+    "/workspaces/{workspace_id}/trash",
+    response={200: TrashListOut, 404: ErrorOut, **AUTH_ERRORS},
+    operation_id="listTrash",
+    description=(
+        "The letters in the trash the caller sees, the most recently trashed first (at most"
+        " 500), with when and by whom, and `purge_after`; `total` counts them all."
+    ),
+)
+def list_trash(request: HttpRequest, workspace_id: UUID) -> TrashListOut:
+    membership = workspace_member(request, workspace_id)
+    return TrashListOut(
+        items=[trash.trashed_out(document) for document in trash.list_trash(membership)],
+        retention_days=trash.TRASH_RETENTION.days,
+        total=trash.count_trash(membership),
+    )
+
+
+# Before `trash/{document_id}`: the router matches paths in order.
+@router.post(
+    "/workspaces/{workspace_id}/trash/empty",
+    response={200: EmptyTrashOut, 404: ErrorOut, **SESSION_WRITE_ERRORS, **BODY_ERRORS},
+    auth=session_auth,
+    operation_id="emptyTrash",
+    description=WEB_SESSION_ONLY
+    + " Purge every letter in the caller's trash for good (role admin), up to `up_to`: the"
+    " newest `trashed_at` the caller showed (all when absent). Letters the caller does not"
+    " see stay. Answers how many letters are now being purged; a job removes them. Written"
+    " to the log, one `document_purged` row per letter.",
+)
+def empty_trash(request: HttpRequest, workspace_id: UUID, payload: EmptyTrashIn) -> EmptyTrashOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
+    count = trash.empty_trash(
+        membership=membership, actor=actor_from_request(request), up_to=payload.up_to
+    )
+    return EmptyTrashOut(document_count=count)
+
+
+@router.delete(
+    "/workspaces/{workspace_id}/trash/{document_id}",
+    response={204: None, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS},
+    auth=session_auth,
+    operation_id="purgeDocument",
+    description=WEB_SESSION_ONLY
+    + " Purge a letter from the trash now, for good (role admin). Only a letter in the"
+    " caller's trash: a live letter, one whose purge started, or one the caller does not"
+    " see answers 404 `document_not_found`. From this answer on it cannot be restored; a"
+    " job removes its scanned pages and its rows. A back-up made earlier still holds it."
+    " Written to the log (`document_purged`).",
+)
+def purge_document(request: HttpRequest, workspace_id: UUID, document_id: UUID) -> Status[None]:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
+    trash.purge_now(
+        membership=membership, actor=actor_from_request(request), document_id=document_id
+    )
+    return Status(204, None)
 
 
 def _my_export_out(membership: Membership, export: MemberExport | None) -> MyExportOut:

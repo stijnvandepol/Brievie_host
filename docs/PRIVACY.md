@@ -122,8 +122,14 @@ confirm them by itself. That is automated processing without a person in between
 - **What the guard rails check.** A letter is confirmed only when the sender, the date
   and every deadline the AI gives are literally in the letter (with enough certainty), and
   a letter that names a term (or an invoice due date) is left for a person unless every
-  action (every payment) has a date. A rule's proposal is never applied, and an AI pick of
-  a person only when the letter's quote names that person.
+  action (every payment) has a date. A rule's proposal to put a person on a letter is
+  never applied. A rule's label only when the rule holds on what is settled (its words
+  in the letterhead, a sender or type a person confirmed, labels and persons already on
+  the letter), or when the AI picked the same label with a confidence of 0.800 or more;
+  not when the rules disagree on the letter, when more than three rule labels qualify,
+  or when the administrator agreed only to the notice from before this rule (they are
+  asked to agree again). An AI pick of a person only when the letter's quote names that
+  person.
 - **Limits.** It reduces checking; it does not make the AI right. The rails check that a
   value is in the letter, not that the letter is true: whoever writes a letter decides what
   is in it, so a wrong or misleading letter can still be confirmed with a wrong sender,
@@ -192,6 +198,115 @@ file is sealed while it is on the server and removed after 24 hours; it is not i
 back-up. Once downloaded it is an ordinary unencrypted file: the member decides where it
 goes. An admin can switch exports off for a workspace (off by default in Zakelijk).
 Making and downloading are in the log, with the number of letters, not their names.
+
+## The trash
+
+A member (not a viewer) can move a letter to the trash ("Verwijderen"). It is then gone
+from every list, count, search, task list, export and rule run, and no text of it goes to
+an AI service, but nothing is removed yet: it can be put back for 30 days. Only members who
+may see the letter see it in the trash.
+
+- **The purge.** After 30 days, or earlier when an admin chooses "Definitief verwijderen" or
+  "Prullenbak legen", Brievie removes the letter for good: its sealed page files, its rows
+  (text, summary, proposals, links to persons and labels, suggestions, history, shares,
+  rule runs) and its tasks, also the done ones. Persons and labels stay. What remains is
+  the log: who moved it, put it back or purged it, with the letter's id only, never its
+  sender, summary or text.
+- **Back-ups keep it longer.** A back-up made before the purge still holds the letter until
+  that back-up expires: with the current retention, monthly snapshots up to a year
+  (`docs/SELFHOST.md`). Restoring such a back-up brings the letter back. The web says this
+  in the question before "Definitief verwijderen" and "Prullenbak legen".
+- **An export made before stays.** A member's export made before the purge stays on the
+  server until its 24 hours are over; a downloaded one is the member's own file.
+- Brievie does not watch a retention term yet (for example the fiscal duty to keep an
+  invoice): an admin who purges early must mind that themselves. The web says so on the
+  trash page.
+
+## Duplicate letters
+
+When a letter arrives, Brievie compares it with the live letters of the same workspace that
+arrived in the last 180 days, to notice the same letter scanned twice. This runs in the
+server's own database, as the system, over all those letters, private ones included: the
+comparison must see both to find a pair. Nothing is sent to an AI service or any other
+party, and nothing is compared across workspaces.
+
+- **Shown only to who sees both.** A pair ("Dubbel?") is shown, counted and decided only by
+  a member who may see both letters. A member who sees one of them gets no row, no count, no
+  mark on that letter and the same "not found" answer as for a pair that does not exist, so
+  nobody learns that a letter they may not see exists. A viewer sees no pairs.
+- **What is kept.** The pair row holds the two letter ids, two scores and the choice (who,
+  when). The history of both letters says that they were merged or called two letters. A
+  merge moves the other letter to the trash (30 days, see above), written to the log as
+  `document_trashed` with reason `duplicate` and ids only.
+- **No content in logs.** Detection and merge log ids, counts and error type names only:
+  never a sender, an amount, a reference or a word of the text, and no audit row holds them.
+
+## Search
+
+Searching letters (`searchDocuments`) runs in the server's own database, inside the
+workspace of the member who asks and only over the letters that member may see. Nothing is
+sent to an AI service or any other party. It reads the same stored data as the rest (the
+masked text, sender, summary, label and person names), so the stored text is not encrypted
+for it; see the table above.
+
+- **The term is not kept.** It is sent in the request body (never in an address). Brievie does
+  not store it, does not write it to its log or the audit log, and does not repeat it in an
+  answer or an error. A search leaves no row. The web app keeps it in memory only (not in the
+  address or the browser's storage) and forgets it on signing out or switching workspace.
+- **PostgreSQL's own log.** PostgreSQL logs a statement that fails (its default,
+  `log_min_error_statement = error`), for example one cancelled or cut off. The database
+  driver puts the values into the statement text before sending it (client-side binding), so
+  such a log line holds the search term. The same already holds for any failing statement
+  that carries letter text. That log stays inside the database container; treat it like the
+  database itself.
+- **A BSN is taken out.** A BSN in the term, also written with other separators (a slash,
+  a comma, a dash, an invisible character), the literal `[BSN]` and the words "bsn" and
+  "burgerservicenummer" are removed before anything else; the answer says so. Stored text
+  holds no BSN, so none can be found.
+- A fragment of the letter (at most 240 characters) comes back with each hit, to the member
+  who may read that letter.
+
+## Mijn taken
+
+- "Mijn taken" is a list made on every request from the letters a member may read; no
+  copy of anyone's list is stored. A task, its words, its amount, its counts and the names
+  "for whom" reach only someone who may read its letter: a task of a letter in the trash or
+  of someone else's private post is in no list and no count, also not an admin's.
+- A task is handed only to a member who may read the letter, never to a viewer. When that
+  member loses sight of the letter (it goes to someone else, the member leaves or becomes a
+  viewer, a person is unlinked), Brievie takes the task back itself and says so in the
+  letter's history ("Brievie haalde een taak weg bij …"), with no person as actor.
+- Ticking off, handing over and filling in a date are history on the letter, under the
+  letter's own rights; they are not in the admin log.
+- An amount is stored only when someone confirmed it, or when the invoice's amount is
+  literally in the letter (the autopilot); the words of a term are stored BSN-masked.
+- Reminders on the phone hold no letter text unless the member turned that on (the app's
+  rule); no log line holds a task's description, amount or quote.
+
+## Privé-post (private letters)
+
+- A letter can be private: only its readers see it (whoever it is addressed to with an
+  account, the members of its departments, whoever it is shared with, and whoever made it
+  private or scanned it). A letter labelled Zorg becomes private on its own at home. The
+  database itself keeps everybody else out (row-level security), not only the screens.
+- What private protects against: the other members of the workspace, admins included.
+  Nobody reads it unnoticed: an admin's emergency access, a grant (linking a person,
+  adding a department member, an accepted invitation), a reset link or ended sessions
+  each leave a history line on the letter or a notice the member sees.
+- What it does not protect against: whoever administers the server machine (the database,
+  the master key, the back-ups); the AI service, which reads a letter while it is
+  processed, before it can be private; page files, which are sealed per workspace, not
+  per reader.
+- A workspace admin can learn **that** somebody has private post, never what: from four
+  answers (`person_in_use` when deleting a person, `cannot_grant_self`, `email_required`
+  on an invitation, `server_admin_only` for an account action on a reader of private
+  post). Members cannot (they cannot delete persons).
+- An invitation for a person with private post needs an e-mail address, which the server
+  does not verify: an admin who controls that address could accept it; the grant then
+  shows as a history line on every private letter of that person.
+- Once a member reads private post, only the server admin may make a reset link for them,
+  end their sessions or manage their devices.
+- The log names a private letter by its id only.
 
 ## Honest limits
 

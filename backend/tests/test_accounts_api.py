@@ -7,7 +7,7 @@ from pytest_django import Settings
 
 from apps.accounts.models import User
 from apps.labels.models import Label
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.factories import TEST_PASSWORD, UserFactory
 from tests.helpers import SETUP_TOKEN, post_json
@@ -90,7 +90,7 @@ def test_setup_rejects_an_unknown_workspace_kind(client: Client) -> None:
 def labels_of_the_workspace() -> list[tuple[str, str]]:
     """(name, system_key) of the only workspace's labels, by name."""
     workspace = Workspace.objects.get()
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return list(
             Label.objects.filter(workspace=workspace)
             .order_by("name")
@@ -197,7 +197,7 @@ def test_login_success_returns_the_user_and_a_session(client: Client) -> None:
         "id": str(user.id),
         "email": "jan@example.nl",
         "name": user.name,
-        "language": "nl",
+        "language": "",
         "explanation_language": "nl",
         "is_server_admin": False,
     }

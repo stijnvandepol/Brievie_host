@@ -29,6 +29,8 @@ class AuditCode(models.TextChoices):
         "sso_settings_changed",
         _("Instellingen voor inloggen via organisatie gewijzigd"),
     )
+    # A workspace made on the server (`manage.py create_workspace`, S 5.2).
+    WORKSPACE_CREATED = "workspace_created", _("Werkruimte gemaakt")
     # Workspace: members, settings, rules, labels, people, private post, exports.
     INVITATION_CREATED = "invitation_created", _("Uitnodiging gemaakt")
     INVITATION_REVOKED = "invitation_revoked", _("Uitnodiging ingetrokken")
@@ -37,6 +39,11 @@ class AuditCode(models.TextChoices):
     MEMBER_REMOVED = "member_removed", _("Lid verwijderd")
     MEMBER_LEFT = "member_left", _("Lid vertrokken")
     WORKSPACE_SETTING_CHANGED = "workspace_setting_changed", _("Instelling gewijzigd")
+    WORKSPACE_PRESET_APPLIED = (
+        "workspace_preset_applied",
+        _("Standaard Thuis of Organisatie overgenomen"),
+    )
+    POST_SORTER_CHANGED = "post_sorter_changed", _("Verdeelt post gewijzigd")
     RULE_CREATED = "rule_created", _("Regel gemaakt")
     RULE_CHANGED = "rule_changed", _("Regel gewijzigd")
     RULE_DELETED = "rule_deleted", _("Regel verwijderd")
@@ -48,11 +55,16 @@ class AuditCode(models.TextChoices):
     PERSON_UNLINKED = "person_unlinked", _("Persoon losgekoppeld van een account")
     DEPARTMENT_MEMBER_ADDED = "department_member_added", _("Lid aan afdeling toegevoegd")
     DEPARTMENT_MEMBER_REMOVED = "department_member_removed", _("Lid uit afdeling gehaald")
+    DEPARTMENT_LEAD_CHANGED = "department_lead_changed", _("Leidinggevende van afdeling gewijzigd")
     EMERGENCY_ACCESS_SWITCHED_ON = "emergency_access_switched_on", _("Noodtoegang aangezet")
     EMERGENCY_ACCESS_SWITCHED_OFF = "emergency_access_switched_off", _("Noodtoegang uitgezet")
     EMERGENCY_ACCESS_USED = "emergency_access_used", _("Noodtoegang gebruikt")
     EXPORT_CREATED = "export_created", _("Export gemaakt")
     EXPORT_DOWNLOADED = "export_downloaded", _("Export gedownload")
+    # The trash: a letter's id only, never its sender, summary or text.
+    DOCUMENT_TRASHED = "document_trashed", _("Brief naar de prullenbak")
+    DOCUMENT_RESTORED = "document_restored", _("Brief teruggezet")
+    DOCUMENT_PURGED = "document_purged", _("Brief definitief verwijderd")
 
 
 class ActorKind(models.TextChoices):
@@ -97,7 +109,7 @@ ALLOWED_VALUES: dict[AuditCode, frozenset[str]] = {
     AuditCode.SIGN_IN_SUCCEEDED: frozenset({"via"}),
     AuditCode.SIGN_IN_FAILED: _NONE,
     # via: password (signing in), password_change (wrong current passwords), invitation
-    # (accepting with an existing account).
+    # (accepting with an existing account), reauthenticate (typing the password again).
     AuditCode.SIGN_IN_LOCKED_OUT: frozenset({"via"}),
     AuditCode.SECOND_FACTOR_ADDED: _NONE,
     AuditCode.SECOND_FACTOR_REMOVED: _NONE,
@@ -114,6 +126,8 @@ ALLOWED_VALUES: dict[AuditCode, frozenset[str]] = {
     AuditCode.SERVER_ADMIN_GRANTED: _NONE,
     AuditCode.SERVER_ADMIN_REVOKED: _NONE,
     AuditCode.SSO_SETTINGS_CHANGED: _NONE,
+    # kind: home or business.
+    AuditCode.WORKSPACE_CREATED: frozenset({"kind"}),
     AuditCode.INVITATION_CREATED: frozenset({"role", "expires_in_days"}),
     # reason: admin, renewed, creator_lost_role.
     AuditCode.INVITATION_REVOKED: frozenset({"reason"}),
@@ -122,6 +136,10 @@ ALLOWED_VALUES: dict[AuditCode, frozenset[str]] = {
     AuditCode.MEMBER_REMOVED: frozenset({"account_deactivated"}),
     AuditCode.MEMBER_LEFT: frozenset({"account_deactivated"}),
     AuditCode.WORKSPACE_SETTING_CHANGED: frozenset({"setting", "value"}),
+    # preset: home or business, the kind whose values were taken.
+    AuditCode.WORKSPACE_PRESET_APPLIED: frozenset({"preset"}),
+    # value: whether the member now sorts post.
+    AuditCode.POST_SORTER_CHANGED: frozenset({"member", "value"}),
     AuditCode.RULE_CREATED: _NONE,
     AuditCode.RULE_CHANGED: _NONE,
     AuditCode.RULE_DELETED: _NONE,
@@ -134,9 +152,16 @@ ALLOWED_VALUES: dict[AuditCode, frozenset[str]] = {
     AuditCode.PERSON_UNLINKED: _NONE,
     AuditCode.DEPARTMENT_MEMBER_ADDED: frozenset({"member"}),
     AuditCode.DEPARTMENT_MEMBER_REMOVED: frozenset({"member"}),
+    # value: whether the member is now a lead.
+    AuditCode.DEPARTMENT_LEAD_CHANGED: frozenset({"member", "value"}),
     AuditCode.EMERGENCY_ACCESS_SWITCHED_ON: _NONE,
     AuditCode.EMERGENCY_ACCESS_SWITCHED_OFF: _NONE,
     AuditCode.EMERGENCY_ACCESS_USED: frozenset({"reason", "document_count"}),
     AuditCode.EXPORT_CREATED: frozenset({"document_count"}),
     AuditCode.EXPORT_DOWNLOADED: _NONE,
+    # reason: user, duplicate.
+    AuditCode.DOCUMENT_TRASHED: frozenset({"reason"}),
+    AuditCode.DOCUMENT_RESTORED: _NONE,
+    # reason: admin, emptied, expired.
+    AuditCode.DOCUMENT_PURGED: frozenset({"reason"}),
 }

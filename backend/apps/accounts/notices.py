@@ -1,8 +1,10 @@
-"""Account notices: what somebody else did to your account, shown until you dismiss it."""
+"""Account notices: what somebody else did to your account, or a device paired with it,
+shown until you dismiss it."""
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Final
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -35,6 +37,10 @@ MESSAGES: dict[str, Promise] = {
     Code.DEVICE_REVOKED: _(
         "%(name)s heeft op %(date)s je apparaat \u2018%(device)s\u2019 ingetrokken."
     ),
+    Code.DEVICE_PAIRED: _(
+        "Op %(date)s is het apparaat \u2018%(device)s\u2019 aan je account gekoppeld. Was jij "
+        "dat niet? Trek het in bij Apparaten en wijzig je wachtwoord."
+    ),
     Code.SERVER_ADMIN_GRANTED: _("Je bent op %(date)s serverbeheerder gemaakt op de server."),
     Code.SERVER_ADMIN_REVOKED: _(
         "Je bent op %(date)s geen serverbeheerder meer. Dat is op de server geregeld."
@@ -47,13 +53,86 @@ MESSAGES: dict[str, Promise] = {
         "%(name)s heeft op %(date)s noodtoegang voor de beheerder uitgezet in %(workspace)s."
     ),
     Code.EMERGENCY_ACCESS_USED: _(
-        "%(name)s heeft op %(date)s met noodtoegang %(count)s privé-brieven van %(person)s "
+        "%(name)s heeft op %(date)s met noodtoegang %(count)s brieven van %(person)s "
         "geopend. De reden staat bij elke brief."
     ),
     Code.PRIVATE_WITHOUT_READERS: _(
         "Er is post die privé had moeten worden, maar niemand zou hem kunnen lezen. Hij is "
         "zichtbaar gebleven voor iedereen in %(workspace)s (document %(document_id)s)."
     ),
+    Code.PRIVATE_WITHOUT_READERS_UNNAMED: _(
+        "Er is post in %(workspace)s die privé had moeten worden, maar niemand zou hem "
+        "kunnen lezen. Hij is zichtbaar gebleven voor wie hem mag zien."
+    ),
+    # The sentence of the category `all`; `CATEGORY_MESSAGES` has the others.
+    Code.SIGHT_WIDENED: _(
+        "Je kunt nu alle post zien die niet privé is. Dat heeft %(name)s op %(date)s ingesteld."
+    ),
+    Code.SIGHT_NARROWED: _("Je ziet de post van anderen niet meer."),
+    Code.ADMINS_READ_ALL_ON: _(
+        "De beheerders kunnen nu alle post lezen die niet privé is, ook de jouwe. Dat heeft "
+        "%(name)s op %(date)s ingesteld."
+    ),
+    Code.SELF_GRANT: _("%(name)s heeft zichzelf toegang gegeven tot post zonder naam."),
+}
+
+# Notices about sight say which kind of post (`category`, visibility_rules): one sentence
+# per kind. A kind not listed here falls back to `MESSAGES`.
+CATEGORY_MESSAGES: dict[str, dict[str, Promise]] = {
+    Code.SIGHT_WIDENED: {
+        "all": MESSAGES[Code.SIGHT_WIDENED],
+        "all_as_admin": _(
+            "Je kunt als beheerder nu alle post zien die niet privé is. Dat heeft %(name)s op "
+            "%(date)s ingesteld."
+        ),
+        "department": _(
+            "Je ziet nu ook de post van %(department)s. Dat heeft %(name)s op %(date)s ingesteld."
+        ),
+        "person": _(
+            "Je ziet nu ook de post van %(person)s. Dat heeft %(name)s op %(date)s ingesteld."
+        ),
+        "unassigned": _(
+            "Je ziet nu post zonder naam, om er een naam op te zetten. Dat heeft %(name)s op "
+            "%(date)s ingesteld."
+        ),
+    },
+    Code.SIGHT_NARROWED: {
+        "all": MESSAGES[Code.SIGHT_NARROWED],
+        "all_as_admin": _("Je leest als beheerder niet meer alle post."),
+        "department": _("Je ziet de post van %(department)s niet meer."),
+        "person": _("Je ziet de post van %(person)s niet meer."),
+        "unassigned": _("Je ziet post zonder naam niet meer."),
+    },
+    Code.SELF_GRANT: {
+        "unassigned": MESSAGES[Code.SELF_GRANT],
+        "department": _("%(name)s heeft zichzelf toegang gegeven tot de post van %(department)s."),
+        "person": _("%(name)s heeft zichzelf toegang gegeven tot de post van %(person)s."),
+    },
+}
+
+
+# The values each notice may carry (S 4.14). A notice outlives the member's sight of a
+# letter, so none holds letter content: a letter is named by its id, a person, department,
+# workspace or device by its name (a directory, not post). `notify` refuses any other key.
+NOTICE_VALUE_KEYS: Final[dict[str, frozenset[str]]] = {
+    Code.PASSWORD_RESET_CREATED: frozenset(),
+    Code.PASSWORD_RESET_COMPLETED: frozenset(),
+    Code.PASSWORD_RESET_BY_COMMAND: frozenset(),
+    Code.SESSIONS_ENDED: frozenset(),
+    Code.DEVICE_REVOKED: frozenset({"device"}),
+    Code.DEVICE_PAIRED: frozenset({"device"}),
+    Code.SERVER_ADMIN_GRANTED: frozenset(),
+    Code.SERVER_ADMIN_REVOKED: frozenset(),
+    Code.SECOND_FACTOR_CLEARED: frozenset(),
+    Code.EMERGENCY_ACCESS_SWITCHED_ON: frozenset({"workspace"}),
+    Code.EMERGENCY_ACCESS_SWITCHED_OFF: frozenset({"workspace"}),
+    Code.EMERGENCY_ACCESS_USED: frozenset({"count", "person"}),
+    Code.PRIVATE_WITHOUT_READERS: frozenset({"workspace", "document_id"}),
+    Code.PRIVATE_WITHOUT_READERS_UNNAMED: frozenset({"workspace"}),
+    Code.SIGHT_WIDENED: frozenset({"category", "department", "person"}),
+    Code.SIGHT_NARROWED: frozenset({"category", "department", "person"}),
+    Code.ADMINS_READ_ALL_ON: frozenset(),
+    Code.SELF_GRANT: frozenset({"category", "department", "person"}),
 }
 
 
@@ -76,9 +155,14 @@ class NoticeView:
 def notify(
     user: User, code: str, *, actor_name: str, values: Mapping[str, str] | None = None
 ) -> None:
-    """Leave `user` a notice that `actor_name` did `code` (values fill in the sentence)."""
+    """Leave `user` a notice that `actor_name` did `code` (values fill in the sentence).
+
+    Only the value keys `NOTICE_VALUE_KEYS` allows for the code: never letter content."""
     if code not in Code.values:
         raise ValueError(f"Unknown account notice code: {code!r}")
+    unknown = sorted(set(values or {}) - NOTICE_VALUE_KEYS[code])
+    if unknown:
+        raise ValueError(f"Account notice {code!r} takes no value {', '.join(unknown)}")
     with transaction.atomic():
         AccountNotice.objects.create(
             user=user, code=code, actor_name=actor_name, values=dict(values or {})
@@ -90,7 +174,8 @@ def notice_message(notice: AccountNotice) -> str:
     day = formats.date_format(timezone.localtime(notice.created_at, NOTICE_ZONE), "j F")
     values = _Values({str(k): str(v) for k, v in notice.values.items()})
     values.update(name=notice.actor_name, date=day)
-    return str(MESSAGES[notice.code]) % values
+    message = CATEGORY_MESSAGES.get(notice.code, {}).get(values["category"], MESSAGES[notice.code])
+    return str(message) % values
 
 
 def can_dismiss(notice: AccountNotice, session: UserSession | None) -> bool:

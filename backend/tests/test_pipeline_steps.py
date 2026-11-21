@@ -18,7 +18,7 @@ from apps.pipeline.choices import ExtractionRequest
 from apps.pipeline.errors import PermanentError
 from apps.pipeline.providers import LLMProvider, ProviderUnavailable
 from apps.pipeline.steps import run_pipeline
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 from tests.rules_support import add_label, make_rule, text_word
 
@@ -81,7 +81,7 @@ class FakeProvider:
 
 
 def make_document(workspace: Workspace, text: str = TEXT, **fields: object) -> Document:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Document.objects.create(
             workspace=workspace, client_id=uuid.uuid4(), page_count=1, ocr_text=text, **fields
         )
@@ -94,7 +94,7 @@ def run(workspace: Workspace, document: Document, provider: LLMProvider | None) 
 
 
 def state(workspace: Workspace, document: Document) -> tuple[str, str, list[Extraction]]:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         fresh = Document.objects.get(id=document.id)
         return fresh.status, fresh.failure_code, list(fresh.extractions.all())
 
@@ -148,7 +148,7 @@ def test_running_twice_leaves_one_set_of_proposals(ws_a: Workspace) -> None:
     document = make_document(ws_a)
     run(ws_a, document, FakeProvider(answer()))
     _, _, first = state(ws_a, document)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Document.objects.filter(id=document.id).update(status="processing")
 
     run(ws_a, document, FakeProvider(answer()))
@@ -229,7 +229,7 @@ def test_document_confirmed_during_the_ai_call_is_left_alone(ws_a: Workspace) ->
     provider = FakeProvider(answer())
 
     def confirm_meanwhile() -> None:
-        with workspace_context(ws_a.id):
+        with workspace_context(ws_a.id, actor=SYSTEM):
             Document.objects.filter(id=document.id).update(status="done")
 
     provider.during_call = confirm_meanwhile
@@ -295,7 +295,7 @@ LETTER = "T.a.v. J. de Vries\nBelastingdienst\nU moet betalen vóór 1 december 
 
 
 def make_person(workspace: Workspace, name: str, *variants: str, archived: bool = False) -> Person:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Person.objects.create(
             workspace=workspace,
             display_name=name,
@@ -305,12 +305,12 @@ def make_person(workspace: Workspace, name: str, *variants: str, archived: bool 
 
 
 def preset_label(workspace: Workspace, key: str) -> Label:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Label.objects.get(system_key=key)
 
 
 def open_suggestions(workspace: Workspace, document: Document) -> list[DocumentSuggestion]:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return list(
             DocumentSuggestion.objects.filter(document=document, state="open").order_by("origin")
         )
@@ -382,7 +382,7 @@ def test_ai_pick_of_deleted_label_is_skipped(ws_a: Workspace) -> None:
     )
 
     def delete_meanwhile() -> None:
-        with workspace_context(ws_a.id):
+        with workspace_context(ws_a.id, actor=SYSTEM):
             Label.objects.filter(id=belasting.id).delete()
             Person.objects.filter(id=emma.id).update(archived_at=timezone.now())
 
@@ -402,7 +402,7 @@ def test_rerun_replaces_open_and_keeps_dismissed(ws_a: Workspace) -> None:
     )
     document = make_document(ws_a, text=LETTER)
     run(ws_a, document, FakeProvider(picking(labels=["Belastingdienst", "Zorg", "Bank"])))
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         suggestions.mark_dismissed(document, "add_label", belasting.id)
         organise.add_label(document, zorg, actor=None, origin="suggestion")
         suggestions.mark_accepted(document, "add_label", zorg.id)
@@ -415,7 +415,7 @@ def test_rerun_replaces_open_and_keeps_dismissed(ws_a: Workspace) -> None:
         (None, jan.id),
         (auto.id, None),
     }
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert suggestions.is_dismissed(document, "add_label", belasting.id)
         assert not DocumentSuggestion.objects.filter(label_id=bank.id).exists()
         after = DocumentSuggestion.objects.get(id=accepted.id)
@@ -510,7 +510,7 @@ def test_a_masked_variant_from_before_is_neither_proposed_nor_sent_to_the_ai(
     bsn_test = make_person(ws_a, "BSN-test", "[BSN]")
     document = make_document(ws_a, text="Burgerservicenummer: [BSN]\nT.a.v. de heer K. Bakker")
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         names = {p.person_id: p.names for p in steps.active_persons()}
         assert names[bsn_test.id] == ("BSN-test",)
     run(ws_a, document, None)

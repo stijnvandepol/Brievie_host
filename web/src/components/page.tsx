@@ -14,10 +14,15 @@ import {
   TextField,
 } from "react-aria-components";
 import { ApiFailure, api, errorMessage } from "../api/client";
-import { inboxCountsQuery, meQuery, workspacesQuery } from "../api/queries";
+import { inboxCountsQuery, meQuery, myTaskCountsQuery, workspacesQuery } from "../api/queries";
+import { resetSearch } from "../search-term";
+import { clearUndo } from "../undo-trash";
 import { Icon, type IconName } from "./icons";
+import { LanguageSwitch } from "./language-switch";
 import { NoticeBar } from "./notice-bar";
+import { SearchField } from "./search-field";
 import { initials, MessageBar } from "./ui";
+import { UndoBar } from "./undo-bar";
 
 /** Every page gets its own title (WCAG 2.4.2). */
 export function usePageTitle(title: string) {
@@ -106,6 +111,7 @@ export function Split({ children, wide = false }: { children: ReactNode; wide?: 
         <p className="split-host">{t`Server: ${window.location.host}`}</p>
       </aside>
       <main className="split-main">
+        <LanguageSwitch />
         <div className={wide ? "split-content wide" : "split-content"}>{children}</div>
       </main>
     </div>
@@ -150,6 +156,7 @@ export function PageHeader({
 }
 
 type BreadcrumbTarget =
+  | "/w/$workspaceId/inbox"
   | "/w/$workspaceId/post"
   | "/w/$workspaceId/automatisering"
   | "/w/$workspaceId/leden"
@@ -166,12 +173,15 @@ function NavItem({
   exact = false,
   ariaLabel,
   count,
+  warn = false,
 }: {
   to:
     | "/"
     | "/koppel-app"
+    | "/w/$workspaceId/taken"
     | "/w/$workspaceId/inbox"
     | "/w/$workspaceId/post"
+    | "/w/$workspaceId/prullenbak"
     | "/w/$workspaceId/personen"
     | "/w/$workspaceId/leden"
     | "/w/$workspaceId/instellingen"
@@ -184,6 +194,8 @@ function NavItem({
   exact?: boolean;
   ariaLabel?: string;
   count?: number;
+  /** The count in the warning style (something is late); the label says it in words. */
+  warn?: boolean;
 }) {
   return (
     <Link
@@ -196,7 +208,7 @@ function NavItem({
       <Icon name={icon} className="nav-icon" />
       <span className="nav-label">{label}</span>
       {count ? (
-        <span className="nav-count" aria-hidden="true">
+        <span className={warn ? "nav-count nav-count-warning" : "nav-count"} aria-hidden="true">
           {count}
         </span>
       ) : null}
@@ -212,13 +224,31 @@ type NavWorkspace = { id: string; name: string; role?: string };
  * A viewer may not read the rules, so Automatisering is left out for them. */
 function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
   const { data: counts } = useQuery(inboxCountsQuery(workspace.id));
+  const { data: taskCounts } = useQuery(myTaskCountsQuery(workspace.id));
   const todo = counts ? counts.review + counts.unassigned : 0;
+  const mine = taskCounts?.mine ?? 0;
+  const late = taskCounts?.overdue ?? 0;
   const params = { workspaceId: workspace.id };
   return (
     <>
       <p className="nav-section">
         <span className="nav-section-name">{workspace.name}</span>
       </p>
+      <NavItem
+        to="/w/$workspaceId/taken"
+        params={params}
+        icon="checklist"
+        label={t`Mijn taken`}
+        ariaLabel={
+          mine > 0
+            ? late > 0
+              ? t`Mijn taken, ${mine} open, waarvan ${late} te laat`
+              : t`Mijn taken, ${mine} open`
+            : undefined
+        }
+        count={mine}
+        warn={late > 0}
+      />
       <NavItem
         to="/w/$workspaceId/inbox"
         params={params}
@@ -232,6 +262,12 @@ function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
         count={todo}
       />
       <NavItem to="/w/$workspaceId/post" params={params} icon="mail" label={t`Alle post`} />
+      <NavItem
+        to="/w/$workspaceId/prullenbak"
+        params={params}
+        icon="delete"
+        label={t`Prullenbak`}
+      />
       <NavItem to="/w/$workspaceId/personen" params={params} icon="people" label={t`Personen`} />
       <NavItem to="/w/$workspaceId/leden" params={params} icon="personAdd" label={t`Leden`} />
       <NavItem to="/w/$workspaceId/labels" params={params} icon="tag" label={t`Labels`} />
@@ -350,6 +386,10 @@ function AccountMenu({
             <Icon name="edit" />
             {t`Wachtwoord wijzigen`}
           </Link>
+          <Link to="/account/taal" className="menu-item">
+            <Icon name="globe" />
+            {t`Taal`}
+          </Link>
           {me?.is_server_admin ? (
             <Link to="/server/logboek" className="menu-item">
               <Icon name="document" />
@@ -388,6 +428,8 @@ export function Shell({ children, workspace }: { children: ReactNode; workspace?
     },
     onSuccess: async () => {
       queryClient.clear();
+      resetSearch();
+      clearUndo();
       await navigate({ to: "/login" });
     },
   });
@@ -423,6 +465,7 @@ export function Shell({ children, workspace }: { children: ReactNode; workspace?
           <BrandMark />
           <span>Brievie</span>
         </Link>
+        {workspace ? <SearchField key={workspace.id} workspaceId={workspace.id} /> : null}
         <div className="topbar-end">
           <AccountMenu me={me} onLogout={() => logout.mutate()} />
         </div>
@@ -444,6 +487,7 @@ export function Shell({ children, workspace }: { children: ReactNode; workspace?
           <div className="content-inner">
             <ErrorAlert error={logout.error} />
             <NoticeBar />
+            {workspace ? <UndoBar workspaceId={workspace.id} /> : null}
             {children}
           </div>
         </main>

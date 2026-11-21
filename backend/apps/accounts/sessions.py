@@ -152,6 +152,30 @@ def end_current_session(request: HttpRequest) -> None:
     request.session.flush()
 
 
+# How long after signing in, or typing the password again, a session may do what needs a
+# recent proof of who is at the browser (creating a pairing code). Longer than a pairing
+# code lives (ten minutes), so "Nieuwe code" right after accepting an invitation works.
+REAUTHENTICATION_WINDOW = timedelta(minutes=15)
+
+
+def recently_authenticated(request: HttpRequest, *, now: datetime | None = None) -> bool:
+    """Whether this web session signed in, or had its password typed again, within
+    `REAUTHENTICATION_WINDOW`. False without a session record (a device token)."""
+    row = UserSession.objects.filter(session_key=request.session.session_key).first()
+    if row is None:
+        return False
+    proved = max(row.created_at, row.reauthenticated_at or row.created_at)
+    return (now or timezone.now()) - proved <= REAUTHENTICATION_WINDOW
+
+
+def mark_reauthenticated(request: HttpRequest) -> None:
+    """Note that the password was just typed again in this session."""
+    with transaction.atomic():
+        UserSession.objects.filter(session_key=request.session.session_key).update(
+            reauthenticated_at=timezone.now()
+        )
+
+
 def touch_session(row: UserSession, request: HttpRequest, *, now: datetime) -> None:
     """Note a use of the session and move its expiry (at most once a minute, see the
     middleware), so Django's own `expire_date` and the cookie enforce both limits."""

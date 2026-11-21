@@ -8,6 +8,7 @@ every planned `propose` action). A rule matches on the hoped state; its actions 
 the user dismissed on the document is never planned, so no later rule builds on it.
 """
 
+import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from uuid import UUID
@@ -24,7 +25,9 @@ OPERATORS: Mapping[str, frozenset[str]] = {
     "source": frozenset({"is"}),
 }
 
-ACTIONS = frozenset({"add_label", "add_addressee"})
+ACTIONS = frozenset({"add_label", "add_addressee", "make_private"})
+# "privé maken": no target; only in an automatic rule (format version 1, PB T19).
+MAKE_PRIVATE = "make_private"
 
 
 @dataclass(frozen=True)
@@ -37,7 +40,8 @@ class Condition:
 @dataclass(frozen=True)
 class Action:
     type: str
-    target_id: UUID
+    # None only for `make_private`.
+    target_id: UUID | None
 
 
 @dataclass(frozen=True)
@@ -70,13 +74,18 @@ class DocumentFacts:
     dismissed_label_ids: frozenset[UUID] = frozenset()
     dismissed_addressee_ids: frozenset[UUID] = frozenset()
 
+    # The letter is private: an automatic rule only proposes an addressee on it (an
+    # automatic action never widens its readers, PB T10).
+    restricted: bool = False
+
 
 @dataclass(frozen=True)
 class PlannedAction:
     rule_id: UUID
     rule_name: str
     action: str
-    target_id: UUID
+    # None only for `make_private`.
+    target_id: UUID | None
     mode: str
     quote: str
 
@@ -206,6 +215,7 @@ def evaluate(facts: DocumentFacts, rules: Sequence[RuleSpec]) -> Evaluation:
     dismissed = _State(set(facts.dismissed_label_ids), set(facts.dismissed_addressee_ids))
     matched: list[UUID] = []
     planned: list[PlannedAction] = []
+    restricted = facts.restricted
     for rule in rules:
         holds, quote = _matches(rule, facts, phrases, hoped)
         if not holds:
@@ -215,12 +225,32 @@ def evaluate(facts: DocumentFacts, rules: Sequence[RuleSpec]) -> Evaluation:
         for action in rule.actions:
             if action.type not in ACTIONS:
                 continue
+            if action.type == MAKE_PRIVATE:
+                # Never a proposal; once, and not on a letter that is private already.
+                if auto and not restricted:
+                    planned.append(
+                        PlannedAction(
+                            rule_id=rule.id,
+                            rule_name=rule.name,
+                            action=MAKE_PRIVATE,
+                            target_id=None,
+                            mode="auto",
+                            quote=quote,
+                        )
+                    )
+                    restricted = True
+                continue
             target = action.target_id
+            if target is None:
+                continue
             if target in settled.targets(action.type) or target in dismissed.targets(action.type):
                 continue
+            # On a private letter (or one this run makes private) an addressee is only
+            # proposed: an automatic action never widens the readers.
+            action_auto = auto and not (restricted and action.type == "add_addressee")
             # Already planned in this run: only an automatic action adds something (it
             # settles it).
-            if target in proposed.targets(action.type) and not auto:
+            if target in proposed.targets(action.type) and not action_auto:
                 continue
             planned.append(
                 PlannedAction(
@@ -228,14 +258,101 @@ def evaluate(facts: DocumentFacts, rules: Sequence[RuleSpec]) -> Evaluation:
                     rule_name=rule.name,
                     action=action.type,
                     target_id=target,
-                    mode="auto" if auto else "propose",
+                    mode="auto" if action_auto else "propose",
                     quote=quote,
                 )
             )
             hoped.targets(action.type).add(target)
             proposed.targets(action.type).add(target)
-            if auto:
+            if action_auto:
                 settled.targets(action.type).add(target)
         if rule.stop:
             break
     return Evaluation(matched_rule_ids=tuple(matched), planned=tuple(planned))
+
+
+# The letterhead: the start of the text up to the first blank line or the salutation,
+# at most this many non-empty lines and characters. Scanned letters seldom keep their
+# blank lines, so the salutation and the caps usually decide: sender, address, date,
+# reference and subject line ("Betreft", "Aan") fit in eight.
+LETTERHEAD_LINES = 8
+LETTERHEAD_CHARS = 400
+# A line that opens the letter itself; it and what follows are running text.
+_SALUTATION = re.compile(r"(?:geachte|beste|hallo|dear|l\.\s?s\.)(?!\w)", re.IGNORECASE)
+
+# Conditions that hold because something is there (not because something is absent).
+_POSITIVE: Mapping[str, frozenset[str]] = {
+    "text": frozenset({"contains_word", "contains"}),
+    "sender": frozenset({"contains_word", "contains", "equals"}),
+    "document_type": frozenset({"is"}),
+    "label": frozenset({"has"}),
+    "addressee": frozenset({"is"}),
+    "source": frozenset({"is"}),
+}
+
+
+def letterhead(text: str) -> str:
+    """The letterhead of a letter's text (see `LETTERHEAD_LINES`).
+
+    Leading blank lines are skipped. A word cut by the character cap is left out, so a
+    part of a longer word ("Belastingdienst" of "Belastingdienstverlening") is no hit.
+    """
+    start = text.lstrip()
+    head = start[:LETTERHEAD_CHARS]
+    if len(start) > LETTERHEAD_CHARS and not start[LETTERHEAD_CHARS].isspace():
+        cut = max((i for i, char in enumerate(head) if char.isspace()), default=-1)
+        head = head[: cut + 1] if cut >= 0 else ""
+    lines: list[str] = []
+    for line in head.splitlines():
+        if not line.strip() or _SALUTATION.match(line.strip()):
+            break
+        lines.append(line)
+        if len(lines) == LETTERHEAD_LINES:
+            break
+    return "\n".join(lines).rstrip()
+
+
+def holds_on_settled(rule: RuleSpec, facts: DocumentFacts) -> bool:
+    """Whether the rule matches on settled facts alone and not on a keyword in the
+    running text, with at least one condition that holds because something is there.
+
+    `facts` holds only what is settled: the caller passes the sender and the type a
+    person confirmed (else empty) and no hoped ids. A word condition holds in the
+    letterhead; a sender condition on the (confirmed) sender or with its words in the
+    letterhead; a negated word is looked for in the whole text. A rule that holds only
+    by absences ("does not contain") does not count.
+    """
+    combine = _COMBINE.get(rule.match)
+    if combine is None:
+        return False
+    head_text = letterhead(facts.text)
+    head = prepare(head_text)
+    sender = prepare(facts.sender)
+    whole: Prepared | None = None
+    held: list[bool] = []
+    present = False
+    for condition in rule.conditions:
+        field_, op, value = condition.field, condition.op, condition.value
+        if op not in OPERATORS.get(field_, frozenset()):
+            holds = False
+        elif field_ == "text" and op == "not_contains_word":
+            whole = whole or prepare(facts.text)
+            holds = _phrase(whole, op, value)[0]
+        elif field_ == "text":
+            holds = _phrase(head, op, value)[0]
+        elif field_ == "sender" and op == "equals":
+            holds = _phrase(sender, op, value)[0] or any(
+                _phrase(prepare(line), op, value)[0] for line in head_text.splitlines()
+            )
+        elif field_ == "sender":
+            holds = _phrase(sender, op, value)[0] or _phrase(head, op, value)[0]
+        elif field_ == "label":
+            holds = _id_condition(set(facts.label_ids), op, value)
+        elif field_ == "addressee":
+            holds = _id_condition(set(facts.addressee_ids), op, value)
+        else:
+            actual = facts.document_type if field_ == "document_type" else facts.source
+            holds = bool(actual) and (actual == value) == (op != "is_not")
+        held.append(holds)
+        present = present or (holds and op in _POSITIVE.get(field_, frozenset()))
+    return combine(held) and present

@@ -106,10 +106,12 @@ def test_an_unreleased_section_is_skipped(release: Path) -> None:
     path = release / "CHANGELOG.md"
     text = path.read_text()
     first = text.index("## [")
-    path.write_text(text[:first] + "## [Onuitgebracht]\n\n- iets\n\n" + text[first:])
+    path.write_text(
+        text[:first] + "## [Onuitgebracht]\n\n- regel-van-onuitgebracht\n\n" + text[first:]
+    )
     notes = release / "notes.md"
     assert check(release, "--notes", str(notes)).returncode == 0
-    assert "iets" not in notes.read_text()
+    assert "regel-van-onuitgebracht" not in notes.read_text()
 
 
 # --- the workflow -----------------------------------------------------------------------
@@ -200,14 +202,20 @@ def test_local_builds_have_no_default_attestation_but_releases_keep_theirs() -> 
     assert "actions/attest-build-provenance@" in job("publish")
 
 
-GOOD = {"format": 1, "version": "0.2.0", "min_upgrade_from": "0.2.0", "postgres_major": 18}
+def _above(text: str) -> str:
+    """A version one minor above `text`: a min_upgrade_from no release may have."""
+    major, minor, _patch = text.split(".")
+    return f"{major}.{int(minor) + 1}.0"
+
+
+GOOD = {"format": 1, "version": version(), "min_upgrade_from": "0.2.0", "postgres_major": 18}
 BAD_RELEASES = [
     {**GOOD, "format": 2},
     {**GOOD, "format": True},
     {**GOOD, "postgres_major": "18"},
     {**GOOD, "postgres_major": 9},
     {**GOOD, "postgres_major": True},
-    {**GOOD, "min_upgrade_from": "0.3.0"},
+    {**GOOD, "min_upgrade_from": _above(version())},
     {**GOOD, "min_upgrade_from": "0.2"},
     {**GOOD, "extra": 1},
     {k: v for k, v in GOOD.items() if k != "postgres_major"},

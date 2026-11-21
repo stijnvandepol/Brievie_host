@@ -9,7 +9,7 @@ from django.core.management.base import CommandError
 from pytest_django import Settings
 
 from apps.common import crypto
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.keys import workspace_key
 from apps.workspaces.models import Workspace, WorkspaceKey
 
@@ -81,10 +81,10 @@ def test_check_master_key_command(settings: Settings) -> None:
 def test_workspace_key_is_stable_per_workspace_and_differs_between_them(
     ws_a: Workspace, ws_b: Workspace
 ) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         first = workspace_key(ws_a.id)
         again = workspace_key(ws_a.id)
-    with workspace_context(ws_b.id):
+    with workspace_context(ws_b.id, actor=SYSTEM):
         other = workspace_key(ws_b.id)
 
     assert len(first) == 32
@@ -93,7 +93,7 @@ def test_workspace_key_is_stable_per_workspace_and_differs_between_them(
 
 
 def test_stored_workspace_key_is_wrapped(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         key = workspace_key(ws_a.id)
         stored = bytes(WorkspaceKey.objects.get().wrapped_key)
 
@@ -102,7 +102,7 @@ def test_stored_workspace_key_is_wrapped(ws_a: Workspace) -> None:
 
 
 def test_wrapped_key_cannot_be_moved_to_another_workspace(ws_a: Workspace, ws_b: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         workspace_key(ws_a.id)
         stored = bytes(WorkspaceKey.objects.get().wrapped_key)
 
@@ -111,7 +111,7 @@ def test_wrapped_key_cannot_be_moved_to_another_workspace(ws_a: Workspace, ws_b:
 
 
 def test_new_workspace_gets_its_key(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert WorkspaceKey.objects.count() == 1
 
 
@@ -121,7 +121,7 @@ def test_workspace_key_needs_the_workspace_context(ws_a: Workspace) -> None:
 
 
 def test_random_bytes_are_used_for_keys(ws_a: Workspace, monkeypatch: pytest.MonkeyPatch) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         WorkspaceKey.objects.all().delete()
         monkeypatch.setattr(os, "urandom", lambda n: b"\x07" * n)
         assert workspace_key(ws_a.id) == b"\x07" * 32

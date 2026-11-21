@@ -31,12 +31,24 @@ from apps.documents.export_files import (
     open_export_for_write,
     remove_export_file,
 )
-from apps.documents.models import Document, DocumentAddressee, MemberExport
+from apps.documents.models import (
+    LIVE,
+    Document,
+    DocumentAddressee,
+    DocumentReader,
+    MemberExport,
+)
 from apps.workspaces.keys import workspace_key
 from apps.workspaces.models import Membership, Workspace
 
 logger = logging.getLogger(__name__)
 
+# The reader rows that put a private letter in the member's own export.
+_OWN_READER_REASONS = (
+    DocumentReader.Reason.ADDRESSEE,
+    DocumentReader.Reason.DEPARTMENT,
+    DocumentReader.Reason.SHARE,
+)
 # How long a finished export can be downloaded.
 VALIDITY = timedelta(hours=24)
 # A pending export older than this has lost its job.
@@ -57,17 +69,32 @@ def _stream_aad(workspace_id: UUID, export_id: UUID) -> bytes:
 
 
 def member_document_ids(workspace_id: UUID, user_id: UUID) -> list[UUID]:
-    """The documents the member may read in the workspace today: the seam of every
-    member export. Part A: the documents on the member's name (an addressee whose person
-    is linked to the member), newest first. Part B replaces the query with the member's
-    reader rows, and this function stays the only place that decides."""
+    """The documents of the member's own export, newest first: the one place that decides
+    (S 4.18, PB decision 26).
+
+    Read as the member, so the policies leave out every letter they cannot read: the
+    letters on a person linked to the member, plus the private letters the member reads
+    through a share, addressee or department reader row that has not expired. Never
+    "every letter the member sees": the switches ("Iedereen ziet alle post", an admin
+    who reads all, sorting) and departments' open post do not widen it, and emergency
+    access is no reader row of the member's own post."""
     with export_context(workspace_id, reader_id=user_id):
         on_their_name = DocumentAddressee.objects.filter(
             document=models.OuterRef("pk"), person__user_id=user_id
         )
+        private_read = DocumentReader.objects.filter(
+            document=models.OuterRef("pk"), user_id=user_id, reason__in=_OWN_READER_REASONS
+        ).filter(models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=timezone.now()))
         return list(
             Document.objects.filter(workspace_id=workspace_id)
-            .filter(models.Exists(on_their_name))
+            .filter(LIVE)
+            .filter(
+                models.Exists(on_their_name)
+                | (
+                    models.Q(visibility=Document.Visibility.RESTRICTED)
+                    & models.Exists(private_read)
+                )
+            )
             .order_by("-created_at", "-id")
             .values_list("id", flat=True)
         )
@@ -238,6 +265,12 @@ def build_export(workspace_id: UUID, export_id: UUID) -> None:
         if export is None:
             return
         user_id, member_name, storage_path = export.user_id, export.user.name, export.storage_path
+        if not Membership.objects.filter(workspace_id=workspace_id, user_id=user_id).exists():
+            # The member left after asking (their export row normally goes with them):
+            # nothing is read or written for someone who is no member.
+            export.status = MemberExport.Status.FAILED
+            export.save(update_fields=["status", "updated_at"])
+            return
         key = workspace_key(workspace_id)
     try:
         path = export_file_path(storage_path)

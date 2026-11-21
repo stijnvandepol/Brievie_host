@@ -92,11 +92,15 @@ class AutopilotError(ValueError):
 
 @dataclass(frozen=True)
 class Autopilot:
-    """The autopilot switches. `allowed` is the server switch."""
+    """The autopilot switches. `allowed` is the server switch. `notice_outdated`: a switch
+    is on but was agreed to under an older notice. `rule_labels`: the autopilot may apply a
+    rule's label proposal (the notice that says so was agreed to)."""
 
     organise: bool
     confirm: bool
     allowed: bool
+    notice_outdated: bool = False
+    rule_labels: bool = False
 
 
 @dataclass(frozen=True)
@@ -144,7 +148,33 @@ class Preview:
     address: str
 
 
-_KEY_AAD = b"ai-api-key"
+# The sealed API key is bound to its workspace and to the one address it may be sent to
+# (security review 2026-11-20): whoever changes `base_url` in the table behind our back
+# gets a key that no longer opens, instead of the key arriving at their server. Keys
+# sealed before (`b"ai-api-key"`) no longer open either; the administrator types the key
+# again.
+_KEY_AAD_PREFIX = b"ai-api-key-v2|"
+
+
+# What a proposal names as its reader when the AI runs on the own network.
+LOCAL_PROVIDER_NAME = "local"
+
+
+def _key_aad(workspace_id: UUID, base_url: str) -> bytes:
+    return _KEY_AAD_PREFIX + str(workspace_id).encode() + b"|" + base_url.encode()
+
+
+def _open_key(workspace_id: UUID, sealed: bytes, base_url: str) -> str | None:
+    """The API key when it was sealed for this workspace and exactly this address."""
+    try:
+        opened = crypto.open_sealed(
+            workspace_key(workspace_id), sealed, aad=_key_aad(workspace_id, base_url)
+        )
+    except crypto.DecryptionError:
+        return None
+    return opened.decode()
+
+
 # A DNS name is at most 253 characters, each label at most 63.
 _MAX_HOST = 253
 _HOST_LABEL = re.compile(r"[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?", re.IGNORECASE)
@@ -234,12 +264,19 @@ def configure(
             event = AIConsentEvent.Event.SWITCHED_OFF if was_on else None
         sealed: bytes | None = None
         if api_key and target.mode != AISettings.Mode.OFF:
-            sealed = crypto.seal(workspace_key(workspace_id), api_key.encode(), aad=_KEY_AAD)
+            sealed = crypto.seal(
+                workspace_key(workspace_id),
+                api_key.encode(),
+                aad=_key_aad(workspace_id, target.base_url),
+            )
         elif target.mode == AISettings.Mode.EXTERNAL:
             # Only a key that is already at this very address may stay.
             kept = None
             if api_key is None and current is not None and current.base_url == target.base_url:
                 kept = current.api_key_sealed if current.mode == target.mode else None
+            # A key sealed for another address (or before keys were bound) is no key.
+            if kept is not None and _open_key(workspace_id, bytes(kept), target.base_url) is None:
+                kept = None
             if kept is None:
                 raise AiSettingsError("key_required", "An external AI service needs an API key.")
             sealed = bytes(kept)
@@ -306,13 +343,25 @@ def _record_switch(workspace_id: UUID, actor: Actor, name: str, value: bool) -> 
     )
 
 
+# The version of `autopilot_notice`. Raise it when the notice says the autopilot does
+# more: a switch agreed to under an older version asks again (`notice_outdated`).
+AUTOPILOT_NOTICE_VERSION = 2
+# From this notice version on, the autopilot may apply a rule's label proposal.
+RULE_LABELS_FROM_NOTICE = 2
+
+
 def autopilot(workspace_id: UUID) -> Autopilot:
     """The stored switches (off without a settings row). Needs the workspace's RLS context."""
     row = AISettings.objects.filter(workspace_id=workspace_id).first()
+    organise = row is not None and row.auto_organise
+    confirm = row is not None and row.auto_confirm
+    version = row.autopilot_notice_version if row is not None else 0
     return Autopilot(
-        organise=row is not None and row.auto_organise,
-        confirm=row is not None and row.auto_confirm,
+        organise=organise,
+        confirm=confirm,
         allowed=_autopilot_allowed(),
+        notice_outdated=(organise or confirm) and version < AUTOPILOT_NOTICE_VERSION,
+        rule_labels=organise and version >= RULE_LABELS_FROM_NOTICE,
     )
 
 
@@ -326,7 +375,11 @@ def autopilot_in_force(workspace_id: UUID) -> Autopilot:
     row = AISettings.objects.filter(workspace_id=workspace_id).first()
     on = stored.allowed and row is not None and row.mode != AISettings.Mode.OFF
     return Autopilot(
-        organise=on and stored.organise, confirm=on and stored.confirm, allowed=stored.allowed
+        organise=on and stored.organise,
+        confirm=on and stored.confirm,
+        allowed=stored.allowed,
+        notice_outdated=stored.notice_outdated,
+        rule_labels=on and stored.rule_labels,
     )
 
 
@@ -346,6 +399,13 @@ def autopilot_notice() -> str:
         '"Brieven zelf bevestigen" aan? Dan bevestigt Brievie brieven ook zelf, '
         "zonder dat iemand eerst kijkt.\n"
         "\n"
+        "Een label dat een regel voorstelt, zet Brievie er dan ook zelf op. Maar alleen als "
+        "de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is "
+        "van hetzelfde label. Staat het woord alleen verderop in de brief en is de AI niet "
+        "zeker? Dan blijft het een voorstel.\n"
+        "\n"
+        'Een regel op "Automatisch toepassen" zet een label altijd zelf op.\n'
+        "\n"
         "De AI leest wat er in de brief staat en gelooft dat. Maar een brief kan fout zijn, "
         "of je misleiden. Dan klopt ook de afzender, de datum of de taak niet.\n"
         "\n"
@@ -355,8 +415,9 @@ def autopilot_notice() -> str:
         "\n"
         "Toch kan Brievie iets missen. Is een brief belangrijk? Lees dan zelf de brief.\n"
         "\n"
-        'Alles wat Brievie zelf doet, krijgt het kenmerk "Automatisch door AI". Je kunt '
-        'het terugdraaien. Of je controleert de brief zelf met "Zelf controleren".\n'
+        'Alles wat Brievie zelf doet, krijgt het kenmerk "Automatisch door AI" (een label '
+        'van een regel: "Automatisch door regel"). Je kunt het terugdraaien. Of je '
+        'controleert de brief zelf met "Zelf controleren".\n'
     )
 
 
@@ -367,7 +428,9 @@ def configure_autopilot(
 
     Raises `AutopilotError`: `forbidden` or `needs_ai` when a switch would go on while the
     server forbids it or the workspace's AI is off, `ack_required` when a switch goes
-    from off to on without `acknowledged`. Switching off always works. Needs the RLS context.
+    from off to on without `acknowledged`. Switching off always works. Agreeing
+    (`acknowledged`) with a switch on stores the current notice version, also when no
+    switch changes (agreeing again to a newer notice). Needs the RLS context.
     """
     with transaction.atomic():
         row = AISettings.objects.select_for_update().filter(workspace_id=workspace_id).first()
@@ -387,7 +450,11 @@ def configure_autopilot(
         if row is not None:
             row.auto_organise = organise
             row.auto_confirm = confirm
-            row.save(update_fields=["auto_organise", "auto_confirm", "updated_at"])
+            fields = ["auto_organise", "auto_confirm", "updated_at"]
+            if acknowledged and (organise or confirm):
+                row.autopilot_notice_version = AUTOPILOT_NOTICE_VERSION
+                fields.append("autopilot_notice_version")
+            row.save(update_fields=fields)
             for name, value in now.items():
                 if value != before[name]:
                     _record_switch(workspace_id, actor, name, value)
@@ -425,7 +492,11 @@ def status(workspace_id: UUID) -> AiStatus:
     if settings is None or settings.mode == AISettings.Mode.OFF:
         return AiStatus(mode=AISettings.Mode.OFF)
     events = AIConsentEvent.objects.filter(workspace_id=workspace_id).order_by("-created_at")
-    has_key = settings.api_key_sealed is not None
+    # A key that does not open for this address is as good as none: the form asks for it.
+    has_key = (
+        settings.api_key_sealed is not None
+        and _open_key(workspace_id, bytes(settings.api_key_sealed), settings.base_url) is not None
+    )
     if settings.mode == AISettings.Mode.LOCAL:
         latest = events.first()
         since = latest.created_at if latest and latest.mode == AISettings.Mode.LOCAL else None
@@ -552,14 +623,24 @@ def provider_for(workspace_id: UUID) -> LLMProvider | None:
         raise PermanentError("ai_not_configured")
     api_key = None
     if settings.api_key_sealed is not None:
-        api_key = crypto.open_sealed(
-            workspace_key(workspace_id), bytes(settings.api_key_sealed), aad=_KEY_AAD
-        ).decode()
+        # Opens only for the address it was stored for: never sent anywhere else.
+        api_key = _open_key(workspace_id, bytes(settings.api_key_sealed), settings.base_url)
+        if api_key is None:
+            raise PermanentError("ai_not_configured")
+    provider: LLMProvider
     if settings.api == AISettings.Api.ANTHROPIC:
-        return AnthropicProvider(base_url=settings.base_url, api_key=api_key, model=settings.model)
-    return OpenAICompatibleProvider(
-        base_url=settings.base_url, api_key=api_key, model=settings.model
-    )
+        provider = AnthropicProvider(
+            base_url=settings.base_url, api_key=api_key, model=settings.model
+        )
+    else:
+        provider = OpenAICompatibleProvider(
+            base_url=settings.base_url, api_key=api_key, model=settings.model
+        )
+    if settings.mode == AISettings.Mode.LOCAL:
+        # Stored on every proposal, which every member reads: the address on the own
+        # network is nobody's business (as in `status`).
+        provider.name = LOCAL_PROVIDER_NAME
+    return provider
 
 
 def _check_address(url: str) -> None:

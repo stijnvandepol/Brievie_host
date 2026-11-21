@@ -30,9 +30,9 @@ from django.utils.translation import gettext as _
 
 from apps.common import crypto
 from apps.documents.intake import page_aad
-from apps.documents.models import Document, DocumentPage
+from apps.documents.models import LIVE, Document, DocumentPage
 from apps.documents.storage import default_storage
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.keys import workspace_key
 
 logger = logging.getLogger(__name__)
@@ -45,11 +45,12 @@ README_FILE = "LEESMIJ.txt"
 def export_context(workspace_id: UUID, *, reader_id: UUID | None) -> AbstractContextManager[None]:
     """The context in which an export reads: the workspace's, as seen by `reader_id`.
 
-    Part A: the whole workspace, the reader is not looked at (callers pick the documents).
-    Part B passes the reader on to row-level security, so letters the reader may not see
-    are left out here too.
+    A member's export passes the member: row-level security then leaves out every letter
+    they may not read, whatever the caller picked. `reader_id=None` reads as the system
+    and is only for the server-side bookkeeping of exports and the full copy of the
+    workspace (`workspace_full_export`, not built yet): never for what one member gets.
     """
-    return workspace_context(workspace_id)
+    return workspace_context(workspace_id, actor=reader_id if reader_id is not None else SYSTEM)
 
 
 @dataclass(frozen=True)
@@ -113,7 +114,9 @@ def _read_document(
 ) -> _DocumentRead | None:
     """One document's data, its page rows and the workspace key, in one short transaction."""
     with export_context(workspace_id, reader_id=reader_id):
-        document = Document.objects.filter(workspace_id=workspace_id, id=document_id).first()
+        document = (
+            Document.objects.filter(LIVE).filter(workspace_id=workspace_id, id=document_id).first()
+        )
         if document is None:
             return None
         pages = [
@@ -183,7 +186,9 @@ def _open_page(
 
 def _exists(workspace_id: UUID, reader_id: UUID | None, document_id: UUID) -> bool:
     with export_context(workspace_id, reader_id=reader_id):
-        return Document.objects.filter(workspace_id=workspace_id, id=document_id).exists()
+        return (
+            Document.objects.filter(LIVE).filter(workspace_id=workspace_id, id=document_id).exists()
+        )
 
 
 def _add(archive: zipfile.ZipFile, name: str, data: bytes, *, compress: bool = True) -> None:

@@ -25,8 +25,8 @@ from apps.pipeline import settings_service, steps
 from apps.pipeline.choices import ExtractionRequest
 from apps.pipeline.steps import run_pipeline
 from apps.tasks.models import Task
-from apps.workspaces.context import workspace_context
-from apps.workspaces.models import Workspace
+from apps.workspaces.context import SYSTEM, workspace_context
+from apps.workspaces.models import Membership, Workspace
 from tests.documents_support import admin_of, make_person
 from tests.rules_support import add_label, make_rule, sender_contains
 
@@ -77,7 +77,7 @@ class Answering:
 
 
 def switch_on(workspace: Workspace, *, organise: bool = False, confirm: bool = True) -> None:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         settings_service.configure(
             workspace_id=workspace.id,
             mode="external",
@@ -97,7 +97,7 @@ def switch_on(workspace: Workspace, *, organise: bool = False, confirm: bool = T
 
 
 def new_document(workspace: Workspace, text: str = TEXT) -> Document:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Document.objects.create(
             workspace=workspace,
             client_id=uuid.uuid4(),
@@ -114,7 +114,7 @@ def run(workspace: Workspace, document: Document, provider: Answering | None) ->
 
 
 def stored(workspace: Workspace, document: Document) -> Document:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Document.objects.get(id=document.id)
 
 
@@ -147,7 +147,7 @@ def test_when_every_rail_holds_the_letter_is_confirmed_by_the_ai(ws_a: Workspace
         date(2026, 11, 3),
     )
     assert (done.summary, done.summary_by_ai) == ("Je moet de aanslag betalen.", True)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         (task,) = Task.objects.filter(document=done)
         events = DocumentEvent.objects.filter(document=done, kind="confirmed")
         (event,) = events
@@ -162,7 +162,7 @@ def test_when_every_rail_holds_the_letter_is_confirmed_by_the_ai(ws_a: Workspace
 
 def test_the_rules_of_trigger_confirmed_run(ws_a: Workspace) -> None:
     switch_on(ws_a)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         label = Label.objects.create(workspace=ws_a, name="Belasting")
     make_rule(ws_a, sender_contains("Belastingdienst"), actions=[add_label(label)], mode="auto")
     document = new_document(ws_a)
@@ -170,7 +170,7 @@ def test_the_rules_of_trigger_confirmed_run(ws_a: Workspace) -> None:
     run(ws_a, document, Answering())
 
     assert stored(ws_a, document).status == Document.Status.DONE
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert DocumentLabel.objects.filter(document=document, label=label).exists()
 
 
@@ -183,14 +183,14 @@ def test_a_failing_rail_leaves_the_letter_for_review_with_its_proposals(ws_a: Wo
     run(ws_a, document, Answering(answer))
 
     assert stored(ws_a, document).status == Document.Status.NEEDS_REVIEW
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert document.extractions.count() > 0
         assert not Task.objects.filter(document=document).exists()
 
 
 def test_an_open_label_proposal_does_not_stop_the_confirm(ws_a: Workspace) -> None:
     switch_on(ws_a, organise=True)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Label.objects.create(workspace=ws_a, name="Gezondheid")
     document = new_document(ws_a)
 
@@ -199,7 +199,7 @@ def test_an_open_label_proposal_does_not_stop_the_confirm(ws_a: Workspace) -> No
     run(ws_a, document, Answering(labels={"Gezondheid": 0.7}))
 
     assert stored(ws_a, document).status == Document.Status.DONE
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert DocumentSuggestion.objects.filter(document=document, state="open").count() == 1
 
 
@@ -215,27 +215,27 @@ def test_an_open_addressee_proposal_waits_for_review(
     run(ws_a, document, Answering())
 
     assert stored(ws_a, document).status == Document.Status.NEEDS_REVIEW
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         open_rows = DocumentSuggestion.objects.filter(document=document, state="open")
         assert [row.action for row in open_rows] == ["add_addressee"]
 
 
 def test_an_open_proposal_does_not_block_when_organise_is_off(ws_a: Workspace) -> None:
     switch_on(ws_a, organise=False)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Label.objects.create(workspace=ws_a, name="Gezondheid")
     document = new_document(ws_a)
 
     run(ws_a, document, Answering(labels={"Gezondheid": 0.7}))
 
     assert stored(ws_a, document).status == Document.Status.DONE
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert DocumentSuggestion.objects.filter(document=document, state="open").count() == 1
 
 
 def test_both_switches_on_and_nothing_left_open_confirms(ws_a: Workspace) -> None:
     switch_on(ws_a, organise=True)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Label.objects.create(workspace=ws_a, name="Gezondheid")
     make_person(ws_a, "Jan de Vries")
     document = new_document(ws_a)
@@ -320,7 +320,7 @@ def test_a_persons_confirm_after_a_reopen_leaves_confirmed_by_ai_false(
     document = new_document(ws_a)
     run(ws_a, document, Answering())
     admin = admin_of(ws_a)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         services.reopen_document(workspace=ws_a, user=admin, document_id=document.id)
         review.confirm_document(
             workspace=ws_a,
@@ -341,7 +341,7 @@ def test_a_persons_confirm_after_a_reopen_leaves_confirmed_by_ai_false(
 
 def test_a_persons_confirm_clears_a_stale_ai_flag(ws_a: Workspace) -> None:
     document = new_document(ws_a)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Document.objects.filter(id=document.id).update(status="needs_review", confirmed_by_ai=True)
         review.confirm_document(
             workspace=ws_a,
@@ -382,7 +382,7 @@ def test_confirm_automatically_validates_a_deadline_quote_against_the_letter(
             )
         ],
     )
-    with workspace_context(ws_a.id), pytest.raises(ApiError):
+    with workspace_context(ws_a.id, actor=SYSTEM), pytest.raises(ApiError):
         review.confirm_automatically(document, data)
 
 
@@ -400,7 +400,7 @@ def test_a_failure_in_the_decision_leaves_the_letter_for_review_not_processing(
         run(ws_a, document, Answering())
 
     assert stored(ws_a, document).status == Document.Status.NEEDS_REVIEW
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert document.extractions.count() > 0
         assert not Task.objects.filter(document=document).exists()
     line = next(r.getMessage() for r in caplog.records if "while confirming" in r.getMessage())
@@ -441,7 +441,7 @@ def test_a_failed_organise_step_stops_the_confirm_whatever_the_switches(
 
     after = stored(ws_a, document)
     assert (after.status, after.confirmed_by_ai) == ("needs_review", False)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert not Task.objects.filter(document=document).exists()
 
 
@@ -452,7 +452,7 @@ def test_a_failed_organise_step_stops_applying_proposals_left_open(
     switch_on(ws_a, organise=True)
     person = make_person(ws_a, "Jan de Vries")
     document = new_document(ws_a)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         locked = Document.objects.select_for_update().get(id=document.id)
         suggestions.propose(
             locked,
@@ -477,7 +477,7 @@ def test_a_failed_organise_step_stops_applying_proposals_left_open(
     assert applied == []
     after = stored(ws_a, document)
     assert (after.status, after.confirmed_by_ai) == ("needs_review", False)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert not DocumentAddressee.objects.filter(document=document).exists()
         assert DocumentSuggestion.objects.get(document=document).state == "open"
 
@@ -529,7 +529,7 @@ def test_the_rules_of_trigger_confirmed_run_exactly_once(
 
 def test_confirm_automatically_never_sets_the_organisation(ws_a: Workspace) -> None:
     document = new_document(ws_a)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         label = Label.objects.create(workspace=ws_a, name="Belasting")
         review.confirm_automatically(
             document,
@@ -556,7 +556,7 @@ def test_a_task_the_person_ticked_off_is_not_created_again_after_a_reopen(
     document = new_document(ws_a)
     run(ws_a, document, Answering())
     admin = admin_of(ws_a)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Task.objects.filter(document=document).update(status=Task.Status.DONE)
         services.reopen_document(workspace=ws_a, user=admin, document_id=document.id)
         review.confirm_document(
@@ -595,13 +595,13 @@ def test_a_task_the_person_ticked_off_is_not_created_again_after_a_reopen(
 def _organised_by_ai(workspace: Workspace) -> tuple[Document, Label, object]:
     """A letter the AI organised and confirmed: label Gezondheid and Jan de Vries, automatic."""
     switch_on(workspace, organise=True)
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         label = Label.objects.create(workspace=workspace, name="Gezondheid")
     person = make_person(workspace, "Jan de Vries")
     document = new_document(workspace)
     run(workspace, document, Answering(labels={"Gezondheid": 0.9}))
     assert stored(workspace, document).confirmed_by_ai is True
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         assert DocumentLabel.objects.get(document=document).automatic is True
         assert DocumentAddressee.objects.get(document=document).automatic is True
     return document, label, person
@@ -625,8 +625,9 @@ def _undoable(workspace: Workspace, document: Document) -> dict[str, bool]:
     from apps.documents import services
     from apps.documents.schemas import DocumentEventOut
 
-    with workspace_context(workspace.id):
-        events = services.list_document_events(workspace=workspace, document_id=document.id)
+    membership = Membership.objects.get(workspace=workspace, role="admin")
+    with workspace_context(workspace.id, actor=membership.user_id):
+        events = services.list_document_events(membership=membership, document_id=document.id)
     return {
         e.kind: DocumentEventOut.resolve_can_undo(e)
         for e in events
@@ -642,7 +643,7 @@ def test_a_persons_confirm_with_the_organisation_takes_the_automatic_links_over(
     document, label, person = _organised_by_ai(ws_a)
     assert _undoable(ws_a, document) == {"label_added": True, "addressee_added": True}
     admin = admin_of(ws_a)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         services.reopen_document(workspace=ws_a, user=admin, document_id=document.id)
         review.confirm_document(
             workspace=ws_a,
@@ -653,7 +654,7 @@ def test_a_persons_confirm_with_the_organisation_takes_the_automatic_links_over(
         assert DocumentLabel.objects.get(document=document).automatic is False
         assert DocumentAddressee.objects.get(document=document).automatic is False
     assert _undoable(ws_a, document) == {"label_added": False, "addressee_added": False}
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         event = DocumentEvent.objects.get(document=document, kind="label_added")
         with pytest.raises(ApiError) as refused:
             services.undo_document_event(
@@ -667,7 +668,7 @@ def test_a_hand_edit_leaves_the_flag_of_kept_links_alone(ws_a: Workspace) -> Non
 
     document, label, person = _organised_by_ai(ws_a)
     admin = admin_of(ws_a)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         services.set_document_labels(
             workspace=ws_a, user=admin, document_id=document.id, label_ids=[label.id]
         )
@@ -687,7 +688,7 @@ def test_a_persons_review_of_an_ai_confirmed_letter_is_no_repeat(ws_a: Workspace
     switch_on(ws_a)
     document = new_document(ws_a)
     run(ws_a, document, Answering())
-    with workspace_context(ws_a.id), pytest.raises(ApiError) as refused:
+    with workspace_context(ws_a.id, actor=SYSTEM), pytest.raises(ApiError) as refused:
         review.confirm_document(
             workspace=ws_a,
             user=admin_of(ws_a),

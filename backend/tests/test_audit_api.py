@@ -13,7 +13,7 @@ from apps.accounts.models import User
 from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.models import ServerAuditEvent, WorkspaceAuditEvent
 from apps.audit.services import AuditActor, AuditTarget, record
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.factories import UserFactory
 from tests.members_support import admin_of, as_user, bearer, join, paired
@@ -38,7 +38,7 @@ def set_time(row_code: str, moment: datetime, *, ws: Workspace | None = None) ->
     test's owner role can: created_at is the one thing a test must control)."""
     model = WorkspaceAuditEvent if ws else ServerAuditEvent
     if ws:
-        with workspace_context(ws.id):
+        with workspace_context(ws.id, actor=SYSTEM):
             model.objects.filter(code=row_code).update(created_at=moment)
     else:
         model.objects.filter(code=row_code).update(created_at=moment)
@@ -107,10 +107,10 @@ def test_a_workspace_log_never_shows_another_workspace(ws_a: Workspace, ws_b: Wo
 def test_row_level_security_hides_another_workspaces_rows(ws_a: Workspace, ws_b: Workspace) -> None:
     log(ws_a, AuditCode.RULE_CREATED)
 
-    with workspace_context(ws_b.id):
+    with workspace_context(ws_b.id, actor=SYSTEM):
         assert WorkspaceAuditEvent.objects.filter(workspace_id=ws_a.id).count() == 0
         assert WorkspaceAuditEvent.objects.count() == 0
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert WorkspaceAuditEvent.objects.count() == 1
 
 
@@ -176,7 +176,7 @@ def test_before_pages_backwards(ws_a: Workspace) -> None:
     for _ in range(5):
         log(ws_a, AuditCode.RULE_CREATED, actor=admin)
     base = datetime(2026, 3, 10, 12, 0, tzinfo=UTC)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         for index, row in enumerate(WorkspaceAuditEvent.objects.order_by("id")):
             WorkspaceAuditEvent.objects.filter(id=row.id).update(
                 created_at=base + timedelta(minutes=index)
@@ -216,7 +216,7 @@ def test_the_log_is_not_a_way_to_change_it(ws_a: Workspace) -> None:
 
     for method in (client.post, client.put, client.delete, client.patch):
         assert method(wpath(ws_a)).status_code >= 400
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert WorkspaceAuditEvent.objects.count() == 1
 
 

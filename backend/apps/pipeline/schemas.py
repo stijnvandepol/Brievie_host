@@ -102,6 +102,10 @@ class AiAutopilotOut(Schema):
     allowed: bool
     # The text to agree to before a switch goes on.
     notice: str
+    # A switch is on, but was agreed to under an older `notice`: show it to agree again
+    # (`updateAiAutopilot` with the same switches and `acknowledged`). Until then the
+    # autopilot does only what the older notice said.
+    notice_outdated: bool = False
 
 
 class AiAutopilotIn(InputSchema):

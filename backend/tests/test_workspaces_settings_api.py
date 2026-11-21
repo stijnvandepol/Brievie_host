@@ -8,6 +8,15 @@ from apps.audit.codes import AuditCode
 from apps.workspaces.models import Membership, Workspace
 from tests.members_support import admin_of, as_user, bearer, join, paired, workspace_rows
 
+# The privacy settings and switches of a home workspace (plan Tasks 29, 37), in every answer.
+PRIVACY = {
+    "care_is_private": True,
+    "emergency_access": False,
+    "everyone_sees_all": True,
+    "departments_enabled": False,
+    "admins_read_all": True,
+}
+
 if TYPE_CHECKING:
     from tests.helpers import Response
 
@@ -31,7 +40,7 @@ def test_every_member_reads_the_settings(ws_a: Workspace) -> None:
     for role in Membership.Role.values:
         r = as_user(join(ws_a, role)).get(url(ws_a))
         assert r.status_code == 200
-        assert r.json() == {"allow_member_export": True}
+        assert r.json() == {**PRIVACY, "allow_member_export": True, "summary_language": "nl"}
 
 
 def test_only_an_admin_changes_workspace_settings(ws_a: Workspace) -> None:
@@ -43,7 +52,7 @@ def test_only_an_admin_changes_workspace_settings(ws_a: Workspace) -> None:
 
     r = put(as_user(admin_of(ws_a)), ws_a, {"allow_member_export": False})
     assert r.status_code == 200
-    assert r.json() == {"allow_member_export": False}
+    assert r.json() == {**PRIVACY, "allow_member_export": False, "summary_language": "nl"}
     assert Workspace.objects.get(id=ws_a.id).allow_member_export is False
 
 
@@ -78,7 +87,7 @@ def test_an_omitted_setting_stays_as_it_is(ws_a: Workspace) -> None:
     r = put(client, ws_a, {})
 
     assert r.status_code == 200
-    assert r.json() == {"allow_member_export": False}
+    assert r.json() == {**PRIVACY, "allow_member_export": False, "summary_language": "nl"}
     assert len(workspace_rows(ws_a, AuditCode.WORKSPACE_SETTING_CHANGED)) == 1
 
 
@@ -92,3 +101,31 @@ def test_a_change_is_logged_once_and_a_repeat_is_not(ws_a: Workspace) -> None:
     (row,) = workspace_rows(ws_a, AuditCode.WORKSPACE_SETTING_CHANGED)
     assert row.actor_id == admin.id
     assert row.values == {"setting": "allow_member_export", "value": False}
+
+
+def test_an_admin_sets_the_summary_language_and_it_is_logged(ws_a: Workspace) -> None:
+    admin = admin_of(ws_a)
+    client = as_user(admin)
+
+    r = put(client, ws_a, {"summary_language": "en"})
+
+    assert r.status_code == 200
+    assert r.json() == {**PRIVACY, "allow_member_export": True, "summary_language": "en"}
+    assert Workspace.objects.get(id=ws_a.id).summary_language == "en"
+    (row,) = workspace_rows(ws_a, AuditCode.WORKSPACE_SETTING_CHANGED)
+    assert row.values == {"setting": "summary_language", "value": "en"}
+
+
+def test_only_an_admin_sets_the_summary_language(ws_a: Workspace) -> None:
+    r = put(as_user(join(ws_a, Membership.Role.MEMBER)), ws_a, {"summary_language": "en"})
+
+    assert r.status_code == 403
+    assert Workspace.objects.get(id=ws_a.id).summary_language == "nl"
+
+
+def test_an_unknown_summary_language_is_refused(ws_a: Workspace) -> None:
+    r = put(as_user(admin_of(ws_a)), ws_a, {"summary_language": "de"})
+
+    assert r.status_code == 422
+    assert r.json()["code"] == "validation_error"
+    assert Workspace.objects.get(id=ws_a.id).summary_language == "nl"

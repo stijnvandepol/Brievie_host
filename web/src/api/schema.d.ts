@@ -13,7 +13,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Login */
+        /**
+         * Login
+         * @description 429 too_many_attempts with Retry-After: five wrong passwords for this email from this address, thirty from this address, or, from a browser that never signed in to this account, more than ten for the account from anywhere (then a wait that doubles from 15 seconds to at most 15 minutes).
+         */
         post: operations["login"];
         delete?: never;
         options?: never;
@@ -55,6 +58,26 @@ export interface paths {
          * @description Set a new password with the token from a reset link's fragment and sign in; every other session of the account ends. 400 reset_link_invalid for an unknown, used, expired or revoked link, or when its maker may no longer act on the account; 422 when the password rules refuse it (the link stays usable). Every paired device and every other open reset link of the account is revoked.
          */
         post: operations["completePasswordReset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/reauthenticate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reauthenticate
+         * @description Web session only: a bearer token answers 401 not_authenticated. Type the password again before an action that needs a recent sign-in (creating a pairing code answers 403 reauthentication_required otherwise). 400 wrong_password; wrong passwords count for the same lockout as signing in (429).
+         */
+        post: operations["reauthenticate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -146,7 +169,7 @@ export interface paths {
         put?: never;
         /**
          * Create Pairing Code
-         * @description Web session only. A bearer token (even a valid one) is not accepted here and answers 401 not_authenticated; a session without a valid CSRF token answers 403. The response carries the code once and is not stored (Cache-Control: no-store). server_link opens the app without the code: it pairs with a proof.
+         * @description Web session only. A bearer token (even a valid one) is not accepted here and answers 401 not_authenticated; a session without a valid CSRF token answers 403. A session that signed in more than 15 minutes ago answers 403 reauthentication_required: call reauthenticate first. The response carries the code once and is not stored (Cache-Control: no-store). server_link opens the app without the code: it pairs with a proof.
          */
         post: operations["createPairingCode"];
         delete?: never;
@@ -239,6 +262,26 @@ export interface paths {
         /** Get Me */
         get: operations["getMe"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/language": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update My Language
+         * @description Choose the language of the interface and of the server's messages for the caller's account (`nl`, `en`, or `` to follow Accept-Language again). The choice wins over Accept-Language on every later request.
+         */
+        put: operations["updateMyLanguage"];
         post?: never;
         delete?: never;
         options?: never;
@@ -532,7 +575,7 @@ export interface paths {
         get: operations["getAiStatus"];
         /**
          * Update Ai Settings
-         * @description Set how the workspace's letters are read. Administrators only. Switching to an external address without consent in force answers 409 `ai_consent_required` unless `consent_address` is exactly the address these settings lead to: first show the notice of `previewAiSettings`. Without `api_key` the stored key stays, at the same address only. The key is never returned.
+         * @description Set how the workspace's letters are read. Web session only: a bearer token answers 401 not_authenticated. Administrators only. Switching to an external address without consent in force answers 409 `ai_consent_required` unless `consent_address` is exactly the address these settings lead to: first show the notice of `previewAiSettings`. Without `api_key` the stored key stays, at the same address only. The key is never returned.
          */
         put: operations["updateAiSettings"];
         post?: never;
@@ -556,7 +599,7 @@ export interface paths {
         get: operations["getAiAutopilot"];
         /**
          * Update Ai Autopilot
-         * @description Switch the AI autopilot on or off. Web session only: a bearer token answers 401 not_authenticated. Administrators only. A switch that goes on needs `acknowledged` (409 `ai_autopilot_ack_required`), AI on for the workspace (409 `ai_autopilot_needs_ai`) and the server's permission (409 `ai_autopilot_forbidden`). Switching off always works. Switching AI off or agreeing to another AI address also switches both off.
+         * @description Switch the AI autopilot on or off. Web session only: a bearer token answers 401 not_authenticated. Administrators only. A switch that goes on needs `acknowledged` (409 `ai_autopilot_ack_required`), AI on for the workspace (409 `ai_autopilot_needs_ai`) and the server's permission (409 `ai_autopilot_forbidden`). Switching off always works. Switching AI off or agreeing to another AI address also switches both off. `acknowledged` with a switch on records that the current `notice` was agreed to (clears `notice_outdated`), also when no switch changes.
          */
         put: operations["updateAiAutopilot"];
         post?: never;
@@ -577,7 +620,7 @@ export interface paths {
         put?: never;
         /**
          * Preview Ai Settings
-         * @description Check AI settings without saving them. When saving them needs consent, `notice` is the text to show (the same `configure_ai` prints) and `address` is what to send back as `consent_address`. Administrators only.
+         * @description Check AI settings without saving them. Web session only: a bearer token answers 401 not_authenticated. When saving them needs consent, `notice` is the text to show (the same `configure_ai` prints) and `address` is what to send back as `consent_address`. Administrators only.
          */
         post: operations["previewAiSettings"];
         delete?: never;
@@ -661,9 +704,29 @@ export interface paths {
         put?: never;
         /**
          * Create Document
-         * @description Upload a scanned document as multipart/form-data: `metadata` is a JSON string (schema `UploadMetadataIn`), followed by one `page` file (image/jpeg) per page in page order. Repeating an upload with the same `client_id` and pages answers 200 with the existing document.
+         * @description Upload a scanned document as multipart/form-data: `metadata` is a JSON string (schema `UploadMetadataIn`), followed by one `page` file (image/jpeg) per page in page order. Repeating an upload with the same `client_id` and pages answers 200 with the existing document. 429 `too_many_uploads` with Retry-After when the member or the workspace uploaded too much in a short time (by default 60 per member per 10 minutes, 600 per workspace per hour).
          */
         post: operations["createDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Search Documents
+         * @description Search the letters of the workspace by their text, sender, summary, label names and person names; every word must match, as a word beginning (Dutch stems too). Best first, then newest. The filters narrow the search; together they all apply. When nothing matches exactly, letters with similar words are answered with `fuzzy=true`. A BSN in `q` is removed before searching (`bsn_removed`). `next_offset` is null on the last page (offset at most 1000). Each hit has a fragment (`snippet`) with the matched words marked. The term is never logged. 422 `validation_error` for a term over 200 characters, an unknown `inbox_state` or `document_type`, or `date_from` after `date_to`; 429 after 30 searches a minute.
+         */
+        post: operations["searchDocuments"];
         delete?: never;
         options?: never;
         head?: never;
@@ -679,6 +742,26 @@ export interface paths {
         };
         /** Get Document */
         get: operations["getDocument"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Document Access
+         * @description Who can see this letter, and why, sorted by name; for any member who sees it (404 document_not_found otherwise, as for a letter that does not exist).
+         */
+        get: operations["getDocumentAccess"];
         put?: never;
         post?: never;
         delete?: never;
@@ -713,7 +796,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Confirm Document */
+        /**
+         * Confirm Document
+         * @description Store the review; the document becomes done. When the confirm hands the letter to someone else (the caller no longer sees it), the answer has `can_read` false and holds the id and status only. A repeat of the same review answers the same.
+         */
         post: operations["confirmDocument"];
         delete?: never;
         options?: never;
@@ -812,6 +898,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Document
+         * @description Put a letter back from the trash, as it was (role member or admin). A letter that is not in the trash answers unchanged. 404 `document_not_found` once its purge started, or for a letter the caller does not see. Written to the log (`document_restored`).
+         */
+        post: operations["restoreDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}/retry": {
         parameters: {
             query?: never;
@@ -863,6 +969,146 @@ export interface paths {
          * @description Say no to a proposal; the document does not change and nothing automatic proposes or makes this change on it again.
          */
         post: operations["dismissSuggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/trash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trash Document
+         * @description Move the letter to the trash (role member or admin; a viewer gets 403). It is gone from every list, count, search and task list, and can be put back with `restoreDocument` until `purge_after` (30 days); then it is purged for good. Trashing a letter in the trash again answers the same. 404 `document_not_found` for a letter the caller does not see. Written to the log (`document_trashed`).
+         */
+        post: operations["trashDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/visibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Document Visibility
+         * @description Make the letter private (`restricted`) or visible to everyone (`workspace`), and share it: afterwards it is shared with exactly `shared_user_ids` (any letter). 403 `cannot_make_public` for someone not addressed while an addressee reads it; 404 `member_not_found` for a share with somebody who is no member. `can_read` false when the caller removed their own share.
+         */
+        put: operations["setDocumentVisibility"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Duplicates
+         * @description The open pairs of letters that are probably one letter scanned twice, newest first (at most 100). A viewer gets an empty list. Only a pair whose two letters the caller both sees; any other answers as a missing one (404 `duplicate_not_found`).
+         */
+        get: operations["listDuplicates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/duplicates/{duplicate_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Duplicate
+         * @description One open pair with what is the same and what differs. 404 `duplicate_not_found` for a decided pair and for a viewer. Only a pair whose two letters the caller both sees; any other answers as a missing one (404 `duplicate_not_found`).
+         */
+        get: operations["getDuplicate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/duplicates/{duplicate_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Duplicate
+         * @description The two letters are two letters (role member or admin; a viewer gets 403): the pair is never proposed again. 409 `duplicate_not_open` when already decided. Only a pair whose two letters the caller both sees; any other answers as a missing one (404 `duplicate_not_found`).
+         */
+        post: operations["dismissDuplicate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/duplicates/{duplicate_id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge Duplicate
+         * @description The two letters are one (role member or admin; a viewer gets 403). The kept letter gets the other's labels, addressees and open tasks; with `complete_twin_tasks` a task done on the other letter completes its open equal on the kept one (`task_twins`). The other letter goes to the trash (`restoreDocument` takes it back for 30 days; the merge itself is not undone). Answers the kept letter. 409 `duplicate_not_open` when already decided, `duplicate_visibility_differs` when the letters are not seen by the same people (`can_merge`), `document_processing`, `document_retained`; 422 `validation_error` for a `keep_document_id` outside the pair. Written to the log (`document_trashed`, reason `duplicate`). Only a pair whose two letters the caller both sees; any other answers as a missing one (404 `duplicate_not_found`).
+         */
+        post: operations["mergeDuplicate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/emergency-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Emergency Access
+         * @description Web session only: a bearer token answers 401 not_authenticated. Switch emergency access for the workspace's admins. Server admins only (403 forbidden), also without a membership; every member gets a notice.
+         */
+        put: operations["setEmergencyAccess"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1094,9 +1340,29 @@ export interface paths {
         get?: never;
         /**
          * Update Member Role
-         * @description Web session only: a bearer token answers 401 not_authenticated. For the workspace's admins: another role answers 403 forbidden, a workspace the caller is not a member of 404 workspace_not_found. Give a member another role; the member sees it at their next request. 404 member_not_found for somebody who is no member of this workspace; 409 last_admin for demoting the only admin. A demoted admin's open invitations and reset links stop.
+         * @description Web session only: a bearer token answers 401 not_authenticated. For the workspace's admins: another role answers 403 forbidden, a workspace the caller is not a member of 404 workspace_not_found. Give a member another role; the member sees it at their next request. 404 member_not_found for somebody who is no member of this workspace; 409 last_admin for demoting the only admin. A demoted admin's open invitations and reset links stop. When somebody gains sight by it (a new admin while admins read all post, a new fallback sorter): 409 confirmation_required without `confirmed`, 409 preview_outdated for an old preview's token (`previewVisibilityChange`). A viewer sorts no post.
          */
         put: operations["updateMemberRole"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/members/{user_id}/sorts-post": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Member Sorts Post
+         * @description Web session only: a bearer token answers 401 not_authenticated. For the workspace's admins: another role answers 403 forbidden, a workspace the caller is not a member of 404 workspace_not_found. "Verdeelt post": the member gets the letters nobody else reads, to put a name on them. 404 member_not_found; 422 viewer_cannot_sort; when somebody gains sight: 409 confirmation_required without `confirmed`, 409 preview_outdated for an old preview's token (`previewVisibilityChange`).
+         */
+        put: operations["updateMemberSortsPost"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1148,6 +1414,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/my-tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Tasks
+         * @description "Mijn taken": the caller's tasks, derived from the post they may read. `part` is `mine` (default: given to them, or on their post), `to_pick_up` (an organisation's department and unnamed post; empty at home) or `all` (every task they see). `status` is `open` (default; by deadline, undated last, at most 500) or `done` (completed in the last 30 days, newest first, at most 200). 422 `validation_error` for another part or status.
+         */
+        get: operations["listMyTasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/my-tasks/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Count My Tasks
+         * @description The numbers of "Mijn taken" for the navigation: open tasks only.
+         */
+        get: operations["countMyTasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/persons": {
         parameters: {
             query?: never;
@@ -1158,7 +1464,10 @@ export interface paths {
         /** List Persons */
         get: operations["listPersons"];
         put?: never;
-        /** Create Person */
+        /**
+         * Create Person
+         * @description `kind` "department" makes a department: admins only (403 `forbidden`).
+         */
         post: operations["createPerson"];
         delete?: never;
         options?: never;
@@ -1176,12 +1485,35 @@ export interface paths {
         get?: never;
         /**
          * Update Person
-         * @description `name_variants` and `archived` left out keep the person's current value (a rename never archives, restores or clears the variants); sent, they replace it.
+         * @description `name_variants` and `archived` left out keep the person's current value (a rename never archives, restores or clears the variants); sent, they replace it. A department or a person linked to an account: admins only (403 `forbidden`).
          */
         put: operations["updatePerson"];
         post?: never;
-        /** Delete Person */
+        /**
+         * Delete Person
+         * @description Admins only (403 `forbidden` for others): `person_in_use` also counts letters the caller cannot see, so only an admin learns that a person is in use.
+         */
         delete: operations["deletePerson"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/persons/{person_id}/emergency-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Emergency Access
+         * @description Web session only, admins. Opens for one hour, read-only, every letter on the name of this person or department that the admin cannot see, with a reason of 10 to 200 characters: a history line on each, an audit row, a notice to the person or the department's members. 409 `emergency_access_off` when the workspace has it off.
+         */
+        post: operations["openEmergencyAccess"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1195,8 +1527,75 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Link Person To Member */
+        /**
+         * Link Person To Member
+         * @description Web session only: a bearer token answers 401 not_authenticated. Link the person to a member of the workspace (`user_id`; administrators only), or unlink it (null). A linked person is unlinked only by its own member (409 `cannot_unlink` for anybody else); 409 `cannot_grant_self` for an admin linking themselves to a person with private post; 409 `is_a_department`. A link by which somebody gains sight needs `confirmed` and the preview's token (409 `confirmation_required`, `preview_outdated`; see `previewVisibilityChange`).
+         */
         put: operations["linkPersonToMember"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/persons/{person_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Department Member
+         * @description Web session only. Admins put a member in a department (a grant). 409 `not_a_department`, 409 `cannot_grant_self` (an admin adding themselves where there is private post). A member already in it: 200, unchanged. When the member gains sight (departments on, "Iedereen ziet alle post" off): 409 `confirmation_required` without `confirmed`, 409 `preview_outdated` for an old preview's token.
+         */
+        post: operations["addDepartmentMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/persons/{person_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Department Member
+         * @description Web session only. Admins make a department member its lead, or not.
+         */
+        put: operations["updateDepartmentMember"];
+        post?: never;
+        /**
+         * Remove Department Member
+         * @description Web session only. Admins take a member out of a department.
+         */
+        delete: operations["removeDepartmentMember"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/post-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get My Post Access
+         * @description "Wie kan mijn post zien?": who can see the caller's post, in sentences (the switches, the admins, who sorts post, private post, emergency access, the server admins, the AI service). For every member, also with the app.
+         */
+        get: operations["getMyPostAccess"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -1373,6 +1772,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/tasks/{task_id}/assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Assign Task
+         * @description Give the task to a member who can read its letter (`user_id`), or take it back (`user_id` null). The same assignee again changes nothing. Writes a `task_assigned` or `task_unassigned` event on the letter. 404 `task_not_found` for a task the caller does not see; 422 `task_without_letter`; 422 `assignee_cannot_read` for someone who may not read the letter, a viewer or no member.
+         */
+        post: operations["assignTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/tasks/{task_id}/assignees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Task Assignees
+         * @description The members the task can be given to: those who can read its letter, viewers left out, by name. Empty for a task without a letter.
+         */
+        get: operations["listTaskAssignees"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/tasks/{task_id}/complete": {
         parameters: {
             query?: never;
@@ -1393,6 +1832,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/tasks/{task_id}/deadline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Task Deadline
+         * @description "Datum invullen": the date the letter names, filled in by hand (`deadline`; null takes it away). The source becomes `manual`; the term's words stay. The same date again changes nothing. Writes a `task_deadline_set` event on the letter. 422 `validation_error` for a date before the letter's date.
+         */
+        post: operations["setTaskDeadline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/tasks/{task_id}/reopen": {
         parameters: {
             query?: never;
@@ -1407,6 +1866,110 @@ export interface paths {
          * @description Idempotent. Writes a `task_reopened` event on the task's document.
          */
         post: operations["reopenTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/trash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Trash
+         * @description The letters in the trash the caller sees, the most recently trashed first (at most 500), with when and by whom, and `purge_after`; `total` counts them all.
+         */
+        get: operations["listTrash"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/trash/empty": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Empty Trash
+         * @description Web session only: a bearer token answers 401 not_authenticated. Purge every letter in the caller's trash for good (role admin), up to `up_to`: the newest `trashed_at` the caller showed (all when absent). Letters the caller does not see stay. Answers how many letters are now being purged; a job removes them. Written to the log, one `document_purged` row per letter.
+         */
+        post: operations["emptyTrash"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/trash/{document_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Purge Document
+         * @description Web session only: a bearer token answers 401 not_authenticated. Purge a letter from the trash now, for good (role admin). Only a letter in the caller's trash: a live letter, one whose purge started, or one the caller does not see answers 404 `document_not_found`. From this answer on it cannot be restored; a job removes its scanned pages and its rows. A back-up made earlier still holds it. Written to the log (`document_purged`).
+         */
+        delete: operations["purgeDocument"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/visibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Visibility
+         * @description Who sees what, for every member: the three switches, who sorts post, and the sentences of "Wie kan mijn post zien?" for the caller; an admin also gets the summary of the installation.
+         */
+        get: operations["getVisibility"];
+        /**
+         * Update Visibility
+         * @description Web session only: a bearer token answers 401 not_authenticated. For the workspace's admins: another role answers 403 forbidden, a workspace the caller is not a member of 404 workspace_not_found. Change who sees what; a value left out stays as it is. When anybody gains sight: 409 confirmation_required without `confirmed`, 409 preview_outdated when something changed since the preview whose token is sent. Every changed value is written to the log; the members whose sight changes get a notice, every member when admins gain all post. Labels and rules are never removed.
+         */
+        put: operations["updateVisibility"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/visibility/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Visibility Change
+         * @description Web session only: a bearer token answers 401 not_authenticated. For the workspace's admins: another role answers 403 forbidden, a workspace the caller is not a member of 404 workspace_not_found. What a change of the switches, or a planned member change (`member_change`), would do: per member what they start and stop seeing, the number of letters whose viewers change, whether it needs confirmation, the summary after it, and the token a confirmed change sends back. Changes nothing. A member change answers that change's own errors (404 member_not_found, 409 last_admin, 422 viewer_cannot_sort, ...).
+         */
+        post: operations["previewVisibilityChange"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1469,6 +2032,11 @@ export interface components {
             auto_organise: boolean;
             /** Notice */
             notice: string;
+            /**
+             * Notice Outdated
+             * @default false
+             */
+            notice_outdated: boolean;
         };
         /** AiSettingsIn */
         AiSettingsIn: {
@@ -1572,6 +2140,14 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** AssignIn */
+        AssignIn: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id?: string | null;
+        };
         /** AuditEventOut */
         AuditEventOut: {
             /**
@@ -1661,6 +2237,11 @@ export interface components {
             summary_by_ai: boolean;
             /** Tasks */
             tasks: components["schemas"]["TaskIn"][];
+            /**
+             * Visibility
+             * @default
+             */
+            visibility: string;
         };
         /** CreatedInvitationOut */
         CreatedInvitationOut: {
@@ -1669,6 +2250,42 @@ export interface components {
             invitation: components["schemas"]["InvitationOut"];
             /** Link */
             link: string;
+        };
+        /** DeadlineIn */
+        DeadlineIn: {
+            /**
+             * Deadline
+             * Format: date
+             */
+            deadline?: string | null;
+        };
+        /** DepartmentMemberIn */
+        DepartmentMemberIn: {
+            /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
+            /**
+             * Is Lead
+             * @default false
+             */
+            is_lead: boolean;
+            /**
+             * Preview Token
+             * @default
+             */
+            preview_token: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /** DepartmentMemberUpdateIn */
+        DepartmentMemberUpdateIn: {
+            /** Is Lead */
+            is_lead: boolean;
         };
         /** DeviceOut */
         DeviceOut: {
@@ -1695,6 +2312,14 @@ export interface components {
             /** Name */
             name: string;
         };
+        /**
+         * DocumentAccessOut
+         * @description Who can see this letter, by name ("Wie kan deze brief zien?").
+         */
+        DocumentAccessOut: {
+            /** Viewers */
+            viewers: components["schemas"]["DocumentViewerOut"][];
+        };
         /** DocumentEventOut */
         DocumentEventOut: {
             /**
@@ -1720,10 +2345,20 @@ export interface components {
             kind: string;
             /** Label Name */
             label_name: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
             /** Origin */
             origin: string;
             /** Person Name */
             person_name: string;
+            /**
+             * Related Document Id
+             * Format: uuid
+             */
+            related_document_id?: string | null;
             /** Rule Name */
             rule_name: string;
             /** Undone */
@@ -1737,6 +2372,18 @@ export interface components {
             auto_addressee_ids?: string[];
             /** Auto Label Ids */
             auto_label_ids?: string[];
+            /** Auto Rule Label Ids */
+            auto_rule_label_ids?: string[];
+            /**
+             * Can Make Public
+             * @default false
+             */
+            can_make_public: boolean;
+            /**
+             * Can Read
+             * @default true
+             */
+            can_read: boolean;
             /**
              * Client Id
              * Format: uuid
@@ -1774,6 +2421,11 @@ export interface components {
              */
             letter_date: string | null;
             /**
+             * Open Duplicate Count
+             * @default 0
+             */
+            open_duplicate_count: number;
+            /**
              * Open Suggestion Count
              * @default 0
              */
@@ -1799,8 +2451,12 @@ export interface components {
              * @default
              */
             proposed_sender: string;
+            /** Reader Names */
+            reader_names?: string[];
             /** Sender */
             sender: string;
+            /** Shared User Ids */
+            shared_user_ids?: string[];
             /** Status */
             status: string;
             /** Suggestions */
@@ -1811,15 +2467,22 @@ export interface components {
             summary_by_ai: boolean;
             /** Tasks */
             tasks: components["schemas"]["TaskOut"][];
+            /**
+             * Visibility
+             * @default workspace
+             */
+            visibility: string;
         };
-        /** DocumentSummaryOut */
-        DocumentSummaryOut: {
+        /** DocumentSearchHitOut */
+        DocumentSearchHitOut: {
             /** Addressee Ids */
             addressee_ids?: string[];
             /** Auto Addressee Ids */
             auto_addressee_ids?: string[];
             /** Auto Label Ids */
             auto_label_ids?: string[];
+            /** Auto Rule Label Ids */
+            auto_rule_label_ids?: string[];
             /**
              * Client Id
              * Format: uuid
@@ -1855,6 +2518,11 @@ export interface components {
              */
             letter_date: string | null;
             /**
+             * Open Duplicate Count
+             * @default 0
+             */
+            open_duplicate_count: number;
+            /**
              * Open Suggestion Count
              * @default 0
              */
@@ -1876,10 +2544,304 @@ export interface components {
              * @default
              */
             proposed_sender: string;
+            /** Reader Names */
+            reader_names?: string[];
+            /** Sender */
+            sender: string;
+            /** Snippet */
+            snippet?: components["schemas"]["SnippetPartOut"][];
+            /** Status */
+            status: string;
+            /**
+             * Visibility
+             * @default workspace
+             */
+            visibility: string;
+        };
+        /**
+         * DocumentSearchIn
+         * @description A search in the letters of the workspace. POST, so the term is never in a URL.
+         */
+        DocumentSearchIn: {
+            /**
+             * Date From
+             * Format: date
+             */
+            date_from?: string | null;
+            /**
+             * Date To
+             * Format: date
+             */
+            date_to?: string | null;
+            /**
+             * Document Type
+             * @default
+             */
+            document_type: string;
+            /**
+             * Inbox State
+             * @default
+             */
+            inbox_state: string;
+            /**
+             * Label Id
+             * Format: uuid
+             */
+            label_id?: string | null;
+            /**
+             * Limit
+             * @default 30
+             */
+            limit: number;
+            /**
+             * Offset
+             * @default 0
+             */
+            offset: number;
+            /**
+             * Person Id
+             * Format: uuid
+             */
+            person_id?: string | null;
+            /** Q */
+            q: string;
+        };
+        /** DocumentSearchOut */
+        DocumentSearchOut: {
+            /**
+             * Bsn Removed
+             * @default false
+             */
+            bsn_removed: boolean;
+            /**
+             * Fuzzy
+             * @default false
+             */
+            fuzzy: boolean;
+            /** Items */
+            items: components["schemas"]["DocumentSearchHitOut"][];
+            /** Next Offset */
+            next_offset?: number | null;
+        };
+        /** DocumentSummaryOut */
+        DocumentSummaryOut: {
+            /** Addressee Ids */
+            addressee_ids?: string[];
+            /** Auto Addressee Ids */
+            auto_addressee_ids?: string[];
+            /** Auto Label Ids */
+            auto_label_ids?: string[];
+            /** Auto Rule Label Ids */
+            auto_rule_label_ids?: string[];
+            /**
+             * Client Id
+             * Format: uuid
+             */
+            client_id: string;
+            /**
+             * Confirmed By Ai
+             * @default false
+             */
+            confirmed_by_ai: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Document Type */
+            document_type: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Inbox State
+             * @default
+             */
+            inbox_state: string;
+            /** Label Ids */
+            label_ids?: string[];
+            /**
+             * Letter Date
+             * Format: date
+             */
+            letter_date: string | null;
+            /**
+             * Open Duplicate Count
+             * @default 0
+             */
+            open_duplicate_count: number;
+            /**
+             * Open Suggestion Count
+             * @default 0
+             */
+            open_suggestion_count: number;
+            /** Page Count */
+            page_count: number;
+            /**
+             * Proposed Document Type
+             * @default
+             */
+            proposed_document_type: string;
+            /**
+             * Proposed Letter Date
+             * Format: date
+             */
+            proposed_letter_date?: string | null;
+            /**
+             * Proposed Sender
+             * @default
+             */
+            proposed_sender: string;
+            /** Reader Names */
+            reader_names?: string[];
             /** Sender */
             sender: string;
             /** Status */
             status: string;
+            /**
+             * Visibility
+             * @default workspace
+             */
+            visibility: string;
+        };
+        /** DocumentViewerOut */
+        DocumentViewerOut: {
+            /** Name */
+            name: string;
+            /** Reasons */
+            reasons: string[];
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /** DocumentVisibilityIn */
+        DocumentVisibilityIn: {
+            /**
+             * Shared User Ids
+             * @default []
+             */
+            shared_user_ids: string[];
+            /** Visibility */
+            visibility: string;
+        };
+        /** DocumentVisibilityOut */
+        DocumentVisibilityOut: {
+            /**
+             * Can Read
+             * @default true
+             */
+            can_read: boolean;
+            /** Reader Names */
+            reader_names?: string[];
+            /** Shared User Ids */
+            shared_user_ids?: string[];
+            /** Visibility */
+            visibility: string;
+        };
+        /** DuplicateDifferenceOut */
+        DuplicateDifferenceOut: {
+            /** Field */
+            field: string;
+            /** First */
+            first: string;
+            /** Second */
+            second: string;
+            /**
+             * Uncertain
+             * @default false
+             */
+            uncertain: boolean;
+        };
+        /**
+         * DuplicateOut
+         * @description Two letters that are probably one letter scanned twice. `first` and `second` are in
+         *     id order; the caller sees both.
+         */
+        DuplicateOut: {
+            /**
+             * Blocked Reason
+             * @default
+             */
+            blocked_reason: string;
+            /**
+             * Can Merge
+             * @default true
+             */
+            can_merge: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Differences */
+            differences?: components["schemas"]["DuplicateDifferenceOut"][];
+            first: components["schemas"]["DocumentSummaryOut"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Same */
+            same?: string[];
+            second: components["schemas"]["DocumentSummaryOut"];
+            /** State */
+            state: string;
+            /**
+             * Suggested Keep Id
+             * Format: uuid
+             */
+            suggested_keep_id: string;
+            /** Task Twins */
+            task_twins?: components["schemas"]["TaskTwinOut"][];
+            /** Text Similarity */
+            text_similarity: number;
+        };
+        /** EmergencyAccessIn */
+        EmergencyAccessIn: {
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** EmergencyAccessOut */
+        EmergencyAccessOut: {
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** EmergencyAccessUseIn */
+        EmergencyAccessUseIn: {
+            /** Reason */
+            reason: string;
+        };
+        /** EmergencyAccessUseOut */
+        EmergencyAccessUseOut: {
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Opened Count */
+            opened_count: number;
+        };
+        /**
+         * EmptyTrashIn
+         * @description Empty the trash up to the newest `trashed_at` the caller showed (all when absent):
+         *     a letter trashed while the admin read the question is not emptied. With an offset
+         *     only (422 otherwise): a moment without one would be read in the server's zone.
+         */
+        EmptyTrashIn: {
+            /**
+             * Up To
+             * Format: date-time
+             */
+            up_to?: string | null;
+        };
+        /** EmptyTrashOut */
+        EmptyTrashOut: {
+            /** Document Count */
+            document_count: number;
         };
         /**
          * ErrorOut
@@ -1937,6 +2899,11 @@ export interface components {
              * @default 0
              */
             automatic: number;
+            /**
+             * Duplicate
+             * @default 0
+             */
+            duplicate: number;
             /** New */
             new: number;
             /** Review */
@@ -1946,6 +2913,11 @@ export interface components {
         };
         /** InvitationIn */
         InvitationIn: {
+            /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
             /**
              * Email
              * @default
@@ -1967,6 +2939,11 @@ export interface components {
              * Format: uuid
              */
             person_id?: string | null;
+            /**
+             * Preview Token
+             * @default
+             */
+            preview_token: string;
             /**
              * Role
              * @default member
@@ -2047,6 +3024,11 @@ export interface components {
              * @default grey
              */
             color: string;
+            /**
+             * Department Id
+             * Format: uuid
+             */
+            department_id?: string | null;
             /** Name */
             name: string;
         };
@@ -2054,6 +3036,11 @@ export interface components {
         LabelOut: {
             /** Color */
             color: string;
+            /**
+             * Department Id
+             * Format: uuid
+             */
+            department_id?: string | null;
             /** Document Count */
             document_count: number;
             /**
@@ -2073,6 +3060,11 @@ export interface components {
              * @default
              */
             color: string;
+            /**
+             * Department Id
+             * Format: uuid
+             */
+            department_id?: string | null;
             /** Name */
             name: string;
         };
@@ -2081,12 +3073,34 @@ export interface components {
             /** Label Ids */
             label_ids: string[];
         };
+        /** LanguageIn */
+        LanguageIn: {
+            /**
+             * Language
+             * @enum {string}
+             */
+            language: "" | "nl" | "en";
+        };
         /** LoginIn */
         LoginIn: {
             /** Email */
             email: string;
             /** Password */
             password: string;
+        };
+        /** MemberChangeOut */
+        MemberChangeOut: {
+            /** Gains */
+            gains: string[];
+            /** Losses */
+            losses: string[];
+            /** Name */
+            name: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
         };
         /** MemberOut */
         MemberOut: {
@@ -2095,6 +3109,8 @@ export interface components {
              * @default false
              */
             can_manage_account: boolean;
+            /** Department Ids */
+            department_ids?: string[];
             /** Name */
             name: string;
             /**
@@ -2105,6 +3121,11 @@ export interface components {
             /** Role */
             role: string;
             /**
+             * Sorts Post
+             * @default false
+             */
+            sorts_post: boolean;
+            /**
              * User Id
              * Format: uuid
              */
@@ -2113,10 +3134,33 @@ export interface components {
         /** MemberRoleIn */
         MemberRoleIn: {
             /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
+            /**
+             * Preview Token
+             * @default
+             */
+            preview_token: string;
+            /**
              * Role
              * @enum {string}
              */
             role: "admin" | "member" | "viewer";
+        };
+        /** MergeDuplicateIn */
+        MergeDuplicateIn: {
+            /**
+             * Complete Twin Tasks
+             * @default true
+             */
+            complete_twin_tasks: boolean;
+            /**
+             * Keep Document Id
+             * Format: uuid
+             */
+            keep_document_id: string;
         };
         /**
          * MyExportOut
@@ -2152,6 +3196,37 @@ export interface components {
             size: number;
             /** Status */
             status: string;
+        };
+        /** MyTaskCountsOut */
+        MyTaskCountsOut: {
+            /** Mine */
+            mine: number;
+            /** Needs Date */
+            needs_date: number;
+            /** Overdue */
+            overdue: number;
+            /** To Pick Up */
+            to_pick_up: number;
+            /** Within Week */
+            within_week: number;
+        };
+        /** MyTasksOut */
+        MyTasksOut: {
+            /** Has Person */
+            has_person: boolean;
+            /** Items */
+            items: components["schemas"]["TaskItemOut"][];
+            /** Split */
+            split: boolean;
+            /**
+             * Today
+             * Format: date
+             */
+            today: string;
+            /** Truncated */
+            truncated: boolean;
+            /** Waiting Letters */
+            waiting_letters: number;
         };
         /** NoticeOut */
         NoticeOut: {
@@ -2299,11 +3374,26 @@ export interface components {
             archived: boolean;
             /** Display Name */
             display_name: string;
+            /**
+             * Kind
+             * @default person
+             */
+            kind: string;
             /** Name Variants */
             name_variants?: string[];
         };
         /** PersonMemberIn */
         PersonMemberIn: {
+            /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
+            /**
+             * Preview Token
+             * @default
+             */
+            preview_token: string;
             /**
              * User Id
              * Format: uuid
@@ -2323,6 +3413,15 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Kind
+             * @default person
+             */
+            kind: string;
+            /** Lead User Ids */
+            lead_user_ids?: string[];
+            /** Member User Ids */
+            member_user_ids?: string[];
             /** Name Variants */
             name_variants: string[];
             /**
@@ -2330,6 +3429,14 @@ export interface components {
              * Format: uuid
              */
             user_id: string | null;
+        };
+        /**
+         * PostAccessOut
+         * @description "Wie kan mijn post zien?" for the caller, in sentences the server writes.
+         */
+        PostAccessOut: {
+            /** Sentences */
+            sentences: string[];
         };
         /** ProposalOut */
         ProposalOut: {
@@ -2349,6 +3456,11 @@ export interface components {
             quote: string;
             /** Value */
             value: string;
+        };
+        /** ReauthenticateIn */
+        ReauthenticateIn: {
+            /** Password */
+            password: string;
         };
         /** RuleActionSchema */
         RuleActionSchema: {
@@ -2569,6 +3681,31 @@ export interface components {
             /** Needs Setup */
             needs_setup: boolean;
         };
+        /**
+         * SnippetPartOut
+         * @description A piece of the fragment; `hit` pieces are what matched. Plain text, never HTML.
+         */
+        SnippetPartOut: {
+            /** Hit */
+            hit: boolean;
+            /** Text */
+            text: string;
+        };
+        /** SortsPostIn */
+        SortsPostIn: {
+            /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
+            /**
+             * Preview Token
+             * @default
+             */
+            preview_token: string;
+            /** Sorts Post */
+            sorts_post: boolean;
+        };
         /** SuggestionOut */
         SuggestionOut: {
             /** Action */
@@ -2599,8 +3736,25 @@ export interface components {
             /** Rule Name */
             rule_name: string;
         };
+        /** TaskAssigneeOut */
+        TaskAssigneeOut: {
+            /** Is Me */
+            is_me: boolean;
+            /** Name */
+            name: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
         /** TaskIn */
         TaskIn: {
+            /**
+             * Amount
+             * @default
+             */
+            amount: string;
             /**
              * Deadline
              * Format: date
@@ -2621,20 +3775,57 @@ export interface components {
         /** TaskItemOut */
         TaskItemOut: {
             /**
+             * Amount
+             * @default
+             */
+            amount: string;
+            /**
+             * Assigned By Name
+             * @default
+             */
+            assigned_by_name: string;
+            /**
+             * Assigned To Id
+             * Format: uuid
+             */
+            assigned_to_id?: string | null;
+            /**
+             * Assigned To Name
+             * @default
+             */
+            assigned_to_name: string;
+            /**
+             * Can Edit
+             * @default false
+             */
+            can_edit: boolean;
+            /**
              * Completed At
              * Format: date-time
              */
             completed_at: string | null;
             /**
+             * Completed By Name
+             * @default
+             */
+            completed_by_name: string;
+            /**
              * Created By Ai
              * @default false
              */
             created_by_ai: boolean;
+            /** Days Left */
+            days_left?: number | null;
             /**
              * Deadline
              * Format: date
              */
             deadline: string | null;
+            /**
+             * Deadline Quote
+             * @default
+             */
+            deadline_quote: string;
             /** Deadline Source */
             deadline_source: string;
             /** Description */
@@ -2645,14 +3836,41 @@ export interface components {
              */
             document_id: string | null;
             /**
+             * Document Type
+             * @default
+             */
+            document_type: string;
+            /** For Names */
+            for_names?: string[];
+            /**
+             * Group
+             * @default
+             */
+            group: string;
+            /**
              * Id
              * Format: uuid
              */
             id: string;
+            /**
+             * Needs Deadline
+             * @default false
+             */
+            needs_deadline: boolean;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
             /** Sender */
             sender: string;
             /** Status */
             status: string;
+            /**
+             * Term Quote
+             * @default
+             */
+            term_quote: string;
             /** Type */
             type: string;
             /**
@@ -2663,6 +3881,21 @@ export interface components {
         };
         /** TaskOut */
         TaskOut: {
+            /**
+             * Amount
+             * @default
+             */
+            amount: string;
+            /**
+             * Assigned To Id
+             * Format: uuid
+             */
+            assigned_to_id?: string | null;
+            /**
+             * Assigned To Name
+             * @default
+             */
+            assigned_to_name: string;
             /**
              * Completed At
              * Format: date-time
@@ -2691,8 +3924,154 @@ export interface components {
             id: string;
             /** Status */
             status: string;
+            /**
+             * Term Quote
+             * @default
+             */
+            term_quote: string;
             /** Type */
             type: string;
+        };
+        /**
+         * TaskTwinOut
+         * @description A done task on one letter with an equal open task on the other: a merge that keeps
+         *     `open_document_id` can complete it (`complete_twin_tasks`).
+         */
+        TaskTwinOut: {
+            /** Description */
+            description: string;
+            /**
+             * Done Document Id
+             * Format: uuid
+             */
+            done_document_id: string;
+            /**
+             * Open Document Id
+             * Format: uuid
+             */
+            open_document_id: string;
+            /** Type */
+            type: string;
+        };
+        /**
+         * TrashListOut
+         * @description The caller's trash, the most recently trashed first (at most 500).
+         */
+        TrashListOut: {
+            /** Items */
+            items?: components["schemas"]["TrashedDocumentOut"][];
+            /**
+             * Retention Days
+             * @default 30
+             */
+            retention_days: number;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+        };
+        /**
+         * TrashedDocumentOut
+         * @description A letter in the trash: its summary row, when and by whom it was trashed, and when
+         *     it is purged (clients never compute the retention themselves).
+         */
+        TrashedDocumentOut: {
+            /** Addressee Ids */
+            addressee_ids?: string[];
+            /** Auto Addressee Ids */
+            auto_addressee_ids?: string[];
+            /** Auto Label Ids */
+            auto_label_ids?: string[];
+            /** Auto Rule Label Ids */
+            auto_rule_label_ids?: string[];
+            /**
+             * Client Id
+             * Format: uuid
+             */
+            client_id: string;
+            /**
+             * Confirmed By Ai
+             * @default false
+             */
+            confirmed_by_ai: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Document Type */
+            document_type: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Inbox State
+             * @default
+             */
+            inbox_state: string;
+            /** Label Ids */
+            label_ids?: string[];
+            /**
+             * Letter Date
+             * Format: date
+             */
+            letter_date: string | null;
+            /**
+             * Open Duplicate Count
+             * @default 0
+             */
+            open_duplicate_count: number;
+            /**
+             * Open Suggestion Count
+             * @default 0
+             */
+            open_suggestion_count: number;
+            /** Page Count */
+            page_count: number;
+            /**
+             * Proposed Document Type
+             * @default
+             */
+            proposed_document_type: string;
+            /**
+             * Proposed Letter Date
+             * Format: date
+             */
+            proposed_letter_date?: string | null;
+            /**
+             * Proposed Sender
+             * @default
+             */
+            proposed_sender: string;
+            /**
+             * Purge After
+             * Format: date-time
+             */
+            purge_after: string;
+            /** Reader Names */
+            reader_names?: string[];
+            /** Sender */
+            sender: string;
+            /** Status */
+            status: string;
+            /**
+             * Trashed At
+             * Format: date-time
+             */
+            trashed_at: string;
+            /**
+             * Trashed By Name
+             * @default
+             */
+            trashed_by_name: string;
+            /**
+             * Visibility
+             * @default workspace
+             */
+            visibility: string;
         };
         /**
          * UploadMetadataIn
@@ -2728,6 +4107,121 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** VisibilityIn */
+        VisibilityIn: {
+            /**
+             * Add Start Set
+             * @default false
+             */
+            add_start_set: boolean;
+            /** Admins Read All */
+            admins_read_all?: boolean | null;
+            /** Allow Member Export */
+            allow_member_export?: boolean | null;
+            /**
+             * Apply Preset
+             * @default false
+             */
+            apply_preset: boolean;
+            /** Care Is Private */
+            care_is_private?: boolean | null;
+            /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
+            /** Departments Enabled */
+            departments_enabled?: boolean | null;
+            /** Everyone Sees All */
+            everyone_sees_all?: boolean | null;
+            /** Kind */
+            kind?: string | null;
+            /**
+             * Preview Token
+             * @default
+             */
+            preview_token: string;
+        };
+        /** VisibilityOut */
+        VisibilityOut: {
+            /** Admins Read All */
+            admins_read_all: boolean;
+            /** Departments Enabled */
+            departments_enabled: boolean;
+            /** Everyone Sees All */
+            everyone_sees_all: boolean;
+            /** Kind */
+            kind: string;
+            /** Sentences */
+            sentences: string[];
+            /** Sorter User Ids */
+            sorter_user_ids: string[];
+            /** Summary */
+            summary?: string[];
+        };
+        /** VisibilityPreviewIn */
+        VisibilityPreviewIn: {
+            /**
+             * Add Start Set
+             * @default false
+             */
+            add_start_set: boolean;
+            /** Admins Read All */
+            admins_read_all?: boolean | null;
+            /** Allow Member Export */
+            allow_member_export?: boolean | null;
+            /**
+             * Apply Preset
+             * @default false
+             */
+            apply_preset: boolean;
+            /** Care Is Private */
+            care_is_private?: boolean | null;
+            /** Departments Enabled */
+            departments_enabled?: boolean | null;
+            /** Everyone Sees All */
+            everyone_sees_all?: boolean | null;
+            /** Kind */
+            kind?: string | null;
+            /**
+             * Member Change
+             * @default
+             */
+            member_change: string;
+            /**
+             * Member Person Id
+             * Format: uuid
+             */
+            member_person_id?: string | null;
+            /**
+             * Member Role
+             * @default
+             */
+            member_role: string;
+            /**
+             * Member Sorts Post
+             * @default false
+             */
+            member_sorts_post: boolean;
+            /**
+             * Member User Id
+             * Format: uuid
+             */
+            member_user_id?: string | null;
+        };
+        /** VisibilityPreviewOut */
+        VisibilityPreviewOut: {
+            /** Changes */
+            changes: components["schemas"]["MemberChangeOut"][];
+            /** Letter Count */
+            letter_count: number;
+            /** Needs Confirmation */
+            needs_confirmation: boolean;
+            /** Preview Token */
+            preview_token: string;
+            /** Sentences */
+            sentences: string[];
+        };
         /** WorkspaceOut */
         WorkspaceOut: {
             /**
@@ -2746,11 +4240,45 @@ export interface components {
         WorkspaceSettingsIn: {
             /** Allow Member Export */
             allow_member_export?: boolean | null;
+            /** Care Is Private */
+            care_is_private?: boolean | null;
+            /** Summary Language */
+            summary_language?: string | null;
         };
         /** WorkspaceSettingsOut */
         WorkspaceSettingsOut: {
+            /**
+             * Admins Read All
+             * @default true
+             */
+            admins_read_all: boolean;
             /** Allow Member Export */
             allow_member_export: boolean;
+            /**
+             * Care Is Private
+             * @default false
+             */
+            care_is_private: boolean;
+            /**
+             * Departments Enabled
+             * @default false
+             */
+            departments_enabled: boolean;
+            /**
+             * Emergency Access
+             * @default false
+             */
+            emergency_access: boolean;
+            /**
+             * Everyone Sees All
+             * @default true
+             */
+            everyone_sees_all: boolean;
+            /**
+             * Summary Language
+             * @default nl
+             */
+            summary_language: string;
         };
     };
     responses: never;
@@ -2899,6 +4427,91 @@ export interface operations {
             };
             /** @description Bad Request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    reauthenticate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReauthenticateIn"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3448,6 +5061,84 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    updateMyLanguage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LanguageIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4931,6 +6622,113 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    searchDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentSearchIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSearchOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
         };
     };
     getDocument: {
@@ -4952,6 +6750,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    getDocumentAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentAccessOut"];
                 };
             };
             /** @description Unauthorized */
@@ -5473,6 +7312,56 @@ export interface operations {
             };
         };
     };
+    restoreDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     retryDocumentProcessing: {
         parameters: {
             query?: never;
@@ -5652,6 +7541,490 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    trashDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashedDocumentOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    setDocumentVisibility: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentVisibilityIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentVisibilityOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    listDuplicates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateOut"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    getDuplicate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                duplicate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    dismissDuplicate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                duplicate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    mergeDuplicate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                duplicate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergeDuplicateIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    setEmergencyAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmergencyAccessIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmergencyAccessOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6715,6 +9088,105 @@ export interface operations {
             };
         };
     };
+    updateMemberSortsPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SortsPostIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     getMyExport: {
         parameters: {
             query?: never;
@@ -6871,6 +9343,98 @@ export interface operations {
             };
             /** @description Too Many Requests */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    listMyTasks: {
+        parameters: {
+            query?: {
+                part?: string;
+                status?: string;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyTasksOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    countMyTasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyTaskCountsOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7174,6 +9738,105 @@ export interface operations {
             };
         };
     };
+    openEmergencyAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                person_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmergencyAccessUseIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmergencyAccessUseOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     linkPersonToMember: {
         parameters: {
             query?: never;
@@ -7264,6 +9927,305 @@ export interface operations {
             };
             /** @description Unprocessable Content */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    addDepartmentMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                person_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepartmentMemberIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    updateDepartmentMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                person_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepartmentMemberUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    removeDepartmentMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                person_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    getMyPostAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostAccessOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7997,6 +10959,146 @@ export interface operations {
             };
         };
     };
+    assignTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskItemOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    listTaskAssignees: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskAssigneeOut"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     completeTask: {
         parameters: {
             query?: never;
@@ -8047,6 +11149,96 @@ export interface operations {
             };
         };
     };
+    setTaskDeadline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeadlineIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskItemOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     reopenTask: {
         parameters: {
             query?: never;
@@ -8088,6 +11280,428 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    listTrash: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashListOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    emptyTrash: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmptyTrashIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmptyTrashOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    purgeDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    getVisibility: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisibilityOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    updateVisibility: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VisibilityIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisibilityOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    previewVisibilityChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VisibilityPreviewIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisibilityPreviewOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

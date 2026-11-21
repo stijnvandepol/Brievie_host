@@ -6,7 +6,7 @@ from django.db import connection
 
 from apps.labels.models import Label
 from apps.rules.models import Rule
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 
 migration = importlib.import_module("apps.rules.migrations.0003_update_old_preset_rules")
@@ -37,7 +37,7 @@ NEW_TAX_BUSINESS = _words("belastingdienst", "naheffing", "aangifte")
 
 
 def _set(workspace: Workspace, key: str, conditions: list[tuple[str, str, str]]) -> object:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         label = Label.objects.get(workspace=workspace, system_key=key)
         Rule.objects.filter(workspace=workspace, system_key=key).update(
             definition=_definition(label.id, conditions)
@@ -46,7 +46,7 @@ def _set(workspace: Workspace, key: str, conditions: list[tuple[str, str, str]])
 
 
 def _stored(workspace: Workspace, key: str) -> object:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Rule.objects.get(workspace=workspace, system_key=key).definition
 
 
@@ -71,7 +71,7 @@ def test_edited_preset_rules_are_left_alone(ws_a: Workspace, ws_b: Workspace) ->
     contracts = _set(ws_b, "contracten", OLD_CONTRACTEN[:2])
     business_tax = _set(ws_b, "belastingdienst", OLD_TAX_BUSINESS)
     edited = {**_definition(business_tax, OLD_TAX_BUSINESS), "match": "all"}
-    with workspace_context(ws_b.id):
+    with workspace_context(ws_b.id, actor=SYSTEM):
         Rule.objects.filter(workspace=ws_b, system_key="belastingdienst").update(definition=edited)
 
     _run()
@@ -93,7 +93,7 @@ def test_current_presets_stay_the_same(ws_a: Workspace, ws_b: Workspace) -> None
 
 def test_old_preset_pointing_at_another_label_is_left_alone(ws_b: Workspace) -> None:
     _set(ws_b, "contracten", OLD_CONTRACTEN)
-    with workspace_context(ws_b.id):
+    with workspace_context(ws_b.id, actor=SYSTEM):
         other = Label.objects.get(workspace=ws_b, system_key="inkoop")
         moved = _definition(other.id, OLD_CONTRACTEN)
         Rule.objects.filter(workspace=ws_b, system_key="contracten").update(definition=moved)

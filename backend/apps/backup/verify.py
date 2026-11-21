@@ -47,6 +47,79 @@ class _Restored:
     documents: dict[UUID, int]
     pages: list[_Page]
     wrapped_keys: dict[UUID, bytes]
+    privacy: list[str]
+
+
+# The helper functions the visibility policies call (S 4.9.1); all six or the policies
+# fail on every read.
+VISIBILITY_FUNCTIONS = (
+    "brievie_actor_id",
+    "brievie_is_system",
+    "brievie_sees_all_post",
+    "brievie_my_post_ids",
+    "brievie_covered_post_ids",
+    "brievie_actor_sorts_post",
+)
+# The restrictive policies of the letter table and of every table with a letter key.
+VISIBILITY_POLICIES = (
+    "document_visibility",
+    "document_visibility_update",
+    "document_visibility_delete",
+)
+READER_TABLE = "documents_documentreader"
+
+
+def privacy_problems(conn: psycopg.Connection[tuple[object, ...]]) -> list[str]:
+    """A restore without the visibility functions or policies must not pass: the counts
+    alone would agree, and every member would then see every letter, or none (PB T21).
+    Read in the caller's transaction. A back-up from before the functions existed
+    (migration `workspaces.0007_visibility_functions`) is not checked for them. A problem
+    names a table at most, never a person or a letter."""
+    expected = conn.execute(
+        "SELECT EXISTS (SELECT 1 FROM django_migrations"
+        " WHERE app = 'workspaces' AND name = '0007_visibility_functions')"
+    ).fetchone()
+    if expected is None or not expected[0]:
+        return []
+    problems: list[str] = []
+    functions = conn.execute(
+        "SELECT count(DISTINCT p.proname) FROM pg_catalog.pg_proc p"
+        " JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace"
+        " WHERE n.nspname = 'public' AND p.proname = ANY(%s)",
+        [list(VISIBILITY_FUNCTIONS)],
+    ).fetchone()
+    if functions is None or functions[0] != len(VISIBILITY_FUNCTIONS):
+        problems.append(_("De database mist de functies voor wie welke post ziet."))
+    children = [
+        str(row[0]).strip('"')
+        for row in conn.execute(
+            "SELECT DISTINCT conrelid::regclass::text FROM pg_catalog.pg_constraint"
+            " WHERE contype = 'f' AND confrelid = 'public.documents_document'::regclass"
+        )
+    ]
+    tables = ["documents_document", *sorted(t for t in children if t != READER_TABLE)]
+    for table in tables:
+        found = conn.execute(
+            "SELECT count(*) FROM pg_catalog.pg_policy"
+            " WHERE polrelid = %s::regclass AND polname = ANY(%s) AND NOT polpermissive",
+            [f"public.{table}", list(VISIBILITY_POLICIES)],
+        ).fetchone()
+        if found is None or found[0] != len(VISIBILITY_POLICIES):
+            problems.append(
+                _("De database mist de regels voor wie welke post ziet in tabel %(table)s.")
+                % {"table": table}
+            )
+    reader = conn.execute(
+        "SELECT count(*) FROM pg_catalog.pg_policy"
+        " WHERE polrelid = %s::regclass AND polname = 'reader_scope'",
+        [f"public.{READER_TABLE}"],
+    ).fetchone()
+    if reader is None or reader[0] != 1:
+        problems.append(
+            _("De database mist de regels voor wie welke post ziet in tabel %(table)s.")
+            % {"table": READER_TABLE}
+        )
+    return problems
 
 
 def _read(conninfo: str) -> _Restored:
@@ -76,10 +149,11 @@ def _read(conninfo: str) -> _Restored:
                     "SELECT workspace_id, wrapped_key FROM workspaces_workspacekey"
                 )
             }
+            privacy = privacy_problems(conn)
     except psycopg.Error:
         # The driver's message can quote the connection string; say only the code.
         raise BackupError("restore_failed") from None
-    return _Restored(workspaces, documents, pages, wrapped_keys)
+    return _Restored(workspaces, documents, pages, wrapped_keys, privacy)
 
 
 def _page_file(storage_root: Path, stored: str) -> tuple[Path | None, str]:
@@ -211,7 +285,7 @@ def verify_restore(
     pages: dict[UUID, list[_Page]] = defaultdict(list)
     for page in restored.pages:
         pages[page.workspace_id].append(page)
-    problems = _counts(manifest, restored, pages)
+    problems = _counts(manifest, restored, pages) + restored.privacy
 
     files: dict[_Page, Path] = {}
     for page in restored.pages:

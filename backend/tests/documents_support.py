@@ -4,6 +4,8 @@ import base64
 import hashlib
 import json
 import uuid
+from datetime import timedelta
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -12,10 +14,11 @@ from django.utils import timezone
 
 from apps.accounts.models import User
 from apps.devices.services import create_pairing_code, pair_device
-from apps.documents.models import Document
+from apps.documents.models import Document, DuplicateCandidate
 from apps.people.models import Person
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
+from tests.visibility_support import as_actor
 
 if TYPE_CHECKING:
     from tests.helpers import Response
@@ -107,16 +110,49 @@ def upload(
 
 def make_document(workspace: Workspace, status: str = "done") -> Document:
     """A document row without pages, in `status`; enough for organising tests."""
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Document.objects.create(
             workspace=workspace, client_id=uuid.uuid4(), page_count=1, status=status
         )
 
 
+def trashed(
+    document: Document,
+    *,
+    by: User | None = None,
+    days_ago: int = 0,
+    purge_started: bool = False,
+) -> Document:
+    """Put the letter in the trash without the service (`days_ago` days ago, by `by`), and
+    mark its purge as started when asked; written as the system. The fresh row."""
+    now = timezone.now()
+    with workspace_context(document.workspace_id, actor=SYSTEM):
+        Document.objects.filter(id=document.id).update(
+            trashed_at=now - timedelta(days=days_ago),
+            trashed_by=by,
+            purge_started_at=now if purge_started else None,
+        )
+        return Document.objects.get(id=document.id)
+
+
 def make_person(workspace: Workspace, name: str, *, archived: bool = False) -> Person:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Person.objects.create(
             workspace=workspace,
             display_name=name,
             archived_at=timezone.now() if archived else None,
+        )
+
+
+def pair(first: Document, second: Document, *, state: str = "open") -> DuplicateCandidate:
+    """A duplicate pair of two letters in `state`, ids ordered, written as the system."""
+    low, high = sorted((first, second), key=lambda d: d.id)
+    with as_actor(low.workspace, SYSTEM):
+        return DuplicateCandidate.objects.create(
+            workspace_id=low.workspace_id,
+            first=low,
+            second=high,
+            state=state,
+            text_similarity=Decimal("0.950"),
+            number_overlap=Decimal("1.000"),
         )

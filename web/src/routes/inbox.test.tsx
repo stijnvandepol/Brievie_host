@@ -23,7 +23,7 @@ const base = `*${API}/workspaces/${workspace.id}`;
 type Summary = components["schemas"]["DocumentSummaryOut"];
 type State = "new" | "review" | "unassigned";
 
-function counts(value: Record<State, number>) {
+function counts(value: Record<State, number> & { duplicate?: number }) {
   return http.get(`${base}/inbox/counts`, () => HttpResponse.json(value));
 }
 
@@ -61,6 +61,16 @@ function rowOf(sender: string): HTMLElement {
 }
 
 describe("te doen", () => {
+  it("Te doen says where tasks are", async () => {
+    server.use(counts({ new: 0, review: 0, unassigned: 0 }), ...loggedInHandlers(), letters([]));
+    renderApp(path);
+    expect(
+      await screen.findByText(
+        "Brieven die je nog moet nakijken of een naam moet geven. Wat je daarna moet doen, staat bij Mijn taken.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("is named Te doen in the title, the heading and the navigation", async () => {
     server.use(counts({ new: 0, review: 0, unassigned: 0 }), ...loggedInHandlers(), letters([]));
     renderApp(path);
@@ -68,7 +78,7 @@ describe("te doen", () => {
     await waitFor(() => expect(document.title).toBe("Te doen - Brievie"));
     expect(
       screen.getByText(
-        "Brieven waar jij nog iets mee moet doen. Al je brieven, ook de afgehandelde, staan bij Alle post.",
+        "Brieven die je nog moet nakijken of een naam moet geven. Wat je daarna moet doen, staat bij Mijn taken.",
       ),
     ).toBeInTheDocument();
     const nav = screen.getByRole("navigation", { name: "Hoofdmenu" });
@@ -365,5 +375,58 @@ describe("te doen focus", () => {
     await waitFor(() =>
       expect(within(row as HTMLElement).getByRole("button", { name: /Op naam van/ })).toHaveFocus(),
     );
+  });
+  it("Te doen shows Dubbel? with its count and hides it at 0", async () => {
+    const pair: components["schemas"]["DuplicateOut"] = {
+      id: "c1111111-1111-4111-8111-111111111111",
+      state: "open",
+      created_at: "2026-11-11T09:31:00Z",
+      first: { ...documentSummary, sender: "Waterschap" },
+      second: { ...reviewLetter, sender: "Waterschap", letter_date: "2026-11-06" },
+      suggested_keep_id: documentSummary.id,
+      text_similarity: 91,
+      can_merge: true,
+      blocked_reason: "",
+    };
+    server.use(
+      counts({ new: 0, review: 0, unassigned: 0, duplicate: 1 }),
+      http.get(`${base}/duplicates`, () => HttpResponse.json([pair])),
+      ...loggedInHandlers(),
+      ...personHandlers(),
+      letters([]),
+    );
+    renderApp(path);
+    const section = await screen.findByRole("region", { name: "Dubbel? 1" });
+    const link = await within(section).findByRole("link", { name: /Lijkt op elkaar voor 91%/ });
+    expect(link).toHaveAttribute("href", `/w/${workspace.id}/dubbel/${pair.id}`);
+    expect(within(section).getAllByText("Waterschap")).toHaveLength(2);
+    expect(screen.getByText("Dubbel?: 1")).toBeInTheDocument();
+  });
+
+  it("hides Dubbel? at 0", async () => {
+    server.use(
+      counts({ new: 0, review: 1, unassigned: 0, duplicate: 0 }),
+      ...loggedInHandlers(),
+      ...personHandlers(),
+      letters([reviewLetter]),
+    );
+    renderApp(path);
+    await screen.findByRole("link", { name: "Gemeente" });
+    expect(await screen.findByText("Controleren: 1")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /Dubbel\?/ })).not.toBeInTheDocument();
+    expect(screen.queryByText("Dubbel?")).not.toBeInTheDocument();
+  });
+
+  it("a letter with an open pair carries the chip Dubbel?", async () => {
+    server.use(
+      counts({ new: 0, review: 1, unassigned: 1 }),
+      ...loggedInHandlers(),
+      ...personHandlers(),
+      letters([{ ...reviewLetter, open_duplicate_count: 1 }, unassignedLetter]),
+    );
+    renderApp(path);
+    await screen.findByRole("link", { name: "Gemeente" });
+    expect(within(rowOf("Gemeente")).getByText("Dubbel?")).toBeInTheDocument();
+    expect(within(rowOf("Belastingdienst")).queryByText("Dubbel?")).not.toBeInTheDocument();
   });
 });

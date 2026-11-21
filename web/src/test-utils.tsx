@@ -1,10 +1,11 @@
 import { I18nProvider } from "@lingui/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
+import { createMemoryHistory } from "@tanstack/react-router";
 import { render } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import type { components } from "./api/schema";
 import { i18n } from "./i18n";
+import { LocaleRouter } from "./locale-router";
 import { createAppRouter } from "./router";
 import { trackApp } from "./test-apps";
 import { server } from "./test-server";
@@ -37,8 +38,13 @@ export function loggedInHandlers() {
     http.get(`*${API}/workspaces/${workspace.id}/inbox/counts`, () =>
       HttpResponse.json({ new: 0, review: 0, unassigned: 0 }),
     ),
+    http.get(`*${API}/workspaces/${workspace.id}/my-tasks/counts`, () =>
+      HttpResponse.json(noTaskCounts),
+    ),
   ];
 }
+
+export const noTaskCounts = { mine: 0, overdue: 0, within_week: 0, needs_date: 0, to_pick_up: 0 };
 
 /**
  * Two workspaces: `/` shows the list instead of going straight to the inbox. With one
@@ -72,7 +78,7 @@ export function renderApp(path: string) {
   render(
     <I18nProvider i18n={i18n}>
       <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
+        <LocaleRouter router={router} />
       </QueryClientProvider>
     </I18nProvider>,
   );
@@ -107,10 +113,15 @@ export const documentSummary = {
   proposed_sender: "",
   proposed_document_type: "",
   proposed_letter_date: null,
+  open_duplicate_count: 0,
+  visibility: "workspace",
+  reader_names: [],
 };
 
 export const documentDetail: components["schemas"]["DocumentOut"] = {
   ...documentSummary,
+  can_make_public: false,
+  shared_user_ids: [],
   failure_code: "",
   pages: [
     { index: 1, ocr_text: "Eerste pagina" },
@@ -131,9 +142,14 @@ export const documentDetail: components["schemas"]["DocumentOut"] = {
       status: "open",
       completed_at: null,
       created_by_ai: false,
+      amount: "",
+      term_quote: "",
+      assigned_to_name: "",
+      assigned_to_id: null,
     },
   ],
   suggestions: [],
+  can_read: true,
 };
 
 type Person = components["schemas"]["PersonOut"];
@@ -145,6 +161,7 @@ export const papa: Person = {
   archived: false,
   document_count: 2,
   user_id: null,
+  kind: "person",
 };
 
 export const annaPerson: Person = {
@@ -154,6 +171,7 @@ export const annaPerson: Person = {
   archived: false,
   document_count: 0,
   user_id: user.id,
+  kind: "person",
 };
 
 export const members: components["schemas"]["MemberOut"][] = [
@@ -163,6 +181,7 @@ export const members: components["schemas"]["MemberOut"][] = [
     role: "admin",
     person_id: annaPerson.id,
     can_manage_account: false,
+    sorts_post: false,
   },
   {
     user_id: "b3333333-3333-4333-8333-333333333333",
@@ -170,6 +189,7 @@ export const members: components["schemas"]["MemberOut"][] = [
     role: "member",
     person_id: null,
     can_manage_account: true,
+    sorts_post: false,
   },
 ];
 
@@ -230,6 +250,29 @@ export function documentHandlers(detail: components["schemas"]["DocumentOut"] = 
       HttpResponse.json([]),
     ),
     ...personHandlers(),
+  ];
+}
+
+type Trashed = components["schemas"]["TrashedDocumentOut"];
+
+/** A letter in the trash: the summary row plus when, by whom and until when. */
+export function trashedLetter(overrides: Partial<Trashed> = {}): Trashed {
+  return {
+    ...documentSummary,
+    trashed_at: "2026-11-09T10:00:00Z",
+    trashed_by_name: "Anna",
+    purge_after: "2026-12-09T10:00:00Z",
+    ...overrides,
+  };
+}
+
+/** The trash of the first workspace; the list is read again from `items` on every call. */
+/** `total`: how many letters the trash holds (the listed ones when absent). */
+export function trashHandlers(items: Trashed[] = [], total?: number) {
+  return [
+    http.get(`*${API}/workspaces/${workspace.id}/trash`, () =>
+      HttpResponse.json({ items, retention_days: 30, total: total ?? items.length }),
+    ),
   ];
 }
 

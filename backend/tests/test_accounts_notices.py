@@ -86,7 +86,7 @@ def test_the_date_is_the_day_in_amsterdam() -> None:
         (
             "emergency_access_used",
             {"count": "2", "person": "Bram"},
-            "Anne heeft op 3 mei met noodtoegang 2 privé-brieven van Bram geopend. "
+            "Anne heeft op 3 mei met noodtoegang 2 brieven van Bram geopend. "
             "De reden staat bij elke brief.",
         ),
     ],

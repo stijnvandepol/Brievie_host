@@ -7,7 +7,7 @@ from django.test import Client
 
 from apps.labels.models import Label
 from apps.labels.services import create_extra_labels
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.documents_support import admin_of
 from tests.factories import UserFactory
@@ -38,7 +38,7 @@ def test_list_labels_by_name_with_counts(client_a: Client, ws_a: Workspace) -> N
     rows = r.json()
     assert [row["name"] for row in rows] == sorted((row["name"] for row in rows), key=str.lower)
     zorg = next(row for row in rows if row["name"] == "Zorg")
-    assert set(zorg) == {"id", "name", "color", "system_key", "document_count"}
+    assert set(zorg) == {"id", "name", "color", "system_key", "document_count", "department_id"}
     assert (zorg["color"], zorg["system_key"], zorg["document_count"]) == ("red", "zorg", 0)
 
 
@@ -58,7 +58,7 @@ def test_create_update_and_delete_a_label(client_a: Client, ws_a: Workspace) -> 
 
     r = client_a.delete(f"{labels_url(ws_a.id)}/{hobby['id']}")
     assert r.status_code == 204
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert not Label.objects.filter(id=hobby["id"]).exists()
 
 
@@ -66,7 +66,7 @@ def test_create_update_and_delete_a_label(client_a: Client, ws_a: Workspace) -> 
 def test_update_without_a_colour_keeps_the_colour(
     client_a: Client, ws_a: Workspace, body: dict[str, object]
 ) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         zorg = Label.objects.get(workspace=ws_a, system_key="zorg")
 
     r = client_a.put(f"{labels_url(ws_a.id)}/{zorg.id}", body, content_type="application/json")
@@ -101,7 +101,7 @@ def test_unknown_color_is_422(client_a: Client, ws_a: Workspace) -> None:
 def test_unknown_color_on_update_is_422_and_changes_nothing(
     client_a: Client, ws_a: Workspace
 ) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         zorg = Label.objects.get(workspace=ws_a, system_key="zorg")
 
     r = client_a.put(
@@ -112,7 +112,7 @@ def test_unknown_color_on_update_is_422_and_changes_nothing(
 
     assert r.status_code == 422
     assert r.json()["code"] == "validation_error"
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         zorg.refresh_from_db()
     assert (zorg.name, zorg.color) == ("Zorg", "red")
 
@@ -127,7 +127,7 @@ def test_blank_name_is_422(client_a: Client, ws_a: Workspace) -> None:
 def test_label_of_another_workspace_is_not_found(
     client_a: Client, ws_a: Workspace, ws_b: Workspace
 ) -> None:
-    with workspace_context(ws_b.id):
+    with workspace_context(ws_b.id, actor=SYSTEM):
         stranger = Label.objects.get(workspace=ws_b, system_key="bank")
 
     for r in (
@@ -155,7 +155,7 @@ def test_apply_preset_needs_admin(client: Client, ws_a: Workspace) -> None:
 
 
 def test_apply_preset_returns_the_label_list(client_a: Client, ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Label.objects.get(workspace=ws_a, system_key="wonen").delete()
 
     r = post_json(client_a, f"/workspaces/{ws_a.id}/labels/preset")
@@ -178,7 +178,7 @@ def test_extra_labels_that_only_postgresql_sees_as_equal_are_skipped(
     ws_a: Workspace, caplog: pytest.LogCaptureFixture
 ) -> None:
     # Python lowers "İ" to "i" + a combining dot, PostgreSQL to a plain "i".
-    with caplog.at_level(logging.DEBUG), workspace_context(ws_a.id):
+    with caplog.at_level(logging.DEBUG), workspace_context(ws_a.id, actor=SYSTEM):
         create_extra_labels(workspace=ws_a, names=["İstanbul", "istanbul", "Reizen"])
         names = set(Label.objects.filter(workspace=ws_a).values_list("name", flat=True))
 
@@ -205,3 +205,23 @@ def test_a_name_that_shows_nothing_or_turns_text_around_is_refused(
 
     assert r.status_code == 422
     assert r.json() == {"code": "validation_error", "message": message}
+
+
+def test_a_workspace_holds_a_limited_number_of_labels(
+    client_a: Client, ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Security review 2026-11-20 (content L5): the AI sees only the first 100 labels.
+    from apps.labels import services
+
+    with workspace_context(ws_a.id, actor=SYSTEM):
+        present = Label.objects.filter(workspace=ws_a).count()
+    monkeypatch.setattr(services, "MAX_LABELS", present + 1)
+
+    assert create(client_a, ws_a.id, {"name": "Nog een"}).status_code == 201
+    r = create(client_a, ws_a.id, {"name": "Te veel"})
+
+    assert r.status_code == 409
+    assert r.json() == {
+        "code": "too_many_labels",
+        "message": "Deze werkruimte heeft het grootste aantal labels. Verwijder er eerst een.",
+    }

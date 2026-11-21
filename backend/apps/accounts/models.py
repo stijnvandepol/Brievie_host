@@ -27,6 +27,11 @@ class UserManager(BaseUserManager["User"]):
 
 
 class User(AbstractBaseUser, PermissionsMixin, BaseModel):
+    class Language(models.TextChoices):
+        # Each language in its own name, so a reader finds theirs; not translated.
+        DUTCH = "nl", "Nederlands"
+        ENGLISH = "en", "English"
+
     class ExplanationLanguage(models.TextChoices):
         # Each language in its own name, so a reader finds theirs; not translated.
         DUTCH = "nl", "Nederlands"
@@ -36,7 +41,10 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel):
     # rejects anything else), so the unique index ignores case.
     email = models.EmailField(max_length=254, unique=True)
     name = models.CharField(max_length=150)
-    language = models.CharField(max_length=10, default="nl")
+    # The language of the interface and of the server's messages, chosen by the user;
+    # "" until they choose: then the browser's or device's Accept-Language decides. The
+    # column also has a database default '' (migration 0012) for raw inserts.
+    language = models.CharField(max_length=2, choices=Language.choices, blank=True, default="")
     explanation_language = models.CharField(
         max_length=2, choices=ExplanationLanguage.choices, default=ExplanationLanguage.DUTCH
     )
@@ -109,13 +117,17 @@ class UserSession(BaseModel):
     client_ip = models.GenericIPAddressField(null=True, blank=True)
     # A short description such as "Firefox op Windows", never the raw user agent.
     browser = models.CharField(max_length=100, blank=True)
+    # When the password was last typed again in this session (`reauthenticate`); with
+    # `created_at` it says how recently the person at this browser proved who they are.
+    reauthenticated_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self) -> str:
         return f"Session of {self.user_id}"
 
 
 class AccountNotice(BaseModel):
-    """Something another person did to this account, shown once in the web app (D 6.3)."""
+    """Something another person did to this account, or a new device on it, shown once in
+    the web app (D 6.3)."""
 
     class Code(models.TextChoices):
         PASSWORD_RESET_CREATED = "password_reset_created", _("Herstellink gemaakt")
@@ -126,6 +138,7 @@ class AccountNotice(BaseModel):
         )
         SESSIONS_ENDED = "sessions_ended", _("Sessies beëindigd")
         DEVICE_REVOKED = "device_revoked", _("Apparaat ingetrokken")
+        DEVICE_PAIRED = "device_paired", _("Apparaat gekoppeld")
         SECOND_FACTOR_CLEARED = "second_factor_cleared", _("Tweestapsverificatie gewist")
         SERVER_ADMIN_GRANTED = "server_admin_granted", _("Serverbeheerder gemaakt")
         SERVER_ADMIN_REVOKED = "server_admin_revoked", _("Geen serverbeheerder meer")
@@ -134,6 +147,19 @@ class AccountNotice(BaseModel):
         EMERGENCY_ACCESS_SWITCHED_OFF = "emergency_access_switched_off", _("Noodtoegang uitgezet")
         EMERGENCY_ACCESS_USED = "emergency_access_used", _("Noodtoegang gebruikt")
         PRIVATE_WITHOUT_READERS = "private_without_readers", _("Privépost zonder lezers")
+        # The same, for an admin who may not see the letter: it is not named.
+        PRIVATE_WITHOUT_READERS_UNNAMED = (
+            "private_without_readers_unnamed",
+            _("Privépost zonder lezers, brief niet genoemd"),
+        )
+        # Who sees what changed (S 4.4, 4.14): the member sees more, or less, post.
+        SIGHT_WIDENED = "sight_widened", _("Je ziet meer post")
+        SIGHT_NARROWED = "sight_narrowed", _("Je ziet minder post")
+        # Admins now read all post that is not private: every member is told (R37).
+        ADMINS_READ_ALL_ON = "admins_read_all_on", _("Beheerders lezen alle post")
+        # An admin gave themselves sight (S 4.7): the department's members, or the other
+        # admins, are told.
+        SELF_GRANT = "self_grant", _("Iemand gaf zichzelf toegang")
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notices")
     code = models.CharField(max_length=40, choices=Code.choices)
@@ -171,3 +197,16 @@ class PasswordReset(BaseModel):
 
     def __str__(self) -> str:
         return f"Password reset for {self.user_id}"
+
+
+class SignInFailures(BaseModel):
+    """Wrong passwords per account, whatever address they came from
+    (`apps.accounts.signin_limits`). Keyed on a hash of the normalised email, so an
+    address without an account is counted alike and no email is stored."""
+
+    account_key = models.CharField(max_length=64, unique=True)
+    failures = models.PositiveIntegerField()
+    last_failure_at = models.DateTimeField(db_index=True)
+
+    def __str__(self) -> str:
+        return f"{self.failures} failures"

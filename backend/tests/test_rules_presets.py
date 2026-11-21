@@ -10,7 +10,7 @@ from apps.rules.definition import to_spec
 from apps.rules.engine import Condition, DocumentFacts, RuleSpec, evaluate
 from apps.rules.models import Rule
 from apps.rules.presets import preset_definition
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 from tests.documents_support import admin_of, make_person
 from tests.rules_support import add_addressee, add_label, make_rule, text_word
@@ -25,18 +25,18 @@ def client_a(client: Client, ws_a: Workspace) -> Client:
 
 
 def rules(workspace: Workspace) -> list[Rule]:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return list(Rule.objects.filter(workspace=workspace).order_by("position"))
 
 
 def preset_label(workspace: Workspace, key: str) -> Label:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Label.objects.get(workspace=workspace, system_key=key)
 
 
 def test_apply_preset_creates_one_rule_per_preset_label_once(ws_a: Workspace) -> None:
     created = rules(ws_a)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         apply_preset(ws_a)
     again = rules(ws_a)
 
@@ -64,7 +64,7 @@ def test_apply_preset_creates_one_rule_per_preset_label_once(ws_a: Workspace) ->
 
 
 def test_deleted_preset_rule_comes_back_with_the_start_set(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Rule.objects.filter(system_key="zorg").delete()
         own = make_rule(ws_a, text_word("APK"), actions=[add_label(preset_label(ws_a, "auto"))])
         renamed = Label.objects.get(system_key="auto")
@@ -80,7 +80,7 @@ def test_deleted_preset_rule_comes_back_with_the_start_set(ws_a: Workspace) -> N
 
 
 def test_existing_workspace_gets_rules_only_for_its_preset_labels(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Rule.objects.all().delete()
         Label.objects.get(system_key="bank").delete()
         Label.objects.create(workspace=ws_a, name="Bank")
@@ -114,7 +114,7 @@ def test_label_named_by_another_rule_is_409_naming_the_rule(
         "code": "label_in_use",
         "message": "De regel 'Huisarts' gebruikt dit label. Pas die regel eerst aan.",
     }
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert Label.objects.filter(id=zorg.id).exists()
         assert Rule.objects.filter(system_key="zorg").exists()
 
@@ -135,7 +135,7 @@ def test_edited_preset_rule_with_more_actions_keeps_its_label(
 ) -> None:
     zorg = preset_label(ws_a, "zorg")
     emma = make_person(ws_a, "Emma")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         rule = Rule.objects.get(system_key="zorg")
         rule.definition = {
             **rule.definition,
@@ -224,7 +224,8 @@ def test_presets_on_sample_letters(
             continue
         specs, keys = preset_specs(kind)
         planned = evaluate(facts, specs).planned
-        assert {keys[p.target_id] for p in planned} == expected, kind
+        assert {keys[p.target_id] for p in planned if p.target_id is not None} == expected, kind
+        assert all(p.target_id is not None for p in planned)
         assert all(p.mode == "propose" for p in planned)
 
 

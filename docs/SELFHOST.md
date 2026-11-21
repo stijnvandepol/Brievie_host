@@ -5,7 +5,8 @@ Simple things come first, advanced things last. Run every command in the folder 
 you installed Brievie. Sections 1 to 12 are about back-ups, 13 about pairing a phone from
 a link, 14 to 19 about people: inviting, roles, removing, sessions, the log and the
 export. Section 20 is about the AI autopilot, 21 about updating Brievie, 22 about Docker
-itself when it is slow.
+itself when it is slow, 23 about the trash and what "definitief verwijderen" means for
+back-ups.
 
 ## 1. In one minute
 
@@ -429,6 +430,22 @@ docker compose --project-directory deploy -f deploy/docker-compose.yml exec api 
 This ends every session and unpairs every phone of that account, and leaves a notice.
 Both commands write the log (the actor is "Brievie").
 
+A second workspace (another household, an organisation next to your own) is made only on
+the server. `--kind` is `home` (Thuis: everyone sees all post) or `business`
+(Organisatie: everyone sees their own post and that of their departments); the workspace
+starts with that kind's values, as at installation:
+
+```sh
+docker compose --project-directory deploy -f deploy/docker-compose.yml exec api \
+  python manage.py create_workspace --name "Bakkerij Jansen" --kind business \
+  --admin-email naam@voorbeeld.nl
+```
+
+When that address has an account, it becomes the workspace's admin. When it has none,
+the command prints an invitation link for that address, once: send it to the person, who
+becomes the first admin (the link works 7 days, and only while the workspace has no admin).
+The server log gets `workspace_created`.
+
 ## 18. Sessions, devices and how long they last
 
 - A web session ends after **14 days without use**, and after **90 days** whatever
@@ -657,3 +674,26 @@ build attestation with the build time in it, which gave every build a new image 
 Docker's containerd image store. `./brievie` now builds without the default attestation
 (`BUILDX_NO_DEFAULT_ATTESTATIONS=1`), so a start without changes leaves the services
 running. If you build with `docker compose build` yourself, set that variable too.
+
+## 23. The trash, and what "definitief verwijderen" means for back-ups
+
+A member moves a letter to the trash with **Verwijderen** on the letter. It stays in the
+**Prullenbak** for 30 days and can be put back (**Terugzetten**); after that Brievie removes
+it for good, within the hour (a job at 41 minutes past each hour). An admin can do it
+earlier: **Definitief verwijderen** for one letter or **Prullenbak legen** for all letters
+in the trash that the admin can see. A private letter the admin may not read stays until
+its 30 days are over. Purging only works in the web, not with the app.
+
+"Definitief verwijderen" removes the letter from Brievie for good: its scanned pages, its
+text and its tasks. **A back-up made earlier still holds it** until that back-up expires.
+With the current retention (section 6) that is up to a year, for the monthly snapshots.
+Restoring such a back-up brings the letter back. If a letter must really be gone from
+every copy, that is only certain once the last back-up that holds it has expired.
+
+Brievie does not watch a retention term yet, for example the fiscal duty to keep invoices
+for seven years. Mind that yourself before you purge a letter early. The check for it will
+hook in at one place (`apps.documents.retention.check_removal`).
+
+The purge waits while a back-up or restore runs and goes on at the next hour. A letter
+whose files cannot be removed (for example a permissions problem on the document volume)
+stays hidden and is tried again every hour; the worker's log names its id.

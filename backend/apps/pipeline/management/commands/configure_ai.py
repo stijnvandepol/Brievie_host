@@ -9,7 +9,7 @@ from django.utils.translation import gettext as _
 
 from apps.pipeline import settings_service
 from apps.pipeline.models import AISettings
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import NOBODY, workspace_context
 from apps.workspaces.models import Workspace
 
 KEY_VARIABLE = "BRIEVIE_AI_API_KEY"
@@ -69,7 +69,7 @@ class Command(BaseCommand):
             target = settings_service.resolve(
                 mode=mode, supplier=supplier, base_url=base_url, model=model
             )
-            with workspace_context(workspace):
+            with workspace_context(workspace, actor=NOBODY):
                 asks = target.mode == AISettings.Mode.EXTERNAL and not (
                     settings_service.consent_in_force(workspace, target.base_url)
                 )
@@ -88,7 +88,7 @@ class Command(BaseCommand):
                 api_key = os.environ.get(KEY_VARIABLE) or getpass("API key: ")
             elif mode == AISettings.Mode.LOCAL:
                 api_key = os.environ.get(KEY_VARIABLE) or None
-            with workspace_context(workspace):
+            with workspace_context(workspace, actor=NOBODY):
                 settings = settings_service.configure(
                     workspace_id=workspace,
                     mode=mode,

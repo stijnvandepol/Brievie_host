@@ -131,6 +131,8 @@ describe("inviting", () => {
       email: "",
       person_id: null,
       note: "",
+      confirmed: false,
+      preview_token: "",
     });
   });
 
@@ -163,6 +165,8 @@ describe("inviting", () => {
       email: "tante@example.nl",
       person_id: null,
       note: "Tante Els",
+      confirmed: false,
+      preview_token: "",
     });
   });
 

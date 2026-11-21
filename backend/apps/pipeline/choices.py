@@ -28,6 +28,8 @@ class ExtractionRequest:
     text: str
     persons: tuple[Choice, ...] = ()
     labels: tuple[Choice, ...] = ()
+    # The workspace's `summary_language`: the language of the summary and descriptions.
+    summary_language: str = "nl"
 
 
 def aliased(

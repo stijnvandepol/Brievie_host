@@ -93,6 +93,46 @@ export const documentQuery = (workspaceId: string, documentId: string) =>
     },
   });
 
+/** The letters in the trash the caller sees, the most recently trashed first. */
+export const trashQuery = (workspaceId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "trash"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/trash", {
+        params: { path: { workspace_id: workspaceId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
+/** The open pairs of letters that are probably one letter scanned twice, newest first. */
+export const duplicatesQuery = (workspaceId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "duplicates"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/duplicates", {
+        params: { path: { workspace_id: workspaceId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
+/** One pair with what is the same and what differs. */
+export const duplicateQuery = (workspaceId: string, duplicateId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "duplicates", duplicateId],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/duplicates/{duplicate_id}",
+        { params: { path: { workspace_id: workspaceId, duplicate_id: duplicateId } } },
+      );
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
 export const personsQuery = (workspaceId: string) =>
   queryOptions({
     queryKey: ["workspaces", workspaceId, "persons"],
@@ -123,6 +163,39 @@ export const inboxCountsQuery = (workspaceId: string) =>
     refetchInterval: (query) => ((query.state.data?.new ?? 0) > 0 ? READING_REFETCH_MS : false),
     queryFn: async () => {
       const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/inbox/counts", {
+        params: { path: { workspace_id: workspaceId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
+export type TaskPart = "mine" | "to_pick_up" | "all";
+export type TaskStatus = "open" | "done";
+
+/**
+ * "Mijn taken": the caller's tasks of one part. Under the documents key on purpose: every
+ * change of a letter (confirm, tick, trash, restore, a name, a merge) already refreshes
+ * `["workspaces", id, "documents"]`, and the list is derived from the letters.
+ */
+export const myTasksQuery = (workspaceId: string, part: TaskPart, status: TaskStatus) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "documents", "my-tasks", part, status],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/my-tasks", {
+        params: { path: { workspace_id: workspaceId }, query: { part, status } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
+/** The numbers of "Mijn taken" for the navigation: open, overdue, to pick up. */
+export const myTaskCountsQuery = (workspaceId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "documents", "my-tasks", "counts"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/my-tasks/counts", {
         params: { path: { workspace_id: workspaceId } },
       });
       if (error !== undefined || !data) throw new ApiFailure(error);
@@ -299,3 +372,39 @@ export const myExportQuery = (workspaceId: string) =>
       return data;
     },
   });
+
+const SEARCH_PAGE_SIZE = 30;
+
+export type DocumentSearch = {
+  q: string;
+  document_type?: string;
+  label_id?: string;
+  person_id?: string;
+  inbox_state?: string;
+  date_from?: string;
+  date_to?: string;
+  offset?: number;
+};
+
+/**
+ * A search in the letters of a workspace. A POST, so the term travels in the body. It is
+ * deliberately no query: a query key would hold the term in the cache and its devtools.
+ */
+export async function searchDocuments(workspaceId: string, search: DocumentSearch) {
+  const { data, error } = await api.POST("/api/v1/workspaces/{workspace_id}/documents/search", {
+    params: { path: { workspace_id: workspaceId } },
+    body: {
+      q: search.q,
+      document_type: search.document_type ?? "",
+      inbox_state: search.inbox_state ?? "",
+      label_id: search.label_id || null,
+      person_id: search.person_id || null,
+      date_from: search.date_from || null,
+      date_to: search.date_to || null,
+      offset: search.offset ?? 0,
+      limit: SEARCH_PAGE_SIZE,
+    },
+  });
+  if (error !== undefined || !data) throw new ApiFailure(error);
+  return data;
+}

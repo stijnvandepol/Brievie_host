@@ -1,0 +1,123 @@
+name: Visibility performance
+
+# The visibility check measured at 100,000 letters (plan "wie ziet wat", Task 2, ruling
+# P1): every list per state and actor, median <= 250 ms on this runner, the preview's
+# count <= 2 s. It takes minutes, so it runs only when what it measures changes (the
+# visibility SQL, the policies, the list services, a migration, the database settings,
+# the measurement or this file), on demand, and once a week (a new postgres:18 image
+# can change a plan). It is its own workflow and no required check: a pull request
+# that touches none of these files does not start it. The report goes to the run's
+# summary, the EXPLAIN (ANALYZE, BUFFERS) of every measured query to the artifact
+# `visibility-perf`.
+on:
+  pull_request:
+    paths:
+      - "backend/brievie/settings.py"
+      - "backend/apps/workspaces/visibility_sql.py"
+      - "backend/apps/workspaces/rls.py"
+      - "backend/apps/workspaces/context.py"
+      - "backend/apps/documents/services.py"
+      - "backend/apps/documents/visibility.py"
+      - "backend/apps/people/services.py"
+      - "backend/apps/labels/services.py"
+      - "backend/apps/tasks/services.py"
+      - "backend/apps/tasks/facts.py"
+      - "backend/apps/*/migrations/**"
+      - "backend/tests/perf/**"
+      - "backend/uv.lock"
+      - ".github/workflows/visibility-perf.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/brievie/settings.py"
+      - "backend/apps/workspaces/visibility_sql.py"
+      - "backend/apps/workspaces/rls.py"
+      - "backend/apps/workspaces/context.py"
+      - "backend/apps/documents/services.py"
+      - "backend/apps/documents/visibility.py"
+      - "backend/apps/people/services.py"
+      - "backend/apps/labels/services.py"
+      - "backend/apps/tasks/services.py"
+      - "backend/apps/tasks/facts.py"
+      - "backend/apps/*/migrations/**"
+      - "backend/tests/perf/**"
+      - "backend/uv.lock"
+      - ".github/workflows/visibility-perf.yml"
+  schedule:
+    - cron: "37 5 * * 0" # Sunday, 05:37 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# As ci.yml: a newer push to a pull request cancels the older run; the event is in the
+# group, so a scheduled run and a push run never cancel each other.
+concurrency:
+  group: visibility-perf-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  visibility-perf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # The same database as the backend job of ci.yml, at its default settings (P1).
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      PGHOST: localhost
+      PGPASSWORD: postgres
+      POSTGRES_USER: postgres
+      BRIEVIE_OWNER_PASSWORD: ci-owner
+      BRIEVIE_APP_PASSWORD: ci-app
+      DATABASE_URL: postgres://brievie_app:ci-app@localhost:5432/brievie
+      DATABASE_OWNER_URL: postgres://brievie_owner:ci-owner@localhost:5432/brievie
+      BRIEVIE_BACKUP_DB_PASSWORD: ci-backup
+      DATABASE_BACKUP_URL: postgres://brievie_backup:ci-backup@localhost:5432/brievie
+      # At least 50 characters: the settings refuse shorter keys.
+      SECRET_KEY: ci-only-not-secret-ci-only-not-secret-ci-only-not-secret
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: "0.13.8"
+      - name: Create database roles
+        run: bash ../deploy/postgres-init/01-roles.sh
+      - run: uv sync --frozen
+      # The test run migrates its own database as brievie_owner (not a superuser, no
+      # BYPASSRLS, so the forced policies bind it), as in the backend job.
+      - name: Measure
+        run: BRIEVIE_PERF=1 BRIEVIE_PERF_REPORT="$RUNNER_TEMP/perf-report.md" uv run pytest tests/perf -p no:cacheprovider
+      - name: Report
+        if: ${{ !cancelled() }}
+        run: |
+          if [ -f "$RUNNER_TEMP/perf-report.md" ]; then
+            cat "$RUNNER_TEMP/perf-report.md"
+            cat "$RUNNER_TEMP/perf-report.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No report: the measurement stopped before its verdict (see the step Measure)." |
+              tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Keep the report and the query plans
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: visibility-perf
+          path: |
+            ${{ runner.temp }}/perf-report.md
+            ${{ runner.temp }}/perf-explain/
+          if-no-files-found: warn

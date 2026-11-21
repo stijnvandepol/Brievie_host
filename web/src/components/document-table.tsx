@@ -1,6 +1,8 @@
 import { t } from "@lingui/core/macro";
 import { Link } from "@tanstack/react-router";
+import type { ReactNode } from "react";
 import type { components } from "../api/schema";
+import { dateFormat } from "../format";
 import { LabelChips } from "./label-chip";
 import { SuggestionMark } from "./suggestion-list";
 import { Badge, EmptyState, type Intent, Personas, useMediaQuery } from "./ui";
@@ -9,7 +11,7 @@ type DocumentSummary = components["schemas"]["DocumentSummaryOut"];
 type Person = components["schemas"]["PersonOut"];
 type LabelOut = components["schemas"]["LabelOut"];
 
-const date = new Intl.DateTimeFormat("nl-NL", { dateStyle: "medium" });
+const date = dateFormat({ dateStyle: "medium" });
 
 export function typeLabel(type: string): string {
   switch (type) {
@@ -86,9 +88,12 @@ export function StatusBadge({ status, inboxState }: { status: string; inboxState
 }
 
 /** Whether Brievie handled (part of) this letter itself: confirmed it, or put a label or person on it. */
-export function isAutomatic(
-  document: Pick<DocumentSummary, "confirmed_by_ai" | "auto_label_ids" | "auto_addressee_ids">,
-): boolean {
+type AutomaticFields = Pick<
+  DocumentSummary,
+  "confirmed_by_ai" | "auto_label_ids" | "auto_addressee_ids" | "auto_rule_label_ids"
+>;
+
+export function isAutomatic(document: AutomaticFields): boolean {
   return (
     document.confirmed_by_ai === true ||
     (document.auto_label_ids ?? []).length > 0 ||
@@ -96,13 +101,25 @@ export function isAutomatic(
   );
 }
 
-/** The mark of a letter the AI handled: text in the same tag as the status, never colour alone. */
-export function AutomaticBadge({
-  document,
-}: {
-  document: Pick<DocumentSummary, "confirmed_by_ai" | "auto_label_ids" | "auto_addressee_ids">;
-}) {
-  return isAutomatic(document) ? <Badge icon="info">{t`Automatisch door AI`}</Badge> : null;
+/** Whether the AI itself chose something on this letter (not only a rule's label). */
+function byAi(document: AutomaticFields): boolean {
+  const byRule = document.auto_rule_label_ids ?? [];
+  return (
+    document.confirmed_by_ai === true ||
+    (document.auto_addressee_ids ?? []).length > 0 ||
+    (document.auto_label_ids ?? []).some((id) => !byRule.includes(id))
+  );
+}
+
+/**
+ * The mark of a letter Brievie handled itself: text in the same tag as the status, never
+ * colour alone. "door regel" when only a rule's label was put on (the AI chose nothing).
+ */
+export function AutomaticBadge({ document }: { document: AutomaticFields }) {
+  if (!isAutomatic(document)) return null;
+  return (
+    <Badge icon="info">{byAi(document) ? t`Automatisch door AI` : t`Automatisch door regel`}</Badge>
+  );
 }
 
 /** The persons a letter is addressed to, each with initials; ids nobody knows are skipped. */
@@ -164,29 +181,36 @@ export function LetterDateText({ document }: { document: Headline }) {
 const PHONE = "(max-width: 639px)";
 
 /** The post of one workspace: a row per document, the sender links to the document. */
-export function DocumentTable({
+export function DocumentTable<D extends DocumentSummary = DocumentSummary>({
   workspaceId,
   documents,
   persons,
   labels,
   empty,
   hint,
+  fragment,
+  caption,
 }: {
   workspaceId: string;
-  documents: DocumentSummary[];
+  documents: D[];
   persons: Person[];
   labels: LabelOut[];
   /** What to say when there are no letters. */
   empty: string;
   /** What to do about an empty list, in a sentence. */
   hint?: string;
+  /** Something under the sender of a row, for example the part of the letter that was found. */
+  fragment?: (document: D) => ReactNode;
+  /** The name of the list for screen readers. */
+  caption?: string;
 }) {
+  const name = caption ?? t`Alle post`;
   // A phone shows a card per letter: seven columns do not fit, and a sideways scroll hides
   // the status. Tests (no media queries) and wider screens get the table.
   const phone = useMediaQuery(PHONE);
   if (documents.length === 0) {
     return (
-      <section className="panel" aria-label={t`Alle post`}>
+      <section className="panel" aria-label={name}>
         <EmptyState icon="mail" hint={hint}>
           {empty}
         </EmptyState>
@@ -195,7 +219,7 @@ export function DocumentTable({
   }
   if (phone) {
     return (
-      <section className="panel" aria-label={t`Alle post`}>
+      <section className="panel" aria-label={name}>
         <ul className="letter-cards">
           {documents.map((document) => (
             <li key={document.id} className="letter-card">
@@ -209,6 +233,7 @@ export function DocumentTable({
                 </Link>
                 <StatusBadge status={document.status} inboxState={document.inbox_state} />
               </div>
+              {fragment?.(document)}
               <p className="letter-card-meta">
                 <span>
                   <TypeText document={document} />
@@ -231,7 +256,7 @@ export function DocumentTable({
   }
   return (
     // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrolling box must be reachable by keyboard (WCAG 2.1.1).
-    <section className="panel table-scroll" aria-label={t`Alle post`} tabIndex={0}>
+    <section className="panel table-scroll" aria-label={name} tabIndex={0}>
       <table className="table table-wide">
         <thead>
           <tr>
@@ -254,6 +279,7 @@ export function DocumentTable({
                 >
                   <SenderText document={document} />
                 </Link>
+                {fragment?.(document)}
               </th>
               <td>
                 <TypeText document={document} />
