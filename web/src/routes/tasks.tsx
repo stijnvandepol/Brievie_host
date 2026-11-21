@@ -187,7 +187,7 @@ function OpenTasks({
               const description = task.description;
               return row(
                 task,
-                canEdit ? (
+                canEdit && task.can_take ? (
                   <Button
                     className="button-text"
                     aria-label={t`Ik doe dit: ${description}`}

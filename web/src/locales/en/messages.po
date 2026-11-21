@@ -1475,6 +1475,10 @@ msgstr "This example does not exist (any more)."
 msgid "Document"
 msgstr "Document"
 
+#: src/components/task-actions.tsx
+msgid "Doet: {takenBy}"
+msgstr "Doing it: {takenBy}"
+
 #. placeholder {0}: dateTime.format(new Date(current.expires_at))
 #: src/components/export-panel.tsx
 msgid "Download ({letters}, geldig tot {0})"
@@ -3993,6 +3997,14 @@ msgstr "Conditions"
 #: src/routes/workspaces.tsx
 msgid "Vraag een beheerder om een uitnodiging."
 msgstr "Ask an admin for an invitation."
+
+#: src/components/task-actions.tsx
+msgid "Vrijgeven"
+msgstr "Release"
+
+#: src/components/task-actions.tsx
+msgid "Vrijgeven: {description}"
+msgstr "Release: {description}"
 
 #: src/routes/rule-editor.tsx
 msgid "Vul de gemarkeerde delen in. Met Test op bestaande post zie je welke brieven de regel zou raken. Er wordt niets opgeslagen tot je op Opslaan drukt."
