@@ -1,13 +1,16 @@
-import { screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import {
   API,
+  documentHandlers,
   HttpResponse,
   http,
   loggedInHandlers,
   renderApp,
+  secondWorkspace,
   server,
+  twoWorkspaces,
   workspace,
 } from "../test-utils";
 
@@ -83,5 +86,56 @@ describe("notices", () => {
     renderApp("/koppel-app");
     await screen.findByRole("heading", { level: 1, name: "Apparaten" });
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});
+
+describe("notices per workspace (decision B7)", () => {
+  const aboutHome = {
+    ...notice,
+    id: "f2222222-2222-4222-8222-222222222222",
+    message: "Noodtoegang staat aan in Thuis.",
+    workspace_id: workspace.id,
+  };
+  const aboutOffice = {
+    ...notice,
+    id: "f3333333-3333-4333-8333-333333333333",
+    message: "Noodtoegang staat aan in Bedrijf.",
+    workspace_id: secondWorkspace.id,
+  };
+  const aboutMe = { ...notice, workspace_id: null };
+
+  function setUp() {
+    server.use(
+      http.get(`*${API}/me/notices`, () => HttpResponse.json([aboutHome, aboutOffice, aboutMe])),
+      twoWorkspaces(),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
+  }
+
+  it("shows a workspace notice only in its workspace", async () => {
+    setUp();
+    renderApp(`/w/${workspace.id}/post`);
+    expect(await screen.findByText("Noodtoegang staat aan in Thuis.")).toBeVisible();
+    expect(screen.queryByText("Noodtoegang staat aan in Bedrijf.")).not.toBeInTheDocument();
+  });
+
+  it("shows account notices everywhere", async () => {
+    setUp();
+    renderApp("/koppel-app");
+    expect(await screen.findByText(/opnieuw ingesteld door Anne/)).toBeVisible();
+    expect(screen.queryByText(/Noodtoegang staat aan/)).not.toBeInTheDocument();
+    cleanup();
+    setUp();
+    renderApp(`/w/${workspace.id}/post`);
+    expect(await screen.findByText(/opnieuw ingesteld door Anne/)).toBeVisible();
+  });
+
+  it("shows all on /werkruimtes", async () => {
+    setUp();
+    renderApp("/werkruimtes");
+    expect(await screen.findByText("Noodtoegang staat aan in Thuis.")).toBeVisible();
+    expect(screen.getByText("Noodtoegang staat aan in Bedrijf.")).toBeVisible();
+    expect(screen.getByText(/opnieuw ingesteld door Anne/)).toBeVisible();
   });
 });

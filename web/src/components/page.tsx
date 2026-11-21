@@ -473,7 +473,16 @@ function AccountMenu({
 }
 
 /** Layout of the screens after login: app bar, navigation pane, then the page. */
-export function Shell({ children, workspace }: { children: ReactNode; workspace?: NavWorkspace }) {
+export function Shell({
+  children,
+  workspace,
+  allNotices = false,
+}: {
+  children: ReactNode;
+  workspace?: NavWorkspace;
+  /** Every notice, also those about a workspace (the overview of workspaces). */
+  allNotices?: boolean;
+}) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { data: me } = useQuery(meQuery);
@@ -567,7 +576,7 @@ export function Shell({ children, workspace }: { children: ReactNode; workspace?
         <main className="content">
           <div className="content-inner">
             <ErrorAlert error={logout.error} />
-            <NoticeBar />
+            <NoticeBar workspaceId={workspace?.id} all={allNotices} />
             {workspace ? <UndoBar workspaceId={workspace.id} /> : null}
             {children}
           </div>

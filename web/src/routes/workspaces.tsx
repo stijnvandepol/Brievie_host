@@ -25,7 +25,7 @@ function WorkspacesPage() {
   }, [error, navigate]);
 
   return (
-    <Shell>
+    <Shell allNotices>
       <PageHeader
         title={t`Werkruimtes`}
         description={t`Een werkruimte heeft eigen post en eigen leden, bijvoorbeeld Thuis of je bedrijf. Kies welke je wilt openen.`}
