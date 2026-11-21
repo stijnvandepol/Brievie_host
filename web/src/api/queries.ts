@@ -21,8 +21,10 @@ export const meQuery = queryOptions({
   },
 });
 
+/** The caller's workspaces. Its own key, not a prefix of the keys of one workspace
+ * (`["workspaces", id, …]`): refreshing the list refetches nothing of any workspace. */
 export const workspacesQuery = queryOptions({
-  queryKey: ["workspaces"],
+  queryKey: ["workspace-list"],
   queryFn: async () => {
     const { data, error } = await api.GET("/api/v1/workspaces");
     if (error !== undefined || !data) throw new ApiFailure(error);

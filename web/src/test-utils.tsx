@@ -70,6 +70,29 @@ export function twoWorkspaces() {
 }
 
 /**
+ * Everything a workspace page asks besides its own content, for any workspace (the second
+ * one of `twoWorkspaces`, a switch test): counts, sight, persons, labels, members, AI.
+ * `documents`: what every document list of that workspace answers.
+ */
+export function workspaceHandlers(
+  id: string,
+  documents: components["schemas"]["DocumentSummaryOut"][] = [],
+) {
+  const base = `*${API}/workspaces/${id}`;
+  return [
+    http.get(`${base}/inbox/counts`, () => HttpResponse.json({ new: 0, review: 0, unassigned: 0 })),
+    http.get(`${base}/my-tasks/counts`, () => HttpResponse.json(noTaskCounts)),
+    http.get(`${base}/visibility`, () => HttpResponse.json(homeVisibility)),
+    http.get(`${base}/documents`, () => HttpResponse.json(documents)),
+    http.get(`${base}/persons`, () => HttpResponse.json([])),
+    http.get(`${base}/people`, () => HttpResponse.json([])),
+    http.get(`${base}/members`, () => HttpResponse.json([])),
+    http.get(`${base}/labels`, () => HttpResponse.json([])),
+    http.get(`${base}/ai`, () => HttpResponse.json({ mode: "off" })),
+  ];
+}
+
+/**
  * Holds a handler until the test calls `open()`, so a test can look at a pending state
  * for as long as it needs. A fixed delay in a handler races the test on a busy machine.
  */

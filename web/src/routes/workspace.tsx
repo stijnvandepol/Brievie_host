@@ -18,5 +18,13 @@ export const workspaceRoute = createRoute({
     undoInWorkspace(workspace.id);
     return { workspace };
   },
-  component: Outlet,
+  component: WorkspaceOutlet,
 });
+
+/** The pages of one workspace, drawn afresh for another: a switch from `/w/A/inbox` to
+ * `/w/B/inbox` mounts the page again, so nothing a page keeps of A (state read once when
+ * it opened) shows in B (spec S 4.3; the old switch looked dead, S 2.1). */
+function WorkspaceOutlet() {
+  const { workspace } = workspaceRoute.useRouteContext();
+  return <Outlet key={workspace.id} />;
+}

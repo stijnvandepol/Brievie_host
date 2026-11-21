@@ -124,6 +124,7 @@ function RoleForm({
         // My own role changed: the pages know it from the route, so ask the server again
         // and let every admin control and menu entry go at once.
         await queryClient.invalidateQueries({ queryKey: workspacesQuery.queryKey });
+        await queryClient.invalidateQueries({ queryKey: ["workspaces", workspaceId] });
         await router.invalidate();
       }
       onClose();
