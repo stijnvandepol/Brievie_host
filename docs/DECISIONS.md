@@ -2543,3 +2543,19 @@ Instellingen with their routes kept.
 - **Database defaults** for the new columns of `workspaces_workspace` and
   `workspaces_membership`, as `summary_language`: a raw insert (a seed, the measurement)
   keeps working; the models keep Python defaults (no `RETURNING`).
+- **Measured at 100,000 letters (plan Task 10, `visibility-perf` of 21-11-2026).** The world
+  gained about 166,000 read marks, `unread_from` 90 days back, 3 % of the confirmed
+  letters with addressees not opened, and "Blijft liggen" on. Medians (ms) per list, the
+  slowest of the four actors, threshold 250; every list PASS, and every result the same
+  without the member filter:
+
+  | list | E | own+D | own |
+  |---|---:|---:|---:|
+  | `menu_counts` | 166 | 167 | 172 |
+  | `list_my_post` | 47 | 48 | 50 |
+  | `list_my_post_unread` | 21 | 27 | 27 |
+  | `list_all_unread` | 45 | 41 | 37 |
+  | `lingering_letters` | 61 | 161 | 157 |
+
+  `menu_counts` is the sum of its parts (two Inbox counts, the unread count of Mijn post,
+  the task aggregate, three lingering counts); no fallback was needed.

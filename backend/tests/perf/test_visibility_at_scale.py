@@ -34,7 +34,7 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from pytest_django import DjangoDbBlocker
 
-from apps.documents import search, visibility
+from apps.documents import lingering, search, visibility
 from apps.documents import services as documents
 from apps.documents.models import Document
 from apps.labels import services as labels
@@ -70,6 +70,11 @@ FILTERED: Final = (
     "list_documents_unassigned",
     "list_documents_own_person",
     "inbox_counts",
+    "menu_counts",
+    "list_my_post",
+    "list_my_post_unread",
+    "list_all_unread",
+    "lingering_letters",
 )
 
 
@@ -138,8 +143,11 @@ def _list(name: str, workspace: Workspace, world: PerfWorld, actor: UUID) -> Cal
         digest = hashlib.sha256(",".join(str(i.task.id) for i in result.items).encode())
         return f"{len(result.items)} rows #{digest.hexdigest()[:12]}"
 
+    def lingered(result: lingering.Lingering) -> str:
+        return f"{ids(result.too_long_in_inbox)} / {ids(result.not_opened)}"
+
     # The document lists take the member (the one visibility seam); fetched before timing.
-    member = Membership.objects.get(workspace=workspace, user_id=actor)
+    member = Membership.objects.select_related("workspace").get(workspace=workspace, user_id=actor)
 
     def found(q: str) -> list[Document]:
         result = search.search_documents(
@@ -166,6 +174,13 @@ def _list(name: str, workspace: Workspace, world: PerfWorld, actor: UUID) -> Cal
         # MAX_CANDIDATES). Both match exactly, so the typo fallback does not run.
         "search_sender": lambda: ids(found("afzender 042")),
         "search_common_word": lambda: ids(found("samenvatting")),
+        "menu_counts": lambda: json.dumps(vars(documents.menu_counts(member)), sort_keys=True),
+        "list_my_post": lambda: ids(documents.list_documents(member, addressed_to_me=True)),
+        "list_my_post_unread": lambda: ids(
+            documents.list_documents(member, addressed_to_me=True, unread_only=True)
+        ),
+        "list_all_unread": lambda: ids(documents.list_documents(member, unread_only=True)),
+        "lingering_letters": lambda: lingered(lingering.lingering_letters(member)),
     }
     return calls[name]
 

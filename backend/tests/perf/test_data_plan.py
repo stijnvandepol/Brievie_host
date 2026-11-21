@@ -138,3 +138,34 @@ def test_the_extras_leave_the_rest_of_the_world_as_it_was() -> None:
     assert plan.letters == plain.letters
     assert plan.label_links == plain.label_links
     assert plan.readers[: len(plain.readers)] == plain.readers
+
+
+def test_read_marks_are_of_addressees_and_the_sorter(plan: Plan) -> None:
+    assert len(set(plan.read_marks)) == len(plan.read_marks)
+    for i, member in plan.read_marks[:5_000]:
+        letter = plan.letters[i]
+        addressed = {p for p in letter.persons if p < DEFAULT.members}
+        for d in letter.departments:
+            addressed |= set(plan.departments[d])
+        assert member in addressed or member == SORTER
+    by_sorter = sum(m == SORTER for _, m in plan.read_marks)
+    assert 15_000 < by_sorter < 25_000
+    # About 70 % of what members are addressed: well over a hundred thousand marks.
+    assert 140_000 < len(plan.read_marks) < 190_000
+    # The plain member has read part of their own post, not all of it.
+    own = {i for i, x in enumerate(plan.letters) if PLAIN in x.persons}
+    read = {i for i, m in plan.read_marks if m == PLAIN}
+    assert read < own
+    assert 0.6 < len(read) / len(own) < 0.8
+
+
+def test_unopened_letters_are_confirmed_and_addressed(plan: Plan) -> None:
+    assert all(
+        plan.letters[i].status == "done"
+        and (plan.letters[i].persons or plan.letters[i].departments)
+        for i in plan.unopened
+    )
+    addressed_done = sum(
+        x.status == "done" and bool(x.persons or x.departments) for x in plan.letters
+    )
+    assert 0.02 < len(plan.unopened) / addressed_done < 0.04
