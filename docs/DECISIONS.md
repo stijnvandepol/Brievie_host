@@ -1546,3 +1546,108 @@ For Thuis and Zakelijk alike; a retention term per letter is later.
   who did it ("door jou", or "door Brievie" when nobody did, for the later merge). The
   web's calls live in `web/src/api/trash.ts`; after each it reads documents, inbox counts,
   trash, persons and labels again (search keeps no cache; tasks come with the letters).
+
+## 2026-11-21: Duplicate letters
+
+Design: `docs/superpowers/specs/2026-11-20-duplicates-design.md`; plan
+`docs/superpowers/plans/2026-11-21-duplicates.md`. On arrival Brievie looks for the same
+letter scanned before, stores a pair (`DuplicateCandidate`), shows it under "Te doen" as
+"Dubbel?" to a member who sees both letters, and that member merges them (the other letter
+to the trash) or says "Het zijn twee brieven" for good.
+
+Rulings of the design (numbers as there):
+
+- **Its own pair model, not a `DocumentSuggestion` kind (1).** A pair belongs to two letters
+  and needs "both readable" as its visibility rule.
+- **Detection in the pipeline's last transaction, as the system, before the autopilot (2).**
+  The rail is the caller's (`steps._confirm_guarded`); `decide_confirmation` and
+  `mentions_term` stay pure and unchanged. A failed detection blocks the confirm too.
+- **Guards only when both values are strong (3)**: confirmed, or confidence >=
+  `NEEDS_ATTENTION_BELOW` (0.85). Weak differences are shown, marked uncertain, not blocking.
+- **Every member read of a pair through `duplicates.visible_pairs` (4)**, on top of
+  `visible_documents`, with a restrictive RLS policy on both letters behind it
+  (`rls.restrict_to_visible_document_pair`). Not listed, not counted, no chip, 404 like a
+  missing one.
+- **A merge never changes who sees a letter (5)**: different viewers (or one private letter)
+  refuse it with 409 `duplicate_visibility_differs`, checked before and after uniting the
+  addressees. The postkamer case goes to the postkamer design.
+- **No audit code of its own (6).** The merge's trash writes `document_trashed`
+  (`reason: duplicate`, ids only).
+- **A done task on the discarded scan completes its open twin on the kept letter only with
+  the checkbox "Taak ook afronden", on by default (7)**, and only a task that was on the
+  kept letter before the merge.
+- **One row per pair forever; only arrivals are compared, 180 days, at most 3 open pairs per
+  letter (8).** An archive sweep is later.
+- **Numbers in the text are a feature (9)**: template letters are textually near-identical;
+  their dates, amounts and references differ.
+- **The discarded letter's history says `trashed` with origin `merge` and the merging user;
+  `move_to_trash` refuses `user=None` (10, trash review M8).** `move_to_trash` derives the
+  origin from `reason` (`user` -> `user`, `duplicate` -> `merge`). Brievie trashes nothing
+  on its own; a future system trash brings its own origin.
+- **A pair with a letter in the trash is hidden, not withdrawn (11)**, and returns on
+  restore. The restore after a merge brings the letter back on its own; the pair stays
+  `merged`, the moved tasks stay on the kept letter.
+- **Labels and addressees a merge adds are a person's choice (12)**: origin `merge`, not
+  automatic, not undoable through the history.
+
+Owner decisions of 21-11: an open pair blocks the AI's auto-confirm (CLAUDE.md autopilot
+line); different visibility refuses the merge; the twin task only through "Taak ook
+afronden"; guards only when both values are strong; compare only on arrival (180 days, 3
+open pairs per letter), no audit code of its own.
+
+Measured (`backend/tests/perf/test_duplicates_measure.py`, `BRIEVIE_PERF=1`, as
+`brievie_owner` under forced RLS; Darwin arm64, 8 CPUs, PostgreSQL 18.7 in Docker,
+`shared_buffers` 128MB, `work_mem` 4MB, jit off; 2,000 generated letters, 300 positive pairs
+with an OCR noise model, 300 hard negatives, 10,000 random pairs):
+
+- **Candidate query: the letter's long digit runs, not its words.** The design's query (the
+  16 longest lexemes, OR'ed against `search_vector`) found the original for 34% (103/300)
+  of the rescans, recall 0.310 at 0.80/0.70, and took 89 ms at 10,000 and 799 ms at 100,000
+  letters: template words match every letter of a sender. The query now takes the letter's
+  digit runs of 6 or more digits (client, invoice, meter numbers, references) as its terms,
+  the longest 16, and its longest words only when it has no such number (never `bsn`). It
+  finds the original for 0.993 (298/300) of the rescans.
+- **`NUMBERS_SHARED_FROM = 0.60`, not the design's 0.70; `TEXT_SIMILAR_FROM = 0.80` as
+  designed.** At 0.80/0.70: recall 0.893, hard negatives 0, random 0. At 0.80/0.60: **recall
+  0.950 (285/300), hard negatives 0.7% (2/300, both reminders of the same invoice), random 0**
+  (highest random similarity 0.794). At 0.80/0.50: recall 0.960, hard negatives 1.3%. 0.60
+  meets the aim (recall >= 0.95, hard negatives <= 2%, random 0); a reminder that slips
+  through is still only a proposal with "Let op: datum verschilt" on top.
+- **Speed aim per size instead of one aim.** `detect` per arrival (warm, median of 7): **15-17
+  ms at 10,000 letters (aim < 50 ms)**, **84-95 ms at 100,000 letters (aim < 150 ms)**; the
+  design's < 50 ms at 100,000 is not met. Detection is one step of a background job per
+  arrival, and homes and small offices stay far below 10,000 letters (the 100,000 corpus puts
+  45,000 letters in one 180-day window).
+- **Why it is not faster: forced RLS keeps `@@` off the GIN index.** `@@` (`ts_match_vq`) is
+  not leakproof, so PostgreSQL evaluates it above the RLS barrier, never as an index
+  condition: the scan reads every letter of the 180-day window through
+  `documents_document_recent` and filters. The same statement as a superuser (RLS bypassed)
+  takes 0.27 ms through the GIN index; under RLS ~90 ms at 100,000. Binding the `tsquery`
+  as a constant changes nothing. Making `ts_match_vq` leakproof needs a superuser and would
+  weaken RLS for everything; a `SECURITY DEFINER` function does not help (RLS is forced on
+  the owner).
+- **Follow-up: approach 3, a number table with leakproof equality**, when an installation
+  nears 100,000 letters in 180 days: the letter's long digit runs in their own table with a
+  btree on `(workspace_id, number)`; text equality is leakproof, so the index drives the
+  candidate query under RLS. Isolated to `duplicates.candidates`.
+- **Search has the same limit.** `searchDocuments` uses `@@` under the same forced RLS, so
+  it does not use the GIN index either (its numbers were measured at 10,000 letters).
+
+Built in batch C:
+
+- **API.** `listDuplicates`, `getDuplicate`, `mergeDuplicate`, `dismissDuplicate`
+  (`apps/documents/duplicates_api.py`), all from `visible_pairs`. Additive:
+  `InboxCountsOut.duplicate`, `DocumentSummaryOut.open_duplicate_count` (lists, detail, the
+  merge answer and search hits) and `DocumentEventOut.related_document_id`. A viewer gets an
+  empty list, zero counts, 404 on `getDuplicate` and 403 on merge and dismiss: a viewer
+  cannot decide, so a count would be a task they cannot do.
+- **One place completes a task.** The merge completes a twin through
+  `tasks.services.complete_task` (which gained `origin`, default `user`).
+- **Web.** "Te doen" shows a block "Dubbel?" with its count (hidden at 0) and a chip
+  "Dubbel?" on a letter with an open pair; the page "Mogelijk dubbel"
+  (`/w/<id>/dubbel/<pair>`) puts both letters side by side (stacked on a phone), marks
+  "Verschilt" and "Verschilt misschien (slecht leesbaar)", keeps the chosen letter (the
+  suggested one preselected), and confirms "Samenvoegen?" with the checkbox "Taak ook
+  afronden" (a native checkbox, as the other checkboxes of the web). After a merge the kept
+  letter opens with the trash's undo bar for the other one; after "Het zijn twee brieven"
+  "Te doen" says "Goed. We vragen het niet meer voor deze twee brieven." once.

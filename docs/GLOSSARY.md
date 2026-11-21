@@ -100,3 +100,7 @@ the translation. Add a line before introducing a new domain term.
 | definitief verwijderen | purge (`purgeDocument`, `purge_started_at`) |
 | prullenbak legen | empty trash (`emptyTrash`) |
 | bewaartermijn | retention term (`retention.check_removal`) |
+| dubbel, Dubbel?, mogelijk dubbel | duplicate (`DuplicateCandidate`, `listDuplicates`) |
+| samenvoegen, Het is dezelfde brief | merge (`mergeDuplicate`) |
+| Het zijn twee brieven | dismiss (`dismissDuplicate`) |
+| Taak ook afronden | complete twin tasks (`complete_twin_tasks`, `task_twins`) |

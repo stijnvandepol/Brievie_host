@@ -67,7 +67,8 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
 - The pipeline applies only on a `processing` document under its row lock and reads
   `autopilot_in_force` at that moment. Nothing automatic happens (no apply, no confirm,
   whatever the switches) when processing failed or the organise step (`organise_processed`)
-  failed; no confirm when applying failed.
+  failed; no confirm when applying failed; no confirm while the letter has an open
+  duplicate pair (`duplicates.has_open_pair`) or the duplicate check failed.
 - `apps.pipeline.autopilot.decide_confirmation` and `mentions_term` stay pure: no database.
   `mentions_term` blocks rather than guesses (linear-time regexes): a letter that names a term
   stays a proposal unless it has actions and every one has a deadline. An invoice due date
@@ -123,6 +124,12 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
   `apps/documents/export_files.py`.
 - A member-facing read of documents starts from `apps.documents.visibility.visible_documents`
   (the one place that says which letters a member may see).
+- Every member read or change of a duplicate pair starts from
+  `apps.documents.duplicates.visible_pairs` (both letters through `visible_documents`); a
+  merge never changes who sees a letter (409 `duplicate_visibility_differs`), trashes only
+  through `trash.move_to_trash(reason="duplicate")`, and completes a twin task only when
+  `complete_twin_tasks` is true (through `tasks.services.complete_task`). Detection runs only
+  on arrival, as the system through the pipeline.
 - A trashed letter (`Document.trashed_at`) is out of every read: through the seam, and off it
   every query filters `models.LIVE` (the policies do not know the trash). The trash itself is
   read only through `visibility.trashed_documents(membership)` (the same rights as the seam);
