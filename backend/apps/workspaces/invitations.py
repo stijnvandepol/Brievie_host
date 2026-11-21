@@ -418,12 +418,14 @@ def lock_open_invitations_for_person(*, workspace_id: UUID, person_id: UUID) -> 
     )
 
 
-def revoke_invitations_for_person(invitations: list[Invitation], *, actor: AuditActor) -> int:
+def revoke_invitations_for_person(
+    invitations: list[Invitation], *, actor: AuditActor, reason: str
+) -> int:
     """Stop the invitations `lock_open_invitations_for_person` locked (the person was
     archived: an archived person cannot be invited, so an old link must not activate
     them). Returns how many."""
     for invitation in invitations:
-        _revoke(invitation, actor=actor, reason="person_archived")
+        _revoke(invitation, actor=actor, reason=reason)
     return len(invitations)
 
 

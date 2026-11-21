@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from django.db import IntegrityError, connection, models, transaction
+from django.db.models import ProtectedError
 from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -383,7 +384,7 @@ def update_person(
                 DocumentSuggestion.objects.filter(
                     person=person, state=DocumentSuggestion.State.OPEN
                 ).delete()
-            revoke_invitations_for_person(invitations, actor=actor)
+            revoke_invitations_for_person(invitations, actor=actor, reason="person_archived")
         _refuse_taken_names(person)
         _save(person)
         return _annotated(workspace, person.id)
@@ -398,10 +399,21 @@ def delete_person(
 ) -> None:
     """Delete a person nothing uses. The refusal names the trash only when `viewer` (the
     caller) sees each letter that keeps the person in their own trash; otherwise it says
-    "in use", so it never tells of a letter the caller may not see."""
+    "in use", so it never tells of a letter the caller may not see. Its open invitations
+    stop with it: without the person an old link would still work, as a plain invitation
+    with its role (re-review of PR #43)."""
+    from apps.workspaces.invitations import (
+        lock_open_invitations_for_person,
+        revoke_invitations_for_person,
+    )
+
     with transaction.atomic():
         # Rules first, in id order: a running rule holds its rules and then needs the person.
         rules = list(Rule.objects.select_for_update().filter(workspace=workspace).order_by("id"))
+        # The person's open invitations before the person (lock order).
+        invitations = lock_open_invitations_for_person(
+            workspace_id=workspace.id, person_id=person_id
+        )
         person = _get_for_update(workspace, person_id)
         # The caller is authorised above; the use and the delete reach letters the caller
         # cannot see (a hidden link would otherwise fail the commit). The message never
@@ -432,6 +444,7 @@ def delete_person(
                     _("De regel '%(rule)s' gebruikt deze persoon. Pas die regel eerst aan.")
                     % {"rule": rule.name},
                 )
+        revoke_invitations_for_person(invitations, actor=actor, reason="person_deleted")
         with system_actor():
             person.delete()
         record(
@@ -717,7 +730,14 @@ def _delete_unused(person: Person, *, actor: AuditActor) -> None:
     person_id = person.id
     workspace_id = person.workspace_id
     with transaction.atomic(), system_actor():
-        person.delete()
+        try:
+            _total, deleted = person.delete()
+        except ProtectedError as exc:
+            raise _member_already_linked() from exc
+        # Anything deleted with it (a proposal naming the person, committed since the
+        # check) means it was in use after all: undo, and refuse cleanly.
+        if any(count for label, count in deleted.items() if label != "people.Person"):
+            raise _member_already_linked()
         if (
             DocumentAddressee.objects.filter(person_id=person_id).exists()
             or DocumentSuggestion.objects.filter(person_id=person_id).exists()

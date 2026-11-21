@@ -243,3 +243,93 @@ def test_private_post_answer_only_for_an_active_account() -> None:
     assert (r.status_code, r.json()["code"]) == (409, "person_has_no_account")
     r = admin.get(f"{base}/{o.persons['Piet'].id}/private-post")
     assert r.status_code == 200
+
+
+# --- the re-review --------------------------------------------------------------------------
+
+
+def test_a_proposal_committed_after_the_check_keeps_the_own_person(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The fresh person looked unused, but a proposal names it by the time it is deleted:
+    the cascade would take the proposal along; the link is refused instead."""
+    from apps.documents.models import DocumentSuggestion
+    from apps.people import services
+
+    o = office()
+    piet = o.persons["Piet"].id
+    r = as_user(o.plain).put(
+        f"/api/v1/workspaces/{o.workspace.id}/persons/{piet}/member",
+        {"user_id": None},
+        content_type="application/json",
+    )
+    assert r.status_code == 200, r.json()
+    with as_actor(o.workspace, SYSTEM):
+        fresh = Person.objects.get(workspace=o.workspace, user=o.plain)
+        DocumentSuggestion.objects.create(
+            workspace=o.workspace,
+            document=o.letters["unassigned"],
+            action=DocumentSuggestion.Action.ADD_ADDRESSEE,
+            person=fresh,
+        )
+    monkeypatch.setattr(services, "_unused", lambda person: True)
+    r = as_user(o.admin).put(
+        f"/api/v1/workspaces/{o.workspace.id}/persons/{piet}/member",
+        {"user_id": str(o.plain.id), "confirmed": True, "preview_token": "x"},
+        content_type="application/json",
+    )
+    assert (r.status_code, r.json()["code"]) == (409, "member_already_linked")
+    with as_actor(o.workspace, SYSTEM):
+        assert Person.objects.filter(id=fresh.id).exists()
+        assert DocumentSuggestion.objects.filter(person=fresh).exists()
+
+
+def test_deleting_a_person_with_an_open_link_revokes_it() -> None:
+    h = home()
+    with as_actor(h.workspace, SYSTEM):
+        opa = Person.objects.create(workspace=h.workspace, display_name="Opa")
+    token = _invite(h, opa)
+    invitation = Invitation.objects.get(person_id=opa.id)
+    r = as_user(h.anne).delete(f"/api/v1/workspaces/{h.workspace.id}/persons/{opa.id}")
+    assert r.status_code == 204, r.content
+    invitation.refresh_from_db()
+    assert invitation.revoked_at is not None
+    status, body = _accept(token, "opa@example.nl")
+    assert (status, body["code"]) == (400, "invitation_invalid")
+    assert not User.objects.filter(email="opa@example.nl").exists()
+
+
+def test_a_revoked_invitation_cannot_be_renewed() -> None:
+    h = home()
+    _invite(h, h.persons["Oma"])
+    invitation = Invitation.objects.get(person_id=h.persons["Oma"].id)
+    admin = as_user(h.anne)
+    r = admin.delete(f"/api/v1/workspaces/{h.workspace.id}/invitations/{invitation.id}")
+    assert r.status_code == 204
+    r = post_json(admin, f"/workspaces/{h.workspace.id}/invitations/{invitation.id}/renew")
+    assert (r.status_code, r.json()["code"]) == (404, "invitation_not_found")
+
+
+def test_a_switched_off_person_comes_back_only_through_a_new_invitation() -> None:
+    from apps.common.tokens import new_token
+
+    h = home()
+    old_token, digest = new_token()
+    Invitation.objects.create(
+        workspace=h.workspace,
+        role="member",
+        person=h.persons["Bob"],
+        email="",
+        token_hash=digest,
+        expires_at=timezone.now() + timedelta(days=7),
+        created_by=h.anne,
+        created_by_name=h.anne.name,
+    )
+    r = as_user(h.anne).delete(f"/api/v1/workspaces/{h.workspace.id}/members/{h.bob.id}")
+    assert r.status_code == 204, r.content
+    status, body = _accept(old_token, h.bob.email, account="existing")
+    assert (status, body["code"]) == (400, "invitation_invalid")
+    status, body = _accept(_invite(h, h.persons["Bob"]), h.bob.email, account="existing")
+    assert status == 200, body
+    with as_actor(h.workspace, SYSTEM):
+        assert Person.objects.get(id=h.persons["Bob"].id).user_id == h.bob.id

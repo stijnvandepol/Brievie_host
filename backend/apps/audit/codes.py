@@ -135,7 +135,8 @@ ALLOWED_VALUES: dict[AuditCode, frozenset[str]] = {
     AuditCode.WORKSPACE_CREATED: frozenset({"kind"}),
     AuditCode.INVITATION_CREATED: frozenset({"role", "expires_in_days"}),
     # reason: admin, renewed, creator_lost_role, member_removed, superseded,
-    # person_archived, replaced (a newer link for the same person), person_unlinked.
+    # person_archived, replaced (a newer link for the same person), person_unlinked,
+    # person_deleted.
     AuditCode.INVITATION_REVOKED: frozenset({"reason"}),
     AuditCode.INVITATION_ACCEPTED: frozenset({"role", "new_account", "account_reactivated"}),
     AuditCode.MEMBER_ROLE_CHANGED: frozenset({"from", "to"}),

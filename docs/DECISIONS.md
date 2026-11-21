@@ -2470,3 +2470,10 @@ Spec `docs/superpowers/specs/2026-11-21-mensen-en-accounts-design.md`, plan
   savepoint and looks again after the DELETE, which waits for a transaction that put the
   person on a letter meanwhile: a link or proposal found then undoes the deletion with a
   clean 409 `member_already_linked`. No test: it needs two transactions racing.
+- **Re-review, point 7 again:** a proposal naming the person is deleted with it
+  (`DocumentSuggestion.person` cascades), so looking after the DELETE could miss it. The
+  per-model counts of `person.delete()` decide now: anything deleted besides the person
+  (or a `ProtectedError`) undoes the deletion with 409 `member_already_linked`.
+- **Re-review: deleting a person stops its open invitations** (reason `person_deleted`,
+  locked after the rules and before the person): with the person gone an old link would
+  have worked as a plain invitation with its role.
