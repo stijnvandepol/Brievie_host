@@ -2137,3 +2137,9 @@ installation starts in own post.
   the person's letters at once, and `test_task_release_callers` now checks per function
   that every writer of sight releases (or runs `sight_change`). A renewed admin
   invitation asks nothing again: it replaces one that was confirmed.
+- **The people writers use the locked role (finding 3).** `link_member` and the
+  department writers (`add_`, `remove_`, `update_department_member`) read the acting
+  member's role from the memberships they lock, not from the endpoint's earlier read: an
+  admin demoted in between gets 403 `forbidden`. `actor_role` of `link_member` counts only
+  for a call without a user, and only `ACTING_AS_SYSTEM` with a system actor is the
+  system; anything else without a user acts with no rights.

@@ -9,7 +9,7 @@ from django.utils.translation import gettext as _
 from psycopg import errors as pg_errors
 
 from apps.accounts.models import User
-from apps.audit.codes import AuditCode, TargetKind
+from apps.audit.codes import ActorKind, AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
 from apps.common.names import check_shown
@@ -462,13 +462,23 @@ def ensure_person_for_member(*, workspace: Workspace, user: User) -> Person:
         )
 
 
-def _lock_for_sight(workspace: Workspace, actor: AuditActor) -> list[Membership]:
+def _lock_for_sight(
+    workspace: Workspace, actor: AuditActor, *, actor_role: str
+) -> tuple[list[Membership], str]:
     """Every membership of the workspace (the lock of every change of who sees what,
-    S 4.4), and 404 `workspace_not_found` when the acting member is gone."""
+    S 4.4) and the acting member's role as the locked rows have it: never the role an
+    endpoint read before the lock (a demotion in between counts). 404
+    `workspace_not_found` when the acting member is gone. A call without a user is the
+    system only when it says so (`ACTING_AS_SYSTEM` and a system actor); else it acts
+    with no rights."""
     locked = lock_memberships(workspace)
-    if actor.user_id is not None and all(m.user_id != actor.user_id for m in locked):
+    if actor.user_id is None:
+        system = actor_role == ACTING_AS_SYSTEM and actor.kind == ActorKind.SYSTEM
+        return locked, ACTING_AS_SYSTEM if system else ""
+    own = next((m for m in locked if m.user_id == actor.user_id), None)
+    if own is None:
         raise ApiError(404, "workspace_not_found", _("We kunnen deze werkruimte niet vinden."))
-    return locked
+    return locked, own.role
 
 
 def link_member(
@@ -491,10 +501,11 @@ def link_member(
     system (no user) is not bound by that. A link by which somebody gains sight needs the
     confirmed preview (409 `confirmation_required`, `preview_outdated`; S 4.4); an unlink
     sends the person's post to the sorters without one (P6, P7). An admin linking
-    themselves: the other admins are told (S 4.7). Lock order: every membership, then
-    the person."""
+    themselves: the other admins are told (S 4.7). A member's rights are those of the
+    locked membership; `actor_role` counts only for a call without a user, which must
+    say `ACTING_AS_SYSTEM`. Lock order: every membership, then the person."""
     with transaction.atomic():
-        locked = _lock_for_sight(workspace, actor)
+        locked, locked_role = _lock_for_sight(workspace, actor, actor_role=actor_role)
         person = _get_for_update(workspace, person_id)
         if person.kind == Person.Kind.DEPARTMENT:
             raise ApiError(
@@ -502,7 +513,7 @@ def link_member(
                 "is_a_department",
                 _("Een afdeling koppel je niet aan één account. Voeg leden toe."),
             )
-        if user_id is not None and not _acts_as_admin(actor_role):
+        if user_id is not None and not _acts_as_admin(locked_role):
             raise _forbidden()
         if person.user_id == user_id:
             # Nothing changes, so nothing is written to the log either.
@@ -580,8 +591,11 @@ def _forbidden() -> ApiError:
 
 def _department_for_update(workspace: Workspace, person_id: UUID, actor: AuditActor) -> Person:
     """The department, locked after every membership (the lock order of a change of
-    sight); 409 `not_a_department` for a person."""
-    _lock_for_sight(workspace, actor)
+    sight), for an admin by the locked rows (403 `forbidden`) or the system; 409
+    `not_a_department` for a person."""
+    _locked, role = _lock_for_sight(workspace, actor, actor_role=ACTING_AS_SYSTEM)
+    if not _acts_as_admin(role):
+        raise _forbidden()
     department = _get_for_update(workspace, person_id)
     if department.kind != Person.Kind.DEPARTMENT:
         raise ApiError(409, "not_a_department", _("Dit is geen afdeling."))
