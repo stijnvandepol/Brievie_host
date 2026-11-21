@@ -340,6 +340,13 @@ def visible_documents(membership: Membership) -> QuerySet[Document]:
     return _readable(membership).filter(LIVE)
 
 
+def readable_documents(membership: Membership) -> QuerySet[Document]:
+    """Every letter `membership`'s user may read, the trash included: only to decide
+    whether a reference to another letter (a history line's `related_document`) may be
+    shown. Lists and detail start from `visible_documents`."""
+    return _readable(membership)
+
+
 def trashed_documents(membership: Membership) -> QuerySet[Document]:
     """The letters in the trash `membership`'s user may see, on the same rights as
     `visible_documents`: the only read of the trash (list, count, restore, purge-now,

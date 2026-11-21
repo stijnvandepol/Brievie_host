@@ -597,8 +597,15 @@ def list_document_events(*, membership: Membership, document_id: UUID) -> list[D
     person is on the document now), `still_automatic` (that link is still marked
     automatic) and `superseded` (a later event concerns the same label or person), which
     `DocumentEventOut.can_undo` reads.
+
+    A line never tells the member about a letter they may not read (the trash counted):
+    a `duplicate_dismissed` line about such a letter is left out, and any other line
+    (`merged`, `task_moved`, `trashed` by a merge) loses its `related_document_id`.
     """
     document = get_document(membership=membership, document_id=document_id)
+    related_readable = models.Exists(
+        visibility.readable_documents(membership).filter(id=models.OuterRef("related_document_id"))
+    )
     label_linked = DocumentLabel.objects.filter(
         document_id=models.OuterRef("document_id"), label_id=models.OuterRef("label_id")
     )
@@ -608,9 +615,15 @@ def list_document_events(*, membership: Membership, document_id: UUID) -> list[D
     later = DocumentEvent.objects.filter(
         document_id=models.OuterRef("document_id"), created_at__gt=models.OuterRef("created_at")
     )
-    return list(
+    found: list[DocumentEvent] = list(
         DocumentEvent.objects.filter(document=document)
         .select_related("actor")
+        .annotate(related_readable=related_readable)
+        .exclude(
+            kind=DocumentEvent.Kind.DUPLICATE_DISMISSED,
+            related_document_id__isnull=False,
+            related_readable=False,
+        )
         .annotate(
             undone=models.Exists(DocumentEvent.objects.filter(undoes=models.OuterRef("pk"))),
             still_linked=models.Exists(label_linked) | models.Exists(person_linked),
@@ -621,6 +634,10 @@ def list_document_events(*, membership: Membership, document_id: UUID) -> list[D
         )
         .order_by("-created_at", "-id")
     )
+    for event in found:
+        if not getattr(event, "related_readable", False):
+            event.related_document_id = None
+    return found
 
 
 def undo_document_event(

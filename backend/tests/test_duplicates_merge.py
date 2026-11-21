@@ -4,6 +4,7 @@ refusals change nothing; a restore after a merge brings no second payment task."
 
 import uuid
 from collections.abc import Callable, Collection
+from datetime import date
 from uuid import UUID
 
 import pytest
@@ -12,7 +13,7 @@ from apps.accounts.models import User
 from apps.audit.codes import ActorKind
 from apps.audit.services import AuditActor
 from apps.common.errors import ApiError
-from apps.documents import duplicates, organise, retention, trash, visibility
+from apps.documents import duplicates, organise, retention, services, trash, visibility
 from apps.documents.models import (
     Document,
     DocumentAddressee,
@@ -27,9 +28,9 @@ from apps.tasks import services as task_services
 from apps.tasks.models import Task
 from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
-from tests.documents_support import admin_of, make_document, make_person, pair
+from tests.documents_support import admin_of, make_document, make_person, pair, trashed
 from tests.members_support import workspace_rows
-from tests.visibility_support import office
+from tests.visibility_support import office, restrict_raw
 
 pytestmark = pytest.mark.usefixtures("without_preset_rules")
 
@@ -134,16 +135,38 @@ def link(
 
 
 def task(
-    document: Document, *, status: str = Task.Status.OPEN, description: str = "Betalen"
+    document: Document,
+    *,
+    status: str = Task.Status.OPEN,
+    description: str = "Betalen",
+    type: str = Task.Type.PAY,
+    deadline: date | None = None,
+    deadline_source: str = Task.DeadlineSource.MANUAL,
 ) -> Task:
     with workspace_context(document.workspace_id, actor=SYSTEM):
         return Task.objects.create(
             workspace_id=document.workspace_id,
             document=document,
-            type=Task.Type.PAY,
+            type=type,
             description=description,
             status=status,
+            deadline=deadline,
+            deadline_source=deadline_source,
         )
+
+
+def history(ws: Workspace, user: User, document: Document) -> list[DocumentEvent]:
+    """The letter's history as `user` reads it (the API's read)."""
+    with workspace_context(ws.id, actor=user.id):
+        return services.list_document_events(
+            membership=membership_of(ws, user), document_id=document.id
+        )
+
+
+def reads(ws: Workspace, user: User, document: Document) -> bool:
+    """Whether `user` may read the letter, in the trash or not."""
+    with workspace_context(ws.id, actor=user.id):
+        return Document.objects.filter(id=document.id).exists()
 
 
 def two_letters(ws: Workspace) -> tuple[Document, Document, DuplicateCandidate]:
@@ -225,7 +248,7 @@ def test_merge_history_on_both(ws_a: Workspace) -> None:
 
 def test_merge_moves_open_tasks_once(ws_a: Workspace) -> None:
     keep, other, candidate = two_letters(ws_a)
-    moving = task(other, description="Betalen aan de gemeente")
+    moving = task(other, description="Betalen aan de gemeente", deadline=date(2026, 12, 1))
     task(keep)
     staying = task(other)
 
@@ -233,7 +256,7 @@ def test_merge_moves_open_tasks_once(ws_a: Workspace) -> None:
 
     on_keep = tasks_of(keep)
     assert {t.id for t in on_keep} >= {moving.id}
-    assert [t.description for t in on_keep].count("Betalen") == 1
+    assert [t.deadline for t in on_keep].count(None) == 1
     assert [t.id for t in tasks_of(other)] == [staying.id]
     for document, related in ((keep, other), (other, keep)):
         [moved] = events(document, DocumentEvent.Kind.TASK_MOVED)
@@ -304,8 +327,8 @@ def test_task_twins_both_directions(ws_a: Workspace) -> None:
     first, second, _ = two_letters(ws_a)
     task(first, status=Task.Status.DONE)
     task(second)
-    task(second, status=Task.Status.DONE, description="Reageren")
-    task(first, description="Reageren")
+    task(second, status=Task.Status.DONE, description="Reageren", type=Task.Type.RESPOND)
+    task(first, description="Reageren", type=Task.Type.RESPOND)
 
     with workspace_context(ws_a.id, actor=SYSTEM):
         twins = duplicates.task_twins(first, second)
@@ -510,3 +533,136 @@ def test_plain_trash_history_unchanged(ws_a: Workspace) -> None:
         admin.id,
         None,
     )
+
+
+DUE = date(2026, 12, 15)
+
+
+def test_merge_treats_differently_worded_payment_tasks_as_one(ws_a: Workspace) -> None:
+    """Two AI runs word the same payment differently: one open payment task after the merge."""
+    keep, other, candidate = two_letters(ws_a)
+    task(
+        keep,
+        description="Betaal factuur 2026-118",
+        deadline=DUE,
+        deadline_source=Task.DeadlineSource.IN_DOCUMENT,
+    )
+    staying = task(
+        other,
+        description="Factuur 2026-118 betalen",
+        deadline=DUE,
+        deadline_source=Task.DeadlineSource.CALCULATED,
+    )
+
+    do_merge(ws_a, candidate, keep)
+
+    open_pay = [
+        t for t in tasks_of(keep) if t.type == Task.Type.PAY and t.status == Task.Status.OPEN
+    ]
+    assert len(open_pay) == 1
+    assert [t.id for t in tasks_of(other)] == [staying.id]
+    assert events(keep, DocumentEvent.Kind.TASK_MOVED) == []
+
+
+def test_twin_ignores_wording_and_source(ws_a: Workspace) -> None:
+    keep, other, candidate = two_letters(ws_a)
+    twin = task(keep, description="Betaal factuur 2026-118", deadline=DUE)
+    task(
+        other,
+        status=Task.Status.DONE,
+        description="Factuur 2026-118 betalen",
+        deadline=DUE,
+        deadline_source=Task.DeadlineSource.IN_DOCUMENT,
+    )
+    with workspace_context(ws_a.id, actor=SYSTEM):
+        twins = duplicates.task_twins(keep, other)
+    assert [(t.done_document_id, t.open_document_id) for t in twins] == [(other.id, keep.id)]
+
+    do_merge(ws_a, candidate, keep, complete_twin_tasks=True)
+
+    [after] = [t for t in tasks_of(keep) if t.id == twin.id]
+    assert after.status == Task.Status.DONE
+
+
+def test_tasks_with_different_deadlines_stay_two(ws_a: Workspace) -> None:
+    keep, other, candidate = two_letters(ws_a)
+    task(keep, description="Betaal termijn 1", deadline=DUE)
+    moving = task(other, description="Betaal termijn 2", deadline=date(2027, 1, 15))
+    task(other, status=Task.Status.DONE, description="Betaal termijn 2", deadline=date(2027, 1, 15))
+    with workspace_context(ws_a.id, actor=SYSTEM):
+        assert duplicates.task_twins(keep, other) == []
+
+    do_merge(ws_a, candidate, keep)
+
+    on_keep = tasks_of(keep)
+    assert moving.id in {t.id for t in on_keep}
+    assert sum(t.status == Task.Status.OPEN for t in on_keep) == 2
+
+
+def test_tasks_of_another_type_stay_two(ws_a: Workspace) -> None:
+    keep, other, candidate = two_letters(ws_a)
+    task(keep, deadline=DUE)
+    moving = task(other, type=Task.Type.OBJECT, description="Bezwaar maken", deadline=DUE)
+
+    do_merge(ws_a, candidate, keep)
+
+    assert moving.id in {t.id for t in tasks_of(keep)}
+
+
+def test_history_hides_a_dismissed_letter_the_reader_cannot_read() -> None:
+    o = office()
+    o.state(e=True, d=True, a=False)
+    private, finance = o.letters["private_femke"], o.letters["finance_letter"]
+    candidate = pair(private, finance)
+    assert reads(o.workspace, o.plain, finance)
+    assert not reads(o.workspace, o.plain, private)
+
+    do_dismiss(o.workspace, candidate, user=o.finance)
+
+    seen = history(o.workspace, o.plain, finance)
+    assert all(e.kind != DocumentEvent.Kind.DUPLICATE_DISMISSED for e in seen)
+    assert all(e.related_document_id in (None, finance.id) for e in seen)
+    [own] = [
+        e
+        for e in history(o.workspace, o.finance, finance)
+        if e.kind == DocumentEvent.Kind.DUPLICATE_DISMISSED
+    ]
+    assert own.related_document_id == private.id
+
+
+def test_history_hides_the_merged_letter_once_the_reader_cannot_read_it() -> None:
+    o = office()
+    o.state(e=True, d=True, a=False)
+    keep = o.letters["finance_letter"]
+    other = make_document(o.workspace, "done")
+    link(other, persons=[o.persons["Finance"]])
+    task(other, deadline=DUE)
+    candidate = pair(keep, other)
+    do_merge(o.workspace, candidate, keep, user=o.finance)
+    # Later the trashed scan becomes private to Femke.
+    restrict_raw(other, [o.finance])
+    assert reads(o.workspace, o.plain, keep)
+    assert not reads(o.workspace, o.plain, other)
+
+    seen = history(o.workspace, o.plain, keep)
+    kinds = {e.kind for e in seen}
+    assert {DocumentEvent.Kind.MERGED, DocumentEvent.Kind.TASK_MOVED} <= kinds
+    assert all(e.related_document_id is None for e in seen)
+    # Femke still reads the scan in the trash, so her history keeps the link.
+    mine = history(o.workspace, o.finance, keep)
+    assert {e.related_document_id for e in mine if e.kind == DocumentEvent.Kind.MERGED} == {
+        other.id
+    }
+
+
+def test_a_pair_whose_letter_left_meanwhile_is_skipped(ws_a: Workspace) -> None:
+    """Review M1: pairs and letters are read in two statements; a letter trashed in
+    between leaves the pair out instead of a 500."""
+    _, second, candidate = two_letters(ws_a)
+    trashed(second)
+    admin = admin_of(ws_a)
+
+    with workspace_context(ws_a.id, actor=admin.id):
+        membership = membership_of(ws_a, admin)
+        assert duplicates._outs(membership, [candidate]) == []
+        refused("duplicate_not_found", lambda: duplicates.duplicate_out(membership, candidate))

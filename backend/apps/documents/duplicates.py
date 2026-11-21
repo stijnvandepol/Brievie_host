@@ -18,7 +18,7 @@ import re
 from collections import Counter, defaultdict
 from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Final
 from uuid import UUID
@@ -31,7 +31,7 @@ from django.utils.translation import gettext as _
 from apps.accounts.models import User
 from apps.audit.services import AuditActor
 from apps.common.errors import ApiError
-from apps.documents import organise, review, visibility
+from apps.documents import organise, visibility
 from apps.documents.duplicates_facts import (
     Fact,
     LetterFacts,
@@ -138,9 +138,16 @@ class TaskTwin:
     description: str
 
 
+def twin_key(task: Task) -> tuple[str, date | None]:
+    """When two scans' tasks are the same task: type and deadline. Not the description
+    (separate AI runs or reviews word one action differently) and not the deadline's
+    source. A task has no amount of its own; the letters' amounts are compared as facts."""
+    return (task.type, task.deadline)
+
+
 def task_twins(first: Document, second: Document) -> list[TaskTwin]:
-    """Every done task of either letter whose equal (type, description, deadline, source)
-    is open on the other one."""
+    """Every done task of either letter whose equal (`twin_key`) is open on the other
+    one."""
     return _twins(
         list(
             Task.objects.filter(document_id__in=[first.id, second.id]).order_by("created_at", "id")
@@ -158,7 +165,7 @@ def _twins(tasks: Sequence[Task]) -> list[TaskTwin]:
         if task.status == Task.Status.OPEN
         and task.document_id is not None
         and task.document_id != done.document_id
-        and review.task_key(task) == review.task_key(done)
+        and twin_key(task) == twin_key(done)
     ]
 
 
@@ -280,17 +287,17 @@ def _unite(keep: Document, other: Document, user: User) -> None:
 
 
 def _merge_tasks(keep: Document, other: Document, user: User, *, complete_twin_tasks: bool) -> None:
-    """An open task of `other` without an equal on `keep` moves to `keep`; a done one
+    """An open task of `other` without an equal (`twin_key`) on `keep` moves to `keep`; a done one
     completes its open equal on `keep` when asked (only a task that was on `keep` before
     the merge: the twins `task_twins` showed). Every other task stays with `other`."""
-    on_keep: dict[tuple[object, ...], list[Task]] = defaultdict(list)
+    on_keep: dict[tuple[str, date | None], list[Task]] = defaultdict(list)
     for task in Task.objects.select_for_update().filter(document=keep).order_by("created_at", "id"):
-        on_keep[review.task_key(task)].append(task)
+        on_keep[twin_key(task)].append(task)
     kept_before = {task.id for tasks in on_keep.values() for task in tasks}
     for task in (
         Task.objects.select_for_update().filter(document=other).order_by("created_at", "id")
     ):
-        equals = on_keep[review.task_key(task)]
+        equals = on_keep[twin_key(task)]
         if task.status == Task.Status.OPEN and not equals:
             task.document = keep
             task.save(update_fields=["document", "updated_at"])
@@ -342,8 +349,10 @@ def get_duplicate(*, membership: Membership, candidate_id: UUID) -> DuplicateOut
 
 def duplicate_out(membership: Membership, candidate: DuplicateCandidate) -> DuplicateOut:
     """A pair as the API shows it (read as the member)."""
-    [out] = _outs(membership, [candidate])
-    return out
+    found = _outs(membership, [candidate])
+    if not found:
+        raise duplicate_not_found()
+    return found[0]
 
 
 def count_pairs(membership: Membership) -> int:
@@ -422,6 +431,9 @@ def _outs(membership: Membership, pairs: Sequence[DuplicateCandidate]) -> list[D
     counts = pair_counts(membership, ids)
     outs = []
     for pair in pairs:
+        # A letter trashed between reading the pairs and the letters: leave the pair out.
+        if pair.first_id not in letters or pair.second_id not in letters:
+            continue
         first, second = letters[pair.first_id], letters[pair.second_id]
         first_facts = _facts(first, list(first.extractions.all()))
         second_facts = _facts(second, list(second.extractions.all()))

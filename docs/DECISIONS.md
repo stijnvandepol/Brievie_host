@@ -1577,7 +1577,11 @@ Rulings of the design (numbers as there):
   the checkbox "Taak ook afronden", on by default (7)**, and only a task that was on the
   kept letter before the merge.
 - **One row per pair forever; only arrivals are compared, 180 days, at most 3 open pairs per
-  letter (8).** An archive sweep is later.
+  letter (8).** An archive sweep is later. The cap holds per arrival: an older letter can
+  gain a pair from each later arrival. A re-try of failed processing runs the pipeline and
+  so searches again (a pair is unique, nothing doubles). Two scans whose last pipeline
+  transactions overlap each see the other as `processing` and are not paired; accepted
+  (a narrow window, no sweep yet; the archive sweep will close it).
 - **Numbers in the text are a feature (9)**: template letters are textually near-identical;
   their dates, amounts and references differ.
 - **The discarded letter's history says `trashed` with origin `merge` and the merging user;
@@ -1641,6 +1645,18 @@ Built in batch C:
   merge answer and search hits) and `DocumentEventOut.related_document_id`. A viewer gets an
   empty list, zero counts, 404 on `getDuplicate` and 403 on merge and dismiss: a viewer
   cannot decide, so a count would be a task they cannot do.
+- **Twin tasks match on type and deadline (final review I2).** `duplicates.twin_key`, used
+  by the merge (does an open task move?) and by `task_twins` ("Taak ook afronden"):
+  separate AI runs or reviews word one payment differently, so the description and the
+  deadline's source are left out. A task has no amount of its own (the letters' amounts
+  are compared as facts), so the owner's "plus the amount when both have one" has nothing
+  to compare yet. Two tasks of one type with the same deadline on two scans are one task;
+  different deadlines (instalments) stay two.
+- **History never names a letter the reader cannot read (final review I1).**
+  `list_document_events` checks `related_document` against
+  `visibility.readable_documents` (the trash counted): a `duplicate_dismissed` line about
+  such a letter is left out, any other line (`merged`, `task_moved`, `trashed` by a merge)
+  answers `related_document_id` null.
 - **One place completes a task.** The merge completes a twin through
   `tasks.services.complete_task` (which gained `origin`, default `user`).
 - **Web.** "Te doen" shows a block "Dubbel?" with its count (hidden at 0) and a chip

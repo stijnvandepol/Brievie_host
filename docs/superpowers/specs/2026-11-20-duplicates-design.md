@@ -142,8 +142,10 @@ system) or in `recheck` (as the system):
 - `mark_failed` runs the same detection (the text came with the upload; a failed AI step
   only means fewer facts).
 - **Compared only on arrival** (owner, 21-11): within 180 days, at most 3 open pairs per
-  letter. A restore from the trash, a confirm or a re-try does not search again. An
-  archive sweep is a later step.
+  arriving letter (an older letter can gain a pair from each later arrival). A restore
+  from the trash or a confirm does not search again; a re-try of failed processing runs
+  the pipeline, so it does (a pair is unique, so nothing doubles). An archive sweep is a
+  later step.
 - **Autopilot** (owner, 21-11): an open duplicate proposal blocks the AI's automatic
   confirm. The rail is the caller's, like the open addressee proposal: `_confirm_guarded`
   returns False when `duplicates.has_open_pair(document.id)` (as the system, open rows
@@ -239,8 +241,9 @@ visibility differs (409 `duplicate_visibility_differs`). Then, for kept `K` and 
    actor the user, `automatic=False` (a person chose it). Not undoable through
    `undoDocumentEvent` (`merge` is not in `UNDOABLE_ORIGINS`); removing by hand works as
    always. Then the viewers check above.
-2. Tasks: an open task of `O` with no equal task on `K` (`review._key_of`: type,
-   description, deadline, source) moves to `K` (`task.document = K`), with a `task_moved`
+2. Tasks: an open task of `O` with no equal task on `K` (`duplicates.twin_key`: type and
+   deadline; not the description, which separate AI runs word differently, nor the
+   deadline's source; a task has no amount of its own) moves to `K` (`task.document = K`), with a `task_moved`
    line of origin `merge` on both letters. A **done** task of `O` whose equal is open on
    `K` completes that task on `K` only when `complete_twin_tasks` is true (owner, 21-11:
    not silent; the merge dialog has a checkbox "Taak ook afronden", on by default, shown
