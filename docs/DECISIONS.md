@@ -1992,3 +1992,38 @@ M3). "Iedereen ziet alle post" stays on everywhere until Task 40, so departments
   (the nightly check, switching emergency access off). The same helper decides what an
   emergency opening counts as already seen (an hour running is renewed) and which admins
   the "nobody could read it" notice may name.
+
+## 2026-11-21: Wie ziet wat, slice A2c (switching safely)
+
+Plan `docs/superpowers/plans/2026-11-20-host-wie-ziet-wat.md`, Tasks 35-41 (merge point
+M4). From here on "Iedereen ziet alle post" can be switched off, and an Organisatie
+installation starts in own post.
+
+- **The rule as data (Task 35, S 4.4).** `apps.workspaces.visibility_rules` is pure (no
+  Django, like the rules engine): a `PolicySnapshot` (switches, members with role, sorting
+  flag, persons and departments, the names of persons and departments) and per member the
+  kinds of post they see: `all`, `all_as_admin`, `person:<id>`, `department:<id>`,
+  `unassigned`. `all` and `all_as_admin` hold every other kind, so a member who sees all
+  gains nothing by a department and loses only the whole. `diff` says who gains and who
+  loses; `expected_sight` states S 4.1 per letter for the tests. The table of S 4.4 is test
+  data (`tests/visibility_transitions.py`), each row with its gains, losses and
+  confirmation written from the table's words, in every state where it applies.
+- **R34: post nobody reads goes to the sorters.** A letter with no person with an account
+  and no department with members (departments counting only while on) goes to the flagged
+  sorters, or to the admins when nobody is flagged; never to everyone, never to nobody.
+- **R35: departments switched off are kept.** Members, leads, labels, links and rules stay;
+  for sight a department then counts as nobody, so a letter only on departments goes to the
+  sorters; private letters keep their readers.
+- **R37: confirmation when anyone gains.** A change in which anybody gains sight needs
+  `confirmed` and the preview's token; a narrowing needs neither. Admins gaining all post
+  tells every member.
+- **P6: a sorter's fallback gain needs no confirmation after a narrowing.** An unlink, a
+  department member removed, a member removed, a demotion or an unflagged sorter sends post
+  nobody reads any more to the sorters; when every gain is such post going to a member who
+  sorted already, nobody confirms. When the admins become the sorters (the last flagged
+  sorter goes) and do not read all post, they gain new post: confirm ("yes when an admin
+  gains").
+- **P7: the last reader leaving sends the post to the sorters.** Removing the last member
+  of a department, or unlinking the last account of a person, makes its letters post
+  nobody reads: the sorters get them, with a `sight_widened` notice, though S 4.4's row
+  says "Gains: nobody".
