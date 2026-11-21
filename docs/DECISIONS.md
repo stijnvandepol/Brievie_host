@@ -1730,3 +1730,11 @@ Finance's letter, with the owner as control.
   department without members) reaches the sorters through the policy and shows in their
   list with its name; the chip "Zonder naam" and the badge count only letters without
   any addressee. S 4.5's wider set would change the contract and the iPhone's filter.
+- **Tasks follow their letter; a letterless task its maker and assignee (P11, Task 15).**
+  `listTasks`, `completeTask` and `reopenTask` read as the member, so a task of a letter
+  the member cannot see is absent from the list and 404 `task_not_found` like an unknown
+  id. An assignee widens only a task without a letter: a task on a letter follows the
+  letter whoever it is assigned to. No task-create or task-assign endpoint exists, so
+  `assignee_cannot_read` is not built; when one comes, an assignment lapses (or is
+  refused) once the assignee may no longer read the letter. A letter purged from the
+  trash takes its tasks with it (as the system), so none becomes letterless.
