@@ -1,4 +1,4 @@
-import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -20,28 +20,30 @@ import {
 afterEach(() => window.localStorage.clear());
 
 describe("start", () => {
-  it("/ goes to Mijn post of the last workspace used, else the first", async () => {
+  it("/ goes to Mijn post of the first workspace", async () => {
     server.use(twoWorkspaces(), ...loggedInHandlers(), ...documentHandlers());
-    const first = renderApp("/");
+    const { router } = renderApp("/");
     await waitFor(() =>
-      expect(first.router.state.location.pathname).toBe(`/w/${workspace.id}/mijn-post`),
+      expect(router.state.location.pathname).toBe(`/w/${workspace.id}/mijn-post`),
     );
     expect(await screen.findByRole("heading", { level: 1, name: "Mijn post" })).toBeVisible();
-    cleanup();
+  });
 
+  it("/ goes to the last workspace used", async () => {
     window.localStorage.setItem("brievie.last-workspace", secondWorkspace.id);
-    server.use(...workspaceHandlers(secondWorkspace.id));
-    const again = renderApp("/");
+    server.use(twoWorkspaces(), ...loggedInHandlers(), ...workspaceHandlers(secondWorkspace.id));
+    const { router } = renderApp("/");
     await waitFor(() =>
-      expect(again.router.state.location.pathname).toBe(`/w/${secondWorkspace.id}/mijn-post`),
+      expect(router.state.location.pathname).toBe(`/w/${secondWorkspace.id}/mijn-post`),
     );
-    cleanup();
+  });
 
-    // A workspace the user left is not opened again.
+  it("/ does not open a workspace the user left", async () => {
     window.localStorage.setItem("brievie.last-workspace", "00000000-0000-4000-8000-000000000000");
-    const gone = renderApp("/");
+    server.use(twoWorkspaces(), ...loggedInHandlers(), ...documentHandlers());
+    const { router } = renderApp("/");
     await waitFor(() =>
-      expect(gone.router.state.location.pathname).toBe(`/w/${workspace.id}/mijn-post`),
+      expect(router.state.location.pathname).toBe(`/w/${workspace.id}/mijn-post`),
     );
   });
 
