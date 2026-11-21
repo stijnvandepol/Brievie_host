@@ -676,13 +676,23 @@ def _member_step(
     if change.kind == "link" and user_id is None:
         raise _incomplete()
     target = user_id if change.kind == "link" else None
+    # The caller's own role, read here: never assumed.
+    actor_role = (
+        Membership.objects.filter(workspace=workspace, user_id=actor.user_id)
+        .values_list("role", flat=True)
+        .first()
+        if actor.user_id is not None
+        else None
+    )
+    if actor_role is None:
+        raise _forbidden()
     return (
         lambda: people.link_member(
             workspace=workspace,
             person_id=person_id,
             user_id=target,
             actor=actor,
-            actor_role=Membership.Role.ADMIN,
+            actor_role=actor_role,
         ),
         change.kind == "unlink",
     )

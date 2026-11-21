@@ -18,6 +18,7 @@ from apps.workspaces.presets import PRESETS
 from apps.workspaces.services import create_workspace
 from tests.factories import UserFactory
 from tests.helpers import SETUP_TOKEN, post_json
+from tests.test_accounts_api import SETUP_BODY
 
 SIX = (
     "everyone_sees_all",
@@ -53,10 +54,7 @@ def _setup_token(settings: Settings) -> None:
 
 
 SETUP: dict[str, object] = {
-    "setup_token": SETUP_TOKEN,
-    "email": "anne@bakkerij.nl",
-    "password": "een-lang-wachtwoord-2026",
-    "name": "Anne",
+    **SETUP_BODY,
     "workspace_name": "Bakkerij Jansen",
     "workspace_kind": "business",
 }

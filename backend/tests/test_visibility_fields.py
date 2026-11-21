@@ -42,10 +42,15 @@ def test_existing_workspaces_migrate_to_everyone_sees_all(ws_a: Workspace, ws_b:
     assert (ws_b.care_is_private, ws_b.emergency_access) == (False, True)
 
 
-@pytest.mark.parametrize("kind", ["home", "business"])
-def test_new_workspaces_of_both_kinds_start_with_everyone_sees_all(kind: str) -> None:
+@pytest.mark.parametrize(
+    ("kind", "switches"), [("home", (True, False, True)), ("business", (False, True, False))]
+)
+def test_new_workspaces_start_with_their_kinds_switches(
+    kind: str, switches: tuple[bool, bool, bool]
+) -> None:
+    # P8 ended with the presets (plan Task 40): an Organisatie starts in own post.
     workspace = create_workspace(name="Nieuw", kind=kind, admin=UserFactory.create())
-    assert _switches(workspace) == (True, False, True)  # P8
+    assert _switches(workspace) == switches
 
 
 def test_privacy_defaults_per_kind(ws_a: Workspace, ws_b: Workspace) -> None:
