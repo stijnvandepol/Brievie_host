@@ -13,7 +13,7 @@ from django.utils.translation import gettext as _
 from apps.accounts.models import User
 from apps.common.errors import ApiError, is_try_again
 from apps.common.privacy import mask_bsns
-from apps.documents import organise, visibility
+from apps.documents import duplicates, organise, visibility
 from apps.documents.models import LIVE, Document, DocumentEvent, DocumentSuggestion
 from apps.documents.schemas import ConfirmIn, TaskIn
 from apps.pipeline.validation import dates_in, quote_in_text
@@ -119,6 +119,9 @@ def _store_confirmation(
         document.status = Document.Status.DONE
         document.confirmed_by = user
         document.save(update_fields=["status", "confirmed_by", "confirmed_at", "updated_at"])
+        # Its facts are confirmed now: a pair whose guard fires is withdrawn. As the
+        # system: the confirming member may not see the other letter.
+        duplicates.recheck(document)
 
 
 _CONFIRMED_FIELDS = [
