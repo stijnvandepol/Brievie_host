@@ -278,7 +278,12 @@ function DocumentView({
             <div className="panel-head">
               <h2 id="tasks-heading">{t`Taken`}</h2>
             </div>
-            <TaskList workspaceId={workspaceId} tasks={document.tasks} canEdit={canEdit} />
+            <TaskList
+              workspaceId={workspaceId}
+              documentId={document.id}
+              tasks={document.tasks}
+              canEdit={canEdit}
+            />
           </section>
         ) : null}
         <DocumentHistory workspaceId={workspaceId} documentId={document.id} canEdit={canEdit} />

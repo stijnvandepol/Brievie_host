@@ -105,3 +105,32 @@ describe("history of duplicate letters", () => {
     expect(screen.getByText("Taak verplaatst naar de dubbele brief")).toBeInTheDocument();
   });
 });
+
+describe("history of tasks (Mijn taken)", () => {
+  it("names who gave, released and dated a task, and a release by Brievie", async () => {
+    server.use(
+      withEvents([
+        event(1, { kind: "task_assigned", person_name: "Piet", related_document_id: null }),
+        event(2, { kind: "task_unassigned", person_name: "Piet", related_document_id: null }),
+        event(3, { kind: "task_deadline_set", related_document_id: null }),
+        event(4, {
+          kind: "task_unassigned",
+          origin: "system",
+          actor_id: null,
+          actor_name: "",
+          person_name: "Femke",
+          related_document_id: null,
+        }),
+      ]),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
+    renderApp(path);
+    expect(await screen.findByText("Bram gaf een taak aan Piet")).toBeInTheDocument();
+    expect(screen.getByText("Bram haalde een taak weg bij Piet")).toBeInTheDocument();
+    expect(screen.getByText("Bram vulde de datum van een taak in")).toBeInTheDocument();
+    expect(
+      screen.getByText("Brievie haalde een taak weg bij Femke: die mag deze brief niet meer lezen"),
+    ).toBeInTheDocument();
+  });
+});

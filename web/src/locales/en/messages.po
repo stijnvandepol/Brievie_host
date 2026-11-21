@@ -53,6 +53,11 @@ msgstr "{0, plural, one {# label added} other {# labels added}}"
 msgid "{0, plural, one {Serveradres} other {Serveradressen}}"
 msgstr "{0, plural, one {Server address} other {Server addresses}}"
 
+#. placeholder {0}: person.name
+#: src/components/assign-dialog.tsx
+msgid "{0} (jij)"
+msgstr "{0} (you)"
+
 #. placeholder {0}: session.browser || t`Onbekende browser`
 #: src/routes/sessions.tsx
 msgid "{0} is daarna uitgelogd."
@@ -177,8 +182,16 @@ msgid "{who} bevestigde deze brief"
 msgstr "{who} confirmed this letter"
 
 #: src/components/document-history.tsx
+msgid "{who} gaf een taak aan {person}"
+msgstr "{who} handed a task to {person}"
+
+#: src/components/document-history.tsx
 msgid "{who} haalde {person} weg"
 msgstr "{who} removed {person}"
+
+#: src/components/document-history.tsx
+msgid "{who} haalde een taak weg bij {person}"
+msgstr "{who} took a task back from {person}"
 
 #: src/components/document-history.tsx
 msgid "{who} haalde het label {label} eraf"
@@ -195,6 +208,10 @@ msgstr "{who} completed a task"
 #: src/components/document-history.tsx
 msgid "{who} rondde een taak af (uit de dubbele brief)"
 msgstr "{who} completed a task (from the duplicate letter)"
+
+#: src/components/document-history.tsx
+msgid "{who} vulde de datum van een taak in"
+msgstr "{who} filled in the date of a task"
 
 #: src/routes/member-devices.tsx
 msgid "{who} wordt overal uitgelogd en krijgt daar een melding van. Gekoppelde telefoons blijven werken."
@@ -236,10 +253,18 @@ msgstr "30 days"
 msgid "7 dagen"
 msgstr "7 days"
 
+#: src/components/task-list.tsx
+msgid "Aan {assignee} gegeven"
+msgstr "Handed to {assignee}"
+
 #. placeholder {0}: task.assigned_by_name
 #: src/task-time.ts
 msgid "Aan jou gegeven door {0}"
 msgstr "Handed to you by {0}"
+
+#: src/components/assign-dialog.tsx
+msgid "Aan wie geef je deze taak?"
+msgstr "Who do you hand this task to?"
 
 #: src/routes/rule-editor.tsx
 msgid "Aan: de regel zet het label of de naam er altijd zelf op. Uit: de regel doet een voorstel dat jij bevestigt."
@@ -487,6 +512,10 @@ msgstr "Only to find the rule again."
 msgid "Alleen voor een andere dienst die werkt zoals OpenAI. Begint met https://. Vul je dit in, dan geldt de dienst die je hierboven koos niet meer en is een model verplicht."
 msgstr "Only for another service that works like OpenAI. Starts with https://. If you fill this in, the service you chose above no longer applies and a model is required."
 
+#: src/components/assign-dialog.tsx
+msgid "Alleen wie deze brief mag lezen, staat in de lijst."
+msgstr "Only people who may read this letter are in the list."
+
 #: src/components/rule-sentence.ts
 #: src/components/rule-templates.tsx
 #: src/routes/rule-editor.tsx
@@ -497,7 +526,9 @@ msgstr "If"
 msgid "Als dubbele brief naar de prullenbak verplaatst door {by}"
 msgstr "Moved to the trash as a duplicate letter by {by}"
 
+#: src/components/assign-dialog.tsx
 #: src/components/confirm-dialog.tsx
+#: src/components/deadline-dialog.tsx
 #: src/components/invite-dialog.tsx
 #: src/components/role-dialog.tsx
 #: src/routes/ai.tsx
@@ -810,6 +841,10 @@ msgstr "Brievie confirms letters by itself."
 msgid "Brievie bevestigt een brief zelf als alles in de brief duidelijk te lezen is. Anders blijft hij staan om te controleren."
 msgstr "Brievie confirms a letter by itself if everything in it can be read clearly. Otherwise it stays to be checked."
 
+#: src/components/document-history.tsx
+msgid "Brievie haalde een taak weg bij {person}: die mag deze brief niet meer lezen"
+msgstr "Brievie took a task back from {person}: they may no longer read this letter"
+
 #: src/routes/trash.tsx
 msgid "Brievie houdt nog geen bewaartermijn bij. Moet je een brief bewaren, bijvoorbeeld een factuur voor de belasting? Let daar dan zelf op voordat je hem wist."
 msgstr "Brievie does not keep track of retention periods yet. Do you need to keep a letter, for example an invoice for your taxes? Then check that yourself before you erase it."
@@ -898,6 +933,15 @@ msgstr "Date"
 msgid "Datum brief"
 msgstr "Letter date"
 
+#: src/components/deadline-dialog.tsx
+#: src/components/task-actions.tsx
+msgid "Datum invullen"
+msgstr "Set a date"
+
+#: src/components/task-actions.tsx
+msgid "Datum invullen: {description}"
+msgstr "Set a date: {description}"
+
 #: src/components/task-row.tsx
 msgid "Datum nodig"
 msgstr "Needs a date"
@@ -949,6 +993,10 @@ msgstr "The letter has been restored."
 #: src/routes/document.tsx
 msgid "De brief komt terug op Te doen, bij Controleren. De taken die de AI maakte en die nog open staan, verdwijnen. Je controleert de brief daarna in de app."
 msgstr "The letter goes back to To do, under Check. The open tasks that the AI made disappear. You then check the letter in the app."
+
+#: src/components/deadline-dialog.tsx
+msgid "De brief noemt een termijn: ‘{term}’."
+msgstr "The letter names a deadline: ‘{term}’."
 
 #: src/components/task-row.tsx
 msgid "De brief noemt een termijn: ‘{term}’. Vul de datum in."
@@ -1315,6 +1363,18 @@ msgstr "Use fewer words."
 msgid "Gebruiker"
 msgstr "User"
 
+#: src/components/assign-dialog.tsx
+msgid "Geef aan"
+msgstr "Hand over"
+
+#: src/components/task-actions.tsx
+msgid "Geef aan: {description}"
+msgstr "Hand over: {description}"
+
+#: src/components/task-actions.tsx
+msgid "Geef aan…"
+msgstr "Hand over…"
+
 #: src/components/reset-link-dialog.tsx
 msgid "Geef deze link aan {name}. Hij werkt 24 uur en één keer."
 msgstr "Give this link to {name}. It works for 24 hours and once."
@@ -1525,10 +1585,12 @@ msgstr "Someone new"
 msgid "Iemand uitnodigen"
 msgstr "Invite someone"
 
+#: src/components/task-actions.tsx
 #: src/routes/tasks.tsx
 msgid "Ik doe dit"
 msgstr "I'll do it"
 
+#: src/components/task-actions.tsx
 #: src/routes/tasks.tsx
 msgid "Ik doe dit: {description}"
 msgstr "I'll do it: {description}"
@@ -2169,6 +2231,14 @@ msgstr "Dismiss: {text}"
 msgid "Niemand"
 msgstr "Nobody"
 
+#: src/components/task-actions.tsx
+msgid "Niet meer aan mij"
+msgstr "Not mine any more"
+
+#: src/components/task-actions.tsx
+msgid "Niet meer aan mij: {description}"
+msgstr "Not mine any more: {description}"
+
 #: src/routes/search.tsx
 msgid "Niets gevonden"
 msgstr "Nothing found"
@@ -2351,6 +2421,7 @@ msgstr "Saved."
 msgid "Opnieuw exporteren"
 msgstr "Export again"
 
+#: src/components/deadline-dialog.tsx
 #: src/components/role-dialog.tsx
 #: src/routes/ai.tsx
 #: src/routes/labels.tsx
@@ -3132,6 +3203,10 @@ msgstr "Open again: {description}"
 #: src/routes/duplicate.tsx
 msgid "Welke brief houd je?"
 msgstr "Which letter do you keep?"
+
+#: src/components/deadline-dialog.tsx
+msgid "Welke datum noemt de brief?"
+msgstr "Which date does the letter name?"
 
 #: src/routes/ai.tsx
 msgid "Welke dienst?"

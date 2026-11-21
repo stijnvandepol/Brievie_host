@@ -15,6 +15,7 @@ import { meQuery, myTasksQuery } from "../api/queries";
 import { assignTask, myTasksKey, refreshAfterTask, tickTask } from "../api/tasks";
 import { Icon } from "../components/icons";
 import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
+import { TaskActions } from "../components/task-actions";
 import { type TaskItem, TaskRow } from "../components/task-row";
 import { EmptyState, Loading, MessageBar } from "../components/ui";
 import { dateFormat } from "../format";
@@ -129,6 +130,9 @@ function OpenTasks({
               </Button>
             ) : null}
             {extra}
+            {canEdit && !isTicked && task.can_edit !== false ? (
+              <TaskActions workspaceId={workspaceId} task={task} showTake={false} />
+            ) : null}
           </>
         }
       />

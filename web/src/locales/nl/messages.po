@@ -53,6 +53,11 @@ msgstr "{0, plural, one {# label toegevoegd} other {# labels toegevoegd}}"
 msgid "{0, plural, one {Serveradres} other {Serveradressen}}"
 msgstr "{0, plural, one {Serveradres} other {Serveradressen}}"
 
+#. placeholder {0}: person.name
+#: src/components/assign-dialog.tsx
+msgid "{0} (jij)"
+msgstr "{0} (jij)"
+
 #. placeholder {0}: session.browser || t`Onbekende browser`
 #: src/routes/sessions.tsx
 msgid "{0} is daarna uitgelogd."
@@ -177,8 +182,16 @@ msgid "{who} bevestigde deze brief"
 msgstr "{who} bevestigde deze brief"
 
 #: src/components/document-history.tsx
+msgid "{who} gaf een taak aan {person}"
+msgstr "{who} gaf een taak aan {person}"
+
+#: src/components/document-history.tsx
 msgid "{who} haalde {person} weg"
 msgstr "{who} haalde {person} weg"
+
+#: src/components/document-history.tsx
+msgid "{who} haalde een taak weg bij {person}"
+msgstr "{who} haalde een taak weg bij {person}"
 
 #: src/components/document-history.tsx
 msgid "{who} haalde het label {label} eraf"
@@ -195,6 +208,10 @@ msgstr "{who} rondde een taak af"
 #: src/components/document-history.tsx
 msgid "{who} rondde een taak af (uit de dubbele brief)"
 msgstr "{who} rondde een taak af (uit de dubbele brief)"
+
+#: src/components/document-history.tsx
+msgid "{who} vulde de datum van een taak in"
+msgstr "{who} vulde de datum van een taak in"
 
 #: src/routes/member-devices.tsx
 msgid "{who} wordt overal uitgelogd en krijgt daar een melding van. Gekoppelde telefoons blijven werken."
@@ -236,10 +253,18 @@ msgstr "30 dagen"
 msgid "7 dagen"
 msgstr "7 dagen"
 
+#: src/components/task-list.tsx
+msgid "Aan {assignee} gegeven"
+msgstr "Aan {assignee} gegeven"
+
 #. placeholder {0}: task.assigned_by_name
 #: src/task-time.ts
 msgid "Aan jou gegeven door {0}"
 msgstr "Aan jou gegeven door {0}"
+
+#: src/components/assign-dialog.tsx
+msgid "Aan wie geef je deze taak?"
+msgstr "Aan wie geef je deze taak?"
 
 #: src/routes/rule-editor.tsx
 msgid "Aan: de regel zet het label of de naam er altijd zelf op. Uit: de regel doet een voorstel dat jij bevestigt."
@@ -487,6 +512,10 @@ msgstr "Alleen om de regel terug te vinden."
 msgid "Alleen voor een andere dienst die werkt zoals OpenAI. Begint met https://. Vul je dit in, dan geldt de dienst die je hierboven koos niet meer en is een model verplicht."
 msgstr "Alleen voor een andere dienst die werkt zoals OpenAI. Begint met https://. Vul je dit in, dan geldt de dienst die je hierboven koos niet meer en is een model verplicht."
 
+#: src/components/assign-dialog.tsx
+msgid "Alleen wie deze brief mag lezen, staat in de lijst."
+msgstr "Alleen wie deze brief mag lezen, staat in de lijst."
+
 #: src/components/rule-sentence.ts
 #: src/components/rule-templates.tsx
 #: src/routes/rule-editor.tsx
@@ -497,7 +526,9 @@ msgstr "Als"
 msgid "Als dubbele brief naar de prullenbak verplaatst door {by}"
 msgstr "Als dubbele brief naar de prullenbak verplaatst door {by}"
 
+#: src/components/assign-dialog.tsx
 #: src/components/confirm-dialog.tsx
+#: src/components/deadline-dialog.tsx
 #: src/components/invite-dialog.tsx
 #: src/components/role-dialog.tsx
 #: src/routes/ai.tsx
@@ -810,6 +841,10 @@ msgstr "Brievie bevestigt brieven zelf."
 msgid "Brievie bevestigt een brief zelf als alles in de brief duidelijk te lezen is. Anders blijft hij staan om te controleren."
 msgstr "Brievie bevestigt een brief zelf als alles in de brief duidelijk te lezen is. Anders blijft hij staan om te controleren."
 
+#: src/components/document-history.tsx
+msgid "Brievie haalde een taak weg bij {person}: die mag deze brief niet meer lezen"
+msgstr "Brievie haalde een taak weg bij {person}: die mag deze brief niet meer lezen"
+
 #: src/routes/trash.tsx
 msgid "Brievie houdt nog geen bewaartermijn bij. Moet je een brief bewaren, bijvoorbeeld een factuur voor de belasting? Let daar dan zelf op voordat je hem wist."
 msgstr "Brievie houdt nog geen bewaartermijn bij. Moet je een brief bewaren, bijvoorbeeld een factuur voor de belasting? Let daar dan zelf op voordat je hem wist."
@@ -898,6 +933,15 @@ msgstr "Datum"
 msgid "Datum brief"
 msgstr "Datum brief"
 
+#: src/components/deadline-dialog.tsx
+#: src/components/task-actions.tsx
+msgid "Datum invullen"
+msgstr "Datum invullen"
+
+#: src/components/task-actions.tsx
+msgid "Datum invullen: {description}"
+msgstr "Datum invullen: {description}"
+
 #: src/components/task-row.tsx
 msgid "Datum nodig"
 msgstr "Datum nodig"
@@ -949,6 +993,10 @@ msgstr "De brief is teruggezet."
 #: src/routes/document.tsx
 msgid "De brief komt terug op Te doen, bij Controleren. De taken die de AI maakte en die nog open staan, verdwijnen. Je controleert de brief daarna in de app."
 msgstr "De brief komt terug op Te doen, bij Controleren. De taken die de AI maakte en die nog open staan, verdwijnen. Je controleert de brief daarna in de app."
+
+#: src/components/deadline-dialog.tsx
+msgid "De brief noemt een termijn: ‘{term}’."
+msgstr "De brief noemt een termijn: ‘{term}’."
 
 #: src/components/task-row.tsx
 msgid "De brief noemt een termijn: ‘{term}’. Vul de datum in."
@@ -1315,6 +1363,18 @@ msgstr "Gebruik minder woorden."
 msgid "Gebruiker"
 msgstr "Gebruiker"
 
+#: src/components/assign-dialog.tsx
+msgid "Geef aan"
+msgstr "Geef aan"
+
+#: src/components/task-actions.tsx
+msgid "Geef aan: {description}"
+msgstr "Geef aan: {description}"
+
+#: src/components/task-actions.tsx
+msgid "Geef aan…"
+msgstr "Geef aan…"
+
 #: src/components/reset-link-dialog.tsx
 msgid "Geef deze link aan {name}. Hij werkt 24 uur en één keer."
 msgstr "Geef deze link aan {name}. Hij werkt 24 uur en één keer."
@@ -1525,10 +1585,12 @@ msgstr "Iemand nieuw"
 msgid "Iemand uitnodigen"
 msgstr "Iemand uitnodigen"
 
+#: src/components/task-actions.tsx
 #: src/routes/tasks.tsx
 msgid "Ik doe dit"
 msgstr "Ik doe dit"
 
+#: src/components/task-actions.tsx
 #: src/routes/tasks.tsx
 msgid "Ik doe dit: {description}"
 msgstr "Ik doe dit: {description}"
@@ -2169,6 +2231,14 @@ msgstr "Negeren: {text}"
 msgid "Niemand"
 msgstr "Niemand"
 
+#: src/components/task-actions.tsx
+msgid "Niet meer aan mij"
+msgstr "Niet meer aan mij"
+
+#: src/components/task-actions.tsx
+msgid "Niet meer aan mij: {description}"
+msgstr "Niet meer aan mij: {description}"
+
 #: src/routes/search.tsx
 msgid "Niets gevonden"
 msgstr "Niets gevonden"
@@ -2351,6 +2421,7 @@ msgstr "Opgeslagen."
 msgid "Opnieuw exporteren"
 msgstr "Opnieuw exporteren"
 
+#: src/components/deadline-dialog.tsx
 #: src/components/role-dialog.tsx
 #: src/routes/ai.tsx
 #: src/routes/labels.tsx
@@ -3132,6 +3203,10 @@ msgstr "Weer open: {description}"
 #: src/routes/duplicate.tsx
 msgid "Welke brief houd je?"
 msgstr "Welke brief houd je?"
+
+#: src/components/deadline-dialog.tsx
+msgid "Welke datum noemt de brief?"
+msgstr "Welke datum noemt de brief?"
 
 #: src/routes/ai.tsx
 msgid "Welke dienst?"
