@@ -2198,3 +2198,34 @@ M5), and two gaps the server still had.
   its role and person, then the memberships are locked, then the invitation (the lock
   order). This replaces "a renewed admin invitation asks nothing again".
 
+- **One way for every change of sight in the web (Task 42).** `useSightChange` serves the
+  switches, the kind, roles, sorters, links, department members and invitations. The
+  switches and the kind preview first (the admin also sees who sees less); member changes
+  write at once and preview only when the server answers 409 `confirmation_required`, so
+  nothing asks where nobody gains. The preview and the write send the same fields (the
+  token binds them); in the preset dialog an unticked value is sent with its current value,
+  because a value left out takes the preset's. A 409 `preview_outdated` makes the preview
+  again and shows the server's sentence.
+- **Leaving a department asks nothing (Task 43).** Its post falls to whoever sorts already
+  (P6), so the web removes a department member without a preview.
+- **The hand-over sentence sits on the letter's addressee picker (Task 44).** The web has no
+  confirm step (that is the app's), so "Na opslaan kun je deze brief niet meer zien. Hij
+  gaat naar Jan." (or "Na toewijzen ziet HR ...") is asked before an addressee change on the
+  letter or in the Inbox that takes the letter out of your sight. It is the web's own
+  estimate from the switches, your person, your departments and the sorters; it does not
+  know the scanner or shares, so it can warn where you keep the letter. The server's
+  `can_read` decides: false returns to the Inbox with "Je kunt deze brief niet meer openen."
+  The Inbox chips (Voor mij, your departments, Zonder naam) show only while not everyone
+  sees all post.
+- **Words (Tasks 45-47).** The role `viewer` is "Alleen lezen" everywhere (R29); "Zakelijk"
+  is "Organisatie" on every screen. PB's "Voor iedereen zichtbaar maken" is "Niet meer
+  privé": in own post a letter that is no longer private is not seen by everyone. The
+  notice codes of this part are shown with the server's own sentence (no text in the web).
+- **Privé settings live on Instellingen (Task 46).** "Zorg-post is privé" for admins and
+  emergency access (a switch for the server admin, a sentence for others) in the section
+  "Privé", linked from "Wie ziet wat".
+- **Installation (Task 47).** Setup asks no departments: they are made on Afdelingen
+  afterwards. The typed client still sends `extra_labels: []` (the field is required in the
+  generated types; empty means none). "Zo is Brievie nu ingesteld" lists the next steps;
+  "Back-up instellen" is a server command (`./brievie backup --init`), not a link.
+  **Merge point M5.**
