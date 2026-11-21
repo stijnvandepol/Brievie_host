@@ -35,6 +35,9 @@ ALLOWED_SYSTEM_CALLERS = {
     # The private-post seams answer yes or no about letters the caller may not see
     # (invitations, member removal, account actions), PB T8.
     "apps/workspaces/access.py",
+    # Who sees what: the snapshot, the preview's viewer count and the release after a
+    # change of sight read every member's and letter's facts (plan Task 37).
+    "apps/workspaces/visibility_settings.py",
     # Fills the derived automatic flag of every letter (documents/0014).
     "apps/documents/migrations/0014_document_has_automatic_link.py",
 }

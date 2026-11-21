@@ -29,6 +29,8 @@ class AuditCode(models.TextChoices):
         "sso_settings_changed",
         _("Instellingen voor inloggen via organisatie gewijzigd"),
     )
+    # A workspace made on the server (`manage.py create_workspace`, S 5.2).
+    WORKSPACE_CREATED = "workspace_created", _("Werkruimte gemaakt")
     # Workspace: members, settings, rules, labels, people, private post, exports.
     INVITATION_CREATED = "invitation_created", _("Uitnodiging gemaakt")
     INVITATION_REVOKED = "invitation_revoked", _("Uitnodiging ingetrokken")
@@ -37,6 +39,11 @@ class AuditCode(models.TextChoices):
     MEMBER_REMOVED = "member_removed", _("Lid verwijderd")
     MEMBER_LEFT = "member_left", _("Lid vertrokken")
     WORKSPACE_SETTING_CHANGED = "workspace_setting_changed", _("Instelling gewijzigd")
+    WORKSPACE_PRESET_APPLIED = (
+        "workspace_preset_applied",
+        _("Standaard Thuis of Organisatie overgenomen"),
+    )
+    POST_SORTER_CHANGED = "post_sorter_changed", _("Verdeelt post gewijzigd")
     RULE_CREATED = "rule_created", _("Regel gemaakt")
     RULE_CHANGED = "rule_changed", _("Regel gewijzigd")
     RULE_DELETED = "rule_deleted", _("Regel verwijderd")
@@ -119,6 +126,8 @@ ALLOWED_VALUES: dict[AuditCode, frozenset[str]] = {
     AuditCode.SERVER_ADMIN_GRANTED: _NONE,
     AuditCode.SERVER_ADMIN_REVOKED: _NONE,
     AuditCode.SSO_SETTINGS_CHANGED: _NONE,
+    # kind: home or business.
+    AuditCode.WORKSPACE_CREATED: frozenset({"kind"}),
     AuditCode.INVITATION_CREATED: frozenset({"role", "expires_in_days"}),
     # reason: admin, renewed, creator_lost_role.
     AuditCode.INVITATION_REVOKED: frozenset({"reason"}),
@@ -127,6 +136,10 @@ ALLOWED_VALUES: dict[AuditCode, frozenset[str]] = {
     AuditCode.MEMBER_REMOVED: frozenset({"account_deactivated"}),
     AuditCode.MEMBER_LEFT: frozenset({"account_deactivated"}),
     AuditCode.WORKSPACE_SETTING_CHANGED: frozenset({"setting", "value"}),
+    # preset: home or business, the kind whose values were taken.
+    AuditCode.WORKSPACE_PRESET_APPLIED: frozenset({"preset"}),
+    # value: whether the member now sorts post.
+    AuditCode.POST_SORTER_CHANGED: frozenset({"member", "value"}),
     AuditCode.RULE_CREATED: _NONE,
     AuditCode.RULE_CHANGED: _NONE,
     AuditCode.RULE_DELETED: _NONE,

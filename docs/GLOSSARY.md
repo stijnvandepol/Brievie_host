@@ -146,6 +146,11 @@ the request that creates the workspace and keep that name.
 | koppelen / ontkoppelen | pair / unpair | koppelcode: pairing code; koppelgegevens: pairing details; "App koppelen" page: Devices. |
 | apparaat | device | |
 | afdeling | department | |
+| groep (Thuis) | group | What an Organisatie calls "afdeling" (R51). |
+| Verdeelt post | Sorts post | The flag of a member who gets the post nobody else reads. |
+| post zonder naam | unnamed post | |
+| Iedereen ziet alle post / Eigen post | Everyone sees all post / Own post | The two positions of "Wie ziet wat". |
+| Wie ziet wat; Wie kan mijn post zien?; Wie kan deze brief zien? | Who sees what; Who can see my post?; Who can see this letter? | |
 | persoon | person | Persons (page), never "people" for the list of persons. |
 | op naam van, geadresseerde | addressed to, addressee | "Address to" for the rule action. |
 | afzender | sender | |

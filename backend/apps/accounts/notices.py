@@ -64,6 +64,50 @@ MESSAGES: dict[str, Promise] = {
         "Er is post in %(workspace)s die privé had moeten worden, maar niemand zou hem "
         "kunnen lezen. Hij is zichtbaar gebleven voor wie hem mag zien."
     ),
+    # The sentence of the category `all`; `CATEGORY_MESSAGES` has the others.
+    Code.SIGHT_WIDENED: _(
+        "Je kunt nu alle post zien die niet privé is. Dat heeft %(name)s op %(date)s ingesteld."
+    ),
+    Code.SIGHT_NARROWED: _("Je ziet de post van anderen niet meer."),
+    Code.ADMINS_READ_ALL_ON: _(
+        "De beheerders kunnen nu alle post lezen die niet privé is, ook de jouwe. Dat heeft "
+        "%(name)s op %(date)s ingesteld."
+    ),
+    Code.SELF_GRANT: _("%(name)s heeft zichzelf toegang gegeven tot post zonder naam."),
+}
+
+# Notices about sight say which kind of post (`category`, visibility_rules): one sentence
+# per kind. A kind not listed here falls back to `MESSAGES`.
+CATEGORY_MESSAGES: dict[str, dict[str, Promise]] = {
+    Code.SIGHT_WIDENED: {
+        "all": MESSAGES[Code.SIGHT_WIDENED],
+        "all_as_admin": _(
+            "Je kunt als beheerder nu alle post zien die niet privé is. Dat heeft %(name)s op "
+            "%(date)s ingesteld."
+        ),
+        "department": _(
+            "Je ziet nu ook de post van %(department)s. Dat heeft %(name)s op %(date)s ingesteld."
+        ),
+        "person": _(
+            "Je ziet nu ook de post van %(person)s. Dat heeft %(name)s op %(date)s ingesteld."
+        ),
+        "unassigned": _(
+            "Je ziet nu post zonder naam, om er een naam op te zetten. Dat heeft %(name)s op "
+            "%(date)s ingesteld."
+        ),
+    },
+    Code.SIGHT_NARROWED: {
+        "all": MESSAGES[Code.SIGHT_NARROWED],
+        "all_as_admin": _("Je leest als beheerder niet meer alle post."),
+        "department": _("Je ziet de post van %(department)s niet meer."),
+        "person": _("Je ziet de post van %(person)s niet meer."),
+        "unassigned": _("Je ziet post zonder naam niet meer."),
+    },
+    Code.SELF_GRANT: {
+        "unassigned": MESSAGES[Code.SELF_GRANT],
+        "department": _("%(name)s heeft zichzelf toegang gegeven tot de post van %(department)s."),
+        "person": _("%(name)s heeft zichzelf toegang gegeven tot de post van %(person)s."),
+    },
 }
 
 
@@ -85,6 +129,10 @@ NOTICE_VALUE_KEYS: Final[dict[str, frozenset[str]]] = {
     Code.EMERGENCY_ACCESS_USED: frozenset({"count", "person"}),
     Code.PRIVATE_WITHOUT_READERS: frozenset({"workspace", "document_id"}),
     Code.PRIVATE_WITHOUT_READERS_UNNAMED: frozenset({"workspace"}),
+    Code.SIGHT_WIDENED: frozenset({"category", "department", "person"}),
+    Code.SIGHT_NARROWED: frozenset({"category", "department", "person"}),
+    Code.ADMINS_READ_ALL_ON: frozenset(),
+    Code.SELF_GRANT: frozenset({"category", "department", "person"}),
 }
 
 
@@ -126,7 +174,8 @@ def notice_message(notice: AccountNotice) -> str:
     day = formats.date_format(timezone.localtime(notice.created_at, NOTICE_ZONE), "j F")
     values = _Values({str(k): str(v) for k, v in notice.values.items()})
     values.update(name=notice.actor_name, date=day)
-    return str(MESSAGES[notice.code]) % values
+    message = CATEGORY_MESSAGES.get(notice.code, {}).get(values["category"], MESSAGES[notice.code])
+    return str(message) % values
 
 
 def can_dismiss(notice: AccountNotice, session: UserSession | None) -> bool:

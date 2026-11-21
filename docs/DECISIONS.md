@@ -1992,3 +1992,178 @@ M3). "Iedereen ziet alle post" stays on everywhere until Task 40, so departments
   (the nightly check, switching emergency access off). The same helper decides what an
   emergency opening counts as already seen (an hour running is renewed) and which admins
   the "nobody could read it" notice may name.
+
+## 2026-11-21: Wie ziet wat, slice A2c (switching safely)
+
+Plan `docs/superpowers/plans/2026-11-20-host-wie-ziet-wat.md`, Tasks 35-41 (merge point
+M4). From here on "Iedereen ziet alle post" can be switched off, and an Organisatie
+installation starts in own post.
+
+- **The rule as data (Task 35, S 4.4).** `apps.workspaces.visibility_rules` is pure (no
+  Django, like the rules engine): a `PolicySnapshot` (switches, members with role, sorting
+  flag, persons and departments, the names of persons and departments) and per member the
+  kinds of post they see: `all`, `all_as_admin`, `person:<id>`, `department:<id>`,
+  `unassigned`. `all` and `all_as_admin` hold every other kind, so a member who sees all
+  gains nothing by a department and loses only the whole. `diff` says who gains and who
+  loses; `expected_sight` states S 4.1 per letter for the tests. The table of S 4.4 is test
+  data (`tests/visibility_transitions.py`), each row with its gains, losses and
+  confirmation written from the table's words, in every state where it applies.
+- **R34: post nobody reads goes to the sorters.** A letter with no person with an account
+  and no department with members (departments counting only while on) goes to the flagged
+  sorters, or to the admins when nobody is flagged; never to everyone, never to nobody.
+- **R35: departments switched off are kept.** Members, leads, labels, links and rules stay;
+  for sight a department then counts as nobody, so a letter only on departments goes to the
+  sorters; private letters keep their readers.
+- **R37: confirmation when anyone gains.** A change in which anybody gains sight needs
+  `confirmed` and the preview's token; a narrowing needs neither. Admins gaining all post
+  tells every member.
+- **P6: a sorter's fallback gain needs no confirmation after a narrowing.** An unlink, a
+  department member removed, a member removed, a demotion or an unflagged sorter sends post
+  nobody reads any more to the sorters; when every gain is such post going to a member who
+  sorted already, nobody confirms. When the admins become the sorters (the last flagged
+  sorter goes) and do not read all post, they gain new post: confirm ("yes when an admin
+  gains").
+- **P7: the last reader leaving sends the post to the sorters.** Removing the last member
+  of a department, or unlinking the last account of a person, makes its letters post
+  nobody reads: the sorters get them, with a `sight_widened` notice, though S 4.4's row
+  says "Gains: nobody".
+- **Changing the switches (Task 37, S 4.4, 4.13).** `apps.workspaces.visibility_settings`:
+  `change` (admin by the locked memberships, then the workspace row), `preview` (any
+  change of sight inside a savepoint that is rolled back, with confirmations and notices
+  left out), `require_confirmation`, `notify_changes`, and `sight_change`, the steps every
+  writer of sight runs around its own write: snapshot, write, snapshot, diff, confirm,
+  notices, and the release of every assignment whose assignee lost sight (switching off
+  ends what ran under it). The preview token is the SHA-256 of the switches and every
+  member's role, flag, persons and departments; a confirmation with another token is 409
+  `preview_outdated`, so it never covers another admin's change. The preview's letter
+  count groups alike letters (ruling M0) and asks letters with reader rows one by one,
+  private letters included (a member change can change their readers).
+  `lock_memberships` moved to the leaf module `workspaces.locks` (people's writers take it
+  too, Task 38).
+- **P9: every member reads the switches.** `getVisibility` answers any member with the
+  switches, who sorts post and their own "Wie kan mijn post zien?" sentences; those
+  sentences state the switches, so hiding the booleans protects nothing. An admin also
+  gets `summary`, the sentences of "Zo is Brievie nu ingesteld" (an added field: the head
+  of the "Wie ziet wat" page needs them, the member sentences say something else).
+- **P10: notices name the kind of post.** `sight_widened` and `sight_narrowed` carry
+  `category` (`all`, `all_as_admin`, `department`, `person`, `unassigned`) and the
+  department's or person's name (a directory, like department names; no letter content).
+  One notice per member and change, for the broadest kind. `admins_read_all_on` goes to
+  every member when admins gain all post. The sentence follows the category
+  (`accounts.notices.CATEGORY_MESSAGES`). A member who left is not told.
+- **The preset switch.** `apply_preset` takes the target kind's values (`presets.PRESETS`)
+  for every value the request leaves out, except emergency access (the server admin's);
+  one `workspace_setting_changed` row per value that really changed, `kind` included, and
+  one `workspace_preset_applied`. `add_start_set` adds the kind's labels and rules and
+  removes nothing.
+- **Every member change through the same steps (Task 38, S 4.4, 4.7).** `change_role`,
+  `remove_member`, the new `set_sorts_post` ("Verdeelt post", `updateMemberSortsPost`,
+  422 `viewer_cannot_sort`, audit `post_sorter_changed`), `add_department_member`,
+  `remove_department_member` and `link_member` take `lock_memberships` first (people's
+  writers too, instead of the caller's own membership: every change of sight in one lock
+  order, memberships before persons) and run `sight_change`. Making a sorter a viewer
+  clears the flag in the same transaction (with its own `post_sorter_changed` row). A
+  self-grant (an admin adding themselves to a department, linking themselves, flagging
+  themselves) tells the department's other members or the other admins (`self_grant`);
+  the audit rows stay the usual ones.
+- **Removing a member never asks for a confirmation.** S 4.4's row says "no", also when
+  the member was the only flagged sorter and the admins become the sorters; the sorters
+  who gain are told, the member who left is not. `previewVisibilityChange` with
+  `member_change` "remove" runs the removal's sight-moving part only (unlink, forget,
+  membership gone), not the account's deactivation.
+- **Unlinking and leaving a department end the member's own export.** Their export held
+  that person's letters and the department's private letters; it goes with the sight
+  (switching something off ends what ran under it).
+- **Accepting an invitation for a person asks nothing and tells nobody.** The admin
+  confirmed when making the invitation; taking `lock_memberships` there would invert the
+  lock order (invitation before memberships). Cost: the sorters are not told that a
+  person's post is the new member's now.
+- **Confirmation fields on old endpoints.** `updateMemberRole`, `linkPersonToMember` and
+  `addDepartmentMember` take `confirmed` and `preview_token` (defaults `false`, `""`): an
+  older client keeps working wherever nobody gains, and gets 409
+  `confirmation_required` where somebody would. The web sends both as defaults until its
+  preview dialog (Task 42); in an organisation a link or a department member then answers
+  with the 409's sentence. `MemberOut` gains `sorts_post` and `department_ids`.
+- **R40: one choice at installation, P8 ended (Task 40).** `create_workspace` gives a new
+  workspace its kind's values through `apps.workspaces.presets.apply_preset_settings`:
+  Thuis E on, D off, A on, Zorg private, no emergency access, own export allowed;
+  Organisatie E off, D on, A off, Zorg not private, emergency access on, no own export. An
+  Organisatie installation now starts in own post (P8 is over: every leak path was closed
+  in Tasks 12-34). Existing workspaces keep what they have. `setupServer` is unchanged and
+  still accepts `extra_labels`.
+- **A second workspace on the command line (S 5.2).** `manage.py create_workspace --name
+  --kind home|business --admin-email`: with an account for that address it becomes the
+  admin; without one the workspace has no member yet and its first admin is invited
+  (`Invitation` role admin, for that address only, 7 days, `created_by` empty,
+  "Serverbeheerder"), the link printed once. An invitation without a maker is usable only
+  as long as the workspace has no admin at all, so a maker-less invitation (a deleted
+  account's) never revives elsewhere. Server audit `workspace_created` (`kind`), actor the
+  system. An unknown kind: exit code 2 with a Dutch sentence. The link uses the first
+  `BRIEVIE_PUBLIC_URLS` entry (a path only without one).
+- **R41: a preset is a starting point.** Switching the kind later goes through
+  `updateVisibility` with `apply_preset` (Task 37); labels and rules are never removed.
+- **Who can see my post, and this letter (Task 41, S 4.15).** `getMyPostAccess` answers
+  any member (also with the app) with the sentences of "Wie kan mijn post zien?" for
+  them; `getVisibility` gives the same sentences beside the switches. `getDocumentAccess`
+  answers, for a letter the caller sees (through the seam; 404 `document_not_found` like
+  an unknown id otherwise, a case in the leak suite), every viewer by name with the
+  reasons that hold (`documents.visibility.viewer_reasons`, the S 4.1 arms on the snapshot
+  and the reader rows): "op naam van", "afdeling", "verdeelt post", "heeft de brief
+  gescand", "is gedeeld", "ziet alle post", "beheerder, leest alle post", "noodtoegang tot
+  14:30" (Dutch time). A member who sees the letter learns who else does: that is the
+  page's purpose. Merge point M4.
+
+### Security review of PR #39 (2026-11-21)
+
+- **A confirmation token is bound to its change (finding 2).** The preview token was the
+  SHA-256 of the switches and the members' facts, which a member can work out from
+  `listMembers` and `getVisibility`, and a preview of a narrowing then confirmed a
+  widening. It is now an HMAC (`django.utils.crypto.salted_hmac`, the key derived from
+  `SECRET_KEY` with a fixed purpose label, no new setting) over the workspace, the admin
+  who previewed, the change itself (the proposal, or the member change with only the
+  fields its kind uses) and the state's fingerprint. Another proposal, another admin,
+  another workspace or a changed state: 409 `preview_outdated`.
+- **An invitation moves sight like a member change (finding 1).** `createInvitation` with
+  role admin takes the memberships' lock (before the invitation, the lock order) and,
+  when the admin role would give the newcomer more sight than the same invitation as a
+  member (all post while "Beheerders lezen alle post" is on, or the unnamed post as a
+  fallback sorter while nobody is flagged), needs the confirmed preview of
+  `member_change` "invite_admin" (`confirmed`, `preview_token`, defaults `false`, `""`;
+  the preview lets a placeholder join as a member and shows what making it admin
+  changes, all rolled back; the token is over the state without the placeholder). A
+  Thuis workspace never asks. Consequence: in a fresh Organisatie (admins do not read
+  all post, nobody flagged) every admin invitation needs the confirmation, as a
+  promotion to admin does since Task 38; the web answers 409 there until its dialog
+  (Task 42).
+  Accepting an invitation now tells, inside its transaction, everybody whose sight changed
+  at that moment (`admins_read_all_on` to every member when an admin joins while admins
+  read all post; `sight_narrowed` to the sorters who no longer get the person's post);
+  the newcomer is not told. This replaces "accepting an invitation tells nobody" above;
+  still no memberships lock there. `on_member_added` releases the sorters' assignments on
+  the person's letters at once, and `test_task_release_callers` now checks per function
+  that every writer of sight releases (or runs `sight_change`). A renewed admin
+  invitation asks nothing again: it replaces one that was confirmed.
+- **The people writers use the locked role (finding 3).** `link_member` and the
+  department writers (`add_`, `remove_`, `update_department_member`) read the acting
+  member's role from the memberships they lock, not from the endpoint's earlier read: an
+  admin demoted in between gets 403 `forbidden`. `actor_role` of `link_member` counts only
+  for a call without a user, and only `ACTING_AS_SYSTEM` with a system actor is the
+  system; anything else without a user acts with no rights.
+- **The preview counts only what its admin can read (finding 4).** `letter_count` counted,
+  as the system, every letter whose viewers change, private ones included: an admin who
+  does not read all post learned exact counts per person or department by previewing a
+  link or a department member. Now it counts only letters the previewing admin can read
+  through the policy at that moment (for one who reads all post: every letter that is not
+  private, plus the private ones they read). The count says "letters you can read whose
+  viewers change"; it may be 0 where others' post moves.
+- **"Wie kan mijn post zien?" says only what is true (finding 5).** "Je post zien alleen
+  jij ..." left out other addressees, the scanner until the letter is done and shares;
+  "Privé-post zie alleen jij ..." left out the members of a department a private letter
+  is on, and who scanned it or made it private (they keep a share). The sentences now
+  list exactly those (Thuis: "groep"), and `tests/test_policy_text_truth.py` checks in all
+  16 states that every viewer `viewers()` gives for a member's letter is someone their
+  sentences name. S 4.15's example sentences are amended by these.
+- **Presets and `create_workspace` widen nobody's sight (checked with the review).** The
+  kind's values are applied only to a new workspace (no member but its first admin, or
+  none); a later preset switch goes through `updateVisibility` (preview, confirmation,
+  notices); the migration left existing workspaces as they were.

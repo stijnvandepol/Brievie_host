@@ -10,7 +10,7 @@ from apps.audit.services import actor_from_request
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.common.throttling import CallerThrottle, ClientAddressThrottle
 from apps.pipeline.schemas import AiStatusOut
-from apps.workspaces import invitations, members, services, settings_service
+from apps.workspaces import invitations, members, services, settings_service, visibility_settings
 from apps.workspaces.deps import workspace_member
 from apps.workspaces.invitations import IssuedInvitation
 from apps.workspaces.models import Membership
@@ -23,8 +23,15 @@ from apps.workspaces.schemas import (
     InvitationInfoOut,
     InvitationOut,
     InvitationTokenIn,
+    MemberChangeOut,
     MemberOut,
     MemberRoleIn,
+    PostAccessOut,
+    SortsPostIn,
+    VisibilityIn,
+    VisibilityOut,
+    VisibilityPreviewIn,
+    VisibilityPreviewOut,
     WorkspaceOut,
     WorkspaceSettingsIn,
     WorkspaceSettingsOut,
@@ -92,6 +99,141 @@ def update_workspace_settings(
     return WorkspaceSettingsOut.of(workspace)
 
 
+def _visibility_out(membership: Membership) -> VisibilityOut:
+    view = visibility_settings.visibility_for(membership)
+    workspace = view.workspace
+    return VisibilityOut(
+        kind=workspace.kind,
+        everyone_sees_all=workspace.everyone_sees_all,
+        departments_enabled=workspace.departments_enabled,
+        admins_read_all=workspace.admins_read_all,
+        sorter_user_ids=sorted(view.sorter_ids, key=str),
+        sentences=view.sentences,
+        summary=view.summary,
+    )
+
+
+@router.get(
+    "/workspaces/{workspace_id}/visibility",
+    response={200: VisibilityOut, 404: ErrorOut, **AUTH_ERRORS},
+    description="Who sees what, for every member: the three switches, who sorts post, and"
+    ' the sentences of "Wie kan mijn post zien?" for the caller; an admin also gets the'
+    " summary of the installation.",
+    operation_id="getVisibility",
+)
+def get_visibility(request: HttpRequest, workspace_id: UUID) -> VisibilityOut:
+    membership = workspace_member(request, workspace_id)
+    return _visibility_out(membership)
+
+
+@router.get(
+    "/workspaces/{workspace_id}/post-access",
+    response={200: PostAccessOut, 404: ErrorOut, **AUTH_ERRORS},
+    description='"Wie kan mijn post zien?": who can see the caller\'s post, in sentences'
+    " (the switches, the admins, who sorts post, private post, emergency access, the server"
+    " admins, the AI service). For every member, also with the app.",
+    operation_id="getMyPostAccess",
+)
+def get_my_post_access(request: HttpRequest, workspace_id: UUID) -> PostAccessOut:
+    membership = workspace_member(request, workspace_id)
+    return PostAccessOut(sentences=visibility_settings.post_access(membership))
+
+
+def _proposal(payload: VisibilityPreviewIn | VisibilityIn) -> visibility_settings.Proposal:
+    return visibility_settings.Proposal(
+        kind=payload.kind,
+        everyone_sees_all=payload.everyone_sees_all,
+        departments_enabled=payload.departments_enabled,
+        admins_read_all=payload.admins_read_all,
+        care_is_private=payload.care_is_private,
+        allow_member_export=payload.allow_member_export,
+        apply_preset=payload.apply_preset,
+        add_start_set=payload.add_start_set,
+    )
+
+
+@router.post(
+    "/workspaces/{workspace_id}/visibility/preview",
+    response={
+        200: VisibilityPreviewOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    auth=session_auth,
+    description=WEB_SESSION_ONLY
+    + ADMINS_ONLY
+    + " What a change of the switches, or a planned member change (`member_change`), would"
+    " do: per member what they start and stop seeing, the number of letters whose viewers"
+    " change, whether it needs confirmation, the summary after it, and the token a"
+    " confirmed change sends back. Changes nothing. A member change answers that change's"
+    " own errors (404 member_not_found, 409 last_admin, 422 viewer_cannot_sort, ...).",
+    operation_id="previewVisibilityChange",
+)
+def preview_visibility_change(
+    request: HttpRequest, workspace_id: UUID, payload: VisibilityPreviewIn
+) -> VisibilityPreviewOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
+    result = visibility_settings.preview_request(
+        workspace=membership.workspace,
+        proposal=_proposal(payload),
+        member_change=visibility_settings.MemberChange(
+            kind=payload.member_change,
+            user_id=payload.member_user_id,
+            person_id=payload.member_person_id,
+            role=payload.member_role,
+            sorts_post=payload.member_sorts_post,
+        ),
+        actor=actor_from_request(request),
+    )
+    return VisibilityPreviewOut(
+        changes=[
+            MemberChangeOut(
+                user_id=c.user_id, name=c.name, gains=list(c.gains), losses=list(c.loses)
+            )
+            for c in visibility_settings.in_words(result)
+        ],
+        letter_count=result.letter_count,
+        needs_confirmation=result.needs_confirmation,
+        sentences=result.sentences,
+        preview_token=result.preview_token,
+    )
+
+
+@router.put(
+    "/workspaces/{workspace_id}/visibility",
+    response={
+        200: VisibilityOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    auth=session_auth,
+    description=WEB_SESSION_ONLY
+    + ADMINS_ONLY
+    + " Change who sees what; a value left out stays as it is. When anybody gains sight:"
+    " 409 confirmation_required without `confirmed`, 409 preview_outdated when something"
+    " changed since the preview whose token is sent. Every changed value is written to the"
+    " log; the members whose sight changes get a notice, every member when admins gain all"
+    " post. Labels and rules are never removed.",
+    operation_id="updateVisibility",
+)
+def update_visibility(
+    request: HttpRequest, workspace_id: UUID, payload: VisibilityIn
+) -> VisibilityOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
+    visibility_settings.change(
+        workspace=membership.workspace,
+        proposal=_proposal(payload),
+        actor=actor_from_request(request),
+        confirmed=payload.confirmed,
+        preview_token=payload.preview_token,
+    )
+    return _visibility_out(membership)
+
+
 @router.put(
     "/workspaces/{workspace_id}/emergency-access",
     response={
@@ -137,7 +279,10 @@ def list_members(request: HttpRequest, workspace_id: UUID) -> list[MemberOut]:
     + ADMINS_ONLY
     + " Give a member another role; the member sees it at their next request. 404"
     " member_not_found for somebody who is no member of this workspace; 409 last_admin for"
-    " demoting the only admin. A demoted admin's open invitations and reset links stop.",
+    " demoting the only admin. A demoted admin's open invitations and reset links stop. When"
+    " somebody gains sight by it (a new admin while admins read all post, a new fallback"
+    " sorter): 409 confirmation_required without `confirmed`, 409 preview_outdated for an"
+    " old preview's token (`previewVisibilityChange`). A viewer sorts no post.",
     operation_id="updateMemberRole",
 )
 def update_member_role(
@@ -149,6 +294,43 @@ def update_member_role(
         user_id=user_id,
         role=payload.role,
         actor=actor_from_request(request),
+        confirmed=payload.confirmed,
+        preview_token=payload.preview_token,
+    )
+    viewer = current_user(request)
+    return services.list_members(membership.workspace, viewer=viewer, user_id=user_id)[0]
+
+
+@router.put(
+    "/workspaces/{workspace_id}/members/{user_id}/sorts-post",
+    response={
+        200: MemberOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        422: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    auth=session_auth,
+    description=WEB_SESSION_ONLY
+    + ADMINS_ONLY
+    + ' "Verdeelt post": the member gets the letters nobody else reads, to put a name on'
+    " them. 404 member_not_found; 422 viewer_cannot_sort; when somebody gains sight: 409"
+    " confirmation_required without `confirmed`, 409 preview_outdated for an old preview's"
+    " token (`previewVisibilityChange`).",
+    operation_id="updateMemberSortsPost",
+)
+def update_member_sorts_post(
+    request: HttpRequest, workspace_id: UUID, user_id: UUID, payload: SortsPostIn
+) -> MemberOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
+    members.set_sorts_post(
+        workspace=membership.workspace,
+        user_id=user_id,
+        sorts_post=payload.sorts_post,
+        actor=actor_from_request(request),
+        confirmed=payload.confirmed,
+        preview_token=payload.preview_token,
     )
     viewer = current_user(request)
     return services.list_members(membership.workspace, viewer=viewer, user_id=user_id)[0]

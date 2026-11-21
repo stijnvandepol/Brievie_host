@@ -430,6 +430,22 @@ docker compose --project-directory deploy -f deploy/docker-compose.yml exec api 
 This ends every session and unpairs every phone of that account, and leaves a notice.
 Both commands write the log (the actor is "Brievie").
 
+A second workspace (another household, an organisation next to your own) is made only on
+the server. `--kind` is `home` (Thuis: everyone sees all post) or `business`
+(Organisatie: everyone sees their own post and that of their departments); the workspace
+starts with that kind's values, as at installation:
+
+```sh
+docker compose --project-directory deploy -f deploy/docker-compose.yml exec api \
+  python manage.py create_workspace --name "Bakkerij Jansen" --kind business \
+  --admin-email naam@voorbeeld.nl
+```
+
+When that address has an account, it becomes the workspace's admin. When it has none,
+the command prints an invitation link for that address, once: send it to the person, who
+becomes the first admin (the link works 7 days, and only while the workspace has no admin).
+The server log gets `workspace_created`.
+
 ## 18. Sessions, devices and how long they last
 
 - A web session ends after **14 days without use**, and after **90 days** whatever

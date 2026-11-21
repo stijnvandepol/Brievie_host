@@ -140,6 +140,9 @@ function InviteForm({
           email: email.trim(),
           person_id: personId === "" ? null : personId,
           note: note.trim(),
+          // The confirmation dialog of "Wie ziet wat" comes with the web pages (plan Task 42).
+          confirmed: false,
+          preview_token: "",
         },
       });
       if (error !== undefined || !data) throw new ApiFailure(error);

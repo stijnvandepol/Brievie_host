@@ -2733,6 +2733,10 @@ msgstr "Soort taak"
 msgid "Staat bij AI 'Brieven zelf onder personen en labels zetten' aan? Dan zet Brievie een voorgesteld label er toch zelf op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is van hetzelfde label. Staat het woord alleen verderop en is de AI niet zeker? Dan blijft het een voorstel."
 msgstr "Staat bij AI 'Brieven zelf onder personen en labels zetten' aan? Dan zet Brievie een voorgesteld label er toch zelf op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is van hetzelfde label. Staat het woord alleen verderop en is de AI niet zeker? Dan blijft het een voorstel."
 
+#: src/components/audit-codes.ts
+msgid "Standaard Thuis of Organisatie overgenomen"
+msgstr "Standaard Thuis of Organisatie overgenomen"
+
 #: src/routes/setup.tsx
 msgid "Start Brievie"
 msgstr "Start Brievie"
@@ -3011,6 +3015,10 @@ msgstr "Vandaag"
 msgid "Veld"
 msgstr "Veld"
 
+#: src/components/audit-codes.ts
+msgid "Verdeelt post gewijzigd"
+msgstr "Verdeelt post gewijzigd"
+
 #: src/routes/rule-editor.tsx
 msgid "Vergelijking"
 msgstr "Vergelijking"
@@ -3251,6 +3259,10 @@ msgstr "Welkom bij Brievie"
 #: src/components/audit-codes.ts
 msgid "Werkruimte"
 msgstr "Werkruimte"
+
+#: src/components/audit-codes.ts
+msgid "Werkruimte gemaakt"
+msgstr "Werkruimte gemaakt"
 
 #: src/routes/members.tsx
 msgid "Werkruimte verlaten"

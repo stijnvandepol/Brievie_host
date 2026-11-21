@@ -9,21 +9,29 @@ from django.utils.translation import gettext as _
 from psycopg import errors as pg_errors
 
 from apps.accounts.models import User
-from apps.audit.codes import AuditCode, TargetKind
+from apps.audit.codes import ActorKind, AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
 from apps.common.names import check_shown
 from apps.common.privacy import holds_bsn, mask_bsns
 from apps.common.text import normalise
 from apps.documents import visibility
+from apps.documents.member_export import remove_member_exports
 from apps.documents.models import DocumentSuggestion
 from apps.people.models import DepartmentMember, Person
 from apps.rules.definition import named_ids
 from apps.rules.models import Rule
 from apps.tasks.assignment import release_unseeing_assignees
 from apps.workspaces.context import system_actor
-from apps.workspaces.locks import lock_own_membership
+from apps.workspaces.locks import lock_memberships
 from apps.workspaces.models import Membership, Workspace
+from apps.workspaces.visibility_rules import department_category, person_category
+from apps.workspaces.visibility_settings import (
+    MemberChange,
+    member_change_key,
+    notify_self_grant,
+    sight_change,
+)
 
 _NAME_UNIQUE = "people_person_name_unique"
 _USER_UNIQUE = "people_person_user_unique"
@@ -454,6 +462,25 @@ def ensure_person_for_member(*, workspace: Workspace, user: User) -> Person:
         )
 
 
+def _lock_for_sight(
+    workspace: Workspace, actor: AuditActor, *, actor_role: str
+) -> tuple[list[Membership], str]:
+    """Every membership of the workspace (the lock of every change of who sees what,
+    S 4.4) and the acting member's role as the locked rows have it: never the role an
+    endpoint read before the lock (a demotion in between counts). 404
+    `workspace_not_found` when the acting member is gone. A call without a user is the
+    system only when it says so (`ACTING_AS_SYSTEM` and a system actor); else it acts
+    with no rights."""
+    locked = lock_memberships(workspace)
+    if actor.user_id is None:
+        system = actor_role == ACTING_AS_SYSTEM and actor.kind == ActorKind.SYSTEM
+        return locked, ACTING_AS_SYSTEM if system else ""
+    own = next((m for m in locked if m.user_id == actor.user_id), None)
+    if own is None:
+        raise ApiError(404, "workspace_not_found", _("We kunnen deze werkruimte niet vinden."))
+    return locked, own.role
+
+
 def link_member(
     *,
     workspace: Workspace,
@@ -461,6 +488,8 @@ def link_member(
     user_id: UUID | None,
     actor: AuditActor,
     actor_role: str,
+    confirmed: bool = False,
+    preview_token: str = "",
 ) -> Person:
     """Link the person to a member of the workspace, or unlink it (`user_id` None): a grant
     of the person's post (PB T12, D 8.1).
@@ -469,10 +498,14 @@ def link_member(
     person has private post (409 `cannot_grant_self`). A person linked to somebody is
     unlinked or relinked only by that member (409 `cannot_unlink`; removing the member
     unlinks too); unlinking oneself is deliberate and allowed, also for a viewer. The
-    system (no user) is not bound by that. Lock order: own membership, then the person."""
+    system (no user) is not bound by that. A link by which somebody gains sight needs the
+    confirmed preview (409 `confirmation_required`, `preview_outdated`; S 4.4); an unlink
+    sends the person's post to the sorters without one (P6, P7). An admin linking
+    themselves: the other admins are told (S 4.7). A member's rights are those of the
+    locked membership; `actor_role` counts only for a call without a user, which must
+    say `ACTING_AS_SYSTEM`. Lock order: every membership, then the person."""
     with transaction.atomic():
-        if actor.user_id is not None:
-            lock_own_membership(workspace.id, actor.user_id)
+        locked, locked_role = _lock_for_sight(workspace, actor, actor_role=actor_role)
         person = _get_for_update(workspace, person_id)
         if person.kind == Person.Kind.DEPARTMENT:
             raise ApiError(
@@ -480,7 +513,7 @@ def link_member(
                 "is_a_department",
                 _("Een afdeling koppel je niet aan één account. Voeg leden toe."),
             )
-        if user_id is not None and not _acts_as_admin(actor_role):
+        if user_id is not None and not _acts_as_admin(locked_role):
             raise _forbidden()
         if person.user_id == user_id:
             # Nothing changes, so nothing is written to the log either.
@@ -507,24 +540,48 @@ def link_member(
             )
         if user_id is not None and user_id == actor.user_id and visibility.has_private_post(person):
             raise _cannot_grant_self()
-        was_linked = person.user_id is not None
-        person.user_id = user_id
-        _save(person)
-        visibility.recompute_where(workspace_id=workspace.id, person_id=person.id)
-        if was_linked:
-            # The former member may no longer read this person's post: their
-            # assignments there end (Mijn taken S 5.3).
-            release_unseeing_assignees(workspace_id=workspace.id)
-        if user_id is not None:
-            visibility.record_grant(
-                person, grantee=User.objects.get(id=user_id), actor_user_id=actor.user_id
-            )
-        record(
-            AuditCode.PERSON_LINKED if user_id is not None else AuditCode.PERSON_UNLINKED,
+        former = person.user_id
+        with sight_change(
+            workspace,
+            narrowing=user_id is None,
+            confirmed=confirmed,
+            preview_token=preview_token,
             actor=actor,
-            target=AuditTarget(TargetKind.PERSON, person.id, person.display_name),
-            workspace_id=workspace.id,
-        )
+            change=member_change_key(
+                MemberChange(kind="link", user_id=user_id, person_id=person.id)
+                if user_id is not None
+                else MemberChange(kind="unlink", person_id=person.id)
+            ),
+        ) as sight:
+            person.user_id = user_id
+            _save(person)
+            visibility.recompute_where(workspace_id=workspace.id, person_id=person.id)
+            if former is not None:
+                # The former member may no longer read this person's post: their
+                # assignments there end (Mijn taken S 5.3), and so does their own export,
+                # which held it.
+                release_unseeing_assignees(workspace_id=workspace.id)
+                remove_member_exports(workspace.id, former)
+            if user_id is not None:
+                visibility.record_grant(
+                    person, grantee=User.objects.get(id=user_id), actor_user_id=actor.user_id
+                )
+            record(
+                AuditCode.PERSON_LINKED if user_id is not None else AuditCode.PERSON_UNLINKED,
+                actor=actor,
+                target=AuditTarget(TargetKind.PERSON, person.id, person.display_name),
+                workspace_id=workspace.id,
+            )
+        if user_id is not None and user_id == actor.user_id:
+            others = [
+                m.user for m in locked if m.role == Membership.Role.ADMIN and m.user_id != user_id
+            ]
+            notify_self_grant(
+                others,
+                category=person_category(person.id),
+                names=sight.before,
+                actor_name=actor.name,
+            )
         return _annotated(workspace, person.id)
 
 
@@ -533,10 +590,12 @@ def _forbidden() -> ApiError:
 
 
 def _department_for_update(workspace: Workspace, person_id: UUID, actor: AuditActor) -> Person:
-    """The department, locked after the actor's own membership (the lock order); 409
+    """The department, locked after every membership (the lock order of a change of
+    sight), for an admin by the locked rows (403 `forbidden`) or the system; 409
     `not_a_department` for a person."""
-    if actor.user_id is not None:
-        lock_own_membership(workspace.id, actor.user_id)
+    _locked, role = _lock_for_sight(workspace, actor, actor_role=ACTING_AS_SYSTEM)
+    if not _acts_as_admin(role):
+        raise _forbidden()
     department = _get_for_update(workspace, person_id)
     if department.kind != Person.Kind.DEPARTMENT:
         raise ApiError(409, "not_a_department", _("Dit is geen afdeling."))
@@ -566,10 +625,15 @@ def add_department_member(
     user_id: UUID,
     actor: AuditActor,
     is_lead: bool = False,
+    confirmed: bool = False,
+    preview_token: str = "",
 ) -> Person:
-    """Put a member in a department (S 4.5, PB T11): a grant. An admin never adds
-    themselves to a department with private post (409 `cannot_grant_self`). Adding a
-    member who is in it already changes nothing."""
+    """Put a member in a department (S 4.5, PB T11): a grant, so with departments on and
+    "Iedereen ziet alle post" off it needs the confirmed preview (409
+    `confirmation_required`, `preview_outdated`). An admin never adds themselves to a
+    department with private post (409 `cannot_grant_self`); one who adds themselves
+    elsewhere: the department's members are told (S 4.7). Adding a member who is in it
+    already changes nothing."""
     with transaction.atomic():
         department = _department_for_update(workspace, person_id, actor)
         name = _member_name(workspace, user_id)
@@ -577,19 +641,41 @@ def add_department_member(
             return _annotated(workspace, department.id)
         if user_id == actor.user_id and visibility.has_private_post(department):
             raise _cannot_grant_self()
-        DepartmentMember.objects.create(
-            workspace=workspace, department=department, user_id=user_id, is_lead=is_lead
+        colleagues = list(
+            User.objects.filter(
+                id__in=DepartmentMember.objects.filter(department=department).values("user_id")
+            )
         )
-        visibility.recompute_where(workspace_id=workspace.id, person_id=department.id)
-        grantee = User.objects.get(id=user_id)
-        visibility.record_grant(department, grantee=grantee, actor_user_id=actor.user_id)
-        record(
-            AuditCode.DEPARTMENT_MEMBER_ADDED,
+        with sight_change(
+            workspace,
+            narrowing=False,
+            confirmed=confirmed,
+            preview_token=preview_token,
             actor=actor,
-            target=_department_target(department),
-            workspace_id=workspace.id,
-            values={"member": name},
-        )
+            change=member_change_key(
+                MemberChange(kind="department_add", user_id=user_id, person_id=department.id)
+            ),
+        ) as sight:
+            DepartmentMember.objects.create(
+                workspace=workspace, department=department, user_id=user_id, is_lead=is_lead
+            )
+            visibility.recompute_where(workspace_id=workspace.id, person_id=department.id)
+            grantee = User.objects.get(id=user_id)
+            visibility.record_grant(department, grantee=grantee, actor_user_id=actor.user_id)
+            record(
+                AuditCode.DEPARTMENT_MEMBER_ADDED,
+                actor=actor,
+                target=_department_target(department),
+                workspace_id=workspace.id,
+                values={"member": name},
+            )
+        if user_id == actor.user_id:
+            notify_self_grant(
+                colleagues,
+                category=department_category(department.id),
+                names=sight.before,
+                actor_name=actor.name,
+            )
         return _annotated(workspace, department.id)
 
 
@@ -597,25 +683,36 @@ def remove_department_member(
     *, workspace: Workspace, person_id: UUID, user_id: UUID, actor: AuditActor
 ) -> Person:
     """Take a member out of a department; their sight of its post goes (also for an admin
-    removing themselves: deliberate, so no `would_lose_access`, ruling c)."""
+    removing themselves: deliberate, so no `would_lose_access`, ruling c). The last member
+    leaving sends the department's post to the sorters (P7), without a confirmation (P6)."""
     with transaction.atomic():
         department = _department_for_update(workspace, person_id, actor)
         name = _member_name(workspace, user_id)
-        removed, _rows = DepartmentMember.objects.filter(
-            department=department, user_id=user_id
-        ).delete()
-        if not removed:
+        if not DepartmentMember.objects.filter(department=department, user_id=user_id).exists():
             return _annotated(workspace, department.id)
-        visibility.recompute_where(workspace_id=workspace.id, person_id=department.id)
-        # The member may no longer read the department's post: their tasks there end.
-        release_unseeing_assignees(workspace_id=workspace.id)
-        record(
-            AuditCode.DEPARTMENT_MEMBER_REMOVED,
+        with sight_change(
+            workspace,
+            narrowing=True,
+            confirmed=False,
+            preview_token="",
             actor=actor,
-            target=_department_target(department),
-            workspace_id=workspace.id,
-            values={"member": name},
-        )
+            change=member_change_key(
+                MemberChange(kind="department_remove", user_id=user_id, person_id=department.id)
+            ),
+        ):
+            DepartmentMember.objects.filter(department=department, user_id=user_id).delete()
+            visibility.recompute_where(workspace_id=workspace.id, person_id=department.id)
+            # The member may no longer read the department's post: their tasks there end,
+            # and so does their own export (it held the department's private letters).
+            release_unseeing_assignees(workspace_id=workspace.id)
+            remove_member_exports(workspace.id, user_id)
+            record(
+                AuditCode.DEPARTMENT_MEMBER_REMOVED,
+                actor=actor,
+                target=_department_target(department),
+                workspace_id=workspace.id,
+                values={"member": name},
+            )
         return _annotated(workspace, department.id)
 
 

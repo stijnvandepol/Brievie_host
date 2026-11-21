@@ -139,6 +139,22 @@ msgstr "Private mail without readers"
 msgid "Privépost zonder lezers, brief niet genoemd"
 msgstr "Private post without readers, letter not named"
 
+#: apps/accounts/models.py
+msgid "Je ziet meer post"
+msgstr "You see more post"
+
+#: apps/accounts/models.py
+msgid "Je ziet minder post"
+msgstr "You see less post"
+
+#: apps/accounts/models.py
+msgid "Beheerders lezen alle post"
+msgstr "Admins read all post"
+
+#: apps/accounts/models.py
+msgid "Iemand gaf zichzelf toegang"
+msgstr "Someone gave themselves access"
+
 #: apps/accounts/notices.py
 #, python-format
 msgid "%(name)s heeft op %(date)s een herstellink voor je wachtwoord gemaakt."
@@ -209,6 +225,73 @@ msgstr "Some mail should have become private, but nobody would have been able to
 msgid "Er is post in %(workspace)s die privé had moeten worden, maar niemand zou hem kunnen lezen. Hij is zichtbaar gebleven voor wie hem mag zien."
 msgstr "Some post in %(workspace)s should have become private, but nobody could have read it. It stayed visible to those who may see it."
 
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je kunt nu alle post zien die niet privé is. Dat heeft %(name)s op %(date)s ingesteld."
+msgstr "You can now see all post that is not private. %(name)s set this on %(date)s."
+
+#: apps/accounts/notices.py
+msgid "Je ziet de post van anderen niet meer."
+msgstr "You no longer see other people's post."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "De beheerders kunnen nu alle post lezen die niet privé is, ook de jouwe. Dat heeft %(name)s op %(date)s ingesteld."
+msgstr "The admins can now read all post that is not private, yours too. %(name)s set this on %(date)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "%(name)s heeft zichzelf toegang gegeven tot post zonder naam."
+msgstr "%(name)s gave themselves access to unnamed post."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je kunt als beheerder nu alle post zien die niet privé is. Dat heeft %(name)s op %(date)s ingesteld."
+msgstr "As an admin you can now see all post that is not private. %(name)s set this on %(date)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je ziet nu ook de post van %(department)s. Dat heeft %(name)s op %(date)s ingesteld."
+msgstr "You now also see the post for %(department)s. %(name)s set this on %(date)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je ziet nu ook de post van %(person)s. Dat heeft %(name)s op %(date)s ingesteld."
+msgstr "You now also see the post for %(person)s. %(name)s set this on %(date)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je ziet nu post zonder naam, om er een naam op te zetten. Dat heeft %(name)s op %(date)s ingesteld."
+msgstr "You now see unnamed post, to put a name on it. %(name)s set this on %(date)s."
+
+#: apps/accounts/notices.py
+msgid "Je leest als beheerder niet meer alle post."
+msgstr "As an admin you no longer read all post."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je ziet de post van %(department)s niet meer."
+msgstr "You no longer see the post for %(department)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je ziet de post van %(person)s niet meer."
+msgstr "You no longer see the post for %(person)s."
+
+#: apps/accounts/notices.py
+msgid "Je ziet post zonder naam niet meer."
+msgstr "You no longer see unnamed post."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "%(name)s heeft zichzelf toegang gegeven tot de post van %(department)s."
+msgstr "%(name)s gave themselves access to the post for %(department)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "%(name)s heeft zichzelf toegang gegeven tot de post van %(person)s."
+msgstr "%(name)s gave themselves access to the post for %(person)s."
+
 #: apps/accounts/passwords.py
 #, python-format
 msgid "Dit wachtwoord is te kort. Gebruik minstens %(min)d tekens."
@@ -263,7 +346,7 @@ msgstr "Brievie is already set up."
 msgid "De installatiecode klopt niet. Je vindt hem in het log van de server."
 msgstr "The setup code is not correct. You can find it in the server log."
 
-#: apps/accounts/services.py
+#: apps/accounts/services.py apps/workspaces/management/commands/create_workspace.py
 msgid "Geef de werkruimte een naam."
 msgstr "Give the workspace a name."
 
@@ -363,6 +446,10 @@ msgid "Instellingen voor inloggen via organisatie gewijzigd"
 msgstr "Settings for signing in through your organization changed"
 
 #: apps/audit/codes.py
+msgid "Werkruimte gemaakt"
+msgstr "Workspace created"
+
+#: apps/audit/codes.py
 msgid "Uitnodiging gemaakt"
 msgstr "Invitation created"
 
@@ -389,6 +476,14 @@ msgstr "Member left"
 #: apps/audit/codes.py
 msgid "Instelling gewijzigd"
 msgstr "Setting changed"
+
+#: apps/audit/codes.py
+msgid "Standaard Thuis of Organisatie overgenomen"
+msgstr "Home or Business defaults taken over"
+
+#: apps/audit/codes.py
+msgid "Verdeelt post gewijzigd"
+msgstr "Sorts post changed"
 
 #: apps/audit/codes.py
 msgid "Regel gemaakt"
@@ -1549,6 +1644,41 @@ msgstr "We can't find this suggestion."
 msgid "Er zijn net heel veel brieven verstuurd. Wacht even, dan gaat het vanzelf verder."
 msgstr "A lot of letters were just sent. Wait a moment, it will continue by itself."
 
+#: apps/documents/visibility.py
+msgid "ziet alle post"
+msgstr "sees all post"
+
+#: apps/documents/visibility.py
+msgid "beheerder, leest alle post"
+msgstr "admin, reads all post"
+
+#: apps/documents/visibility.py
+#, python-format
+msgid "op naam van %(person)s"
+msgstr "addressed to %(person)s"
+
+#: apps/documents/visibility.py
+#, python-format
+msgid "afdeling %(department)s"
+msgstr "department %(department)s"
+
+#: apps/documents/visibility.py
+msgid "verdeelt post"
+msgstr "sorts post"
+
+#: apps/documents/visibility.py
+msgid "heeft de brief gescand"
+msgstr "scanned the letter"
+
+#: apps/documents/visibility.py
+msgid "is gedeeld"
+msgstr "shared with them"
+
+#: apps/documents/visibility.py
+#, python-format
+msgid "noodtoegang tot %(time)s"
+msgstr "emergency access until %(time)s"
+
 #: apps/documents/visibility.py apps/people/services.py apps/workspaces/members.py
 msgid "We kunnen dit lid niet vinden."
 msgstr "We can't find this member."
@@ -1663,7 +1793,7 @@ msgstr "There is already a label with this name."
 msgid "Kies een afdeling."
 msgstr "Choose a department."
 
-#: apps/labels/services.py apps/people/services.py apps/workspaces/deps.py apps/workspaces/members.py
+#: apps/labels/services.py apps/people/services.py apps/workspaces/deps.py apps/workspaces/members.py apps/workspaces/visibility_settings.py
 msgid "Je mag dit niet doen in deze werkruimte."
 msgstr "You are not allowed to do this in this workspace."
 
@@ -1740,6 +1870,10 @@ msgstr "This person is still in use. You can archive the person instead."
 #, python-format
 msgid "De regel '%(rule)s' gebruikt deze persoon. Pas die regel eerst aan."
 msgstr "The rule '%(rule)s' uses this person. Change that rule first."
+
+#: apps/people/services.py apps/workspaces/deps.py apps/workspaces/locks.py apps/workspaces/settings_service.py
+msgid "We kunnen deze werkruimte niet vinden."
+msgstr "We can't find this workspace."
 
 #: apps/people/services.py
 msgid "Een afdeling koppel je niet aan één account. Voeg leden toe."
@@ -2267,10 +2401,6 @@ msgstr "From version {installed} you cannot go to {target} in one step. First up
 msgid "Van versie {installed} is er geen weg naar {target} met ./brievie update. Lees \"Voor je bijwerkt\" in CHANGELOG.md."
 msgstr "From version {installed} there is no way to {target} with ./brievie update. Read \"Before you update\" in CHANGELOG.md."
 
-#: apps/workspaces/deps.py apps/workspaces/locks.py apps/workspaces/settings_service.py
-msgid "We kunnen deze werkruimte niet vinden."
-msgstr "We can't find this workspace."
-
 #: apps/workspaces/invitations.py
 msgid "Deze persoon is al gekoppeld aan een lid."
 msgstr "This person is already linked to a member."
@@ -2286,6 +2416,10 @@ msgstr "Enter the email address of this person. Only that address can use the in
 #: apps/workspaces/invitations.py
 msgid "Iemand met dit e-mailadres is al lid."
 msgstr "Someone with this email address is already a member."
+
+#: apps/workspaces/invitations.py
+msgid "Vul een geldig e-mailadres in."
+msgstr "Fill in a valid email address."
 
 #: apps/workspaces/invitations.py
 msgid "We kunnen deze uitnodiging niet vinden."
@@ -2315,9 +2449,31 @@ msgstr "Choose a new account or an existing account."
 msgid "Deze persoon is intussen aan iemand anders gekoppeld. Vraag een nieuwe uitnodiging."
 msgstr "This person has been linked to someone else in the meantime. Ask for a new invitation."
 
+#: apps/workspaces/management/commands/create_workspace.py
+msgid "Kies als soort home (Thuis) of business (Organisatie)."
+msgstr "Choose home or business as the kind."
+
+#: apps/workspaces/management/commands/create_workspace.py
+msgid "Dit e-mailadres klopt niet."
+msgstr "This email address is not right."
+
+#: apps/workspaces/management/commands/create_workspace.py
+#, python-format
+msgid "Werkruimte %(name)s is gemaakt. %(admin)s is beheerder."
+msgstr "Workspace %(name)s has been created. %(admin)s is its admin."
+
+#: apps/workspaces/management/commands/create_workspace.py
+#, python-format
+msgid "Werkruimte %(name)s is gemaakt. Stuur deze link naar %(email)s; die wordt de eerste beheerder. De link werkt 7 dagen en wordt maar één keer getoond:"
+msgstr "Workspace %(name)s has been created. Send this link to %(email)s, who becomes the first admin. The link works for 7 days and is shown only once:"
+
 #: apps/workspaces/members.py
 msgid "Een werkruimte heeft altijd minstens één beheerder. Maak eerst iemand anders beheerder."
 msgstr "A workspace always has at least one admin. Make someone else admin first."
+
+#: apps/workspaces/members.py
+msgid "Iemand met Alleen lezen kan geen post verdelen."
+msgstr "Someone with Read only cannot sort post."
 
 #: apps/workspaces/members.py
 msgid "Dit account is serverbeheerder. Alleen een serverbeheerder kan het uit zijn laatste werkruimte halen."
@@ -2342,6 +2498,174 @@ msgstr "Member"
 #: apps/workspaces/models.py
 msgid "Alleen lezen"
 msgstr "Read only"
+
+#: apps/workspaces/policy_text.py
+#, python-format
+msgid "%(first)s en %(last)s"
+msgstr "%(first)s and %(last)s"
+
+#: apps/workspaces/policy_text.py
+msgid "alle post die niet privé is"
+msgstr "all post that is not private"
+
+#: apps/workspaces/policy_text.py
+msgid "alle post als beheerder"
+msgstr "all post as an admin"
+
+#: apps/workspaces/policy_text.py
+msgid "post zonder naam"
+msgstr "unnamed post"
+
+#: apps/workspaces/policy_text.py
+#, python-format
+msgid "post van %(department)s"
+msgstr "post for %(department)s"
+
+#: apps/workspaces/policy_text.py
+#, python-format
+msgid "post van %(person)s"
+msgstr "post for %(person)s"
+
+#: apps/workspaces/policy_text.py
+#, python-format
+msgid "Tekst van brieven gaat naar %(supplier)s."
+msgstr "The text of letters goes to %(supplier)s."
+
+#: apps/workspaces/policy_text.py
+msgid "Brieven worden gelezen door AI op je eigen netwerk."
+msgstr "Letters are read by AI on your own network."
+
+#: apps/workspaces/policy_text.py
+msgid "Brieven worden niet door AI gelezen."
+msgstr "Letters are not read by AI."
+
+#: apps/workspaces/policy_text.py
+msgid "Iedereen in Brievie ziet alle post, behalve post die privé is."
+msgstr "Everyone in Brievie sees all post, except post that is private."
+
+#: apps/workspaces/policy_text.py
+msgid "Ieder ziet zijn eigen post en die van zijn groepen."
+msgstr "Everyone sees their own post and that of their groups."
+
+#: apps/workspaces/policy_text.py
+msgid "Ieder ziet zijn eigen post en die van zijn afdelingen."
+msgstr "Everyone sees their own post and that of their departments."
+
+#: apps/workspaces/policy_text.py
+msgid "Ieder ziet zijn eigen post."
+msgstr "Everyone sees their own post."
+
+#: apps/workspaces/policy_text.py
+msgid "Er zijn nog geen groepen."
+msgstr "There are no groups yet."
+
+#: apps/workspaces/policy_text.py
+msgid "Er zijn nog geen afdelingen."
+msgstr "There are no departments yet."
+
+#: apps/workspaces/policy_text.py
+#, python-format
+msgid "Post zonder naam zien: %(names)s (verdeelt post)."
+msgstr "Unnamed post is seen by: %(names)s (sorts post)."
+
+#: apps/workspaces/policy_text.py
+msgid "Post zonder naam zie jij, tot je iemand aanwijst die post verdeelt."
+msgstr "You see unnamed post, until you choose someone who sorts post."
+
+#: apps/workspaces/policy_text.py
+#, python-format
+msgid "Post zonder naam zien de beheerders: %(names)s."
+msgstr "Unnamed post is seen by the admins: %(names)s."
+
+#: apps/workspaces/policy_text.py
+msgid "Beheerders lezen alle post die niet privé is."
+msgstr "Admins read all post that is not private."
+
+#: apps/workspaces/policy_text.py
+msgid "Beheerders lezen geen post die niet voor hen is."
+msgstr "Admins read no post that is not for them."
+
+#: apps/workspaces/policy_text.py
+msgid "Zorgpost is privé."
+msgstr "Care post is private."
+
+#: apps/workspaces/policy_text.py
+msgid "Je bent beheerder."
+msgstr "You are an admin."
+
+#: apps/workspaces/policy_text.py
+msgid "Noodtoegang staat aan."
+msgstr "Emergency access is on."
+
+#: apps/workspaces/policy_text.py
+msgid "Er is nog geen back-up."
+msgstr "There is no backup yet."
+
+#: apps/workspaces/policy_text.py
+msgid "Iedereen in Brievie ziet alle post, behalve privé-post."
+msgstr "Everyone in Brievie sees all post, except private post."
+
+#: apps/workspaces/policy_text.py
+msgid "Je post zien: jij en de anderen op wier naam de brief ook staat, de mensen van een groep als hij op naam van die groep staat, wie de brief scant (tot hij klaar is) en met wie hij gedeeld is."
+msgstr "Your post is seen by: you and the others the letter is also addressed to, the people in a group when it is addressed to that group, whoever scans the letter (until it is done) and whoever it is shared with."
+
+#: apps/workspaces/policy_text.py
+msgid "Je post zien: jij en de anderen op wier naam de brief ook staat, de mensen van een afdeling als hij op naam van die afdeling staat, wie de brief scant (tot hij klaar is) en met wie hij gedeeld is."
+msgstr "Your post is seen by: you and the others the letter is also addressed to, the people in a department when it is addressed to that department, whoever scans the letter (until it is done) and whoever it is shared with."
+
+#: apps/workspaces/policy_text.py
+msgid "Je post zien: jij en de anderen op wier naam de brief ook staat, wie de brief scant (tot hij klaar is) en met wie hij gedeeld is."
+msgstr "Your post is seen by: you and the others the letter is also addressed to, whoever scans the letter (until it is done) and whoever it is shared with."
+
+#: apps/workspaces/policy_text.py
+#, python-format
+msgid "De beheerders %(names)s lezen alle post die niet privé is."
+msgstr "The admins %(names)s read all post that is not private."
+
+#: apps/workspaces/policy_text.py
+msgid "De beheerders lezen je post niet."
+msgstr "The admins do not read your post."
+
+#: apps/workspaces/policy_text.py
+msgid "Privé-post zien alleen: de mensen op wier naam hij staat, de mensen van een groep op wier naam hij staat, wie de brief scande of privé maakte, en met wie hij gedeeld is."
+msgstr "Private post is seen only by: the people it is addressed to, the people in a group it is addressed to, whoever scanned the letter or made it private, and whoever it is shared with."
+
+#: apps/workspaces/policy_text.py
+msgid "Privé-post zien alleen: de mensen op wier naam hij staat, de mensen van een afdeling op wier naam hij staat, wie de brief scande of privé maakte, en met wie hij gedeeld is."
+msgstr "Private post is seen only by: the people it is addressed to, the people in a department it is addressed to, whoever scanned the letter or made it private, and whoever it is shared with."
+
+#: apps/workspaces/policy_text.py
+msgid "Noodtoegang staat aan. De beheerders kunnen je post openen. Ze moeten een reden geven, en jij krijgt dan een melding."
+msgstr "Emergency access is on. The admins can open your post. They must give a reason, and you then get a notice."
+
+#: apps/workspaces/policy_text.py
+msgid "Noodtoegang staat uit."
+msgstr "Emergency access is off."
+
+#: apps/workspaces/policy_text.py
+#, python-format
+msgid "Wie de server zelf beheert, kan technisch bij alle gegevens. Dat is %(names)s."
+msgstr "Whoever manages the server itself can technically reach all data. That is %(names)s."
+
+#: apps/workspaces/visibility_settings.py
+msgid "Bevestig eerst dat deze mensen meer post gaan zien."
+msgstr "First confirm that these people will see more post."
+
+#: apps/workspaces/visibility_settings.py
+msgid "Er is intussen iets veranderd. Bekijk de wijziging opnieuw."
+msgstr "Something has changed in the meantime. Look at the change again."
+
+#: apps/workspaces/visibility_settings.py
+msgid "Kies Thuis of Organisatie."
+msgstr "Choose Home or Business."
+
+#: apps/workspaces/visibility_settings.py
+msgid "Zeg om welk lid, welke persoon of welke rol het gaat."
+msgstr "Say which member, person or role this is about."
+
+#: apps/workspaces/visibility_settings.py
+msgid "Nieuwe beheerder"
+msgstr "New admin"
 
 #: brievie/api.py
 msgid "De database is niet bereikbaar. Probeer het later opnieuw."

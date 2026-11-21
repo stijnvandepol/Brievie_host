@@ -87,7 +87,7 @@ describe("members", () => {
     await u.click(within(dialog).getByRole("radio", { name: "Meekijker" }));
     await u.click(within(dialog).getByRole("button", { name: "Opslaan" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(body).toEqual({ role: "viewer" });
+    expect(body).toEqual({ role: "viewer", confirmed: false, preview_token: "" });
   });
 
   it("a member sees no admin actions", async () => {

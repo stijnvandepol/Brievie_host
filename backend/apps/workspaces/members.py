@@ -33,13 +33,15 @@ from apps.tasks.assignment import release_member
 from apps.workspaces.access import on_member_removed
 from apps.workspaces.context import NOBODY, Actor, workspace_context
 from apps.workspaces.invitations import revoke_invitations_bound_to, revoke_invitations_made_by
+from apps.workspaces.locks import lock_memberships as lock_memberships
 from apps.workspaces.models import Membership, Workspace
-
-
-def lock_memberships(workspace: Workspace) -> list[Membership]:
-    """Lock every membership of the workspace, in id order: the one lock order of every
-    member change. Must run inside a transaction."""
-    return list(Membership.objects.select_for_update().filter(workspace=workspace).order_by("id"))
+from apps.workspaces.visibility_rules import UNASSIGNED
+from apps.workspaces.visibility_settings import (
+    MemberChange,
+    member_change_key,
+    notify_self_grant,
+    sight_change,
+)
 
 
 def _forbidden() -> ApiError:
@@ -91,14 +93,25 @@ def _revoke_what_the_admin_made(workspace: Workspace, user_id: UUID, actor: Audi
     revoke_resets_made_by(user_id)
 
 
-def change_role(*, workspace: Workspace, user_id: UUID, role: str, actor: AuditActor) -> Membership:
+def change_role(
+    *,
+    workspace: Workspace,
+    user_id: UUID,
+    role: str,
+    actor: AuditActor,
+    confirmed: bool = False,
+    preview_token: str = "",
+) -> Membership:
     """Give a member of `workspace` another role; the actor is its admin.
 
     403 `forbidden` when the actor is no admin by the locked rows; 404 `member_not_found`
     for somebody who is no member of this workspace; 409 `last_admin` for demoting the
     only admin. The same role writes nothing. A demoted admin's open invitations and
     reset links stop. The member's sessions keep working, with the new role at their
-    next request.
+    next request. A viewer sorts no post: the flag goes with the role. When anybody
+    gains sight (a new admin while admins read all post, a new fallback sorter), the
+    confirmed preview's token is needed (409 `confirmation_required`,
+    `preview_outdated`; S 4.4).
     """
     if role not in Membership.Role.values:
         raise ApiError(422, "validation_error", _("Kies een rol: beheerder, lid of meekijker."))
@@ -113,22 +126,104 @@ def change_role(*, workspace: Workspace, user_id: UUID, role: str, actor: AuditA
         if role != Membership.Role.ADMIN and _is_only_admin(member, locked):
             raise _last_admin()
         previous = member.role
-        member.role = role
-        member.save(update_fields=["role", "updated_at"])
-        if role == Membership.Role.VIEWER:
-            # A viewer is given no task (S 5.3): their assignments end with the role.
-            as_actor: Actor = actor.user_id if actor.user_id is not None else NOBODY
-            with workspace_context(workspace.id, actor=as_actor):
-                release_member(workspace_id=workspace.id, user_id=user_id)
-        if previous == Membership.Role.ADMIN:
-            _revoke_what_the_admin_made(workspace, user_id, actor)
-        record(
-            AuditCode.MEMBER_ROLE_CHANGED,
+        with sight_change(
+            workspace,
+            narrowing=Membership.RANK[role] < Membership.RANK[previous],
+            confirmed=confirmed,
+            preview_token=preview_token,
             actor=actor,
-            target=_member_target(workspace, member),
-            workspace_id=workspace.id,
-            values={"from": previous, "to": role},
-        )
+            change=member_change_key(MemberChange(kind="role", user_id=user_id, role=role)),
+        ):
+            member.role = role
+            stops_sorting = role == Membership.Role.VIEWER and member.sorts_post
+            if stops_sorting:
+                member.sorts_post = False
+            member.save(
+                update_fields=["role", "updated_at", *(["sorts_post"] if stops_sorting else [])]
+            )
+            if role == Membership.Role.VIEWER:
+                # A viewer is given no task (S 5.3): their assignments end with the role.
+                as_actor: Actor = actor.user_id if actor.user_id is not None else NOBODY
+                with workspace_context(workspace.id, actor=as_actor):
+                    release_member(workspace_id=workspace.id, user_id=user_id)
+            if previous == Membership.Role.ADMIN:
+                _revoke_what_the_admin_made(workspace, user_id, actor)
+            target = _member_target(workspace, member)
+            record(
+                AuditCode.MEMBER_ROLE_CHANGED,
+                actor=actor,
+                target=target,
+                workspace_id=workspace.id,
+                values={"from": previous, "to": role},
+            )
+            if stops_sorting:
+                record(
+                    AuditCode.POST_SORTER_CHANGED,
+                    actor=actor,
+                    target=target,
+                    workspace_id=workspace.id,
+                    values={"member": target.name, "value": False},
+                )
+    return member
+
+
+def _viewer_cannot_sort() -> ApiError:
+    return ApiError(422, "viewer_cannot_sort", _("Iemand met Alleen lezen kan geen post verdelen."))
+
+
+def set_sorts_post(
+    *,
+    workspace: Workspace,
+    user_id: UUID,
+    sorts_post: bool,
+    actor: AuditActor,
+    confirmed: bool = False,
+    preview_token: str = "",
+) -> Membership:
+    """Flag a member as one who sorts post ("Verdeelt post"), or not (S 4.1 rule 4).
+
+    403 `forbidden` for a non-admin by the locked rows, 404 `member_not_found`, 422
+    `viewer_cannot_sort`; flagging needs the confirmed preview (the member gains the post
+    nobody reads), unflagging only when admins become the sorters and gain by it. The
+    same value writes nothing. An admin who flags themselves: the other admins are told
+    (S 4.7)."""
+    with transaction.atomic():
+        locked = lock_memberships(workspace)
+        _require_admin(locked, actor)
+        member = next((m for m in locked if m.user_id == user_id), None)
+        if member is None:
+            raise _member_not_found()
+        if member.sorts_post == sorts_post:
+            return member
+        if sorts_post and member.role == Membership.Role.VIEWER:
+            raise _viewer_cannot_sort()
+        with sight_change(
+            workspace,
+            narrowing=not sorts_post,
+            confirmed=confirmed,
+            preview_token=preview_token,
+            actor=actor,
+            change=member_change_key(
+                MemberChange(kind="sorts_post", user_id=user_id, sorts_post=sorts_post)
+            ),
+        ) as sight:
+            member.sorts_post = sorts_post
+            member.save(update_fields=["sorts_post", "updated_at"])
+            target = _member_target(workspace, member)
+            record(
+                AuditCode.POST_SORTER_CHANGED,
+                actor=actor,
+                target=target,
+                workspace_id=workspace.id,
+                values={"member": target.name, "value": sorts_post},
+            )
+        if sorts_post and actor.user_id == user_id:
+            others = [
+                m.user for m in locked if m.role == Membership.Role.ADMIN and m.user_id != user_id
+            ]
+            notify_self_grant(
+                others, category=UNASSIGNED, names=sight.before, actor_name=actor.name
+            )
     return member
 
 
@@ -207,8 +302,18 @@ def remove_member(
             if not any(admin.id != user.id for admin in server_admins):
                 raise last_server_admin_error()
         target = _member_target(workspace, member)
-        persons = _unlink_and_unassign(workspace, user_id, actor)
-        member.delete()
+        # S 4.4: never a confirmation for a removal; the sorters who gain are told.
+        with sight_change(
+            workspace,
+            narrowing=True,
+            confirmed=False,
+            preview_token="",
+            actor=actor,
+            change=member_change_key(MemberChange(kind="remove", user_id=user_id)),
+            ask_confirmation=False,
+        ):
+            persons = _unlink_and_unassign(workspace, user_id, actor)
+            member.delete()
         if last_membership:
             deactivate_account(user, actor=actor, current=request)
         for person in persons:
@@ -225,3 +330,19 @@ def remove_member(
             workspace_id=workspace.id,
             values={"account_deactivated": last_membership},
         )
+
+
+def removal_preview_step(*, workspace: Workspace, user_id: UUID, actor: AuditActor) -> None:
+    """The part of `remove_member` that moves sight, for `previewVisibilityChange` only
+    (inside its savepoint, rolled back): the same refusals (403, 404, 409 `last_admin`),
+    the person unlinked, the member's rows forgotten, the membership gone. The account
+    itself is left alone."""
+    locked = lock_memberships(workspace)
+    _require_admin(locked, actor)
+    member = next((m for m in locked if m.user_id == user_id), None)
+    if member is None:
+        raise _member_not_found()
+    if _is_only_admin(member, locked):
+        raise _last_admin()
+    _unlink_and_unassign(workspace, user_id, actor)
+    member.delete()

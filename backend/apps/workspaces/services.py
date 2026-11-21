@@ -8,41 +8,52 @@ from apps.accounts.authority import actor_reads_all_post
 from apps.accounts.models import User
 from apps.labels.presets import apply_preset
 from apps.labels.services import create_extra_labels
-from apps.people.models import Person
+from apps.people.models import DepartmentMember, Person
 from apps.people.services import ensure_person_for_member
 from apps.workspaces import access
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import NOBODY, workspace_context
 from apps.workspaces.keys import workspace_key
 from apps.workspaces.models import Membership, Workspace
+from apps.workspaces.presets import apply_preset_settings
 from apps.workspaces.schemas import MemberOut
+
+
+def _new_workspace(*, name: str, kind: str) -> Workspace:
+    """The workspace row with its kind's values (`presets.apply_preset_settings`)."""
+    if kind not in Workspace.Kind.values:
+        raise ValueError(f"Unknown workspace kind: {kind!r}")
+    workspace = Workspace(name=name, kind=kind)
+    apply_preset_settings(workspace)
+    workspace.save()
+    return workspace
 
 
 def create_workspace(
     *, name: str, kind: str, admin: User, extra_labels: Sequence[str] = ()
 ) -> Workspace:
-    """The workspace with its admin, the start set of labels and `extra_labels` as own labels."""
-    if kind not in Workspace.Kind.values:
-        raise ValueError(f"Unknown workspace kind: {kind!r}")
+    """The workspace with its admin, the kind's values (Thuis: everyone sees all post;
+    Organisatie: own post, departments, R40), the start set of labels and `extra_labels`
+    as own labels."""
     with transaction.atomic():
-        home = kind == Workspace.Kind.HOME
-        # Every new workspace starts as "Iedereen ziet alle post" until every path that
-        # could show a hidden letter is closed (P8); the privacy defaults follow the kind.
-        workspace = Workspace.objects.create(
-            name=name,
-            kind=kind,
-            allow_member_export=home,
-            everyone_sees_all=True,
-            departments_enabled=False,
-            admins_read_all=True,
-            care_is_private=home,
-            emergency_access=not home,
-        )
+        workspace = _new_workspace(name=name, kind=kind)
         Membership.objects.create(user=admin, workspace=workspace, role=Membership.Role.ADMIN)
         with workspace_context(workspace.id, actor=admin.id):
             workspace_key(workspace.id)
             ensure_person_for_member(workspace=workspace, user=admin)
             apply_preset(workspace)
             create_extra_labels(workspace=workspace, names=extra_labels)
+    return workspace
+
+
+def create_workspace_without_admin(*, name: str, kind: str) -> Workspace:
+    """A workspace whose first admin is still to be invited (`manage.py
+    create_workspace` for an address without an account): the kind's values, the key and
+    the start set; no member yet."""
+    with transaction.atomic():
+        workspace = _new_workspace(name=name, kind=kind)
+        with workspace_context(workspace.id, actor=NOBODY):
+            workspace_key(workspace.id)
+            apply_preset(workspace)
     return workspace
 
 
@@ -66,6 +77,11 @@ def list_members(
     person_ids = dict(
         Person.objects.filter(workspace=workspace).exclude(user=None).values_list("user_id", "id")
     )
+    departments: dict[UUID, list[UUID]] = {}
+    for member_id, department_id in DepartmentMember.objects.filter(
+        workspace=workspace
+    ).values_list("user_id", "department_id"):
+        departments.setdefault(member_id, []).append(department_id)
     rows = Membership.objects.filter(workspace=workspace)
     if user_id is not None:
         rows = rows.filter(user_id=user_id)
@@ -107,6 +123,8 @@ def list_members(
             role=m.role,
             person_id=person_ids.get(m.user_id),
             can_manage_account=may_manage(m),
+            sorts_post=m.sorts_post,
+            department_ids=sorted(departments.get(m.user_id, []), key=str),
         )
         for m in memberships
     ]

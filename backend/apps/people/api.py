@@ -114,7 +114,9 @@ def delete_person(request: HttpRequest, workspace_id: UUID, person_id: UUID) -> 
         "to a member of the workspace (`user_id`; administrators only), or unlink it "
         "(null). A linked person is unlinked only by its own member (409 `cannot_unlink` "
         "for anybody else); 409 `cannot_grant_self` for an admin linking themselves to a "
-        "person with private post; 409 `is_a_department`."
+        "person with private post; 409 `is_a_department`. A link by which somebody gains sight "
+        "needs `confirmed` and the preview's token (409 `confirmation_required`, "
+        "`preview_outdated`; see `previewVisibilityChange`)."
     ),
     operation_id="linkPersonToMember",
 )
@@ -128,6 +130,8 @@ def link_person_to_member(
         user_id=payload.user_id,
         actor=actor_from_request(request),
         actor_role=membership.role,
+        confirmed=payload.confirmed,
+        preview_token=payload.preview_token,
     )
 
 
@@ -149,7 +153,10 @@ _DEPARTMENT_WRITE = {
     description=(
         "Web session only. Admins put a member in a department (a grant). 409 "
         "`not_a_department`, 409 `cannot_grant_self` (an admin adding themselves where "
-        "there is private post). A member already in it: 200, unchanged."
+        "there is private post). A member already in it: 200, unchanged. When the member gains "
+        'sight (departments on, "Iedereen ziet alle post" off): 409 '
+        "`confirmation_required` without `confirmed`, 409 `preview_outdated` for an old "
+        "preview's token."
     ),
 )
 def add_department_member(
@@ -162,6 +169,8 @@ def add_department_member(
         user_id=payload.user_id,
         is_lead=payload.is_lead,
         actor=actor_from_request(request),
+        confirmed=payload.confirmed,
+        preview_token=payload.preview_token,
     )
 
 
