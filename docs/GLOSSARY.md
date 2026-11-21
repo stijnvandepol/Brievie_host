@@ -205,7 +205,10 @@ the request that creates the workspace and keep that name.
 | Mijn post | My post | The start page; "Ook mijn afdeling": "Include my department" (home: "Ook mijn groep", "Include my group"). |
 | Ongelezen | Unread | Per member. Markeer als gelezen / ongelezen: "Mark as read" / "Mark as unread"; Alles gelezen: "Mark all read"; Alleen ongelezen: "Unread only". |
 | Blijft liggen | Lying too long | "ligt er 4 dagen": "waiting 4 days"; In de Inbox te lang: "Too long in the Inbox"; Nog niet geopend: "Not opened yet". |
-| Werkruimte kiezen / Alle werkruimtes | Choose workspace / All workspaces | |
+| Werkruimte kiezen / Alle werkruimtes | Choose workspace / All workspaces | The switcher's button: "Workspace: Bedrijf. Choose another workspace". |
+| Instellingen | Settings | At the bottom of the menu, for everyone: Jouw account (Your account), Apparaten (Devices), Wie kan mijn post zien? (Who can see my post?), AI; an admin also gets "Werkruimte Bedrijf" (Workspace Bedrijf) and Logboek (Log). |
+| Doet: Anne | Doing it: Anne | Someone else's task, shown without buttons to a member. |
+| Ik doe dit / Vrijgeven | I'll do it / Release | "Ik doe dit" only on a task nobody has; "Vrijgeven" is an admin's on someone else's task. |
 | herstellink | reset link | |
 | back-up | backup | |
 | logboek | log | Serverlogboek: Server log. |

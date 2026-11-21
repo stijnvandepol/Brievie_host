@@ -2559,3 +2559,26 @@ Instellingen with their routes kept.
 
   `menu_counts` is the sum of its parts (two Inbox counts, the unread count of Mijn post,
   the task aggregate, three lingering counts); no fallback was needed.
+- **The web (plan Tasks 12-19).** The workspace route keys its pages by the workspace id
+  (a switch mounts them afresh) and the workspace list has its own query key
+  (`workspace-list`), so refreshing it refetches nothing of any workspace; the two places
+  that leaned on the old prefix refresh their own workspace. `/` is no page: it opens Mijn
+  post of the workspace used last in this browser (`localStorage`, a convenience; while
+  still a member), else the first, else `/werkruimtes` (the old overview, which never
+  bounces, also with one workspace). The switcher is a plain block with one workspace and
+  a React Aria menu with several; the brand link opens this workspace's Mijn post; the tab
+  title names the workspace when there are several. The menu draws its numbers from one
+  `getMenuCounts` per page (refetched on focus and every minute; under the documents key,
+  so every change of a letter or task refreshes it). Instellingen is for everyone and
+  holds Jouw account, Apparaten, Wie kan mijn post zien? and AI (the AI page was a menu
+  item for every member before, so it stays reachable for them); an admin also gets the
+  workspace's settings, "Blijft liggen" (an organisation only) and the log. Outside a
+  workspace the menu shows Werkruimtes and Apparaten. The letter page marks the letter
+  read once per opening after it rendered it (a ref per letter id; never a list, a
+  prefetch or a refetch). A notice with a `workspace_id` shows only in that workspace and
+  on `/werkruimtes`.
+- **"My post" in English (B1).** The owner named the item "Mijn post" / "My post"; the
+  glossary's rule "post is mail in English" keeps its other uses ("All mail") and gets this
+  name as the exception (it pairs with "My tasks", and "Who can see my post?" already
+  said "post"). The one catalogue entry "Mijn post" (also the heading of the own export on
+  Mensen) now reads "My post".
