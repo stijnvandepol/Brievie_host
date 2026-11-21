@@ -28,6 +28,10 @@ LISTS: Final = (
     "list_persons",
     "list_labels",
     "list_tasks_all",
+    # Mijn taken (spec S 11): the member's list, the organisation's second part, the counts.
+    "list_my_tasks",
+    "list_my_tasks_to_pick_up",
+    "count_my_tasks",
     # Search (merged with M1): through the same seam, so measured on the same world.
     "search_sender",
     "search_common_word",

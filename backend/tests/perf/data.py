@@ -436,11 +436,17 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
         c.execute(
             "INSERT INTO tasks_task (id, created_at, updated_at, workspace_id, document_id, type,"
             " description, deadline, deadline_source, deadline_quote, status, assigned_to_id,"
-            " completed_at, created_by_ai, created_by_id)"
+            " completed_at, created_by_ai, created_by_id, amount, term_quote)"
             " SELECT gen_random_uuid(), %s, %s, %s, d, (%s::text[])[1 + (n %% %s)::int],"
             " 'Taak ' || n, %s::date + days, 'in_document', '',"
             " CASE WHEN is_open THEN 'open' ELSE 'done' END, assignee,"
-            " CASE WHEN is_open THEN NULL ELSE %s END, false, maker"
+            " CASE WHEN is_open THEN NULL ELSE %s END, false, maker,"
+            # Mijn taken: an amount on 3 in 10 payments, a term on half the undated tasks
+            # (5 % of all); from the row number, so the drawn world stays as measured.
+            " CASE WHEN (%s::text[])[1 + (n %% %s)::int] = 'pay' AND n %% 10 < 3"
+            "  THEN (n %% 100000) / 100.0 END,"
+            " CASE WHEN days IS NULL AND n %% 2 = 0"
+            "  THEN 'binnen zes weken na dagtekening' ELSE '' END"
             " FROM unnest(%s::uuid[], %s::boolean[], %s::uuid[], %s::uuid[], %s::int[])"
             "   WITH ORDINALITY AS t(d, is_open, assignee, maker, days, n)",
             [
@@ -451,6 +457,8 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
                 len(_TASK_TYPES),
                 today,
                 now,
+                _TASK_TYPES,
+                len(_TASK_TYPES),
                 [None if t.letter is None else letters[t.letter] for t in plan.tasks],
                 [t.open for t in plan.tasks],
                 [None if t.assigned_to is None else users[t.assigned_to] for t in plan.tasks],

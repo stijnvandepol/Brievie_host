@@ -134,6 +134,10 @@ def _list(name: str, workspace: Workspace, world: PerfWorld, actor: UUID) -> Cal
         pairs = ",".join(f"{getattr(r, 'id', '')}={getattr(r, 'document_count', '')}" for r in rows)
         return f"{len(rows)} rows #{hashlib.sha256(pairs.encode()).hexdigest()[:12]}"
 
+    def listed(result: tasks.MyTaskList) -> str:
+        digest = hashlib.sha256(",".join(str(i.task.id) for i in result.items).encode())
+        return f"{len(result.items)} rows #{digest.hexdigest()[:12]}"
+
     # The document lists take the member (the one visibility seam); fetched before timing.
     member = Membership.objects.get(workspace=workspace, user_id=actor)
 
@@ -155,6 +159,9 @@ def _list(name: str, workspace: Workspace, world: PerfWorld, actor: UUID) -> Cal
         "list_persons": lambda: counted(people.list_persons(workspace)),
         "list_labels": lambda: counted(labels.list_labels(workspace)),
         "list_tasks_all": lambda: f"{len(tasks.list_tasks(workspace, status='all'))} rows",
+        "list_my_tasks": lambda: listed(tasks.my_tasks(member)),
+        "list_my_tasks_to_pick_up": lambda: listed(tasks.my_tasks(member, part="to_pick_up")),
+        "count_my_tasks": lambda: json.dumps(vars(tasks.count_my_tasks(member)), sort_keys=True),
         # A sender (one in 200 letters), and a word in every summary (ranks the newest
         # MAX_CANDIDATES). Both match exactly, so the typo fallback does not run.
         "search_sender": lambda: ids(found("afzender 042")),
