@@ -65,7 +65,7 @@ jobs:
       postgres:
         image: postgres:18
         env:
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_PASSWORD: ${{ format('pg-{0}-{1}', github.run_id, github.run_attempt) }}
         ports:
           - 5432:5432
         options: >-
@@ -75,16 +75,8 @@ jobs:
           --health-retries 30
     env:
       PGHOST: localhost
-      PGPASSWORD: postgres
+      PGPASSWORD: ${{ format('pg-{0}-{1}', github.run_id, github.run_attempt) }}
       POSTGRES_USER: postgres
-      BRIEVIE_OWNER_PASSWORD: ci-owner
-      BRIEVIE_APP_PASSWORD: ci-app
-      DATABASE_URL: postgres://brievie_app:ci-app@localhost:5432/brievie
-      DATABASE_OWNER_URL: postgres://brievie_owner:ci-owner@localhost:5432/brievie
-      BRIEVIE_BACKUP_DB_PASSWORD: ci-backup
-      DATABASE_BACKUP_URL: postgres://brievie_backup:ci-backup@localhost:5432/brievie
-      # At least 50 characters: the settings refuse shorter keys.
-      SECRET_KEY: ci-only-not-secret-ci-only-not-secret-ci-only-not-secret
     defaults:
       run:
         working-directory: backend
@@ -95,6 +87,26 @@ jobs:
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           version: "0.13.8"
+      # The role passwords and the secret key are made per job and masked: no literal
+      # secret in this file. The URLs are built from them.
+      - name: Generate the CI-only secrets
+        run: |
+          set -euo pipefail
+          owner=$(openssl rand -hex 24)
+          app=$(openssl rand -hex 24)
+          backup=$(openssl rand -hex 24)
+          # 96 hex characters: the settings refuse keys shorter than 50.
+          secret_key=$(openssl rand -hex 48)
+          for value in "$owner" "$app" "$backup" "$secret_key"; do echo "::add-mask::$value"; done
+          {
+            echo "BRIEVIE_OWNER_PASSWORD=$owner"
+            echo "BRIEVIE_APP_PASSWORD=$app"
+            echo "BRIEVIE_BACKUP_DB_PASSWORD=$backup"
+            echo "SECRET_KEY=$secret_key"
+            echo "DATABASE_URL=postgres://brievie_app:$app@localhost:5432/brievie"
+            echo "DATABASE_OWNER_URL=postgres://brievie_owner:$owner@localhost:5432/brievie"
+            echo "DATABASE_BACKUP_URL=postgres://brievie_backup:$backup@localhost:5432/brievie"
+          } >> "$GITHUB_ENV"
       - name: Create database roles
         run: bash ../deploy/postgres-init/01-roles.sh
       - run: uv sync --frozen
