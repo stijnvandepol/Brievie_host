@@ -42,7 +42,8 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel):
     email = models.EmailField(max_length=254, unique=True)
     name = models.CharField(max_length=150)
     # The language of the interface and of the server's messages, chosen by the user;
-    # "" until they choose: then the browser's or device's Accept-Language decides.
+    # "" until they choose: then the browser's or device's Accept-Language decides. The
+    # column also has a database default '' (migration 0012) for raw inserts.
     language = models.CharField(max_length=2, choices=Language.choices, blank=True, default="")
     explanation_language = models.CharField(
         max_length=2, choices=ExplanationLanguage.choices, default=ExplanationLanguage.DUTCH

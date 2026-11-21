@@ -1,6 +1,11 @@
 from django.apps.registry import Apps
 from django.db import migrations, models
 
+# A database default too, so a raw INSERT that leaves the column out keeps working (the
+# model's default stays a Python one: Django never inserts with RETURNING for it).
+SET_DEFAULT = "ALTER TABLE accounts_user ALTER COLUMN language SET DEFAULT ''"
+DROP_DEFAULT = "ALTER TABLE accounts_user ALTER COLUMN language DROP DEFAULT"
+
 
 def forget_the_old_default(apps: Apps, schema_editor: object) -> None:
     """Nobody could choose a language before: the stored "nl" was only the default, so
@@ -37,4 +42,5 @@ class Migration(migrations.Migration):
                 max_length=2,
             ),
         ),
+        migrations.RunSQL(SET_DEFAULT, DROP_DEFAULT),
     ]
