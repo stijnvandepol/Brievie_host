@@ -15,7 +15,7 @@ from typing import Final
 from uuid import UUID
 
 from django.db import connection, transaction
-from django.db.models import Exists, OuterRef, Q
+from django.db.models import Exists, Min, OuterRef, Q
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
@@ -23,8 +23,9 @@ from apps.accounts.models import User
 from apps.common.errors import ApiError
 from apps.documents import visibility
 from apps.documents.models import Document, DocumentReadMark
-from apps.workspaces.context import current_actor
-from apps.workspaces.models import Membership
+from apps.people.models import DepartmentMember, Person
+from apps.workspaces.context import current_actor, system_actor
+from apps.workspaces.models import Membership, Workspace
 
 # "Alles gelezen" marks the rows on screen: a list shows at most 200 (S 5.3).
 MARK_MANY_MAX: Final = 200
@@ -161,5 +162,53 @@ def my_post_ids(user_id: UUID) -> frozenset[UUID]:
 def note_addressee_opened(
     document: Document, membership: Membership, *, post_ids: frozenset[UUID] | None = None
 ) -> None:
-    """Placeholder until "Opened by an addressee" (Task 3)."""
-    del document, membership, post_ids
+    """When the member is one the letter is addressed to (their person, a person they
+    manage, their department) and reads it other than only through emergency access: the
+    letter counts as opened by an addressee (S 5.5), set once, as the system. It says
+    nothing about who. `post_ids`: the member's `my_post_ids`, when the caller has them."""
+    if document.addressee_opened_at is not None or not document.addressee_ids:
+        return
+    mine = post_ids if post_ids is not None else my_post_ids(membership.user_id)
+    if not mine & set(document.addressee_ids):
+        return
+    if visibility.only_through_emergency(document):
+        return
+    now = timezone.now()
+    with system_actor():
+        Document.objects.filter(id=document.id, addressee_opened_at__isnull=True).update(
+            addressee_opened_at=now
+        )
+    document.addressee_opened_at = now
+
+
+def recompute_addressee_opened(document: Document) -> None:
+    """After the letter's addressees changed (`visibility.addressee_scope`): opened when one
+    of the members it is now addressed to has a mark (the earliest), else not. As the
+    system; `document.addressee_ids` is the synced list."""
+    with system_actor():
+        opened = None
+        ids = list(document.addressee_ids)
+        if ids:
+            persons = Person.objects.filter(id__in=ids, kind=Person.Kind.PERSON)
+            users = set(persons.filter(user__isnull=False).values_list("user_id", flat=True))
+            users |= {
+                manager
+                for manager in persons.filter(user__isnull=True).values_list(
+                    "managed_by_id", flat=True
+                )
+                if manager is not None
+            }
+            if Workspace.objects.filter(
+                id=document.workspace_id, departments_enabled=True
+            ).exists():
+                users |= set(
+                    DepartmentMember.objects.filter(department_id__in=ids).values_list(
+                        "user_id", flat=True
+                    )
+                )
+            if users:
+                opened = DocumentReadMark.objects.filter(
+                    document_id=document.id, user_id__in=users
+                ).aggregate(first=Min("read_at"))["first"]
+        Document.objects.filter(id=document.id).update(addressee_opened_at=opened)
+    document.addressee_opened_at = opened

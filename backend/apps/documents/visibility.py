@@ -80,7 +80,11 @@ def addressee_scope(document: Document) -> Iterator[None]:
         else:
             _scopes.depth[document.id] = depth
     if depth == 0:
-        sync_addressee_ids(document)
+        if sync_addressee_ids(document):
+            # Imported here: `reading` reads letters through this module.
+            from apps.documents.reading import recompute_addressee_opened
+
+            recompute_addressee_opened(document)
         recompute(document)
         _release_assignees(document.workspace_id, [document.id])
 
@@ -98,9 +102,12 @@ def in_addressee_scope(document_id: UUID) -> bool:
     return _scopes.depth.get(document_id, 0) > 0
 
 
-def sync_addressee_ids(document: Document) -> None:
-    """`addressee_ids` := the letter's addressee links, sorted; as the system."""
+def sync_addressee_ids(document: Document) -> bool:
+    """`addressee_ids` := the letter's addressee links, sorted; as the system. Whether the
+    list changed."""
     with system_actor(), connection.cursor() as c:
+        c.execute("SELECT addressee_ids FROM documents_document WHERE id = %s", [document.id])
+        before = c.fetchone()
         c.execute(
             "UPDATE documents_document SET addressee_ids = ("
             " SELECT COALESCE(array_agg(person_id ORDER BY person_id), '{}')"
@@ -111,6 +118,7 @@ def sync_addressee_ids(document: Document) -> None:
         c.execute("SELECT addressee_ids FROM documents_document WHERE id = %s", [document.id])
         row = c.fetchone()
     document.addressee_ids = list(row[0]) if row else []
+    return (list(before[0]) if before else []) != document.addressee_ids
 
 
 def _members(workspace_id: UUID, user_ids: Collection[UUID]) -> set[UUID]:

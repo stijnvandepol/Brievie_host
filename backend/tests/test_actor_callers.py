@@ -38,6 +38,9 @@ ALLOWED_SYSTEM_CALLERS = {
     # Who sees what: the snapshot, the preview's viewer count and the release after a
     # change of sight read every member's and letter's facts (plan Task 37).
     "apps/workspaces/visibility_settings.py",
+    # "Ongelezen": whether an addressee opened a letter is written as the system after the
+    # member's own mark, and recomputed when its addressees change (navigation S 5.5).
+    "apps/documents/reading.py",
     # Fills `addressee_opened_at` of every confirmed letter (documents/0022).
     "apps/documents/migrations/0022_read_marks.py",
     # Fills the derived automatic flag of every letter (documents/0014).
