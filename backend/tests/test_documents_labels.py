@@ -19,6 +19,15 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture
+def ws_a(ws_a: Workspace) -> Workspace:
+    """These tests use the Zorg label as any label: that it makes a letter private at
+    home (`care_is_private`, plan Task 30) has its own tests."""
+    Workspace.objects.filter(id=ws_a.id).update(care_is_private=False)
+    ws_a.care_is_private = False
+    return ws_a
+
+
+@pytest.fixture
 def client_a(client: Client, ws_a: Workspace) -> Client:
     client.force_login(admin_of(ws_a))
     return client

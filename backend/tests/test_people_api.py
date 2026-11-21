@@ -190,7 +190,8 @@ def test_a_bsn_in_a_name_is_refused(
     assert r.json()["code"] == "validation_error"
     assert r.json()["message"].startswith(BSN_REFUSED)
     with workspace_context(ws_a.id, actor=SYSTEM):
-        assert not Person.objects.filter(display_name__startswith="Jan").exists()
+        # Only persons without an account: the admin's own may be called "Jan …" (Faker).
+        assert not Person.objects.filter(display_name__startswith="Jan", user=None).exists()
 
 
 def test_a_person_with_a_masked_variant_from_before_stays_editable(
