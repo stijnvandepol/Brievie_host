@@ -211,8 +211,8 @@ Texts (B1):
   the default: nothing about a scan folder exists.
 - **Workspace**: page "Scanmap" under settings, admin only, shown only when the server has a
   scan folder. The admin switches it on and chooses the folder name (default: the workspace
-  name in lower case, letters, digits and `-` only, e.g. `kantoor`). Optional: "Map per
-  persoon" (off). Each change is one audit row `workspace_setting_changed` (`setting`
+  name in lower case, letters, digits and `-` only, e.g. `kantoor`). Optional: "Mappen per
+  persoon en afdeling" (off; 3.2a). Each change is one audit row `workspace_setting_changed` (`setting`
   = `inbox_folder` / `inbox_per_person`, `value` = on/off; the folder name is not in the
   row: workspace names are allowed, but a folder name can be anything).
 
@@ -230,23 +230,108 @@ a taken name answers 409 `inbox_folder_taken`.
 #### 3.2 Layout on the share
 
 ```
-/inbox/                         = BRIEVIE_INBOX_DIR
-  kantoor/                      workspace "Kantoor": files here become letters
-    Jan de Vries/               only with "Map per persoon": addressee preset to Jan
+/inbox/                         = BRIEVIE_INBOX_DIR (one root, set in compose/.env)
+  kantoor/                      workspace "Kantoor": files here become letters on nobody's name
+    Jan de Vries/               "Mappen per persoon en afdeling": Jan is the addressee
     Anne/
+    Financien/                  a department: the department is the addressee
+    Oude scans/                 unknown folder: not read, shown on the Scanmap page
     mislukt/                    files Brievie could not take in, with a reason file
 ```
 
-- The `intake` service creates the workspace folder, `mislukt/` and the person folders when
-  they are missing (a person folder's name is the person's display name, made safe for SMB:
-  no `\ / : * ? " < > |`, at most 60 characters; two persons with the same safe name get
-  ` (2)`). A renamed person keeps their folder (the mapping is by id, stored in
-  `InboxFolder`); a deleted person's folder is no longer read, and its files are moved to
-  `mislukt/` with reason `person_gone`.
-- Reserved names that are never a person folder: `mislukt`, and anything starting with `.`,
-  `@` (Synology's `@eaDir`), `#` (`#recycle`) or `~`.
-- Only files directly in a workspace folder or a person folder are read. Deeper folders are
-  ignored (not an error).
+- The `intake` service creates the workspace folder and `mislukt/` when they are missing.
+- Reserved names that are never a subfolder of a person or department: `mislukt`, and anything
+  starting with `.`, `@` (Synology's `@eaDir`), `#` (`#recycle`) or `~`.
+- Only files directly in a workspace folder or a person or department folder are read. Deeper
+  folders are ignored (not an error).
+
+#### 3.2a Folders per person or department (owner wish 2026-11-21)
+
+The owner's wish: the printer scans PDFs into an inbox folder on the NAS and Brievie picks them
+up; post scanned into a person's own folder lands with that person. The same holds for a
+department.
+
+**Which folders exist.** With "Mappen per persoon en afdeling" on (off by default), the
+`intake` service keeps one subfolder per:
+
+- active person (`kind = person`, not archived) **linked to a member account**: the people who
+  sign in and expect "their" post;
+- active department, **while departments are on** (`Workspace.departments_enabled`). With
+  departments off, a department's post goes to whoever sorts post anyway, so a folder would
+  promise more than it does; the folder is then paused (below).
+
+A person without an account (a child at home, a former colleague kept for name matching) gets a
+folder only when an admin adds one on the "Scanmap" page ("Map maken"). This keeps the scanner's
+folder list short in an office where the person list grows with every sender's addressee.
+
+**Names.** A folder's name is the person's or department's display name made safe for SMB: no
+`\ / : * ? " < > |` and no control characters, trimmed, at most 60 characters, not reserved.
+Names are unique **ignoring case** across persons and departments together (SMB is
+case-insensitive): the second "Anne" or a department with a person's name gets ` (2)`. The
+mapping is stored by id (`ScanFolder`: workspace, person or department, name on disk), so a
+renamed person keeps their folder; the page shows the folder name next to the current name.
+
+**Created by Brievie or by hand.** Brievie creates a missing folder (`mkdirat`, one level, an
+existing directory is fine). So a folder the admin made by hand **with exactly the expected
+name** is simply adopted, files in it included. A folder by hand with another name is an
+unknown folder until the admin links it on the page ("Koppel aan …": person or department),
+which stores that name for that id. Brievie never renames, moves or removes a directory.
+
+**Unknown subfolder.** A directory directly in the workspace folder that is not reserved and
+has no `ScanFolder` row: **not read, nothing in it is moved or removed**, and Brievie never
+creates a person or department from a folder name (a typo would make a new addressee). The
+"Scanmap" page lists it with the number of files waiting in it and the sentence "Brievie leest
+de map 'Oude scans' niet. Koppel hem aan een persoon of afdeling, of haal de bestanden eruit."
+The name is BSN-masked before it is stored for the page and never logged. Files in it stay
+unencrypted on the share until somebody acts; the page's warning (3.8) counts them too.
+
+**A folder whose owner is gone or paused.** A person archived or deleted, or no longer linked
+to an account and not added by hand: the folder is no longer read, its files are moved to
+`mislukt/` with reason `person_gone` (as before). A department folder while departments are
+off: paused; its files wait and are shown ("Afdelingen staan uit. Brievie leest de map
+'Financien' weer als je ze aanzet."), because the files are not at fault and switching
+departments back on should deliver them. An admin can also stop a folder ("Niet meer lezen");
+its directory stays and becomes an unknown folder.
+
+**Besluit: the person or department from the folder is the addressee directly, not as a
+proposal.** The letter is created with the addressee link in the same transaction (through
+`apps.documents.organise.add_addressee` inside `visibility.addressee_scope`, the only writer),
+`automatic`, history origin `watch_folder`, no actor, before the pipeline runs. Checked against
+today's rules:
+
+- *Nothing automatic widens a private letter's readers* (PB T10, security review PR #38): the
+  letter does not exist before this transaction and is not private when the addressee is set;
+  there is no earlier reader set to widen. If the pipeline later makes it private (Zorg with
+  `care_is_private`, or a rule "Privé maken"), the folder's person or department is already an
+  addressee and `make_private` counts them as readers: that is intended, it is their post.
+- *Who reads it* is decided only by the workspace's visibility rules, as for any letter with
+  that addressee: with "Iedereen ziet alle post" on, everyone; with it off, the person's member
+  account, the department's members while departments are on, the admins while "Beheerders lezen
+  alle post" is on. The folder never grants reading by itself; `scanned_by` is null, so no
+  scanner arm.
+- *Not the AI guessing*: the folder is a deliberate act of whoever has write rights on the
+  share, the paper equivalent of putting a letter in Anne's tray. So it does not wait for
+  `auto_organise`, it applies in households where the autopilot is off, and it is not subject
+  to "nothing automatic happens when processing failed" (that rule governs the pipeline's
+  autopilot; the folder's addressee is set at intake, and a failed letter is better off with the
+  right person).
+- *Undoable*: `automatic` links show under "Automatisch" and can be undone through the history,
+  like an autopilot addition. Name matching sees the person already there and proposes nothing
+  for them; for the rules engine the person is on the letter (`holds_on_settled`).
+- *The honest edge*: with "Iedereen ziet alle post" off, a scan put into the wrong folder is
+  seen by the wrong person until somebody undoes it, and it is not in the sorters' "Zonder naam"
+  list. That is the same trust as the share itself: whoever can write to the scan root can put
+  a letter on anyone's name (3.8, SELFHOST).
+
+Rejected for v1: **proposal mode** (a `DocumentSuggestion` from the folder; the letter stays
+"Zonder naam" with the sorters until confirmed). Safer against misfiling, but it defeats the
+wish ("lands with that person") exactly where it matters, in a workspace where members see only
+their own post. Cheap to add later as a per-workspace switch "Map stelt voor in plaats van toe
+te wijzen" if an office asks.
+
+Not in v1: **"Post in deze map is privé"**. Making a letter private is a narrowing that today
+only a person or a rule with mode `auto` does; a folder switch would be a third automatic path
+with its own "nobody could read it" case. Left as a question for the owner.
 
 #### 3.3 Picking up a file
 
@@ -359,8 +444,8 @@ The preset addressee comes from the folder, not from the letter, so it is set **
 pipeline runs; name matching then sees an addressee that is already there and proposes nothing
 for that person. The autopilot (when on) treats it as any existing addressee.
 
-Visibility: the workspace default (as for every letter until part B of 1d). When private post
-exists, "Map per persoon" may get the option "Post in deze map is privé"; not in v1.
+Visibility: the workspace's rules, as for any letter with that addressee; the ruling and its
+checks are in 3.2a. "Post in deze map is privé" is not in v1.
 
 #### 3.7 Rights on the share (UID/GID) and Synology without SSH
 
@@ -441,8 +526,12 @@ from a scanner app that saves a PDF and then uploading that. An Android app stay
 - `DocumentEvent.Origin`: new value `watch_folder`.
 - `InboxSettings` (workspace content table, `WorkspaceModel`, RLS forced): `enabled` (false),
   `folder_name` (unique across the server), `per_person` (false).
-- `InboxFolder` (workspace, RLS): `person` (FK, null for the workspace folder itself),
-  `name` on disk; unique (`workspace`, `person`).
+- `InboxFolder` (workspace, RLS; the plan calls it `ScanFolder`): `person` (FK to `Person`,
+  which holds persons and departments), `name` on disk, `added_by_admin` (bool), `state`
+  (`active`, `paused`, `stopped`, `gone`); unique (`workspace`, `person`) and (`workspace`,
+  lower(`name`)).
+- `InboxSettings` also keeps the job's last view of unknown subfolders (`unknown_folders`:
+  masked name and file count, at most 50), for the page.
 - `InboxFile` (workspace, RLS): `relative_path`, `size`, `mtime_ns`, `device`, `inode`,
   `first_seen_at`, `state` (`seen`, `imported`, `failed`), `reason` (code), `document` (FK,
   null). Rows of `imported` older than 30 days are purged by the job; `failed` rows stay while
@@ -469,6 +558,13 @@ from a scanner app that saves a PDF and then uploading that. An Android app stay
   `InboxFailureOut`: `name`, `reason`, `failed_at`).
 - `PUT /workspaces/{id}/inbox` — `updateInboxSettings` (admin, `auth=session_auth`):
   `enabled`, `folder_name`, `per_person`. 409 `inbox_folder_taken`, 409 `inbox_unavailable`.
+- `ScanFolderOut` (plan naming) also lists `folders` (id, name, person id and current name,
+  kind, state, waiting count) and `unknown_folders` (name, file count), both default empty.
+- `POST /workspaces/{id}/inbox/folders` — `addScanFolder` (admin, session): `person_id`,
+  `name` (default empty = from the display name; given = link an existing unknown folder).
+  `DELETE /workspaces/{id}/inbox/folders/{folder_id}` — `removeScanFolder`: stop reading; the
+  directory and its files stay. Audit `workspace_setting_changed` (`setting` =
+  `scan_folder_person`, `value` = `added` / `removed`).
 - No endpoint removes or moves a file on the share.
 
 Every new field has a default; nullable fields are primitives; no `anyOf`. iOS: no change
@@ -495,7 +591,7 @@ needed; the app may later show `has_original` and `source`.
 |---|---|---|
 | Web upload | on for members, nothing to set up | same |
 | Scan folder | off; does not show | server owner sets `BRIEVIE_INBOX_DIR`, admin switches on per workspace |
-| Folder per person | off | optional |
+| Folder per person or department | off | optional; departments only while departments are on |
 | E-mail | not available | not available (outlook) |
 
 ## Risks
@@ -552,3 +648,8 @@ real Synology.
 6. Web upload also accepts device tokens (ready for an Android app).
 7. A preset addressee from a person folder is marked `automatic` and can be undone.
 8. IMAP polling recommended for e-mail later; not in v1.
+9. (2026-11-21) Folders per person **and department**: automatic for persons with an account and
+   for departments while departments are on, by hand for others; names from display names,
+   unique ignoring case; an unknown subfolder is not read and never touched; the folder's
+   person or department is the addressee directly (3.2a), not a proposal; no "privé" folder in
+   v1.
