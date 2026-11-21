@@ -20,16 +20,17 @@ function withCurrent(options: FilterOption[], value: string | undefined): Filter
 function PostPage() {
   usePageTitle(t`Alle post`);
   const { workspace } = postRoute.useRouteContext();
-  const { persoon, label, automatisch } = postRoute.useSearch();
+  const { persoon, label, automatisch, ongelezen } = postRoute.useSearch();
   const navigate = useNavigate();
   const persons = useQuery(personsQuery(workspace.id));
   const labels = useQuery(labelsQuery(workspace.id));
-  const filtered = Boolean(persoon || label || automatisch);
+  const filtered = Boolean(persoon || label || automatisch || ongelezen);
   const { data, error, isPending } = useQuery(
     documentsQuery(workspace.id, {
       person_id: persoon,
       label_id: label,
       automatic: automatisch,
+      unread_only: ongelezen,
     }),
   );
 
@@ -64,6 +65,7 @@ function PostPage() {
                   ...(event.target.value ? { persoon: event.target.value } : {}),
                   ...(label ? { label } : {}),
                   ...(automatisch ? { automatisch } : {}),
+                  ...(ongelezen ? { ongelezen } : {}),
                 },
               })
             }
@@ -89,6 +91,7 @@ function PostPage() {
                   ...(persoon ? { persoon } : {}),
                   ...(event.target.value ? { label: event.target.value } : {}),
                   ...(automatisch ? { automatisch } : {}),
+                  ...(ongelezen ? { ongelezen } : {}),
                 },
               })
             }
@@ -114,11 +117,32 @@ function PostPage() {
                   ...(persoon ? { persoon } : {}),
                   ...(label ? { label } : {}),
                   ...(event.target.checked ? { automatisch: true } : {}),
+                  ...(ongelezen ? { ongelezen } : {}),
                 },
               })
             }
           />
           <label htmlFor="filter-automatic">{t`Automatisch door Brievie`}</label>
+        </div>
+        <div className="check filter-check">
+          <input
+            id="filter-unread"
+            type="checkbox"
+            checked={ongelezen === true}
+            onChange={(event) =>
+              void navigate({
+                to: "/w/$workspaceId/post",
+                params: { workspaceId: workspace.id },
+                search: {
+                  ...(persoon ? { persoon } : {}),
+                  ...(label ? { label } : {}),
+                  ...(automatisch ? { automatisch } : {}),
+                  ...(event.target.checked ? { ongelezen: true } : {}),
+                },
+              })
+            }
+          />
+          <label htmlFor="filter-unread">{t`Alleen ongelezen`}</label>
         </div>
       </div>
       {isPending ? <Loading /> : null}
@@ -129,6 +153,7 @@ function PostPage() {
           documents={data}
           persons={persons.data ?? []}
           labels={labels.data ?? []}
+          showUnread
           empty={filtered ? t`Geen brieven met deze filters.` : t`Er is nog geen post.`}
           hint={
             filtered
@@ -147,11 +172,14 @@ export const postRoute = createRoute({
   path: "post",
   validateSearch: (
     search: Record<string, unknown>,
-  ): { persoon?: string; label?: string; automatisch?: true } => ({
+  ): { persoon?: string; label?: string; automatisch?: true; ongelezen?: true } => ({
     ...(typeof search.persoon === "string" && search.persoon ? { persoon: search.persoon } : {}),
     ...(typeof search.label === "string" && search.label ? { label: search.label } : {}),
     ...(search.automatisch === true || search.automatisch === "true"
       ? { automatisch: true as const }
+      : {}),
+    ...(search.ongelezen === true || search.ongelezen === "true"
+      ? { ongelezen: true as const }
       : {}),
   }),
   component: PostPage,

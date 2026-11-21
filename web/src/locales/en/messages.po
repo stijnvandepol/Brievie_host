@@ -647,6 +647,11 @@ msgstr "Read only"
 msgid "Alleen om de regel terug te vinden."
 msgstr "Only to find the rule again."
 
+#: src/routes/my-post.tsx
+#: src/routes/post.tsx
+msgid "Alleen ongelezen"
+msgstr "Unread only"
+
 #: src/routes/ai.tsx
 msgid "Alleen voor een andere dienst die werkt zoals OpenAI. Begint met https://. Vul je dit in, dan geldt de dienst die je hierboven koos niet meer en is een model verplicht."
 msgstr "Only for another service that works like OpenAI. Starts with https://. If you fill this in, the service you chose above no longer applies and a model is required."
@@ -658,6 +663,10 @@ msgstr "Only people who may read this letter are in the list."
 #: src/routes/inbox.tsx
 msgid "Alles"
 msgstr "All"
+
+#: src/routes/my-post.tsx
+msgid "Alles gelezen"
+msgstr "Mark all read"
 
 #: src/components/rule-sentence.ts
 #: src/components/rule-templates.tsx
@@ -2130,6 +2139,10 @@ msgstr "Annual statement"
 msgid "Je account hangt nog niet aan een naam. Daarom zie je hier alleen taken die iemand aan je geeft. Vraag een beheerder om je te koppelen bij Mensen."
 msgstr "Your account is not linked to a name yet. That is why you only see tasks someone gives you here. Ask an admin to link you on People."
 
+#: src/routes/my-post.tsx
+msgid "Je account hoort nog bij geen persoon in deze werkruimte, dus er staat hier geen post. Vraag een beheerder om je te koppelen bij Mensen."
+msgstr "Your account is not linked to a person in this workspace yet, so there is no mail here. Ask an admin to link you under People."
+
 #. placeholder {0}: workspace.name
 #: src/routes/settings.tsx
 msgid "Je account, je apparaten en wat leden in {0} mogen doen."
@@ -2158,6 +2171,10 @@ msgstr "You use an external AI service. The names on this page go along with eve
 #: src/routes/rule-editor.tsx
 msgid "Je hebt {total} brieven"
 msgstr "You have {total} letters"
+
+#: src/routes/my-post.tsx
+msgid "Je hebt alles gelezen."
+msgstr "You have read everything."
 
 #: src/routes/tasks.tsx
 msgid "Je hebt de laatste 30 dagen niets afgevinkt."
@@ -2562,6 +2579,14 @@ msgstr "Create a label first."
 msgid "Mail"
 msgstr "Email"
 
+#: src/routes/document.tsx
+msgid "Markeer als gelezen"
+msgstr "Mark as read"
+
+#: src/routes/document.tsx
+msgid "Markeer als ongelezen"
+msgstr "Mark as unread"
+
 #: src/components/audit-table.tsx
 #: src/routes/search.tsx
 msgid "Meer laden"
@@ -2949,12 +2974,24 @@ msgid "Ongedaan maken"
 msgstr "Undo"
 
 #: src/components/document-table.tsx
+msgid "Ongelezen"
+msgstr "Unread"
+
+#: src/components/document-table.tsx
 msgid "Ontvangen"
 msgstr "Received"
 
 #: src/routes/visibility.tsx
 msgid "Ook de startset labels toevoegen"
 msgstr "Also add the starter set of labels"
+
+#: src/routes/my-post.tsx
+msgid "Ook mijn afdeling"
+msgstr "Include my department"
+
+#: src/routes/my-post.tsx
+msgid "Ook mijn groep"
+msgstr "Include my group"
 
 #: src/routes/duplicate.tsx
 msgid "Op beide brieven hetzelfde: {sameFields}."
@@ -4195,6 +4232,10 @@ msgstr "Check it yourself"
 #: src/routes/document.tsx
 msgid "Zelf controleren?"
 msgstr "Check it yourself?"
+
+#: src/routes/my-post.tsx
+msgid "Zet Alleen ongelezen uit om al je post te zien."
+msgstr "Turn off Unread only to see all your mail."
 
 #: src/components/export-panel.tsx
 msgid "Zet het aan bij Instellingen."

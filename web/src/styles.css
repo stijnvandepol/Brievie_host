@@ -3468,3 +3468,21 @@ a.menu-item:hover {
   max-width: min(360px, calc(100vw - 32px));
   outline: none;
 }
+
+/* "Ongelezen" (spec S 5.4): the caller has not read the letter. A dot in the brand colour,
+   the row in bold; the word is in the row header for screen readers. */
+.unread-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: var(--s-s);
+  border-radius: var(--radius-circular);
+  background: var(--brand-bg);
+  vertical-align: middle;
+}
+
+tr.unread td,
+tr.unread th,
+.letter-card.unread {
+  font-weight: var(--weight-semibold);
+}

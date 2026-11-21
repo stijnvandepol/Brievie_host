@@ -312,6 +312,11 @@ export function documentHandlers(detail: components["schemas"]["DocumentOut"] = 
     http.get(`*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/events`, () =>
       HttpResponse.json([]),
     ),
+    // Opening a letter marks it read (spec S 5.3).
+    http.post(
+      `*${API}/workspaces/${workspace.id}/documents/:documentId/read`,
+      () => new HttpResponse(null, { status: 204 }),
+    ),
     ...personHandlers(),
   ];
 }

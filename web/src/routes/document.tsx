@@ -1,7 +1,7 @@
 import { t } from "@lingui/core/macro";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import {
@@ -12,6 +12,7 @@ import {
   personsQuery,
   visibilityQuery,
 } from "../api/queries";
+import { markRead, markUnread, refreshAfterReading } from "../api/reading";
 import type { components } from "../api/schema";
 import { refreshAfterTrash, trashDocument } from "../api/trash";
 import { ConfirmAction, ConfirmDialog } from "../components/confirm-dialog";
@@ -435,6 +436,36 @@ function DocumentView({
   );
 }
 
+/**
+ * "Ongelezen" on the letter page (spec S 5.3): the letter counts as read once this page
+ * shows it (one call per opening, never on a prefetch or a refetch), and "Markeer als
+ * ongelezen" / "Markeer als gelezen" change the caller's own mark.
+ */
+function useReadMark(workspaceId: string, document: Document | undefined) {
+  const queryClient = useQueryClient();
+  const marked = useRef<string | null>(null);
+  const shown = document?.id;
+  useEffect(() => {
+    if (!shown || marked.current === shown) return;
+    marked.current = shown;
+    void markRead(workspaceId, shown)
+      .then(() => {
+        queryClient.setQueryData(documentQuery(workspaceId, shown).queryKey, (old) =>
+          old ? { ...old, unread: false } : old,
+        );
+        return refreshAfterReading(queryClient, workspaceId, shown);
+      })
+      .catch(() => {
+        // The letter's own answer says what is wrong with it; a lost mark is no error.
+      });
+  }, [shown, workspaceId, queryClient]);
+  return useMutation({
+    mutationFn: (read: boolean) =>
+      read ? markRead(workspaceId, shown ?? "") : markUnread(workspaceId, shown ?? ""),
+    onSuccess: () => refreshAfterReading(queryClient, workspaceId),
+  });
+}
+
 function DocumentPage() {
   const { workspace } = documentRoute.useRouteContext();
   const { documentId } = documentRoute.useParams();
@@ -442,6 +473,7 @@ function DocumentPage() {
   const unknown = t`Onbekende afzender`;
   const title = data ? data.sender || unknown : t`Brief`;
   usePageTitle(title);
+  const reading = useReadMark(workspace.id, data);
 
   return (
     <Shell workspace={workspace}>
@@ -453,7 +485,20 @@ function DocumentPage() {
           params: { workspaceId: workspace.id },
           label: t`Alle post`,
         }}
+        commands={
+          data ? (
+            <Button
+              className="button secondary"
+              isDisabled={reading.isPending}
+              onPress={() => reading.mutate(data.unread === true)}
+            >
+              <Icon name="mail" />
+              {data.unread ? t`Markeer als gelezen` : t`Markeer als ongelezen`}
+            </Button>
+          ) : undefined
+        }
       />
+      <ErrorAlert error={reading.error} />
       {isPending ? <Loading /> : null}
       {error instanceof ApiFailure && error.code === "document_in_trash" ? (
         <MessageBar intent="info">

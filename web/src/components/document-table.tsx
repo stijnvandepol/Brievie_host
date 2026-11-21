@@ -193,6 +193,17 @@ export function LetterDateText({ document }: { document: Headline }) {
 
 const PHONE = "(max-width: 639px)";
 
+/** "Ongelezen" (spec S 5.4): a dot in the brand colour, and the word for screen readers.
+ * The caller's own state; the row is bold as well. */
+function UnreadMark() {
+  return (
+    <>
+      <span className="unread-dot" aria-hidden="true" />
+      <span className="visually-hidden">{t`Ongelezen`}: </span>
+    </>
+  );
+}
+
 /** The post of one workspace: a row per document, the sender links to the document. */
 export function DocumentTable<D extends DocumentSummary = DocumentSummary>({
   workspaceId,
@@ -203,6 +214,7 @@ export function DocumentTable<D extends DocumentSummary = DocumentSummary>({
   hint,
   fragment,
   caption,
+  showUnread = false,
 }: {
   workspaceId: string;
   documents: D[];
@@ -216,6 +228,8 @@ export function DocumentTable<D extends DocumentSummary = DocumentSummary>({
   fragment?: (document: D) => ReactNode;
   /** The name of the list for screen readers. */
   caption?: string;
+  /** Marks the letters the caller has not read (Mijn post, Alle post; never the Inbox). */
+  showUnread?: boolean;
 }) {
   const name = caption ?? t`Alle post`;
   const departments = useQuery(visibilityQuery(workspaceId)).data?.departments_enabled === true;
@@ -236,8 +250,12 @@ export function DocumentTable<D extends DocumentSummary = DocumentSummary>({
       <section className="panel" aria-label={name}>
         <ul className="letter-cards">
           {documents.map((document) => (
-            <li key={document.id} className="letter-card">
+            <li
+              key={document.id}
+              className={showUnread && document.unread ? "letter-card unread" : "letter-card"}
+            >
               <div className="letter-card-top">
+                {showUnread && document.unread ? <UnreadMark /> : null}
                 <Link
                   to="/w/$workspaceId/post/$documentId"
                   params={{ workspaceId, documentId: document.id }}
@@ -294,8 +312,9 @@ export function DocumentTable<D extends DocumentSummary = DocumentSummary>({
         </thead>
         <tbody>
           {documents.map((document) => (
-            <tr key={document.id}>
+            <tr key={document.id} className={showUnread && document.unread ? "unread" : undefined}>
               <th scope="row" className="cell-strong">
+                {showUnread && document.unread ? <UnreadMark /> : null}
                 <Link
                   to="/w/$workspaceId/post/$documentId"
                   params={{ workspaceId, documentId: document.id }}
