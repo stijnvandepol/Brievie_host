@@ -1752,6 +1752,11 @@
       },
       "InvitationIn": {
         "properties": {
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
           "email": {
             "default": "",
             "maxLength": 254,
@@ -1781,6 +1786,12 @@
               "string",
               "null"
             ]
+          },
+          "preview_token": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Preview Token",
+            "type": "string"
           },
           "role": {
             "default": "member",
@@ -4197,7 +4208,7 @@
           },
           "member_change": {
             "default": "",
-            "pattern": "^(|role|sorts_post|department_add|department_remove|link|unlink|remove)$",
+            "pattern": "^(|role|sorts_post|department_add|department_remove|link|unlink|remove|invite_admin)$",
             "title": "Member Change",
             "type": "string"
           },

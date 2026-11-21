@@ -2659,6 +2659,10 @@ msgstr "Choose Home or Business."
 msgid "Zeg om welk lid, welke persoon of welke rol het gaat."
 msgstr "Say which member, person or role this is about."
 
+#: apps/workspaces/visibility_settings.py
+msgid "Nieuwe beheerder"
+msgstr "New admin"
+
 #: brievie/api.py
 msgid "De database is niet bereikbaar. Probeer het later opnieuw."
 msgstr "The database cannot be reached. Try again later."

@@ -109,6 +109,10 @@ class InvitationIn(InputSchema):
     person_id: UUID | None = None
     # Optional: the admin's own name for it; never shown to the invitee.
     note: str = Field(default="", max_length=100)
+    # An admin invitation by which the new admin gains sight needs these (S 4.4): the
+    # confirmed preview of `member_change` "invite_admin".
+    confirmed: bool = False
+    preview_token: str = Field(default="", max_length=64)
 
 
 class InvitationOut(Schema):
@@ -216,7 +220,9 @@ class VisibilityPreviewIn(VisibilitySettingsIn):
     # "department_add", "department_remove", "link", "unlink" or "remove"; "" for none.
     member_change: str = Field(
         default="",
-        pattern="^(|role|sorts_post|department_add|department_remove|link|unlink|remove)$",
+        pattern=(
+            "^(|role|sorts_post|department_add|department_remove|link|unlink|remove|invite_admin)$"
+        ),
     )
     # The member concerned (role, sorts_post, department_add/remove, link, remove).
     member_user_id: UUID | None = None

@@ -2914,6 +2914,11 @@ export interface components {
         /** InvitationIn */
         InvitationIn: {
             /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
+            /**
              * Email
              * @default
              */
@@ -2934,6 +2939,11 @@ export interface components {
              * Format: uuid
              */
             person_id?: string | null;
+            /**
+             * Preview Token
+             * @default
+             */
+            preview_token: string;
             /**
              * Role
              * @default member

@@ -28,6 +28,7 @@ def on_member_added(
     if person_id is None:
         return
     from apps.documents import visibility
+    from apps.tasks.assignment import release_unseeing_assignees
 
     with system_actor():
         person = Person.objects.filter(workspace_id=workspace_id, id=person_id).first()
@@ -36,6 +37,9 @@ def on_member_added(
             return
         visibility.recompute_where(workspace_id=workspace_id, person_id=person_id)
         visibility.record_grant(person, grantee=user, actor_user_id=created_by_id)
+        # The person's post is the new member's now: whoever sorted it no longer sees it,
+        # and their assignments there end at once (Mijn taken S 5.3).
+        release_unseeing_assignees(workspace_id=workspace_id)
 
 
 def on_member_removed(workspace_id: UUID, user_id: UUID) -> None:

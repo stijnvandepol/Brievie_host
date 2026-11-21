@@ -258,10 +258,12 @@ def notify_changes(
     names: PolicySnapshot,
     actor_name: str,
     admins_gained_all: bool,
+    skip_user_id: UUID | None = None,
 ) -> None:
     """Content-free notices (S 4.4 point 4): `sight_widened` to each member who gains,
     `sight_narrowed` to each who loses (one each, the broadest kind of post), and
-    `admins_read_all_on` to every member when admins gained all post (R37)."""
+    `admins_read_all_on` to every member when admins gained all post (R37). Nothing to
+    `skip_user_id` (a member who just joined)."""
     from apps.accounts.notices import notify  # notices import services that import this
 
     if previewing():
@@ -271,6 +273,7 @@ def notify_changes(
     users = {
         u.id: u
         for u in User.objects.filter(id__in=[c.user_id for c in changes if c.user_id in members])
+        if u.id != skip_user_id
     }
     for change in changes:
         user = users.get(change.user_id)
@@ -292,7 +295,25 @@ def notify_changes(
             )
     if admins_gained_all:
         for member in User.objects.filter(memberships__workspace=workspace).order_by("id"):
-            notify(member, "admins_read_all_on", actor_name=actor_name)
+            if member.id != skip_user_id:
+                notify(member, "admins_read_all_on", actor_name=actor_name)
+
+
+def notify_join(
+    workspace: Workspace, *, before: PolicySnapshot, user_id: UUID, actor_name: str
+) -> None:
+    """A member joined through an invitation (inside the accept's transaction): the
+    notices of S 4.4 to everybody else whose sight changed by it."""
+    after = snapshot(workspace)
+    changes = diff(before, after)
+    notify_changes(
+        workspace,
+        changes,
+        names=_names(before, after),
+        actor_name=actor_name,
+        admins_gained_all=any(ALL_AS_ADMIN in c.gains for c in changes),
+        skip_user_id=user_id,
+    )
 
 
 def notify_self_grant(

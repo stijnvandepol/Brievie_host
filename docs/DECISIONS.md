@@ -2123,3 +2123,17 @@ installation starts in own post.
   who previewed, the change itself (the proposal, or the member change with only the
   fields its kind uses) and the state's fingerprint. Another proposal, another admin,
   another workspace or a changed state: 409 `preview_outdated`.
+- **An invitation moves sight like a member change (finding 1).** `createInvitation` with
+  role admin takes the memberships' lock (before the invitation, the lock order) and,
+  when the new admin would gain sight at that moment (all post while "Beheerders lezen
+  alle post" is on, or the unnamed post as a fallback sorter), needs the confirmed
+  preview of `member_change` "invite_admin" (`confirmed`, `preview_token`, defaults
+  `false`, `""`; the preview adds a placeholder admin inside its rolled-back savepoint).
+  Accepting an invitation now tells, inside its transaction, everybody whose sight changed
+  at that moment (`admins_read_all_on` to every member when an admin joins while admins
+  read all post; `sight_narrowed` to the sorters who no longer get the person's post);
+  the newcomer is not told. This replaces "accepting an invitation tells nobody" above;
+  still no memberships lock there. `on_member_added` releases the sorters' assignments on
+  the person's letters at once, and `test_task_release_callers` now checks per function
+  that every writer of sight releases (or runs `sight_change`). A renewed admin
+  invitation asks nothing again: it replaces one that was confirmed.

@@ -35,7 +35,16 @@ from apps.pipeline import settings_service
 from apps.pipeline.settings_service import AiStatus, Autopilot
 from apps.workspaces.access import on_member_added, person_requires_email
 from apps.workspaces.context import NOBODY, workspace_context
+from apps.workspaces.locks import lock_memberships
 from apps.workspaces.models import Invitation, Membership, Workspace
+from apps.workspaces.visibility_settings import (
+    MemberChange,
+    invited_admin_changes,
+    member_change_key,
+    notify_join,
+    require_confirmation,
+    snapshot,
+)
 
 INVITATION_PATH = "/uitnodiging"
 VALIDITY_DAYS = (1, 7, 30)
@@ -181,10 +190,29 @@ def create_invitation(
     email: str,
     person_id: UUID | None,
     note: str,
+    confirmed: bool = False,
+    preview_token: str = "",
 ) -> IssuedInvitation:
     """Make an invitation to `membership`'s workspace; the caller is its admin (checked
-    by the endpoint, which also entered the workspace's context)."""
+    by the endpoint, which also entered the workspace's context). An admin invitation by
+    which the new admin would gain sight (all post while admins read all post, or the
+    unnamed post as a fallback sorter) needs the confirmed preview of `invite_admin`
+    (409 `confirmation_required`, `preview_outdated`; S 4.4), checked under the
+    memberships' lock, which comes before the invitations in the lock order."""
     with transaction.atomic():
+        if role == Membership.Role.ADMIN:
+            lock_memberships(membership.workspace)
+            before, changes = invited_admin_changes(membership.workspace)
+            require_confirmation(
+                changes=changes,
+                before=before,
+                narrowing=False,
+                confirmed=confirmed,
+                preview_token=preview_token,
+                workspace_id=membership.workspace_id,
+                actor_id=actor.user_id,
+                change=member_change_key(MemberChange(kind="invite_admin")),
+            )
         return _issue(
             workspace=membership.workspace,
             creator=membership.user,
@@ -462,6 +490,7 @@ def accept_invitation(
     is_new = account == NEW_ACCOUNT
     with transaction.atomic():
         invitation = _usable(token, lock=True)
+        before = snapshot(invitation.workspace)
         if not is_new:
             # The account as it is now, locked (lock order: invitation, then the user,
             # as a removal locks the user): a removal of its last membership that
@@ -494,6 +523,15 @@ def accept_invitation(
                 person_id=person.id,
                 created_by_id=invitation.created_by_id,
             )
+        # Who gains or loses sight by the join is told now (S 4.4): every member when an
+        # admin joins while admins read all post, the sorters who no longer get the
+        # person's post. The admin confirmed when making the invitation.
+        notify_join(
+            invitation.workspace,
+            before=before,
+            user_id=user.id,
+            actor_name=invitation.created_by_name,
+        )
         invitation.accepted_at = timezone.now()
         invitation.accepted_by = user
         invitation.save(update_fields=["accepted_at", "accepted_by", "updated_at"])

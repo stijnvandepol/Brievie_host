@@ -174,9 +174,12 @@ def _unlinks_a_person(node: ast.AST) -> bool:
 
 
 def test_every_narrowing_writer_releases() -> None:
-    """A module with a function that recomputes readers, writes a member's role or links
-    a person to another user is on the list, and that module calls a release."""
+    """Every function that recomputes readers, writes a member's role or links a person
+    to another user releases itself (or runs `sight_change`, which releases whenever
+    anybody loses sight): per function, not per module, so a new writer in a module that
+    releases elsewhere cannot forget it (security review of PR #39, finding 1b)."""
     found = set()
+    silent = set()
     for path in sorted(APPS.rglob("*.py")):
         relative = str(path.relative_to(APPS))
         if "/migrations/" in f"/{relative}" or relative.startswith("tasks/"):
@@ -192,7 +195,7 @@ def test_every_narrowing_writer_releases() -> None:
                 or (_unlinks_a_person(function) and relative.startswith("people/"))
             ):
                 found.add(relative)
+                if not calls & (RELEASES | {"sight_change"}):
+                    silent.add(f"{relative}:{function.name}")
     assert found <= RELEASE_CALLERS, found - RELEASE_CALLERS
-    for module in RELEASE_CALLERS:
-        source = (APPS / module).read_text(encoding="utf-8")
-        assert _calls(ast.parse(source)) & RELEASES, module
+    assert not silent, silent
