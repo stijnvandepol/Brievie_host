@@ -10,8 +10,8 @@ A category is a kind of post a member sees:
 
 - `all`: every letter that is not private ("Iedereen ziet alle post");
 - `all_as_admin`: the same, as an admin while "Beheerders lezen alle post" is on;
-- `person:<id>`: the letters on a person's name (own post, or as sorter a person
-  without an account);
+- `person:<id>`: the letters on a person's name (own post, the post of a person the
+  member manages, or as sorter a person without an account nobody manages);
 - `department:<id>`: the letters on a department's name (a member while departments
   are on, or as sorter a department nobody reads through);
 - `unassigned`: the letters on nobody's name (sorters only).
@@ -51,9 +51,13 @@ class MemberFacts:
     name: str
     role: str
     sorts_post: bool
-    # The persons linked to the member (kind person), and the departments they are in.
+    # The persons linked to the member (kind person) and those without an account the
+    # member manages ("Beheerd door"), and the departments they are in.
     person_ids: frozenset[UUID]
     department_ids: frozenset[UUID]
+    # Of `person_ids`, the persons the member manages (for wording only: their post is the
+    # member's like their own).
+    managed_ids: frozenset[UUID] = frozenset()
 
 
 @dataclass(frozen=True)

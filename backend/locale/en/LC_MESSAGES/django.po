@@ -1663,6 +1663,11 @@ msgstr "addressed to %(person)s"
 
 #: apps/documents/visibility.py
 #, python-format
+msgid "beheert de post van %(person)s"
+msgstr "manages the mail of %(person)s"
+
+#: apps/documents/visibility.py
+#, python-format
 msgid "afdeling %(department)s"
 msgstr "department %(department)s"
 
@@ -2610,6 +2615,11 @@ msgid "Er is nog geen back-up."
 msgstr "There is no backup yet."
 
 #: apps/workspaces/policy_text.py
+#, python-format
+msgid "%(member)s beheert de post van %(persons)s."
+msgstr "%(member)s manages the mail of %(persons)s."
+
+#: apps/workspaces/policy_text.py
 msgid "Iedereen in Brievie ziet alle post, behalve privé-post."
 msgstr "Everyone in Brievie sees all post, except private post."
 
@@ -2633,6 +2643,10 @@ msgstr "The admins %(names)s read all post that is not private."
 #: apps/workspaces/policy_text.py
 msgid "De beheerders lezen je post niet."
 msgstr "The admins do not read your post."
+
+#: apps/workspaces/policy_text.py
+msgid "Staat een brief ook op naam van iemand zonder account wiens post iemand beheert, dan ziet wie die post beheert hem ook."
+msgstr "When a letter is also addressed to someone without an account whose mail someone manages, whoever manages that mail sees it too."
 
 #: apps/workspaces/policy_text.py
 msgid "Privé-post zien alleen: de mensen op wier naam hij staat, de mensen van een groep op wier naam hij staat, wie de brief scande of privé maakte, en met wie hij gedeeld is."

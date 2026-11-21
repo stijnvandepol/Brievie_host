@@ -127,6 +127,7 @@ def _summary(facts: PolicyFacts) -> list[str]:
             if switches.admins_read_all
             else _("Beheerders lezen geen post die niet voor hen is.")
         )
+    lines += _managers(snapshot)
     if facts.care_is_private:
         lines.append(_("Zorgpost is privé."))
     if switches.everyone_sees_all and viewer_is_admin:
@@ -137,6 +138,19 @@ def _summary(facts: PolicyFacts) -> list[str]:
     if not facts.has_backup:
         lines.append(_("Er is nog geen back-up."))
     return lines
+
+
+def _managers(snapshot: PolicySnapshot) -> list[str]:
+    """ "Anne beheert de post van Oma." for every member who manages somebody's post."""
+    return [
+        _("%(member)s beheert de post van %(persons)s.")
+        % {
+            "member": member.name,
+            "persons": join_names(snapshot.person_names.get(p, "") for p in member.managed_ids),
+        }
+        for member in sorted(snapshot.members, key=lambda m: m.name.casefold())
+        if member.managed_ids
+    ]
 
 
 def _member(facts: PolicyFacts) -> list[str]:
@@ -186,6 +200,13 @@ def _member(facts: PolicyFacts) -> list[str]:
             lines.append(
                 _("Post zonder naam zien de beheerders: %(names)s.") % {"names": join_names(admins)}
             )
+    if any(member.managed_ids for member in snapshot.members):
+        lines.append(
+            _(
+                "Staat een brief ook op naam van iemand zonder account wiens post iemand "
+                "beheert, dan ziet wie die post beheert hem ook."
+            )
+        )
     # Whatever the switches say: a private letter's readers (documents.visibility).
     lines.append(
         _(
