@@ -58,10 +58,20 @@ msgstr "{0, plural, one {Serveradres} other {Serveradressen}}"
 msgid "{0} (jij)"
 msgstr "{0} (jij)"
 
+#. placeholder {0}: member.name
+#: src/routes/departments.tsx
+msgid "{0} (Leidinggevende)"
+msgstr "{0} (Leidinggevende)"
+
 #. placeholder {0}: session.browser || t`Onbekende browser`
 #: src/routes/sessions.tsx
 msgid "{0} is daarna uitgelogd."
 msgstr "{0} is daarna uitgelogd."
+
+#. placeholder {0}: member.name
+#: src/routes/departments.tsx
+msgid "{0} is leidinggevende"
+msgstr "{0} is leidinggevende"
 
 #. placeholder {0}: device.name
 #: src/components/device-table.tsx
@@ -90,10 +100,17 @@ msgstr "{0} nodigt je uit voor {1}"
 msgid "{0} verdeelt post"
 msgstr "{0} verdeelt post"
 
+#. placeholder {0}: department.display_name
 #. placeholder {0}: member.name
+#: src/routes/departments.tsx
 #: src/routes/members.tsx
 msgid "{0} verwijderen?"
 msgstr "{0} verwijderen?"
+
+#. placeholder {0}: department.display_name
+#: src/routes/departments.tsx
+msgid "{0} wordt verwijderd, met wie erin zit. Dit kun je niet ongedaan maken."
+msgstr "{0} wordt verwijderd, met wie erin zit. Dit kun je niet ongedaan maken."
 
 #. placeholder {0}: person.display_name
 #: src/routes/persons.tsx
@@ -308,6 +325,7 @@ msgstr "Aanmaning"
 msgid "Aanslag"
 msgstr "Aanslag"
 
+#: src/routes/departments.tsx
 #: src/routes/labels.tsx
 #: src/routes/persons.tsx
 msgid "Aantal brieven"
@@ -364,6 +382,7 @@ msgstr "Actief"
 msgid "Actief: {name}"
 msgstr "Actief: {name}"
 
+#: src/routes/departments.tsx
 #: src/routes/labels.tsx
 #: src/routes/members.tsx
 #: src/routes/persons.tsx
@@ -382,6 +401,12 @@ msgstr "Adres"
 msgid "Adres van de AI op je netwerk"
 msgstr "Adres van de AI op je netwerk"
 
+#: src/routes/departments.tsx
+msgid "Afdeling maken"
+msgstr "Afdeling maken"
+
+#: src/components/page.tsx
+#: src/routes/departments.tsx
 #: src/routes/setup.tsx
 msgid "Afdelingen"
 msgstr "Afdelingen"
@@ -389,6 +414,10 @@ msgstr "Afdelingen"
 #: src/routes/visibility.tsx
 msgid "Afdelingen gebruiken"
 msgstr "Afdelingen gebruiken"
+
+#: src/routes/departments.tsx
+msgid "Afdelingen staan uit."
+msgstr "Afdelingen staan uit."
 
 #: src/routes/duplicate.tsx
 msgid "afgerond"
@@ -564,6 +593,7 @@ msgstr "Als dubbele brief naar de prullenbak verplaatst door {by}"
 #: src/components/visibility-preview-dialog.tsx
 #: src/routes/ai.tsx
 #: src/routes/automations.tsx
+#: src/routes/departments.tsx
 #: src/routes/labels.tsx
 #: src/routes/persons.tsx
 #: src/routes/visibility.tsx
@@ -1558,9 +1588,22 @@ msgstr "Groen"
 msgid "Groenblauw"
 msgstr "Groenblauw"
 
+#: src/routes/departments.tsx
+msgid "Groep maken"
+msgstr "Groep maken"
+
+#: src/components/page.tsx
+#: src/routes/departments.tsx
+msgid "Groepen"
+msgstr "Groepen"
+
 #: src/routes/visibility.tsx
 msgid "Groepen gebruiken"
 msgstr "Groepen gebruiken"
+
+#: src/routes/departments.tsx
+msgid "Groepen staan uit."
+msgstr "Groepen staan uit."
 
 #: src/routes/invitation.tsx
 msgid "Heb je al een account?"
@@ -1802,6 +1845,18 @@ msgstr "Ja, gebruik {0}"
 msgid "Ja, iedereen mag alle post zien"
 msgstr "Ja, iedereen mag alle post zien"
 
+#. placeholder {0}: person.display_name
+#. placeholder {1}: member.name
+#: src/routes/persons.tsx
+msgid "Ja, koppel {0} aan {1}"
+msgstr "Ja, koppel {0} aan {1}"
+
+#. placeholder {0}: member.name
+#. placeholder {1}: department.display_name
+#: src/routes/departments.tsx
+msgid "Ja, voeg {0} toe aan {1}"
+msgstr "Ja, voeg {0} toe aan {1}"
+
 #: src/routes/visibility.tsx
 msgid "Ja, zet afdelingen aan"
 msgstr "Ja, zet afdelingen aan"
@@ -2004,6 +2059,7 @@ msgstr "Kies minstens 12 tekens."
 #: src/components/document-table.tsx
 #: src/components/invite-dialog.tsx
 #: src/components/reset-link-dialog.tsx
+#: src/routes/departments.tsx
 msgid "Klaar"
 msgstr "Klaar"
 
@@ -2112,6 +2168,7 @@ msgid "Later"
 msgstr "Later"
 
 #: src/components/page.tsx
+#: src/routes/departments.tsx
 #: src/routes/member-devices.tsx
 #: src/routes/members.tsx
 #: src/routes/settings.tsx
@@ -2122,6 +2179,16 @@ msgstr "Leden"
 #: src/routes/visibility.tsx
 msgid "Leden mogen hun eigen post exporteren"
 msgstr "Leden mogen hun eigen post exporteren"
+
+#. placeholder {0}: department.display_name
+#: src/routes/departments.tsx
+msgid "Leden van {0}"
+msgstr "Leden van {0}"
+
+#. placeholder {0}: department.display_name
+#: src/routes/departments.tsx
+msgid "Leden: {0}"
+msgstr "Leden: {0}"
 
 #. placeholder {0}: chosen?.default_model ?? ""
 #: src/routes/ai.tsx
@@ -2293,6 +2360,7 @@ msgstr "Na het wijzigen word je in je andere browsers uitgelogd. Je gekoppelde t
 msgid "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
 msgstr "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
 
+#: src/routes/departments.tsx
 #: src/routes/home.tsx
 #: src/routes/invitation.tsx
 #: src/routes/labels.tsx
@@ -2317,6 +2385,7 @@ msgstr "Naam kiezen: {0}"
 msgid "Naam van de werkruimte"
 msgstr "Naam van de werkruimte"
 
+#: src/routes/departments.tsx
 #: src/routes/persons.tsx
 msgid "Naamvarianten"
 msgstr "Naamvarianten"
@@ -2528,6 +2597,15 @@ msgstr "Op te pakken"
 msgid "Op wiens naam brieven binnenkomen, ook iemand zonder account, zoals een kind. Wie zelf inlogt, staat bij Leden."
 msgstr "Op wiens naam brieven binnenkomen, ook iemand zonder account, zoals een kind. Wie zelf inlogt, staat bij Leden."
 
+#: src/routes/departments.tsx
+msgid "Opbergen"
+msgstr "Opbergen"
+
+#. placeholder {0}: department.display_name
+#: src/routes/departments.tsx
+msgid "Opbergen: {0}"
+msgstr "Opbergen: {0}"
+
 #: src/routes/tasks.tsx
 msgid "Open"
 msgstr "Open"
@@ -2548,6 +2626,10 @@ msgstr "Open uitnodigingen"
 msgid "OpenAI in de Verenigde Staten ({host})"
 msgstr "OpenAI in de Verenigde Staten ({host})"
 
+#: src/routes/departments.tsx
+msgid "Opgeborgen"
+msgstr "Opgeborgen"
+
 #: src/routes/settings.tsx
 msgid "Opgeslagen"
 msgstr "Opgeslagen"
@@ -2563,6 +2645,7 @@ msgstr "Opnieuw exporteren"
 #: src/components/deadline-dialog.tsx
 #: src/components/role-dialog.tsx
 #: src/routes/ai.tsx
+#: src/routes/departments.tsx
 #: src/routes/labels.tsx
 #: src/routes/persons.tsx
 #: src/routes/rule-editor.tsx
@@ -2977,12 +3060,15 @@ msgstr "Teruggedraaid"
 msgid "Teruggezet uit de prullenbak door {by}"
 msgstr "Teruggezet uit de prullenbak door {by}"
 
+#: src/routes/departments.tsx
 #: src/routes/persons.tsx
 #: src/routes/trash.tsx
 msgid "Terugzetten"
 msgstr "Terugzetten"
 
+#. placeholder {0}: department.display_name
 #. placeholder {0}: person.display_name
+#: src/routes/departments.tsx
 #: src/routes/persons.tsx
 msgid "Terugzetten: {0}"
 msgstr "Terugzetten: {0}"
@@ -3209,6 +3295,7 @@ msgid "Verwijderd op {when} door {who}"
 msgstr "Verwijderd op {when} door {who}"
 
 #: src/routes/automations.tsx
+#: src/routes/departments.tsx
 #: src/routes/document.tsx
 #: src/routes/labels.tsx
 #: src/routes/members.tsx
@@ -3217,8 +3304,10 @@ msgstr "Verwijderd op {when} door {who}"
 msgid "Verwijderen"
 msgstr "Verwijderen"
 
+#. placeholder {0}: department.display_name
 #. placeholder {0}: member.name
 #. placeholder {0}: person.display_name
+#: src/routes/departments.tsx
 #: src/routes/members.tsx
 #: src/routes/persons.tsx
 msgid "Verwijderen: {0}"
@@ -3437,6 +3526,12 @@ msgstr "Wie heeft wie uitgenodigd, welke rol veranderde en wat er verder is inge
 msgid "Wie hier staat, ziet brieven waar nog geen naam of afdeling op staat, en zet er een naam op. Staat hier niemand, dan doen de beheerders dat: {admins}."
 msgstr "Wie hier staat, ziet brieven waar nog geen naam of afdeling op staat, en zet er een naam op. Staat hier niemand, dan doen de beheerders dat: {admins}."
 
+#. placeholder {0}: department.display_name
+#. placeholder {1}: department.display_name
+#: src/routes/departments.tsx
+msgid "Wie in {0} zit, ziet de post op die naam. Een leidinggevende mag ook de labels van {1} beheren."
+msgstr "Wie in {0} zit, ziet de post op die naam. Een leidinggevende mag ook de labels van {1} beheren."
+
 #: src/components/invite-dialog.tsx
 msgid "Wie is het?"
 msgstr "Wie is het?"
@@ -3493,6 +3588,14 @@ msgstr "Wijzigen: {0}"
 msgid "Wijzigen: {name}"
 msgstr "Wijzigen: {name}"
 
+#: src/routes/departments.tsx
+msgid "Wil je post scheiden binnen je huishouden? Maak groepen."
+msgstr "Wil je post scheiden binnen je huishouden? Maak groepen."
+
+#: src/routes/departments.tsx
+msgid "Wil je post scheiden binnen je organisatie? Maak afdelingen."
+msgstr "Wil je post scheiden binnen je organisatie? Maak afdelingen."
+
 #: src/routes/search.tsx
 msgid "Wis filters"
 msgstr "Wis filters"
@@ -3542,6 +3645,10 @@ msgstr "Zie je hier een browser die je niet kent? Log die uit en wijzig je wacht
 #: src/routes/visibility.tsx
 msgid "Zo is het nu"
 msgstr "Zo is het nu"
+
+#: src/routes/departments.tsx
+msgid "Zo staat de naam op brieven, bijvoorbeeld Afd. Financiën. Zet elke variant op een eigen regel."
+msgstr "Zo staat de naam op brieven, bijvoorbeeld Afd. Financiën. Zet elke variant op een eigen regel."
 
 #: src/routes/persons.tsx
 msgid "Zo staat de naam op brieven, bijvoorbeeld J. de Vries. Zet elke variant op een eigen regel."

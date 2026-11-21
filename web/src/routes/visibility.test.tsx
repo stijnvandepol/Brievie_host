@@ -68,10 +68,10 @@ function gainingPreview(): Preview {
 function handlers(visibility: Visibility = ownPost, role: "admin" | "member" | "viewer" = "admin") {
   return [
     asRole(role, visibility.kind === "home" ? "home" : "business"),
-    ...loggedInHandlers(),
     http.get(`${base}/visibility`, () => HttpResponse.json(visibility)),
     http.get(`${base}/settings`, () => HttpResponse.json(settings)),
     http.get(`${base}/members`, () => HttpResponse.json(members)),
+    ...loggedInHandlers(),
   ];
 }
 

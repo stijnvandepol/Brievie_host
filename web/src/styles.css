@@ -3317,13 +3317,10 @@ a.menu-item:hover {
 /* Wie ziet wat: the sentences of a state, and the preview before a change of sight. */
 .sentence-list,
 .preview-list {
+  display: grid;
+  gap: var(--s-xs);
   margin: 0;
   padding-left: var(--s-l);
-}
-
-.sentence-list li,
-.preview-list li {
-  margin-bottom: var(--s-xs);
 }
 
 .preview-group h3 {

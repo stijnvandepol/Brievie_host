@@ -204,6 +204,57 @@ describe("persons", () => {
     );
   });
 
+  it("linking that widens sight asks through the preview first", async () => {
+    const bodies: { confirmed: boolean; preview_token: string }[] = [];
+    server.use(
+      http.put(`${base}/persons/${papa.id}/member`, async ({ request }) => {
+        const body = (await request.json()) as { confirmed: boolean; preview_token: string };
+        bodies.push(body);
+        if (!body.confirmed) {
+          return HttpResponse.json(
+            errorBody(
+              "confirmation_required",
+              "Bevestig eerst dat deze mensen meer post gaan zien.",
+            ),
+            { status: 409 },
+          );
+        }
+        return HttpResponse.json({ ...papa, user_id: members[1]?.user_id });
+      }),
+      http.post(`${base}/visibility/preview`, async ({ request }) => {
+        expect(await request.json()).toMatchObject({
+          member_change: "link",
+          member_user_id: members[1]?.user_id,
+          member_person_id: papa.id,
+        });
+        return HttpResponse.json({
+          changes: [
+            {
+              user_id: members[1]?.user_id,
+              name: "Bram",
+              gains: ["post van Papa"],
+              losses: [],
+            },
+          ],
+          letter_count: 2,
+          needs_confirmation: true,
+          sentences: [],
+          preview_token: "link-token",
+        });
+      }),
+      ...loggedInHandlers(),
+      ...personHandlers(),
+    );
+    const user = userEvent.setup();
+    renderApp(path);
+    const select = await screen.findByRole("combobox", { name: /Koppel aan account: Papa/ });
+    await user.selectOptions(select, "Bram");
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: "Ja, koppel Papa aan Bram" }));
+    await waitFor(() => expect(bodies).toHaveLength(2));
+    expect(bodies[1]).toMatchObject({ confirmed: true, preview_token: "link-token" });
+  });
+
   it("has no link control when every member has a person", async () => {
     server.use(
       ...loggedInHandlers(),
