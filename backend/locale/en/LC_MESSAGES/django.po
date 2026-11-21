@@ -21,7 +21,7 @@ msgstr "You manage your own account in your own settings."
 msgid "Dit kan alleen de serverbeheerder, omdat dit account ook buiten deze werkruimte bestaat."
 msgstr "Only the server admin can do this, because this account also exists outside this workspace."
 
-#: apps/accounts/authority.py
+#: apps/accounts/authority.py apps/workspaces/settings_service.py
 msgid "Dit kan alleen de serverbeheerder."
 msgstr "Only the server administrator can do this."
 
@@ -2224,7 +2224,7 @@ msgstr "From version {installed} you cannot go to {target} in one step. First up
 msgid "Van versie {installed} is er geen weg naar {target} met ./brievie update. Lees \"Voor je bijwerkt\" in CHANGELOG.md."
 msgstr "From version {installed} there is no way to {target} with ./brievie update. Read \"Before you update\" in CHANGELOG.md."
 
-#: apps/workspaces/deps.py apps/workspaces/locks.py
+#: apps/workspaces/deps.py apps/workspaces/locks.py apps/workspaces/settings_service.py
 msgid "We kunnen deze werkruimte niet vinden."
 msgstr "We can't find this workspace."
 

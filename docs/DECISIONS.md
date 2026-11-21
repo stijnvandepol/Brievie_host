@@ -1899,3 +1899,10 @@ M3). "Iedereen ziet alle post" stays on everywhere until Task 40, so departments
   serverbeheerder."). A link made before the member became a reader stops working (the
   rule is checked again at completion). `listMembers.can_manage_account` applies the
   same conditions with one query for the readers.
+- **Zorg and the emergency-access switch (Task 29, PB T15).** `care_is_private` is a
+  workspace setting (`bool | None = None` in `updateWorkspaceSettings`, so an older client
+  never changes it; a change is audited and changes no existing letter).
+  `setEmergencyAccess` is the server admin's own operation (web session, no membership
+  needed, 403 `forbidden` for anyone else): audit `emergency_access_switched_on`/`_off` and
+  a notice to every member; the same value writes nothing. Both are shown to every member
+  in `getWorkspaceSettings`.

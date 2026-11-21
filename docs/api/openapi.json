@@ -1362,6 +1362,32 @@
         "title": "DuplicateOut",
         "type": "object"
       },
+      "EmergencyAccessIn": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "EmergencyAccessIn",
+        "type": "object"
+      },
+      "EmergencyAccessOut": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "EmergencyAccessOut",
+        "type": "object"
+      },
       "EmptyTrashIn": {
         "description": "Empty the trash up to the newest `trashed_at` the caller showed (all when absent):\na letter trashed while the admin read the question is not emptied. With an offset\nonly (422 otherwise): a moment without one would be read in the server's zone.",
         "properties": {
@@ -3703,6 +3729,13 @@
               "null"
             ]
           },
+          "care_is_private": {
+            "title": "Care Is Private",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "summary_language": {
             "pattern": "^(nl|en)$",
             "title": "Summary Language",
@@ -3719,6 +3752,16 @@
         "properties": {
           "allow_member_export": {
             "title": "Allow Member Export",
+            "type": "boolean"
+          },
+          "care_is_private": {
+            "default": false,
+            "title": "Care Is Private",
+            "type": "boolean"
+          },
+          "emergency_access": {
+            "default": false,
+            "title": "Emergency Access",
             "type": "boolean"
           },
           "summary_language": {
@@ -8887,6 +8930,125 @@
         "summary": "Merge Duplicate",
         "tags": [
           "duplicates"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/emergency-access": {
+      "put": {
+        "description": "Web session only: a bearer token answers 401 not_authenticated. Switch emergency access for the workspace's admins. Server admins only (403 forbidden), also without a membership; every member gets a notice.",
+        "operationId": "setEmergencyAccess",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmergencyAccessIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmergencyAccessOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Set Emergency Access",
+        "tags": [
+          "workspaces"
         ]
       }
     },

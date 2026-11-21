@@ -39,12 +39,19 @@ class WorkspaceSettingsOut(Schema):
     allow_member_export: bool
     # The language of the AI's summaries and task descriptions: "nl" or "en".
     summary_language: str = "nl"
+    # A letter labelled Zorg becomes private on its own (at home on, in an organisation off).
+    care_is_private: bool = False
+    # An admin may open someone's hidden post for an hour with a reason (only a server
+    # admin switches it, `setEmergencyAccess`).
+    emergency_access: bool = False
 
     @staticmethod
     def of(workspace: Workspace) -> "WorkspaceSettingsOut":
         return WorkspaceSettingsOut(
             allow_member_export=workspace.allow_member_export,
             summary_language=workspace.summary_language,
+            care_is_private=workspace.care_is_private,
+            emergency_access=workspace.emergency_access,
         )
 
 
@@ -53,6 +60,16 @@ class WorkspaceSettingsIn(InputSchema):
     allow_member_export: bool | None = None
     # "nl" or "en" (a pattern, not an enum: the contract has no nullable enums).
     summary_language: str | None = Field(default=None, pattern="^(nl|en)$")
+    # A Zorg label makes a letter private; changes no letter that has it already.
+    care_is_private: bool | None = None
+
+
+class EmergencyAccessIn(InputSchema):
+    enabled: bool
+
+
+class EmergencyAccessOut(Schema):
+    enabled: bool
 
 
 class MemberRoleIn(InputSchema):

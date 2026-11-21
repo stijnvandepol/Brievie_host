@@ -1055,6 +1055,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/emergency-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Emergency Access
+         * @description Web session only: a bearer token answers 401 not_authenticated. Switch emergency access for the workspace's admins. Server admins only (403 forbidden), also without a membership; every member gets a notice.
+         */
+        put: operations["setEmergencyAccess"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/folders": {
         parameters: {
             query?: never;
@@ -2544,6 +2564,16 @@ export interface components {
             /** Text Similarity */
             text_similarity: number;
         };
+        /** EmergencyAccessIn */
+        EmergencyAccessIn: {
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** EmergencyAccessOut */
+        EmergencyAccessOut: {
+            /** Enabled */
+            enabled: boolean;
+        };
         /**
          * EmptyTrashIn
          * @description Empty the trash up to the newest `trashed_at` the caller showed (all when absent):
@@ -3763,6 +3793,8 @@ export interface components {
         WorkspaceSettingsIn: {
             /** Allow Member Export */
             allow_member_export?: boolean | null;
+            /** Care Is Private */
+            care_is_private?: boolean | null;
             /** Summary Language */
             summary_language?: string | null;
         };
@@ -3770,6 +3802,16 @@ export interface components {
         WorkspaceSettingsOut: {
             /** Allow Member Export */
             allow_member_export: boolean;
+            /**
+             * Care Is Private
+             * @default false
+             */
+            care_is_private: boolean;
+            /**
+             * Emergency Access
+             * @default false
+             */
+            emergency_access: boolean;
             /**
              * Summary Language
              * @default nl
@@ -7265,6 +7307,95 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    setEmergencyAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmergencyAccessIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmergencyAccessOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -17,6 +17,8 @@ from apps.workspaces.models import Membership
 from apps.workspaces.schemas import (
     AcceptInvitationIn,
     CreatedInvitationOut,
+    EmergencyAccessIn,
+    EmergencyAccessOut,
     InvitationIn,
     InvitationInfoOut,
     InvitationOut,
@@ -85,8 +87,36 @@ def update_workspace_settings(
         actor=actor_from_request(request),
         allow_member_export=payload.allow_member_export,
         summary_language=payload.summary_language,
+        care_is_private=payload.care_is_private,
     )
     return WorkspaceSettingsOut.of(workspace)
+
+
+@router.put(
+    "/workspaces/{workspace_id}/emergency-access",
+    response={
+        200: EmergencyAccessOut,
+        403: ErrorOut,
+        404: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    auth=session_auth,
+    description=WEB_SESSION_ONLY
+    + " Switch emergency access for the workspace's admins. Server admins only (403"
+    " forbidden), also without a membership; every member gets a notice.",
+    operation_id="setEmergencyAccess",
+)
+def set_emergency_access(
+    request: HttpRequest, workspace_id: UUID, payload: EmergencyAccessIn
+) -> EmergencyAccessOut:
+    workspace = settings_service.set_emergency_access(
+        workspace_id=workspace_id,
+        enabled=payload.enabled,
+        user=current_user(request),
+        actor=actor_from_request(request),
+    )
+    return EmergencyAccessOut(enabled=workspace.emergency_access)
 
 
 @router.get(
