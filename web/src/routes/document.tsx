@@ -30,7 +30,7 @@ import { ErrorAlert, focusPageHeading, PageHeader, Shell, usePageTitle } from ".
 import { PersonPicker, useSetAddressees } from "../components/person-picker";
 import { PrivateLock } from "../components/private-lock";
 import { ShareDialog, useSetVisibility } from "../components/share-dialog";
-import { SuggestionList } from "../components/suggestion-list";
+import { NewPersonList, SuggestionList } from "../components/suggestion-list";
 import { TaskList } from "../components/task-list";
 import { Loading, MessageBar } from "../components/ui";
 import { showLetterGone } from "../lost-letter";
@@ -385,6 +385,7 @@ function DocumentView({
           labels={labels.data ?? []}
           canEdit={canEdit}
         />
+        <NewPersonList workspaceId={workspaceId} document={document} canEdit={canEdit} />
         {document.summary ? (
           <section className="panel" aria-labelledby="summary-heading">
             <div className="panel-head">

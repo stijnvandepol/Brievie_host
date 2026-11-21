@@ -147,3 +147,99 @@ export function SuggestionMark({ count }: { count: number }) {
     </Badge>
   );
 }
+
+/**
+ * The AI's proposals that the letter is for somebody nobody knows yet (Mensen, B3): the
+ * name, the words that led to it, "Toevoegen als persoon" (the person is made and the
+ * letter put on them) and "Negeren" (never asked again on this letter). Nothing makes the
+ * person on its own.
+ */
+export function NewPersonList({
+  workspaceId,
+  document,
+  canEdit,
+}: {
+  workspaceId: string;
+  document: Document;
+  canEdit: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const answer = useMutation({
+    mutationFn: async ({ id, verb }: { id: string; verb: "accept" | "dismiss" }) => {
+      const params = {
+        path: { workspace_id: workspaceId, document_id: document.id, suggestion_id: id },
+      };
+      const { data, error } =
+        verb === "accept"
+          ? await api.POST(
+              "/api/v1/workspaces/{workspace_id}/documents/{document_id}/new-person-suggestions/{suggestion_id}/accept",
+              { params },
+            )
+          : await api.POST(
+              "/api/v1/workspaces/{workspace_id}/documents/{document_id}/new-person-suggestions/{suggestion_id}/dismiss",
+              { params },
+            );
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+    onSuccess: (answered) => {
+      queryClient.setQueryData(["workspaces", workspaceId, "documents", document.id], answered);
+    },
+    onSettled: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["workspaces", workspaceId, "documents"] }),
+        queryClient.invalidateQueries({ queryKey: ["workspaces", workspaceId, "persons"] }),
+        queryClient.invalidateQueries({ queryKey: ["workspaces", workspaceId, "people"] }),
+      ]);
+    },
+  });
+  const items = document.new_person_suggestions ?? [];
+  if (items.length === 0) return null;
+  const disabled = answer.isPending || document.status === "processing";
+  return (
+    <section className="panel" aria-labelledby="new-person-heading">
+      <div className="panel-head">
+        <h2 id="new-person-heading">{t`Nieuwe persoon?`}</h2>
+      </div>
+      <ul className="suggestion-list">
+        {items.map((item) => {
+          const name = item.name;
+          return (
+            <li key={item.id} className="suggestion">
+              <div>
+                <p className="suggestion-question">
+                  {t`Deze brief is voor ${name}. Die persoon staat nog niet in Brievie.`}
+                </p>
+                <p className="muted small">{t`Voorstel van AI`}</p>
+                {item.quote ? <q className="muted small block">{item.quote}</q> : null}
+              </div>
+              {canEdit ? (
+                <div className="suggestion-actions">
+                  <Button
+                    className="button small"
+                    aria-label={t`Toevoegen als persoon: ${name}`}
+                    isDisabled={disabled}
+                    onPress={() => answer.mutate({ id: item.id, verb: "accept" })}
+                  >
+                    <Icon name="personAdd" />
+                    {t`Toevoegen als persoon`}
+                  </Button>
+                  <Button
+                    className="button secondary small"
+                    aria-label={t`Negeren: ${name}`}
+                    isDisabled={disabled}
+                    onPress={() => answer.mutate({ id: item.id, verb: "dismiss" })}
+                  >
+                    <Icon name="dismiss" />
+                    {t`Negeren`}
+                  </Button>
+                </div>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+      <ErrorAlert error={answer.error} />
+    </section>
+  );
+}

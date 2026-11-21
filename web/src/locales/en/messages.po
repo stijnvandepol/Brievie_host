@@ -1303,6 +1303,10 @@ msgstr "Keep this letter"
 msgid "Deze brief houden: brief {position}"
 msgstr "Keep this letter: letter {position}"
 
+#: src/components/suggestion-list.tsx
+msgid "Deze brief is voor {name}. Die persoon staat nog niet in Brievie."
+msgstr "This letter is for {name}. That person is not in Brievie yet."
+
 #: src/components/document-history.tsx
 msgid "Deze brief kon niet privé worden: dan zou niemand hem kunnen lezen. Hij is zichtbaar gebleven."
 msgstr "This letter could not become private: nobody could read it then. It stayed visible."
@@ -2643,6 +2647,10 @@ msgid "Negeren"
 msgstr "Dismiss"
 
 #: src/components/suggestion-list.tsx
+msgid "Negeren: {name}"
+msgstr "Dismiss: {name}"
+
+#: src/components/suggestion-list.tsx
 msgid "Negeren: {text}"
 msgstr "Dismiss: {text}"
 
@@ -2712,6 +2720,10 @@ msgstr "New person"
 #: src/components/person-picker.tsx
 msgid "Nieuwe persoon: ‘{typed}’"
 msgstr "New person: ‘{typed}’"
+
+#: src/components/suggestion-list.tsx
+msgid "Nieuwe persoon?"
+msgstr "New person?"
 
 #: src/routes/automations.tsx
 #: src/routes/rule-editor.tsx
@@ -3468,6 +3480,14 @@ msgstr "Apply to existing mail?"
 #: src/routes/visibility.tsx
 msgid "Toevoegen"
 msgstr "Add"
+
+#: src/components/suggestion-list.tsx
+msgid "Toevoegen als persoon"
+msgstr "Add as a person"
+
+#: src/components/suggestion-list.tsx
+msgid "Toevoegen als persoon: {name}"
+msgstr "Add as a person: {name}"
 
 #: src/components/suggestion-list.tsx
 msgid "Toevoegen: {text}"
