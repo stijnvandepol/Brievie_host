@@ -5,6 +5,21 @@ Alle veranderingen in Brievie (de server) die je als beheerder merkt. De vorm vo
 [Semantic Versioning](https://semver.org/lang/nl/). Elke versie heeft een tag `vX.Y.Z`.
 Lees bij elke versie eerst **Voor je bijwerkt**, als die er staat.
 
+## [Onuitgebracht]
+
+### Toegevoegd
+
+- **Prullenbak voor brieven.** Met **Verwijderen** op een brief gaat die 30 dagen naar de
+  **Prullenbak**. Daar kun je hem terugzetten. Na 30 dagen wist Brievie de brief voorgoed,
+  ook de bestanden van de pagina's. Je ziet in de prullenbak alleen brieven die je ook
+  zonder prullenbak mag zien.
+- Een beheerder kan een brief meteen **definitief verwijderen** of de **prullenbak legen**.
+  Dat kan niet ongedaan worden gemaakt. Een back-up die eerder is gemaakt, bevat de brief
+  nog tot die back-up verloopt. Privépost van een ander blijft bij het legen staan en
+  wordt na 30 dagen door Brievie zelf gewist.
+- Het logboek noemt verplaatsen naar de prullenbak, terugzetten en definitief wissen.
+  Brievie houdt nog geen bewaartermijn per brief bij (zie SELFHOST, deel 23).
+
 ## [0.3.0] - 2026-11-20
 
 Zoeken in je post, een autopilot die ook het label van een regel kan toepassen, en een
