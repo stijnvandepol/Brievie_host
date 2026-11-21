@@ -1805,3 +1805,30 @@ section 16, recorded here as built.
   a member (`release_member`, also clearing letterless tasks as before), and unlinking a
   person from a member. `tests/test_task_release_callers.py` fails a new narrowing writer
   outside that list; "Wie ziet wat" T24, T27, T37 and T38 add theirs there.
+- **MT1, MT2: name and place.** "Mijn taken" (English "My tasks"), first in the
+  navigation above "Te doen", whose description now points to it. The start screen stays
+  "Te doen" (Q1 unanswered). "Op te pakken" is "To pick up" in English.
+- **MT4: whose task, one rule.** `apps.tasks.mine.reason_for` (pure) gives each visible
+  task one reason: `assigned`, `addressee`, `department`, `unassigned` (the sorter's post
+  nobody reads through, `brievie_covered_post_ids`), `other`. At home "Mijn taken" holds
+  the first four; an organisation keeps `department` and `unassigned` under "Op te
+  pakken". `services.my_tasks` builds the same rule as one filter on the member's facts
+  (read once per request through the visibility functions) and runs as the member under
+  the task policy. "Zonder naam" is said only for a letter without any addressee (P4); a
+  letter for Jan without an account says "Voor Jan". `for_names` leaves out the reader's
+  own persons ("Voor jou en Piet").
+- **MT7: `listMyTasks` next to `listTasks`.** `listTasks` keeps its meaning (the phone's
+  calendar trusts it) and only gains defaulted fields.
+- **MT9, MT10: groups and done.** "Binnen 7 dagen" is today up to today + 6, counted in
+  Europe/Amsterdam; "Afgerond" shows the last 30 days (200 rows), never deletes.
+- **MT11: task changes are letter history**, not audit rows.
+- **MT12: "Datum nodig".** At confirm an undated task stores the letter's term words
+  (`autopilot.term_phrase`, pure, the patterns of `mentions_term`); `setTaskDeadline`
+  fills in a manual date and keeps those words; a reconfirm recognises the dated task.
+- **MT13: reminders follow "mine"** (the app, `Brievie_ios`).
+- **"Waiting letters" is one count.** `documents.services.waiting_letters` counts review
+  and unnamed letters through `visible_documents` with a plain WHERE (on the seam list);
+  `inbox_counts`' aggregate would cost its ~165 ms again on every list.
+- **Web.** The list's query keys live under the documents key, so every existing refresh
+  of the letters refreshes the list; a ticked row stays with "Ongedaan maken" until the
+  page is left. "Datum invullen" uses the browser's date field (no new dependency).

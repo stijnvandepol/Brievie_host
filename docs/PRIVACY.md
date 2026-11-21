@@ -266,6 +266,23 @@ for it; see the table above.
 - A fragment of the letter (at most 240 characters) comes back with each hit, to the member
   who may read that letter.
 
+## Mijn taken
+
+- "Mijn taken" is a list made on every request from the letters a member may read; no
+  copy of anyone's list is stored. A task, its words, its amount, its counts and the names
+  "for whom" reach only someone who may read its letter: a task of a letter in the trash or
+  of someone else's private post is in no list and no count, also not an admin's.
+- A task is handed only to a member who may read the letter, never to a viewer. When that
+  member loses sight of the letter (it goes to someone else, the member leaves or becomes a
+  viewer, a person is unlinked), Brievie takes the task back itself and says so in the
+  letter's history ("Brievie haalde een taak weg bij …"), with no person as actor.
+- Ticking off, handing over and filling in a date are history on the letter, under the
+  letter's own rights; they are not in the admin log.
+- An amount is stored only when someone confirmed it, or when the invoice's amount is
+  literally in the letter (the autopilot); the words of a term are stored BSN-masked.
+- Reminders on the phone hold no letter text unless the member turned that on (the app's
+  rule); no log line holds a task's description, amount or quote.
+
 ## Honest limits
 
 - The e-mail address on an invitation is not verified (above).
