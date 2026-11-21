@@ -5,7 +5,26 @@ Alle veranderingen in Brievie (de server) die je als beheerder merkt. De vorm vo
 [Semantic Versioning](https://semver.org/lang/nl/). Elke versie heeft een tag `vX.Y.Z`.
 Lees bij elke versie eerst **Voor je bijwerkt**, als die er staat.
 
-## [Onuitgebracht]
+## [0.4.0] - 2026-11-21
+
+Wie ziet welke post, een prullenbak, dubbele brieven, "Mijn taken" en de webinterface ook in
+het Engels.
+
+### Voor je bijwerkt
+
+- Werk bij met `./brievie update`. De API-sleutel van de AI hoef je niet opnieuw in te
+  voeren; dat stond al bij 0.3.0.
+- Een bestaande werkruimte verandert niet: iedereen ziet nog alle post, tot een beheerder
+  dat onder **Instellingen → Wie ziet wat** uitzet. Een **nieuwe** werkruimte van het soort
+  Organisatie start wel met "ieder zijn eigen post".
+- Zodra leden privé-post hebben, kan een werkruimte-beheerder niet meer alles met hun
+  account doen (een herstellink maken, sessies of apparaten beheren). Dat kan dan alleen de
+  serverbeheerder, op de server.
+- Een persoon die aan een lid is gekoppeld, maakt alleen dat lid zelf los. Een beheerder
+  kan nog wel koppelen.
+- Alleen beheerders veranderen afdelingen en personen met een account.
+- Een tweede werkruimte maak je op de server met
+  `manage.py create_workspace --name <naam> --kind home|business --admin-email <adres>`.
 
 ### Toegevoegd
 
@@ -18,15 +37,15 @@ Lees bij elke versie eerst **Voor je bijwerkt**, als die er staat.
 - **Afdelingen** (thuis: **Groepen**) met leden en leidinggevenden, labels van een
   afdeling, en in de **Inbox** knoppen om te filteren (Voor mij, je afdeling, Zonder naam).
 - **Privé-brieven en delen.** Op een brief: **Privé maken**, **Delen met** en **Wie kan deze
-  brief zien?**. Een beheerder kan met een reden een uur lang **Noodtoegang** gebruiken, als
-  de serverbeheerder dat aanzet. Elk lid leest onder zijn account **Wie kan mijn post zien?**.
-- Na de installatie zie je **Zo is Brievie nu ingesteld**, met wat je daarna kunt doen.
-
-### Gewijzigd
-
-- **Te doen** heet nu **Inbox**. **Zakelijk** heet nu **Organisatie**, de rol meekijker heet
-  nu **Alleen lezen**.
-
+  brief zien?**. Thuis maakt het label Zorg een brief vanzelf privé. Een regel kan een brief
+  privé maken.
+- **Noodtoegang.** Als de serverbeheerder het aanzet, kan een beheerder met een reden een
+  uur lang verborgen post lezen, alleen lezen. Dat blijft in het logboek staan.
+- **Wie kan mijn post zien?** Elk lid leest onder zijn account wie zijn post kan zien.
+- **Mijn taken.** Elk lid krijgt een eigen takenlijst uit de post die hij mag lezen:
+  te laat, binnen 7 dagen, later en zonder datum. Je vinkt taken af, vult een datum in of
+  geeft een taak aan iemand die de brief mag zien. In een organisatie staat daaronder wat
+  nog door een afdeling of door niemand is opgepakt.
 - **Prullenbak voor brieven.** Met **Verwijderen** op een brief gaat die 30 dagen naar de
   **Prullenbak**. Daar kun je hem terugzetten. Na 30 dagen wist Brievie de brief voorgoed,
   ook de bestanden van de pagina's. Je ziet in de prullenbak alleen brieven die je ook
@@ -45,6 +64,16 @@ Lees bij elke versie eerst **Voor je bijwerkt**, als die er staat.
   Brievie het niet meer. Je ziet een paar alleen als je beide brieven mag zien. Brievie
   vergelijkt alleen nieuwe brieven met de post van de laatste 180 dagen; zolang een brief
   een open paar heeft, bevestigt de AI hem niet zelf.
+- **Engels naast Nederlands.** De server en de webinterface zijn ook in het Engels. Elk
+  lid kiest zijn taal onder zijn account; vóór het inloggen volgt Brievie de browser.
+  Een beheerder kiest ook in welke taal de AI de samenvattingen schrijft (werkruimte-
+  instellingen); Nederlands blijft de standaard.
+- Na de installatie zie je **Zo is Brievie nu ingesteld**, met wat je daarna kunt doen.
+
+### Gewijzigd
+
+- **Te doen** heet nu **Inbox**. **Zakelijk** heet nu **Organisatie**, de rol meekijker heet
+  nu **Alleen lezen**.
 
 ## [0.3.0] - 2026-11-20
 
