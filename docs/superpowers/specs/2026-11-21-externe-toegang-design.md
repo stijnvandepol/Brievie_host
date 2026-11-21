@@ -323,7 +323,8 @@ ExternalAccessOut
   set, `/ready` does not answer; mentions `COMPOSE_PROFILES=tunnel`), `upload_limit_above_cloudflare`
   (warning), `public_web_without_second_factor` (problem), `public_web_off` (ok: "alleen de app"),
   `request_not_secure` (problem: the admin's own request arrived without https: a proxy
-  misconfiguration), `cloudflare_reads_along` (warning, always with the tunnel), `app_update_needed`
+  misconfiguration), `public_host_not_forwarded` (problem: on the public route the Host is not
+  the public name, so CSRF fails: the proxy does not pass the original Host), `cloudflare_reads_along` (warning, always with the tunnel), `app_update_needed`
   (warning while a public way is on and a paired device reports an app version below the first
   version with per-address trust).
 - Page: one panel per way (home, VPN, tunnel, own proxy) with "aan/uit" and its addresses, the
@@ -348,12 +349,17 @@ App side (Brievie_ios, section "iOS tasks" of the plan):
 - **I1 Per-address trust.** `ServerTrust` gets the set of public hosts. For a host in it: system
   roots, hostname check, no CA anchor. Any other host: the CA as the only anchor (as today).
   `ServerConnection` gains `publicURLs: [URL]?` (optional: an old stored pairing still decodes).
-- **I2 Pairing from outside.** `verify`/`locate`: when the CA-anchored health check fails on a URL
-  whose host a public CA can certify (`publicHostBinding != nil`), try system trust; the proof's
-  binding is what TLS actually validated (CA fingerprint or host), and the server accepts either
-  (`trust_bindings`). After pairing the app keeps: link/QR URLs it verified against the CA, plus
-  the server's `public_urls` from `PairOut`, never a public URL taken from the link alone (the
-  `storedURLs` reasoning).
+- **I2 Pairing from outside.** `verify`/`locate` make two passes: first every URL anchored to the
+  CA; only when none verifies, a second pass with system trust over the URLs whose host a public
+  CA can certify (`publicHostBinding != nil`). So a link that lists a foreign public name first
+  never wins over a reachable home address. The proof's binding is what TLS actually validated
+  (CA fingerprint or host), and the server accepts either (`trust_bindings`). After pairing the
+  app keeps: link/QR URLs it verified against the CA, plus the server's `public_urls` from
+  `PairOut`, never a public URL taken from the link alone (the `storedURLs` reasoning).
+  Residual risk, said plainly: a link pairing that ends on system trust (home address
+  unreachable) cannot tell a fake server that pretends to accept the proof from the real one,
+  exactly as today's link without a pin; the QR path is unaffected, its addresses come from the
+  server's own screen.
 - **I3 Learning and remembering addresses.** After any successful call over a verified connection
   the app refreshes `urls`/`public_urls` from `getServerAddresses` (at most once a day and when a
   call fails as unreachable everywhere), and tries the last address that worked first: away from
@@ -391,7 +397,9 @@ Page "Brievie installeren met Docker Compose" with a section per way. Structure:
    controleer je het": the settings page "Van buiten bereikbaar".
 5. *Alle variabelen*: the table below.
 6. *Problemen oplossen*: 400 (name not in `ALLOWED_HOSTS`), app "niet geverifieerd" (old app or
-   public name missing), sign-in loops (proto not https: trusted proxies), 413/Cloudflare, 524.
+   public name missing), sign-in loops (proto not https: trusted proxies), "stuur de oorspronkelijke
+   Host door" (plain nginx sends the upstream name as Host; NPM, Traefik and Synology keep the
+   original), 413/Cloudflare, 524. With `./brievie`, leave `COMPOSE_PROFILES` out of `deploy/.env`.
 
 ### 11.1 Every variable of `deploy/.env.example`
 

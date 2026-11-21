@@ -177,7 +177,8 @@ Sketch (CI `stack` is the judge of syntax; adjust there, keep the properties the
 	tls internal { protocols tls1.2 tls1.3 }
 	vars brievie_route private
 	vars brievie_hsts {$BRIEVIE_HSTS_SECONDS}
-	vars brievie_host {host}
+	# With its port: a home install on BRIEVIE_HTTPS_PORT=8443 must keep Host == Origin (CSRF).
+	vars brievie_host {http.request.hostport}
 	@via_proxy remote_ip {$BRIEVIE_TRUSTED_PROXIES}
 	vars @via_proxy brievie_route public
 	vars @via_proxy brievie_hsts 31536000
@@ -196,7 +197,7 @@ http://:8080 {
 }
 ```
 
-- [ ] Failing text tests (new or rewritten, named): `test_every_proxy_to_the_api_sets_the_three_edge_headers` (one `to_api` snippet, every `reverse_proxy` in it), `test_cf_connecting_ip_is_read_only_on_the_tunnel_listener`, `test_tunnel_listener_forces_https_and_the_public_host`, `test_trusted_proxies_only_from_the_variable_on_443_and_private_ranges_on_8080`, `test_hsts_comes_from_the_route_var` (rewrite of the HSTS part of the snippet test), `test_error_responses_carry_the_security_headers` (rewritten: `import security_headers` count is now 3 in one snippet, `handle_errors` count 2, both inside `brievie_routes`), `test_caddy_replaces_a_client_sent_forwarded_for` → rewritten as `test_forwarded_for_is_trusted_only_from_configured_proxies` (no `header_up X-Forwarded-For`; `trusted_proxies` only in the two `servers` blocks), `test_document_upload_has_its_own_body_limit` (unchanged, must still pass), `test_8080_is_never_published` (not in any `ports:`).
+- [ ] Failing text tests (new or rewritten, named): `test_every_proxy_to_the_api_sets_the_three_edge_headers` (one `to_api` snippet, every `reverse_proxy` in it), `test_cf_connecting_ip_is_read_only_on_the_tunnel_listener`, `test_tunnel_listener_forces_https_and_the_public_host`, `test_trusted_proxies_only_from_the_variable_on_443_and_private_ranges_on_8080`, `test_hsts_comes_from_the_route_var` (rewrite of the HSTS part of the snippet test), `test_error_responses_carry_the_security_headers` (rewritten: `import security_headers` count is now 3 in one snippet, `handle_errors` count 2, both inside `brievie_routes`), `test_caddy_replaces_a_client_sent_forwarded_for` → rewritten as `test_forwarded_for_is_trusted_only_from_configured_proxies` (no `header_up X-Forwarded-For`; `trusted_proxies` only in the two `servers` blocks), `test_document_upload_has_its_own_body_limit` (unchanged, must still pass), `test_8080_is_never_published` (not in any `ports:`), `test_the_home_route_keeps_the_host_with_its_port` (`:443` passes `{http.request.hostport}`; only `:8080` overrides Host).
 - [ ] Rewrite the Caddyfile per the sketch; keep the header comments; keep `protocols tls1.2 tls1.3`.
 - [ ] Commit `feat(deploy): serve the tunnel and proxy routes with their own trust and HSTS`.
 
@@ -303,6 +304,7 @@ CHECK_CODES: tuple[str, ...]   # the closed list of S 8
 **Files:** modify `brievie`, `backend/tests/test_brievie_wrapper.py` (fake docker).
 
 - [ ] Failing tests: `test_start_without_token_never_mentions_the_tunnel_profile`, `test_start_with_token_starts_cloudflared_after_the_stack` (logged calls: main `up … --wait` without `--profile tunnel`, then `--profile tunnel up -d --no-deps cloudflared`), `test_a_failing_tunnel_is_a_warning_not_a_failed_start`, `test_update_and_restore_pass_the_profile_when_stopping_and_starting`, `test_the_token_never_appears_in_an_argv_or_output`, `test_start_refuses_a_public_name_that_is_not_a_bare_host`, `test_start_refuses_a_public_name_equal_to_the_home_name`, `test_start_prints_every_address`, `test_start_prints_the_red_sentence_with_public_web_before_second_factor`.
+- [ ] Compose reads `COMPOSE_PROFILES` from `deploy/.env` by itself: the wrapper unsets/overrides it for its own calls (`COMPOSE_PROFILES=` exported empty for the main `up`) so cloudflared never joins the main `up -d --wait`; test `test_compose_profiles_in_env_does_not_pull_cloudflared_into_the_main_start`. After `up -d --no-deps cloudflared`, poll `ps --status running --services` for up to 15 s before deciding "running" or the warning.
 - [ ] Implement: a `tunnel_on` flag from `env_value BRIEVIE_TUNNEL_TOKEN` (presence only; the value is never copied into a variable that is printed), name checks with `is_bare_host` logic in shell, Dutch messages from S 10.
 - [ ] Commit `feat(wrapper): start the tunnel when a token is set`.
 
@@ -322,7 +324,8 @@ Add to `stack`, after "The web interface is served", with `BRIEVIE_PUBLIC_HOSTNA
 - [ ] "Caddy's configuration adapts": `$COMPOSE exec -T caddy caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile` piped to a Python check: the `:8080` server alone has `client_ip_headers: ["CF-Connecting-IP"]`; every `reverse_proxy` handler sets `X-Brievie-Route`, `X-Brievie-Client-IP`, `X-Brievie-Peer-IP`.
 - [ ] "The home name answers with HSTS 0": `curl -sk -D- https://localhost/api/v1/health` has `max-age=0`.
 - [ ] "The tunnel listener answers with HSTS one year": `$COMPOSE exec -T api python -c` (urllib, `Host: brievie.example.test`, `X-Forwarded-Proto: https`) to `http://caddy:8080/api/v1/health` → 200 and `max-age=31536000`; `X-Forwarded-Proto: http` → 308 to `https://brievie.example.test/…`.
-- [ ] "A forged route header changes nothing": via `:8080` with `X-Brievie-Route: private` → `GET /api/v1/auth/me` is 403 `public_web_off`; via `https://localhost` with `X-Brievie-Route: public` and `CF-Connecting-IP: 203.0.113.9` → 401 `not_authenticated` (private route).
+- [ ] "A 413 carries the route's HSTS": an oversized body via `:8080` → 413 with `max-age=31536000`; via `https://localhost` → 413 with `max-age=0`.
+- [ ] "A forged route header changes nothing": via `:8080` with `X-Brievie-Route: private` → the `getMe` path (resolve it from the router) is 403 `public_web_off`; via `https://localhost` with `X-Brievie-Route: public` and `CF-Connecting-IP: 203.0.113.9` → 401 `not_authenticated` (private route).
 - [ ] "The VPN name is served by the private CA": `curl -sk --resolve vpn.example.test:443:127.0.0.1 https://vpn.example.test/api/v1/health` → 200.
 - [ ] "An IP address without SNI gets a certificate": `curl -sk https://127.0.0.1/api/v1/health -H 'Host: localhost'` → 200 (`default_sni`).
 - [ ] "The tunnel profile is valid": `$COMPOSE --profile tunnel config -q` with `BRIEVIE_TUNNEL_TOKEN=x`; and without the token `$COMPOSE config -q` (no interpolation error).
@@ -347,8 +350,8 @@ Start after host Task 7 is merged (`make sync-api` needs `public_urls` and `getS
 
 **Files:** `Pairing/PairingService.swift`, `Pairing/PairingProof.swift`, `Server/LiveBrievieServer*.swift`, tests.
 
-- [ ] Failing tests: `locateFallsBackToSystemTrustForACertifiableHostWhenTheCAFails`, `proofBindsToTheHostWhenSystemTrustValidated`, `proofBindsToTheCAWhenTheCAValidated`, `storedURLsKeepOnlyCAVerifiedLinkURLsPlusServerPublicURLs`, `aPublicURLFromTheLinkAloneIsNeverStored`.
-- [ ] Implement; the trust binding follows what TLS validated; `PairOut.public_urls` fills `ServerConnection.publicURLs`.
+- [ ] Failing tests: `caAnchoredAddressesWinOverSystemTrustWhateverTheLinkOrder`, `locateFallsBackToSystemTrustForACertifiableHostOnlyWhenNoAddressVerifiesWithTheCA`, `proofBindsToTheHostWhenSystemTrustValidated`, `proofBindsToTheCAWhenTheCAValidated`, `storedURLsKeepOnlyCAVerifiedLinkURLsPlusServerPublicURLs`, `aPublicURLFromTheLinkAloneIsNeverStored`.
+- [ ] Implement two passes in `locate` and `pair(_:deviceName:)`: first every URL CA-anchored; only when none verifies, a second pass with system trust over the URLs whose host a public CA can certify. The trust binding follows what TLS validated; `PairOut.public_urls` fills `ServerConnection.publicURLs`; a public URL the server did not return is never stored.
 
 ### I3: Learn and remember addresses
 
