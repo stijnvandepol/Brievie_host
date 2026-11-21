@@ -295,12 +295,24 @@ for it; see the table above.
   letter page or in the app's reader, scanned or uploaded it, or marked it read. A plain
   look at a list, a refresh in the background or a script does not count. This mark is
   personal data about reading behaviour and is used for exactly two things: the member's
-  own "Ongelezen" (bold rows, the number at Mijn post), and, in an organisation, the
-  absence of any addressee's opening for the sorters and admins ("Nog niet geopend"),
-  which tells them that the addressee (or, with several, none of them) has not opened the
-  letter yet. It never says when someone opened a letter, nor which of several addressees
-  did, and nobody else ever sees a member's own marks: the database lets each member read
-  only their own rows. At home "Blijft liggen" does not exist.
+  own "Ongelezen" (bold rows, the number at Mijn post), and, in an organisation, whether
+  any addressee has opened a confirmed letter, for the sorters and admins ("Nog niet
+  geopend"). Only a member's own opening of the confirmed letter counts there: not a scan
+  or upload, not "Alles gelezen", not an opening while the letter is still being checked,
+  and not one through emergency access.
+- What "Nog niet geopend" tells, exactly: that none of the letter's addressees opened it
+  before today. A letter opened today leaves the list at the start of the next day, so a
+  sorter can learn on which day the addressees (with one addressee: that person) first
+  opened a letter, never the hour, nor which of several addressees did. Nobody else ever
+  sees a member's own marks: the database lets each member read only their own rows. At
+  home "Blijft liggen" does not exist.
+- In het Nederlands: "Nog niet geopend" laat de postverdelers en beheerders van een
+  organisatie zien dat geen van de geadresseerden een bevestigde brief vóór vandaag heeft
+  geopend. Een brief die vandaag is geopend, verdwijnt pas de volgende dag uit de lijst.
+  Zo kan een verdeler zien op welke dag de geadresseerden (bij één geadresseerde: die
+  persoon) een brief voor het eerst openden, nooit het uur, en nooit wie van meerdere
+  geadresseerden. Scannen, "Alles gelezen", openen tijdens het nakijken of met noodtoegang
+  telt niet als openen.
 - The marks are never in the letter's history, the log, an export or a log line. They go
   with the letter when it is purged, and for one member when they leave the workspace.
   "Blijft liggen" lists and counts only letters the viewer may read: a private letter they

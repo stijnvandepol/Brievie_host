@@ -7,7 +7,7 @@ from django.test import Client
 from django.utils import timezone
 
 from apps.accounts.models import User
-from apps.documents import lingering
+from apps.documents import lingering, reading
 from apps.documents.models import Document
 from apps.workspaces.context import SYSTEM
 from apps.workspaces.models import Membership, Workspace
@@ -194,3 +194,31 @@ def test_home_cannot_switch_lingering_on() -> None:
     assert body["message"] == "Dit kan alleen in een organisatie."
     h.workspace.refresh_from_db()
     assert h.workspace.lingering_enabled is False
+
+
+def test_opening_today_does_not_change_todays_lingering_list() -> None:
+    # Security review of PR #44, point 2: day-granular, so the list never tells a sorter
+    # the hour an addressee opened a letter, at most the day.
+    o = office()
+    o.state(e=True, d=True, a=True)
+    _all_old(o)
+    member = Membership.objects.select_related("workspace").get(
+        workspace=o.workspace, user=o.sorter
+    )
+    before = _lingering(o.workspace, o.sorter)
+    assert "own_piet" in _names(o, before.not_opened)
+    count = _count(o.workspace, o.sorter)
+    piet = Membership.objects.select_related("workspace").get(workspace=o.workspace, user=o.plain)
+    with as_actor(o.workspace, o.plain.id):
+        reading.mark_read(piet, o.letters["own_piet"].id)
+    with as_actor(o.workspace, SYSTEM):
+        assert Document.objects.get(id=o.letters["own_piet"].id).addressee_opened_at is not None
+    after = _lingering(o.workspace, o.sorter)
+    assert _names(o, after.not_opened) == _names(o, before.not_opened)
+    assert _count(o.workspace, o.sorter) == count
+    # The next day it is gone.
+    tomorrow = timezone.now() + timedelta(days=1)
+    with as_actor(o.workspace, o.sorter.id):
+        later = lingering.lingering_letters(member, now=tomorrow)
+        assert lingering.count_lingering(member, now=tomorrow) < count
+    assert "own_piet" not in _names(o, later.not_opened)

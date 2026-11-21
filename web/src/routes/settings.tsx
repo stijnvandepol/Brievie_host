@@ -168,7 +168,7 @@ function LingeringSettings({
         <span className="switch-track" aria-hidden="true" />
         {t`Laat zien welke post blijft liggen`}
       </Switch>
-      <p className="switch-hint">{t`Wie post verdeelt en de beheerders zien boven de Inbox welke brieven te lang in de Inbox staan, en welke brieven niemand op wiens naam ze staan heeft geopend.`}</p>
+      <p className="switch-hint">{t`Wie post verdeelt en de beheerders zien boven de Inbox welke brieven te lang in de Inbox staan, en welke brieven niemand op wiens naam ze staan vóór vandaag heeft geopend. Zo zien zij op welke dag iemand een brief opende, nooit het uur.`}</p>
       {settings.lingering_enabled ? (
         <>
           <DaysField

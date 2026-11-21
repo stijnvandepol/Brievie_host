@@ -76,15 +76,18 @@ def _inbox_arms(before: datetime) -> tuple[Q, Q]:
     )
 
 
-def _not_opened(before: datetime) -> Q:
-    """Confirmed, with addressees, opened by none of them, confirmed before `before` (a
-    letter without a confirmation time counts from its arrival). The partial index
-    `documents_document_unopened`."""
+def _not_opened_arms(before: datetime, now: datetime) -> tuple[Q, Q]:
+    """Confirmed, with addressees, confirmed before `before` (a letter without a
+    confirmation time counts from its arrival), and opened by none of them before today:
+    not opened at all (index `documents_document_unopened`), or opened today (index
+    `documents_document_opened`). Day-granular on purpose (security review of PR #44,
+    point 2): a letter leaves the list only when the day ends, so the list never tells
+    a sorter the hour an addressee opened it, at most the day."""
     confirmed = Q(confirmed_at__lt=before) | Q(confirmed_at__isnull=True, created_at__lt=before)
+    addressed = Q(status=Document.Status.DONE) & ~Q(addressee_ids=[]) & confirmed
     return (
-        Q(status=Document.Status.DONE, addressee_opened_at__isnull=True)
-        & ~Q(addressee_ids=[])
-        & confirmed
+        addressed & Q(addressee_opened_at__isnull=True),
+        addressed & Q(addressee_opened_at__gte=cutoff(1, now)),
     )
 
 
@@ -111,17 +114,19 @@ def lingering_letters(membership: Membership, *, now: datetime | None = None) ->
     for arm in _inbox_arms(cutoff(inbox_days, moment)):
         inbox += list(_listed(letters.filter(arm)).order_by("created_at", "id")[:LIST_MAX])
     inbox.sort(key=lambda d: (d.created_at, d.id))
-    not_opened = list(
-        _listed(letters.filter(_not_opened(cutoff(unopened_days, moment)))).order_by(
-            "confirmed_at", "created_at", "id"
-        )[:LIST_MAX]
-    )
+    not_opened: list[Document] = []
+    for arm in _not_opened_arms(cutoff(unopened_days, moment), moment):
+        not_opened += list(
+            _listed(letters.filter(arm)).order_by("confirmed_at", "created_at", "id")[:LIST_MAX]
+        )
+    not_opened.sort(key=lambda d: (d.confirmed_at or d.created_at, d.created_at, d.id))
+    not_opened = not_opened[:LIST_MAX]
     return Lingering(inbox[:LIST_MAX], not_opened, inbox_days, unopened_days)
 
 
 def count_lingering(membership: Membership, *, now: datetime | None = None) -> int:
     """How many letters linger for the member (both groups, not capped); 0 unless
-    `applies_to`. Three counts, each on a partial index."""
+    `applies_to`. Four counts, each on a partial index."""
     if not applies_to(membership):
         return 0
     workspace = membership.workspace
@@ -129,7 +134,7 @@ def count_lingering(membership: Membership, *, now: datetime | None = None) -> i
     letters = visibility.visible_documents(membership)
     arms = [
         *_inbox_arms(cutoff(workspace.lingering_inbox_days, moment)),
-        _not_opened(cutoff(workspace.lingering_unopened_days, moment)),
+        *_not_opened_arms(cutoff(workspace.lingering_unopened_days, moment), moment),
     ]
     return sum(letters.filter(arm).count() for arm in arms)
 
