@@ -1204,6 +1204,26 @@ msgstr "This server does not use a certificate of its own."
 msgid "De gegevens bij deze upload kloppen niet."
 msgstr "The details of this upload are not correct."
 
+#: apps/documents/duplicates.py
+msgid "We kunnen deze dubbele brieven niet vinden."
+msgstr "We can't find these duplicate letters."
+
+#: apps/documents/duplicates.py
+msgid "Over deze twee brieven is al gekozen."
+msgstr "A choice has already been made about these two letters."
+
+#: apps/documents/duplicates.py
+msgid "Deze twee brieven zijn niet voor dezelfde mensen zichtbaar. Kies 'Het zijn twee brieven', of laat ze eerst voor dezelfde mensen zichtbaar zijn."
+msgstr "These two letters are not visible to the same people. Choose 'They are two letters', or first make them visible to the same people."
+
+#: apps/documents/duplicates.py
+msgid "Kies een van de twee brieven om te houden."
+msgstr "Choose one of the two letters to keep."
+
+#: apps/documents/duplicates.py apps/documents/review.py apps/documents/services.py
+msgid "Dit document wordt nog verwerkt. Probeer het zo opnieuw."
+msgstr "This document is still being processed. Try again in a moment."
+
 #: apps/documents/export.py
 #, python-format
 msgid "Gemaakt op %(date)s met Brievie."
@@ -1422,10 +1442,6 @@ msgstr "This letter still has to be kept. You can't erase it now."
 #: apps/documents/review.py apps/documents/services.py apps/documents/trash.py
 msgid "We kunnen dit document niet vinden."
 msgstr "We can't find this document."
-
-#: apps/documents/review.py apps/documents/services.py
-msgid "Dit document wordt nog verwerkt. Probeer het zo opnieuw."
-msgstr "This document is still being processed. Try again in a moment."
 
 #: apps/documents/review.py
 msgid "Dit document kun je nu niet bevestigen."

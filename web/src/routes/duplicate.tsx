@@ -19,6 +19,8 @@ import { LabelChips } from "../components/label-chip";
 import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
 import { Badge, Loading, MessageBar } from "../components/ui";
 import { showDismissed } from "../duplicate-notice";
+import { dateFormat } from "../format";
+import { formattingLocale } from "../i18n";
 import { showUndo } from "../undo-trash";
 import { workspaceRoute } from "./workspace";
 
@@ -26,9 +28,19 @@ type Duplicate = components["schemas"]["DuplicateOut"];
 type Summary = components["schemas"]["DocumentSummaryOut"];
 type Difference = components["schemas"]["DuplicateDifferenceOut"];
 
-const scanned = new Intl.DateTimeFormat("nl-NL", { dateStyle: "medium" });
-const euro = new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" });
-const list = new Intl.ListFormat("nl-NL", { type: "conjunction" });
+const scanned = dateFormat({ dateStyle: "medium" });
+
+/** An amount in euros, in the active language. */
+function formatEuro(value: number): string {
+  return new Intl.NumberFormat(formattingLocale(), { style: "currency", currency: "EUR" }).format(
+    value,
+  );
+}
+
+/** A list of words joined with "en" or "and", in the active language. */
+function formatList(words: string[]): string {
+  return new Intl.ListFormat(formattingLocale(), { type: "conjunction" }).format(words);
+}
 
 /** A fact's name inside a sentence ("Let op: bedrag verschilt."). */
 function fieldWord(field: string): string {
@@ -74,10 +86,10 @@ function fieldLabel(field: string): string {
   }
 }
 
-/** A value of `differences` as it reads: dates and amounts in Dutch. */
+/** A value of `differences` as it reads: dates and amounts in the active language. */
 function shownValue(field: string, value: string): string {
   if (field === "amount" && value !== "" && !Number.isNaN(Number(value))) {
-    return euro.format(Number(value));
+    return formatEuro(Number(value));
   }
   if (field === "letter_date" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return formatLetterDate(value);
   return value;
@@ -316,9 +328,9 @@ function DuplicateView({
   });
   // A page count is shown as a difference but never warned about: a scan may miss a page.
   const warned = differences.filter((d) => d.field !== "page_count");
-  const fields = list.format(warned.map((d) => fieldWord(d.field)));
+  const fields = formatList(warned.map((d) => fieldWord(d.field)));
   const similarity = pair.text_similarity;
-  const sameFields = list.format(same.map(fieldWord));
+  const sameFields = formatList(same.map(fieldWord));
   const columns = (
     <div className="duplicate-columns">
       <Column
