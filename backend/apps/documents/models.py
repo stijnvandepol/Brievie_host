@@ -194,6 +194,12 @@ class Document(WorkspaceModel):
                 condition=models.Q(status="done", addressee_ids=[]),
                 name="documents_document_unassigned",
             ),
+            # Letters to check ("Controleren"): "Mijn taken" counts them as waiting.
+            models.Index(
+                fields=["workspace"],
+                condition=models.Q(status__in=["needs_review", "failed"]),
+                name="documents_document_review",
+            ),
             GinIndex(fields=["search_vector"], name="documents_document_search"),
             # For the typo fallback of search (pg_trgm word similarity).
             GinIndex(

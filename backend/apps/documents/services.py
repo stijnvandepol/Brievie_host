@@ -261,12 +261,14 @@ def inbox_counts(membership: Membership) -> dict[str, int]:
 
 def waiting_letters(membership: Membership) -> int:
     """How many letters the member sees wait to be checked or named ("Te doen"'s review
-    and unassigned states), for the line on top of "Mijn taken". A plain WHERE, not an
-    aggregate filter: the cheap status test runs before the policy (one count, no badges)."""
-    return (
-        visibility.visible_documents(membership)
-        .filter(_in_state(InboxState.REVIEW) | _in_state(InboxState.UNASSIGNED))
-        .count()
+    and unassigned states), for the line on top of "Mijn taken"."""
+    letters = visibility.visible_documents(membership)
+    # Two counts, each on its own partial index (`documents_document_review`,
+    # `documents_document_unassigned`): the policy then runs only for the few matching
+    # letters. One OR of the two (or an aggregate filter) runs it for every letter.
+    return sum(
+        letters.filter(_in_state(state)).count()
+        for state in (InboxState.REVIEW, InboxState.UNASSIGNED)
     )
 
 
