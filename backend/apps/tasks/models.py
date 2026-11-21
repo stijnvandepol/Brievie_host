@@ -32,6 +32,10 @@ class Task(WorkspaceModel):
         OPEN = "open", _("Open")
         DONE = "done", _("Afgerond")
 
+    # The trash contract: a letter in the trash keeps its tasks (hidden from every list
+    # with it); a purge deletes the letter's tasks as the system before the letter, so no
+    # task of a private letter becomes letterless (a letterless task's description would
+    # reach whoever sees all post).
     document = models.ForeignKey(
         "documents.Document", null=True, blank=True, on_delete=models.SET_NULL, related_name="tasks"
     )

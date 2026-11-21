@@ -1718,3 +1718,59 @@ language arrives" (2026-11-13).
 - **Rule for later work.** Every new user-facing text needs both languages: Dutch in the
   code, English in the catalogue (`make messages` / `pnpm extract`). The tests above fail
   otherwise.
+
+## 2026-11-21: Who sees which letter: every leak path tested in own post (plan Tasks 12–23)
+
+Each path of S 4.10 is tested in `office()` in state E off, D on, A off (set by tests only:
+no user can switch "Iedereen ziet alle post" off yet), as a member who must not see
+Finance's letter, with the owner as control.
+
+- **`inbox_state = "unassigned"` keeps its meaning "no addressee at all" (P4, Task 12).**
+  A letter on an addressee nobody reads through (a person without an account, a
+  department without members) reaches the sorters through the policy and shows in their
+  list with its name; the chip "Zonder naam" and the badge count only letters without
+  any addressee. S 4.5's wider set would change the contract and the iPhone's filter.
+- **Tasks follow their letter; a letterless task its maker and assignee (P11, Task 15).**
+  `listTasks`, `completeTask` and `reopenTask` read as the member, so a task of a letter
+  the member cannot see is absent from the list and 404 `task_not_found` like an unknown
+  id. An assignee widens only a task without a letter: a task on a letter follows the
+  letter whoever it is assigned to. No task-create or task-assign endpoint exists, so
+  `assignee_cannot_read` is not built; when one comes, an assignment lapses (or is
+  refused) once the assignee may no longer read the letter. A letter purged from the
+  trash takes its tasks with it (as the system), so none becomes letterless.
+- **Notice values from a fixed list (Task 18, S 4.14).** `accounts.notices.NOTICE_VALUE_KEYS`
+  names, per notice code, the value keys it may carry; `notify` raises `ValueError` for any
+  other. The union is `workspace`, `person`, `department`, `category`, `count`,
+  `document_id`, `member`, `setting` and `device`: a letter by its id, everything else by
+  a directory name. `device` is added to the plan's list: the existing device notices
+  carry the device's name, which is no letter content.
+- **The own export reads as the member (Task 20, S 4.18, PB decision 26).**
+  `member_document_ids` keeps the letters on a person linked to the member and adds the
+  private letters they read through an unexpired share, addressee or department reader
+  row; never a department's open post, never what a switch or emergency access shows.
+  A queued export job for someone who is no member any more (their row normally goes
+  with them) reads and writes nothing and marks the export failed. `export_context(...,
+  reader_id=None)` is the system's bookkeeping and the future full copy only.
+- **Rule tests and manual runs act as their member (Task 21; P5 and R7 as recorded on
+  2026-11-20).** `testRule` counts and shows only letters the admin sees, a manual run
+  touches only those, and `listRules` counts only runs on visible letters. The rules
+  after processing and confirming run as the system and reach every letter. A job with an
+  empty actor sees no letter and no row of one, also while "Iedereen ziet alle post" is on.
+- **One seam for every query that shows letters (Task 23).** `visibility.visible_documents(membership)`
+  (with `trashed_documents` and `readable_documents`) is where the list, counts, detail,
+  pages, history, search, the trash and duplicate pairs start; it takes the membership,
+  not the workspace (recorded with the search merge). `tests/test_visibility_seams.py`
+  fails when a member-facing documents module reads `Document.objects` outside the
+  known by-id write locks, when raw SQL on the letter table appears in a module not on
+  its list, or when a table with a letter key lacks the visibility policies. `testRule`
+  keeps its own query: it reads as the admin under the policies (Task 21 tests it), and
+  its query-count tests run as the system, which the seam refuses. The trash contract is
+  written on `Task.document`: a purge deletes the letter's tasks as the system first.
+- **Found while testing Task 20: the policy does not itself check membership.** A user
+  whose membership row is gone but whose person is still linked, who has reader rows, or
+  who scanned a letter not yet done, would still match those arms if code ran as them.
+  No path does: every request passes `workspace_member` first, every job checks the
+  membership, and removing a member unlinks their persons (Task 27 also removes their
+  reader rows, shares and department memberships). Closing it inside the policy (the
+  actor counted only while a member) needs a migration of the policies and a new
+  measurement; left to the owner, not built here.
