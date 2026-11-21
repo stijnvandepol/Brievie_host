@@ -1,5 +1,6 @@
 import { t } from "@lingui/core/macro";
 import createClient, { type Middleware } from "openapi-fetch";
+import { currentLocale } from "../i18n";
 import type { components, paths } from "./schema";
 
 export type ErrorBody = components["schemas"]["ErrorOut"];
@@ -25,13 +26,24 @@ const csrf: Middleware = {
   },
 };
 
+/**
+ * The server answers in the interface's language: before sign-in, and while the account
+ * has not chosen one (an account's own choice wins on the server).
+ */
+const language: Middleware = {
+  onRequest({ request }) {
+    request.headers.set("Accept-Language", currentLocale());
+    return request;
+  },
+};
+
 export const api = createClient<paths>({
   baseUrl: globalThis.location.origin,
   credentials: "include",
   // Looked up per call, so a test double installed after import is used.
   fetch: (request) => globalThis.fetch(request),
 });
-api.use(csrf);
+api.use(csrf, language);
 
 function isErrorBody(value: unknown): value is ErrorBody {
   return (
@@ -44,7 +56,7 @@ function isErrorBody(value: unknown): value is ErrorBody {
   );
 }
 
-/** The server's own Dutch sentence when there is one, otherwise a calm fallback. */
+/** The server's own sentence when there is one, otherwise a calm fallback. */
 export function errorMessage(error: unknown): string {
   if (error instanceof ApiFailure || isErrorBody(error)) return error.message;
   if (error instanceof TypeError) {

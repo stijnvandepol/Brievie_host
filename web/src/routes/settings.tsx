@@ -2,11 +2,12 @@ import { t } from "@lingui/core/macro";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createRoute, Link, redirect } from "@tanstack/react-router";
 import { useState } from "react";
-import { Switch } from "react-aria-components";
+import { Label, Radio, RadioGroup, Switch } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import { workspaceSettingsQuery } from "../api/queries";
 import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
 import { Loading } from "../components/ui";
+import { isLocale, LANGUAGE_NAMES, LOCALES } from "../i18n";
 import { workspaceRoute } from "./workspace";
 
 function SettingsPage() {
@@ -16,10 +17,10 @@ function SettingsPage() {
   const settings = useQuery(workspaceSettingsQuery(workspace.id));
   const [saved, setSaved] = useState(false);
   const save = useMutation({
-    mutationFn: async (allow: boolean) => {
+    mutationFn: async (body: { allow_member_export?: boolean; summary_language?: string }) => {
       const { data, error } = await api.PUT("/api/v1/workspaces/{workspace_id}/settings", {
         params: { path: { workspace_id: workspace.id } },
-        body: { allow_member_export: allow },
+        body,
       });
       if (error !== undefined || !data) throw new ApiFailure(error);
       return data;
@@ -48,7 +49,7 @@ function SettingsPage() {
             isDisabled={save.isPending}
             onChange={(on) => {
               setSaved(false);
-              save.mutate(on);
+              save.mutate({ allow_member_export: on });
             }}
           >
             <span className="switch-track" aria-hidden="true" />
@@ -58,6 +59,39 @@ function SettingsPage() {
           <p role="status" aria-live="polite" className="status">
             {saved ? t`Opgeslagen` : ""}
           </p>
+        </section>
+      ) : null}
+      {settings.data ? (
+        <section className="panel panel-pad" aria-labelledby="settings-summary">
+          <h2 id="settings-summary">{t`Samenvattingen`}</h2>
+          <RadioGroup
+            className="choice form-narrow"
+            value={settings.data.summary_language ?? "nl"}
+            isDisabled={save.isPending}
+            onChange={(next) => {
+              if (!isLocale(next)) return;
+              setSaved(false);
+              save.mutate({ summary_language: next });
+            }}
+          >
+            <Label className="choice-label">{t`Taal van de samenvatting en de taken die AI maakt`}</Label>
+            <div className="cards cards-stack">
+              {LOCALES.map((locale) => (
+                <Radio
+                  key={locale}
+                  value={locale}
+                  className="card"
+                  aria-label={LANGUAGE_NAMES[locale]}
+                >
+                  <span className="card-top" aria-hidden="true">
+                    <strong lang={locale}>{LANGUAGE_NAMES[locale]}</strong>
+                    <span className="radio-indicator" />
+                  </span>
+                </Radio>
+              ))}
+            </div>
+          </RadioGroup>
+          <p className="switch-hint">{t`Geldt voor brieven die AI vanaf nu leest. De brief zelf blijft zoals hij is.`}</p>
         </section>
       ) : null}
       <section className="panel panel-pad" aria-labelledby="settings-log">

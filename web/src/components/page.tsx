@@ -17,6 +17,7 @@ import { ApiFailure, api, errorMessage } from "../api/client";
 import { inboxCountsQuery, meQuery, workspacesQuery } from "../api/queries";
 import { resetSearch } from "../search-term";
 import { Icon, type IconName } from "./icons";
+import { LanguageSwitch } from "./language-switch";
 import { NoticeBar } from "./notice-bar";
 import { SearchField } from "./search-field";
 import { initials, MessageBar } from "./ui";
@@ -108,6 +109,7 @@ export function Split({ children, wide = false }: { children: ReactNode; wide?: 
         <p className="split-host">{t`Server: ${window.location.host}`}</p>
       </aside>
       <main className="split-main">
+        <LanguageSwitch />
         <div className={wide ? "split-content wide" : "split-content"}>{children}</div>
       </main>
     </div>
@@ -351,6 +353,10 @@ function AccountMenu({
           <Link to="/account/wachtwoord" className="menu-item">
             <Icon name="edit" />
             {t`Wachtwoord wijzigen`}
+          </Link>
+          <Link to="/account/taal" className="menu-item">
+            <Icon name="globe" />
+            {t`Taal`}
           </Link>
           {me?.is_server_admin ? (
             <Link to="/server/logboek" className="menu-item">

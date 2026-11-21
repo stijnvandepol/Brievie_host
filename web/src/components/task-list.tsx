@@ -2,12 +2,13 @@ import { t } from "@lingui/core/macro";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ApiFailure, api } from "../api/client";
 import type { components } from "../api/schema";
+import { dateFormat } from "../format";
 import { formatLetterDate } from "./document-table";
 import { ErrorAlert } from "./page";
 
 type Task = components["schemas"]["TaskOut"];
 
-const day = new Intl.DateTimeFormat("nl-NL", { dateStyle: "medium" });
+const day = dateFormat({ dateStyle: "medium" });
 
 /** Ticks a task off (`done`) or opens it again; the document and its history reload. */
 function useTick(workspaceId: string) {

@@ -4,13 +4,14 @@ import { useId } from "react";
 import { ApiFailure, api } from "../api/client";
 import { devicesQuery, userDevicesQuery } from "../api/queries";
 import type { components } from "../api/schema";
+import { dateFormat } from "../format";
 import { ConfirmAction } from "./confirm-dialog";
 import { ErrorAlert } from "./page";
 import { Badge, EmptyState, Loading } from "./ui";
 
 type Device = components["schemas"]["DeviceOut"];
 
-const dateTime = new Intl.DateTimeFormat("nl-NL", { dateStyle: "medium", timeStyle: "short" });
+const dateTime = dateFormat({ dateStyle: "medium", timeStyle: "short" });
 
 function DeviceRow({
   device,

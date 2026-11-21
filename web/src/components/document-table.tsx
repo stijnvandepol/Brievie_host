@@ -2,6 +2,7 @@ import { t } from "@lingui/core/macro";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import type { components } from "../api/schema";
+import { dateFormat } from "../format";
 import { LabelChips } from "./label-chip";
 import { SuggestionMark } from "./suggestion-list";
 import { Badge, EmptyState, type Intent, Personas, useMediaQuery } from "./ui";
@@ -10,7 +11,7 @@ type DocumentSummary = components["schemas"]["DocumentSummaryOut"];
 type Person = components["schemas"]["PersonOut"];
 type LabelOut = components["schemas"]["LabelOut"];
 
-const date = new Intl.DateTimeFormat("nl-NL", { dateStyle: "medium" });
+const date = dateFormat({ dateStyle: "medium" });
 
 export function typeLabel(type: string): string {
   switch (type) {

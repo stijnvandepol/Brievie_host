@@ -2023,6 +2023,49 @@ input[type="checkbox"]:checked:disabled {
   justify-content: center;
 }
 
+.split-main {
+  flex-direction: column;
+  gap: var(--s-l);
+}
+
+/* The language switch above the form of the screens before sign-in. */
+.language-switch {
+  align-self: flex-end;
+  display: inline-flex;
+  gap: var(--s-xs);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.language-option {
+  min-height: 32px;
+  padding: 0 var(--s-m);
+  border: 1px solid transparent;
+  border-radius: var(--radius-medium);
+  background: transparent;
+  color: var(--neutral-fg2);
+  font: inherit;
+  font-size: var(--caption-size);
+  cursor: pointer;
+}
+
+.language-option:hover {
+  background: var(--neutral-bg1-hover);
+}
+
+.language-option[aria-pressed="true"] {
+  border-color: var(--neutral-stroke1);
+  background: var(--neutral-bg1);
+  color: var(--neutral-fg1);
+  font-weight: var(--weight-semibold);
+}
+
+.language-option:focus-visible {
+  outline: 2px solid var(--brand-stroke1);
+  outline-offset: 1px;
+}
+
 .split-content {
   width: 100%;
   max-width: 440px;

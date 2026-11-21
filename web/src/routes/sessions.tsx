@@ -7,12 +7,13 @@ import type { components } from "../api/schema";
 import { ConfirmAction } from "../components/confirm-dialog";
 import { ErrorAlert, focusPageHeading, PageHeader, Shell, usePageTitle } from "../components/page";
 import { Badge, Loading } from "../components/ui";
+import { dateFormat } from "../format";
 import { requireUser } from "../guards";
 import { rootRoute } from "./root";
 
 type Session = components["schemas"]["SessionOut"];
 
-const dateTime = new Intl.DateTimeFormat("nl-NL", { dateStyle: "medium", timeStyle: "short" });
+const dateTime = dateFormat({ dateStyle: "medium", timeStyle: "short" });
 
 function methodLabel(method: string): string {
   if (method === "password") return t`Wachtwoord`;

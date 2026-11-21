@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { redirect } from "@tanstack/react-router";
 import { meQuery, setupStatusQuery } from "./api/queries";
+import { isLocale, setLocale } from "./i18n";
 import { resetSearch } from "./search-term";
 
 // Route guards always ask the server (staleTime 0): the answers change when somebody
@@ -17,6 +18,8 @@ export async function requireUser(queryClient: QueryClient) {
     resetSearch();
     throw redirect({ to: "/login" });
   }
+  // The account's own language choice wins over this browser's.
+  if (isLocale(user.language)) setLocale(user.language);
   return user;
 }
 

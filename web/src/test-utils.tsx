@@ -1,10 +1,11 @@
 import { I18nProvider } from "@lingui/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
+import { createMemoryHistory } from "@tanstack/react-router";
 import { render } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import type { components } from "./api/schema";
 import { i18n } from "./i18n";
+import { LocaleRouter } from "./locale-router";
 import { createAppRouter } from "./router";
 import { trackApp } from "./test-apps";
 import { server } from "./test-server";
@@ -72,7 +73,7 @@ export function renderApp(path: string) {
   render(
     <I18nProvider i18n={i18n}>
       <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
+        <LocaleRouter router={router} />
       </QueryClientProvider>
     </I18nProvider>,
   );

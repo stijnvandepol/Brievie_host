@@ -1,6 +1,8 @@
+import "./test-locale";
 import "@testing-library/jest-dom/vitest";
 import { cleanup, configure } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, expect } from "vitest";
+import { setLocale } from "./i18n";
 import { resetSearch } from "./search-term";
 import { settleApps } from "./test-apps";
 import { server } from "./test-server";
@@ -14,6 +16,7 @@ afterEach(async () => {
     );
   }
   cleanup();
+  setLocale("nl");
   resetSearch();
   server.resetHandlers();
   document.cookie = "csrftoken=; Max-Age=0; path=/";

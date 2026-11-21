@@ -8,6 +8,7 @@ import { homeRoute } from "./routes/home";
 import { inboxRoute } from "./routes/inbox";
 import { invitationRoute } from "./routes/invitation";
 import { labelsRoute } from "./routes/labels";
+import { languageRoute } from "./routes/language";
 import { loginRoute } from "./routes/login";
 import { memberDevicesRoute } from "./routes/member-devices";
 import { membersRoute } from "./routes/members";
@@ -35,6 +36,7 @@ const routeTree = rootRoute.addChildren([
   sessionsRoute,
   serverAuditLogRoute,
   passwordRoute,
+  languageRoute,
   workspaceRoute.addChildren([
     inboxRoute,
     postRoute,
