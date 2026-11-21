@@ -306,7 +306,7 @@ def _opened_then_trashed(h: Home) -> tuple[Document, Client]:
     assert _open(admin, h.persons["Bob"]).json()["opened_count"] == 1
     bob = Client()
     bob.force_login(h.bob)
-    r = bob.post(f"/api/v1/workspaces/{h.workspace.id}/documents/{doc.id}/trash")
+    r = bob.post(f"/api/v1/workspaces/{h.workspace.id}/documents/{doc.id}/trash", content_type=JSON)
     assert r.status_code in (200, 201), r.json()
     return doc, admin
 
@@ -327,7 +327,11 @@ def test_a_trashed_letter_under_emergency_access_is_listed_read_only() -> None:
 def test_emergency_access_cannot_restore_from_the_trash() -> None:
     h = home()
     doc, admin = _opened_then_trashed(h)
-    _read_only(admin.post(f"/api/v1/workspaces/{h.workspace.id}/documents/{doc.id}/restore"))
+    _read_only(
+        admin.post(
+            f"/api/v1/workspaces/{h.workspace.id}/documents/{doc.id}/restore", content_type=JSON
+        )
+    )
     assert _trash_state(h, doc) == (True, False)
 
 
