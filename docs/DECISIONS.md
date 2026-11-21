@@ -1738,3 +1738,9 @@ Finance's letter, with the owner as control.
   `assignee_cannot_read` is not built; when one comes, an assignment lapses (or is
   refused) once the assignee may no longer read the letter. A letter purged from the
   trash takes its tasks with it (as the system), so none becomes letterless.
+- **Notice values from a fixed list (Task 18, S 4.14).** `accounts.notices.NOTICE_VALUE_KEYS`
+  names, per notice code, the value keys it may carry; `notify` raises `ValueError` for any
+  other. The union is `workspace`, `person`, `department`, `category`, `count`,
+  `document_id`, `member`, `setting` and `device`: a letter by its id, everything else by
+  a directory name. `device` is added to the plan's list: the existing device notices
+  carry the device's name, which is no letter content.

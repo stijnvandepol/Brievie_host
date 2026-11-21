@@ -4,6 +4,7 @@ shown until you dismiss it."""
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Final
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -62,6 +63,26 @@ MESSAGES: dict[str, Promise] = {
 }
 
 
+# The values each notice may carry (S 4.14). A notice outlives the member's sight of a
+# letter, so none holds letter content: a letter is named by its id, a person, department,
+# workspace or device by its name (a directory, not post). `notify` refuses any other key.
+NOTICE_VALUE_KEYS: Final[dict[str, frozenset[str]]] = {
+    Code.PASSWORD_RESET_CREATED: frozenset(),
+    Code.PASSWORD_RESET_COMPLETED: frozenset(),
+    Code.PASSWORD_RESET_BY_COMMAND: frozenset(),
+    Code.SESSIONS_ENDED: frozenset(),
+    Code.DEVICE_REVOKED: frozenset({"device"}),
+    Code.DEVICE_PAIRED: frozenset({"device"}),
+    Code.SERVER_ADMIN_GRANTED: frozenset(),
+    Code.SERVER_ADMIN_REVOKED: frozenset(),
+    Code.SECOND_FACTOR_CLEARED: frozenset(),
+    Code.EMERGENCY_ACCESS_SWITCHED_ON: frozenset({"workspace"}),
+    Code.EMERGENCY_ACCESS_SWITCHED_OFF: frozenset({"workspace"}),
+    Code.EMERGENCY_ACCESS_USED: frozenset({"count", "person"}),
+    Code.PRIVATE_WITHOUT_READERS: frozenset({"workspace", "document_id"}),
+}
+
+
 class _Values(dict[str, str]):
     """A value a sentence names but the notice lacks reads as empty, never a crash."""
 
@@ -81,9 +102,14 @@ class NoticeView:
 def notify(
     user: User, code: str, *, actor_name: str, values: Mapping[str, str] | None = None
 ) -> None:
-    """Leave `user` a notice that `actor_name` did `code` (values fill in the sentence)."""
+    """Leave `user` a notice that `actor_name` did `code` (values fill in the sentence).
+
+    Only the value keys `NOTICE_VALUE_KEYS` allows for the code: never letter content."""
     if code not in Code.values:
         raise ValueError(f"Unknown account notice code: {code!r}")
+    unknown = sorted(set(values or {}) - NOTICE_VALUE_KEYS[code])
+    if unknown:
+        raise ValueError(f"Account notice {code!r} takes no value {', '.join(unknown)}")
     with transaction.atomic():
         AccountNotice.objects.create(
             user=user, code=code, actor_name=actor_name, values=dict(values or {})
