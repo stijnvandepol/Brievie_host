@@ -113,7 +113,10 @@ def test_it_uses_the_postgres_18_service_and_never_docker_compose() -> None:
     # The same major as the backend job (and so as the image's client, test_deploy_files).
     assert "image: postgres:18\n" in CI
     assert "bash ../deploy/postgres-init/01-roles.sh" in text
-    assert "DATABASE_OWNER_URL: postgres://brievie_owner:ci-owner@localhost:5432/brievie" in text
+    # No literal secret in the file: the role passwords are generated per job and masked.
+    assert "openssl rand -hex 24" in text
+    assert "::add-mask::" in text
+    assert "DATABASE_OWNER_URL=postgres://brievie_owner:$owner@localhost:5432/brievie" in text
     assert "uv sync --frozen" in text
     for forbidden in ("docker compose", "./brievie", "docker run", "make dev"):
         assert forbidden not in text, forbidden
