@@ -296,6 +296,39 @@ def test_activation_only_through_invitation(): ...  # no service but _link_perso
 
 ---
 
+## Slice B3: the AI proposes a new person (owner's answer to Besluit B3: "yes, now")
+
+Ruling: a proposal only, never a person. Its own table (`documents.NewPersonSuggestion`), so
+nothing that reads `DocumentSuggestion` (autopilot, review, rules, the iPhone app) can apply
+or show it; the same rules as every AI output (consent through `provider_for`, BSN masked
+before and refused after).
+
+### Task B3a: the proposal, from the AI to the letter
+
+**Files:** `backend/apps/documents/models.py` (`NewPersonSuggestion`), `documents/migrations/0020_new_person_suggestion.py` (workspace RLS and the child policy of its letter), `apps/pipeline/schema.py` (`nieuwe_personen`), `prompts/extract_nl.txt`, `apps/pipeline/validation.py` (`validate_new_names`, pure), `apps/documents/new_persons.py`, `apps/pipeline/steps.py`, `apps/documents/schemas.py`, `services.py`, `api.py`, `tests/fixtures/extraction_schema.json`
+**Test:** `backend/tests/test_people_new_person_suggestions.py`
+
+- The AI returns at most three names that are in no list; a name is kept only when the
+  letter itself holds it, holds no BSN and is 2–100 characters; confidence capped at 0.8.
+- The pipeline proposes a name nobody has (every person and department, archived ones too,
+  not only the 50 sent to the AI); a name dismissed or accepted on the letter is never
+  proposed on it again; an open proposal stops the autopilot's confirm (whose letter it is,
+  is a question); nothing automatic makes a person.
+- `DocumentOut.new_person_suggestions` (open ones); `acceptNewPersonSuggestion` makes the
+  person through `create_person` (its refusals, `person_created`) and puts the letter on
+  them through `organise`, or takes a person who has the name by now; `dismissNewPersonSuggestion`.
+  Both lock the letter for organising (`require_editable`), members only; a member who
+  cannot see the letter gets `document_not_found`.
+- Commit `feat(people): the AI may propose a person nobody knows yet`.
+
+### Task B3b: the proposal on the letter page
+
+**Files:** `web/src/components/suggestion-list.tsx` (`NewPersonList`), `web/src/routes/document.tsx` (+ tests)
+
+- "Nieuwe persoon?": "Deze brief is voor <naam>. Die persoon staat nog niet in Brievie.", the
+  quote, "Toevoegen als persoon" and "Negeren" (not for read-only members).
+- Commit `feat(web): accept or dismiss the AI's new person on a letter`.
+
 ## Slice C: "Beheerd door" (only when the owner chose B2 "now")
 
 ### Task 11: The column, the helpers, and the proof
@@ -367,7 +400,7 @@ def test_activation_only_through_invitation(): ...  # no service but _link_perso
 ## Not in this plan (and where each hooks in)
 
 - Merging two persons: a later action on the Mensen detail, through `organise` with a preview.
-- AI proposing an unknown name (Besluit B3): new output field in `pipeline/schema.py`, a suggestion kind in `DocumentSuggestion`, shown in the picker of Task 9.
+- (Built after all: Besluit B3, slice B3 above.)
 - E-mailing invitations: no SMTP in Brievie.
 
 ## Self-review

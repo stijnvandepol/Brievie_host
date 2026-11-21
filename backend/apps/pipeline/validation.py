@@ -12,6 +12,8 @@ from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from uuid import UUID
 
+from apps.common.privacy import holds_bsn, mask_bsns
+from apps.common.text import normalise
 from apps.documents.models import Document
 from apps.pipeline.choices import Choice, ExtractionRequest
 from apps.pipeline.schema import ActionOut, ExtractionPayload, InvoiceOut, SourcedDate
@@ -24,6 +26,10 @@ GENERATED = Decimal("0.500")
 # quote need not contain the name, so nothing in the letter proves either.
 CHOICE_CONFIDENCE_CAP = Decimal("0.800")
 MAX_AI_LABELS = 3
+# At most this many unknown names per letter (Mensen, Besluit B3).
+MAX_NEW_NAMES = 3
+NEW_NAME_MIN = 2
+NEW_NAME_MAX = 100
 
 
 @dataclass(frozen=True)
@@ -126,6 +132,53 @@ def validate_choices(
         labels.append(ValidatedChoice("label", known_labels[label.id], "", confidence))
     labels.sort(key=lambda choice: choice.confidence, reverse=True)
     return addressees + labels[:MAX_AI_LABELS], dropped
+
+
+@dataclass(frozen=True)
+class ValidatedNewName:
+    """A name the AI says the letter is for and that is in no list: a proposal only."""
+
+    name: str
+    # `apps.common.text.normalise(name)`.
+    key: str
+    quote: str
+    confidence: Decimal
+
+
+def validate_new_names(payload: ExtractionPayload, text: str) -> list[ValidatedNewName]:
+    """The AI's unknown names that the letter itself holds, at most MAX_NEW_NAMES.
+
+    A name is tidied and BSN-masked; one that holds a BSN, is shorter than NEW_NAME_MIN or
+    longer than NEW_NAME_MAX characters, or is not literally in the letter (the name
+    itself, not only its quote: nothing invented) is dropped, as is a repeat of the same
+    name however written. The quote is kept only when it is in the letter. Confidence is
+    capped at CHOICE_CONFIDENCE_CAP. Whether the workspace knows the name already is for
+    the caller to say: it holds every person, also those not sent to the AI.
+    """
+    found: list[ValidatedNewName] = []
+    seen: set[str] = set()
+    for pick in payload.new_persons:
+        name = " ".join(pick.name.split())
+        if holds_bsn(name) or name != mask_bsns(name):
+            continue
+        key = normalise(name)
+        if not NEW_NAME_MIN <= len(name) <= NEW_NAME_MAX or not key or key in seen:
+            continue
+        if not quote_in_text(name, text):
+            continue
+        quote = (pick.quote or "").strip()
+        seen.add(key)
+        found.append(
+            ValidatedNewName(
+                name=name,
+                key=key,
+                quote=quote if quote_in_text(quote, text) else "",
+                confidence=min(_clamp(pick.confidence), CHOICE_CONFIDENCE_CAP),
+            )
+        )
+        if len(found) == MAX_NEW_NAMES:
+            break
+    return found
 
 
 def _by_alias(choices: tuple[Choice, ...]) -> dict[str, UUID]:

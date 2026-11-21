@@ -189,6 +189,36 @@
         }
       ]
     },
+    "nieuwe_personen": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "bron": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "naam": {
+            "type": "string"
+          },
+          "zekerheid": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "naam",
+          "bron",
+          "zekerheid"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
     "samenvatting_b1": {
       "type": "string"
     }
@@ -199,7 +229,8 @@
     "dagtekening",
     "samenvatting_b1",
     "acties",
-    "factuur"
+    "factuur",
+    "nieuwe_personen"
   ],
   "type": "object"
 }

@@ -16,7 +16,7 @@ from pydantic import ValidationError
 
 from apps.common.errors import ApiError
 from apps.common.privacy import holds_bsn, mask_bsns
-from apps.documents import duplicates, review, suggestions, visibility
+from apps.documents import duplicates, new_persons, review, suggestions, visibility
 from apps.documents.models import LIVE, Document, DocumentSuggestion, Extraction
 from apps.labels.models import Label
 from apps.people.matching import PRESELECT_FROM, PersonNames, match_addressees
@@ -27,7 +27,14 @@ from apps.pipeline.errors import PermanentError
 from apps.pipeline.providers import LLMProvider
 from apps.pipeline.schema import ExtractionPayload
 from apps.pipeline.settings_service import autopilot_in_force, provider_for
-from apps.pipeline.validation import ValidatedChoice, ValidatedValue, validate, validate_choices
+from apps.pipeline.validation import (
+    ValidatedChoice,
+    ValidatedNewName,
+    ValidatedValue,
+    validate,
+    validate_choices,
+    validate_new_names,
+)
 from apps.rules import triggers
 from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
@@ -68,6 +75,7 @@ def run_pipeline(
 
     values: list[ValidatedValue] = []
     choices: list[ValidatedChoice] = []
+    new_names: list[ValidatedNewName] = []
     payload: ExtractionPayload | None = None
     dropped = 0
     day = today()
@@ -75,6 +83,7 @@ def run_pipeline(
         payload = extract(provider, request)
         values = validate(payload, text, today=day)
         choices, dropped = validate_choices(payload, text, request)
+        new_names = validate_new_names(payload, text)
 
     with workspace_context(workspace_id, actor=SYSTEM):
         document = _lock_processing(document_id)
@@ -89,7 +98,7 @@ def run_pipeline(
         # One addressee scope around proposing, applying and confirming: the letter's
         # addressee list and readers are synced once, after all of it.
         with visibility.addressee_scope(document):
-            organised = _organise_guarded(document, text, persons, choices)
+            organised = _organise_guarded(document, text, persons, choices, new_names)
             # When proposing failed, nothing automatic happens: whatever is open is not
             # this run's proposals, and nothing says the persons are right. A person looks.
             in_force = (
@@ -131,6 +140,7 @@ def organise_processed(
     text: str,
     persons: Sequence[PersonNames],
     ai_choices: Sequence[ValidatedChoice],
+    new_names: Sequence[ValidatedNewName] = (),
 ) -> None:
     """Propose labels and addressees for a processed document (design 17).
 
@@ -195,6 +205,8 @@ def organise_processed(
                 origin=DocumentSuggestion.Origin.AI,
                 confidence=choice.confidence,
             )
+    # A name nobody has: a proposal of a new person, never a person (spec M7).
+    new_persons.propose(document, new_names)
     triggers.on_processed(document)
 
 
@@ -299,13 +311,14 @@ def _organise_guarded(
     text: str,
     persons: Sequence[PersonNames],
     ai_choices: Sequence[ValidatedChoice],
+    new_names: Sequence[ValidatedNewName] = (),
 ) -> bool:
     """`organise_processed` in a savepoint; whether it succeeded. When proposing fails,
     its writes are rolled back and the caller still stores what it has (the AI's
     proposals, a failure) and moves the document on, so it never stays `processing`."""
     try:
         with transaction.atomic():
-            organise_processed(document, text, persons, ai_choices)
+            organise_processed(document, text, persons, ai_choices, new_names)
     except Exception as exc:  # noqa: BLE001 - the document must not stay processing
         # The type only: an exception message may quote the document.
         logger.error(
@@ -380,6 +393,9 @@ def _confirm_guarded(
         with transaction.atomic():
             data = decide_confirmation(payload=payload, values=values, text=text, today=today)
             if data is None or (organised and _has_open_addressee_proposal(document)):
+                return False
+            # The AI says the letter is for somebody nobody knows: a person decides.
+            if new_persons.has_open(document):
                 return False
             review.confirm_automatically(document, data)
     except ApiError:

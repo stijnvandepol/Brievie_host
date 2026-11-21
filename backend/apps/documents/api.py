@@ -408,6 +408,55 @@ def dismiss_suggestion(
     return services.document_out_for(document)
 
 
+@router.post(
+    "/workspaces/{workspace_id}/documents/{document_id}/new-person-suggestions/{suggestion_id}/accept",
+    response={
+        200: DocumentOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        422: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+    },
+    operation_id="acceptNewPersonSuggestion",
+    description=(
+        "Members (not read-only). Make the person the AI proposed (as createPerson does, with "
+        "its refusals) and put the letter on them; when a person with that name exists by "
+        "now, that person. Accepting again changes nothing. 404 suggestion_not_found for a "
+        "dismissed or unknown proposal."
+    ),
+)
+def accept_new_person_suggestion(
+    request: HttpRequest, workspace_id: UUID, document_id: UUID, suggestion_id: UUID
+) -> DocumentOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    document = services.accept_new_person_suggestion(
+        membership=membership,
+        actor=actor_from_request(request),
+        document_id=document_id,
+        suggestion_id=suggestion_id,
+    )
+    return services.document_out_for(document)
+
+
+@router.post(
+    "/workspaces/{workspace_id}/documents/{document_id}/new-person-suggestions/{suggestion_id}/dismiss",
+    response={200: DocumentOut, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS},
+    operation_id="dismissNewPersonSuggestion",
+    description=(
+        "Members (not read-only). Say no to a proposed new person: nobody is made and the "
+        "name is never proposed on this letter again."
+    ),
+)
+def dismiss_new_person_suggestion(
+    request: HttpRequest, workspace_id: UUID, document_id: UUID, suggestion_id: UUID
+) -> DocumentOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    document = services.dismiss_new_person_suggestion(
+        workspace=membership.workspace, document_id=document_id, suggestion_id=suggestion_id
+    )
+    return services.document_out_for(document)
+
+
 @router.put(
     "/workspaces/{workspace_id}/documents/{document_id}/visibility",
     response={

@@ -2366,3 +2366,28 @@ Spec `docs/superpowers/specs/2026-11-21-mensen-en-accounts-design.md`, plan
   (ook: ...)"). Names compare as the server's `normalise` (`web/src/names.ts`).
 - **Words** in `docs/GLOSSARY.md`: Mensen/People and the account states; "persoon" stays
   "person". `docs/SPEC.md` names Mensen where Leden stood.
+
+### Mensen, the AI proposes a new person (Besluit B3, plan Tasks B3a and B3b)
+
+- **Its own table, `documents.NewPersonSuggestion`.** CLAUDE.md's "A label or addressee
+  proposal is a `DocumentSuggestion`" stays true: this proposes to *make* a person, not to
+  put an existing one on a letter. In `DocumentSuggestion` it would have needed a third
+  action with neither label nor person, which `SuggestionOut` (read by the iPhone app),
+  the autopilot, the review and `target_id_of` cannot read; in its own table none of them
+  can ever apply or show it (M7 by construction). Same shape: one row per name per
+  letter, `dismissed` is the letter's memory of "no", nothing automatic repeats it.
+- **What the AI's name must be.** In the letter itself (the name, not only its quote),
+  no BSN (raw or masked), 2–100 characters, at most three per letter, confidence capped at
+  0.8 like every pick. Known is any person or department of the workspace, archived ones
+  included (a name taken there would be refused on accept), not only the 50 the AI sees.
+- **An open new-person proposal stops the autopilot's confirm**, like an open duplicate
+  pair: the AI itself says the letter is for somebody nobody knows. — Cost if wrong: such
+  a letter waits for a person instead of being confirmed.
+- **Accepting is a human's act by the normal paths.** `create_person` (its rules, the BSN
+  refusal, `person_created` with the member as actor) and `organise.add_addressee` (origin
+  suggestion) in one transaction, after the letter is locked for organising
+  (`require_editable`). A person who has the name by now is taken instead of a second one.
+  Members only (403 for read-only), device tokens as for the other proposals.
+- **Consent and privacy as for every AI output.** The name comes only from a run under the
+  recorded consent (`provider_for`); the text sent is BSN-masked; the stored name and quote
+  are masked again; the row is readable only with its letter (child policy).

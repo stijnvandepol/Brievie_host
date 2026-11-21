@@ -597,6 +597,55 @@ class DocumentSuggestion(WorkspaceModel):
         return f"{self.document_id} {self.action} {self.state}"
 
 
+class NewPersonSuggestion(WorkspaceModel):
+    """The AI's proposal that a letter is for somebody the workspace does not know yet
+    ("Deze brief is voor M. Jansen; die ken ik nog niet"), one row per name per letter.
+
+    Only a proposal (spec M7, Besluit B3): a person is made only when a member accepts it.
+    Its own table, so nothing that reads `DocumentSuggestion` (the autopilot, the review,
+    the iPhone app) can apply it or show it as an addressee. A `dismissed` row is the
+    letter's memory of "no": the name is never proposed on this letter again. Readable only
+    with its letter (`rls.restrict_to_visible_documents`).
+    """
+
+    same_workspace_fields = ("document", "person")
+
+    class State(models.TextChoices):
+        OPEN = "open"
+        ACCEPTED = "accepted"
+        DISMISSED = "dismissed"
+
+    document = models.ForeignKey(
+        Document, on_delete=models.CASCADE, related_name="new_person_suggestions"
+    )
+    # The name as the letter writes it: tidied, BSN-masked, never holding a BSN.
+    name = models.CharField(max_length=150)
+    # `apps.common.text.normalise(name)`: the same name however it is written.
+    name_key = models.CharField(max_length=150)
+    # The words in the letter that led to it. BSN-masked.
+    quote = models.TextField(blank=True, default="")
+    confidence = models.DecimalField(max_digits=4, decimal_places=3, default=Decimal("0"))
+    state = models.CharField(max_length=20, choices=State.choices, default=State.OPEN)
+    # The person a member made (or chose) by accepting it.
+    person = models.ForeignKey(
+        "people.Person", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+
+    class Meta:
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["document", "name_key"], name="documents_newpersonsuggestion_unique"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(confidence__gte=0) & models.Q(confidence__lte=1),
+                name="documents_newpersonsuggestion_confidence_range",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.document_id} new person {self.state}"
+
+
 class DuplicateCandidate(WorkspaceModel):
     """Two letters that are probably one letter scanned twice: one row per pair, ever.
 

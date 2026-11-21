@@ -50,6 +50,13 @@ class AddresseePick(_Model):
     confidence: float = Field(alias="zekerheid")
 
 
+class NewNameOut(_Model):
+    # A name the letter is addressed to that is not in the list of persons.
+    name: str = Field(alias="naam")
+    quote: str | None = Field(alias="bron")
+    confidence: float = Field(alias="zekerheid")
+
+
 class LabelPick(_Model):
     # An alias from the request's list of labels: L1, L2, ...
     id: str
@@ -63,6 +70,9 @@ class ExtractionPayload(_Model):
     summary: str = Field(alias="samenvatting_b1")
     actions: list[ActionOut] = Field(alias="acties")
     invoice: InvoiceOut | None = Field(alias="factuur")
+    # Who the letter is for when that is nobody in the list (Mensen, Besluit B3): only ever
+    # a proposal. Absent in answers of before it was asked.
+    new_persons: list[NewNameOut] = Field(default_factory=list, alias="nieuwe_personen")
     # Absent when the request had no list to choose from (and in 1b answers).
     addressees: list[AddresseePick] = Field(default_factory=list, alias="op_naam_van")
     labels: list[LabelPick] = Field(default_factory=list, alias="labels")
@@ -81,6 +91,7 @@ def json_schema(request: ExtractionRequest | None = None) -> dict[str, object]:
     result = cast(dict[str, object], _inline(schema, definitions))
     properties = cast(dict[str, dict[str, object]], result["properties"])
     required = cast(list[str], result["required"])
+    properties["nieuwe_personen"].pop("default", None)
     lists: dict[str, tuple[Choice, ...]] = {
         "op_naam_van": request.persons if request else (),
         "labels": request.labels if request else (),

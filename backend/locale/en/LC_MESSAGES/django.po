@@ -1534,6 +1534,10 @@ msgstr "Normal"
 msgid "Privé"
 msgstr "Private"
 
+#: apps/documents/new_persons.py apps/documents/services.py
+msgid "We kunnen dit voorstel niet vinden."
+msgstr "We can't find this suggestion."
+
 #: apps/documents/organise.py
 #, python-format
 msgid "Een document staat op naam van hoogstens %(max)d personen."
@@ -1639,10 +1643,6 @@ msgstr "This document does not need to be processed again."
 #: apps/documents/services.py
 msgid "Dit document kun je niet opnieuw controleren."
 msgstr "You can't check this document again."
-
-#: apps/documents/services.py
-msgid "We kunnen dit voorstel niet vinden."
-msgstr "We can't find this suggestion."
 
 #: apps/documents/upload_limits.py
 msgid "Er zijn net heel veel brieven verstuurd. Wacht even, dan gaat het vanzelf verder."
