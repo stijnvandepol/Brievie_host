@@ -177,7 +177,7 @@ function PersonRow({
     mutationFn: async (userId: string) => {
       const { error } = await api.PUT(
         "/api/v1/workspaces/{workspace_id}/persons/{person_id}/member",
-        { params: { path }, body: { user_id: userId } },
+        { params: { path }, body: { user_id: userId, confirmed: false, preview_token: "" } },
       );
       if (error !== undefined) throw new ApiFailure(error);
     },

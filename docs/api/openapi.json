@@ -557,10 +557,21 @@
       },
       "DepartmentMemberIn": {
         "properties": {
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
           "is_lead": {
             "default": false,
             "title": "Is Lead",
             "type": "boolean"
+          },
+          "preview_token": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Preview Token",
+            "type": "string"
           },
           "user_id": {
             "format": "uuid",
@@ -2055,6 +2066,14 @@
             "title": "Can Manage Account",
             "type": "boolean"
           },
+          "department_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Department Ids",
+            "type": "array"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -2070,6 +2089,11 @@
           "role": {
             "title": "Role",
             "type": "string"
+          },
+          "sorts_post": {
+            "default": false,
+            "title": "Sorts Post",
+            "type": "boolean"
           },
           "user_id": {
             "format": "uuid",
@@ -2088,6 +2112,17 @@
       },
       "MemberRoleIn": {
         "properties": {
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "preview_token": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Preview Token",
+            "type": "string"
+          },
           "role": {
             "enum": [
               "admin",
@@ -2572,6 +2607,17 @@
       },
       "PersonMemberIn": {
         "properties": {
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "preview_token": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Preview Token",
+            "type": "string"
+          },
           "user_id": {
             "format": "uuid",
             "title": "User Id",
@@ -3237,6 +3283,30 @@
           "hit"
         ],
         "title": "SnippetPartOut",
+        "type": "object"
+      },
+      "SortsPostIn": {
+        "properties": {
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "preview_token": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Preview Token",
+            "type": "string"
+          },
+          "sorts_post": {
+            "title": "Sorts Post",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "sorts_post"
+        ],
+        "title": "SortsPostIn",
         "type": "object"
       },
       "SuggestionOut": {
@@ -11019,7 +11089,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/members/{user_id}/role": {
       "put": {
-        "description": "Web session only: a bearer token answers 401 not_authenticated. For the workspace's admins: another role answers 403 forbidden, a workspace the caller is not a member of 404 workspace_not_found. Give a member another role; the member sees it at their next request. 404 member_not_found for somebody who is no member of this workspace; 409 last_admin for demoting the only admin. A demoted admin's open invitations and reset links stop.",
+        "description": "Web session only: a bearer token answers 401 not_authenticated. For the workspace's admins: another role answers 403 forbidden, a workspace the caller is not a member of 404 workspace_not_found. Give a member another role; the member sees it at their next request. 404 member_not_found for somebody who is no member of this workspace; 409 last_admin for demoting the only admin. A demoted admin's open invitations and reset links stop. When somebody gains sight by it (a new admin while admins read all post, a new fallback sorter): 409 confirmation_required without `confirmed`, 409 preview_outdated for an old preview's token (`previewVisibilityChange`). A viewer sorts no post.",
         "operationId": "updateMemberRole",
         "parameters": [
           {
@@ -11151,6 +11221,145 @@
           }
         ],
         "summary": "Update Member Role",
+        "tags": [
+          "workspaces"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/members/{user_id}/sorts-post": {
+      "put": {
+        "description": "Web session only: a bearer token answers 401 not_authenticated. For the workspace's admins: another role answers 403 forbidden, a workspace the caller is not a member of 404 workspace_not_found. \"Verdeelt post\": the member gets the letters nobody else reads, to put a name on them. 404 member_not_found; 422 viewer_cannot_sort; when somebody gains sight: 409 confirmation_required without `confirmed`, 409 preview_outdated for an old preview's token (`previewVisibilityChange`).",
+        "operationId": "updateMemberSortsPost",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SortsPostIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Update Member Sorts Post",
         "tags": [
           "workspaces"
         ]
@@ -12097,7 +12306,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/persons/{person_id}/member": {
       "put": {
-        "description": "Web session only: a bearer token answers 401 not_authenticated. Link the person to a member of the workspace (`user_id`; administrators only), or unlink it (null). A linked person is unlinked only by its own member (409 `cannot_unlink` for anybody else); 409 `cannot_grant_self` for an admin linking themselves to a person with private post; 409 `is_a_department`.",
+        "description": "Web session only: a bearer token answers 401 not_authenticated. Link the person to a member of the workspace (`user_id`; administrators only), or unlink it (null). A linked person is unlinked only by its own member (409 `cannot_unlink` for anybody else); 409 `cannot_grant_self` for an admin linking themselves to a person with private post; 409 `is_a_department`. A link by which somebody gains sight needs `confirmed` and the preview's token (409 `confirmation_required`, `preview_outdated`; see `previewVisibilityChange`).",
         "operationId": "linkPersonToMember",
         "parameters": [
           {
@@ -12236,7 +12445,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/persons/{person_id}/members": {
       "post": {
-        "description": "Web session only. Admins put a member in a department (a grant). 409 `not_a_department`, 409 `cannot_grant_self` (an admin adding themselves where there is private post). A member already in it: 200, unchanged.",
+        "description": "Web session only. Admins put a member in a department (a grant). 409 `not_a_department`, 409 `cannot_grant_self` (an admin adding themselves where there is private post). A member already in it: 200, unchanged. When the member gains sight (departments on, \"Iedereen ziet alle post\" off): 409 `confirmation_required` without `confirmed`, 409 `preview_outdated` for an old preview's token.",
         "operationId": "addDepartmentMember",
         "parameters": [
           {

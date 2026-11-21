@@ -599,15 +599,101 @@ class MemberChange:
     sorts_post: bool = False
 
 
+def _incomplete() -> ApiError:
+    return ApiError(
+        422, "validation_error", _("Zeg om welk lid, welke persoon of welke rol het gaat.")
+    )
+
+
+def _member_step(
+    workspace: Workspace, change: MemberChange, actor: AuditActor
+) -> tuple[Callable[[], object], bool]:
+    """The writer's own step for a planned member change, and whether it narrows."""
+    from apps.people import services as people
+    from apps.workspaces import members
+
+    user_id, person_id = change.user_id, change.person_id
+    if change.kind == "role":
+        if user_id is None or not change.role:
+            raise _incomplete()
+        current = (
+            Membership.objects.filter(workspace=workspace, user_id=user_id)
+            .values_list("role", flat=True)
+            .first()
+        )
+        narrowing = current is not None and Membership.RANK[change.role] < Membership.RANK[current]
+        role = change.role
+        return (
+            lambda: members.change_role(
+                workspace=workspace, user_id=user_id, role=role, actor=actor
+            ),
+            narrowing,
+        )
+    if change.kind == "sorts_post":
+        if user_id is None:
+            raise _incomplete()
+        sorts = change.sorts_post
+        return (
+            lambda: members.set_sorts_post(
+                workspace=workspace, user_id=user_id, sorts_post=sorts, actor=actor
+            ),
+            not sorts,
+        )
+    if change.kind == "remove":
+        if user_id is None:
+            raise _incomplete()
+        return (
+            lambda: members.removal_preview_step(workspace=workspace, user_id=user_id, actor=actor),
+            True,
+        )
+    if person_id is None:
+        raise _incomplete()
+    if change.kind in ("department_add", "department_remove"):
+        if user_id is None:
+            raise _incomplete()
+        if change.kind == "department_add":
+            return (
+                lambda: people.add_department_member(
+                    workspace=workspace, person_id=person_id, user_id=user_id, actor=actor
+                ),
+                False,
+            )
+        return (
+            lambda: people.remove_department_member(
+                workspace=workspace, person_id=person_id, user_id=user_id, actor=actor
+            ),
+            True,
+        )
+    if change.kind == "link" and user_id is None:
+        raise _incomplete()
+    target = user_id if change.kind == "link" else None
+    return (
+        lambda: people.link_member(
+            workspace=workspace,
+            person_id=person_id,
+            user_id=target,
+            actor=actor,
+            actor_role=Membership.Role.ADMIN,
+        ),
+        change.kind == "unlink",
+    )
+
+
 def preview_request(
     *, workspace: Workspace, proposal: Proposal, member_change: MemberChange, actor: AuditActor
 ) -> PreviewResult:
-    """The preview of a settings change, or of a planned member change."""
+    """The preview of a settings change, or of a planned member change (the writer's own
+    step, its refusals included). Admins only, by the endpoint."""
+    if actor.user_id is None:
+        raise _forbidden()
     if not member_change.kind:
-        if actor.user_id is None:
-            raise _forbidden()
         return preview_change(workspace=workspace, proposal=proposal, viewer_id=actor.user_id)
-    raise ApiError(422, "validation_error", _("Deze wijziging kan Brievie nog niet laten zien."))
+    step, narrowing = _member_step(workspace, member_change, actor)
+
+    def apply() -> None:
+        step()
+
+    return preview(workspace, apply, narrowing=narrowing, viewer_id=actor.user_id)
 
 
 def in_words(result: PreviewResult) -> list[Change]:

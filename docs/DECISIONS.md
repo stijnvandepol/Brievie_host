@@ -2056,3 +2056,31 @@ installation starts in own post.
   one `workspace_setting_changed` row per value that really changed, `kind` included, and
   one `workspace_preset_applied`. `add_start_set` adds the kind's labels and rules and
   removes nothing.
+- **Every member change through the same steps (Task 38, S 4.4, 4.7).** `change_role`,
+  `remove_member`, the new `set_sorts_post` ("Verdeelt post", `updateMemberSortsPost`,
+  422 `viewer_cannot_sort`, audit `post_sorter_changed`), `add_department_member`,
+  `remove_department_member` and `link_member` take `lock_memberships` first (people's
+  writers too, instead of the caller's own membership: every change of sight in one lock
+  order, memberships before persons) and run `sight_change`. Making a sorter a viewer
+  clears the flag in the same transaction (with its own `post_sorter_changed` row). A
+  self-grant (an admin adding themselves to a department, linking themselves, flagging
+  themselves) tells the department's other members or the other admins (`self_grant`);
+  the audit rows stay the usual ones.
+- **Removing a member never asks for a confirmation.** S 4.4's row says "no", also when
+  the member was the only flagged sorter and the admins become the sorters; the sorters
+  who gain are told, the member who left is not. `previewVisibilityChange` with
+  `member_change` "remove" runs the removal's sight-moving part only (unlink, forget,
+  membership gone), not the account's deactivation.
+- **Unlinking and leaving a department end the member's own export.** Their export held
+  that person's letters and the department's private letters; it goes with the sight
+  (switching something off ends what ran under it).
+- **Accepting an invitation for a person asks nothing and tells nobody.** The admin
+  confirmed when making the invitation; taking `lock_memberships` there would invert the
+  lock order (invitation before memberships). Cost: the sorters are not told that a
+  person's post is the new member's now.
+- **Confirmation fields on old endpoints.** `updateMemberRole`, `linkPersonToMember` and
+  `addDepartmentMember` take `confirmed` and `preview_token` (defaults `false`, `""`): an
+  older client keeps working wherever nobody gains, and gets 409
+  `confirmation_required` where somebody would. The web sends both as defaults until its
+  preview dialog (Task 42); in an organisation a link or a department member then answers
+  with the 409's sentence. `MemberOut` gains `sorts_post` and `department_ids`.

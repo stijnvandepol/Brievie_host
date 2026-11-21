@@ -1832,6 +1832,10 @@ msgstr "This person is still in use. You can archive the person instead."
 msgid "De regel '%(rule)s' gebruikt deze persoon. Pas die regel eerst aan."
 msgstr "The rule '%(rule)s' uses this person. Change that rule first."
 
+#: apps/people/services.py apps/workspaces/deps.py apps/workspaces/locks.py apps/workspaces/settings_service.py
+msgid "We kunnen deze werkruimte niet vinden."
+msgstr "We can't find this workspace."
+
 #: apps/people/services.py
 msgid "Een afdeling koppel je niet aan één account. Voeg leden toe."
 msgstr "A department is not linked to one account. Add members instead."
@@ -2358,10 +2362,6 @@ msgstr "From version {installed} you cannot go to {target} in one step. First up
 msgid "Van versie {installed} is er geen weg naar {target} met ./brievie update. Lees \"Voor je bijwerkt\" in CHANGELOG.md."
 msgstr "From version {installed} there is no way to {target} with ./brievie update. Read \"Before you update\" in CHANGELOG.md."
 
-#: apps/workspaces/deps.py apps/workspaces/locks.py apps/workspaces/settings_service.py
-msgid "We kunnen deze werkruimte niet vinden."
-msgstr "We can't find this workspace."
-
 #: apps/workspaces/invitations.py
 msgid "Deze persoon is al gekoppeld aan een lid."
 msgstr "This person is already linked to a member."
@@ -2409,6 +2409,10 @@ msgstr "This person has been linked to someone else in the meantime. Ask for a n
 #: apps/workspaces/members.py
 msgid "Een werkruimte heeft altijd minstens één beheerder. Maak eerst iemand anders beheerder."
 msgstr "A workspace always has at least one admin. Make someone else admin first."
+
+#: apps/workspaces/members.py
+msgid "Iemand met Alleen lezen kan geen post verdelen."
+msgstr "Someone with Read only cannot sort post."
 
 #: apps/workspaces/members.py
 msgid "Dit account is serverbeheerder. Alleen een serverbeheerder kan het uit zijn laatste werkruimte halen."
@@ -2591,8 +2595,8 @@ msgid "Kies Thuis of Organisatie."
 msgstr "Choose Home or Business."
 
 #: apps/workspaces/visibility_settings.py
-msgid "Deze wijziging kan Brievie nog niet laten zien."
-msgstr "Brievie cannot show this change yet."
+msgid "Zeg om welk lid, welke persoon of welke rol het gaat."
+msgstr "Say which member, person or role this is about."
 
 #: brievie/api.py
 msgid "De database is niet bereikbaar. Probeer het later opnieuw."

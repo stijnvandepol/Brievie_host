@@ -8,7 +8,7 @@ from apps.accounts.authority import actor_reads_all_post
 from apps.accounts.models import User
 from apps.labels.presets import apply_preset
 from apps.labels.services import create_extra_labels
-from apps.people.models import Person
+from apps.people.models import DepartmentMember, Person
 from apps.people.services import ensure_person_for_member
 from apps.workspaces import access
 from apps.workspaces.context import workspace_context
@@ -66,6 +66,11 @@ def list_members(
     person_ids = dict(
         Person.objects.filter(workspace=workspace).exclude(user=None).values_list("user_id", "id")
     )
+    departments: dict[UUID, list[UUID]] = {}
+    for member_id, department_id in DepartmentMember.objects.filter(
+        workspace=workspace
+    ).values_list("user_id", "department_id"):
+        departments.setdefault(member_id, []).append(department_id)
     rows = Membership.objects.filter(workspace=workspace)
     if user_id is not None:
         rows = rows.filter(user_id=user_id)
@@ -107,6 +112,8 @@ def list_members(
             role=m.role,
             person_id=person_ids.get(m.user_id),
             can_manage_account=may_manage(m),
+            sorts_post=m.sorts_post,
+            department_ids=sorted(departments.get(m.user_id, []), key=str),
         )
         for m in memberships
     ]

@@ -167,11 +167,12 @@ def sight_categories(snapshot: PolicySnapshot, member: MemberFacts) -> frozenset
     return frozenset(categories)
 
 
-_ORDER: Final = {ALL: 0, ALL_AS_ADMIN: 1, DEPARTMENT: 2, PERSON: 3, UNASSIGNED: 4}
+_ORDER: Final = {ALL: 0, ALL_AS_ADMIN: 1, UNASSIGNED: 2, DEPARTMENT: 3, PERSON: 4}
 
 
 def ordered(categories: Iterable[str]) -> tuple[str, ...]:
-    """Broadest first: all, all as admin, departments, persons, unassigned."""
+    """Broadest first: all, all as admin, unassigned (what makes a sorter), departments,
+    persons. A notice names the first."""
     return tuple(sorted(categories, key=lambda c: (_ORDER.get(split_category(c)[0], 9), c)))
 
 

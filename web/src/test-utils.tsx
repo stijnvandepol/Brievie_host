@@ -181,6 +181,7 @@ export const members: components["schemas"]["MemberOut"][] = [
     role: "admin",
     person_id: annaPerson.id,
     can_manage_account: false,
+    sorts_post: false,
   },
   {
     user_id: "b3333333-3333-4333-8333-333333333333",
@@ -188,6 +189,7 @@ export const members: components["schemas"]["MemberOut"][] = [
     role: "member",
     person_id: null,
     can_manage_account: true,
+    sorts_post: false,
   },
 ];
 

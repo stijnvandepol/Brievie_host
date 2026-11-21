@@ -197,7 +197,11 @@ describe("persons", () => {
     // Anna is linked already, so her row has no control.
     expect(screen.getAllByRole("combobox")).toHaveLength(1);
     await user.selectOptions(select, "Bram");
-    await waitFor(() => expect(bodies).toEqual([{ user_id: members[1]?.user_id }]));
+    await waitFor(() =>
+      expect(bodies).toEqual([
+        { user_id: members[1]?.user_id, confirmed: false, preview_token: "" },
+      ]),
+    );
   });
 
   it("has no link control when every member has a person", async () => {

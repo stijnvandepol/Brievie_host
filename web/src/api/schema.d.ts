@@ -1320,9 +1320,29 @@ export interface paths {
         get?: never;
         /**
          * Update Member Role
-         * @description Web session only: a bearer token answers 401 not_authenticated. For the workspace's admins: another role answers 403 forbidden, a workspace the caller is not a member of 404 workspace_not_found. Give a member another role; the member sees it at their next request. 404 member_not_found for somebody who is no member of this workspace; 409 last_admin for demoting the only admin. A demoted admin's open invitations and reset links stop.
+         * @description Web session only: a bearer token answers 401 not_authenticated. For the workspace's admins: another role answers 403 forbidden, a workspace the caller is not a member of 404 workspace_not_found. Give a member another role; the member sees it at their next request. 404 member_not_found for somebody who is no member of this workspace; 409 last_admin for demoting the only admin. A demoted admin's open invitations and reset links stop. When somebody gains sight by it (a new admin while admins read all post, a new fallback sorter): 409 confirmation_required without `confirmed`, 409 preview_outdated for an old preview's token (`previewVisibilityChange`). A viewer sorts no post.
          */
         put: operations["updateMemberRole"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/members/{user_id}/sorts-post": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Member Sorts Post
+         * @description Web session only: a bearer token answers 401 not_authenticated. For the workspace's admins: another role answers 403 forbidden, a workspace the caller is not a member of 404 workspace_not_found. "Verdeelt post": the member gets the letters nobody else reads, to put a name on them. 404 member_not_found; 422 viewer_cannot_sort; when somebody gains sight: 409 confirmation_required without `confirmed`, 409 preview_outdated for an old preview's token (`previewVisibilityChange`).
+         */
+        put: operations["updateMemberSortsPost"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1489,7 +1509,7 @@ export interface paths {
         get?: never;
         /**
          * Link Person To Member
-         * @description Web session only: a bearer token answers 401 not_authenticated. Link the person to a member of the workspace (`user_id`; administrators only), or unlink it (null). A linked person is unlinked only by its own member (409 `cannot_unlink` for anybody else); 409 `cannot_grant_self` for an admin linking themselves to a person with private post; 409 `is_a_department`.
+         * @description Web session only: a bearer token answers 401 not_authenticated. Link the person to a member of the workspace (`user_id`; administrators only), or unlink it (null). A linked person is unlinked only by its own member (409 `cannot_unlink` for anybody else); 409 `cannot_grant_self` for an admin linking themselves to a person with private post; 409 `is_a_department`. A link by which somebody gains sight needs `confirmed` and the preview's token (409 `confirmation_required`, `preview_outdated`; see `previewVisibilityChange`).
          */
         put: operations["linkPersonToMember"];
         post?: never;
@@ -1510,7 +1530,7 @@ export interface paths {
         put?: never;
         /**
          * Add Department Member
-         * @description Web session only. Admins put a member in a department (a grant). 409 `not_a_department`, 409 `cannot_grant_self` (an admin adding themselves where there is private post). A member already in it: 200, unchanged.
+         * @description Web session only. Admins put a member in a department (a grant). 409 `not_a_department`, 409 `cannot_grant_self` (an admin adding themselves where there is private post). A member already in it: 200, unchanged. When the member gains sight (departments on, "Iedereen ziet alle post" off): 409 `confirmation_required` without `confirmed`, 409 `preview_outdated` for an old preview's token.
          */
         post: operations["addDepartmentMember"];
         delete?: never;
@@ -2202,10 +2222,20 @@ export interface components {
         /** DepartmentMemberIn */
         DepartmentMemberIn: {
             /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
+            /**
              * Is Lead
              * @default false
              */
             is_lead: boolean;
+            /**
+             * Preview Token
+             * @default
+             */
+            preview_token: string;
             /**
              * User Id
              * Format: uuid
@@ -3009,6 +3039,8 @@ export interface components {
              * @default false
              */
             can_manage_account: boolean;
+            /** Department Ids */
+            department_ids?: string[];
             /** Name */
             name: string;
             /**
@@ -3019,6 +3051,11 @@ export interface components {
             /** Role */
             role: string;
             /**
+             * Sorts Post
+             * @default false
+             */
+            sorts_post: boolean;
+            /**
              * User Id
              * Format: uuid
              */
@@ -3026,6 +3063,16 @@ export interface components {
         };
         /** MemberRoleIn */
         MemberRoleIn: {
+            /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
+            /**
+             * Preview Token
+             * @default
+             */
+            preview_token: string;
             /**
              * Role
              * @enum {string}
@@ -3267,6 +3314,16 @@ export interface components {
         };
         /** PersonMemberIn */
         PersonMemberIn: {
+            /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
+            /**
+             * Preview Token
+             * @default
+             */
+            preview_token: string;
             /**
              * User Id
              * Format: uuid
@@ -3555,6 +3612,21 @@ export interface components {
             hit: boolean;
             /** Text */
             text: string;
+        };
+        /** SortsPostIn */
+        SortsPostIn: {
+            /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
+            /**
+             * Preview Token
+             * @default
+             */
+            preview_token: string;
+            /** Sorts Post */
+            sorts_post: boolean;
         };
         /** SuggestionOut */
         SuggestionOut: {
@@ -8811,6 +8883,105 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["MemberRoleIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    updateMemberSortsPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SortsPostIn"];
             };
         };
         responses: {

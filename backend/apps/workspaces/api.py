@@ -26,6 +26,7 @@ from apps.workspaces.schemas import (
     MemberChangeOut,
     MemberOut,
     MemberRoleIn,
+    SortsPostIn,
     VisibilityIn,
     VisibilityOut,
     VisibilityPreviewIn,
@@ -264,7 +265,10 @@ def list_members(request: HttpRequest, workspace_id: UUID) -> list[MemberOut]:
     + ADMINS_ONLY
     + " Give a member another role; the member sees it at their next request. 404"
     " member_not_found for somebody who is no member of this workspace; 409 last_admin for"
-    " demoting the only admin. A demoted admin's open invitations and reset links stop.",
+    " demoting the only admin. A demoted admin's open invitations and reset links stop. When"
+    " somebody gains sight by it (a new admin while admins read all post, a new fallback"
+    " sorter): 409 confirmation_required without `confirmed`, 409 preview_outdated for an"
+    " old preview's token (`previewVisibilityChange`). A viewer sorts no post.",
     operation_id="updateMemberRole",
 )
 def update_member_role(
@@ -276,6 +280,43 @@ def update_member_role(
         user_id=user_id,
         role=payload.role,
         actor=actor_from_request(request),
+        confirmed=payload.confirmed,
+        preview_token=payload.preview_token,
+    )
+    viewer = current_user(request)
+    return services.list_members(membership.workspace, viewer=viewer, user_id=user_id)[0]
+
+
+@router.put(
+    "/workspaces/{workspace_id}/members/{user_id}/sorts-post",
+    response={
+        200: MemberOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        422: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    auth=session_auth,
+    description=WEB_SESSION_ONLY
+    + ADMINS_ONLY
+    + ' "Verdeelt post": the member gets the letters nobody else reads, to put a name on'
+    " them. 404 member_not_found; 422 viewer_cannot_sort; when somebody gains sight: 409"
+    " confirmation_required without `confirmed`, 409 preview_outdated for an old preview's"
+    " token (`previewVisibilityChange`).",
+    operation_id="updateMemberSortsPost",
+)
+def update_member_sorts_post(
+    request: HttpRequest, workspace_id: UUID, user_id: UUID, payload: SortsPostIn
+) -> MemberOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
+    members.set_sorts_post(
+        workspace=membership.workspace,
+        user_id=user_id,
+        sorts_post=payload.sorts_post,
+        actor=actor_from_request(request),
+        confirmed=payload.confirmed,
+        preview_token=payload.preview_token,
     )
     viewer = current_user(request)
     return services.list_members(membership.workspace, viewer=viewer, user_id=user_id)[0]

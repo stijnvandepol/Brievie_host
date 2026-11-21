@@ -51,6 +51,9 @@ class PersonIn(InputSchema):
 class PersonMemberIn(InputSchema):
     # The member to link; null unlinks.
     user_id: UUID | None = None
+    # A link by which somebody gains sight needs these (S 4.4): see `previewVisibilityChange`.
+    confirmed: bool = False
+    preview_token: str = Field(default="", max_length=64)
 
 
 class EmergencyAccessUseIn(InputSchema):
@@ -68,6 +71,10 @@ class DepartmentMemberIn(InputSchema):
     user_id: UUID
     # The member leads the department: manages its labels (sees nothing extra).
     is_lead: bool = False
+    # With departments on and "Iedereen ziet alle post" off the member gains sight: the
+    # confirmed preview's token is needed (S 4.4).
+    confirmed: bool = False
+    preview_token: str = Field(default="", max_length=64)
 
 
 class DepartmentMemberUpdateIn(InputSchema):

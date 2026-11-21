@@ -32,6 +32,10 @@ class MemberOut(Schema):
     # Whether the caller may act on this account (reset link, sessions, devices): the
     # rule of apps.accounts.authority.
     can_manage_account: bool = False
+    # "Verdeelt post": the member gets the letters nobody else reads (S 4.1).
+    sorts_post: bool = False
+    # The departments the member is in.
+    department_ids: list[UUID] = Field(default_factory=list)
 
 
 class WorkspaceSettingsOut(Schema):
@@ -80,8 +84,19 @@ class EmergencyAccessOut(Schema):
     enabled: bool
 
 
-class MemberRoleIn(InputSchema):
+class ConfirmedIn(InputSchema):
+    # A change by which somebody gains sight needs these (S 4.4): the admin confirmed,
+    # with the token of the preview (`previewVisibilityChange`) that was confirmed.
+    confirmed: bool = False
+    preview_token: str = Field(default="", max_length=64)
+
+
+class MemberRoleIn(ConfirmedIn):
     role: Literal["admin", "member", "viewer"]
+
+
+class SortsPostIn(ConfirmedIn):
+    sorts_post: bool
 
 
 class InvitationIn(InputSchema):
