@@ -1447,6 +1447,10 @@ msgstr "We can't find this document."
 msgid "Dit document kun je nu niet bevestigen."
 msgstr "You can't confirm this document right now."
 
+#: apps/documents/review.py
+msgid "Het bedrag klopt niet. Schrijf het als 1234,56."
+msgstr "That amount is not valid. Write it as 1234.56."
+
 #: apps/documents/review.py apps/rules/definition.py
 msgid "Dit soort document kennen we niet."
 msgstr "We don't know this kind of document."

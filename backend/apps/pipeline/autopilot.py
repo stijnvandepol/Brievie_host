@@ -422,8 +422,14 @@ def _task(
     text = description.strip()
     if code is None or not text or len(text) > _MAX_DESCRIPTION:
         return None
+    amount = _quoted_amount(values) if code == Task.Type.PAY else ""
     if not (deadline_value or "").strip():
-        return TaskIn(type=code, description=text, deadline_source=Task.DeadlineSource.MANUAL)
+        return TaskIn(
+            type=code,
+            description=text,
+            deadline_source=Task.DeadlineSource.MANUAL,
+            amount=amount,
+        )
     found = _best(values, "action_deadline", group)
     if found is None or found.confidence < NEEDS_ATTENTION_BELOW:
         return None
@@ -436,7 +442,20 @@ def _task(
         deadline=deadline,
         deadline_source=Task.DeadlineSource.IN_DOCUMENT,
         deadline_quote=found.quote,
+        amount=amount,
     )
+
+
+_PLAIN_AMOUNT = re.compile(r"[0-9]{1,10}\.[0-9]{2}")
+
+
+def _quoted_amount(values: Sequence[ValidatedValue]) -> str:
+    """The invoice's amount for a payment, only when its quote holds it (the validation
+    gives zero confidence otherwise): "1234.56", else empty."""
+    found = _best(values, "invoice_amount_incl", 0)
+    if found is None or found.confidence <= 0 or not _PLAIN_AMOUNT.fullmatch(found.value):
+        return ""
+    return found.value
 
 
 def _best(values: Sequence[ValidatedValue], field: str, group: int) -> ValidatedValue | None:

@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import ClassVar
 
 from django.conf import settings
@@ -94,3 +95,9 @@ class Task(WorkspaceModel):
 
     def __str__(self) -> str:
         return f"{self.type}: {self.description}"
+
+
+def amount_text(amount: Decimal | None) -> str:
+    """An amount as the API sends it: a decimal string with two places, empty when unknown
+    (a nullable decimal would render as `anyOf` in the contract, MT8)."""
+    return "" if amount is None else f"{amount:.2f}"

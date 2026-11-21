@@ -2908,6 +2908,12 @@
       },
       "TaskIn": {
         "properties": {
+          "amount": {
+            "default": "",
+            "maxLength": 20,
+            "title": "Amount",
+            "type": "string"
+          },
           "deadline": {
             "format": "date",
             "title": "Deadline",
@@ -3023,6 +3029,24 @@
       },
       "TaskOut": {
         "properties": {
+          "amount": {
+            "default": "",
+            "title": "Amount",
+            "type": "string"
+          },
+          "assigned_to_id": {
+            "format": "uuid",
+            "title": "Assigned To Id",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "assigned_to_name": {
+            "default": "",
+            "title": "Assigned To Name",
+            "type": "string"
+          },
           "completed_at": {
             "format": "date-time",
             "title": "Completed At",
@@ -3063,6 +3087,11 @@
           },
           "status": {
             "title": "Status",
+            "type": "string"
+          },
+          "term_quote": {
+            "default": "",
+            "title": "Term Quote",
             "type": "string"
           },
           "type": {

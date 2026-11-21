@@ -3143,6 +3143,11 @@ export interface components {
         /** TaskIn */
         TaskIn: {
             /**
+             * Amount
+             * @default
+             */
+            amount: string;
+            /**
              * Deadline
              * Format: date
              */
@@ -3205,6 +3210,21 @@ export interface components {
         /** TaskOut */
         TaskOut: {
             /**
+             * Amount
+             * @default
+             */
+            amount: string;
+            /**
+             * Assigned To Id
+             * Format: uuid
+             */
+            assigned_to_id?: string | null;
+            /**
+             * Assigned To Name
+             * @default
+             */
+            assigned_to_name: string;
+            /**
              * Completed At
              * Format: date-time
              */
@@ -3232,6 +3252,11 @@ export interface components {
             id: string;
             /** Status */
             status: string;
+            /**
+             * Term Quote
+             * @default
+             */
+            term_quote: string;
             /** Type */
             type: string;
         };
