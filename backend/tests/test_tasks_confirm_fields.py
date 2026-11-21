@@ -46,14 +46,15 @@ def _tasks(workspace: Workspace) -> list[Task]:
 
 
 def _undated(**changes: object) -> dict[str, object]:
-    return task(
+    body = task(
         type="object",
         description="Maak bezwaar",
         deadline=None,
         deadline_source="manual",
         deadline_quote="",
-        **changes,
     )
+    body.update(changes)
+    return body
 
 
 TEXT = "Belastingdienst\nDatum 3 november 2026\nU moet € 1.234,56 betalen vóór 1 december 2026."

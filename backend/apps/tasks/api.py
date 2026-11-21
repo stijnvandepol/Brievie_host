@@ -4,7 +4,7 @@ from django.http import HttpRequest
 from ninja import Router
 
 from apps.accounts.services import current_user
-from apps.common.schemas import AUTH_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
+from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.tasks import assignment, services
 from apps.tasks.schemas import (
     AssignIn,
@@ -105,7 +105,7 @@ def reopen_task(request: HttpRequest, workspace_id: UUID, task_id: UUID) -> Task
 
 @router.post(
     f"{_TASK}/assign",
-    response={200: TaskItemOut, 404: ErrorOut, 422: ErrorOut, **SESSION_WRITE_ERRORS},
+    response={200: TaskItemOut, 404: ErrorOut, **SESSION_WRITE_ERRORS, **BODY_ERRORS},
     operation_id="assignTask",
     description=(
         "Give the task to a member who can read its letter (`user_id`), or take it back "
@@ -150,7 +150,7 @@ def list_task_assignees(
 
 @router.post(
     f"{_TASK}/deadline",
-    response={200: TaskItemOut, 404: ErrorOut, 422: ErrorOut, **SESSION_WRITE_ERRORS},
+    response={200: TaskItemOut, 404: ErrorOut, **SESSION_WRITE_ERRORS, **BODY_ERRORS},
     operation_id="setTaskDeadline",
     description=(
         '"Datum invullen": the date the letter names, filled in by hand (`deadline`; null '

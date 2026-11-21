@@ -183,7 +183,10 @@ def test_nightly_check_repairs_a_hand_damaged_array(
     assert stored(ws_a, document) == []
     (line,) = [r for r in caplog.records if r.getMessage().startswith("Visibility check")]
     assert line.levelno == logging.WARNING
-    assert line.getMessage() == "Visibility check: 1 addressee lists and 0 reader rows differed"
+    assert line.getMessage() == (
+        "Visibility check: 1 addressee lists and 0 reader rows differed;"
+        " 0 task assignments released"
+    )
     assert str(stray) not in caplog.text
 
 
