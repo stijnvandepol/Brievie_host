@@ -2229,3 +2229,26 @@ M5), and two gaps the server still had.
   generated types; empty means none). "Zo is Brievie nu ingesteld" lists the next steps;
   "Back-up instellen" is a server command (`./brievie backup --init`), not a link.
   **Merge point M5.**
+
+### Security review of PR #40 (2026-11-21)
+
+- **Making a letter private keeps only the shares sent (point 1).** `setDocumentVisibility`
+  with `restricted` on a letter that is not private now sets its shares to exactly those
+  sent, besides the scanner and the caller (who stay readers, as the dialog says); an
+  earlier share not sent again ends with a `share_removed` line. The dialog starts from
+  the current shares and names the scanner and the members of the letter's departments.
+  Cost: an older client that makes a shared letter private with an empty list ends those
+  shares, which is what it asked for.
+- **Lock order of the invitation writers (point 2):** memberships, then the invitation,
+  then the person (accepting: the invitation, the account, the person). The confirmation
+  check of a person invitation reads the person without a lock; `_issue` locks it.
+- **A department is never invited (point 3).** `invitable_person` and `_link_person` take
+  `kind` person only (404 `person_not_found`); the dialog leaves departments out. Accepting
+  such an invitation would have failed with a server error (a department has no account),
+  not linked the department as the review assumed.
+- **A change of sight refreshes the workspace's cache (point 4).** `useSightChange` and the
+  Afdelingen dialogs invalidate everything under `["workspaces", id]`. Wie ziet wat already
+  did through the workspaces list key, a prefix of every workspace query.
+- **Texts (point 5).** A department's label is offered to its members and the admins; whoever
+  sees a letter with it sees the label. Admins who do not read all post still get unnamed
+  post while nobody sorts it, and other post through emergency access.
