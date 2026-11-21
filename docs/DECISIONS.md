@@ -2125,10 +2125,16 @@ installation starts in own post.
   another workspace or a changed state: 409 `preview_outdated`.
 - **An invitation moves sight like a member change (finding 1).** `createInvitation` with
   role admin takes the memberships' lock (before the invitation, the lock order) and,
-  when the new admin would gain sight at that moment (all post while "Beheerders lezen
-  alle post" is on, or the unnamed post as a fallback sorter), needs the confirmed
-  preview of `member_change` "invite_admin" (`confirmed`, `preview_token`, defaults
-  `false`, `""`; the preview adds a placeholder admin inside its rolled-back savepoint).
+  when the admin role would give the newcomer more sight than the same invitation as a
+  member (all post while "Beheerders lezen alle post" is on, or the unnamed post as a
+  fallback sorter while nobody is flagged), needs the confirmed preview of
+  `member_change` "invite_admin" (`confirmed`, `preview_token`, defaults `false`, `""`;
+  the preview lets a placeholder join as a member and shows what making it admin
+  changes, all rolled back; the token is over the state without the placeholder). A
+  Thuis workspace never asks. Consequence: in a fresh Organisatie (admins do not read
+  all post, nobody flagged) every admin invitation needs the confirmation, as a
+  promotion to admin does since Task 38; the web answers 409 there until its dialog
+  (Task 42).
   Accepting an invitation now tells, inside its transaction, everybody whose sight changed
   at that moment (`admins_read_all_on` to every member when an admin joins while admins
   read all post; `sight_narrowed` to the sorters who no longer get the person's post);

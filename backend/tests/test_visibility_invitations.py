@@ -157,3 +157,28 @@ def test_accepting_an_invitation_for_a_person_ends_the_sorters_assignments(
     assert AccountNotice.objects.filter(
         user=o.sorter, code="sight_narrowed", values__person="Jan"
     ).exists()
+
+
+@pytest.mark.parametrize(
+    ("state", "widens"),
+    [
+        ({"e": True, "d": False, "a": True, "s": False}, False),  # Thuis: everyone sees all
+        ({"e": False, "d": True, "a": False, "s": False}, True),  # a fallback sorter more
+        ({"e": False, "d": True, "a": True, "s": False}, True),  # admins read all post
+        ({"e": False, "d": True, "a": False, "s": True}, False),  # Sandra sorts
+    ],
+)
+def test_the_preview_and_the_invitation_agree(
+    client: Client, state: dict[str, bool], widens: bool
+) -> None:
+    """Only what the admin role adds beyond a member invitation counts."""
+    o = office()
+    o.state(**state)
+    client.force_login(o.admin)
+    preview = _preview_invite(client, o)
+    assert preview["needs_confirmation"] is widens
+    changes = preview["changes"]
+    assert isinstance(changes, list)
+    assert {c["name"] for c in changes} <= {"Nieuwe beheerder"}
+    status, body = _invite(client, o, role="admin", email="nina@example.nl")
+    assert status == (409 if widens else 201), body

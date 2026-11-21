@@ -526,6 +526,7 @@ def preview(
     narrowing: bool,
     actor_id: UUID | None,
     change: str,
+    token_state: PolicySnapshot | None = None,
 ) -> PreviewResult:
     """Run `apply` (a change of sight) inside a savepoint that is rolled back, and say
     what it would do: who gains and who loses, how many letters the admin can read
@@ -554,7 +555,10 @@ def preview(
         needs_confirmation=needs_confirmation(changes, before=before, narrowing=narrowing),
         sentences=sentences,
         preview_token=confirmation_token(
-            workspace_id=workspace.id, actor_id=actor_id, change=change, before=before
+            workspace_id=workspace.id,
+            actor_id=actor_id,
+            change=change,
+            before=before if token_state is None else token_state,
         ),
         after=after,
     )
@@ -740,8 +744,6 @@ def _member_step(
     from apps.workspaces import members
 
     user_id, person_id = change.user_id, change.person_id
-    if change.kind == "invite_admin":
-        return (lambda: _placeholder_admin(workspace), False)
     if change.kind == "role":
         if user_id is None or not change.role:
             raise _incomplete()
@@ -818,30 +820,58 @@ def _member_step(
     )
 
 
-def _placeholder_admin(workspace: Workspace) -> None:
-    """An invited admin as if they had joined, for the preview only (rolled back)."""
-    user = User.objects.create(email=f"{uuid4()}@preview.invalid", name=_("Nieuwe beheerder"))
-    Membership.objects.create(user=user, workspace=workspace, role=Membership.Role.ADMIN)
-
-
-def invited_admin_changes(workspace: Workspace) -> tuple[PolicySnapshot, list[Change]]:
-    """What an admin who joins now would change (pure: a member added to the snapshot)."""
-    before = snapshot(workspace)
+def _with_newcomer(policy: PolicySnapshot, role: str) -> PolicySnapshot:
     newcomer = MemberFacts(
         user_id=UUID(int=0),
         name="",
-        role=Membership.Role.ADMIN,
+        role=role,
         sorts_post=False,
         person_ids=frozenset(),
         department_ids=frozenset(),
     )
-    after = PolicySnapshot(
-        switches=before.switches,
-        members=(*before.members, newcomer),
-        person_names=before.person_names,
-        department_names=before.department_names,
+    return PolicySnapshot(
+        switches=policy.switches,
+        members=(*policy.members, newcomer),
+        person_names=policy.person_names,
+        department_names=policy.department_names,
     )
-    return before, diff(before, after)
+
+
+def invited_admin_changes(workspace: Workspace) -> tuple[PolicySnapshot, list[Change]]:
+    """What inviting an admin changes beyond inviting a member (pure): the state now, and
+    the difference between the newcomer joining as a member and as an admin. Nothing in
+    Thuis (everyone sees all anyway); with admins reading all post, all post; with nobody
+    flagged, the unnamed post as a fallback sorter."""
+    before = snapshot(workspace)
+    as_member = _with_newcomer(before, Membership.Role.MEMBER)
+    as_admin = _with_newcomer(before, Membership.Role.ADMIN)
+    return before, diff(as_member, as_admin)
+
+
+def _preview_invite_admin(workspace: Workspace, actor_id: UUID) -> PreviewResult:
+    """The preview of an admin invitation: a placeholder newcomer joins as a member, and
+    the preview shows what making them admin changes; the token is over the state
+    without the placeholder, as `create_invitation` checks it. All rolled back."""
+    real = snapshot(workspace)
+    with transaction.atomic():
+        user = User.objects.create(email=f"{uuid4()}@preview.invalid", name=_("Nieuwe beheerder"))
+        membership = Membership.objects.create(
+            user=user, workspace=workspace, role=Membership.Role.MEMBER
+        )
+
+        def promote() -> None:
+            Membership.objects.filter(id=membership.id).update(role=Membership.Role.ADMIN)
+
+        result = preview(
+            workspace,
+            promote,
+            narrowing=False,
+            actor_id=actor_id,
+            change=member_change_key(MemberChange(kind="invite_admin")),
+            token_state=real,
+        )
+        transaction.set_rollback(True)
+    return result
 
 
 def preview_request(
@@ -853,6 +883,8 @@ def preview_request(
         raise _forbidden()
     if not member_change.kind:
         return preview_change(workspace=workspace, proposal=proposal, actor_id=actor.user_id)
+    if member_change.kind == "invite_admin":
+        return _preview_invite_admin(workspace, actor.user_id)
     step, narrowing = _member_step(workspace, member_change, actor)
 
     def apply() -> None:
