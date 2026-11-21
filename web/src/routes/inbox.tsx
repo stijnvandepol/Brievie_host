@@ -27,6 +27,7 @@ import {
 import { LabelChips } from "../components/label-chip";
 import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
 import { PersonPicker, useSetAddressees } from "../components/person-picker";
+import { PrivateLock } from "../components/private-lock";
 import { SuggestionMark } from "../components/suggestion-list";
 import { Badge, EmptyState, Loading, MessageBar } from "../components/ui";
 import { clearDismissed, isDismissedPending } from "../duplicate-notice";
@@ -113,6 +114,11 @@ function InboxRow({
       <td>
         <span className="cell-badges">
           <LabelChips labels={labels} ids={document.label_ids ?? []} />
+          <PrivateLock
+            visibility={document.visibility}
+            readerNames={document.reader_names}
+            variant="row"
+          />
           <SuggestionMark count={document.open_suggestion_count} />
           {(document.open_duplicate_count ?? 0) > 0 ? (
             <Badge intent="warning">{t`Dubbel?`}</Badge>

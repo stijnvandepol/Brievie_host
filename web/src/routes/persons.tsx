@@ -16,8 +16,14 @@ import {
   TextField,
 } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
-import { membersQuery, personsQuery, visibilityQuery } from "../api/queries";
+import {
+  membersQuery,
+  personsQuery,
+  visibilityQuery,
+  workspaceSettingsQuery,
+} from "../api/queries";
 import type { components } from "../api/schema";
+import { EmergencyDialog } from "../components/emergency-dialog";
 import { ExternalAiNotice } from "../components/external-ai-notice";
 import { Icon } from "../components/icons";
 import { ErrorAlert, focusPageHeading, PageHeader, Shell, usePageTitle } from "../components/page";
@@ -123,7 +129,10 @@ function PersonRow({
   onError,
   onDone,
   sight,
+  onEmergency,
 }: {
+  /** Opens emergency access for this person; only for an admin while it is on. */
+  onEmergency?: () => void;
   workspaceId: string;
   sight: ReturnType<typeof useSightChange>;
   person: Person;
@@ -249,6 +258,16 @@ function PersonRow({
               {isAdmin ? <DeleteButton person={person} onConfirm={() => remove.mutate()} /> : null}
             </>
           ) : null}
+          {onEmergency ? (
+            <Button
+              className="button-text"
+              aria-label={t`Noodtoegang: ${person.display_name}`}
+              onPress={onEmergency}
+            >
+              <Icon name="shield" />
+              {t`Noodtoegang`}
+            </Button>
+          ) : null}
           {canLink ? (
             <select
               className="inline-select"
@@ -320,6 +339,10 @@ function PersonsPage() {
   const members = useQuery(membersQuery(workspace.id));
   const visibility = useQuery(visibilityQuery(workspace.id));
   const sight = useSightChange(workspace.id);
+  const isAdmin = workspace.role === "admin";
+  const settings = useQuery({ ...workspaceSettingsQuery(workspace.id), enabled: isAdmin });
+  const emergencyOn = isAdmin && settings.data?.emergency_access === true;
+  const [emergency, setEmergency] = useState<Person | null>(null);
   const [editing, setEditing] = useState<Editing>(null);
   // While departments are on they have their own page (Afdelingen); off, they are names.
   const shown = (persons.data ?? []).filter(
@@ -371,6 +394,7 @@ function PersonsPage() {
                 <PersonRow
                   key={person.id}
                   sight={sight}
+                  onEmergency={emergencyOn ? () => setEmergency(person) : undefined}
                   workspaceId={workspace.id}
                   person={person}
                   members={members.data ?? []}
@@ -407,6 +431,13 @@ function PersonsPage() {
         </Modal>
       </ModalOverlay>
       {sight.dialog}
+      {emergency ? (
+        <EmergencyDialog
+          workspaceId={workspace.id}
+          person={emergency}
+          onClose={() => setEmergency(null)}
+        />
+      ) : null}
     </Shell>
   );
 }

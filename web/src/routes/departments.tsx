@@ -16,9 +16,15 @@ import {
   TextField,
 } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
-import { membersQuery, personsQuery, visibilityQuery } from "../api/queries";
+import {
+  membersQuery,
+  personsQuery,
+  visibilityQuery,
+  workspaceSettingsQuery,
+} from "../api/queries";
 import type { components } from "../api/schema";
 import { ConfirmAction } from "../components/confirm-dialog";
+import { EmergencyDialog } from "../components/emergency-dialog";
 import { Icon } from "../components/icons";
 import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
 import { Badge, CheckRow, EmptyState, Loading } from "../components/ui";
@@ -323,6 +329,12 @@ function DepartmentsPage() {
   const [making, setMaking] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(undefined);
+  const [emergency, setEmergency] = useState<Person | null>(null);
+  const settings = useQuery({
+    ...workspaceSettingsQuery(workspace.id),
+    enabled: workspace.role === "admin",
+  });
+  const emergencyOn = workspace.role === "admin" && settings.data?.emergency_access === true;
   const kind = visibility.data?.kind ?? "business";
   const title = departmentsTitle(kind);
   usePageTitle(title);
@@ -432,6 +444,16 @@ function DepartmentsPage() {
                       </Link>
                       {isAdmin ? (
                         <>
+                          {emergencyOn ? (
+                            <Button
+                              className="button-text"
+                              aria-label={t`Noodtoegang: ${department.display_name}`}
+                              onPress={() => setEmergency(department)}
+                            >
+                              <Icon name="shield" />
+                              {t`Noodtoegang`}
+                            </Button>
+                          ) : null}
                           <Button
                             className="button-text"
                             aria-label={t`Leden: ${department.display_name}`}
@@ -493,6 +515,13 @@ function DepartmentsPage() {
         />
       ) : null}
       {sight.dialog}
+      {emergency ? (
+        <EmergencyDialog
+          workspaceId={workspace.id}
+          person={emergency}
+          onClose={() => setEmergency(null)}
+        />
+      ) : null}
     </Shell>
   );
 }

@@ -7,6 +7,7 @@ import type { components } from "../api/schema";
 import { dateFormat } from "../format";
 import { assignWord } from "./hand-over";
 import { LabelChips } from "./label-chip";
+import { PrivateLock } from "./private-lock";
 import { SuggestionMark } from "./suggestion-list";
 import { Badge, EmptyState, type Intent, Personas, useMediaQuery } from "./ui";
 
@@ -262,6 +263,11 @@ export function DocumentTable<D extends DocumentSummary = DocumentSummary>({
               <Addressees persons={persons} ids={document.addressee_ids ?? []} />
               <span className="cell-badges">
                 <LabelChips labels={labels} ids={document.label_ids ?? []} />
+                <PrivateLock
+                  visibility={document.visibility}
+                  readerNames={document.reader_names}
+                  variant="row"
+                />
                 <SuggestionMark count={document.open_suggestion_count} />
                 <AutomaticBadge document={document} />
               </span>
@@ -316,6 +322,11 @@ export function DocumentTable<D extends DocumentSummary = DocumentSummary>({
                     status={document.status}
                     inboxState={document.inbox_state}
                     departments={departments}
+                  />
+                  <PrivateLock
+                    visibility={document.visibility}
+                    readerNames={document.reader_names}
+                    variant="row"
                   />
                   <SuggestionMark count={document.open_suggestion_count} />
                   <AutomaticBadge document={document} />

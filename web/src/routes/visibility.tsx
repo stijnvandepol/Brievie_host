@@ -1,6 +1,6 @@
 import { t } from "@lingui/core/macro";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createRoute, redirect } from "@tanstack/react-router";
+import { createRoute, Link, redirect } from "@tanstack/react-router";
 import { useState } from "react";
 import {
   Button,
@@ -488,6 +488,25 @@ function VisibilityPage() {
               </div>
             </section>
           )}
+          <nav className="panel panel-pad link-row" aria-label={t`Meer over wie wat ziet`}>
+            <Link
+              to="/w/$workspaceId/instellingen"
+              params={{ workspaceId: workspace.id }}
+              hash="prive"
+              className="button secondary"
+            >
+              {t`Privé`}
+            </Link>
+            {data.departments_enabled ? (
+              <Link
+                to="/w/$workspaceId/afdelingen"
+                params={{ workspaceId: workspace.id }}
+                className="button secondary"
+              >
+                {kind === "home" ? t`Groepen` : t`Afdelingen`}
+              </Link>
+            ) : null}
+          </nav>
         </>
       ) : null}
       {presetTarget && data && settings.data ? (

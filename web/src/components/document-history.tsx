@@ -104,6 +104,27 @@ function sentence(
     }
     case "restored":
       return t`Teruggezet uit de prullenbak door ${by}`;
+    // Who reads the letter (private letters, sharing, grants, emergency access).
+    case "made_private":
+      return t`${who} maakte deze brief privé`;
+    case "made_public":
+      return t`${who} maakte deze brief weer zichtbaar: hij is niet meer privé`;
+    case "share_added":
+      return t`${who} deelde deze brief met ${person}`;
+    case "share_removed":
+      return t`${who} haalde ${person} weg bij delen`;
+    case "access_granted": {
+      const grantee = event.note ?? "";
+      return t`${grantee} kan deze brief nu lezen (gekoppeld aan ${person})`;
+    }
+    case "emergency_opened": {
+      const reason = event.note ?? "";
+      return t`${who} opende deze brief met noodtoegang: ${reason}`;
+    }
+    case "private_skipped":
+      return event.note
+        ? event.note
+        : t`Deze brief kon niet privé worden: dan zou niemand hem kunnen lezen. Hij is zichtbaar gebleven.`;
     default:
       return null;
   }
