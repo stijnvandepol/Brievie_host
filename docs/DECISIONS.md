@@ -1937,3 +1937,16 @@ M3). "Iedereen ziet alle post" stays on everywhere until Task 40, so departments
   rolled back and running the policy's condition (`viewers`), so the answer is the
   policy's own. The notice to the people concerned now says "brieven" (not only private
   ones).
+- **The back-up check knows the visibility rules (Task 34, PB T21).** `verify_restore`
+  also checks, in its one read transaction, that the six helper functions exist, that the
+  letter table and every table with a letter key (the task table included) have their
+  three restrictive visibility policies, and that the reader table has `reader_scope`. A
+  back-up from before `workspaces.0007_visibility_functions` is not checked for them. A
+  problem names a table, never a person or a letter. **Merge point M3:** private letters,
+  shares, departments, department labels and emergency access are in; every workspace
+  still has "Iedereen ziet alle post" on, so departments only sort.
+- **Still open: the letter policy arms do not check membership** (recorded above with
+  Task 20). No task of this slice changes the policy; removing a member now also removes
+  their reader rows, shares and department memberships (Task 27), which closes the
+  reader-row arm in practice. Closing it inside the policy stays the owner's call (a
+  policy migration and a new measurement).

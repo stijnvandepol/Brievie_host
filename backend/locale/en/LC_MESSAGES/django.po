@@ -950,6 +950,15 @@ msgid "Zo herstel je Brievie"
 msgstr "How to restore Brievie"
 
 #: apps/backup/verify.py
+msgid "De database mist de functies voor wie welke post ziet."
+msgstr "The database lacks the functions for who sees which post."
+
+#: apps/backup/verify.py
+#, python-format
+msgid "De database mist de regels voor wie welke post ziet in tabel %(table)s."
+msgstr "The database lacks the rules for who sees which post in table %(table)s."
+
+#: apps/backup/verify.py
 #, python-format
 msgid "Pagina %(index)s van document %(document)s in werkruimte %(workspace)s ligt buiten de opslag."
 msgstr "Page %(index)s of document %(document)s in workspace %(workspace)s is outside the storage."
