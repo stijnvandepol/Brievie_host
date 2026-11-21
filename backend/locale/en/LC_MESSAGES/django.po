@@ -2087,6 +2087,14 @@ msgstr "We can't find this task."
 msgid "De status moet open, done of all zijn."
 msgstr "The status must be open, done or all."
 
+#: apps/tasks/services.py
+msgid "Kies mine, to_pick_up of all."
+msgstr "Choose mine, to_pick_up or all."
+
+#: apps/tasks/services.py
+msgid "De status moet open of done zijn."
+msgstr "The status must be open or done."
+
 #: apps/updates/management/commands/check_health.py
 msgid "De server antwoordt niet goed na het bijwerken."
 msgstr "The server does not answer properly after the update."

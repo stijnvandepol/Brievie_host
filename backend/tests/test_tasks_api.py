@@ -78,6 +78,21 @@ def test_list_open_tasks_by_deadline_nulls_last(client_a: Client, ws_a: Workspac
         "sender",
         "updated_at",
         "created_by_ai",
+        # Mijn taken (additive, every one defaulted).
+        "deadline_quote",
+        "term_quote",
+        "needs_deadline",
+        "amount",
+        "days_left",
+        "group",
+        "reason",
+        "for_names",
+        "assigned_to_id",
+        "assigned_to_name",
+        "assigned_by_name",
+        "completed_by_name",
+        "document_type",
+        "can_edit",
     }
 
 

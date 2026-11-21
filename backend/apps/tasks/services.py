@@ -32,6 +32,8 @@ from apps.tasks.models import Task
 from apps.workspaces.models import Membership, Workspace
 
 LIST_MAX = 500
+# What a list row names besides the task: its letter and the people around it.
+TASK_RELATED: Final = ("document", "assigned_to", "assigned_by", "completed_by")
 _STATUSES = (*Task.Status.values, "all")
 
 
@@ -49,7 +51,7 @@ def list_tasks(workspace: Workspace, *, status: str = "open") -> list[Task]:
     tasks = (
         Task.objects.filter(workspace=workspace)
         .filter(Q(document__isnull=True) | Q(document__trashed_at__isnull=True))
-        .select_related("document")
+        .select_related(*TASK_RELATED)
     )
     if status != "all":
         tasks = tasks.filter(status=status)
@@ -93,7 +95,7 @@ def reopen_task(*, workspace: Workspace, user: User, task_id: UUID) -> Task:
 def _get_for_update(workspace: Workspace, task_id: UUID) -> Task:
     task = (
         Task.objects.select_for_update(of=("self",))
-        .select_related("document")
+        .select_related(*TASK_RELATED)
         .filter(workspace=workspace, id=task_id)
         .filter(Q(document__isnull=True) | Q(document__trashed_at__isnull=True))
         .first()
@@ -222,7 +224,7 @@ def my_tasks(membership: Membership, *, part: str = "mine", status: str = "open"
     condition = _part_filter(part, facts)
     if condition is not None:
         tasks = tasks.filter(condition)
-    tasks = tasks.select_related("document", "assigned_to", "assigned_by", "completed_by")
+    tasks = tasks.select_related(*TASK_RELATED)
     if status == Task.Status.OPEN:
         cap = MY_LIST_MAX
         ordered = tasks.order_by(

@@ -1882,6 +1882,81 @@
         "title": "MyExportOut",
         "type": "object"
       },
+      "MyTaskCountsOut": {
+        "properties": {
+          "mine": {
+            "title": "Mine",
+            "type": "integer"
+          },
+          "needs_date": {
+            "title": "Needs Date",
+            "type": "integer"
+          },
+          "overdue": {
+            "title": "Overdue",
+            "type": "integer"
+          },
+          "to_pick_up": {
+            "title": "To Pick Up",
+            "type": "integer"
+          },
+          "within_week": {
+            "title": "Within Week",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "mine",
+          "overdue",
+          "within_week",
+          "needs_date",
+          "to_pick_up"
+        ],
+        "title": "MyTaskCountsOut",
+        "type": "object"
+      },
+      "MyTasksOut": {
+        "properties": {
+          "has_person": {
+            "title": "Has Person",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TaskItemOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "split": {
+            "title": "Split",
+            "type": "boolean"
+          },
+          "today": {
+            "format": "date",
+            "title": "Today",
+            "type": "string"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          },
+          "waiting_letters": {
+            "title": "Waiting Letters",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "today",
+          "has_person",
+          "truncated",
+          "waiting_letters",
+          "split"
+        ],
+        "title": "MyTasksOut",
+        "type": "object"
+      },
       "NoticeOut": {
         "properties": {
           "can_dismiss": {
@@ -2952,6 +3027,34 @@
       },
       "TaskItemOut": {
         "properties": {
+          "amount": {
+            "default": "",
+            "title": "Amount",
+            "type": "string"
+          },
+          "assigned_by_name": {
+            "default": "",
+            "title": "Assigned By Name",
+            "type": "string"
+          },
+          "assigned_to_id": {
+            "format": "uuid",
+            "title": "Assigned To Id",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "assigned_to_name": {
+            "default": "",
+            "title": "Assigned To Name",
+            "type": "string"
+          },
+          "can_edit": {
+            "default": false,
+            "title": "Can Edit",
+            "type": "boolean"
+          },
           "completed_at": {
             "format": "date-time",
             "title": "Completed At",
@@ -2960,10 +3063,22 @@
               "null"
             ]
           },
+          "completed_by_name": {
+            "default": "",
+            "title": "Completed By Name",
+            "type": "string"
+          },
           "created_by_ai": {
             "default": false,
             "title": "Created By Ai",
             "type": "boolean"
+          },
+          "days_left": {
+            "title": "Days Left",
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "deadline": {
             "format": "date",
@@ -2972,6 +3087,11 @@
               "string",
               "null"
             ]
+          },
+          "deadline_quote": {
+            "default": "",
+            "title": "Deadline Quote",
+            "type": "string"
           },
           "deadline_source": {
             "title": "Deadline Source",
@@ -2989,9 +3109,36 @@
               "null"
             ]
           },
+          "document_type": {
+            "default": "",
+            "title": "Document Type",
+            "type": "string"
+          },
+          "for_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "For Names",
+            "type": "array"
+          },
+          "group": {
+            "default": "",
+            "title": "Group",
+            "type": "string"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
+            "type": "string"
+          },
+          "needs_deadline": {
+            "default": false,
+            "title": "Needs Deadline",
+            "type": "boolean"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
             "type": "string"
           },
           "sender": {
@@ -3000,6 +3147,11 @@
           },
           "status": {
             "title": "Status",
+            "type": "string"
+          },
+          "term_quote": {
+            "default": "",
+            "title": "Term Quote",
             "type": "string"
           },
           "type": {
@@ -10325,6 +10477,160 @@
         "summary": "Download My Export",
         "tags": [
           "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/my-tasks": {
+      "get": {
+        "description": "\"Mijn taken\": the caller's tasks, derived from the post they may read. `part` is `mine` (default: given to them, or on their post), `to_pick_up` (an organisation's department and unnamed post; empty at home) or `all` (every task they see). `status` is `open` (default; by deadline, undated last, at most 500) or `done` (completed in the last 30 days, newest first, at most 200). 422 `validation_error` for another part or status.",
+        "operationId": "listMyTasks",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "part",
+            "required": false,
+            "schema": {
+              "default": "mine",
+              "title": "Part",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "default": "open",
+              "title": "Status",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyTasksOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "List My Tasks",
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/my-tasks/counts": {
+      "get": {
+        "description": "The numbers of \"Mijn taken\" for the navigation: open tasks only.",
+        "operationId": "countMyTasks",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyTaskCountsOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Count My Tasks",
+        "tags": [
+          "tasks"
         ]
       }
     },
