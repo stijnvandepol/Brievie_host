@@ -416,6 +416,10 @@ msgstr "Afdelingen"
 msgid "Afdelingen gebruiken"
 msgstr "Afdelingen gebruiken"
 
+#: src/routes/automations.tsx
+msgid "Afdelingen staan uit: deze post gaat nu naar wie post verdeelt."
+msgstr "Afdelingen staan uit: deze post gaat nu naar wie post verdeelt."
+
 #: src/routes/departments.tsx
 msgid "Afdelingen staan uit."
 msgstr "Afdelingen staan uit."
@@ -563,6 +567,12 @@ msgstr "Alleen een beheerder kan regels wijzigen."
 #: src/routes/automations.tsx
 msgid "Alleen leden en beheerders van deze werkruimte zien de regels."
 msgstr "Alleen leden en beheerders van deze werkruimte zien de regels."
+
+#: src/components/role-dialog.tsx
+#: src/routes/home.tsx
+#: src/routes/members.tsx
+msgid "Alleen lezen"
+msgstr "Alleen lezen"
 
 #: src/routes/rule-editor.tsx
 msgid "Alleen om de regel terug te vinden."
@@ -1305,6 +1315,10 @@ msgstr "een actie die deze versie niet kent"
 msgid "Een actie die deze versie van Brievie niet kent. Die blijft zoals hij is."
 msgstr "Een actie die deze versie van Brievie niet kent. Die blijft zoals hij is."
 
+#: src/routes/labels.tsx
+msgid "een afdeling"
+msgstr "een afdeling"
+
 #: src/routes/ai.tsx
 msgid "Een AI die je zelf thuis of op kantoor draait, zoals Ollama. Brievie stuurt de tekst alleen naar een adres op je eigen netwerk."
 msgstr "Een AI die je zelf thuis of op kantoor draait, zoals Ollama. Brievie stuurt de tekst alleen naar een adres op je eigen netwerk."
@@ -1317,9 +1331,17 @@ msgstr "Een AI kan je brieven lezen en voorstellen wat erin staat. Hier zie je o
 msgid "Een AI-dienst op internet"
 msgstr "Een AI-dienst op internet"
 
+#: src/routes/labels.tsx
+msgid "een groep"
+msgstr "een groep"
+
 #: src/components/rule-sentence.ts
 msgid "Een label"
 msgstr "Een label"
+
+#: src/routes/labels.tsx
+msgid "Een label van {departmentWord} zien alleen de mensen die erin zitten, en de beheerders."
+msgstr "Een label van {departmentWord} zien alleen de mensen die erin zitten, en de beheerders."
 
 #: src/routes/automations.tsx
 msgid "Een regel zet labels of een naam op nieuwe post. De regels draaien van boven naar beneden."
@@ -1614,6 +1636,10 @@ msgstr "Groepen"
 msgid "Groepen gebruiken"
 msgstr "Groepen gebruiken"
 
+#: src/routes/automations.tsx
+msgid "Groepen staan uit: deze post gaat nu naar wie post verdeelt."
+msgstr "Groepen staan uit: deze post gaat nu naar wie post verdeelt."
+
 #: src/routes/departments.tsx
 msgid "Groepen staan uit."
 msgstr "Groepen staan uit."
@@ -1696,6 +1722,7 @@ msgid "Huidig wachtwoord"
 msgstr "Huidig wachtwoord"
 
 #: src/components/audit-table.tsx
+#: src/routes/labels.tsx
 #: src/routes/post.tsx
 #: src/routes/search.tsx
 msgid "Iedereen"
@@ -1841,6 +1868,7 @@ msgid "is precies"
 msgstr "is precies"
 
 #. placeholder {0}: member.name
+#: src/routes/members.tsx
 #: src/routes/visibility.tsx
 msgid "Ja, {0} verdeelt post"
 msgstr "Ja, {0} verdeelt post"
@@ -1863,6 +1891,20 @@ msgstr "Ja, iedereen mag alle post zien"
 #: src/routes/persons.tsx
 msgid "Ja, koppel {0} aan {1}"
 msgstr "Ja, koppel {0} aan {1}"
+
+#. placeholder {0}: member.name
+#. placeholder {1}: roleLabel(role)
+#: src/components/role-dialog.tsx
+msgid "Ja, maak {0} {1}"
+msgstr "Ja, maak {0} {1}"
+
+#: src/components/invite-dialog.tsx
+msgid "Ja, maak de uitnodiging"
+msgstr "Ja, maak de uitnodiging"
+
+#: src/routes/members.tsx
+msgid "Ja, maak een nieuwe link"
+msgstr "Ja, maak een nieuwe link"
 
 #. placeholder {0}: member.name
 #. placeholder {1}: department.display_name
@@ -1930,6 +1972,10 @@ msgstr "Je hebt nog geen regels."
 msgid "Je krijgt een link en een QR-code. Wie die opent, maakt een account of logt in en hoort daarna bij deze werkruimte."
 msgstr "Je krijgt een link en een QR-code. Wie die opent, maakt een account of logt in en hoort daarna bij deze werkruimte."
 
+#: src/routes/invitation.tsx
+msgid "Je kunt alleen lezen: je kunt post lezen, maar niets wijzigen."
+msgstr "Je kunt alleen lezen: je kunt post lezen, maar niets wijzigen."
+
 #: src/routes/members.tsx
 msgid "Je kunt daarna niet meer bij {workspaceName}. De post blijft hier voor de andere leden."
 msgstr "Je kunt daarna niet meer bij {workspaceName}. De post blijft hier voor de andere leden."
@@ -1990,10 +2036,6 @@ msgstr "Je wordt hier uitgelogd en gaat naar de inlogpagina."
 msgid "Je wordt lid: je kunt post scannen, controleren en ordenen."
 msgstr "Je wordt lid: je kunt post scannen, controleren en ordenen."
 
-#: src/routes/invitation.tsx
-msgid "Je wordt meekijker: je kunt alles lezen, maar niets wijzigen."
-msgstr "Je wordt meekijker: je kunt alles lezen, maar niets wijzigen."
-
 #: src/components/reset-link-dialog.tsx
 msgid "Je ziet de link maar één keer. Geldig tot {expires}."
 msgstr "Je ziet de link maar één keer. Geldig tot {expires}."
@@ -2015,12 +2057,12 @@ msgid "Jouw account"
 msgstr "Jouw account"
 
 #: src/components/role-dialog.tsx
-msgid "Kan alles lezen, maar niets wijzigen."
-msgstr "Kan alles lezen, maar niets wijzigen."
-
-#: src/components/role-dialog.tsx
 msgid "Kan leden uitnodigen en alles instellen."
 msgstr "Kan leden uitnodigen en alles instellen."
+
+#: src/components/role-dialog.tsx
+msgid "Kan post lezen, maar niets wijzigen."
+msgstr "Kan post lezen, maar niets wijzigen."
 
 #: src/components/role-dialog.tsx
 msgid "Kan post scannen, controleren en ordenen."
@@ -2173,12 +2215,18 @@ msgstr "Label wijzigen"
 #: src/components/document-table.tsx
 #: src/components/label-picker.tsx
 #: src/components/page.tsx
+#: src/routes/departments.tsx
 #: src/routes/document.tsx
 #: src/routes/duplicate.tsx
 #: src/routes/inbox.tsx
 #: src/routes/labels.tsx
 msgid "Labels"
 msgstr "Labels"
+
+#. placeholder {0}: department.display_name
+#: src/routes/departments.tsx
+msgid "Labels: {0}"
+msgstr "Labels: {0}"
 
 #: src/task-time.ts
 msgid "Later"
@@ -2289,11 +2337,6 @@ msgstr "Maak eerst een label."
 #: src/components/rule-sentence.ts
 msgid "Mail"
 msgstr "Mail"
-
-#: src/components/role-dialog.tsx
-#: src/routes/home.tsx
-msgid "Meekijker"
-msgstr "Meekijker"
 
 #: src/components/audit-table.tsx
 #: src/routes/search.tsx
@@ -2496,6 +2539,10 @@ msgstr "Nieuwe uitleg lezen"
 #: src/components/autopilot-panel.tsx
 msgid "Nieuwe uitleg over automatisch verwerken"
 msgstr "Nieuwe uitleg over automatisch verwerken"
+
+#: src/routes/labels.tsx
+msgid "Noem een label niet naar een persoon of een gevoelig onderwerp."
+msgstr "Noem een label niet naar een persoon of een gevoelig onderwerp."
 
 #: src/task-time.ts
 msgid "Nog {daysLeft} dagen ({date})"
@@ -2770,6 +2817,10 @@ msgstr "Privé maken"
 #: src/routes/rule-editor.tsx
 msgid "Privé maken kan alleen in een regel die automatisch werkt. Zet Automatisch toepassen aan, of haal de actie weg."
 msgstr "Privé maken kan alleen in een regel die automatisch werkt. Zet Automatisch toepassen aan, of haal de actie weg."
+
+#: src/routes/labels.tsx
+msgid "Probeer"
+msgstr "Probeer"
 
 #: src/routes/search.tsx
 msgid "Probeer een andere spelling of het begin van het woord."
@@ -3251,6 +3302,7 @@ msgid "Upload"
 msgstr "Upload"
 
 #: src/components/audit-table.tsx
+#: src/routes/labels.tsx
 #: src/routes/search.tsx
 msgid "Van"
 msgstr "Van"
@@ -3267,6 +3319,7 @@ msgstr "Vandaag"
 msgid "Veld"
 msgstr "Veld"
 
+#: src/routes/members.tsx
 #: src/routes/visibility.tsx
 msgid "Verdeelt post"
 msgstr "Verdeelt post"
@@ -3274,6 +3327,11 @@ msgstr "Verdeelt post"
 #: src/components/audit-codes.ts
 msgid "Verdeelt post gewijzigd"
 msgstr "Verdeelt post gewijzigd"
+
+#. placeholder {0}: member.name
+#: src/routes/members.tsx
+msgid "Verdeelt post: {0}"
+msgstr "Verdeelt post: {0}"
 
 #: src/routes/visibility.tsx
 msgid "Verder"

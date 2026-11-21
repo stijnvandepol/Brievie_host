@@ -1,6 +1,6 @@
 import { t } from "@lingui/core/macro";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createRoute } from "@tanstack/react-router";
+import { createRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import {
   Button,
@@ -419,42 +419,54 @@ function DepartmentsPage() {
                   <td>{memberNames(department, members)}</td>
                   <td className="num">{department.document_count}</td>
                   <td className="cell-action">
-                    {isAdmin ? (
-                      <span className="row-actions">
-                        <Button
-                          className="button-text"
-                          aria-label={t`Leden: ${department.display_name}`}
-                          onPress={() => setEditing(department.id)}
-                        >
-                          <Icon name="people" />
-                          {t`Leden`}
-                        </Button>
-                        <Button
-                          className="button-text"
-                          aria-label={
-                            department.archived
-                              ? t`Terugzetten: ${department.display_name}`
-                              : t`Opbergen: ${department.display_name}`
-                          }
-                          onPress={() => archive(department, !department.archived)}
-                        >
-                          <Icon name={department.archived ? "restore" : "archive"} />
-                          {department.archived ? t`Terugzetten` : t`Opbergen`}
-                        </Button>
-                        {department.document_count === 0 ? (
-                          <ConfirmAction
-                            label={t`Verwijderen`}
-                            ariaLabel={t`Verwijderen: ${department.display_name}`}
-                            icon="delete"
-                            title={t`${department.display_name} verwijderen?`}
-                            confirmLabel={t`Verwijderen`}
-                            onConfirm={() => remove(department)}
+                    <span className="row-actions">
+                      <Link
+                        to="/w/$workspaceId/labels"
+                        params={{ workspaceId: workspace.id }}
+                        search={{ van: department.id }}
+                        className="button-text"
+                        aria-label={t`Labels: ${department.display_name}`}
+                      >
+                        <Icon name="tag" />
+                        {t`Labels`}
+                      </Link>
+                      {isAdmin ? (
+                        <>
+                          <Button
+                            className="button-text"
+                            aria-label={t`Leden: ${department.display_name}`}
+                            onPress={() => setEditing(department.id)}
                           >
-                            <p>{t`${department.display_name} wordt verwijderd, met wie erin zit. Dit kun je niet ongedaan maken.`}</p>
-                          </ConfirmAction>
-                        ) : null}
-                      </span>
-                    ) : null}
+                            <Icon name="people" />
+                            {t`Leden`}
+                          </Button>
+                          <Button
+                            className="button-text"
+                            aria-label={
+                              department.archived
+                                ? t`Terugzetten: ${department.display_name}`
+                                : t`Opbergen: ${department.display_name}`
+                            }
+                            onPress={() => archive(department, !department.archived)}
+                          >
+                            <Icon name={department.archived ? "restore" : "archive"} />
+                            {department.archived ? t`Terugzetten` : t`Opbergen`}
+                          </Button>
+                          {department.document_count === 0 ? (
+                            <ConfirmAction
+                              label={t`Verwijderen`}
+                              ariaLabel={t`Verwijderen: ${department.display_name}`}
+                              icon="delete"
+                              title={t`${department.display_name} verwijderen?`}
+                              confirmLabel={t`Verwijderen`}
+                              onConfirm={() => remove(department)}
+                            >
+                              <p>{t`${department.display_name} wordt verwijderd, met wie erin zit. Dit kun je niet ongedaan maken.`}</p>
+                            </ConfirmAction>
+                          ) : null}
+                        </>
+                      ) : null}
+                    </span>
                   </td>
                 </tr>
               ))}

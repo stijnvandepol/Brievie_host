@@ -141,7 +141,7 @@ the request that creates the workspace and keep that name.
 | werkruimte | workspace | |
 | Thuis / Zakelijk (Organisatie) | Home / Business | |
 | lid | member | |
-| meekijker, Alleen lezen | viewer, Read only | Role badge "Viewer". |
+| Alleen lezen (rol; heette meekijker) | Read only | The role `viewer`; its badge says "Read only" (R29). |
 | beheerder | admin | serverbeheerder: server admin. |
 | koppelen / ontkoppelen | pair / unpair | koppelcode: pairing code; koppelgegevens: pairing details; "App koppelen" page: Devices. |
 | apparaat | device | |
