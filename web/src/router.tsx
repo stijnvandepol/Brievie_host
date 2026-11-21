@@ -27,6 +27,7 @@ import { settingsRoute } from "./routes/settings";
 import { setupRoute } from "./routes/setup";
 import { tasksRoute } from "./routes/tasks";
 import { trashRoute } from "./routes/trash";
+import { visibilityRoute } from "./routes/visibility";
 import { workspaceRoute } from "./routes/workspace";
 
 const routeTree = rootRoute.addChildren([
@@ -53,6 +54,7 @@ const routeTree = rootRoute.addChildren([
     memberDevicesRoute,
     settingsRoute,
     auditLogRoute,
+    visibilityRoute,
     labelsRoute,
     automationsRoute,
     aiRoute,

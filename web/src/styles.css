@@ -3313,3 +3313,20 @@ a.menu-item:hover {
   align-items: center;
   margin-top: var(--s-xs);
 }
+
+/* Wie ziet wat: the sentences of a state, and the preview before a change of sight. */
+.sentence-list,
+.preview-list {
+  margin: 0;
+  padding-left: var(--s-l);
+}
+
+.sentence-list li,
+.preview-list li {
+  margin-bottom: var(--s-xs);
+}
+
+.preview-group h3 {
+  margin: var(--s-s) 0 var(--s-xs);
+  font-size: inherit;
+}

@@ -86,6 +86,11 @@ msgid "{0} nodigt je uit voor {1}"
 msgstr "{0} nodigt je uit voor {1}"
 
 #. placeholder {0}: member.name
+#: src/routes/visibility.tsx
+msgid "{0} verdeelt post"
+msgstr "{0} verdeelt post"
+
+#. placeholder {0}: member.name
 #: src/routes/members.tsx
 msgid "{0} verwijderen?"
 msgstr "{0} verwijderen?"
@@ -107,6 +112,10 @@ msgstr "{count, plural, one {# brief geladen, er zijn er meer} other {# brieven 
 msgid "{count, plural, one {# brief gevonden} other {# brieven gevonden}}"
 msgstr "{count, plural, one {# brief gevonden} other {# brieven gevonden}}"
 
+#: src/components/visibility-preview-dialog.tsx
+msgid "{count, plural, one {Dit verandert voor # persoon wat die ziet.} other {Dit verandert voor # mensen wat ze zien.}}"
+msgstr "{count, plural, one {Dit verandert voor # persoon wat die ziet.} other {Dit verandert voor # mensen wat ze zien.}}"
+
 #: src/routes/tasks.tsx
 msgid "{count, plural, one {Er wacht nog # brief op nakijken. Daar kunnen nieuwe taken uit komen.} other {Er wachten nog # brieven op nakijken. Daar kunnen nieuwe taken uit komen.}}"
 msgstr "{count, plural, one {Er wacht nog # brief op nakijken. Daar kunnen nieuwe taken uit komen.} other {Er wachten nog # brieven op nakijken. Daar kunnen nieuwe taken uit komen.}}"
@@ -122,6 +131,10 @@ msgstr "{emptyCount, plural, one {# brief in de prullenbak wordt voorgoed uit Br
 #: src/task-time.ts
 msgid "{late, plural, one {# dag te laat ({date})} other {# dagen te laat ({date})}}"
 msgstr "{late, plural, one {# dag te laat ({date})} other {# dagen te laat ({date})}}"
+
+#: src/components/visibility-preview-dialog.tsx
+msgid "{letters, plural, one {Het gaat om # brief die jij kunt lezen.} other {Het gaat om # brieven die jij kunt lezen.}}"
+msgstr "{letters, plural, one {Het gaat om # brief die jij kunt lezen.} other {Het gaat om # brieven die jij kunt lezen.}}"
 
 #: src/routes/rule-editor.tsx
 msgid "{matched, plural, one {# van de nieuwste {checked} brieven past} other {# van de nieuwste {checked} brieven passen}}"
@@ -147,6 +160,7 @@ msgstr "{name} wordt verwijderd en van 1 brief gehaald. Dit kun je niet ongedaan
 msgid "{name} wordt verwijderd. Wat de regel al heeft gedaan, blijft staan."
 msgstr "{name} wordt verwijderd. Wat de regel al heeft gedaan, blijft staan."
 
+#: src/routes/visibility.tsx
 #: src/task-time.ts
 msgid "{rest} en {last}"
 msgstr "{rest} en {last}"
@@ -253,6 +267,10 @@ msgstr "30 dagen"
 msgid "7 dagen"
 msgstr "7 dagen"
 
+#: src/routes/visibility.tsx
+msgid "aan"
+msgstr "aan"
+
 #: src/components/task-list.tsx
 msgid "Aan {assignee} gegeven"
 msgstr "Aan {assignee} gegeven"
@@ -266,6 +284,10 @@ msgstr "Aan jou gegeven door {0}"
 msgid "Aan wie geef je deze taak?"
 msgstr "Aan wie geef je deze taak?"
 
+#: src/routes/visibility.tsx
+msgid "Aan: {admins} zien alle post die niet privé is. Uit: zij regelen wie wat ziet, maar lezen alleen post die voor hen is."
+msgstr "Aan: {admins} zien alle post die niet privé is. Uit: zij regelen wie wat ziet, maar lezen alleen post die voor hen is."
+
 #: src/routes/rule-editor.tsx
 msgid "Aan: de regel zet het label of de naam er altijd zelf op. Uit: de regel doet een voorstel dat jij bevestigt."
 msgstr "Aan: de regel zet het label of de naam er altijd zelf op. Uit: de regel doet een voorstel dat jij bevestigt."
@@ -273,6 +295,10 @@ msgstr "Aan: de regel zet het label of de naam er altijd zelf op. Uit: de regel 
 #: src/routes/rule-editor.tsx
 msgid "Aan: de regels hieronder slaan een brief over die bij deze past."
 msgstr "Aan: de regels hieronder slaan een brief over die bij deze past."
+
+#: src/routes/visibility.tsx
+msgid "Aan: iedereen in Brievie ziet elke brief, behalve brieven die privé zijn. Uit: je ziet alleen post op je eigen naam en van je afdelingen."
+msgstr "Aan: iedereen in Brievie ziet elke brief, behalve brieven die privé zijn. Uit: je ziet alleen post op je eigen naam en van je afdelingen."
 
 #: src/components/document-table.tsx
 msgid "Aanmaning"
@@ -359,6 +385,10 @@ msgstr "Adres van de AI op je netwerk"
 #: src/routes/setup.tsx
 msgid "Afdelingen"
 msgstr "Afdelingen"
+
+#: src/routes/visibility.tsx
+msgid "Afdelingen gebruiken"
+msgstr "Afdelingen gebruiken"
 
 #: src/routes/duplicate.tsx
 msgid "afgerond"
@@ -531,10 +561,12 @@ msgstr "Als dubbele brief naar de prullenbak verplaatst door {by}"
 #: src/components/deadline-dialog.tsx
 #: src/components/invite-dialog.tsx
 #: src/components/role-dialog.tsx
+#: src/components/visibility-preview-dialog.tsx
 #: src/routes/ai.tsx
 #: src/routes/automations.tsx
 #: src/routes/labels.tsx
 #: src/routes/persons.tsx
+#: src/routes/visibility.tsx
 msgid "Annuleren"
 msgstr "Annuleren"
 
@@ -686,6 +718,10 @@ msgstr "Begin met een voorbeeld hieronder, met de startset, of maak zelf een reg
 #: src/routes/home.tsx
 msgid "Beheerder"
 msgstr "Beheerder"
+
+#: src/routes/visibility.tsx
+msgid "Beheerders lezen alle post"
+msgstr "Beheerders lezen alle post"
 
 #: src/routes/search.tsx
 msgid "Bekijk alle post"
@@ -860,6 +896,10 @@ msgstr "Brievie kon deze brief niet goed lezen. Controleer hem in de app."
 #: src/routes/inbox.tsx
 msgid "Brievie leest deze brief nog. Je hoeft niets te doen."
 msgstr "Brievie leest deze brief nog. Je hoeft niets te doen."
+
+#: src/routes/visibility.tsx
+msgid "Brievie stelt deze instellingen voor. Zet een vinkje uit om iets te houden zoals het is."
+msgstr "Brievie stelt deze instellingen voor. Zet een vinkje uit om iets te houden zoals het is."
 
 #: src/components/autopilot-panel.tsx
 msgid "Brievie zet brieven zelf onder personen en labels."
@@ -1046,6 +1086,10 @@ msgstr "De regel wordt op al je post toegepast, niet alleen op de nieuwste 500."
 msgid "De regel wordt op al je post toegepast."
 msgstr "De regel wordt op al je post toegepast."
 
+#: src/routes/visibility.tsx
+msgid "De serverbeheerder zet noodtoegang aan of uit."
+msgstr "De serverbeheerder zet noodtoegang aan of uit."
+
 #: src/routes/language.tsx
 msgid "De taal van Brievie op deze server en in de app. De inhoud van je brieven blijft zoals hij is."
 msgstr "De taal van Brievie op deze server en in de app. De inhoud van je brieven blijft zoals hij is."
@@ -1169,6 +1213,10 @@ msgstr "deze voorwaarden kloppen"
 msgid "Deze werkruimte gebruikt nu een eigen adres ({0}). Vul dat adres opnieuw in onder Geavanceerd als je het wilt houden."
 msgstr "Deze werkruimte gebruikt nu een eigen adres ({0}). Vul dat adres opnieuw in onder Geavanceerd als je het wilt houden."
 
+#: src/routes/visibility.tsx
+msgid "Dit bepaalt welke standaard Brievie voorstelt. Het verandert zelf niemands rechten."
+msgstr "Dit bepaalt welke standaard Brievie voorstelt. Het verandert zelf niemands rechten."
+
 #: src/routes/member-devices.tsx
 msgid "Dit lid"
 msgstr "Dit lid"
@@ -1278,6 +1326,10 @@ msgstr "Er is al een sleutel opgeslagen. Laat dit leeg om die te houden."
 msgid "Er is iets misgegaan. Probeer het later opnieuw."
 msgstr "Er is iets misgegaan. Probeer het later opnieuw."
 
+#: src/routes/visibility.tsx
+msgid "Er is niemand meer om toe te voegen. Iemand met de rol Alleen lezen kan geen post verdelen."
+msgstr "Er is niemand meer om toe te voegen. Iemand met de rol Alleen lezen kan geen post verdelen."
+
 #: src/routes/post.tsx
 msgid "Er is nog geen post."
 msgstr "Er is nog geen post."
@@ -1338,6 +1390,14 @@ msgstr "factuurnummer"
 #: src/routes/duplicate.tsx
 msgid "Factuurnummer"
 msgstr "Factuurnummer"
+
+#: src/components/visibility-preview-dialog.tsx
+msgid "Gaan meer zien"
+msgstr "Gaan meer zien"
+
+#: src/components/visibility-preview-dialog.tsx
+msgid "Gaan minder zien"
+msgstr "Gaan minder zien"
 
 #: src/routes/persons.tsx
 msgid "Gearchiveerd"
@@ -1498,6 +1558,10 @@ msgstr "Groen"
 msgid "Groenblauw"
 msgstr "Groenblauw"
 
+#: src/routes/visibility.tsx
+msgid "Groepen gebruiken"
+msgstr "Groepen gebruiken"
+
 #: src/routes/invitation.tsx
 msgid "Heb je al een account?"
 msgstr "Heb je al een account?"
@@ -1559,6 +1623,10 @@ msgstr "het soort post niet {type} is"
 msgid "Het zijn twee brieven"
 msgstr "Het zijn twee brieven"
 
+#: src/components/visibility-preview-dialog.tsx
+msgid "Hiermee gaat niemand iets anders zien."
+msgstr "Hiermee gaat niemand iets anders zien."
+
 #: src/routes/rule-editor.tsx
 msgid "Hoeveel voorwaarden moeten kloppen"
 msgstr "Hoeveel voorwaarden moeten kloppen"
@@ -1577,6 +1645,10 @@ msgstr "Huidig wachtwoord"
 msgid "Iedereen"
 msgstr "Iedereen"
 
+#: src/routes/visibility.tsx
+msgid "Iedereen ziet alle post"
+msgstr "Iedereen ziet alle post"
+
 #: src/components/document-history.tsx
 msgid "iemand"
 msgstr "iemand"
@@ -1588,6 +1660,10 @@ msgstr "Iemand"
 #: src/components/invite-dialog.tsx
 msgid "Iemand nieuw"
 msgstr "Iemand nieuw"
+
+#: src/routes/visibility.tsx
+msgid "Iemand toevoegen"
+msgstr "Iemand toevoegen"
 
 #: src/components/invite-dialog.tsx
 msgid "Iemand uitnodigen"
@@ -1670,6 +1746,7 @@ msgstr "Instelling gewijzigd"
 #: src/routes/audit-log.tsx
 #: src/routes/rule-editor.tsx
 #: src/routes/settings.tsx
+#: src/routes/visibility.tsx
 msgid "Instellingen"
 msgstr "Instellingen"
 
@@ -1706,6 +1783,32 @@ msgstr "is niet"
 #: src/components/rule-sentence.ts
 msgid "is precies"
 msgstr "is precies"
+
+#. placeholder {0}: member.name
+#: src/routes/visibility.tsx
+msgid "Ja, {0} verdeelt post"
+msgstr "Ja, {0} verdeelt post"
+
+#: src/routes/visibility.tsx
+msgid "Ja, beheerders lezen alle post"
+msgstr "Ja, beheerders lezen alle post"
+
+#. placeholder {0}: kindName(presetTarget)
+#: src/routes/visibility.tsx
+msgid "Ja, gebruik {0}"
+msgstr "Ja, gebruik {0}"
+
+#: src/routes/visibility.tsx
+msgid "Ja, iedereen mag alle post zien"
+msgstr "Ja, iedereen mag alle post zien"
+
+#: src/routes/visibility.tsx
+msgid "Ja, zet afdelingen aan"
+msgstr "Ja, zet afdelingen aan"
+
+#: src/routes/visibility.tsx
+msgid "Ja, zet groepen aan"
+msgstr "Ja, zet groepen aan"
 
 #: src/components/document-table.tsx
 msgid "Jaaropgave"
@@ -2016,6 +2119,7 @@ msgid "Leden"
 msgstr "Leden"
 
 #: src/routes/settings.tsx
+#: src/routes/visibility.tsx
 msgid "Leden mogen hun eigen post exporteren"
 msgstr "Leden mogen hun eigen post exporteren"
 
@@ -2034,6 +2138,7 @@ msgstr "Let op: {fields} verschilt. Een herinnering of een tweede termijn lijkt 
 
 #: src/components/role-dialog.tsx
 #: src/routes/home.tsx
+#: src/routes/visibility.tsx
 msgid "Lid"
 msgstr "Lid"
 
@@ -2324,6 +2429,14 @@ msgstr "Noodtoegang uitgezet"
 msgid "Notitie voor jezelf"
 msgstr "Notitie voor jezelf"
 
+#: src/routes/visibility.tsx
+msgid "Nu zien nog steeds alle mensen alle post; afdelingen helpen dan alleen bij het sorteren."
+msgstr "Nu zien nog steeds alle mensen alle post; afdelingen helpen dan alleen bij het sorteren."
+
+#: src/routes/visibility.tsx
+msgid "Nu zien nog steeds alle mensen alle post; groepen helpen dan alleen bij het sorteren."
+msgstr "Nu zien nog steeds alle mensen alle post; groepen helpen dan alleen bij het sorteren."
+
 #: src/components/rule-sentence.ts
 msgid "of"
 msgstr "of"
@@ -2374,6 +2487,10 @@ msgstr "Ongedaan maken"
 #: src/components/document-table.tsx
 msgid "Ontvangen"
 msgstr "Ontvangen"
+
+#: src/routes/visibility.tsx
+msgid "Ook de startset labels toevoegen"
+msgstr "Ook de startset labels toevoegen"
 
 #: src/routes/duplicate.tsx
 msgid "Op beide brieven hetzelfde: {sameFields}."
@@ -2456,6 +2573,10 @@ msgstr "Opslaan"
 msgid "Oranje"
 msgstr "Oranje"
 
+#: src/routes/visibility.tsx
+msgid "Organisatie"
+msgstr "Organisatie"
+
 #: src/routes/language.tsx
 msgid "Overal, ook in de app."
 msgstr "Overal, ook in de app."
@@ -2533,6 +2654,10 @@ msgstr "Persoon wijzigen"
 #: src/components/document-table.tsx
 msgid "Polis"
 msgstr "Polis"
+
+#: src/routes/visibility.tsx
+msgid "Post zonder naam"
+msgstr "Post zonder naam"
 
 #: src/routes/rule-editor.tsx
 msgid "Privé maken"
@@ -2731,6 +2856,15 @@ msgstr "soort"
 msgid "Soort"
 msgstr "Soort"
 
+#: src/routes/visibility.tsx
+msgid "Soort gebruik"
+msgstr "Soort gebruik"
+
+#. placeholder {0}: kindName(target)
+#: src/routes/visibility.tsx
+msgid "Soort gebruik: {0}"
+msgstr "Soort gebruik: {0}"
+
 #: src/routes/document.tsx
 msgid "Soort taak"
 msgstr "Soort taak"
@@ -2864,6 +2998,7 @@ msgstr "Test op bestaande post"
 #: src/components/rule-templates.tsx
 #: src/routes/home.tsx
 #: src/routes/setup.tsx
+#: src/routes/visibility.tsx
 msgid "Thuis"
 msgstr "Thuis"
 
@@ -2897,6 +3032,7 @@ msgstr "Toepassen op bestaande post?"
 
 #: src/components/suggestion-list.tsx
 #: src/routes/labels.tsx
+#: src/routes/visibility.tsx
 msgid "Toevoegen"
 msgstr "Toevoegen"
 
@@ -2924,6 +3060,10 @@ msgstr "Tweestapsverificatie uitgezet"
 #: src/routes/search.tsx
 msgid "Typ minstens twee tekens."
 msgstr "Typ minstens twee tekens."
+
+#: src/routes/visibility.tsx
+msgid "uit"
+msgstr "uit"
 
 #: src/routes/automations.tsx
 msgid "Uit"
@@ -3015,9 +3155,17 @@ msgstr "Vandaag"
 msgid "Veld"
 msgstr "Veld"
 
+#: src/routes/visibility.tsx
+msgid "Verdeelt post"
+msgstr "Verdeelt post"
+
 #: src/components/audit-codes.ts
 msgid "Verdeelt post gewijzigd"
 msgstr "Verdeelt post gewijzigd"
+
+#: src/routes/visibility.tsx
+msgid "Verder"
+msgstr "Verder"
 
 #: src/routes/rule-editor.tsx
 msgid "Vergelijking"
@@ -3285,6 +3433,10 @@ msgstr "Wie"
 msgid "Wie heeft wie uitgenodigd, welke rol veranderde en wat er verder is ingesteld."
 msgstr "Wie heeft wie uitgenodigd, welke rol veranderde en wat er verder is ingesteld."
 
+#: src/routes/visibility.tsx
+msgid "Wie hier staat, ziet brieven waar nog geen naam of afdeling op staat, en zet er een naam op. Staat hier niemand, dan doen de beheerders dat: {admins}."
+msgstr "Wie hier staat, ziet brieven waar nog geen naam of afdeling op staat, en zet er een naam op. Staat hier niemand, dan doen de beheerders dat: {admins}."
+
 #: src/components/invite-dialog.tsx
 msgid "Wie is het?"
 msgstr "Wie is het?"
@@ -3298,13 +3450,37 @@ msgstr "Wie leest je brieven?"
 msgid "Wie met een eigen account inlogt in {0}. Op wiens naam brieven staan, regel je bij Personen."
 msgstr "Wie met een eigen account inlogt in {0}. Op wiens naam brieven staan, regel je bij Personen."
 
+#: src/routes/visibility.tsx
+msgid "Wie verdeelt post?"
+msgstr "Wie verdeelt post?"
+
 #. placeholder {0}: workspace.name
 #: src/routes/audit-log.tsx
 msgid "Wie wat heeft gedaan in {0}. Er staat nooit de inhoud van een brief in."
 msgstr "Wie wat heeft gedaan in {0}. Er staat nooit de inhoud van een brief in."
 
+#. placeholder {0}: workspace.name
+#: src/routes/visibility.tsx
+msgid "Wie welke post ziet in {0}. Elke wijziging laat eerst zien wie meer of minder gaat zien."
+msgstr "Wie welke post ziet in {0}. Elke wijziging laat eerst zien wie meer of minder gaat zien."
+
+#: src/routes/settings.tsx
+msgid "Wie welke post ziet: iedereen alles, of ieder zijn eigen post en die van zijn afdelingen."
+msgstr "Wie welke post ziet: iedereen alles, of ieder zijn eigen post en die van zijn afdelingen."
+
+#: src/routes/settings.tsx
+#: src/routes/visibility.tsx
+msgid "Wie ziet wat"
+msgstr "Wie ziet wat"
+
+#: src/routes/visibility.tsx
+msgid "Wie ziet welke post"
+msgstr "Wie ziet welke post"
+
+#: src/components/visibility-preview-dialog.tsx
 #: src/routes/labels.tsx
 #: src/routes/persons.tsx
+#: src/routes/visibility.tsx
 msgid "Wijzigen"
 msgstr "Wijzigen"
 
@@ -3347,6 +3523,14 @@ msgstr "Zelf controleren?"
 msgid "Zet het aan bij Instellingen."
 msgstr "Zet het aan bij Instellingen."
 
+#: src/routes/visibility.tsx
+msgid "Zet post op naam van een afdeling, zoals Finance. Wie in die afdeling zit, ziet die post."
+msgstr "Zet post op naam van een afdeling, zoals Finance. Wie in die afdeling zit, ziet die post."
+
+#: src/routes/visibility.tsx
+msgid "Zet post op naam van een groep, zoals Kinderen. Wie in die groep zit, ziet die post."
+msgstr "Zet post op naam van een groep, zoals Kinderen. Wie in die groep zit, ziet die post."
+
 #: src/components/audit-codes.ts
 msgid "Zichtbaarheid gewijzigd"
 msgstr "Zichtbaarheid gewijzigd"
@@ -3355,6 +3539,10 @@ msgstr "Zichtbaarheid gewijzigd"
 msgid "Zie je hier een browser die je niet kent? Log die uit en wijzig je wachtwoord."
 msgstr "Zie je hier een browser die je niet kent? Log die uit en wijzig je wachtwoord."
 
+#: src/routes/visibility.tsx
+msgid "Zo is het nu"
+msgstr "Zo is het nu"
+
 #: src/routes/persons.tsx
 msgid "Zo staat de naam op brieven, bijvoorbeeld J. de Vries. Zet elke variant op een eigen regel."
 msgstr "Zo staat de naam op brieven, bijvoorbeeld J. de Vries. Zet elke variant op een eigen regel."
@@ -3362,6 +3550,10 @@ msgstr "Zo staat de naam op brieven, bijvoorbeeld J. de Vries. Zet elke variant 
 #: src/components/rule-templates.tsx
 msgid "Zo werkt een regel"
 msgstr "Zo werkt een regel"
+
+#: src/components/visibility-preview-dialog.tsx
+msgid "Zo wordt het"
+msgstr "Zo wordt het"
 
 #: src/routes/language.tsx
 msgid "Zoals je browser of telefoon"
@@ -3403,3 +3595,7 @@ msgstr "Zonder datum"
 #: src/task-time.ts
 msgid "Zonder naam"
 msgstr "Zonder naam"
+
+#: src/routes/visibility.tsx
+msgid "Zorg-post is privé"
+msgstr "Zorg-post is privé"

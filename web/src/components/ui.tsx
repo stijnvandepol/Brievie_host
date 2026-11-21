@@ -1,5 +1,5 @@
 import { t } from "@lingui/core/macro";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useId, useState } from "react";
 import { Icon, type IconName } from "./icons";
 
 /** The four kinds of message and status, each with its own icon: colour is never the only signal. */
@@ -136,4 +136,39 @@ export function useMediaQuery(query: string, fallback = false): boolean {
     return () => list.removeEventListener("change", update);
   }, [query]);
   return matches;
+}
+
+/** A native checkbox with its label (and an optional hint under it). */
+export function CheckRow({
+  checked,
+  onChange,
+  disabled = false,
+  hint,
+  children,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
+  hint?: ReactNode;
+  children: ReactNode;
+}) {
+  const id = useId();
+  return (
+    <div className="check">
+      <input
+        id={id}
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        aria-describedby={hint ? `${id}-hint` : undefined}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <label htmlFor={id}>{children}</label>
+      {hint ? (
+        <div id={`${id}-hint`} className="muted small">
+          {hint}
+        </div>
+      ) : null}
+    </div>
+  );
 }
