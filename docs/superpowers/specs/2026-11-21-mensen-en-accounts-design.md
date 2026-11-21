@@ -63,6 +63,13 @@ detail view; for a pending invitation **"Opnieuw versturen"** and **"Intrekken"*
   (`routes/members.tsx`, invitations, roles, devices, reset links).
 - iOS uses `listPersons` and `createPerson` only (addressee picker in review).
 
+**Gap in that invariant.** `link_member` with `user_id=None` lets a member unlink
+themselves without getting a new person: they keep a `Membership` and have no `Person`,
+and would be missing from a list of people. Ruling M8: the invariant "every member has
+exactly one person" is *maintained*: an unlink of a member gives that member a fresh
+person at once (`ensure_person_for_member`, same transaction; a new person has no letters,
+so nobody's sight changes); the old person becomes "niet actief".
+
 **Finding.** The data model already has the shape Stijn asks for; the product shows it as
 two concepts. The work is mostly naming, one list, one missing state, and the edges.
 
@@ -123,7 +130,7 @@ A person's detail shows the departments they are in.
 | uitgenodigd → niet actief / uitgeschakeld | "Intrekken" | admin, web session | `revokeInvitation` (unchanged) |
 | uitgenodigd → actief | the invitee accepts (new or existing account) | the invitee | `acceptInvitation` (unchanged; now also clears `deactivated_at`) |
 | actief → uitgeschakeld | "Uitschakelen" (an admin), "Werkruimte verlaten" (oneself) | admin / the member | `removeMember`, `leaveWorkspace` (unchanged; now also set `deactivated_at`, `former_user`) |
-| niet actief / uitgeschakeld → gearchiveerd | "Archiveren" | admin for a person that had an account, else any member (as today) | `updatePerson` (now also revokes an open invitation for the person) |
+| niet actief / uitgeschakeld → gearchiveerd | "Archiveren" | any member (not viewer), as today for a person without an account | `updatePerson` (now also revokes an open invitation for the person) |
 
 **Activation goes only through the invitation flow** (Ruling M3). There is no "activate"
 endpoint and no way to set a password for someone. Linking an existing member to a
@@ -165,9 +172,11 @@ letters without a reader. That is today's behaviour of `removeMember`. At home e
 access is off by default, so nobody can open them. Two answers:
 
 1. **In slice A (always):** the "Uitschakelen" dialog says it before the admin confirms,
-   from a boolean `has_private_post` on the row (admins only; it reveals no more than
-   the `email_required` answer of an invitation already does, and no count, by PR #39
-   finding 4): "Op naam van Anne staan privébrieven. Na uitschakelen kan niemand ze
+   from a per-person read `getPersonHasPrivatePost` that the dialog calls when it opens
+   (admin, web session, a boolean, no count). It is deliberately not a column of the
+   list: a list column would show an Organisatie admin at a glance which colleagues have
+   private (Zorg) letters, the passive disclosure PR #39 findings 4 and 5 removed. One
+   person at a time it reveals no more than the `email_required` answer to an invitation: "Op naam van Anne staan privébrieven. Na uitschakelen kan niemand ze
    lezen, tot je Anne opnieuw uitnodigt of iemand de post laat beheren." (plan).
    Nothing is silent; nothing widens.
 2. **Slice C, "Beheerd door" (see Besluit B2):** an admin names one member who manages a
@@ -209,8 +218,12 @@ access is off by default, so nobody can open them. Two answers:
   preview, `notify_join`.
 - `listPeople` is `session_auth` (a device token gets 401: it lists account facts). Every
   member may call it (the names are already in `listPersons`); the account columns
-  (e-mail, last sign-in, app use, invitation, `has_private_post`, `can_manage_account`) are
-  filled for admins only and empty/null for others (M5).
+  (e-mail, last sign-in, app use, invitation, `can_manage_account`) are filled for admins
+  only and empty/null for others, and for others `state` is collapsed to `active` or
+  `inactive` (M5).
+- `getPersonHasPrivatePost` (`GET /workspaces/{id}/persons/{person_id}/private-post`,
+  admin, `session_auth`): `{has_private_post: bool}`, read as the system, used only by the
+  "Uitschakelen" and "Uitnodigen" dialogs.
 - Audit (all through `apps.audit.services.record`, closed list):
   - create: **new** `person_created` (target person, no values). Today creating a person
     writes nothing; under "everyone is an account" it should.
@@ -250,8 +263,11 @@ New:
   `last_sign_in_at: datetime | None = None`, `last_app_use_at: datetime | None = None`,
   `deactivated_at: datetime | None = None`, `invitation_id: UUID | None = None`,
   `invitation_expires_at: datetime | None = None`, `invitation_expired: bool = False`,
-  `has_private_post: bool = False`, `can_manage_account: bool = False`. Slice C adds
-  `managed_by_user_id: UUID | None = None`. Nullable fields primitives only; no `anyOf`.
+  `can_manage_account: bool = False`. Slice C adds `managed_by_user_id: UUID | None =
+  None`. Nullable fields primitives only; no `anyOf`.
+- `GET /workspaces/{workspace_id}/persons/{person_id}/private-post`
+  `getPersonHasPrivatePost` (`session_auth`, admin) → `PersonPrivatePostOut`
+  `{has_private_post: bool = False}`; 404 `person_not_found`.
 - Slice C: `PUT /workspaces/{workspace_id}/persons/{person_id}/manager`
   `setPersonManager` (`session_auth`, admin): body `user_id: UUID | None = None`,
   `confirmed: bool = False`, `preview_token: str = ""`; `previewVisibilityChange` gains
@@ -261,7 +277,8 @@ Changed behaviour of existing endpoints (no schema change): `acceptInvitation` c
 `deactivated_at`/`former_user`; `removeMember`/`leaveWorkspace` set them; `createPerson`
 records `person_created`; archiving through `updatePerson` revokes the person's open
 invitation (`invitation_revoked`, reason `person_archived`). `listPersons`,
-`listMembers`, `linkPersonToMember` stay as they are for old clients.
+`listMembers`, `linkPersonToMember` stay as they are for old clients; an unlink through
+`linkPersonToMember` now also gives the member a fresh person (M8).
 
 Contract: the new operations appear in `openapi.json`; `test_openapi_contract` keeps
 comparing with `openapi_1b.json` and `openapi_1c.json` (nothing removed or made required).
@@ -282,6 +299,8 @@ comparing with `openapi_1b.json` and `openapi_1c.json` (nothing removed or made 
   - uitgenodigd: **Opnieuw versturen**, **Intrekken**; "verlopen" shown when expired.
   - actief: Rol wijzigen, Verdeelt post, Afdelingen, Apparaten, Herstellink (where
     `can_manage_account`), **Uitschakelen** (with the private-post sentence of 4).
+  - "Opnieuw versturen" works on an expired invitation too (`renewInvitation` takes any
+    invitation not accepted or revoked).
   - every person: Naam en schrijfwijzen, Archiveren; slice C: Beheerd door.
 - **Detail `/w/$id/mensen/$personId`:** the same facts and actions, the person's letters
   (link to Alle post filtered on the person), "Wie kan de post van <naam> zien?" (the
@@ -331,6 +350,7 @@ Mensen detail.
 | M5 | Account columns for admins only | e-mail and sign-in times are account facts |
 | M6 | Activation ends "Beheerd door" (slice C) | an adult with an account decides |
 | M7 | Nothing automatic creates a person; the autopilot never does | Stijn: a human adds the person |
+| M8 | Every member always has exactly one person (kept, not only migrated) | Mensen is one complete list |
 
 ## 13. Not in this design
 

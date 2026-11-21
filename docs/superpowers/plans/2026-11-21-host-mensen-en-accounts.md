@@ -110,13 +110,14 @@ def test_visibility_sql_never_reads_former_user(): ...       # "former_user" not
 ### Task 2: Switching off sets the mark, accepting clears it, archiving withdraws
 
 **Files:**
-- Modify: `backend/apps/workspaces/members.py` (`_unlink_and_unassign`), `backend/apps/workspaces/invitations.py` (`_link_person`), `backend/apps/people/services.py` (`create_person`, `update_person`), `backend/apps/audit/codes.py`
+- Modify: `backend/apps/workspaces/members.py` (`_unlink_and_unassign`), `backend/apps/workspaces/invitations.py` (`_link_person`), `backend/apps/people/services.py` (`create_person`, `update_person`, `link_member`), `backend/apps/audit/codes.py`
 - Test: `backend/tests/test_people_account_lifecycle.py`
 
 **Interfaces:**
 - `_unlink_and_unassign`: the queryset update also sets `deactivated_at=now`, `former_user_id=user_id` (same statement, so no `save()` check for a non-member is needed).
 - `_link_person`: `person.deactivated_at = None`, `person.former_user = None` with `user`; `update_fields` gains both.
 - `AuditCode.PERSON_CREATED = "person_created", _("Persoon toegevoegd")`, values `_NONE`, target kind person; written by `create_person` for both kinds (a department too: "Persoon toegevoegd" names the target kind; keep one code).
+- `link_member` with `user_id=None` and a former member: inside the same transaction and `sight_change`, `ensure_person_for_member(workspace=…, user=former_user)` (spec M8), so every member keeps exactly one person. A relink to another person is unaffected (the member's own person is the one being linked).
 - `update_person` archiving (`archived` false → true) revokes the open invitation naming the person (`invitations._revoke(..., reason="person_archived")`, through a new public `revoke_invitations_for_person(*, workspace_id, person_id, actor) -> int` in `invitations.py`, lock order: memberships are not taken, invitation rows `FOR UPDATE`).
 
 - [ ] **Step 1: Failing tests:**
@@ -132,6 +133,10 @@ def test_accept_by_other_account_still_allowed(): ...        # the invitation de
 def test_create_person_records_person_created(): ...         # one row, no values, name of the person
 def test_archiving_revokes_open_invitation(): ...            # invitation_revoked reason person_archived
 def test_sight_unchanged_by_marking(): ...                   # viewers() after removal equals main's behaviour (P7 sorters)
+def test_every_member_always_has_a_person(): ...             # self-unlink -> a new person linked to the member,
+                                                             # the old one niet actief; viewers() unchanged
+def test_unlink_person_count_invariant(): ...                # after any sequence of link/unlink/remove/accept:
+                                                             # count(members) == count(persons with user_id)
 ```
 
 - [ ] **Step 2:** Push → FAIL. **Step 3:** Implement. **Step 4:** Push → PASS (also the existing `test_workspaces_remove_member.py`, `test_workspaces_accept_invitation.py`, `test_visibility_invitations.py`).
@@ -155,11 +160,12 @@ class PersonAccount:
     person: Person; state: AccountState; role: str; sorts_post: bool; department_ids: tuple[UUID, ...]
     email: str; last_sign_in_at: datetime | None; last_app_use_at: datetime | None
     invitation_id: UUID | None; invitation_expires_at: datetime | None; invitation_expired: bool
-    has_private_post: bool; can_manage_account: bool
+    can_manage_account: bool
 
 def list_people(workspace: Workspace, *, viewer: Membership, state: str = "") -> list[PersonAccount]: ...
 ```
-- `list_people`: persons of kind `person` from `list_persons` (its counts and order), memberships of the workspace in one query, users (`last_login`, `email`) of linked and former users in one, `Device` max `last_seen_at` (unrevoked) grouped in one, open invitations with a `person_id` in one, `access.private_post_readers` reused through `list_members`' rule for `can_manage_account` (call `workspaces.services.list_members` once and index by user id), `has_private_post` from one system query (`Document.objects.filter(visibility=RESTRICTED, addressee_ids__overlap=ids)` unnested, as the system, booleans only). For a viewer who is no admin: `email=""`, times `None`, invitation fields empty, `has_private_post=False`, `can_manage_account=False`. Unknown `state` → 422 `validation_error`.
+- `list_people`: persons of kind `person` from `list_persons` (its counts and order), memberships of the workspace in one query, users (`last_login`, `email`) of linked and former users in one, `Device` max `last_seen_at` (unrevoked) grouped in one, open invitations with a `person_id` in one, `can_manage_account` from `workspaces.services.list_members` (called once, indexed by user id). For a viewer who is no admin: `email=""`, times `None`, invitation fields empty, `can_manage_account=False`, and `state` collapsed to `active`/`inactive` (spec M5); the `state` filter then accepts only those two. Unknown `state` → 422 `validation_error`.
+- `person_has_private_post(workspace, person_id) -> bool` (admin checked by the endpoint): `visibility.has_private_post(person)` as the system; 404 `person_not_found` for a department or an unknown id.
 - The email shown for a switched-off person is the former user's (prefill for "Opnieuw uitnodigen").
 
 - [ ] **Step 1: Failing tests:**
@@ -174,7 +180,8 @@ def test_never_signed_in_is_null(): ...
 def test_last_app_use_ignores_revoked_devices(): ...
 def test_switched_off_shows_former_account(): ...  # email and last sign-in of former_user
 def test_non_admin_gets_no_account_facts(): ...
-def test_has_private_post_is_boolean_only(): ...   # also for a letter the admin cannot read; no count anywhere
+def test_non_admin_sees_only_active_or_inactive(): ...   # invited and deactivated collapse to inactive
+def test_person_has_private_post_is_boolean_only(): ...  # also for a letter the admin cannot read; no count
 def test_list_people_query_count(django_assert_max_num_queries): ...   # constant in the number of persons (<= 12)
 ```
 
@@ -190,6 +197,7 @@ def test_list_people_query_count(django_assert_max_num_queries): ...   # constan
 **Interfaces:**
 - `GET /workspaces/{workspace_id}/people`, `operation_id="listPeople"`, `auth=session_auth`, any member (`workspace_member(..., min_role=VIEWER)`), query `state: str = ""`, `response={200: list[PersonAccountOut], 404: ErrorOut, 422: ErrorOut, **AUTH_ERRORS}`.
 - `PersonAccountOut` exactly as S 8 (every non-identity field with a default; nullable fields primitives).
+- `GET /workspaces/{workspace_id}/persons/{person_id}/private-post`, `operation_id="getPersonHasPrivatePost"`, `auth=session_auth`, admin → `PersonPrivatePostOut`.
 
 - [ ] **Step 1: Failing tests:**
 
@@ -201,6 +209,8 @@ def test_other_workspace_is_404(client): ...
 def test_state_filter(client): ...
 def test_unknown_state_is_422(client): ...
 def test_schema_has_no_anyof(): ...                 # via the contract test helpers
+def test_private_post_read_admin_only(client): ...  # member 403, device token 401, department 404
+def test_list_people_has_no_private_post_field(): ... # the list never carries it (spec 4, PR #39 f4/f5)
 ```
 
 - [ ] **Step 2–4:** Push → FAIL, implement, `make openapi`, `cd web && pnpm gen:api`, push → PASS (`test_openapi_contract` against `openapi_1b.json` and `openapi_1c.json` unchanged).
@@ -250,8 +260,8 @@ def test_activation_only_through_invitation(): ...  # no service but _link_perso
 
 **Behaviour:**
 - niet actief → button **Uitnodigen**; uitgeschakeld → **Opnieuw uitnodigen** (email prefilled); both `createInvitation` with `person_id`. A 422 `email_required` shows its sentence at the address field. An admin role runs WZW T42's preview dialog (409 `confirmation_required`).
-- uitgenodigd → **Opnieuw versturen** (`renewInvitation`; the one-time link dialog with "De oude link werkt niet meer.") and **Intrekken** (`revokeInvitation`, confirm dialog); "Verlopen" badge when `invitation_expired`.
-- actief → **Uitschakelen** (`removeMember`; when `has_private_post`, the sentence of S 4 in the dialog), Rol wijzigen, Verdeelt post (existing dialogs from branch 5), Apparaten (link to `/leden/$userId/apparaten`), Herstellink where `can_manage_account`.
+- uitgenodigd → **Opnieuw versturen** (`renewInvitation`, also for an expired one; the one-time link dialog with "De oude link werkt niet meer.") and **Intrekken** (`revokeInvitation`, confirm dialog); "Verlopen" badge when `invitation_expired`.
+- actief → **Uitschakelen** (`removeMember`; the dialog calls `getPersonHasPrivatePost` when it opens and, when true, shows the sentence of S 4), Rol wijzigen, Verdeelt post (existing dialogs from branch 5), Apparaten (link to `/leden/$userId/apparaten`), Herstellink where `can_manage_account`.
 - Only admins see actions; a member sees "Persoon toevoegen" only.
 
 - [ ] **Step 1: Failing tests:** `invites a never signed in person from the row`, `reinvite prefills the former address`, `email required shows the server sentence`, `resend shows the new link once`, `withdraw asks first and refreshes the row to Niet actief`, `switch off warns about private post`, `switch off without private post has no warning`, `member sees no actions`.
