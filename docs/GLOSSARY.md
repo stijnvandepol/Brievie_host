@@ -94,3 +94,60 @@ the translation. Add a line before introducing a new domain term.
 | zoeken | search (`searchDocuments`) |
 | fragment (stuk tekst bij een treffer) | snippet (`SnippetPartOut`) |
 | Geen exacte treffer. Dit lijkt erop. | approximate match (`fuzzy`) |
+
+## English in the interface
+
+The web interface and the server's messages speak Dutch (the source) and English. The
+table above names the code; this one fixes the English **words the user reads**, the
+same in the web, the server's messages and the iPhone app (`Brievie_ios`
+`docs/GLOSSARY-en.md`; copy changes both ways). Plain and friendly, sentence case,
+American spelling ("organize", "color"), readable for British readers too. Not
+translated: the content of letters, names of persons and labels a user made, the
+AI's summaries and tasks (their language is the workspace setting "Samenvattingen",
+`summary_language`). Start-set labels and their rules are created in the language of
+the request that creates the workspace and keep that name.
+
+| Dutch | English | Note |
+|---|---|---|
+| post (alle brieven samen) | mail | "All mail", "Search your mail", "My mail". Never "post". |
+| brief | letter | One item. "Letter date" for dagtekening. |
+| Alle post | All mail | |
+| Te doen | To do | |
+| Controleren / Te controleren | Check / To check | "Check it yourself" for Zelf controleren. |
+| Naam kiezen | Choose a name | |
+| Bezig… | Processing… | |
+| termijn, uiterlijk | deadline | Never "term" or "due date"; "Deadline {date}" on a task. Vervaldatum (invoice field) is "Due date". |
+| taak | task | |
+| werkruimte | workspace | |
+| Thuis / Zakelijk (Organisatie) | Home / Business | |
+| lid | member | |
+| meekijker, Alleen lezen | viewer, Read only | Role badge "Viewer". |
+| beheerder | admin | serverbeheerder: server admin. |
+| koppelen / ontkoppelen | pair / unpair | koppelcode: pairing code; koppelgegevens: pairing details; "App koppelen" page: Devices. |
+| apparaat | device | |
+| afdeling | department | |
+| persoon | person | Persons (page), never "people" for the list of persons. |
+| op naam van, geadresseerde | addressed to, addressee | "Address to" for the rule action. |
+| afzender | sender | |
+| samenvatting | summary | |
+| voorstel | suggestion | negeren: dismiss. |
+| regel | rule | Automatisering: Automation. |
+| startset | starter set | |
+| Automatisch toepassen | Apply automatically | |
+| Automatisch verwerken (autopilot) | Autopilot | "Confirm letters automatically", "File letters under persons and labels automatically". |
+| Automatisch door AI / door regel | Automatically by AI / by rule | |
+| bevestigen | confirm | |
+| terugdraaien | undo | |
+| herstelblad | recovery sheet | |
+| herstellink | reset link | |
+| back-up | backup | |
+| logboek | log | Serverlogboek: Server log. |
+| inloggen / uitloggen | sign in / sign out | |
+| installatiecode | setup code | |
+| noodtoegang | emergency access | |
+| privé | private | |
+| export, exporteren | export | |
+| BSN | BSN | Explained where it matters ("citizen service number"). |
+| Belastingdienst, KVK, WOZ, APK, DUO | (unchanged) | Dutch names of Dutch things. |
+| Taak: betalen, reageren, bezwaar maken, aanvragen, keuring, opzeggen, verlengen, aangifte | Pay, Respond, File an objection, Apply, Inspection, Cancel contract, Renew, File a return | "Object" and "Cancel" alone read as a noun and a button. |
+| Soort: factuur, aanslag, beschikking, rekening, herinnering, aanmaning, polis, jaaropgave, loonstrook, bonnetje | Invoice, Tax assessment, Decision, Bill, Reminder, Payment demand, Policy, Annual statement, Payslip, Receipt | |
