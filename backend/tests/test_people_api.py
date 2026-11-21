@@ -326,7 +326,14 @@ def test_link_and_unlink_member(client_a: Client, ws_a: Workspace) -> None:
     assert r.status_code == 409
     assert r.json()["code"] == "member_already_linked"
 
+    # Only the linked member unlinks (PB T12, D 8.1): the admin may not.
     r = put(client_a, f"{base}/{first['id']}/member", {})
+    assert r.status_code == 409
+    assert r.json()["code"] == "cannot_unlink"
+
+    member_client = Client()
+    member_client.force_login(member)
+    r = put(member_client, f"{base}/{first['id']}/member", {})
     assert r.status_code == 200
     assert r.json()["user_id"] is None
 

@@ -107,19 +107,23 @@ def delete_person(request: HttpRequest, workspace_id: UUID, person_id: UUID) -> 
     auth=session_auth,
     description=(
         "Web session only: a bearer token answers 401 not_authenticated. Link the person "
-        "to a member of the workspace (`user_id`), or unlink it (null). Administrators only."
+        "to a member of the workspace (`user_id`; administrators only), or unlink it "
+        "(null). A linked person is unlinked only by its own member (409 `cannot_unlink` "
+        "for anybody else); 409 `cannot_grant_self` for an admin linking themselves to a "
+        "person with private post; 409 `is_a_department`."
     ),
     operation_id="linkPersonToMember",
 )
 def link_person_to_member(
     request: HttpRequest, workspace_id: UUID, person_id: UUID, payload: PersonMemberIn
 ) -> Person:
-    membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
+    membership = workspace_member(request, workspace_id)
     return services.link_member(
         workspace=membership.workspace,
         person_id=person_id,
         user_id=payload.user_id,
         actor=actor_from_request(request),
+        actor_role=membership.role,
     )
 
 

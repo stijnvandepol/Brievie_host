@@ -435,10 +435,24 @@ def ensure_person_for_member(*, workspace: Workspace, user: User) -> Person:
 
 
 def link_member(
-    *, workspace: Workspace, person_id: UUID, user_id: UUID | None, actor: AuditActor
+    *,
+    workspace: Workspace,
+    person_id: UUID,
+    user_id: UUID | None,
+    actor: AuditActor,
+    actor_role: str = Membership.Role.ADMIN,
 ) -> Person:
-    """Link the person to a member of the workspace, or unlink it (`user_id` None)."""
+    """Link the person to a member of the workspace, or unlink it (`user_id` None): a grant
+    of the person's post (PB T12, D 8.1).
+
+    Linking needs an admin (403 `forbidden`), never to the admin's own account when the
+    person has private post (409 `cannot_grant_self`). A person linked to somebody is
+    unlinked or relinked only by that member (409 `cannot_unlink`; removing the member
+    unlinks too); unlinking oneself is deliberate and allowed, also for a viewer. The
+    system (no user) is not bound by that. Lock order: own membership, then the person."""
     with transaction.atomic():
+        if actor.user_id is not None:
+            lock_own_membership(workspace.id, actor.user_id)
         person = _get_for_update(workspace, person_id)
         if person.kind == Person.Kind.DEPARTMENT:
             raise ApiError(
@@ -446,6 +460,11 @@ def link_member(
                 "is_a_department",
                 _("Een afdeling koppel je niet aan één account. Voeg leden toe."),
             )
+        if user_id is not None and actor_role != Membership.Role.ADMIN:
+            raise _forbidden()
+        if person.user_id == user_id:
+            # Nothing changes, so nothing is written to the log either.
+            return _annotated(workspace, person.id)
         if user_id is not None:
             if not Membership.objects.filter(workspace=workspace, user_id=user_id).exists():
                 raise ApiError(404, "member_not_found", _("We kunnen dit lid niet vinden."))
@@ -455,23 +474,37 @@ def link_member(
                 .exists()
             ):
                 raise _member_already_linked()
-        if person.user_id == user_id:
-            # Nothing changes, so nothing is written to the log either.
-            return _annotated(workspace, person.id)
+        if (
+            person.user_id is not None
+            and actor.user_id is not None
+            and person.user_id != actor.user_id
+        ):
+            linked = User.objects.filter(id=person.user_id).values_list("name", flat=True).first()
+            raise ApiError(
+                409,
+                "cannot_unlink",
+                _("Alleen %(name)s kan deze koppeling losmaken.") % {"name": linked or ""},
+            )
+        if user_id is not None and user_id == actor.user_id and visibility.has_private_post(person):
+            raise _cannot_grant_self()
         was_linked = person.user_id is not None
         person.user_id = user_id
         _save(person)
+        visibility.recompute_where(workspace_id=workspace.id, person_id=person.id)
         if was_linked:
             # The former member may no longer read this person's post: their
             # assignments there end (Mijn taken S 5.3).
             release_unseeing_assignees(workspace_id=workspace.id)
-        if user_id is not None or was_linked:
-            record(
-                AuditCode.PERSON_LINKED if user_id is not None else AuditCode.PERSON_UNLINKED,
-                actor=actor,
-                target=AuditTarget(TargetKind.PERSON, person.id, person.display_name),
-                workspace_id=workspace.id,
+        if user_id is not None:
+            visibility.record_grant(
+                person, grantee=User.objects.get(id=user_id), actor_user_id=actor.user_id
             )
+        record(
+            AuditCode.PERSON_LINKED if user_id is not None else AuditCode.PERSON_UNLINKED,
+            actor=actor,
+            target=AuditTarget(TargetKind.PERSON, person.id, person.display_name),
+            workspace_id=workspace.id,
+        )
         return _annotated(workspace, person.id)
 
 

@@ -1878,3 +1878,15 @@ M3). "Iedereen ziet alle post" stays on everywhere until Task 40, so departments
   that department (403 `forbidden`); members keep managing labels for everyone.
   `updateLabel` moves a label only when `department_id` is sent, so an older client never
   moves one.
+- **Linking is a grant; removing a member (Task 27, PB T12/T13).** Linking a person needs
+  an admin, never to the admin's own account when the person has private post (409
+  `cannot_grant_self`); a linked person is unlinked or relinked only by its own member
+  (409 `cannot_unlink`; `linkPersonToMember` is now open to every role, the service
+  decides), or by removing the member. Every link or unlink recomputes the readers and
+  writes `access_granted` on the person's private letters. Removing a member removes
+  their reader rows, shares and department memberships (`access.on_member_removed`); an
+  invitation accepted for a person makes the new member its reader with the inviting
+  admin as the grant's actor, and one for a person with private post needs an address.
+  The removal itself is not wrapped in `system_actor()`: every step that must reach
+  letters the admin cannot see (releasing tasks, forgetting the member) runs as the system
+  on its own.

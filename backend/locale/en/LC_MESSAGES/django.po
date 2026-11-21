@@ -1707,6 +1707,11 @@ msgid "Een afdeling koppel je niet aan één account. Voeg leden toe."
 msgstr "A department is not linked to one account. Add members instead."
 
 #: apps/people/services.py
+#, python-format
+msgid "Alleen %(name)s kan deze koppeling losmaken."
+msgstr "Only %(name)s can remove this link."
+
+#: apps/people/services.py
 msgid "Dit is geen afdeling."
 msgstr "This is not a department."
 
