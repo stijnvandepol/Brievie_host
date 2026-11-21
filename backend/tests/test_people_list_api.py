@@ -60,6 +60,7 @@ def test_admin_gets_people_with_account_columns() -> None:
     assert people["Oma"]["state"] == "invited"
     assert people["Oma"]["invitation_id"] is not None
     assert people["Oma"]["invitation_expired"] is False
+    assert people["Oma"]["invitation_role"] == "member"
     assert people["Anne"]["can_manage_account"] is False  # never one's own account
 
 
@@ -73,6 +74,7 @@ def test_member_gets_people_without_account_columns() -> None:
             assert row[name] in ("", None), (row["display_name"], name)
         assert row["can_manage_account"] is False
         assert row["role"] == ""
+        assert row["invitation_role"] == ""
 
 
 def test_device_token_gets_401() -> None:

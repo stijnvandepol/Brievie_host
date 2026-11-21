@@ -2301,13 +2301,23 @@ Spec `docs/superpowers/specs/2026-11-21-mensen-en-accounts-design.md`, plan
   letter, so it gains nobody anything, and inside the block it would have counted as a gain
   and asked a confirmation for a self-unlink. — Cost if wrong: none for sight; the member
   has a second name ("Anne (2)") until an admin renames or archives one.
-- **`linkPersonToMember` cannot link a member to another person any more.** With M8 every
-  member has their own person, so a link answers 409 `member_already_linked`, as it did
-  already for every member with a person. The endpoint stays for old clients and for
-  unlinking; the way to give a person an account is the invitation with that person, and
-  joining two persons of one human is the later "merge" (spec 13). — Why: absorbing the
-  member's own person on link would delete a person behind the admin's back. — Cost if
-  wrong: an admin who wanted to link must invite instead.
+- **Relinking takes the member's unused own person away.** With M8 every member has their
+  own person, so a link of a member to another person would always answer 409
+  `member_already_linked` (a self-unlink could never be undone). Now the member's own
+  person makes way when it looks exactly as Brievie made it (the member's name, or
+  "name (2)", at most that name as variant) and nothing uses it (no letter, also in the
+  trash, no proposal, no rule, no open invitation): it is deleted inside the change of
+  sight (`person_deleted` in the log). Any other person stays and the link is refused as
+  before. — Why: undoing an unlink must work; a person somebody named by hand is never
+  deleted behind the admin's back. — Cost if wrong: an unused auto-made person is gone; it
+  held nothing.
+- **The post of a person made or deleted by a change counts for nobody** (`visibility_rules
+  .diff`). A person that exists in only one of the two snapshots of a change of sight is on
+  no letter (a person on a letter is never deleted, a new one is on none yet), so the
+  fresh person of an unlink and the deleted one of a relink are no gain or loss: no
+  confirmation, no notice, nothing in the preview. A person in both snapshots counts as
+  before, also one without letters (its future post is a kind of post). — Cost if wrong:
+  none for letters; only the wording of a change.
 - **Archiving a person withdraws its open invitations** (`invitation_revoked`, reason
   `person_archived`). Lock order of `updatePerson` when it archives: the person's open
   invitations first, then the person (memberships, invitations, person: as renewing and

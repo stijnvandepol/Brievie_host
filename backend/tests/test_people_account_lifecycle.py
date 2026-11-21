@@ -310,3 +310,57 @@ def test_unlink_person_count_invariant(client: Client) -> None:
     r = post_json(as_user(nina), f"/workspaces/{h.workspace.id}/leave")
     assert r.status_code == 204, r.content
     _assert_one_person_per_member(h.workspace)
+
+
+def test_relinking_after_unlinking_oneself_takes_the_fresh_person_away(client: Client) -> None:
+    """Piet unlinks himself, then an admin links him to his old person again (the preview
+    first): the fresh person Brievie made for him goes (it was on nothing), Piet sees his
+    post again, and nobody is told of the fresh person."""
+    o = office()
+    client.force_login(o.plain)
+    piet = o.persons["Piet"].id
+    url = f"/api/v1/workspaces/{o.workspace.id}/persons/{piet}/member"
+    r = client.put(url, {"user_id": None}, content_type="application/json")
+    assert r.status_code == 200, r.json()
+    with as_actor(o.workspace, SYSTEM):
+        fresh = Person.objects.get(workspace=o.workspace, user=o.plain)
+    admin = as_user(o.admin)
+    preview = post_json(
+        admin,
+        f"/workspaces/{o.workspace.id}/visibility/preview",
+        {"member_change": "link", "member_user_id": str(o.plain.id), "member_person_id": str(piet)},
+    )
+    assert preview.status_code == 200, preview.json()
+    for change in preview.json()["changes"]:
+        assert not any("Piet (2)" in kind for kind in change["losses"] + change["gains"])
+    r = admin.put(
+        url,
+        {
+            "user_id": str(o.plain.id),
+            "confirmed": True,
+            "preview_token": preview.json()["preview_token"],
+        },
+        content_type="application/json",
+    )
+    assert r.status_code == 200, r.json()
+    with as_actor(o.workspace, SYSTEM):
+        assert not Person.objects.filter(id=fresh.id).exists()
+        assert Person.objects.get(id=piet).user_id == o.plain.id
+        (row,) = WorkspaceAuditEvent.objects.filter(code="person_deleted")
+    assert row.target_id == fresh.id
+    assert o.plain.id in _viewers_all(o)[o.letters["own_piet"].id]
+    _assert_one_person_per_member(o.workspace)
+
+
+def test_a_person_named_by_hand_is_never_taken_away(client: Client) -> None:
+    h = home()
+    with as_actor(h.workspace, SYSTEM):
+        Person.objects.filter(id=h.persons["Bob"].id).update(name_variants=["B. Jansen"])
+    r = as_user(h.anne).put(
+        f"/api/v1/workspaces/{h.workspace.id}/persons/{h.persons['Oma'].id}/member",
+        {"user_id": str(h.bob.id)},
+        content_type="application/json",
+    )
+    assert (r.status_code, r.json()["code"]) == (409, "member_already_linked")
+    with as_actor(h.workspace, SYSTEM):
+        assert Person.objects.get(id=h.persons["Bob"].id).user_id == h.bob.id

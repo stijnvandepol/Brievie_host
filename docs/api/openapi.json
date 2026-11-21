@@ -2695,6 +2695,11 @@
               "null"
             ]
           },
+          "invitation_role": {
+            "default": "",
+            "title": "Invitation Role",
+            "type": "string"
+          },
           "last_app_use_at": {
             "format": "date-time",
             "title": "Last App Use At",

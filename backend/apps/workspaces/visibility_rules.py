@@ -196,11 +196,24 @@ def _compare(before: frozenset[str], after: frozenset[str]) -> tuple[set[str], s
     return set(after - before), set(before - after)
 
 
+def _persons_in_both(category: str, before: PolicySnapshot, after: PolicySnapshot) -> bool:
+    """False for the post of a person that exists in only one of the two snapshots: one
+    made or deleted by the change itself. Such a person is on no letter (a person on a
+    letter is never deleted, and a new one is on none yet), so nobody gains or loses a
+    letter by it: Mensen gives a member a fresh person when they unlink their own, and
+    linking takes that unused person away again (spec M8)."""
+    kind, item = split_category(category)
+    if kind != PERSON or item is None:
+        return True
+    return item in before.person_names and item in after.person_names
+
+
 def diff(before: PolicySnapshot, after: PolicySnapshot) -> list[Change]:
     """Per member, the categories gained and lost between two snapshots, sorted by name.
 
     A member only in `before` loses everything, one only in `after` gains everything;
-    members whose sight stays the same are left out."""
+    members whose sight stays the same are left out. The post of a person made or deleted
+    by the change counts for nobody (`_persons_in_both`)."""
     changes: list[Change] = []
     ids = [m.user_id for m in before.members] + [
         m.user_id for m in after.members if before.member(m.user_id) is None
@@ -211,6 +224,8 @@ def diff(before: PolicySnapshot, after: PolicySnapshot) -> list[Change]:
         had = sight_categories(before, old) if old is not None else frozenset()
         has = sight_categories(after, new) if new is not None else frozenset()
         gains, loses = _compare(had, has)
+        gains = {c for c in gains if _persons_in_both(c, before, after)}
+        loses = {c for c in loses if _persons_in_both(c, before, after)}
         if not gains and not loses:
             continue
         name = new.name if new is not None else old.name if old is not None else ""

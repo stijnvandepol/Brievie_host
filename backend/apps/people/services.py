@@ -548,15 +548,24 @@ def link_member(
         if person.user_id == user_id:
             # Nothing changes, so nothing is written to the log either.
             return _annotated(workspace, person.id)
+        unused_own: Person | None = None
         if user_id is not None:
             if not Membership.objects.filter(workspace=workspace, user_id=user_id).exists():
                 raise ApiError(404, "member_not_found", _("We kunnen dit lid niet vinden."))
-            if (
-                Person.objects.filter(workspace=workspace, user_id=user_id)
+            own = (
+                Person.objects.select_for_update(no_key=True)
+                .filter(workspace=workspace, user_id=user_id)
                 .exclude(id=person.id)
-                .exists()
-            ):
-                raise _member_already_linked()
+                .first()
+            )
+            if own is not None:
+                # Every member has their own person (M8). The one Brievie made for them
+                # (their name, nothing else) that nothing uses yet, such as the fresh
+                # person of a member who unlinked themselves, makes way; any other stays,
+                # and the link is refused as before.
+                if not (_made_for_member(own, user_id) and _unused(own)):
+                    raise _member_already_linked()
+                unused_own = own
         if (
             person.user_id is not None
             and actor.user_id is not None
@@ -584,6 +593,8 @@ def link_member(
                 else MemberChange(kind="unlink", person_id=person.id)
             ),
         ) as sight:
+            if unused_own is not None:
+                _delete_unused(unused_own, actor=actor)
             person.user_id = user_id
             if user_id is not None:
                 # Linked: an account again, no longer "uitgeschakeld".
@@ -624,6 +635,59 @@ def link_member(
                 actor_name=actor.name,
             )
         return _annotated(workspace, person.id)
+
+
+def _made_for_member(person: Person, user_id: UUID) -> bool:
+    """Whether the person looks exactly as `ensure_person_for_member` makes one for this
+    member: the member's name (or "name (2)", ...) and at most that name as variant. A
+    person somebody named or gave variants by hand is never taken away."""
+    raw = User.objects.filter(id=user_id).values_list("name", flat=True).first()
+    if raw is None:
+        return False
+    name = _tidy(mask_bsns(raw))
+    base, _sep, number = person.display_name.rpartition(" (")
+    numbered = number.endswith(")") and number[:-1].isdigit()
+    shown = (base if numbered else person.display_name).casefold()
+    # The whole name, or (a name near the limit) cut short to make room for " (2)".
+    whole = len(shown) >= min(len(name), NAME_MAX - 10)
+    if not shown or not whole or not name.casefold().startswith(shown):
+        return False
+    return person.kind == Person.Kind.PERSON and person.name_variants in ([], [name])
+
+
+def _unused(person: Person) -> bool:
+    """Whether nothing uses this person: on no letter (also in the trash), in no proposal,
+    named by no rule and no open invitation. As the system: letters the caller cannot see
+    count too."""
+    from apps.workspaces.models import Invitation
+
+    with system_actor():
+        if person.document_links.exists():
+            return False
+        if DocumentSuggestion.objects.filter(person=person).exists():
+            return False
+    if Invitation.objects.filter(
+        person_id=person.id, accepted_at__isnull=True, revoked_at__isnull=True
+    ).exists():
+        return False
+    return not any(
+        person.id in named_ids(rule)[1]
+        for rule in Rule.objects.filter(workspace=person.workspace_id)
+    )
+
+
+def _delete_unused(person: Person, *, actor: AuditActor) -> None:
+    """Delete a member's own unused person to link them to another one (see `link_member`)."""
+    name = person.display_name
+    person_id = person.id
+    with system_actor():
+        person.delete()
+    record(
+        AuditCode.PERSON_DELETED,
+        actor=actor,
+        target=AuditTarget(TargetKind.PERSON, person_id, name),
+        workspace_id=person.workspace_id,
+    )
 
 
 def _forbidden() -> ApiError:

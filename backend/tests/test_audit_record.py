@@ -222,6 +222,7 @@ def test_the_list_of_codes_is_the_closed_list_of_d11() -> None:
         "rule_run",
         "label_deleted",
         "person_deleted",
+        "person_created",
         "visibility_changed",
         "person_linked",
         "person_unlinked",

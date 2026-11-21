@@ -54,8 +54,9 @@ def test_deleting_user_keeps_person(ws_a: Workspace) -> None:
             deactivated_at=timezone.now(),
             former_user=former,
         )
-    User.objects.filter(id=former.id).delete()
+    # Django sets the column to null itself, so it must see the person (forced RLS).
     with workspace_context(ws_a.id, actor=SYSTEM):
+        User.objects.filter(id=former.id).delete()
         person.refresh_from_db()
     assert person.former_user_id is None
     assert person.deactivated_at is not None

@@ -68,6 +68,8 @@ class PersonAccountOut(Schema):
     # The open invitation that names the person (the newest), for "Opnieuw versturen" and
     # "Intrekken"; expired ones too (`invitation_expired`).
     invitation_id: UUID | None = None
+    # The role the open invitation gives (its renewal is previewed with it).
+    invitation_role: str = ""
     invitation_expires_at: datetime | None = None
     invitation_expired: bool = False
     # Whether the caller may act on this account (reset link, sessions, devices).

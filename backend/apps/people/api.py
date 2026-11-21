@@ -74,6 +74,7 @@ def list_people(
             last_app_use_at=a.last_app_use_at,
             deactivated_at=a.deactivated_at,
             invitation_id=a.invitation_id,
+            invitation_role=a.invitation_role,
             invitation_expires_at=a.invitation_expires_at,
             invitation_expired=a.invitation_expired,
             can_manage_account=a.can_manage_account,

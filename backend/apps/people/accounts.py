@@ -68,6 +68,7 @@ class PersonAccount:
     last_app_use_at: datetime | None = None
     deactivated_at: datetime | None = None
     invitation_id: UUID | None = None
+    invitation_role: str = ""
     invitation_expires_at: datetime | None = None
     invitation_expired: bool = False
     can_manage_account: bool = False
@@ -204,6 +205,7 @@ def list_people(
                 last_app_use_at=app_use.get(account) if account is not None else None,
                 deactivated_at=person.deactivated_at if person.user_id is None else None,
                 invitation_id=invitation.id if invitation is not None else None,
+                invitation_role=invitation.role if invitation is not None else "",
                 invitation_expires_at=invitation.expires_at if invitation is not None else None,
                 invitation_expired=invitation is not None and invitation.expires_at <= now,
                 can_manage_account=person.user_id in manageable,
