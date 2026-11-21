@@ -37,14 +37,22 @@ def list_labels(workspace: Workspace) -> list[Label]:
     policy, the visible letters hashed once), not a join of every label to every link
     (measured, DECISIONS 2026-11-20). Same count: the links the policy shows, of letters
     not in the trash.
+
+    The trash is an anti-join against the few trashed letters (partial index
+    `documents_document_trash`), not a join of every link to its letter: the link's
+    policy already proves the letter visible, and a per-link lookup of the live letter
+    doubled the cost (measured 2026-11-21). A trashed letter the actor cannot
+    see needs no exclusion here: its links are hidden by their own policy.
     """
     labels = list(Label.objects.filter(workspace=workspace).order_by(Lower("name"), "id"))
     with connection.cursor() as cursor:
         cursor.execute(
             "SELECT l.label_id, pg_catalog.count(*) FROM public.documents_documentlabel l"
-            " JOIN public.documents_document d ON d.id = l.document_id AND d.trashed_at IS NULL"
-            " WHERE l.workspace_id = %s GROUP BY l.label_id",
-            [workspace.id],
+            " WHERE l.workspace_id = %s AND NOT EXISTS ("
+            "SELECT 1 FROM public.documents_document d"
+            " WHERE d.id = l.document_id AND d.workspace_id = %s AND d.trashed_at IS NOT NULL)"
+            " GROUP BY l.label_id",
+            [workspace.id, workspace.id],
         )
         counts: dict[UUID, int] = {row[0]: int(row[1]) for row in cursor.fetchall()}
     for label in labels:
