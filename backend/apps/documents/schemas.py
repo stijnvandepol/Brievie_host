@@ -69,6 +69,9 @@ class DocumentSummaryOut(Schema):
     proposed_sender: str = ""
     proposed_document_type: str = ""
     proposed_letter_date: date | None = None
+    # Open duplicate pairs with this letter that the caller sees in full (`listDuplicates`):
+    # show a chip "Dubbel?". 0 for a viewer.
+    open_duplicate_count: int = 0
 
 
 class TrashedDocumentOut(DocumentSummaryOut):
@@ -216,6 +219,8 @@ class InboxCountsOut(Schema):
     unassigned: int
     # Documents the autopilot confirmed or put a label or addressee on.
     automatic: int = 0
+    # Open duplicate pairs the caller sees in full (`listDuplicates`); 0 for a viewer.
+    duplicate: int = 0
 
 
 class DocumentEventOut(Schema):
@@ -235,6 +240,9 @@ class DocumentEventOut(Schema):
     person_name: str
     can_undo: bool
     undone: bool
+    # The other letter of a duplicate pair (`merged`, `duplicate_dismissed`, `task_moved`,
+    # and `trashed` with origin `merge`); null otherwise or once that letter is purged.
+    related_document_id: UUID | None = None
 
     @staticmethod
     def resolve_actor_name(obj: DocumentEvent) -> str:
@@ -255,6 +263,62 @@ class DocumentEventOut(Schema):
                 obj.origin not in AUTOMATIC_ORIGINS or bool(getattr(obj, "still_automatic", False))
             )
         )
+
+
+class DuplicateDifferenceOut(Schema):
+    # "sender", "letter_date", "document_type", "amount", "invoice_number",
+    # "payment_reference" or "page_count".
+    field: str
+    # The value on `first` and on `second`: dates ISO, amounts as decimal text.
+    first: str
+    second: str
+    # One side was read with little confidence: maybe a misread, maybe a real difference.
+    uncertain: bool = False
+
+
+class TaskTwinOut(Schema):
+    """A done task on one letter with an equal open task on the other: a merge that keeps
+    `open_document_id` can complete it (`complete_twin_tasks`)."""
+
+    done_document_id: UUID
+    open_document_id: UUID
+    type: str
+    description: str
+
+
+class DuplicateOut(Schema):
+    """Two letters that are probably one letter scanned twice. `first` and `second` are in
+    id order; the caller sees both."""
+
+    id: UUID
+    # "open" (the lists only answer open pairs).
+    state: str
+    created_at: datetime
+    first: DocumentSummaryOut
+    second: DocumentSummaryOut
+    # The letter to keep by default: the confirmed one, else the one further in review,
+    # else the older.
+    suggested_keep_id: UUID
+    # How alike the two texts are, 0 to 100.
+    text_similarity: int
+    # The facts both letters share (field names as in `differences`).
+    same: list[str] = Field(default_factory=list)
+    # The facts that differ, uncertain ones first.
+    differences: list[DuplicateDifferenceOut] = Field(default_factory=list)
+    task_twins: list[TaskTwinOut] = Field(default_factory=list)
+    # False when the two letters are not seen by the same people: a merge answers 409
+    # `duplicate_visibility_differs`; offer "Het zijn twee brieven".
+    can_merge: bool = True
+    # "visibility_differs" when `can_merge` is false; empty otherwise.
+    blocked_reason: str = ""
+
+
+class MergeDuplicateIn(InputSchema):
+    # One of the pair's two letters: it stays, the other goes to the trash.
+    keep_document_id: UUID
+    # Complete an open task on the kept letter whose equal is done on the other one
+    # (`task_twins`).
+    complete_twin_tasks: bool = True
 
 
 class MyExportOut(Schema):

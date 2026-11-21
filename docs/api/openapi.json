@@ -605,6 +605,14 @@
             "title": "Person Name",
             "type": "string"
           },
+          "related_document_id": {
+            "format": "uuid",
+            "title": "Related Document Id",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "rule_name": {
             "title": "Rule Name",
             "type": "string"
@@ -716,6 +724,11 @@
               "string",
               "null"
             ]
+          },
+          "open_duplicate_count": {
+            "default": 0,
+            "title": "Open Duplicate Count",
+            "type": "integer"
           },
           "open_suggestion_count": {
             "default": 0,
@@ -886,6 +899,11 @@
               "string",
               "null"
             ]
+          },
+          "open_duplicate_count": {
+            "default": 0,
+            "title": "Open Duplicate Count",
+            "type": "integer"
           },
           "open_suggestion_count": {
             "default": 0,
@@ -1126,6 +1144,11 @@
               "null"
             ]
           },
+          "open_duplicate_count": {
+            "default": 0,
+            "title": "Open Duplicate Count",
+            "type": "integer"
+          },
           "open_suggestion_count": {
             "default": 0,
             "title": "Open Suggestion Count",
@@ -1173,6 +1196,110 @@
           "letter_date"
         ],
         "title": "DocumentSummaryOut",
+        "type": "object"
+      },
+      "DuplicateDifferenceOut": {
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "first": {
+            "title": "First",
+            "type": "string"
+          },
+          "second": {
+            "title": "Second",
+            "type": "string"
+          },
+          "uncertain": {
+            "default": false,
+            "title": "Uncertain",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "field",
+          "first",
+          "second"
+        ],
+        "title": "DuplicateDifferenceOut",
+        "type": "object"
+      },
+      "DuplicateOut": {
+        "description": "Two letters that are probably one letter scanned twice. `first` and `second` are in\nid order; the caller sees both.",
+        "properties": {
+          "blocked_reason": {
+            "default": "",
+            "title": "Blocked Reason",
+            "type": "string"
+          },
+          "can_merge": {
+            "default": true,
+            "title": "Can Merge",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "differences": {
+            "items": {
+              "$ref": "#/components/schemas/DuplicateDifferenceOut"
+            },
+            "title": "Differences",
+            "type": "array"
+          },
+          "first": {
+            "$ref": "#/components/schemas/DocumentSummaryOut"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "same": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Same",
+            "type": "array"
+          },
+          "second": {
+            "$ref": "#/components/schemas/DocumentSummaryOut"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "suggested_keep_id": {
+            "format": "uuid",
+            "title": "Suggested Keep Id",
+            "type": "string"
+          },
+          "task_twins": {
+            "items": {
+              "$ref": "#/components/schemas/TaskTwinOut"
+            },
+            "title": "Task Twins",
+            "type": "array"
+          },
+          "text_similarity": {
+            "title": "Text Similarity",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "created_at",
+          "first",
+          "second",
+          "suggested_keep_id",
+          "text_similarity"
+        ],
+        "title": "DuplicateOut",
         "type": "object"
       },
       "EmptyTrashIn": {
@@ -1305,6 +1432,11 @@
           "automatic": {
             "default": 0,
             "title": "Automatic",
+            "type": "integer"
+          },
+          "duplicate": {
+            "default": 0,
+            "title": "Duplicate",
             "type": "integer"
           },
           "new": {
@@ -1658,6 +1790,25 @@
           "role"
         ],
         "title": "MemberRoleIn",
+        "type": "object"
+      },
+      "MergeDuplicateIn": {
+        "properties": {
+          "complete_twin_tasks": {
+            "default": true,
+            "title": "Complete Twin Tasks",
+            "type": "boolean"
+          },
+          "keep_document_id": {
+            "format": "uuid",
+            "title": "Keep Document Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "keep_document_id"
+        ],
+        "title": "MergeDuplicateIn",
         "type": "object"
       },
       "MyExportOut": {
@@ -2913,6 +3064,37 @@
         "title": "TaskOut",
         "type": "object"
       },
+      "TaskTwinOut": {
+        "description": "A done task on one letter with an equal open task on the other: a merge that keeps\n`open_document_id` can complete it (`complete_twin_tasks`).",
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "done_document_id": {
+            "format": "uuid",
+            "title": "Done Document Id",
+            "type": "string"
+          },
+          "open_document_id": {
+            "format": "uuid",
+            "title": "Open Document Id",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "done_document_id",
+          "open_document_id",
+          "type",
+          "description"
+        ],
+        "title": "TaskTwinOut",
+        "type": "object"
+      },
       "TrashListOut": {
         "description": "The caller's trash, the most recently trashed first (at most 500).",
         "properties": {
@@ -3016,6 +3198,11 @@
               "string",
               "null"
             ]
+          },
+          "open_duplicate_count": {
+            "default": 0,
+            "title": "Open Duplicate Count",
+            "type": "integer"
           },
           "open_suggestion_count": {
             "default": 0,
@@ -7888,6 +8075,371 @@
         "summary": "Trash Document",
         "tags": [
           "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/duplicates": {
+      "get": {
+        "description": "The open pairs of letters that are probably one letter scanned twice, newest first (at most 100). A viewer gets an empty list. Only a pair whose two letters the caller both sees; any other answers as a missing one (404 `duplicate_not_found`).",
+        "operationId": "listDuplicates",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DuplicateOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "List Duplicates",
+        "tags": [
+          "duplicates"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/duplicates/{duplicate_id}": {
+      "get": {
+        "description": "One open pair with what is the same and what differs. 404 `duplicate_not_found` for a decided pair and for a viewer. Only a pair whose two letters the caller both sees; any other answers as a missing one (404 `duplicate_not_found`).",
+        "operationId": "getDuplicate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "duplicate_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Duplicate Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DuplicateOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Get Duplicate",
+        "tags": [
+          "duplicates"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/duplicates/{duplicate_id}/dismiss": {
+      "post": {
+        "description": "The two letters are two letters (role member or admin; a viewer gets 403): the pair is never proposed again. 409 `duplicate_not_open` when already decided. Only a pair whose two letters the caller both sees; any other answers as a missing one (404 `duplicate_not_found`).",
+        "operationId": "dismissDuplicate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "duplicate_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Duplicate Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Dismiss Duplicate",
+        "tags": [
+          "duplicates"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/duplicates/{duplicate_id}/merge": {
+      "post": {
+        "description": "The two letters are one (role member or admin; a viewer gets 403). The kept letter gets the other's labels, addressees and open tasks; with `complete_twin_tasks` a task done on the other letter completes its open equal on the kept one (`task_twins`). The other letter goes to the trash (`restoreDocument` takes it back for 30 days; the merge itself is not undone). Answers the kept letter. 409 `duplicate_not_open` when already decided, `duplicate_visibility_differs` when the letters are not seen by the same people (`can_merge`), `document_processing`, `document_retained`; 422 `validation_error` for a `keep_document_id` outside the pair. Written to the log (`document_trashed`, reason `duplicate`). Only a pair whose two letters the caller both sees; any other answers as a missing one (404 `duplicate_not_found`).",
+        "operationId": "mergeDuplicate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "duplicate_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Duplicate Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergeDuplicateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Merge Duplicate",
+        "tags": [
+          "duplicates"
         ]
       }
     },

@@ -15,8 +15,8 @@ word of a letter.
 """
 
 import re
-from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections import Counter, defaultdict
+from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
@@ -37,9 +37,11 @@ from apps.documents.duplicates_facts import (
     LetterFacts,
     Verdict,
     decide,
+    differences,
     number_overlap,
     numbers_in,
     payment_reference_in,
+    same,
     strong,
 )
 from apps.documents.models import (
@@ -50,6 +52,7 @@ from apps.documents.models import (
     DuplicateCandidate,
     Extraction,
 )
+from apps.documents.schemas import DuplicateDifferenceOut, DuplicateOut, TaskTwinOut
 from apps.documents.visibility import visible_documents
 from apps.tasks import services as task_services
 from apps.tasks.models import Task
@@ -64,6 +67,10 @@ TERMS: Final = 16
 MAX_CANDIDATES: Final = 20
 # The most open pairs one arrival gets.
 MAX_OPEN_PER_LETTER: Final = 3
+# The most pairs `listDuplicates` answers.
+LIST_LIMIT = 100
+# `DuplicateOut.blocked_reason` when the two letters are not seen by the same people.
+BLOCKED_VISIBILITY: Final = "visibility_differs"
 
 
 def duplicate_not_found() -> ApiError:
@@ -110,11 +117,14 @@ def visibility_differs() -> ApiError:
 def viewers_differ(a: Document, b: Document) -> bool:
     """Whether two letters are seen by other people: one is private and the other not, or
     the members who see them (the policy's own condition, as the system) differ."""
+    return _viewers_differ(a, b, visibility.viewers([a.id, b.id]))
+
+
+def _viewers_differ(a: Document, b: Document, seen: dict[UUID, frozenset[UUID]]) -> bool:
     if (a.visibility == Document.Visibility.RESTRICTED) != (
         b.visibility == Document.Visibility.RESTRICTED
     ):
         return True
-    seen = visibility.viewers([a.id, b.id])
     return seen.get(a.id) != seen.get(b.id)
 
 
@@ -131,9 +141,15 @@ class TaskTwin:
 def task_twins(first: Document, second: Document) -> list[TaskTwin]:
     """Every done task of either letter whose equal (type, description, deadline, source)
     is open on the other one."""
-    tasks = list(
-        Task.objects.filter(document_id__in=[first.id, second.id]).order_by("created_at", "id")
+    return _twins(
+        list(
+            Task.objects.filter(document_id__in=[first.id, second.id]).order_by("created_at", "id")
+        )
     )
+
+
+def _twins(tasks: Sequence[Task]) -> list[TaskTwin]:
+    """The twins among the tasks of two letters (`task_twins`)."""
     return [
         TaskTwin(done.document_id, task.document_id, task.type, task.description)
         for done in tasks
@@ -303,6 +319,154 @@ def _decide(
     candidate.decided_by = user
     candidate.decided_at = timezone.now()
     candidate.save(update_fields=["state", "kept", "decided_by", "decided_at", "updated_at"])
+
+
+def list_duplicates(membership: Membership) -> list[DuplicateOut]:
+    """The open pairs the member sees in full, newest first (at most `LIST_LIMIT`); empty
+    for a viewer (who cannot decide)."""
+    if _is_viewer(membership):
+        return []
+    pairs = list(visible_pairs(membership).order_by("-created_at", "-id")[:LIST_LIMIT])
+    return _outs(membership, pairs)
+
+
+def get_duplicate(*, membership: Membership, candidate_id: UUID) -> DuplicateOut:
+    """One open pair the member sees in full, or 404 `duplicate_not_found` (as a random
+    id: a pair with a letter the member cannot see, a decided pair, or a viewer)."""
+    found = None if _is_viewer(membership) else visible_pairs(membership).filter(id=candidate_id)
+    candidate = None if found is None else found.first()
+    if candidate is None:
+        raise duplicate_not_found()
+    return duplicate_out(membership, candidate)
+
+
+def duplicate_out(membership: Membership, candidate: DuplicateCandidate) -> DuplicateOut:
+    """A pair as the API shows it (read as the member)."""
+    [out] = _outs(membership, [candidate])
+    return out
+
+
+def count_pairs(membership: Membership) -> int:
+    """How many open pairs the member sees in full (the inbox count); 0 for a viewer."""
+    return 0 if _is_viewer(membership) else visible_pairs(membership).count()
+
+
+def pair_counts(membership: Membership, document_ids: Collection[UUID]) -> dict[UUID, int]:
+    """For each of `document_ids`, how many open pairs with it the member sees in full
+    (the chip on a letter); a letter without one is left out. Empty for a viewer."""
+    ids = list(document_ids)
+    if not ids or _is_viewer(membership):
+        return {}
+    counts: Counter[UUID] = Counter()
+    for first_id, second_id in (
+        visible_pairs(membership)
+        .filter(Q(first_id__in=ids) | Q(second_id__in=ids))
+        .values_list("first_id", "second_id")
+    ):
+        counts.update(i for i in (first_id, second_id) if i in ids)
+    return dict(counts)
+
+
+def _is_viewer(membership: Membership) -> bool:
+    return membership.role == Membership.Role.VIEWER
+
+
+# The further a letter is in review, the better it is to keep.
+_REVIEW_RANK: Final[dict[str, int]] = {
+    Document.Status.DONE: 3,
+    Document.Status.NEEDS_REVIEW: 2,
+    Document.Status.FAILED: 1,
+    Document.Status.PROCESSING: 0,
+}
+
+
+def suggested_keep(first: Document, second: Document) -> Document:
+    """The letter to keep by default: the confirmed one, else the one further in review,
+    else the older."""
+    return min(
+        (first, second),
+        key=lambda d: (
+            d.confirmed_at is None,
+            -_REVIEW_RANK.get(d.status, 0),
+            d.created_at,
+            d.id,
+        ),
+    )
+
+
+def _outs(membership: Membership, pairs: Sequence[DuplicateCandidate]) -> list[DuplicateOut]:
+    """The pairs as the API shows them, with a few queries for all of them."""
+    if not pairs:
+        return []
+    # Imported here: `services` reaches the pipeline's jobs, whose steps import this module.
+    from apps.documents import services
+
+    ids = {i for p in pairs for i in (p.first_id, p.second_id)}
+    letters = {
+        d.id: d
+        for d in visible_documents(membership)
+        .filter(id__in=ids)
+        .prefetch_related(
+            "addressee_links",
+            "label_links",
+            "extractions",
+            services.SUGGESTIONS,
+            services.HEADLINE_PROPOSALS,
+        )
+    }
+    tasks: defaultdict[UUID, list[Task]] = defaultdict(list)
+    for task in Task.objects.filter(document_id__in=ids).order_by("created_at", "id"):
+        if task.document_id is not None:
+            tasks[task.document_id].append(task)
+    seen = visibility.viewers(ids)
+    counts = pair_counts(membership, ids)
+    outs = []
+    for pair in pairs:
+        first, second = letters[pair.first_id], letters[pair.second_id]
+        first_facts = _facts(first, list(first.extractions.all()))
+        second_facts = _facts(second, list(second.extractions.all()))
+        differs = _viewers_differ(first, second, seen)
+        outs.append(
+            DuplicateOut(
+                id=pair.id,
+                state=pair.state,
+                created_at=pair.created_at,
+                first=services.document_summary_out(
+                    first, open_duplicate_count=counts.get(first.id, 0)
+                ),
+                second=services.document_summary_out(
+                    second, open_duplicate_count=counts.get(second.id, 0)
+                ),
+                suggested_keep_id=suggested_keep(first, second).id,
+                text_similarity=int(
+                    (pair.text_similarity * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+                ),
+                same=same(first_facts, second_facts),
+                differences=[
+                    DuplicateDifferenceOut(
+                        field=d.field, first=d.first, second=d.second, uncertain=d.uncertain
+                    )
+                    for d in differences(first_facts, second_facts)
+                ],
+                task_twins=[
+                    TaskTwinOut(
+                        done_document_id=t.done_document_id,
+                        open_document_id=t.open_document_id,
+                        type=t.type,
+                        description=t.description,
+                    )
+                    for t in _twins(
+                        sorted(
+                            tasks[first.id] + tasks[second.id],
+                            key=lambda t: (t.created_at, t.id),
+                        )
+                    )
+                ],
+                can_merge=not differs,
+                blocked_reason=BLOCKED_VISIBILITY if differs else "",
+            )
+        )
+    return outs
 
 
 def facts_of(document: Document) -> LetterFacts:

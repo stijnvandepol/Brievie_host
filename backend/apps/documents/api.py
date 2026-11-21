@@ -141,7 +141,7 @@ def list_documents(
         label_id=label_id,
         automatic=automatic,
     )
-    return [services.document_summary_out(document) for document in documents]
+    return services.document_summaries_out(membership, documents)
 
 
 @router.post(
@@ -206,7 +206,7 @@ def get_inbox_counts(request: HttpRequest, workspace_id: UUID) -> InboxCountsOut
 def get_document(request: HttpRequest, workspace_id: UUID, document_id: UUID) -> DocumentOut:
     membership = workspace_member(request, workspace_id)
     document = services.get_document(membership=membership, document_id=document_id)
-    return services.document_out(document)
+    return services.document_out_as(membership, document)
 
 
 @router.get(

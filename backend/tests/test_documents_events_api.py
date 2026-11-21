@@ -53,7 +53,7 @@ def test_events_newest_first_with_names(client: Client, ws_a: Workspace) -> None
     ]
     assert set(rows[0]) == {
         "id", "created_at", "kind", "origin", "actor_id", "actor_name", "rule_name",
-        "label_name", "person_name", "can_undo", "undone",
+        "label_name", "person_name", "can_undo", "undone", "related_document_id",
     }  # fmt: skip
     for row in rows:
         assert row["origin"] == "user"

@@ -14,6 +14,7 @@ from apps.common.version import server_version
 from apps.devices.api import router as devices_router
 from apps.devices.auth import DeviceTokenAuth
 from apps.documents.api import router as documents_router
+from apps.documents.duplicates_api import router as duplicates_router
 from apps.documents.schemas import UploadMetadataIn
 from apps.labels.api import router as labels_router
 from apps.people.api import router as people_router
@@ -66,6 +67,7 @@ def get_health(request: HttpRequest) -> HealthOut:
 api.add_router("", accounts_router)
 api.add_router("", workspaces_router)
 api.add_router("", documents_router)
+api.add_router("", duplicates_router)
 api.add_router("", people_router)
 api.add_router("", labels_router)
 api.add_router("", rules_router)

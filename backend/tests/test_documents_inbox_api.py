@@ -133,7 +133,13 @@ def test_inbox_counts(client_a: Client, ws_a: Workspace) -> None:
     r = client_a.get(counts_url(ws_a.id))
 
     assert r.status_code == 200
-    assert r.json() == {"new": 1, "review": 2, "unassigned": 1, "automatic": 0}
+    assert r.json() == {
+        "new": 1,
+        "review": 2,
+        "unassigned": 1,
+        "automatic": 0,
+        "duplicate": 0,
+    }
 
 
 @pytest.mark.parametrize("query", [{"inbox_state": "done"}, {"person_id": "geen-uuid"}])
@@ -183,4 +189,5 @@ def test_other_workspace_is_404_on_every_new_endpoint(
         "review": 0,
         "unassigned": 0,
         "automatic": 0,
+        "duplicate": 0,
     }
