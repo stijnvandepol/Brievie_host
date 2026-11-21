@@ -275,7 +275,7 @@ def my_tasks(membership: Membership, *, part: str = "mine", status: str = "open"
                 reason=reason,
                 group=group_for(task.deadline, today) if open_task else None,
                 days_left=days_left(task.deadline, today) if open_task else None,
-                for_names=_for_names(task, names),
+                for_names=_for_names(task, names, facts.person_ids),
             )
         )
     # Imported here: `documents.services` reaches this module through the duplicates.
@@ -344,8 +344,10 @@ def _names(person_ids: set[UUID]) -> dict[UUID, str]:
     return dict(Person.objects.filter(id__in=person_ids).values_list("id", "display_name"))
 
 
-def _for_names(task: Task, names: dict[UUID, str]) -> list[str]:
+def _for_names(task: Task, names: dict[UUID, str], own: frozenset[UUID]) -> list[str]:
+    """The letter's persons and departments other than the member's own persons: the
+    member is "jou" ("Voor jou en Piet")."""
     if task.document is None:
         return []
-    found = [names[p] for p in task.document.addressee_ids if p in names]
+    found = [names[p] for p in task.document.addressee_ids if p in names and p not in own]
     return sorted(found, key=str.casefold)

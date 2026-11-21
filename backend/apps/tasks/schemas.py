@@ -41,7 +41,8 @@ class TaskItemOut(Schema):
     # Why it is the member's: "assigned", "addressee", "department", "unassigned" or
     # "other"; empty in `listTasks`.
     reason: str = ""
-    # The names of the letter's persons and departments ("Voor Piet"); empty in `listTasks`.
+    # The names of the letter's persons and departments other than the caller's own
+    # persons ("Voor jou en Piet", "Voor Finance"); empty in `listTasks`.
     for_names: list[str] = Field(default_factory=list)
     assigned_to_id: UUID | None = None
     assigned_to_name: str = ""

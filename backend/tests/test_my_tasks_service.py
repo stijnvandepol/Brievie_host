@@ -103,9 +103,9 @@ def test_department_tasks_leave_to_pick_up_when_departments_off() -> None:
 def test_letter_for_two_persons_listed_for_both_and_done_for_both() -> None:
     h = household()
     both = letter(h.workspace, on=[h.persons["Anne"], h.persons["Piet"]])
-    for user in (h.anne, h.piet):
+    for user, other in ((h.anne, "Piet"), (h.piet, "Anne")):
         found = {i.task.id: i for i in mine(h.workspace, user).items}
-        assert found[both.id].for_names == ["Anne", "Piet"]
+        assert found[both.id].for_names == [other]  # the reader is "jou"
     with workspace_context(h.workspace.id, actor=h.piet.id):
         services.complete_task(workspace=h.workspace, user=h.piet, task_id=both.id)
     for user in (h.anne, h.piet):

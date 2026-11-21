@@ -36,7 +36,7 @@ def test_list_my_tasks_shape(client: Client) -> None:
     assert item["id"] == str(task.id)
     assert item["reason"] == "addressee"
     assert item["group"] == "later"
-    assert item["for_names"] == ["Anne", "Piet"]
+    assert item["for_names"] == ["Piet"]
     assert item["can_edit"] is True
     assert item["amount"] == ""
     assert item["needs_deadline"] is False
