@@ -66,8 +66,10 @@ def test_complete_and_reopen_a_hidden_task_are_404(client: Client, action: str) 
             Task.objects.filter(id=task.id).update(status=Task.Status.DONE)
     client.force_login(o.hr)
 
-    hidden = client.post(f"{_tasks_url(o)}/{task.id}/{action}")
-    unknown = client.post(f"{_tasks_url(o)}/{uuid.uuid4()}/{action}")
+    hidden = client.post(f"{_tasks_url(o)}/{task.id}/{action}", content_type="application/json")
+    unknown = client.post(
+        f"{_tasks_url(o)}/{uuid.uuid4()}/{action}", content_type="application/json"
+    )
 
     assert hidden.status_code == unknown.status_code == 404
     assert hidden.json() == unknown.json()
@@ -84,9 +86,19 @@ def test_letterless_task_visible_to_its_maker_only(client: Client) -> None:
     for user in (o.hr, o.finance, o.sorter, o.admin, o.viewer):
         assert task.id not in _listed(o, client, user), user.name
     client.force_login(o.hr)
-    assert client.post(f"{_tasks_url(o)}/{task.id}/complete").status_code == 404
+    assert (
+        client.post(
+            f"{_tasks_url(o)}/{task.id}/complete", content_type="application/json"
+        ).status_code
+        == 404
+    )
     client.force_login(o.plain)
-    assert client.post(f"{_tasks_url(o)}/{task.id}/complete").status_code == 200
+    assert (
+        client.post(
+            f"{_tasks_url(o)}/{task.id}/complete", content_type="application/json"
+        ).status_code
+        == 200
+    )
 
 
 def test_letterless_task_visible_to_its_assignee(client: Client) -> None:

@@ -91,8 +91,12 @@ def test_retry_by_a_member_who_cannot_read_the_letter_is_404_and_sends_nothing(
     jobs = _process_jobs()
     client.force_login(o.hr)
 
-    hidden = client.post(f"{documents_url(o.workspace.id)}/{letter.id}/retry")
-    unknown = client.post(f"{documents_url(o.workspace.id)}/{uuid.uuid4()}/retry")
+    hidden = client.post(
+        f"{documents_url(o.workspace.id)}/{letter.id}/retry", content_type="application/json"
+    )
+    unknown = client.post(
+        f"{documents_url(o.workspace.id)}/{uuid.uuid4()}/retry", content_type="application/json"
+    )
 
     assert hidden.status_code == 404
     assert hidden.json() == unknown.json()
@@ -101,7 +105,12 @@ def test_retry_by_a_member_who_cannot_read_the_letter_is_404_and_sends_nothing(
         assert Document.objects.get(id=letter.id).status == Document.Status.FAILED
 
     client.force_login(o.finance)
-    assert client.post(f"{documents_url(o.workspace.id)}/{letter.id}/retry").status_code == 202
+    assert (
+        client.post(
+            f"{documents_url(o.workspace.id)}/{letter.id}/retry", content_type="application/json"
+        ).status_code
+        == 202
+    )
 
 
 def test_ai_request_holds_only_its_own_letter() -> None:
