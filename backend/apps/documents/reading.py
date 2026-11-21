@@ -1,0 +1,165 @@
+"""What a member has read: "Ongelezen" (navigation spec S 5).
+
+The only writer of `DocumentReadMark`. A mark is one member's fact about one letter: it is
+written as that member (the own-row policy refuses anything else), never put in the
+letter's history, the audit log, an export or a log line, and never shown to anybody else.
+
+A letter is unread for a member when they see it, it is not being processed, it arrived
+after their `Membership.unread_from`, and they have no mark for it (S 5.2). A letter is read
+when they open it (an explicit call of the web's letter page or the app's reader, never a
+plain `GET`), scan or upload it, or mark it read (S 5.3).
+"""
+
+from collections.abc import Sequence
+from typing import Final
+from uuid import UUID
+
+from django.db import connection, transaction
+from django.db.models import Exists, OuterRef, Q
+from django.utils import timezone
+from django.utils.translation import gettext as _
+
+from apps.accounts.models import User
+from apps.common.errors import ApiError
+from apps.documents import visibility
+from apps.documents.models import Document, DocumentReadMark
+from apps.workspaces.context import current_actor
+from apps.workspaces.models import Membership
+
+# "Alles gelezen" marks the rows on screen: a list shows at most 200 (S 5.3).
+MARK_MANY_MAX: Final = 200
+
+
+def unread_q(membership: Membership) -> Q:
+    """The condition of an unread letter for `membership` (S 5.2). Only ever applied on top
+    of `visibility.visible_documents(membership)`: it narrows, it never widens."""
+    marked = DocumentReadMark.objects.filter(document=OuterRef("pk"), user_id=membership.user_id)
+    return (
+        ~Q(status=Document.Status.PROCESSING)
+        & Q(created_at__gte=membership.unread_from)
+        & Q(~Exists(marked))
+    )
+
+
+def unread_ids(membership: Membership, documents: Sequence[Document]) -> set[UUID]:
+    """Which of `documents` (already read through the seam) are unread for the member: one
+    query for a whole list."""
+    candidates = [
+        d.id
+        for d in documents
+        if d.status != Document.Status.PROCESSING and d.created_at >= membership.unread_from
+    ]
+    if not candidates:
+        return set()
+    marked = set(
+        DocumentReadMark.objects.filter(
+            document_id__in=candidates, user_id=membership.user_id
+        ).values_list("document_id", flat=True)
+    )
+    return {d for d in candidates if d not in marked}
+
+
+def is_unread_for_actor(document: Document) -> bool:
+    """Whether the letter is unread for the current user (the letter's detail). False for
+    the system and for anybody who is not a member."""
+    actor = current_actor()
+    if not isinstance(actor, UUID):
+        return False
+    membership = Membership.objects.filter(
+        workspace_id=document.workspace_id, user_id=actor
+    ).first()
+    if membership is None:
+        return False
+    return document.id in unread_ids(membership, [document])
+
+
+def _insert(user_id: UUID, workspace_id: UUID, document_ids: Sequence[UUID]) -> int:
+    """Marks for `user_id` on `document_ids` that it lacks, as the current actor (the
+    own-row policy checks that it is that user). The number newly written."""
+    if not document_ids:
+        return 0
+    known = set(
+        DocumentReadMark.objects.filter(
+            document_id__in=list(document_ids), user_id=user_id
+        ).values_list("document_id", flat=True)
+    )
+    now = timezone.now()
+    new = [
+        DocumentReadMark(workspace_id=workspace_id, document_id=d, user_id=user_id, read_at=now)
+        for d in dict.fromkeys(document_ids)
+        if d not in known
+    ]
+    # ON CONFLICT DO NOTHING: a second tab marking the same letter at once changes nothing.
+    DocumentReadMark.objects.bulk_create(new, ignore_conflicts=True)
+    return len(new)
+
+
+def mark_read(membership: Membership, document_id: UUID) -> None:
+    """The member opened the letter (S 5.3): their own mark, once. 404 like `getDocument`
+    for a letter they may not see or that is in the trash. Writes nothing else of the
+    member: no history, no audit row."""
+    # Imported here: `services` builds the letter's answer with this module.
+    from apps.documents.services import get_document
+
+    with transaction.atomic():
+        document = get_document(membership=membership, document_id=document_id)
+        _insert(membership.user_id, membership.workspace_id, [document.id])
+        note_addressee_opened(document, membership)
+
+
+def mark_unread(membership: Membership, document_id: UUID) -> None:
+    """ "Markeer als ongelezen": the member's own mark goes. Whether an addressee opened the
+    letter stays (an opening happened). 404 like `getDocument`."""
+    from apps.documents.services import get_document
+
+    with transaction.atomic():
+        document = get_document(membership=membership, document_id=document_id)
+        DocumentReadMark.objects.filter(
+            document_id=document.id, user_id=membership.user_id
+        ).delete()
+
+
+def mark_many_read(membership: Membership, document_ids: Sequence[UUID]) -> int:
+    """ "Alles gelezen": the member's marks on the given letters, at most 200 (422
+    `validation_error`). Ids the member does not see are skipped without a word, so the
+    answer says nothing about them. The number newly marked."""
+    ids = list(dict.fromkeys(document_ids))
+    if len(ids) > MARK_MANY_MAX:
+        raise ApiError(422, "validation_error", _("Kies hoogstens 200 brieven."))
+    if not ids:
+        return 0
+    with transaction.atomic():
+        documents = list(
+            visibility.visible_documents(membership)
+            .filter(id__in=ids)
+            .only("id", "workspace_id", "addressee_ids", "addressee_opened_at")
+        )
+        marked = _insert(membership.user_id, membership.workspace_id, [d.id for d in documents])
+        waiting = [d for d in documents if d.addressee_ids and d.addressee_opened_at is None]
+        if waiting:
+            mine = my_post_ids(membership.user_id)
+            for document in waiting:
+                note_addressee_opened(document, membership, post_ids=mine)
+        return marked
+
+
+def mark_scanned(document: Document, user: User) -> None:
+    """The uploader made the letter: it is nothing new to them (S 5.3). In the upload's
+    transaction, as the uploader."""
+    _insert(user.id, document.workspace_id, [document.id])
+
+
+def my_post_ids(user_id: UUID) -> frozenset[UUID]:
+    """The persons (own and managed) and departments whose post is the user's: the
+    policy's own function (`brievie_my_post_ids`), so there is no second definition."""
+    with connection.cursor() as c:
+        c.execute("SELECT public.brievie_my_post_ids(%s)", [user_id])
+        row = c.fetchone()
+    return frozenset(row[0]) if row is not None and row[0] else frozenset()
+
+
+def note_addressee_opened(
+    document: Document, membership: Membership, *, post_ids: frozenset[UUID] | None = None
+) -> None:
+    """Placeholder until "Opened by an addressee" (Task 3)."""
+    del document, membership, post_ids
