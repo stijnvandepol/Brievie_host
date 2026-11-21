@@ -18,8 +18,11 @@ from typing import Final
 
 from apps.documents.models import NEEDS_ATTENTION_BELOW
 
+# Measured (tests/perf/test_duplicates_measure.py, 2026-11-21): at 0.80 / 0.60 recall 0.95,
+# 0.7% of hard negatives and no random pair proposed; 0.70 lost the rescans whose OCR
+# misread digits (recall 0.89).
 TEXT_SIMILAR_FROM: Final = Decimal("0.80")
-NUMBERS_SHARED_FROM: Final = Decimal("0.70")
+NUMBERS_SHARED_FROM: Final = Decimal("0.60")
 # Below this many numbers on both letters the overlap says little: text alone decides.
 FEW_NUMBERS: Final = 3
 

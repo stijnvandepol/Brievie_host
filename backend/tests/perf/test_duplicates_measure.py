@@ -3,15 +3,17 @@
 Runs only with BRIEVIE_PERF=1, on the throw-away test database: a corpus of 2,000
 generated letters (`duplicates_corpus`), 300 positives (the same letter scanned again),
 300 hard negatives and 10,000 random pairs. Every positive and hard negative arrives
-through the real candidate query (`duplicates._CANDIDATES_SQL`: search index, `pg_trgm`)
+through the real candidate query (`duplicates.candidates`: search index, `pg_trgm`)
 and the real decision (`duplicates_facts.decide`), per threshold pair, with and without
 the guards. Then the workspace grows to 10,000 and 100,000 letters and `duplicates.detect`
 is timed per arrival (warm, median of 7). The report is printed and, when
 BRIEVIE_PERF_REPORT names a file, written next to it as `duplicates-measure.md`.
 
 `test_verdict` runs last (file order) and applies the aim: recall >= 0.95, false proposals
-<= 2% of hard negatives and 0 of random pairs at the chosen thresholds, < 50 ms per arrival
-at 100,000 letters.
+<= 2% of hard negatives and 0 of random pairs at the chosen thresholds; time per arrival
+under the aim of its size: < 50 ms at 10,000 letters, < 150 ms at 100,000 (controller ruling
+21-11: forced RLS keeps `@@` off the GIN index, so the candidate query reads the 180-day
+window; a number table with a leakproof equality is the follow-up near 100,000).
 """
 
 import os
@@ -59,8 +61,11 @@ SIZES: Final = (10_000, 100_000)
 TIMED_RUNS: Final = 7
 AIM_RECALL: Final = 0.95
 AIM_HARD: Final = 0.02
-AIM_MS: Final = 50.0
+# Aim per size (ms per arrival, warm median).
+AIM_MS: Final = {10_000: 50.0, 100_000: 150.0}
 CHUNK: Final = 5_000
+# The thresholds in force (`duplicates_facts`), read before the grid overwrites them.
+CHOSEN: Final = (duplicates_facts.TEXT_SIMILAR_FROM, duplicates_facts.NUMBERS_SHARED_FROM)
 
 
 @dataclass
@@ -203,19 +208,12 @@ def results() -> Results:
 
 
 def _candidates(world: World, text: str) -> dict[UUID, Decimal]:
-    with connection.cursor() as c:
-        c.execute(
-            duplicates._CANDIDATES_SQL,  # the real query, measured
-            {
-                "text": text,
-                "terms": duplicates.TERMS,
-                "workspace": world.workspace_id,
-                "id": uuid.uuid4(),
-                "since": world.today - duplicates.WINDOW,
-                "limit": duplicates.MAX_CANDIDATES,
-            },
-        )
-        return {row[0]: duplicates._score(float(row[1])) for row in c.fetchall()}
+    return duplicates.candidates(  # the real query, measured
+        text=text,
+        workspace_id=world.workspace_id,
+        document_id=uuid.uuid4(),
+        since=world.today - duplicates.WINDOW,
+    )
 
 
 def _likely(
@@ -340,13 +338,17 @@ def _evaluate(
                 f"{_rate(row[False][1], NEGATIVES)} | {row[True][2]} | {row[False][2]} | "
                 f"{other / (n_pos + NEGATIVES):.3f} |"
             )
-            if (text, numbers) == (Decimal("0.80"), Decimal("0.70")):
+            if (text, numbers) == CHOSEN:
                 chosen = {
                     "recall": row[True][0] / n_pos,
                     "hard": row[True][1] / NEGATIVES,
                     "random": row[True][2],
                 }
-    lines += ["", "Hard negatives proposed at 0.80 / 0.70 with guards, per kind:", ""]
+    lines += [
+        "",
+        f"Hard negatives proposed at {CHOSEN[0]} / {CHOSEN[1]} with guards, per kind:",
+        "",
+    ]
     for how in corpus.NEGATIVE_KINDS:
         group = [(n_pos + k, a) for k, a in enumerate(world.negatives) if a.kind == how]
         proposed = sum(
@@ -355,8 +357,7 @@ def _evaluate(
                 arrivals[True][k],
                 base[True][a.partner],
                 a.candidates[a.partner],
-                Decimal("0.80"),
-                Decimal("0.70"),
+                *CHOSEN,
             )
             for k, a in group
         )
@@ -415,11 +416,12 @@ def _time_detect(world: World, results: Results, size: int) -> None:
                     timings.append(took * 1000)
         if size == SIZES[-1]:
             with connection.cursor() as c:
+                text = world.positives[0].text
                 c.execute(
                     "EXPLAIN (ANALYZE, BUFFERS) " + duplicates._CANDIDATES_SQL,
                     {
-                        "text": world.positives[0].text,
-                        "terms": duplicates.TERMS,
+                        "text": text,
+                        "query": duplicates.candidate_query(text),
                         "workspace": world.workspace_id,
                         "id": uuid.uuid4(),
                         "since": world.today - duplicates.WINDOW,
@@ -471,9 +473,13 @@ def test_verdict(results: Results) -> None:
     lines += ["## Time of `detect` per arrival (warm, median of 7)", ""]
     for size, runs in sorted(results.timings.items()):
         median = statistics.median(runs)
-        lines.append(f"- {size:,} letters: median {median:.1f} ms, slowest {max(runs):.1f} ms")
-        if size == SIZES[-1] and median >= AIM_MS:
-            results.failures.append(f"detect {median:.1f} ms >= {AIM_MS} ms at {size:,}")
+        lines.append(
+            f"- {size:,} letters: median {median:.1f} ms, slowest {max(runs):.1f} ms"
+            f" (aim < {AIM_MS[size]:.0f} ms)"
+        )
+        aim = AIM_MS[size]
+        if median >= aim:
+            results.failures.append(f"detect {median:.1f} ms >= {aim} ms at {size:,}")
     lines += ["", "## Candidate query at 100,000 letters", "", "```", results.explain, "```"]
     if results.failures:
         lines += ["", "## Aim missed", "", *(f"- {f}" for f in results.failures)]

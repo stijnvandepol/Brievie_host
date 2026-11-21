@@ -84,9 +84,9 @@ def test_number_overlap_is_jaccard() -> None:
 def test_likely_when_text_and_numbers_match() -> None:
     a, b = facts(), facts()
 
-    assert likely(a, b, "0.80", "0.70") is Verdict.LIKELY
-    assert likely(a, b, "0.79", "0.70") is Verdict.NONE
-    assert likely(a, b, "0.80", "0.69") is Verdict.NONE
+    assert likely(a, b, "0.80", "0.60") is Verdict.LIKELY
+    assert likely(a, b, "0.79", "0.60") is Verdict.NONE
+    assert likely(a, b, "0.80", "0.59") is Verdict.NONE
 
 
 def test_few_numbers_need_text_only() -> None:

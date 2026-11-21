@@ -45,6 +45,33 @@ def test_second_scan_gets_a_pair(ws_a: Workspace) -> None:
     assert second.status == Document.Status.NEEDS_REVIEW
 
 
+def test_terms_are_long_numbers_first() -> None:
+    lexemes = ["jaarafrekening", "00451278", "12345", "77120934", "2026", "assen"]
+
+    assert duplicates.terms_of(lexemes) == ["00451278", "77120934"]
+
+
+def test_terms_are_the_longest_words_without_numbers() -> None:
+    words = [f"woord{'x' * n}" for n in range(20)]
+
+    assert duplicates.terms_of([*words, "2026"]) == words[::-1][: duplicates.TERMS]
+
+
+def test_candidate_query_leaves_out_the_bsn(ws_a: Workspace) -> None:
+    with workspace_context(ws_a.id, actor=SYSTEM):
+        assert duplicates.candidate_query("BSN [BSN] klantnummer 00451278") == "'00451278'"
+        assert duplicates.candidate_query("[BSN]") is None
+
+
+def test_letter_without_numbers_is_found_by_its_words(ws_a: Workspace) -> None:
+    first = letter(ws_a, OTHER_LETTER, status=Document.Status.DONE)
+
+    second = arrive(ws_a, rescan(OTHER_LETTER))
+
+    [row] = pairs_of(ws_a)
+    assert (row.first_id, row.second_id) == tuple(sorted((first.id, second.id)))
+
+
 def test_different_letter_gets_none(ws_a: Workspace) -> None:
     letter(ws_a, LETTER)
 
