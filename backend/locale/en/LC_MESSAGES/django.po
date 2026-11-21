@@ -2173,7 +2173,7 @@ msgstr "Home"
 
 #: apps/workspaces/models.py
 msgid "Organisatie"
-msgstr "Organization"
+msgstr "Business"
 
 #: apps/workspaces/models.py
 msgid "Beheerder"
