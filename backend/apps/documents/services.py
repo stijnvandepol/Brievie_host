@@ -12,6 +12,7 @@ from apps.common.errors import ApiError
 from apps.documents import organise, suggestions, visibility
 from apps.documents.intake import page_aad
 from apps.documents.models import (
+    LIVE,
     Document,
     DocumentAddressee,
     DocumentEvent,
@@ -32,7 +33,9 @@ from apps.documents.schemas import (
 from apps.documents.storage import default_storage
 from apps.pipeline.jobs import defer_processing
 from apps.tasks.models import Task
+from apps.workspaces.context import current_actor
 from apps.workspaces.keys import workspace_key
+from apps.workspaces.locks import lock_own_membership
 from apps.workspaces.models import Membership, Workspace
 
 _PATH_UNIQUE = "documents_folder_workspace_path_unique"
@@ -113,6 +116,19 @@ def _auto_label_ids(document: Document) -> list[UUID]:
     return [link.label_id for link in document.label_links.all() if link.automatic]
 
 
+def _auto_rule_label_ids(document: Document) -> list[UUID]:
+    """The automatic labels whose accepted proposal came from a rule (the autopilot applied
+    a rule's label). Read from the suggestions, so a list's prefetch is used."""
+    by_rule = {
+        s.label_id
+        for s in document.suggestions.all()
+        if s.label_id is not None
+        and s.state == DocumentSuggestion.State.ACCEPTED
+        and s.origin == DocumentSuggestion.Origin.RULE
+    }
+    return [label_id for label_id in _auto_label_ids(document) if label_id in by_rule]
+
+
 # The prefetch of a document's suggestions wherever several documents are shown: with
 # their persons, so `_open_suggestions` can leave out archived ones without a query each.
 SUGGESTIONS = models.Prefetch(
@@ -183,24 +199,10 @@ def _open_suggestions(document: Document) -> list[DocumentSuggestion]:
     return sorted(rows, key=lambda s: (not s.preselected, -s.confidence, s.created_at, s.id))
 
 
-def _has_addressee() -> models.Exists:
-    return models.Exists(DocumentAddressee.objects.filter(document=models.OuterRef("pk")))
-
-
-def _has_automatic_link() -> models.Q:
-    return models.Exists(
-        DocumentLabel.objects.filter(document=models.OuterRef("pk"), automatic=True)
-    ) | models.Exists(
-        DocumentAddressee.objects.filter(document=models.OuterRef("pk"), automatic=True)
-    )
-
-
 def _is_automatic() -> models.Q:
-    """The AI confirmed the document or put a label or addressee on it itself.
-
-    Needs the `has_automatic` annotation (an `Exists` cannot sit in an aggregate filter).
-    """
-    return models.Q(confirmed_by_ai=True) | models.Q(has_automatic=True)
+    """The AI confirmed the document or put a label or addressee on it itself (the stored
+    `has_automatic_link`, kept by `organise.sync_automatic`; DECISIONS 2026-11-20)."""
+    return models.Q(confirmed_by_ai=True) | models.Q(has_automatic_link=True)
 
 
 def _in_state(state: str) -> models.Q:
@@ -208,7 +210,9 @@ def _in_state(state: str) -> models.Q:
         return models.Q(status=Document.Status.PROCESSING)
     if state == InboxState.REVIEW:
         return models.Q(status__in=_REVIEW_STATUSES)
-    return models.Q(status=Document.Status.DONE, has_addressee=False)
+    # `addressee_ids` mirrors the links (one writer, checked nightly); this form uses the
+    # partial index `documents_document_unassigned`.
+    return models.Q(status=Document.Status.DONE, addressee_ids=[])
 
 
 def list_documents(
@@ -225,13 +229,12 @@ def list_documents(
     """
     if inbox_state and inbox_state not in INBOX_STATES:
         raise ApiError(422, "validation_error", _("Deze stand van de inbox kennen we niet."))
-    documents = visibility.visible_documents(membership).annotate(
-        has_addressee=_has_addressee(), has_automatic=_has_automatic_link()
-    )
+    documents = visibility.visible_documents(membership)
     if inbox_state:
         documents = documents.filter(_in_state(inbox_state))
     if person_id is not None:
-        documents = documents.filter(addressee_links__person_id=person_id)
+        # The GIN index on `addressee_ids`.
+        documents = documents.filter(addressee_ids__contains=[person_id])
     if label_id is not None:
         documents = documents.filter(label_links__label_id=label_id)
     if automatic:
@@ -244,11 +247,9 @@ def list_documents(
 
 
 def inbox_counts(membership: Membership) -> dict[str, int]:
-    """How many of the documents the member sees are in each inbox state, for the badges."""
-    documents = visibility.visible_documents(membership).annotate(
-        has_addressee=_has_addressee(), has_automatic=_has_automatic_link()
-    )
-    counts = documents.aggregate(
+    """How many of the documents the member sees are in each inbox state, for the
+    badges: one pass."""
+    counts = visibility.visible_documents(membership).aggregate(
         **{state: models.Count("id", filter=_in_state(state)) for state in INBOX_STATES},
         automatic=models.Count("id", filter=_is_automatic()),
     )
@@ -256,9 +257,15 @@ def inbox_counts(membership: Membership) -> dict[str, int]:
 
 
 def get_document(*, membership: Membership, document_id: UUID) -> Document:
-    """A document the member sees, or 404 (one they may not see is not found either)."""
+    """A document the member sees, or 404 (one they may not see is not found either).
+
+    A letter in the member's own trash answers `document_in_trash`; one in the trash they
+    may not see, or whose purge started, is not found like any other.
+    """
     document = visibility.visible_documents(membership).filter(id=document_id).first()
     if document is None:
+        if visibility.trashed_documents(membership).filter(id=document_id).exists():
+            raise ApiError(404, "document_in_trash", _("Deze brief staat in de prullenbak."))
         raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
     return document
 
@@ -287,6 +294,7 @@ def _summary_out(
         open_suggestion_count=len(open_suggestions),
         confirmed_by_ai=document.confirmed_by_ai,
         auto_label_ids=_auto_label_ids(document),
+        auto_rule_label_ids=_auto_rule_label_ids(document),
         auto_addressee_ids=_auto_addressee_ids(document),
         proposed_sender="" if document.sender else proposed.get(Extraction.Field.SENDER, ""),
         proposed_document_type=""
@@ -295,6 +303,35 @@ def _summary_out(
         proposed_letter_date=None
         if document.letter_date
         else _iso_date(proposed.get(Extraction.Field.LETTER_DATE, "")),
+    )
+
+
+def document_out_for(document: Document) -> DocumentOut:
+    """The answer of an organising endpoint: the full document while the caller still
+    sees it, else only its id and status with `can_read` false (S 4.9.3: `can_read` is
+    computed last, as the caller; nothing of the letter is read as the caller after)."""
+    if visibility.can_read(document.id):
+        return document_out(document)
+    return DocumentOut(
+        id=document.id,
+        client_id=document.client_id,
+        status=visibility.status_of(document.id) or document.status,
+        page_count=0,
+        created_at=document.created_at,
+        sender="",
+        document_type="",
+        letter_date=None,
+        failure_code="",
+        summary="",
+        summary_by_ai=False,
+        pages=[],
+        proposals=[],
+        tasks=[],
+        suggestions=[],
+        addressee_ids=[],
+        label_ids=[],
+        inbox_state="",
+        can_read=False,
     )
 
 
@@ -372,8 +409,11 @@ def read_page(*, membership: Membership, document_id: UUID, index: int) -> tuple
 def retry_processing(*, workspace: Workspace, document_id: UUID) -> Document:
     """Queue a failed document for processing again."""
     with transaction.atomic():
+        _lock_own_membership(workspace)
         document = (
-            Document.objects.select_for_update().filter(workspace=workspace, id=document_id).first()
+            Document.objects.select_for_update(no_key=True)
+            .filter(LIVE, workspace=workspace, id=document_id)
+            .first()
         )
         if document is None:
             raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
@@ -400,8 +440,11 @@ def reopen_document(*, workspace: Workspace, user: User, document_id: UUID) -> D
     Labels, addressees, proposals and suggestions stay, so the normal review follows.
     """
     with transaction.atomic():
+        lock_own_membership(workspace.id, user.id)
         document = (
-            Document.objects.select_for_update().filter(workspace=workspace, id=document_id).first()
+            Document.objects.select_for_update(no_key=True)
+            .filter(LIVE, workspace=workspace, id=document_id)
+            .first()
         )
         if document is None:
             raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
@@ -432,7 +475,8 @@ def set_document_addressees(
     """The document's addressees become exactly `person_ids`."""
     with transaction.atomic():
         document = _lock_for_organising(workspace, document_id)
-        organise.set_addressees(document=document, person_ids=person_ids, actor=user)
+        with visibility.addressee_scope(document):
+            organise.set_addressees(document=document, person_ids=person_ids, actor=user)
     return document
 
 
@@ -465,7 +509,8 @@ def accept_suggestion(
                     "validation_error",
                     _("Een gearchiveerde persoon kun je niet aan een document toevoegen."),
                 )
-            organise.add_addressee(document, suggestion.person, actor=user, origin=origin)
+            with visibility.addressee_scope(document):
+                organise.add_addressee(document, suggestion.person, actor=user, origin=origin)
         suggestion.state = DocumentSuggestion.State.ACCEPTED
         suggestion.save(update_fields=["state", "updated_at"])
     return document
@@ -495,10 +540,21 @@ def _suggestion(document: Document, suggestion_id: UUID) -> DocumentSuggestion:
     return suggestion
 
 
+def _lock_own_membership(workspace: Workspace) -> None:
+    """The request's membership first (`apps.workspaces.locks`); the system has none."""
+    actor = current_actor()
+    if isinstance(actor, UUID):
+        lock_own_membership(workspace.id, actor)
+
+
 def _lock_for_organising(workspace: Workspace, document_id: UUID) -> Document:
-    """The document, locked; refused while it is still being processed."""
+    """The document, locked after the caller's membership (the lock order); refused while
+    it is still being processed."""
+    _lock_own_membership(workspace)
     document = (
-        Document.objects.select_for_update().filter(workspace=workspace, id=document_id).first()
+        Document.objects.select_for_update(no_key=True)
+        .filter(LIVE, workspace=workspace, id=document_id)
+        .first()
     )
     if document is None:
         raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
@@ -550,5 +606,6 @@ def undo_document_event(
     """Reverse a change a rule made; the rule will not make it again on this document."""
     with transaction.atomic():
         document = _lock_for_organising(workspace, document_id)
-        organise.undo_event(document=document, event_id=event_id, actor=user)
+        with visibility.addressee_scope(document):
+            organise.undo_event(document=document, event_id=event_id, actor=user)
     return document

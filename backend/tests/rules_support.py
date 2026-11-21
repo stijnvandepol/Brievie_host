@@ -10,7 +10,7 @@ from apps.labels.models import Label
 from apps.rules import definition
 from apps.rules.engine import Condition
 from apps.rules.models import Rule
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 
 
@@ -25,7 +25,7 @@ def make_rule(
     active: bool = True,
 ) -> Rule:
     """A rule appended after the workspace's rules."""
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         last = Rule.objects.filter(workspace=workspace).aggregate(last=Max("position"))["last"]
         return Rule.objects.create(
             workspace=workspace,
@@ -55,14 +55,14 @@ def sender_contains(value: str) -> Condition:
 
 
 def remove_rules(workspace: Workspace) -> None:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         Rule.objects.filter(workspace=workspace).delete()
 
 
 def make_document(
     workspace: Workspace, text: str = "", *, status: str = "needs_review"
 ) -> Document:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return Document.objects.create(
             workspace=workspace, client_id=uuid.uuid4(), page_count=1, ocr_text=text, status=status
         )

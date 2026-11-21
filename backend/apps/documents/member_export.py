@@ -31,7 +31,7 @@ from apps.documents.export_files import (
     open_export_for_write,
     remove_export_file,
 )
-from apps.documents.models import Document, DocumentAddressee, MemberExport
+from apps.documents.models import LIVE, Document, DocumentAddressee, MemberExport
 from apps.workspaces.keys import workspace_key
 from apps.workspaces.models import Membership, Workspace
 
@@ -67,6 +67,7 @@ def member_document_ids(workspace_id: UUID, user_id: UUID) -> list[UUID]:
         )
         return list(
             Document.objects.filter(workspace_id=workspace_id)
+            .filter(LIVE)
             .filter(models.Exists(on_their_name))
             .order_by("-created_at", "-id")
             .values_list("id", flat=True)

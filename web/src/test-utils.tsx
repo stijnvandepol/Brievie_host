@@ -134,6 +134,7 @@ export const documentDetail: components["schemas"]["DocumentOut"] = {
     },
   ],
   suggestions: [],
+  can_read: true,
 };
 
 type Person = components["schemas"]["PersonOut"];
@@ -230,6 +231,29 @@ export function documentHandlers(detail: components["schemas"]["DocumentOut"] = 
       HttpResponse.json([]),
     ),
     ...personHandlers(),
+  ];
+}
+
+type Trashed = components["schemas"]["TrashedDocumentOut"];
+
+/** A letter in the trash: the summary row plus when, by whom and until when. */
+export function trashedLetter(overrides: Partial<Trashed> = {}): Trashed {
+  return {
+    ...documentSummary,
+    trashed_at: "2026-11-09T10:00:00Z",
+    trashed_by_name: "Anna",
+    purge_after: "2026-12-09T10:00:00Z",
+    ...overrides,
+  };
+}
+
+/** The trash of the first workspace; the list is read again from `items` on every call. */
+/** `total`: how many letters the trash holds (the listed ones when absent). */
+export function trashHandlers(items: Trashed[] = [], total?: number) {
+  return [
+    http.get(`*${API}/workspaces/${workspace.id}/trash`, () =>
+      HttpResponse.json({ items, retention_days: 30, total: total ?? items.length }),
+    ),
   ];
 }
 

@@ -53,6 +53,10 @@ class AuditCode(models.TextChoices):
     EMERGENCY_ACCESS_USED = "emergency_access_used", _("Noodtoegang gebruikt")
     EXPORT_CREATED = "export_created", _("Export gemaakt")
     EXPORT_DOWNLOADED = "export_downloaded", _("Export gedownload")
+    # The trash: a letter's id only, never its sender, summary or text.
+    DOCUMENT_TRASHED = "document_trashed", _("Brief naar de prullenbak")
+    DOCUMENT_RESTORED = "document_restored", _("Brief teruggezet")
+    DOCUMENT_PURGED = "document_purged", _("Brief definitief verwijderd")
 
 
 class ActorKind(models.TextChoices):
@@ -97,7 +101,7 @@ ALLOWED_VALUES: dict[AuditCode, frozenset[str]] = {
     AuditCode.SIGN_IN_SUCCEEDED: frozenset({"via"}),
     AuditCode.SIGN_IN_FAILED: _NONE,
     # via: password (signing in), password_change (wrong current passwords), invitation
-    # (accepting with an existing account).
+    # (accepting with an existing account), reauthenticate (typing the password again).
     AuditCode.SIGN_IN_LOCKED_OUT: frozenset({"via"}),
     AuditCode.SECOND_FACTOR_ADDED: _NONE,
     AuditCode.SECOND_FACTOR_REMOVED: _NONE,
@@ -139,4 +143,9 @@ ALLOWED_VALUES: dict[AuditCode, frozenset[str]] = {
     AuditCode.EMERGENCY_ACCESS_USED: frozenset({"reason", "document_count"}),
     AuditCode.EXPORT_CREATED: frozenset({"document_count"}),
     AuditCode.EXPORT_DOWNLOADED: _NONE,
+    # reason: user (later duplicate).
+    AuditCode.DOCUMENT_TRASHED: frozenset({"reason"}),
+    AuditCode.DOCUMENT_RESTORED: _NONE,
+    # reason: admin, emptied, expired.
+    AuditCode.DOCUMENT_PURGED: frozenset({"reason"}),
 }

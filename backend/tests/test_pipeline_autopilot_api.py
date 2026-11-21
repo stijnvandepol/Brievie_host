@@ -6,7 +6,7 @@ from django.test import Client, override_settings
 from apps.audit.codes import AuditCode
 from apps.audit.models import WorkspaceAuditEvent
 from apps.pipeline import settings_service
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 from tests.documents_support import admin_of, bearer_for
 from tests.members_support import as_user, join
@@ -26,7 +26,7 @@ def put(client: Client, workspace: Workspace, body: dict[str, object]) -> "Respo
 
 
 def external(workspace: Workspace) -> None:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         settings_service.configure(
             workspace_id=workspace.id,
             mode="external",
@@ -38,13 +38,13 @@ def external(workspace: Workspace) -> None:
 
 
 def stored(workspace: Workspace) -> tuple[bool, bool]:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         state = settings_service.autopilot(workspace.id)
     return state.organise, state.confirm
 
 
 def audit_rows(workspace: Workspace) -> list[WorkspaceAuditEvent]:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return list(
             WorkspaceAuditEvent.objects.filter(
                 code=AuditCode.WORKSPACE_SETTING_CHANGED,
@@ -63,7 +63,7 @@ def test_a_member_reads_the_autopilot_and_its_notice(ws_a: Workspace) -> None:
 
     assert r.status_code == 200
     body = r.json()
-    assert set(body) == {"auto_organise", "auto_confirm", "allowed", "notice"}
+    assert set(body) == {"auto_organise", "auto_confirm", "allowed", "notice", "notice_outdated"}
     assert (body["auto_organise"], body["auto_confirm"], body["allowed"]) == (False, False, True)
     assert body["notice"] == settings_service.autopilot_notice()
 

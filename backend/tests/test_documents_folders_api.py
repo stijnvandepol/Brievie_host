@@ -7,7 +7,7 @@ from django.test import Client
 
 from apps.accounts.models import User
 from apps.documents.models import Folder
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.factories import UserFactory
 from tests.helpers import post_json
@@ -55,7 +55,7 @@ def test_create_and_list_folders(client_a: Client, ws_a: Workspace) -> None:
 def test_created_folder_belongs_to_the_workspace(client_a: Client, ws_a: Workspace) -> None:
     create(client_a, ws_a.id, {"name": "Auto"})
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert Folder.objects.get().workspace_id == ws_a.id
 
 
@@ -86,7 +86,7 @@ def test_unknown_parent_is_404(client_a: Client, ws_a: Workspace) -> None:
 def test_parent_from_another_workspace_is_404(
     client_a: Client, ws_a: Workspace, ws_b: Workspace
 ) -> None:
-    with workspace_context(ws_b.id):
+    with workspace_context(ws_b.id, actor=SYSTEM):
         other = Folder.objects.create(workspace=ws_b, name="Geheim")
 
     r = create(client_a, ws_a.id, {"name": "APK", "parent_id": str(other.id)})
@@ -98,7 +98,7 @@ def test_parent_from_another_workspace_is_404(
 def test_other_workspace_looks_exactly_like_a_missing_one(  # Review Focus 3
     client_a: Client, ws_b: Workspace
 ) -> None:
-    with workspace_context(ws_b.id):
+    with workspace_context(ws_b.id, actor=SYSTEM):
         Folder.objects.create(workspace=ws_b, name="Geheim")
     unknown = uuid.uuid4()
 
@@ -110,7 +110,7 @@ def test_other_workspace_looks_exactly_like_a_missing_one(  # Review Focus 3
         assert other.status_code == missing.status_code == 404
         assert other.json() == missing.json()
         assert other.json()["code"] == "workspace_not_found"
-    with workspace_context(ws_b.id):
+    with workspace_context(ws_b.id, actor=SYSTEM):
         assert list(Folder.objects.values_list("name", flat=True)) == ["Geheim"]
 
 
@@ -124,7 +124,7 @@ def test_viewer_may_list_but_not_create(client: Client, ws_a: Workspace) -> None
 
     assert r.status_code == 403
     assert r.json()["code"] == "forbidden"
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert Folder.objects.count() == 0
 
 

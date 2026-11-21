@@ -6,9 +6,9 @@ from django.test import Client
 
 from apps.pipeline import settings_service
 from apps.pipeline.models import AIConsentEvent, AISettings
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
-from tests.documents_support import admin_of
+from tests.documents_support import admin_of, bearer_for
 from tests.factories import UserFactory
 from tests.helpers import post_json
 
@@ -37,12 +37,12 @@ def external(**overrides: object) -> dict[str, object]:
 
 
 def stored(workspace: Workspace) -> AISettings | None:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return AISettings.objects.first()
 
 
 def events(workspace: Workspace) -> list[AIConsentEvent]:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         return list(AIConsentEvent.objects.order_by("created_at"))
 
 
@@ -75,6 +75,46 @@ def test_only_an_administrator_changes_the_ai(client: Client, ws_a: Workspace, r
         assert response.json()["code"] == "forbidden"
     assert stored(ws_a) is None
     assert events(ws_a) == []
+
+
+def test_a_device_token_cannot_change_the_ai(client: Client, ws_a: Workspace) -> None:
+    # A stolen phone of an administrator must not send the workspace's post elsewhere.
+    attacker = "https://evil.example/v1"
+    headers = bearer_for(admin_of(ws_a))
+
+    responses = (
+        client.put(
+            f"/api/v1{ai_path(ws_a)}",
+            external(base_url=attacker, model="x", consent_address=attacker),
+            content_type="application/json",
+            headers=headers,
+        ),
+        client.post(
+            f"/api/v1{ai_path(ws_a)}/preview",
+            {"mode": "external", "base_url": attacker, "model": "x"},
+            content_type="application/json",
+            headers=headers,
+        ),
+    )
+
+    for response in responses:
+        assert response.status_code == 401
+        assert response.json()["code"] == "not_authenticated"
+    assert stored(ws_a) is None
+    assert events(ws_a) == []
+
+
+def test_the_contract_says_the_ai_settings_are_web_session_only() -> None:
+    from brievie.api import api
+
+    paths = api.get_openapi_schema()["paths"]
+    for path, method in (
+        ("/api/v1/workspaces/{workspace_id}/ai", "put"),
+        ("/api/v1/workspaces/{workspace_id}/ai/preview", "post"),
+    ):
+        operation = paths[path][method]
+        assert operation["security"] == [{"SessionAuth": []}]
+        assert "Web session only" in operation["description"]
 
 
 def test_another_workspace_is_not_found(admin: Client, ws_b: Workspace) -> None:

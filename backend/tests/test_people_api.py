@@ -6,8 +6,9 @@ from django.test import Client
 
 from apps.accounts.models import User
 from apps.people.models import Person
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
+from tests.documents_support import bearer_for
 from tests.factories import UserFactory
 from tests.helpers import SETUP_TOKEN, post_json
 
@@ -188,7 +189,7 @@ def test_a_bsn_in_a_name_is_refused(
     assert r.status_code == 422
     assert r.json()["code"] == "validation_error"
     assert r.json()["message"].startswith(BSN_REFUSED)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert not Person.objects.filter(display_name__startswith="Jan").exists()
 
 
@@ -196,7 +197,7 @@ def test_a_person_with_a_masked_variant_from_before_stays_editable(
     client_a: Client, ws_a: Workspace
 ) -> None:
     # Stored before BSNs were refused; it matches nothing now (common.text).
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         old = Person.objects.create(
             workspace=ws_a, display_name="Jan [BSN]", name_variants=["[BSN]", "J. Jansen"]
         )
@@ -280,7 +281,7 @@ def test_delete_person(client_a: Client, ws_a: Workspace) -> None:
     r = client_a.delete(f"/api/v1/workspaces/{ws_a.id}/persons/{person['id']}")
 
     assert r.status_code == 204
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert not Person.objects.filter(id=person["id"]).exists()
 
 
@@ -333,6 +334,23 @@ def test_link_and_unlink_member(client_a: Client, ws_a: Workspace) -> None:
     assert r.status_code == 200
 
 
+def test_a_device_token_cannot_link(client_a: Client, ws_a: Workspace) -> None:
+    # Security review 2026-11-20 (content L4): who a person is decides whose post is whose.
+    member = join(ws_a, "member")
+    person = create(client_a, ws_a.id, {"display_name": "Kind"}).json()
+
+    r = Client().put(
+        f"/api/v1/workspaces/{ws_a.id}/persons/{person['id']}/member",
+        {"user_id": str(member.id)},
+        content_type="application/json",
+        headers=bearer_for(admin_of(ws_a)),
+    )
+
+    assert (r.status_code, r.json()["code"]) == (401, "not_authenticated")
+    with workspace_context(ws_a.id, actor=SYSTEM):
+        assert Person.objects.get(id=person["id"]).user_id is None
+
+
 def test_link_to_a_non_member_is_404(client_a: Client, ws_a: Workspace, ws_b: Workspace) -> None:
     person = create(client_a, ws_a.id, {"display_name": "Kind"}).json()
     base = f"/workspaces/{ws_a.id}/persons/{person['id']}/member"
@@ -344,14 +362,14 @@ def test_link_to_a_non_member_is_404(client_a: Client, ws_a: Workspace, ws_b: Wo
 
 
 def test_delete_linked_person_is_refused(client_a: Client, ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         own = Person.objects.get(user=admin_of(ws_a))
 
     r = client_a.delete(f"/api/v1/workspaces/{ws_a.id}/persons/{own.id}")
 
     assert r.status_code == 409
     assert r.json()["code"] == "person_in_use"
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert Person.objects.filter(id=own.id).exists()
 
 
@@ -395,7 +413,7 @@ def test_unknown_person_is_404(client_a: Client, ws_a: Workspace) -> None:
 def test_other_workspace_is_404_on_every_person_endpoint(
     client_a: Client, ws_a: Workspace, ws_b: Workspace
 ) -> None:
-    with workspace_context(ws_b.id):
+    with workspace_context(ws_b.id, actor=SYSTEM):
         other = Person.objects.get(user=admin_of(ws_b))
 
     # A person of workspace B through workspace A's URL is not found.
@@ -419,7 +437,7 @@ def test_other_workspace_is_404_on_every_person_endpoint(
     ):
         assert r.status_code == 404
         assert r.json()["code"] == "workspace_not_found"
-    with workspace_context(ws_b.id):
+    with workspace_context(ws_b.id, actor=SYSTEM):
         other.refresh_from_db()
         assert other.user_id == admin_of(ws_b).id
 
@@ -453,7 +471,7 @@ def test_a_member_whose_name_another_person_has_gets_no_shared_variant(
     member = join(ws_a, "member")
     member.name = "anna  de vries"
     member.save()
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         person = ensure_person_for_member(workspace=ws_a, user=member)
     assert (person.display_name, person.name_variants) == ("anna de vries (2)", [])
 
@@ -462,3 +480,23 @@ def test_a_member_whose_name_another_person_has_gets_no_shared_variant(
         (f"/workspaces/{ws_a.id}/persons/{person.id}", "Anna (lid)"),
     ):
         assert put(client_a, path, {"display_name": name}).status_code == 200
+
+
+def test_a_workspace_holds_a_limited_number_of_persons(
+    client_a: Client, ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Security review 2026-11-20 (content L5): every letter's name matching walks them all.
+    from apps.people import services
+
+    with workspace_context(ws_a.id, actor=SYSTEM):
+        present = Person.objects.filter(workspace=ws_a).count()
+    monkeypatch.setattr(services, "MAX_PERSONS", present + 1)
+
+    assert create(client_a, ws_a.id, {"display_name": "Oma"}).status_code == 201
+    r = create(client_a, ws_a.id, {"display_name": "Opa"})
+
+    assert r.status_code == 409
+    assert r.json() == {
+        "code": "too_many_persons",
+        "message": "Deze werkruimte heeft het grootste aantal personen. Verwijder er eerst een.",
+    }

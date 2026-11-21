@@ -13,7 +13,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Login */
+        /**
+         * Login
+         * @description 429 too_many_attempts with Retry-After: five wrong passwords for this email from this address, thirty from this address, or, from a browser that never signed in to this account, more than ten for the account from anywhere (then a wait that doubles from 15 seconds to at most 15 minutes).
+         */
         post: operations["login"];
         delete?: never;
         options?: never;
@@ -55,6 +58,26 @@ export interface paths {
          * @description Set a new password with the token from a reset link's fragment and sign in; every other session of the account ends. 400 reset_link_invalid for an unknown, used, expired or revoked link, or when its maker may no longer act on the account; 422 when the password rules refuse it (the link stays usable). Every paired device and every other open reset link of the account is revoked.
          */
         post: operations["completePasswordReset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/reauthenticate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reauthenticate
+         * @description Web session only: a bearer token answers 401 not_authenticated. Type the password again before an action that needs a recent sign-in (creating a pairing code answers 403 reauthentication_required otherwise). 400 wrong_password; wrong passwords count for the same lockout as signing in (429).
+         */
+        post: operations["reauthenticate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -146,7 +169,7 @@ export interface paths {
         put?: never;
         /**
          * Create Pairing Code
-         * @description Web session only. A bearer token (even a valid one) is not accepted here and answers 401 not_authenticated; a session without a valid CSRF token answers 403. The response carries the code once and is not stored (Cache-Control: no-store). server_link opens the app without the code: it pairs with a proof.
+         * @description Web session only. A bearer token (even a valid one) is not accepted here and answers 401 not_authenticated; a session without a valid CSRF token answers 403. A session that signed in more than 15 minutes ago answers 403 reauthentication_required: call reauthenticate first. The response carries the code once and is not stored (Cache-Control: no-store). server_link opens the app without the code: it pairs with a proof.
          */
         post: operations["createPairingCode"];
         delete?: never;
@@ -532,7 +555,7 @@ export interface paths {
         get: operations["getAiStatus"];
         /**
          * Update Ai Settings
-         * @description Set how the workspace's letters are read. Administrators only. Switching to an external address without consent in force answers 409 `ai_consent_required` unless `consent_address` is exactly the address these settings lead to: first show the notice of `previewAiSettings`. Without `api_key` the stored key stays, at the same address only. The key is never returned.
+         * @description Set how the workspace's letters are read. Web session only: a bearer token answers 401 not_authenticated. Administrators only. Switching to an external address without consent in force answers 409 `ai_consent_required` unless `consent_address` is exactly the address these settings lead to: first show the notice of `previewAiSettings`. Without `api_key` the stored key stays, at the same address only. The key is never returned.
          */
         put: operations["updateAiSettings"];
         post?: never;
@@ -556,7 +579,7 @@ export interface paths {
         get: operations["getAiAutopilot"];
         /**
          * Update Ai Autopilot
-         * @description Switch the AI autopilot on or off. Web session only: a bearer token answers 401 not_authenticated. Administrators only. A switch that goes on needs `acknowledged` (409 `ai_autopilot_ack_required`), AI on for the workspace (409 `ai_autopilot_needs_ai`) and the server's permission (409 `ai_autopilot_forbidden`). Switching off always works. Switching AI off or agreeing to another AI address also switches both off.
+         * @description Switch the AI autopilot on or off. Web session only: a bearer token answers 401 not_authenticated. Administrators only. A switch that goes on needs `acknowledged` (409 `ai_autopilot_ack_required`), AI on for the workspace (409 `ai_autopilot_needs_ai`) and the server's permission (409 `ai_autopilot_forbidden`). Switching off always works. Switching AI off or agreeing to another AI address also switches both off. `acknowledged` with a switch on records that the current `notice` was agreed to (clears `notice_outdated`), also when no switch changes.
          */
         put: operations["updateAiAutopilot"];
         post?: never;
@@ -577,7 +600,7 @@ export interface paths {
         put?: never;
         /**
          * Preview Ai Settings
-         * @description Check AI settings without saving them. When saving them needs consent, `notice` is the text to show (the same `configure_ai` prints) and `address` is what to send back as `consent_address`. Administrators only.
+         * @description Check AI settings without saving them. Web session only: a bearer token answers 401 not_authenticated. When saving them needs consent, `notice` is the text to show (the same `configure_ai` prints) and `address` is what to send back as `consent_address`. Administrators only.
          */
         post: operations["previewAiSettings"];
         delete?: never;
@@ -661,7 +684,7 @@ export interface paths {
         put?: never;
         /**
          * Create Document
-         * @description Upload a scanned document as multipart/form-data: `metadata` is a JSON string (schema `UploadMetadataIn`), followed by one `page` file (image/jpeg) per page in page order. Repeating an upload with the same `client_id` and pages answers 200 with the existing document.
+         * @description Upload a scanned document as multipart/form-data: `metadata` is a JSON string (schema `UploadMetadataIn`), followed by one `page` file (image/jpeg) per page in page order. Repeating an upload with the same `client_id` and pages answers 200 with the existing document. 429 `too_many_uploads` with Retry-After when the member or the workspace uploaded too much in a short time (by default 60 per member per 10 minutes, 600 per workspace per hour).
          */
         post: operations["createDocument"];
         delete?: never;
@@ -733,7 +756,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Confirm Document */
+        /**
+         * Confirm Document
+         * @description Store the review; the document becomes done. When the confirm hands the letter to someone else (the caller no longer sees it), the answer has `can_read` false and holds the id and status only. A repeat of the same review answers the same.
+         */
         post: operations["confirmDocument"];
         delete?: never;
         options?: never;
@@ -832,6 +858,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Document
+         * @description Put a letter back from the trash, as it was (role member or admin). A letter that is not in the trash answers unchanged. 404 `document_not_found` once its purge started, or for a letter the caller does not see. Written to the log (`document_restored`).
+         */
+        post: operations["restoreDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}/retry": {
         parameters: {
             query?: never;
@@ -883,6 +929,26 @@ export interface paths {
          * @description Say no to a proposal; the document does not change and nothing automatic proposes or makes this change on it again.
          */
         post: operations["dismissSuggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/trash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trash Document
+         * @description Move the letter to the trash (role member or admin; a viewer gets 403). It is gone from every list, count, search and task list, and can be put back with `restoreDocument` until `purge_after` (30 days); then it is purged for good. Trashing a letter in the trash again answers the same. 404 `document_not_found` for a letter the caller does not see. Written to the log (`document_trashed`).
+         */
+        post: operations["trashDocument"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1200,7 +1266,10 @@ export interface paths {
          */
         put: operations["updatePerson"];
         post?: never;
-        /** Delete Person */
+        /**
+         * Delete Person
+         * @description Admins only (403 `forbidden` for others): `person_in_use` also counts letters the caller cannot see, so only an admin learns that a person is in use.
+         */
         delete: operations["deletePerson"];
         options?: never;
         head?: never;
@@ -1215,7 +1284,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Link Person To Member */
+        /**
+         * Link Person To Member
+         * @description Web session only: a bearer token answers 401 not_authenticated. Link the person to a member of the workspace (`user_id`), or unlink it (null). Administrators only.
+         */
         put: operations["linkPersonToMember"];
         post?: never;
         delete?: never;
@@ -1433,6 +1505,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/trash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Trash
+         * @description The letters in the trash the caller sees, the most recently trashed first (at most 500), with when and by whom, and `purge_after`; `total` counts them all.
+         */
+        get: operations["listTrash"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/trash/empty": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Empty Trash
+         * @description Web session only: a bearer token answers 401 not_authenticated. Purge every letter in the caller's trash for good (role admin), up to `up_to`: the newest `trashed_at` the caller showed (all when absent). Letters the caller does not see stay. Answers how many letters are now being purged; a job removes them. Written to the log, one `document_purged` row per letter.
+         */
+        post: operations["emptyTrash"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/trash/{document_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Purge Document
+         * @description Web session only: a bearer token answers 401 not_authenticated. Purge a letter from the trash now, for good (role admin). Only a letter in the caller's trash: a live letter, one whose purge started, or one the caller does not see answers 404 `document_not_found`. From this answer on it cannot be restored; a job removes its scanned pages and its rows. A back-up made earlier still holds it. Written to the log (`document_purged`).
+         */
+        delete: operations["purgeDocument"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1489,6 +1621,11 @@ export interface components {
             auto_organise: boolean;
             /** Notice */
             notice: string;
+            /**
+             * Notice Outdated
+             * @default false
+             */
+            notice_outdated: boolean;
         };
         /** AiSettingsIn */
         AiSettingsIn: {
@@ -1757,6 +1894,13 @@ export interface components {
             auto_addressee_ids?: string[];
             /** Auto Label Ids */
             auto_label_ids?: string[];
+            /** Auto Rule Label Ids */
+            auto_rule_label_ids?: string[];
+            /**
+             * Can Read
+             * @default true
+             */
+            can_read: boolean;
             /**
              * Client Id
              * Format: uuid
@@ -1840,6 +1984,8 @@ export interface components {
             auto_addressee_ids?: string[];
             /** Auto Label Ids */
             auto_label_ids?: string[];
+            /** Auto Rule Label Ids */
+            auto_rule_label_ids?: string[];
             /**
              * Client Id
              * Format: uuid
@@ -1976,6 +2122,8 @@ export interface components {
             auto_addressee_ids?: string[];
             /** Auto Label Ids */
             auto_label_ids?: string[];
+            /** Auto Rule Label Ids */
+            auto_rule_label_ids?: string[];
             /**
              * Client Id
              * Format: uuid
@@ -2036,6 +2184,24 @@ export interface components {
             sender: string;
             /** Status */
             status: string;
+        };
+        /**
+         * EmptyTrashIn
+         * @description Empty the trash up to the newest `trashed_at` the caller showed (all when absent):
+         *     a letter trashed while the admin read the question is not emptied. With an offset
+         *     only (422 otherwise): a moment without one would be read in the server's zone.
+         */
+        EmptyTrashIn: {
+            /**
+             * Up To
+             * Format: date-time
+             */
+            up_to?: string | null;
+        };
+        /** EmptyTrashOut */
+        EmptyTrashOut: {
+            /** Document Count */
+            document_count: number;
         };
         /**
          * ErrorOut
@@ -2506,6 +2672,11 @@ export interface components {
             /** Value */
             value: string;
         };
+        /** ReauthenticateIn */
+        ReauthenticateIn: {
+            /** Password */
+            password: string;
+        };
         /** RuleActionSchema */
         RuleActionSchema: {
             /**
@@ -2861,6 +3032,114 @@ export interface components {
             type: string;
         };
         /**
+         * TrashListOut
+         * @description The caller's trash, the most recently trashed first (at most 500).
+         */
+        TrashListOut: {
+            /** Items */
+            items?: components["schemas"]["TrashedDocumentOut"][];
+            /**
+             * Retention Days
+             * @default 30
+             */
+            retention_days: number;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+        };
+        /**
+         * TrashedDocumentOut
+         * @description A letter in the trash: its summary row, when and by whom it was trashed, and when
+         *     it is purged (clients never compute the retention themselves).
+         */
+        TrashedDocumentOut: {
+            /** Addressee Ids */
+            addressee_ids?: string[];
+            /** Auto Addressee Ids */
+            auto_addressee_ids?: string[];
+            /** Auto Label Ids */
+            auto_label_ids?: string[];
+            /** Auto Rule Label Ids */
+            auto_rule_label_ids?: string[];
+            /**
+             * Client Id
+             * Format: uuid
+             */
+            client_id: string;
+            /**
+             * Confirmed By Ai
+             * @default false
+             */
+            confirmed_by_ai: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Document Type */
+            document_type: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Inbox State
+             * @default
+             */
+            inbox_state: string;
+            /** Label Ids */
+            label_ids?: string[];
+            /**
+             * Letter Date
+             * Format: date
+             */
+            letter_date: string | null;
+            /**
+             * Open Suggestion Count
+             * @default 0
+             */
+            open_suggestion_count: number;
+            /** Page Count */
+            page_count: number;
+            /**
+             * Proposed Document Type
+             * @default
+             */
+            proposed_document_type: string;
+            /**
+             * Proposed Letter Date
+             * Format: date
+             */
+            proposed_letter_date?: string | null;
+            /**
+             * Proposed Sender
+             * @default
+             */
+            proposed_sender: string;
+            /**
+             * Purge After
+             * Format: date-time
+             */
+            purge_after: string;
+            /** Sender */
+            sender: string;
+            /** Status */
+            status: string;
+            /**
+             * Trashed At
+             * Format: date-time
+             */
+            trashed_at: string;
+            /**
+             * Trashed By Name
+             * @default
+             */
+            trashed_by_name: string;
+        };
+        /**
          * UploadMetadataIn
          * @description The `metadata` field of `createDocument`, as a JSON string.
          */
@@ -3065,6 +3344,91 @@ export interface operations {
             };
             /** @description Bad Request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    reauthenticate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReauthenticateIn"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5097,6 +5461,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
         };
     };
     searchDocuments: {
@@ -5737,6 +6110,56 @@ export interface operations {
             };
         };
     };
+    restoreDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     retryDocumentProcessing: {
         parameters: {
             query?: never;
@@ -5885,6 +6308,65 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    trashDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashedDocumentOut"];
                 };
             };
             /** @description Unauthorized */
@@ -8352,6 +8834,192 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    listTrash: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashListOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    emptyTrash: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmptyTrashIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmptyTrashOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    purgeDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

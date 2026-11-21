@@ -12,13 +12,25 @@ class Workspace(BaseModel):
 
     class Kind(models.TextChoices):
         HOME = "home", _("Thuis")
-        BUSINESS = "business", _("Zakelijk")
+        BUSINESS = "business", _("Organisatie")
 
     name = models.CharField(max_length=150)
     kind = models.CharField(max_length=10, choices=Kind.choices)
     modules = models.JSONField(default=dict, blank=True)
     # Whether a member may export their own post (D 6.3): on at home, off in Zakelijk.
     allow_member_export = models.BooleanField(default=True)
+    # Who sees which letter (S 4.1). No `db_default` on any of them: Django would then
+    # insert with RETURNING, which reads the new row through the SELECT policies.
+    # "Iedereen ziet alle post": every member sees every letter that is not private.
+    everyone_sees_all = models.BooleanField(default=True)
+    # Departments receive post; off, their letters go to whoever sorts post.
+    departments_enabled = models.BooleanField(default=False)
+    # Admins see all post that is not private, also with `everyone_sees_all` off.
+    admins_read_all = models.BooleanField(default=True)
+    # A letter labelled Zorg becomes private on its own (S 4.6).
+    care_is_private = models.BooleanField(default=False)
+    # A member may ask for emergency access to someone's hidden post (S 4.7).
+    emergency_access = models.BooleanField(default=False)
 
     def __str__(self) -> str:
         return self.name
@@ -30,13 +42,15 @@ class Membership(BaseModel):
     class Role(models.TextChoices):
         ADMIN = "admin", _("Beheerder")
         MEMBER = "member", _("Lid")
-        VIEWER = "viewer", _("Meekijker")
+        VIEWER = "viewer", _("Alleen lezen")
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="memberships"
     )
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="memberships")
     role = models.CharField(max_length=10, choices=Role.choices)
+    # "Verdeelt post": this member gets the letters no account or department covers.
+    sorts_post = models.BooleanField(default=False)
 
     # Each role may do everything the roles below it may do.
     RANK: ClassVar[dict[str, int]] = {Role.VIEWER: 0, Role.MEMBER: 1, Role.ADMIN: 2}

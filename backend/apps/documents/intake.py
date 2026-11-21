@@ -11,11 +11,13 @@ from apps.accounts.models import User
 from apps.common import crypto
 from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
+from apps.documents import visibility
 from apps.documents.jpeg import jpeg_size
 from apps.documents.models import Document, DocumentPage
 from apps.documents.schemas import UploadMetadataIn
 from apps.documents.storage import DocumentStorage, default_storage
 from apps.pipeline.jobs import defer_processing
+from apps.workspaces.context import system_actor
 from apps.workspaces.keys import workspace_key
 from apps.workspaces.models import Workspace
 
@@ -64,9 +66,10 @@ def create_document_from_upload(
                     )
             except IntegrityError:
                 # Another request with this client_id got in first; nothing is written yet.
-                winner = Document.objects.filter(
-                    workspace=workspace, client_id=metadata.client_id
-                ).first()
+                with system_actor():
+                    winner = Document.objects.filter(
+                        workspace=workspace, client_id=metadata.client_id
+                    ).first()
                 if winner is None:
                     raise
                 return _same_upload(winner, hashes), False
@@ -84,16 +87,37 @@ def create_document_from_upload(
 
 
 def _find_existing(workspace: Workspace, client_id: UUID) -> Document | None:
-    return Document.objects.filter(workspace=workspace, client_id=client_id).first()
+    """As the system: the client_id is unique in the workspace, also among the letters
+    the uploader no longer sees (a letter they scanned and handed over)."""
+    with system_actor():
+        return Document.objects.filter(workspace=workspace, client_id=client_id).first()
 
 
 def _same_upload(existing: Document, hashes: list[str]) -> Document:
-    stored = list(existing.pages.order_by("index").values_list("sha256", flat=True))
-    if stored != hashes:
+    """The existing letter when the uploader may read it and the pages are the same;
+    otherwise the same 409 as for a different upload, so the answer tells nothing. A
+    letter in the trash is never brought back by an upload: 409 `document_trashed`, only
+    once the pages and the right to read it are established."""
+    with system_actor():
+        stored = list(existing.pages.order_by("index").values_list("sha256", flat=True))
+    if stored != hashes or not visibility.can_read(existing.id):
         raise ApiError(
             409,
             "document_conflict",
             _("Er bestaat al een ander document met dit kenmerk."),
+        )
+    if existing.purge_started_at is not None:
+        # Restoring it is no longer possible: no advice to do so.
+        raise ApiError(
+            409,
+            "document_trashed",
+            _("Deze brief staat in de prullenbak en wordt nu voorgoed gewist."),
+        )
+    if existing.trashed_at is not None:
+        raise ApiError(
+            409,
+            "document_trashed",
+            _("Deze brief staat in de prullenbak. Zet hem daar terug als je hem weer wilt zien."),
         )
     return existing
 

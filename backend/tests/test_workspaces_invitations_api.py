@@ -14,7 +14,7 @@ from apps.audit.models import WorkspaceAuditEvent
 from apps.audit.services import AuditActor
 from apps.common.models import WorkspaceModel
 from apps.people.models import Person
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.invitations import revoke_invitations_made_by
 from apps.workspaces.models import Invitation, Membership, Workspace
 from tests.documents_support import admin_of, bearer_for
@@ -65,7 +65,7 @@ def sha256(value: str) -> str:
 
 
 def person(ws: Workspace, name: str) -> Person:
-    with workspace_context(ws.id):
+    with workspace_context(ws.id, actor=SYSTEM):
         return Person.objects.create(workspace=ws, display_name=name)
 
 
@@ -160,7 +160,7 @@ def test_an_invitation_for_a_person_names_them(ws_a: Workspace) -> None:
 
 
 def test_a_linked_person_cannot_be_invited_again(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         own = Person.objects.get(user=admin_of(ws_a))
 
     r = post_json(as_admin(ws_a), url(ws_a), {"person_id": str(own.id)})
@@ -176,7 +176,7 @@ def test_a_linked_person_cannot_be_invited_again(ws_a: Workspace) -> None:
 def test_a_person_of_another_workspace_or_archived_is_404(ws_a: Workspace, ws_b: Workspace) -> None:
     elsewhere = person(ws_b, "Buurman")
     archived = person(ws_a, "Opa")
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         Person.objects.filter(pk=archived.pk).update(archived_at=timezone.now())
 
     for person_id in (elsewhere.id, archived.id, uuid4()):
@@ -352,7 +352,7 @@ def test_invitation_events_are_logged(ws_a: Workspace) -> None:
     second = Invitation.objects.get(revoked_at=None)
     admin.delete(f"/api/v1{url(ws_a, f'/{second.id}')}")
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         rows = list(
             WorkspaceAuditEvent.objects.filter(code__startswith="invitation_").order_by(
                 "created_at", "id"
@@ -373,7 +373,7 @@ def test_invitation_events_are_logged(ws_a: Workspace) -> None:
 def test_the_audit_name_is_the_email_without_a_note(ws_a: Workspace) -> None:
     create(as_admin(ws_a), ws_a, email="anne@example.nl")
 
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         row = WorkspaceAuditEvent.objects.get(code="invitation_created")
     assert row.target_name == "anne@example.nl"
 
@@ -424,7 +424,7 @@ def test_revoke_invitations_made_by_stops_only_that_admins_open_links(
         (ws_a.id, second_admin.id),
         (ws_b.id, first_admin.id),
     }
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         rows = list(WorkspaceAuditEvent.objects.filter(code="invitation_revoked"))
     assert [(r.values, r.actor_kind) for r in rows] == [({"reason": "creator_lost_role"}, "system")]
 

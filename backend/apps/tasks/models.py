@@ -51,6 +51,11 @@ class Task(WorkspaceModel):
     completed_at = models.DateTimeField(null=True, blank=True)
     # The autopilot made this task, not a person.
     created_by_ai = models.BooleanField(default=False)
+    # The person who made it (a confirm); null for the autopilot and for older tasks. A
+    # task without a letter is seen by its maker and its assignee (R39).
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
 
     class Meta:
         ordering: ClassVar[list[str]] = ["deadline", "created_at", "id"]

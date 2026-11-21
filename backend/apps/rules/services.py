@@ -14,7 +14,7 @@ from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
-from apps.documents.models import Document
+from apps.documents.models import LIVE, Document
 from apps.documents.services import HEADLINE_PROPOSALS, SUGGESTIONS, document_summary_out
 from apps.labels.models import Label
 from apps.people.models import Person
@@ -24,6 +24,7 @@ from apps.rules.facts import facts_for_many
 from apps.rules.models import Rule, RuleRun
 from apps.rules.schemas import RuleIn, RuleTestOut
 from apps.rules.templates import RuleTemplate, rule_templates
+from apps.workspaces.context import system_actor
 from apps.workspaces.models import Workspace
 
 RULES_MAX = 200
@@ -159,7 +160,9 @@ def delete_rule(*, workspace: Workspace, rule_id: UUID, actor: AuditActor) -> No
     """Its runs go with it; history events keep the rule's name."""
     with transaction.atomic():
         rule = _get_for_update(workspace, rule_id)
-        rule.delete()
+        # Its runs and events on letters the caller cannot see go too.
+        with system_actor():
+            rule.delete()
         _record(AuditCode.RULE_DELETED, workspace, actor, rule_id)
 
 
@@ -186,7 +189,7 @@ def test_rule(*, workspace: Workspace, data: RuleIn) -> RuleTestOut:
     spec = definition.to_spec(rule)
     if spec is None:
         raise _invalid(_("Deze regel kunnen we niet lezen."))
-    documents = Document.objects.filter(workspace=workspace).exclude(
+    documents = Document.objects.filter(LIVE, workspace=workspace).exclude(
         status=Document.Status.PROCESSING
     )
     total = documents.count()
@@ -240,6 +243,8 @@ def run_rule(*, workspace: Workspace, rule_id: UUID, actor: AuditActor) -> None:
             raise rule_not_found()
         if not rule.active:
             raise ApiError(409, "rule_inactive", _("Deze regel staat uit. Zet hem eerst aan."))
+        if actor.user_id is None:
+            raise ValueError("A rule run is started by a member (R7).")
         # A second click while the first run waits is the same ask.
-        jobs.defer_rule_run(workspace.id, rule.id)
+        jobs.defer_rule_run(workspace.id, rule.id, user_id=actor.user_id)
         _record(AuditCode.RULE_RUN, workspace, actor, rule.id)

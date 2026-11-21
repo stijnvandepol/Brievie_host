@@ -26,6 +26,11 @@ function sentence(
   const person = event.person_name;
   const label = event.label_name;
   // What Brievie did itself has no person behind it.
+  if (event.origin === "rule_autopilot" && event.kind === "label_added") {
+    return ruleName
+      ? t`Automatisch toegevoegd door regel ${ruleName}: label ${label}`
+      : t`Automatisch toegevoegd door een regel: label ${label}`;
+  }
   if (event.origin === "ai" || event.origin === "name_match") {
     if (event.kind === "label_added") {
       return event.origin === "ai"
@@ -58,6 +63,15 @@ function sentence(
       return t`${who} rondde een taak af`;
     case "task_reopened":
       return t`${who} zette een taak weer open`;
+    case "trashed": {
+      // Without anybody behind it, Brievie did it (a later merge of a double scan).
+      const by = isMine(event, me) ? t`jou` : event.actor_name || t`Brievie`;
+      return t`Naar de prullenbak verplaatst door ${by}`;
+    }
+    case "restored": {
+      const by = isMine(event, me) ? t`jou` : event.actor_name || t`iemand`;
+      return t`Teruggezet uit de prullenbak door ${by}`;
+    }
     default:
       return null;
   }

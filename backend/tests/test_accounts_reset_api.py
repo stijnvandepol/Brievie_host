@@ -24,7 +24,7 @@ from apps.accounts.resets import complete_password_reset, revoke_resets_made_by
 from apps.audit.models import ServerAuditEvent, WorkspaceAuditEvent
 from apps.devices.models import Device
 from apps.devices.services import create_pairing_code, pair_device
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.factories import TEST_PASSWORD, UserFactory
 from tests.helpers import post_json
@@ -322,7 +322,7 @@ def test_reset_writes_notices_and_audit_rows(ws_a: Workspace) -> None:
     assert ended.values == {"count": 1, "reason": "reset"}
     signed = ServerAuditEvent.objects.filter(code="sign_in_succeeded", target_id=member.id)
     assert {"via": "reset"} in [row.values for row in signed]
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         (in_workspace,) = WorkspaceAuditEvent.objects.filter(code="password_reset_created")
     assert (in_workspace.actor_id, in_workspace.target_id) == (admin.id, member.id)
 
@@ -335,7 +335,7 @@ def test_a_link_for_a_member_of_two_workspaces_is_in_the_server_log_only(
 
     assert ServerAuditEvent.objects.filter(code="password_reset_created").count() == 1
     for ws in (ws_a, ws_b):
-        with workspace_context(ws.id):
+        with workspace_context(ws.id, actor=SYSTEM):
             assert not WorkspaceAuditEvent.objects.filter(code="password_reset_created").exists()
 
 
@@ -356,7 +356,7 @@ def test_reset_token_never_logged(ws_a: Workspace, caplog: pytest.LogCaptureFixt
         assert secret not in caplog.text
         assert all(secret not in str(body) for _, body in answers)
         assert all(secret not in str(row.values) for row in ServerAuditEvent.objects.all())
-        with workspace_context(ws_a.id):
+        with workspace_context(ws_a.id, actor=SYSTEM):
             assert all(secret not in str(row.values) for row in WorkspaceAuditEvent.objects.all())
         assert all(secret not in str(n.values) for n in AccountNotice.objects.all())
 
@@ -476,7 +476,7 @@ def test_a_device_token_cannot_make_a_link(ws_a: Workspace) -> None:
     assert r.status_code == 401
     assert r.json()["code"] == "not_authenticated"
     assert not PasswordReset.objects.exists()
-    assert not AccountNotice.objects.exists()
+    assert not AccountNotice.objects.exclude(code="device_paired").exists()
     assert not ServerAuditEvent.objects.filter(code="password_reset_created").exists()
 
 

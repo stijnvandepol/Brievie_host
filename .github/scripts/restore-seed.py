@@ -57,7 +57,7 @@ def seed() -> dict[str, object]:
     entries: list[dict[str, str]] = []
     for name, kind in (("Thuis", "home"), ("Zakelijk", "business")):
         workspace = create_workspace(name=name, kind=kind, admin=user)
-        with workspace_context(workspace.id):
+        with workspace_context(workspace.id, actor=user.id):
             # Two decisions in the history (the own network, then off); neither makes
             # a call, and the workspace ends with AI off.
             for mode, address, model in (("local", _LOCAL_ADDRESS, "seed"), ("off", "", "")):
@@ -74,7 +74,7 @@ def seed() -> dict[str, object]:
         metadata = UploadMetadataIn.model_validate(
             {"client_id": str(uuid.uuid4()), "pages": [{"sha256": digest, "text": ""}]}
         )
-        with workspace_context(workspace.id):
+        with workspace_context(workspace.id, actor=user.id):
             document, _created = create_document_from_upload(
                 workspace=workspace, user=user, metadata=metadata, pages=[page]
             )

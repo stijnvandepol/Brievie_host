@@ -17,7 +17,7 @@ from apps.backup.errors import REASONS, BackupError
 from apps.backup.locks import BACKUP_LOCK_KEY
 from apps.backup.sweep import Orphan, delete_orphans, find_orphans, sweep
 from apps.documents.models import DocumentPage
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 from tests.backup_support import Recorder
 from tests.documents_support import admin_of, jpeg, upload
@@ -37,7 +37,7 @@ def upload_letter(workspace: Workspace) -> None:
 
 
 def page_file(workspace: Workspace) -> Path:
-    with workspace_context(workspace.id):
+    with workspace_context(workspace.id, actor=SYSTEM):
         page = DocumentPage.objects.get()
     return storage_root() / page.storage_path
 
@@ -204,7 +204,7 @@ def test_a_path_stored_in_another_form_still_counts_as_known(
 ) -> None:
     upload_letter(ws_a)
     extra = stray(ws_a)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         page = DocumentPage.objects.get()
         DocumentPage.objects.filter(pk=page.pk).update(
             storage_path=str(storage_root() / page.storage_path)
@@ -215,7 +215,7 @@ def test_a_path_stored_in_another_form_still_counts_as_known(
 
 def test_a_path_form_nobody_matches_is_refused(ws_a: Workspace, backup_conninfo: str) -> None:
     upload_letter(ws_a)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         DocumentPage.objects.update(storage_path="elsewhere/1.page")
 
     with pytest.raises(BackupError) as raised:
@@ -293,7 +293,7 @@ def test_the_files_are_listed_before_the_database_is_read(
         # A letter that arrives between the two reads: its page is in the database
         # by now, and it is not a candidate because the files were listed already.
         upload_letter(ws_a)
-        with workspace_context(ws_a.id):
+        with workspace_context(ws_a.id, actor=SYSTEM):
             for page in DocumentPage.objects.all():
                 late.append(storage_root() / page.storage_path)
         for path in late:
@@ -357,7 +357,7 @@ def test_one_unplaceable_stored_path_stops_everything(
     upload_letter(ws_a)
     upload_letter(ws_b)
     victim = page_file(ws_a)
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         DocumentPage.objects.update(storage_path=f"/old-root/{relative(victim)}")
     age(victim, timedelta(days=2))
 

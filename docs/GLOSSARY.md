@@ -83,6 +83,20 @@ the translation. Add a line before introducing a new domain term.
 | Automatisch verwerken (de autopilot) | AI autopilot (`AISettings.auto_organise`, `auto_confirm`) |
 | Automatisch door AI (kenmerk) | automatic (`automatic`, `confirmed_by_ai`, `created_by_ai`) |
 | Zelf controleren | reopen (`reopenDocument`) |
+| Iedereen ziet alle post | everyone sees all (`Workspace.everyone_sees_all`) |
+| Afdelingen gebruiken (Thuis: groepen gebruiken) | departments enabled (`Workspace.departments_enabled`) |
+| afdeling, groep | department (`Person.kind = department`) |
+| leidinggevende (van een afdeling) | department lead (`DepartmentMember.is_lead`) |
+| Beheerders lezen alle post | admins read all (`Workspace.admins_read_all`) |
+| verdeelt post | sorter (`Membership.sorts_post`) |
+| organisatie (soort werkruimte) | workspace kind `business` |
+| alleen lezen (rol) | viewer |
 | zoeken | search (`searchDocuments`) |
 | fragment (stuk tekst bij een treffer) | snippet (`SnippetPartOut`) |
 | Geen exacte treffer. Dit lijkt erop. | approximate match (`fuzzy`) |
+| prullenbak | trash (`trashed_at`, `listTrash`) |
+| verwijderen (naar de prullenbak) | trash (`trashDocument`) |
+| terugzetten | restore (`restoreDocument`) |
+| definitief verwijderen | purge (`purgeDocument`, `purge_started_at`) |
+| prullenbak legen | empty trash (`emptyTrash`) |
+| bewaartermijn | retention term (`retention.check_removal`) |

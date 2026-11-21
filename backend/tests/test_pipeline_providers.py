@@ -16,7 +16,7 @@ from apps.pipeline.providers import (
     ProviderUnavailable,
 )
 from apps.pipeline.schema import json_schema
-from apps.workspaces.context import workspace_context
+from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.keys import workspace_key
 from apps.workspaces.models import Workspace
 
@@ -169,7 +169,7 @@ def test_one_very_long_page_is_cut_hard() -> None:
 
 
 def test_provider_for_is_none_when_ai_is_off(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         assert settings_service.provider_for(ws_a.id) is None
         settings_service.configure(
             workspace_id=ws_a.id, mode="off", base_url="", model="", api_key=None
@@ -178,7 +178,7 @@ def test_provider_for_is_none_when_ai_is_off(ws_a: Workspace) -> None:
 
 
 def test_configure_external_seals_the_key_and_builds_the_provider(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         settings_service.configure(
             workspace_id=ws_a.id,
             mode="external",
@@ -190,7 +190,11 @@ def test_configure_external_seals_the_key_and_builds_the_provider(ws_a: Workspac
         stored = AISettings.objects.get()
         sealed = bytes(stored.api_key_sealed or b"")
         built = settings_service.provider_for(ws_a.id)
-        opened = crypto.open_sealed(workspace_key(ws_a.id), sealed, aad=b"ai-api-key")
+        opened = crypto.open_sealed(
+            workspace_key(ws_a.id),
+            sealed,
+            aad=b"ai-api-key-v2|" + str(ws_a.id).encode() + b"|https://api.mistral.ai/v1",
+        )
 
     assert (stored.base_url, stored.model) == ("https://api.mistral.ai/v1", "mistral-small-latest")
     assert API_KEY.encode() not in sealed
@@ -200,7 +204,7 @@ def test_configure_external_seals_the_key_and_builds_the_provider(ws_a: Workspac
 
 
 def test_configure_again_replaces_the_settings(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         settings_service.configure(
             workspace_id=ws_a.id,
             mode="external",
@@ -219,7 +223,7 @@ def test_configure_again_replaces_the_settings(ws_a: Workspace) -> None:
 
 
 def test_external_needs_https_and_a_key(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         with pytest.raises(ValueError, match="https"):
             settings_service.configure(
                 workspace_id=ws_a.id, mode="external", base_url="http://api.mistral.ai/v1",
@@ -244,11 +248,15 @@ def test_external_needs_https_and_a_key(ws_a: Workspace) -> None:
      "http://10.0.0.5/v1"],
 )  # fmt: skip
 def test_local_accepts_addresses_on_the_own_network(ws_a: Workspace, url: str) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         settings_service.configure(
             workspace_id=ws_a.id, mode="local", base_url=url, model="qwen", api_key=None
         )
-        assert settings_service.provider_for(ws_a.id) is not None
+        built = settings_service.provider_for(ws_a.id)
+        assert built is not None
+        # Security review 2026-11-20 (content L6): a proposal tells every member, also a
+        # viewer, who read the letter; the address on the own network is nobody's business.
+        assert built.name == "local"
 
 
 @pytest.mark.parametrize(
@@ -258,14 +266,14 @@ def test_local_accepts_addresses_on_the_own_network(ws_a: Workspace, url: str) -
 )  # fmt: skip
 def test_local_refuses_addresses_outside_the_own_network(ws_a: Workspace, url: str) -> None:
     # Spec acceptance: no document content leaves the server with AI `local`.
-    with workspace_context(ws_a.id), pytest.raises(ValueError, match="network"):
+    with workspace_context(ws_a.id, actor=SYSTEM), pytest.raises(ValueError, match="network"):
         settings_service.configure(
             workspace_id=ws_a.id, mode="local", base_url=url, model="qwen", api_key=None
         )
 
 
 def test_local_is_checked_again_before_use(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         AISettings.objects.create(
             workspace=ws_a, mode="local", base_url="https://api.mistral.ai/v1", model="m"
         )
@@ -276,7 +284,7 @@ def test_local_is_checked_again_before_use(ws_a: Workspace) -> None:
 
 
 def test_unknown_mode_is_refused(ws_a: Workspace) -> None:
-    with workspace_context(ws_a.id), pytest.raises(ValueError, match="mode"):
+    with workspace_context(ws_a.id, actor=SYSTEM), pytest.raises(ValueError, match="mode"):
         settings_service.configure(
             workspace_id=ws_a.id, mode="cloud", base_url="", model="", api_key=None
         )
@@ -294,7 +302,7 @@ LONG_HOST = "ollama-inference-gateway.huis-van-de-familie.example-lan.local"
 def test_local_refuses_numeric_host_forms(ws_a: Workspace, url: str) -> None:
     # A resolver reads these as IPv4 addresses (8.8.8.8, 127.0.0.1, ...), not as names.
     assert not settings_service.is_on_own_network(url)
-    with workspace_context(ws_a.id), pytest.raises(ValueError, match="network"):
+    with workspace_context(ws_a.id, actor=SYSTEM), pytest.raises(ValueError, match="network"):
         settings_service.configure(
             workspace_id=ws_a.id, mode="local", base_url=url, model="qwen", api_key=None
         )
@@ -309,7 +317,7 @@ def test_local_still_accepts_service_names_with_digits(url: str) -> None:
 
 def test_long_realistic_host_name_is_accepted_and_named(ws_a: Workspace) -> None:
     assert len(LONG_HOST) > 50
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         settings_service.configure(
             workspace_id=ws_a.id, mode="local", base_url=f"http://{LONG_HOST}:11434/v1",
             model="qwen", api_key=None,
@@ -317,7 +325,8 @@ def test_long_realistic_host_name_is_accepted_and_named(ws_a: Workspace) -> None
         built = settings_service.provider_for(ws_a.id)
 
     assert built is not None
-    assert built.name == LONG_HOST
+    # A local reader is named "local" on proposals (security review 2026-11-20).
+    assert built.name == "local"
 
 
 @pytest.mark.parametrize(
@@ -327,7 +336,7 @@ def test_long_realistic_host_name_is_accepted_and_named(ws_a: Workspace) -> None
      "https://api.mistral.ai/" + "v" * 300],
 )  # fmt: skip
 def test_host_or_address_that_cannot_be_stored_is_refused(ws_a: Workspace, url: str) -> None:
-    with workspace_context(ws_a.id):
+    with workspace_context(ws_a.id, actor=SYSTEM):
         with pytest.raises(ValueError, match="AI service"):
             settings_service.configure(
                 workspace_id=ws_a.id,
@@ -367,3 +376,62 @@ def test_long_letter_is_cut_but_the_block_is_whole() -> None:
     provider(transport).extract(ExtractionRequest("a" * 40000, CHOICES.persons, CHOICES.labels))
 
     assert json.loads(seen[0].content)["messages"][1]["content"] == "a" * 30000 + "\n\n" + BLOCK
+
+
+# --- Security review 2026-11-20: the key is bound to its address ---
+
+
+def _external_with_key(workspace: Workspace) -> None:
+    settings_service.configure(
+        workspace_id=workspace.id,
+        mode="external",
+        consent=True,
+        base_url="",
+        model="",
+        api_key=API_KEY,
+    )
+
+
+def test_a_key_is_never_sent_to_an_address_changed_behind_our_back(ws_a: Workspace) -> None:
+    evil = "https://evil.example/v1"
+    with workspace_context(ws_a.id, actor=SYSTEM):
+        _external_with_key(ws_a)
+        # Somebody with the database role rewrites the address and the consent with it.
+        AISettings.objects.update(base_url=evil, consented_base_url=evil)
+
+        with pytest.raises(PermanentError, match="ai_not_configured"):
+            settings_service.provider_for(ws_a.id)
+        assert settings_service.status(ws_a.id).has_api_key is False
+
+
+def test_a_key_of_another_workspace_does_not_open(ws_a: Workspace, ws_b: Workspace) -> None:
+    with workspace_context(ws_a.id, actor=SYSTEM):
+        _external_with_key(ws_a)
+        sealed = bytes(AISettings.objects.get().api_key_sealed or b"")
+    with workspace_context(ws_b.id, actor=SYSTEM):
+        _external_with_key(ws_b)
+        AISettings.objects.update(api_key_sealed=sealed)
+
+        with pytest.raises(PermanentError, match="ai_not_configured"):
+            settings_service.provider_for(ws_b.id)
+
+
+def test_a_key_sealed_before_the_binding_must_be_typed_again(ws_a: Workspace) -> None:
+    with workspace_context(ws_a.id, actor=SYSTEM):
+        _external_with_key(ws_a)
+        legacy = crypto.seal(workspace_key(ws_a.id), API_KEY.encode(), aad=b"ai-api-key")
+        AISettings.objects.update(api_key_sealed=legacy)
+
+        assert settings_service.status(ws_a.id).has_api_key is False
+        with pytest.raises(PermanentError):
+            settings_service.provider_for(ws_a.id)
+        # Saving without a key does not keep it: the form asks for it.
+        with pytest.raises(ValueError, match="key"):
+            settings_service.configure(
+                workspace_id=ws_a.id,
+                mode="external",
+                consent=True,
+                base_url="",
+                model="",
+                api_key=None,
+            )

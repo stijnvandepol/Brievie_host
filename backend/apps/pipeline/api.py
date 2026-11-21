@@ -87,9 +87,11 @@ def list_ai_suppliers(request: HttpRequest, workspace_id: UUID) -> list[AiSuppli
         **SESSION_WRITE_ERRORS,
         **BODY_ERRORS,
     },
+    auth=session_auth,
     operation_id="previewAiSettings",
     description=(
-        "Check AI settings without saving them. When saving them needs consent, "
+        "Check AI settings without saving them. Web session only: a bearer token answers "
+        "401 not_authenticated. When saving them needs consent, "
         "`notice` is the text to show (the same `configure_ai` prints) and `address` "
         "is what to send back as `consent_address`. Administrators only."
     ),
@@ -124,10 +126,12 @@ def preview_ai_settings(
         **SESSION_WRITE_ERRORS,
         **BODY_ERRORS,
     },
+    auth=session_auth,
     throttle=CallerThrottle("ai_settings", "10/10m"),
     operation_id="updateAiSettings",
     description=(
-        "Set how the workspace's letters are read. Administrators only. Switching to an "
+        "Set how the workspace's letters are read. Web session only: a bearer token "
+        "answers 401 not_authenticated. Administrators only. Switching to an "
         "external address without consent in force answers 409 `ai_consent_required` "
         "unless `consent_address` is exactly the address these settings lead to: first "
         "show the notice of `previewAiSettings`. Without `api_key` the stored key stays, "
@@ -173,6 +177,7 @@ def _autopilot_out(workspace_id: UUID) -> AiAutopilotOut:
         auto_confirm=state.confirm,
         allowed=state.allowed,
         notice=settings_service.autopilot_notice(),
+        notice_outdated=state.notice_outdated,
     )
 
 
@@ -210,7 +215,9 @@ def get_ai_autopilot(request: HttpRequest, workspace_id: UUID) -> AiAutopilotOut
         "`acknowledged` (409 `ai_autopilot_ack_required`), AI on for the workspace "
         "(409 `ai_autopilot_needs_ai`) and the server's permission (409 "
         "`ai_autopilot_forbidden`). Switching off always works. Switching AI off or "
-        "agreeing to another AI address also switches both off."
+        "agreeing to another AI address also switches both off. `acknowledged` with a "
+        "switch on records that the current `notice` was agreed to (clears "
+        "`notice_outdated`), also when no switch changes."
     ),
 )
 def update_ai_autopilot(
