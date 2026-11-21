@@ -10,6 +10,7 @@ import { DeviceTable } from "../components/device-table";
 import { Icon } from "../components/icons";
 import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
 import { MessageBar } from "../components/ui";
+import { dateFormat } from "../format";
 import { requireUser } from "../guards";
 import { rootRoute } from "./root";
 
@@ -28,7 +29,7 @@ function readPayload(qrPayload: string): { urls: string[]; hasPin: boolean } | n
   }
 }
 
-const clock = new Intl.DateTimeFormat("nl-NL", { hour: "2-digit", minute: "2-digit" });
+const clock = dateFormat({ hour: "2-digit", minute: "2-digit" });
 
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
 

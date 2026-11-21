@@ -32,9 +32,10 @@ def test_id_is_a_uuid() -> None:
     assert isinstance(user.id, uuid.UUID)
 
 
-def test_language_defaults_to_dutch() -> None:
+def test_language_starts_unchosen_and_explanation_dutch() -> None:
     user = UserFactory.create()
-    assert user.language == "nl"
+    # No choice yet: the caller's Accept-Language decides.
+    assert user.language == ""
     assert user.explanation_language == "nl"
 
 

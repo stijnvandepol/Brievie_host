@@ -3,6 +3,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { Button } from "react-aria-components";
 import type { components } from "../api/schema";
+import { dateFormat } from "../format";
 import { actorKindLabel, auditLabel, targetKindLabel } from "./audit-codes";
 import { Icon } from "./icons";
 import { ErrorAlert } from "./page";
@@ -16,7 +17,7 @@ export type AuditFilters = { userId: string; code: string; since: string; until:
 /** The rows the server sends at once by default; a shorter page is the last one. */
 const PAGE_SIZE = 100;
 
-const dateTime = new Intl.DateTimeFormat("nl-NL", { dateStyle: "medium", timeStyle: "medium" });
+const dateTime = dateFormat({ dateStyle: "medium", timeStyle: "medium" });
 
 /** The query string of the filters; `before` only for the next page of the list, never for the CSV. */
 export function auditParams(filters: AuditFilters): URLSearchParams {

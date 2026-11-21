@@ -926,6 +926,10 @@ msgstr "De regel wordt op al je post toegepast, niet alleen op de nieuwste 500."
 msgid "De regel wordt op al je post toegepast."
 msgstr "De regel wordt op al je post toegepast."
 
+#: src/routes/language.tsx
+msgid "De taal van Brievie op deze server en in de app. De inhoud van je brieven blijft zoals hij is."
+msgstr "De taal van Brievie op deze server en in de app. De inhoud van je brieven blijft zoals hij is."
+
 #: src/components/rule-sentence.ts
 msgid "de tekst"
 msgstr "de tekst"
@@ -1122,6 +1126,10 @@ msgstr "Eigen adres"
 msgid "Eigen CA, vingerafdruk zit in de code"
 msgstr "Eigen CA, vingerafdruk zit in de code"
 
+#: src/routes/language.tsx
+msgid "Elk apparaat gebruikt zijn eigen taal."
+msgstr "Elk apparaat gebruikt zijn eigen taal."
+
 #: src/routes/settings.tsx
 msgid "Elk lid kan dan een ZIP-bestand met de eigen post downloaden."
 msgstr "Elk lid kan dan een ZIP-bestand met de eigen post downloaden."
@@ -1305,6 +1313,10 @@ msgstr "Geldig tot"
 #: src/components/invite-dialog.tsx
 msgid "Geldig tot {expires}."
 msgstr "Geldig tot {expires}."
+
+#: src/routes/settings.tsx
+msgid "Geldt voor brieven die AI vanaf nu leest. De brief zelf blijft zoals hij is."
+msgstr "Geldt voor brieven die AI vanaf nu leest. De brief zelf blijft zoals hij is."
 
 #: src/routes/document.tsx
 msgid "Gemaakt door AI. Controleer of het klopt."
@@ -2208,6 +2220,10 @@ msgstr "Opslaan"
 msgid "Oranje"
 msgstr "Oranje"
 
+#: src/routes/language.tsx
+msgid "Overal, ook in de app."
+msgstr "Overal, ook in de app."
+
 #: src/components/document-table.tsx
 msgid "Overig"
 msgstr "Overig"
@@ -2393,6 +2409,10 @@ msgstr "Samengevoegd met een dubbele brief door {by}"
 msgid "Samenvatting"
 msgstr "Samenvatting"
 
+#: src/routes/settings.tsx
+msgid "Samenvattingen"
+msgstr "Samenvattingen"
+
 #: src/routes/duplicate.tsx
 msgid "Samenvoegen"
 msgstr "Samenvoegen"
@@ -2522,6 +2542,20 @@ msgstr "Taak verplaatst naar de dubbele brief"
 #: src/components/document-history.tsx
 msgid "Taak verplaatst uit de dubbele brief"
 msgstr "Taak verplaatst uit de dubbele brief"
+
+#: src/components/language-switch.tsx
+#: src/components/page.tsx
+#: src/routes/language.tsx
+msgid "Taal"
+msgstr "Taal"
+
+#: src/routes/language.tsx
+msgid "Taal van Brievie"
+msgstr "Taal van Brievie"
+
+#: src/routes/settings.tsx
+msgid "Taal van de samenvatting en de taken die AI maakt"
+msgstr "Taal van de samenvatting en de taken die AI maakt"
 
 #: src/routes/document.tsx
 #: src/routes/duplicate.tsx
@@ -3021,6 +3055,10 @@ msgstr "Zo staat de naam op brieven, bijvoorbeeld J. de Vries. Zet elke variant 
 #: src/components/rule-templates.tsx
 msgid "Zo werkt een regel"
 msgstr "Zo werkt een regel"
+
+#: src/routes/language.tsx
+msgid "Zoals je browser of telefoon"
+msgstr "Zoals je browser of telefoon"
 
 #: src/routes/search.tsx
 msgid "Zoek een brief"

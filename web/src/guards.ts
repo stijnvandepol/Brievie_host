@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { redirect } from "@tanstack/react-router";
 import { meQuery, setupStatusQuery } from "./api/queries";
+import { isLocale, setLocale } from "./i18n";
 import { resetSearch } from "./search-term";
 import { clearUndo } from "./undo-trash";
 
@@ -19,6 +20,8 @@ export async function requireUser(queryClient: QueryClient) {
     clearUndo();
     throw redirect({ to: "/login" });
   }
+  // The account's own language choice wins over this browser's.
+  if (isLocale(user.language)) setLocale(user.language);
   return user;
 }
 

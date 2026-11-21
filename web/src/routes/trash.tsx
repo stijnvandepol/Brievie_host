@@ -11,6 +11,7 @@ import { LetterDateText, SenderText, TypeText } from "../components/document-tab
 import { Icon } from "../components/icons";
 import { ErrorAlert, focusPageHeading, PageHeader, Shell, usePageTitle } from "../components/page";
 import { EmptyState, Loading, MessageBar } from "../components/ui";
+import { dateFormat } from "../format";
 import { workspaceRoute } from "./workspace";
 
 type Trashed = components["schemas"]["TrashedDocumentOut"];
@@ -18,7 +19,7 @@ type Trashed = components["schemas"]["TrashedDocumentOut"];
 /** The trash list holds at most this many letters (the server's cap). */
 const LIST_CAP = 500;
 
-const longDate = new Intl.DateTimeFormat("nl-NL", { dateStyle: "long" });
+const longDate = dateFormat({ dateStyle: "long" });
 
 /** Calendar days from today until `purgeAfter`, in the viewer's own time zone. */
 export function daysLeft(purgeAfter: string, now: Date = new Date()): number {

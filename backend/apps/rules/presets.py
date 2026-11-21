@@ -4,6 +4,7 @@ from uuid import UUID
 
 from django.db import transaction
 from django.db.models import Max
+from django.utils.translation import gettext as _
 
 from apps.labels.models import Label
 from apps.labels.presets import PRESETS, PresetLabel
@@ -48,7 +49,8 @@ def ensure_preset_rules(workspace: Workspace) -> None:
             Rule.objects.create(
                 workspace=workspace,
                 position=position,
-                name=f"Label {label.name}",
+                # In the language of the request that creates it, like the label.
+                name=_("Label %(name)s") % {"name": label.name},
                 mode=Rule.Mode.PROPOSE,
                 definition=preset_definition(preset, label.id),
                 system_key=preset.key,

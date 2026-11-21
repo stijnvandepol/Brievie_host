@@ -1716,6 +1716,24 @@
         "title": "LabelsIn",
         "type": "object"
       },
+      "LanguageIn": {
+        "properties": {
+          "language": {
+            "enum": [
+              "",
+              "nl",
+              "en"
+            ],
+            "title": "Language",
+            "type": "string"
+          }
+        },
+        "required": [
+          "language"
+        ],
+        "title": "LanguageIn",
+        "type": "object"
+      },
       "LoginIn": {
         "properties": {
           "email": {
@@ -3369,6 +3387,14 @@
               "boolean",
               "null"
             ]
+          },
+          "summary_language": {
+            "pattern": "^(nl|en)$",
+            "title": "Summary Language",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "title": "WorkspaceSettingsIn",
@@ -3379,6 +3405,11 @@
           "allow_member_export": {
             "title": "Allow Member Export",
             "type": "boolean"
+          },
+          "summary_language": {
+            "default": "nl",
+            "title": "Summary Language",
+            "type": "string"
           }
         },
         "required": [
@@ -4349,6 +4380,107 @@
           }
         ],
         "summary": "Get Me",
+        "tags": [
+          "accounts"
+        ]
+      }
+    },
+    "/api/v1/me/language": {
+      "put": {
+        "description": "Choose the language of the interface and of the server's messages for the caller's account (`nl`, `en`, or `` to follow Accept-Language again). The choice wins over Accept-Language on every later request.",
+        "operationId": "updateMyLanguage",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LanguageIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Update My Language",
         "tags": [
           "accounts"
         ]

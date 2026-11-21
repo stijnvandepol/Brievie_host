@@ -210,7 +210,7 @@ def rule_templates() -> tuple[RuleTemplate, ...]:
                 ),
             ),
             actions=(
-                _pick_label(_("Kies het label dat de brief krijgt."), key="wonen", name="Wonen"),
+                _pick_label(_("Kies het label dat de brief krijgt."), key="wonen", name=_("Wonen")),
             ),
             tip=_(
                 "Twee voorwaarden samen zijn preciezer dan één: een brief van je "

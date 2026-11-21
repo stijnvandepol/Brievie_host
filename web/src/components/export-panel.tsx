@@ -4,11 +4,12 @@ import { Link } from "@tanstack/react-router";
 import { Button } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import { myExportQuery } from "../api/queries";
+import { dateFormat } from "../format";
 import { Icon } from "./icons";
 import { ErrorAlert } from "./page";
 import { Loading } from "./ui";
 
-const dateTime = new Intl.DateTimeFormat("nl-NL", { dateStyle: "medium", timeStyle: "short" });
+const dateTime = dateFormat({ dateStyle: "medium", timeStyle: "short" });
 
 /**
  * "Mijn post exporteren": make a ZIP of one's own post, wait while it is built, then

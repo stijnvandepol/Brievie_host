@@ -1667,3 +1667,54 @@ Built in batch C:
   afronden" (a native checkbox, as the other checkboxes of the web). After a merge the kept
   letter opens with the trash's undo bar for the other one; after "Het zijn twee brieven"
   "Te doen" says "Goed. We vragen het niet meer voor deze twee brieven." once.
+
+## 2026-11-21: English next to Dutch
+
+The server and the web interface speak Dutch and English. Dutch stays the source
+language (the msgids) and the default; this supersedes "no `.po` files until a second
+language arrives" (2026-11-13).
+
+- **Server catalogue.** `backend/locale/en/LC_MESSAGES/django.po` and its compiled
+  `django.mo`, both committed. They are written by `manage.py update_messages`
+  (`make messages`; `apps.common.catalogue`): it reads the msgids with `ast` from every
+  gettext call and `{% translate %}` tag, merges them into the `.po` and writes the
+  `.mo` itself. No GNU gettext anywhere (not on the Mac, in CI or in the image) and no
+  build step in the Dockerfile: `COPY backend/` carries the `.mo`. Dropped: Django's
+  `makemessages`/`compilemessages` (need xgettext/msgfmt), and compiling in the image
+  (a stale or missing `.mo` would only show in production). CI runs
+  `update_messages --check`; tests fail when a Dutch text has no English, a translation
+  loses a placeholder, a file is stale, or a gettext call has a non-literal msgid. No
+  new dependency.
+- **Web catalogue.** Lingui locale `en` (`web/src/locales/en/messages.po`); both
+  catalogues are loaded up front (small). A test fails when `en` misses a message of `nl`.
+- **Which language.** Before sign-in: `Accept-Language` (Django's `LocaleMiddleware`;
+  Dutch when it names neither). The web sends its active language as `Accept-Language`
+  on every call; it starts from a choice kept in the browser (`localStorage`, set by the
+  switch on the setup, sign-in, invitation and reset screens), else the browser's
+  language. Once the caller is known the account's choice `User.language` wins
+  (`AccountLanguageMiddleware` for a session, `DeviceTokenAuth` for a device), set
+  through `PUT /api/v1/me/language` (`updateMyLanguage`, session or device). `""` means
+  no choice: the header decides. The existing field held the default `nl` for everyone
+  without anyone choosing it, so migration 0012 empties it; a stored `nl` would
+  otherwise override an English iPhone. `UserOut.language` keeps its type (string, now
+  `""`, `nl` or `en`).
+- **Not translated.** Letter content, names of persons and labels a user made. Start-set
+  labels and their preset rules are created in the language of the request that creates
+  the workspace (or adds the start set) and keep that name. Management command output,
+  the recovery sheet (forced `nl`), the `./brievie` wrapper and `docs/` stay Dutch for
+  now; their msgids are in the catalogue anyway, so the check stays simple.
+- **AI summaries.** `Workspace.summary_language` (`nl`/`en`, default `nl`), admin-only in
+  the workspace settings (additive, audited, session-only like the rest). It changes only
+  the two places of the prompt that ask for the language of the summary and the task
+  descriptions; the Dutch prompt is byte for byte the old one, the instructions stay
+  Dutch and every other value and quote comes from the letter as it is. `mentions_term`
+  and the deadline rules read the letter text, never the summary (tested). The spec's
+  per-member explanation language (`User.explanation_language`, unused) would need a
+  summary per member; per workspace is the step that fits one stored summary.
+- **Formatting.** Web dates follow the language: `nl-NL`, or the browser's English region
+  (else `en-GB`).
+- **Glossary.** `docs/GLOSSARY.md` "English in the interface", kept equal to the iPhone
+  app's `docs/GLOSSARY-en.md`: "mail" for the collection ("All mail"), "letter" for one.
+- **Rule for later work.** Every new user-facing text needs both languages: Dutch in the
+  code, English in the catalogue (`make messages` / `pnpm extract`). The tests above fail
+  otherwise.

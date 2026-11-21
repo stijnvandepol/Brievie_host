@@ -197,7 +197,7 @@ def test_login_success_returns_the_user_and_a_session(client: Client) -> None:
         "id": str(user.id),
         "email": "jan@example.nl",
         "name": user.name,
-        "language": "nl",
+        "language": "",
         "explanation_language": "nl",
         "is_server_admin": False,
     }

@@ -12,6 +12,7 @@ sections 11, 12, 14, 18 and 19 before changing architecture). Decisions live in
 - `make typecheck`: `mypy --strict`
 - `make migrate`: apply migrations as the owner role
 - `make openapi`: write `docs/api/openapi.json`
+- `make messages`: update the English catalogue `backend/locale/en` from the Dutch texts (fill the empty `msgstr`, run it again for the `.mo`)
 - `uv run python manage.py configure_ai --workspace <id> --mode off|external|local [--supplier mistral|openai|claude] [--accept-external-ai]`: AI per workspace (`external` asks to type `akkoord`)
 - `uv run python manage.py set_server_admin --email <address> [--remove]` and `reset_password --email <address>`: server admin and a lost password, on the server
 
@@ -20,13 +21,15 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
 - `pnpm test`: Vitest (queries by role); `pnpm build`: `tsc --noEmit` + Vite build
 - `pnpm lint`: Biome; `pnpm typecheck`: `tsc --noEmit`
 - `pnpm gen:api`: regenerate `src/api/schema.d.ts` from `docs/api/openapi.json` (after `make openapi`)
-- `pnpm extract`: update the Dutch text catalogue after changing visible strings
+- `pnpm extract`: update the text catalogues (`nl` source, `en`) after changing visible strings
 
 ## Rules in short
 
-- Code, comments, commits, table and field names in English. User-facing text in
-  Dutch (B1): in the backend always through `gettext`, in `web/` always through Lingui
-  (`t` macros; run `pnpm extract` afterwards).
+- Code, comments, commits, table and field names in English. User-facing text exists
+  in Dutch (B1, the source) and English: in the backend always through `gettext`, in
+  `web/` always through Lingui (`t` macros). A new string needs both: write the Dutch,
+  then add the English (`make messages` / `pnpm extract`, terms from `docs/GLOSSARY.md`
+  "English in the interface"); tests fail otherwise.
 - Every table: UUID `id`, `created_at`, `updated_at`. Every workspace content table:
   `workspace_id` (subclass `WorkspaceModel`) and RLS enabled **and forced**.
 - `mypy --strict` and `ruff check` clean. No `Any`, no bare `except`.

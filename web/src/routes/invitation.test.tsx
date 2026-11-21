@@ -125,7 +125,9 @@ describe("accept an invitation", () => {
     );
     renderApp(`/uitnodiging#${TOKEN}`);
     expect(await screen.findByRole("alert")).toHaveTextContent(DEAD);
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    // Only the language switch, no action.
+    const languages = screen.getByRole("group", { name: "Taal" });
+    expect(screen.queryAllByRole("button").filter((b) => !languages.contains(b))).toEqual([]);
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(screen.queryByText(/Thuis/)).not.toBeInTheDocument();
   });

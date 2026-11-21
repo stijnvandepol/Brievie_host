@@ -4,12 +4,13 @@ import { Button } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import { documentEventsQuery, meQuery } from "../api/queries";
 import type { components } from "../api/schema";
+import { dateFormat } from "../format";
 import { Icon } from "./icons";
 import { ErrorAlert } from "./page";
 
 type DocumentEvent = components["schemas"]["DocumentEventOut"];
 
-const dateTime = new Intl.DateTimeFormat("nl-NL", { dateStyle: "medium", timeStyle: "short" });
+const dateTime = dateFormat({ dateStyle: "medium", timeStyle: "short" });
 
 /** One event as a sentence, or `null` for a kind this version does not know yet. */
 function sentence(

@@ -269,6 +269,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/language": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update My Language
+         * @description Choose the language of the interface and of the server's messages for the caller's account (`nl`, `en`, or `` to follow Accept-Language again). The choice wins over Accept-Language on every later request.
+         */
+        put: operations["updateMyLanguage"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/notices": {
         parameters: {
             query?: never;
@@ -2566,6 +2586,14 @@ export interface components {
             /** Label Ids */
             label_ids: string[];
         };
+        /** LanguageIn */
+        LanguageIn: {
+            /**
+             * Language
+             * @enum {string}
+             */
+            language: "" | "nl" | "en";
+        };
         /** LoginIn */
         LoginIn: {
             /** Email */
@@ -3393,11 +3421,18 @@ export interface components {
         WorkspaceSettingsIn: {
             /** Allow Member Export */
             allow_member_export?: boolean | null;
+            /** Summary Language */
+            summary_language?: string | null;
         };
         /** WorkspaceSettingsOut */
         WorkspaceSettingsOut: {
             /** Allow Member Export */
             allow_member_export: boolean;
+            /**
+             * Summary Language
+             * @default nl
+             */
+            summary_language: string;
         };
     };
     responses: never;
@@ -4180,6 +4215,84 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    updateMyLanguage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LanguageIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

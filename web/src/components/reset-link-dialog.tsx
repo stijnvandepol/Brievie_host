@@ -3,12 +3,13 @@ import { useEffect, useRef, useState } from "react";
 import { Button, Dialog, Heading, Modal, ModalOverlay } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import type { components } from "../api/schema";
+import { dateFormat } from "../format";
 import { ConfirmDialog } from "./confirm-dialog";
 import { OneTimeLink } from "./one-time-link";
 
 type Reset = components["schemas"]["PasswordResetOut"];
 
-const dateTime = new Intl.DateTimeFormat("nl-NL", { dateStyle: "long", timeStyle: "short" });
+const dateTime = dateFormat({ dateStyle: "long", timeStyle: "short" });
 
 function ResetLink({ name, reset, onClose }: { name: string; reset: Reset; onClose: () => void }) {
   const heading = useRef<HTMLHeadingElement>(null);
