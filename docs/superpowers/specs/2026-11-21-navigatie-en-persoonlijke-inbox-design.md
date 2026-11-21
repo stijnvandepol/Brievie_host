@@ -283,15 +283,19 @@ Days are calendar days in Europe/Amsterdam (as MT S 11); working days are a late
   count (words in `aria-label`).
 - Inbox page: a section **Blijft liggen** above the list (collapsed to a line when empty),
   two groups with the existing row layout plus the age ("ligt er 4 dagen", "5 dagen niet
-  geopend") and the addressees' names (names are a directory). No sentence says *who* did
-  not open it beyond "de geadresseerde".
+  geopend") and the addressees' names (names are a directory). This does tell a sorter
+  which addressee has not opened a letter (with one addressee, plainly that person): that
+  is the signal's purpose in an organisation. It never says *when* someone opened anything,
+  nor which of several addressees did; at home it does not exist.
 - At home, nothing of this appears, and the endpoint answers an empty result.
 
 ### 6.3 Privacy
 
 The mark is personal data about reading behaviour. It is used for exactly two things: the
 member's own unread state, and the absence of any addressee's opening for the
-organisation's sorters. PRIVACY.md gets that sentence. Marks are deleted with the letter
+organisation's sorters, which tells them that the addressee (or, with several, none of
+them) has not opened the letter yet. PRIVACY.md gets that sentence, including that last
+part. Marks are deleted with the letter
 (cascade at purge), and for one member when they leave the workspace (`forget_member`).
 They are not in the member's own export (they describe the app, not the post; Besluiten
 none: the export stays as is).
