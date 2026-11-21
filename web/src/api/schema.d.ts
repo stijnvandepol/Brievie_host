@@ -975,6 +975,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/visibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Document Visibility
+         * @description Make the letter private (`restricted`) or visible to everyone (`workspace`), and share it: afterwards it is shared with exactly `shared_user_ids` (any letter). 403 `cannot_make_public` for someone not addressed while an addressee reads it; 404 `member_not_found` for a share with somebody who is no member. `can_read` false when the caller removed their own share.
+         */
+        put: operations["setDocumentVisibility"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/duplicates": {
         parameters: {
             query?: never;
@@ -2093,6 +2113,11 @@ export interface components {
             summary_by_ai: boolean;
             /** Tasks */
             tasks: components["schemas"]["TaskIn"][];
+            /**
+             * Visibility
+             * @default
+             */
+            visibility: string;
         };
         /** CreatedInvitationOut */
         CreatedInvitationOut: {
@@ -2178,6 +2203,11 @@ export interface components {
             kind: string;
             /** Label Name */
             label_name: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
             /** Origin */
             origin: string;
             /** Person Name */
@@ -2202,6 +2232,11 @@ export interface components {
             auto_label_ids?: string[];
             /** Auto Rule Label Ids */
             auto_rule_label_ids?: string[];
+            /**
+             * Can Make Public
+             * @default false
+             */
+            can_make_public: boolean;
             /**
              * Can Read
              * @default true
@@ -2274,8 +2309,12 @@ export interface components {
              * @default
              */
             proposed_sender: string;
+            /** Reader Names */
+            reader_names?: string[];
             /** Sender */
             sender: string;
+            /** Shared User Ids */
+            shared_user_ids?: string[];
             /** Status */
             status: string;
             /** Suggestions */
@@ -2286,6 +2325,11 @@ export interface components {
             summary_by_ai: boolean;
             /** Tasks */
             tasks: components["schemas"]["TaskOut"][];
+            /**
+             * Visibility
+             * @default workspace
+             */
+            visibility: string;
         };
         /** DocumentSearchHitOut */
         DocumentSearchHitOut: {
@@ -2358,12 +2402,19 @@ export interface components {
              * @default
              */
             proposed_sender: string;
+            /** Reader Names */
+            reader_names?: string[];
             /** Sender */
             sender: string;
             /** Snippet */
             snippet?: components["schemas"]["SnippetPartOut"][];
             /** Status */
             status: string;
+            /**
+             * Visibility
+             * @default workspace
+             */
+            visibility: string;
         };
         /**
          * DocumentSearchIn
@@ -2501,10 +2552,41 @@ export interface components {
              * @default
              */
             proposed_sender: string;
+            /** Reader Names */
+            reader_names?: string[];
             /** Sender */
             sender: string;
             /** Status */
             status: string;
+            /**
+             * Visibility
+             * @default workspace
+             */
+            visibility: string;
+        };
+        /** DocumentVisibilityIn */
+        DocumentVisibilityIn: {
+            /**
+             * Shared User Ids
+             * @default []
+             */
+            shared_user_ids: string[];
+            /** Visibility */
+            visibility: string;
+        };
+        /** DocumentVisibilityOut */
+        DocumentVisibilityOut: {
+            /**
+             * Can Read
+             * @default true
+             */
+            can_read: boolean;
+            /** Reader Names */
+            reader_names?: string[];
+            /** Shared User Ids */
+            shared_user_ids?: string[];
+            /** Visibility */
+            visibility: string;
         };
         /** DuplicateDifferenceOut */
         DuplicateDifferenceOut: {
@@ -3726,6 +3808,8 @@ export interface components {
              * Format: date-time
              */
             purge_after: string;
+            /** Reader Names */
+            reader_names?: string[];
             /** Sender */
             sender: string;
             /** Status */
@@ -3740,6 +3824,11 @@ export interface components {
              * @default
              */
             trashed_by_name: string;
+            /**
+             * Visibility
+             * @default workspace
+             */
+            visibility: string;
         };
         /**
          * UploadMetadataIn
@@ -7097,6 +7186,105 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    setDocumentVisibility: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentVisibilityIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentVisibilityOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

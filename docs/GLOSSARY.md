@@ -88,6 +88,10 @@ the translation. Add a line before introducing a new domain term.
 | afdeling, groep | department (`Person.kind = department`) |
 | leidinggevende (van een afdeling) | department lead (`DepartmentMember.is_lead`) |
 | Beheerders lezen alle post | admins read all (`Workspace.admins_read_all`) |
+| privé (brief) | restricted (`Document.visibility = restricted`) |
+| lezer (van een privébrief) | reader (`DocumentReader`) |
+| delen met | share (`DocumentShare`) |
+| noodtoegang | emergency access (`Workspace.emergency_access`, `DocumentReader.reason = emergency`) |
 | verdeelt post | sorter (`Membership.sorts_post`) |
 | organisatie (soort werkruimte) | workspace kind `business` |
 | alleen lezen (rol) | viewer |

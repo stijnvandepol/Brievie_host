@@ -502,6 +502,11 @@
             "maxItems": 20,
             "title": "Tasks",
             "type": "array"
+          },
+          "visibility": {
+            "default": "",
+            "title": "Visibility",
+            "type": "string"
           }
         },
         "required": [
@@ -657,6 +662,11 @@
             "title": "Label Name",
             "type": "string"
           },
+          "note": {
+            "default": "",
+            "title": "Note",
+            "type": "string"
+          },
           "origin": {
             "title": "Origin",
             "type": "string"
@@ -730,6 +740,11 @@
             },
             "title": "Auto Rule Label Ids",
             "type": "array"
+          },
+          "can_make_public": {
+            "default": false,
+            "title": "Can Make Public",
+            "type": "boolean"
           },
           "can_read": {
             "default": true,
@@ -831,9 +846,24 @@
             "title": "Proposed Sender",
             "type": "string"
           },
+          "reader_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reader Names",
+            "type": "array"
+          },
           "sender": {
             "title": "Sender",
             "type": "string"
+          },
+          "shared_user_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Shared User Ids",
+            "type": "array"
           },
           "status": {
             "title": "Status",
@@ -860,6 +890,11 @@
             },
             "title": "Tasks",
             "type": "array"
+          },
+          "visibility": {
+            "default": "workspace",
+            "title": "Visibility",
+            "type": "string"
           }
         },
         "required": [
@@ -992,6 +1027,13 @@
             "title": "Proposed Sender",
             "type": "string"
           },
+          "reader_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reader Names",
+            "type": "array"
+          },
           "sender": {
             "title": "Sender",
             "type": "string"
@@ -1005,6 +1047,11 @@
           },
           "status": {
             "title": "Status",
+            "type": "string"
+          },
+          "visibility": {
+            "default": "workspace",
+            "title": "Visibility",
             "type": "string"
           }
         },
@@ -1236,12 +1283,24 @@
             "title": "Proposed Sender",
             "type": "string"
           },
+          "reader_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reader Names",
+            "type": "array"
+          },
           "sender": {
             "title": "Sender",
             "type": "string"
           },
           "status": {
             "title": "Status",
+            "type": "string"
+          },
+          "visibility": {
+            "default": "workspace",
+            "title": "Visibility",
             "type": "string"
           }
         },
@@ -1256,6 +1315,62 @@
           "letter_date"
         ],
         "title": "DocumentSummaryOut",
+        "type": "object"
+      },
+      "DocumentVisibilityIn": {
+        "properties": {
+          "shared_user_ids": {
+            "default": [],
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Shared User Ids",
+            "type": "array"
+          },
+          "visibility": {
+            "title": "Visibility",
+            "type": "string"
+          }
+        },
+        "required": [
+          "visibility"
+        ],
+        "title": "DocumentVisibilityIn",
+        "type": "object"
+      },
+      "DocumentVisibilityOut": {
+        "properties": {
+          "can_read": {
+            "default": true,
+            "title": "Can Read",
+            "type": "boolean"
+          },
+          "reader_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reader Names",
+            "type": "array"
+          },
+          "shared_user_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Shared User Ids",
+            "type": "array"
+          },
+          "visibility": {
+            "title": "Visibility",
+            "type": "string"
+          }
+        },
+        "required": [
+          "visibility"
+        ],
+        "title": "DocumentVisibilityOut",
         "type": "object"
       },
       "DuplicateDifferenceOut": {
@@ -3595,6 +3710,13 @@
             "title": "Purge After",
             "type": "string"
           },
+          "reader_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reader Names",
+            "type": "array"
+          },
           "sender": {
             "title": "Sender",
             "type": "string"
@@ -3611,6 +3733,11 @@
           "trashed_by_name": {
             "default": "",
             "title": "Trashed By Name",
+            "type": "string"
+          },
+          "visibility": {
+            "default": "workspace",
+            "title": "Visibility",
             "type": "string"
           }
         },
@@ -8563,6 +8690,148 @@
           }
         ],
         "summary": "Trash Document",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/visibility": {
+      "put": {
+        "description": "Make the letter private (`restricted`) or visible to everyone (`workspace`), and share it: afterwards it is shared with exactly `shared_user_ids` (any letter). 403 `cannot_make_public` for someone not addressed while an addressee reads it; 404 `member_not_found` for a share with somebody who is no member. `can_read` false when the caller removed their own share.",
+        "operationId": "setDocumentVisibility",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentVisibilityIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentVisibilityOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Set Document Visibility",
         "tags": [
           "documents"
         ]

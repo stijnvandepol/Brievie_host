@@ -1906,3 +1906,12 @@ M3). "Iedereen ziet alle post" stays on everywhere until Task 40, so departments
   needed, 403 `forbidden` for anyone else): audit `emergency_access_switched_on`/`_off` and
   a notice to every member; the same value writes nothing. Both are shown to every member
   in `getWorkspaceSettings`.
+- **Private by hand, by Zorg and at confirm (Task 30, PB T17/T18).** The Zorg label
+  arriving (by hand, by accepting it, by a rule, by the autopilot) makes a letter private
+  where `care_is_private` is on; a proposal of it does not. `setDocumentVisibility`:
+  `restricted` makes a letter private (or, already private, sets its shares);
+  `workspace` makes it visible again and then sets its shares to exactly the list sent,
+  on any letter (R44: an empty list removes them). `ConfirmIn.visibility` ("" leaves it)
+  runs inside the confirm's write order, before the rules; a refused `workspace`
+  (403 `cannot_make_public`) stores nothing. Lists and the letter carry `visibility` and
+  `reader_names`; search, the trash and duplicate pairs carry `visibility` only.

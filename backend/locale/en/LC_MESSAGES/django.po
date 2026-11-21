@@ -1459,6 +1459,10 @@ msgstr "You can't confirm this document right now."
 msgid "Het bedrag klopt niet. Schrijf het als 1234,56."
 msgstr "That amount is not valid. Write it as 1234.56."
 
+#: apps/documents/review.py apps/documents/services.py
+msgid "Kies privé of zichtbaar voor iedereen."
+msgstr "Choose private or visible to everyone."
+
 #: apps/documents/review.py apps/rules/definition.py
 msgid "Dit soort document kennen we niet."
 msgstr "We don't know this kind of document."

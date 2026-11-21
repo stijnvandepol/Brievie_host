@@ -239,6 +239,13 @@ def member_filter() -> Q | None:
     )
 
 
+def visibility_of(document_id: UUID) -> str:
+    """A letter's visibility, also when the caller no longer sees it; as the system."""
+    with system_actor():
+        value = Document.objects.filter(id=document_id).values_list("visibility", flat=True).first()
+    return value or Document.Visibility.WORKSPACE
+
+
 def status_of(document_id: UUID) -> str:
     """A letter's status, also when the caller no longer sees it (the answer of a
     hand-over, `can_read` false: the id and status only). As the system."""

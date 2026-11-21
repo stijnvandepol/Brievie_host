@@ -283,6 +283,31 @@ for it; see the table above.
 - Reminders on the phone hold no letter text unless the member turned that on (the app's
   rule); no log line holds a task's description, amount or quote.
 
+## Privé-post (private letters)
+
+- A letter can be private: only its readers see it (whoever it is addressed to with an
+  account, the members of its departments, whoever it is shared with, and whoever made it
+  private or scanned it). A letter labelled Zorg becomes private on its own at home. The
+  database itself keeps everybody else out (row-level security), not only the screens.
+- What private protects against: the other members of the workspace, admins included.
+  Nobody reads it unnoticed: an admin's emergency access, a grant (linking a person,
+  adding a department member, an accepted invitation), a reset link or ended sessions
+  each leave a history line on the letter or a notice the member sees.
+- What it does not protect against: whoever administers the server machine (the database,
+  the master key, the back-ups); the AI service, which reads a letter while it is
+  processed, before it can be private; page files, which are sealed per workspace, not
+  per reader.
+- A workspace admin can learn **that** somebody has private post, never what: from four
+  answers (`person_in_use` when deleting a person, `cannot_grant_self`, `email_required`
+  on an invitation, `server_admin_only` for an account action on a reader of private
+  post). Members cannot (they cannot delete persons).
+- An invitation for a person with private post needs an e-mail address, which the server
+  does not verify: an admin who controls that address could accept it; the grant then
+  shows as a history line on every private letter of that person.
+- Once a member reads private post, only the server admin may make a reset link for them,
+  end their sessions or manage their devices.
+- The log names a private letter by its id only.
+
 ## Honest limits
 
 - The e-mail address on an invitation is not verified (above).

@@ -27,6 +27,7 @@ function event(id: number, overrides: Partial<Event>): Event {
     origin: "user",
     actor_id: bram,
     actor_name: "Bram",
+    note: "",
     rule_name: "",
     label_name: "",
     person_name: "",
