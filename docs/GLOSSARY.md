@@ -10,6 +10,11 @@ the translation. Add a line before introducing a new domain term.
 | meekijker | viewer |
 | beheerder | admin |
 | persoon | person |
+| Mensen (de lijst van iedereen die post kan krijgen) | people (`listPeople`) |
+| accountstatus: niet actief, uitgenodigd, actief, uitgeschakeld | account state: inactive, invited, active, deactivated |
+| uitgeschakeld op; vorig account | deactivated_at; former_user |
+| beheerd door | managed_by |
+| nieuwe persoon (AI-voorstel) | new_person suggestion |
 | naamvariant | name_variant |
 | gearchiveerd | archived |
 | relatie | relation |
@@ -159,7 +164,15 @@ the request that creates the workspace and keep that name.
 | Noodtoegang | Emergency access | |
 | Zorg-post is privé | Care post is private | The label Zorg is "Healthcare" in English. |
 | Leidinggevende | Lead | Of a department. |
-| persoon | person | Persons (page), never "people" for the list of persons. |
+| persoon | person | One person; "Persons" where the old list is meant. |
+| Mensen | People | The section with everybody who can get mail, each with an account state. |
+| niet actief / uitgenodigd / actief / uitgeschakeld | not active / invited / active / switched off | The account state of a person. |
+| nooit ingelogd; laatst ingelogd | never signed in; last signed in | "Last in the app" for the newest use of a paired device. |
+| Uitnodigen; Opnieuw uitnodigen | Invite; Invite again | |
+| Opnieuw versturen; Intrekken | Send again; Withdraw | Of a pending invitation. |
+| Uitschakelen | Switch off | An account; the person and their mail stay. |
+| Nieuwe persoon | New person | In the addressee picker, and the AI's proposal of a name nobody has. |
+| Beheerd door | Managed by | A member who reads the mail of a person without an active account. |
 | op naam van, geadresseerde | addressed to, addressee | "Address to" for the rule action. |
 | afzender | sender | |
 | samenvatting | summary | |

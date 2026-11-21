@@ -2337,3 +2337,32 @@ Spec `docs/superpowers/specs/2026-11-21-mensen-en-accounts-design.md`, plan
   shows the former account's; both are the account's, the same in every workspace.
 - **Measured, not assumed:** `listPeople` runs a constant number of queries whatever the
   number of people (test with 8 more people and invitations).
+
+### Slice B: the web (plan Tasks 6–10)
+
+- **Tasks 6, 7 and 8 are one commit.** The row actions and the person's page share
+  `components/person-actions.tsx`; built apart the steps would not have type-checked.
+- **One query, filtered in the browser.** Mensen asks `listPeople` once (no `state`) and
+  filters on status and name locally, so the filter is instant and the counts agree; the
+  server's `state` filter stays for other clients. — Cost if wrong: none below the 500
+  persons a workspace may have.
+- **"Verdeelt post" stays a switch on the row** for admins (as on Leden), and is on the
+  person's page too; both go through the preview (`useSightChange`).
+- **Invitations without a person stay in their own panel** ("Open uitnodigingen") under
+  the list; an invitation with a person shows on that person's row.
+- **"Uitschakelen" asks `getPersonHasPrivatePost` when its dialog opens**, never for the
+  list (PR #39 findings 4 and 5). The invite dialog for a person asks it too, to say the
+  address is required before the server answers `email_required`; that sentence is shown at
+  the address field.
+- **Linking a person to a member is not offered on Mensen** (M3: an account comes only by
+  invitation); `linkPersonToMember` stays for old clients.
+- **Departments while departments are off.** They are not people (M2), so Mensen never
+  lists them; the old Personen page showed them as names while departments were off.
+  Switching departments on shows them on Afdelingen again. — Cost if wrong: an admin who
+  wants to rename such a name switches departments on for a moment.
+- **"Nieuwe persoon" is a button beside the picker, not an option in its list.** The
+  picker is a select without free text; the button opens a small dialog with a name field
+  that offers a person who already has the name or writes it so first ("Bedoel je ...?
+  (ook: ...)"). Names compare as the server's `normalise` (`web/src/names.ts`).
+- **Words** in `docs/GLOSSARY.md`: Mensen/People and the account states; "persoon" stays
+  "person". `docs/SPEC.md` names Mensen where Leden stood.

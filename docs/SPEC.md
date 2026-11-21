@@ -481,7 +481,7 @@ De namen hieronder zijn de begrippen uit dit document. In de code zijn tabel- en
 
 **App (tabbalk):** Vandaag · Documenten · [scanknop] · Geld · Werkruimte
 
-**Webinterface (beheer):** Inbox · Mappen (boomstructuur, slepen) · Regels (regel-bouwer met test) · Taken · Geld · Leden · Instellingen · Back-ups · Updates
+**Webinterface (beheer):** Inbox · Mappen (boomstructuur, slepen) · Regels (regel-bouwer met test) · Taken · Geld · Mensen (iedereen die post krijgt, met accountstatus; vervangt Leden en Personen, zie `docs/superpowers/specs/2026-11-21-mensen-en-accounts-design.md`) · Instellingen · Back-ups · Updates
 
 - Thuis-teksten warm en uitleggend; Zakelijk-teksten kort en zakelijk. Zelfde componenten.
 - Controle-scherm: document bovenaan, kaarten eronder; elk AI-veld met "waar staat dit?" die de bron markeert.
