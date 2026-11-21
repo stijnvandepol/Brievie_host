@@ -253,6 +253,21 @@ class LabelsIn(InputSchema):
     label_ids: list[UUID] = Field(max_length=30)
 
 
+class LingeringLetterOut(DocumentSummaryOut):
+    # Calendar days it has lain: since it arrived (Inbox) or was confirmed (not opened).
+    days: int = 0
+
+
+class LingeringOut(Schema):
+    # "In de Inbox te lang": to check or without a name for `inbox_days` days or more.
+    too_long_in_inbox: list[LingeringLetterOut]
+    # "Nog niet geopend": confirmed `unopened_days` days or more ago, and none of its
+    # addressees opened it.
+    not_opened: list[LingeringLetterOut]
+    inbox_days: int
+    unopened_days: int
+
+
 class MarkReadIn(InputSchema):
     # The letters to mark read ("Alles gelezen"): at most 200; ids the caller does not see
     # are skipped.

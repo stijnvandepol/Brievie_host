@@ -54,6 +54,12 @@ class WorkspaceSettingsOut(Schema):
     departments_enabled: bool = False
     admins_read_all: bool = True
 
+    # "Blijft liggen" (organisation only): shown to the sorters and admins; the calendar
+    # days in the Inbox (1-30) and not opened after confirming (1-60).
+    lingering_enabled: bool = False
+    lingering_inbox_days: int = 2
+    lingering_unopened_days: int = 5
+
     @staticmethod
     def of(workspace: Workspace) -> "WorkspaceSettingsOut":
         return WorkspaceSettingsOut(
@@ -64,6 +70,9 @@ class WorkspaceSettingsOut(Schema):
             everyone_sees_all=workspace.everyone_sees_all,
             departments_enabled=workspace.departments_enabled,
             admins_read_all=workspace.admins_read_all,
+            lingering_enabled=workspace.lingering_enabled,
+            lingering_inbox_days=workspace.lingering_inbox_days,
+            lingering_unopened_days=workspace.lingering_unopened_days,
         )
 
 
@@ -74,6 +83,10 @@ class WorkspaceSettingsIn(InputSchema):
     summary_language: str | None = Field(default=None, pattern="^(nl|en)$")
     # A Zorg label makes a letter private; changes no letter that has it already.
     care_is_private: bool | None = None
+    # "Blijft liggen": only in an organisation (422 at home for true).
+    lingering_enabled: bool | None = None
+    lingering_inbox_days: int | None = Field(default=None, ge=1, le=30)
+    lingering_unopened_days: int | None = Field(default=None, ge=1, le=60)
 
 
 class EmergencyAccessIn(InputSchema):

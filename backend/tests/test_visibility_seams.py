@@ -22,7 +22,12 @@ from tests.test_rls_coverage import missing_visibility_policies
 APPS: Final = Path(__file__).resolve().parent.parent / "apps"
 
 # Member-facing modules: what they read, they read for one member.
-MEMBER_FACING: Final = ("documents/services.py", "documents/search.py", "documents/trash.py")
+MEMBER_FACING: Final = (
+    "documents/services.py",
+    "documents/search.py",
+    "documents/trash.py",
+    "documents/lingering.py",
+)
 
 # Functions there that name `Document.objects` directly: each locks one letter by id
 # for a write, as the caller (the policies answer a hidden letter like a missing one).
@@ -39,6 +44,8 @@ SEAM_READS: Final = {
     ("documents/services.py", "waiting_letters"),
     ("documents/services.py", "get_document"),
     ("documents/search.py", "_filtered"),
+    ("documents/lingering.py", "lingering_letters"),
+    ("documents/lingering.py", "count_lingering"),
     ("documents/reading.py", "mark_read"),
     ("documents/reading.py", "mark_unread"),
     ("documents/reading.py", "mark_many_read"),

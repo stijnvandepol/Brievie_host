@@ -1234,6 +1234,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/inbox/lingering": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Lingering Letters
+         * @description "Blijft liggen", for the sorters and admins of an organisation with it switched on (`lingeringEnabled`): letters too long in the Inbox, and confirmed letters none of whose addressees opened them, oldest first, at most 100 each, only letters the caller may see. Empty lists for everyone else and at home.
+         */
+        get: operations["listLingeringLetters"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/invitations": {
         parameters: {
             query?: never;
@@ -3242,6 +3262,110 @@ export interface components {
              */
             language: "" | "nl" | "en";
         };
+        /** LingeringLetterOut */
+        LingeringLetterOut: {
+            /** Addressee Ids */
+            addressee_ids?: string[];
+            /** Auto Addressee Ids */
+            auto_addressee_ids?: string[];
+            /** Auto Label Ids */
+            auto_label_ids?: string[];
+            /** Auto Rule Label Ids */
+            auto_rule_label_ids?: string[];
+            /**
+             * Client Id
+             * Format: uuid
+             */
+            client_id: string;
+            /**
+             * Confirmed By Ai
+             * @default false
+             */
+            confirmed_by_ai: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Days
+             * @default 0
+             */
+            days: number;
+            /** Document Type */
+            document_type: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Inbox State
+             * @default
+             */
+            inbox_state: string;
+            /** Label Ids */
+            label_ids?: string[];
+            /**
+             * Letter Date
+             * Format: date
+             */
+            letter_date: string | null;
+            /**
+             * Open Duplicate Count
+             * @default 0
+             */
+            open_duplicate_count: number;
+            /**
+             * Open Suggestion Count
+             * @default 0
+             */
+            open_suggestion_count: number;
+            /** Page Count */
+            page_count: number;
+            /**
+             * Proposed Document Type
+             * @default
+             */
+            proposed_document_type: string;
+            /**
+             * Proposed Letter Date
+             * Format: date
+             */
+            proposed_letter_date?: string | null;
+            /**
+             * Proposed Sender
+             * @default
+             */
+            proposed_sender: string;
+            /** Reader Names */
+            reader_names?: string[];
+            /** Sender */
+            sender: string;
+            /** Status */
+            status: string;
+            /**
+             * Unread
+             * @default false
+             */
+            unread: boolean;
+            /**
+             * Visibility
+             * @default workspace
+             */
+            visibility: string;
+        };
+        /** LingeringOut */
+        LingeringOut: {
+            /** Inbox Days */
+            inbox_days: number;
+            /** Not Opened */
+            not_opened: components["schemas"]["LingeringLetterOut"][];
+            /** Too Long In Inbox */
+            too_long_in_inbox: components["schemas"]["LingeringLetterOut"][];
+            /** Unopened Days */
+            unopened_days: number;
+        };
         /** LoginIn */
         LoginIn: {
             /** Email */
@@ -4581,6 +4705,12 @@ export interface components {
             allow_member_export?: boolean | null;
             /** Care Is Private */
             care_is_private?: boolean | null;
+            /** Lingering Enabled */
+            lingering_enabled?: boolean | null;
+            /** Lingering Inbox Days */
+            lingering_inbox_days?: number | null;
+            /** Lingering Unopened Days */
+            lingering_unopened_days?: number | null;
             /** Summary Language */
             summary_language?: string | null;
         };
@@ -4613,6 +4743,21 @@ export interface components {
              * @default true
              */
             everyone_sees_all: boolean;
+            /**
+             * Lingering Enabled
+             * @default false
+             */
+            lingering_enabled: boolean;
+            /**
+             * Lingering Inbox Days
+             * @default 2
+             */
+            lingering_inbox_days: number;
+            /**
+             * Lingering Unopened Days
+             * @default 5
+             */
+            lingering_unopened_days: number;
             /**
              * Summary Language
              * @default nl
@@ -8846,6 +8991,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InboxCountsOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    listLingeringLetters: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LingeringOut"];
                 };
             };
             /** @description Unauthorized */

@@ -99,6 +99,9 @@ def update_workspace_settings(
         allow_member_export=payload.allow_member_export,
         summary_language=payload.summary_language,
         care_is_private=payload.care_is_private,
+        lingering_enabled=payload.lingering_enabled,
+        lingering_inbox_days=payload.lingering_inbox_days,
+        lingering_unopened_days=payload.lingering_unopened_days,
     )
     return WorkspaceSettingsOut.of(workspace)
 

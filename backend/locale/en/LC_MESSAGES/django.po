@@ -2697,6 +2697,10 @@ msgstr "Emergency access is off."
 msgid "Wie de server zelf beheert, kan technisch bij alle gegevens. Dat is %(names)s."
 msgstr "Whoever manages the server itself can technically reach all data. That is %(names)s."
 
+#: apps/workspaces/settings_service.py
+msgid "Dit kan alleen in een organisatie."
+msgstr "This is only possible in an organisation."
+
 #: apps/workspaces/visibility_settings.py
 msgid "Bevestig eerst dat deze mensen meer post gaan zien."
 msgstr "First confirm that these people will see more post."

@@ -2081,6 +2081,195 @@
         "title": "LanguageIn",
         "type": "object"
       },
+      "LingeringLetterOut": {
+        "properties": {
+          "addressee_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Addressee Ids",
+            "type": "array"
+          },
+          "auto_addressee_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Auto Addressee Ids",
+            "type": "array"
+          },
+          "auto_label_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Auto Label Ids",
+            "type": "array"
+          },
+          "auto_rule_label_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Auto Rule Label Ids",
+            "type": "array"
+          },
+          "client_id": {
+            "format": "uuid",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "confirmed_by_ai": {
+            "default": false,
+            "title": "Confirmed By Ai",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "days": {
+            "default": 0,
+            "title": "Days",
+            "type": "integer"
+          },
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "inbox_state": {
+            "default": "",
+            "title": "Inbox State",
+            "type": "string"
+          },
+          "label_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Label Ids",
+            "type": "array"
+          },
+          "letter_date": {
+            "format": "date",
+            "title": "Letter Date",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "open_duplicate_count": {
+            "default": 0,
+            "title": "Open Duplicate Count",
+            "type": "integer"
+          },
+          "open_suggestion_count": {
+            "default": 0,
+            "title": "Open Suggestion Count",
+            "type": "integer"
+          },
+          "page_count": {
+            "title": "Page Count",
+            "type": "integer"
+          },
+          "proposed_document_type": {
+            "default": "",
+            "title": "Proposed Document Type",
+            "type": "string"
+          },
+          "proposed_letter_date": {
+            "format": "date",
+            "title": "Proposed Letter Date",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "proposed_sender": {
+            "default": "",
+            "title": "Proposed Sender",
+            "type": "string"
+          },
+          "reader_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reader Names",
+            "type": "array"
+          },
+          "sender": {
+            "title": "Sender",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "unread": {
+            "default": false,
+            "title": "Unread",
+            "type": "boolean"
+          },
+          "visibility": {
+            "default": "workspace",
+            "title": "Visibility",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "client_id",
+          "status",
+          "page_count",
+          "created_at",
+          "sender",
+          "document_type",
+          "letter_date"
+        ],
+        "title": "LingeringLetterOut",
+        "type": "object"
+      },
+      "LingeringOut": {
+        "properties": {
+          "inbox_days": {
+            "title": "Inbox Days",
+            "type": "integer"
+          },
+          "not_opened": {
+            "items": {
+              "$ref": "#/components/schemas/LingeringLetterOut"
+            },
+            "title": "Not Opened",
+            "type": "array"
+          },
+          "too_long_in_inbox": {
+            "items": {
+              "$ref": "#/components/schemas/LingeringLetterOut"
+            },
+            "title": "Too Long In Inbox",
+            "type": "array"
+          },
+          "unopened_days": {
+            "title": "Unopened Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "too_long_in_inbox",
+          "not_opened",
+          "inbox_days",
+          "unopened_days"
+        ],
+        "title": "LingeringOut",
+        "type": "object"
+      },
       "LoginIn": {
         "properties": {
           "email": {
@@ -4615,6 +4804,31 @@
               "null"
             ]
           },
+          "lingering_enabled": {
+            "title": "Lingering Enabled",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "lingering_inbox_days": {
+            "maximum": 30,
+            "minimum": 1,
+            "title": "Lingering Inbox Days",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "lingering_unopened_days": {
+            "maximum": 60,
+            "minimum": 1,
+            "title": "Lingering Unopened Days",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "summary_language": {
             "pattern": "^(nl|en)$",
             "title": "Summary Language",
@@ -4657,6 +4871,21 @@
             "default": true,
             "title": "Everyone Sees All",
             "type": "boolean"
+          },
+          "lingering_enabled": {
+            "default": false,
+            "title": "Lingering Enabled",
+            "type": "boolean"
+          },
+          "lingering_inbox_days": {
+            "default": 2,
+            "title": "Lingering Inbox Days",
+            "type": "integer"
+          },
+          "lingering_unopened_days": {
+            "default": 5,
+            "title": "Lingering Unopened Days",
+            "type": "integer"
           },
           "summary_language": {
             "default": "nl",
@@ -10924,6 +11153,68 @@
           }
         ],
         "summary": "Get Inbox Counts",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/inbox/lingering": {
+      "get": {
+        "description": "\"Blijft liggen\", for the sorters and admins of an organisation with it switched on (`lingeringEnabled`): letters too long in the Inbox, and confirmed letters none of whose addressees opened them, oldest first, at most 100 each, only letters the caller may see. Empty lists for everyone else and at home.",
+        "operationId": "listLingeringLetters",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LingeringOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "List Lingering Letters",
         "tags": [
           "documents"
         ]

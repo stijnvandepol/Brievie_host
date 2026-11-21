@@ -3,6 +3,7 @@ from uuid import UUID
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, models, transaction
+from django.utils import timezone
 from django.utils.translation import gettext as _
 from psycopg import errors as pg_errors
 
@@ -10,7 +11,15 @@ from apps.accounts.models import User
 from apps.audit.services import AuditActor
 from apps.common import crypto
 from apps.common.errors import ApiError
-from apps.documents import duplicates, new_persons, organise, reading, suggestions, visibility
+from apps.documents import (
+    duplicates,
+    lingering,
+    new_persons,
+    organise,
+    reading,
+    suggestions,
+    visibility,
+)
 from apps.documents.intake import page_aad
 from apps.documents.models import (
     LIVE,
@@ -27,6 +36,8 @@ from apps.documents.schemas import (
     DocumentOut,
     DocumentSummaryOut,
     DocumentVisibilityOut,
+    LingeringLetterOut,
+    LingeringOut,
     NewPersonSuggestionOut,
     PageOut,
     ProposalOut,
@@ -298,6 +309,28 @@ def waiting_letters(membership: Membership) -> int:
     return sum(
         letters.filter(_in_state(state)).count()
         for state in (InboxState.REVIEW, InboxState.UNASSIGNED)
+    )
+
+
+def lingering_out(membership: Membership) -> LingeringOut:
+    """ "Blijft liggen" for the member (`lingering.lingering_letters`), as rows with their
+    days. Empty unless they sort post or are an admin of an organisation with it on."""
+    result = lingering.lingering_letters(membership)
+    now = timezone.now()
+
+    def rows(documents: list[Document]) -> list[LingeringLetterOut]:
+        return [
+            LingeringLetterOut(**summary.model_dump(), days=lingering.days_of(document, now=now))
+            for document, summary in zip(
+                documents, document_summaries_out(membership, documents), strict=True
+            )
+        ]
+
+    return LingeringOut(
+        too_long_in_inbox=rows(result.too_long_in_inbox),
+        not_opened=rows(result.not_opened),
+        inbox_days=result.inbox_days,
+        unopened_days=result.unopened_days,
     )
 
 

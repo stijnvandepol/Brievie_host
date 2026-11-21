@@ -33,6 +33,7 @@ from apps.documents.schemas import (
     FolderOut,
     InboxCountsOut,
     LabelsIn,
+    LingeringOut,
     MarkReadIn,
     MarkReadOut,
     MyExportOut,
@@ -230,6 +231,22 @@ def search_documents(
 def get_inbox_counts(request: HttpRequest, workspace_id: UUID) -> InboxCountsOut:
     membership = workspace_member(request, workspace_id)
     return InboxCountsOut(**services.inbox_counts(membership))
+
+
+@router.get(
+    "/workspaces/{workspace_id}/inbox/lingering",
+    response={200: LingeringOut, 404: ErrorOut, **AUTH_ERRORS},
+    operation_id="listLingeringLetters",
+    description=(
+        '"Blijft liggen", for the sorters and admins of an organisation with it switched on '
+        "(`lingeringEnabled`): letters too long in the Inbox, and confirmed letters none of "
+        "whose addressees opened them, oldest first, at most 100 each, only letters the "
+        "caller may see. Empty lists for everyone else and at home."
+    ),
+)
+def list_lingering_letters(request: HttpRequest, workspace_id: UUID) -> LingeringOut:
+    membership = workspace_member(request, workspace_id)
+    return services.lingering_out(membership)
 
 
 @router.get(
