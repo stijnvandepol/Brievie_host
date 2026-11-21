@@ -158,6 +158,10 @@ msgstr "{length} van {REASON_MAX} tekens, minstens {REASON_MIN}."
 msgid "{letters, plural, one {Het gaat om # brief die jij kunt lezen.} other {Het gaat om # brieven die jij kunt lezen.}}"
 msgstr "{letters, plural, one {Het gaat om # brief die jij kunt lezen.} other {Het gaat om # brieven die jij kunt lezen.}}"
 
+#: src/routes/people-detail.tsx
+msgid "{manager} beheert de post van {name} en ziet die als eigen post."
+msgstr "{manager} beheert de post van {name} en ziet die als eigen post."
+
 #: src/routes/rule-editor.tsx
 msgid "{matched, plural, one {# van de nieuwste {checked} brieven past} other {# van de nieuwste {checked} brieven passen}}"
 msgstr "{matched, plural, one {# van de nieuwste {checked} brieven past} other {# van de nieuwste {checked} brieven passen}}"
@@ -822,6 +826,22 @@ msgstr "Begin met een voorbeeld"
 #: src/routes/automations.tsx
 msgid "Begin met een voorbeeld hieronder, met de startset, of maak zelf een regel."
 msgstr "Begin met een voorbeeld hieronder, met de startset, of maak zelf een regel."
+
+#: src/routes/people-detail.tsx
+msgid "Beheerd door"
+msgstr "Beheerd door"
+
+#: src/components/audit-codes.ts
+msgid "Beheerd door beëindigd"
+msgstr "Beheerd door beëindigd"
+
+#: src/components/audit-codes.ts
+msgid "Beheerd door ingesteld"
+msgstr "Beheerd door ingesteld"
+
+#: src/components/person-actions.tsx
+msgid "Beheerd door: {name}"
+msgstr "Beheerd door: {name}"
 
 #: src/components/role-dialog.tsx
 #: src/routes/home.tsx
@@ -2013,6 +2033,11 @@ msgstr "is precies"
 msgid "Ja, {0} verdeelt post"
 msgstr "Ja, {0} verdeelt post"
 
+#. placeholder {0}: person.display_name
+#: src/components/person-actions.tsx
+msgid "Ja, {name} beheert de post van {0}"
+msgstr "Ja, {name} beheert de post van {0}"
+
 #: src/routes/visibility.tsx
 msgid "Ja, beheerders lezen alle post"
 msgstr "Ja, beheerders lezen alle post"
@@ -2298,6 +2323,10 @@ msgstr "Koppelgegevens"
 #: src/components/page.tsx
 msgid "Kruimelpad"
 msgstr "Kruimelpad"
+
+#: src/components/person-actions.tsx
+msgid "Laat de post beheren door"
+msgstr "Laat de post beheren door"
 
 #: src/routes/sessions.tsx
 msgid "Laatst gebruikt"
@@ -2654,6 +2683,7 @@ msgstr "Negeren: {name}"
 msgid "Negeren: {text}"
 msgstr "Negeren: {text}"
 
+#: src/components/person-actions.tsx
 #: src/components/person-picker.tsx
 msgid "Niemand"
 msgstr "Niemand"
@@ -3098,6 +3128,10 @@ msgstr "Privé voor {names}"
 #: src/routes/people-detail.tsx
 msgid "Privébrieven lezen alleen de mensen met wie ze gedeeld zijn."
 msgstr "Privébrieven lezen alleen de mensen met wie ze gedeeld zijn."
+
+#: src/routes/people-detail.tsx
+msgid "Privébrieven van {name} leest {manager} ook, net als de mensen met wie ze gedeeld zijn."
+msgstr "Privébrieven van {name} leest {manager} ook, net als de mensen met wie ze gedeeld zijn."
 
 #: src/routes/labels.tsx
 msgid "Probeer"

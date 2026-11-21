@@ -160,3 +160,128 @@ describe("a person's page", () => {
     expect(await screen.findByText("We kunnen deze persoon niet vinden.")).toBeInTheDocument();
   });
 });
+
+describe("Beheerd door", () => {
+  const managed = { ...papa, managed_by_user_id: bram.user_id };
+
+  it("sets a manager after the preview", async () => {
+    const sent: unknown[] = [];
+    server.use(
+      http.put(`${base}/persons/${papa.id}/manager`, async ({ request }) => {
+        const body = (await request.json()) as { confirmed: boolean };
+        sent.push(body);
+        if (!body.confirmed) {
+          return HttpResponse.json(
+            errorBody(
+              "confirmation_required",
+              "Bevestig eerst dat deze mensen meer post gaan zien.",
+            ),
+            { status: 409 },
+          );
+        }
+        return HttpResponse.json({});
+      }),
+      http.post(`${base}/visibility/preview`, () =>
+        HttpResponse.json({
+          changes: [{ user_id: bram.user_id, name: "Bram", gains: ["post van Papa"], losses: [] }],
+          letter_count: 2,
+          needs_confirmation: true,
+          sentences: [],
+          preview_token: "tok",
+        }),
+      ),
+      ...loggedInHandlers(),
+      ...peopleHandlers(),
+    );
+    const u = userEvent.setup();
+    renderApp(detail(papa.id));
+    await u.selectOptions(
+      await screen.findByRole("combobox", { name: "Beheerd door: Papa" }),
+      "Bram",
+    );
+    const preview = await screen.findByRole("alertdialog");
+    expect(preview).toHaveTextContent("Bram: post van Papa");
+    await u.click(
+      within(preview).getByRole("button", { name: "Ja, Bram beheert de post van Papa" }),
+    );
+    await waitFor(() => expect(sent).toHaveLength(2));
+    expect(sent[1]).toMatchObject({ user_id: bram.user_id, confirmed: true, preview_token: "tok" });
+  });
+
+  it("clears it without a preview", async () => {
+    const sent: unknown[] = [];
+    server.use(
+      http.put(`${base}/persons/${papa.id}/manager`, async ({ request }) => {
+        sent.push(await request.json());
+        return HttpResponse.json({});
+      }),
+      http.get(`${base}/visibility`, () =>
+        HttpResponse.json({ ...homeVisibility, kind: "business", everyone_sees_all: false }),
+      ),
+      ...loggedInHandlers(),
+      ...peopleHandlers(people.map((p) => (p.id === papa.id ? managed : p))),
+    );
+    const u = userEvent.setup();
+    renderApp(detail(papa.id));
+    expect(
+      await screen.findByRole("region", { name: "Wie kan de post van Papa zien?" }),
+    ).toHaveTextContent("Bram beheert de post van Papa");
+    await u.selectOptions(screen.getByRole("combobox", { name: "Beheerd door: Papa" }), "Niemand");
+    await waitFor(() =>
+      expect(sent).toEqual([{ user_id: null, confirmed: false, preview_token: "" }]),
+    );
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  it("naming oneself with private post shows the server's sentence", async () => {
+    const sentence =
+      "Je kunt jezelf geen toegang geven tot privé-post. Gebruik een uitnodiging of noodtoegang.";
+    server.use(
+      http.put(`${base}/persons/${papa.id}/manager`, () =>
+        HttpResponse.json(errorBody("cannot_grant_self", sentence), { status: 409 }),
+      ),
+      ...loggedInHandlers(),
+      ...peopleHandlers(),
+    );
+    const u = userEvent.setup();
+    renderApp(detail(papa.id));
+    await u.selectOptions(
+      await screen.findByRole("combobox", { name: "Beheerd door: Papa" }),
+      "Anna",
+    );
+    expect(await screen.findByText(sentence)).toBeInTheDocument();
+  });
+
+  it("switching off offers a manager when there is private post", async () => {
+    const calls: string[] = [];
+    server.use(
+      http.get(`${base}/persons/${bram.id}/private-post`, () =>
+        HttpResponse.json({ has_private_post: true }),
+      ),
+      http.delete(`${base}/members/${bram.user_id}`, () => {
+        calls.push("removed");
+        return new HttpResponse(null, { status: 204 });
+      }),
+      http.put(`${base}/persons/${bram.id}/manager`, async ({ request }) => {
+        calls.push(`manager ${JSON.stringify(await request.json())}`);
+        return HttpResponse.json({});
+      }),
+      ...loggedInHandlers(),
+      ...peopleHandlers(),
+    );
+    const u = userEvent.setup();
+    renderApp(detail(bram.id));
+    await u.click(await screen.findByRole("button", { name: "Uitschakelen: Bram" }));
+    const dialog = await screen.findByRole("alertdialog", {
+      name: "Account van Bram uitschakelen?",
+    });
+    await u.selectOptions(
+      await within(dialog).findByRole("combobox", { name: "Laat de post beheren door" }),
+      "Anna",
+    );
+    await u.click(within(dialog).getByRole("button", { name: "Uitschakelen" }));
+    await waitFor(() => expect(calls).toHaveLength(2));
+    expect(calls[0]).toBe("removed");
+    expect(calls[1]).toContain(people[0]?.user_id ?? "");
+  });
+});

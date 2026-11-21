@@ -2391,3 +2391,37 @@ Spec `docs/superpowers/specs/2026-11-21-mensen-en-accounts-design.md`, plan
 - **Consent and privacy as for every AI output.** The name comes only from a run under the
   recorded consent (`provider_for`); the text sent is BSN-masked; the stored name and quote
   are masked again; the row is readable only with its letter (child policy).
+
+### Mensen, slice C: "Beheerd door" (plan Tasks 11–15)
+
+- **A manager reads the post of a person without an active account as their own**
+  (`Person.managed_by`, only kind person, only while `user_id` is null, only a member; a
+  check constraint and `save()`). `brievie_my_post_ids` gains those persons and
+  `brievie_covered_post_ids` counts them as read through, so the sorters stop getting that
+  post. A private letter on the person gets a reader row with reason `managed`.
+- **Migrations replay their own text.** `workspaces/0007` now reads the helpers frozen as
+  they were (`visibility_functions_sql_0007`); `0009` replaces the two helpers in place
+  (`CREATE OR REPLACE`: the policies call them) and its reverse restores the 0007 text, never
+  a drop. Without a manager no letter changes viewers (migration test, all four switch
+  combinations, both kinds of workspace).
+- **The snapshot is the same rule as the SQL.** `MemberFacts.person_ids` holds the managed
+  persons (`managed_ids` only for the wording "beheert de post van"), so previews, tokens,
+  notices, `expected_sight` and "Wie kan deze brief zien?" agree with the helpers.
+- **Setting it is a widening with a confirmation** (`setPersonManager`, member_change
+  `manage`); never the admin themself while private post is on the person
+  (`cannot_grant_self`); not a department, not a person with an account. Lock order:
+  memberships, then the person.
+- **M6: what ends it.** Accepting an invitation for the person (an adult with an account
+  decides who reads their post) — the manager is told by `notify_join`, their export goes,
+  `person_manager_cleared` is logged; the old link endpoint likewise; the manager leaving
+  or being removed (P7, the post goes back to the sorters, logged per person). Switching
+  it off ends what ran under it: the former manager's assignments there and their own
+  export.
+- **Audit codes** `person_manager_set` and `person_manager_cleared` (value `member`: the
+  manager's name; a member is a person, so a name is allowed).
+- **The web:** "Beheerd door" on the page of a person without an active account (admins),
+  with the preview on a gain; the "Uitschakelen" dialog of a person with private post
+  offers "Laat de post beheren door" and sets it, with its own preview, right after.
+- **Measured:** the perf world manages 2 % of its persons (one of fifty, by a member in a
+  department); `visibility-perf` stays within the M0 budget with no threshold raised (the
+  numbers are in the run's summary of the PR's last commit).

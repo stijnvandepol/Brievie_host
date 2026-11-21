@@ -17,6 +17,7 @@ import { Icon } from "../components/icons";
 import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
 import {
   lastSignIn,
+  ManagerControl,
   PersonActions,
   SortsPostSwitch,
   StateBadge,
@@ -35,9 +36,12 @@ const dateTime = dateFormat({ dateStyle: "long", timeStyle: "short" });
 function PostOfInactivePerson({
   name,
   everyoneSeesAll,
+  manager,
 }: {
   name: string;
   everyoneSeesAll: boolean;
+  /** The member who manages the post ("Beheerd door"), if anybody. */
+  manager: string | null;
 }) {
   return (
     <section className="panel panel-pad" aria-labelledby="who-sees">
@@ -45,9 +49,15 @@ function PostOfInactivePerson({
       <p>
         {everyoneSeesAll
           ? t`Iedereen in deze werkruimte ziet de post van ${name}.`
-          : t`De post van ${name} gaat naar wie post verdeelt.`}
+          : manager
+            ? t`${manager} beheert de post van ${name} en ziet die als eigen post.`
+            : t`De post van ${name} gaat naar wie post verdeelt.`}
       </p>
-      <p className="muted">{t`Privébrieven lezen alleen de mensen met wie ze gedeeld zijn.`}</p>
+      <p className="muted">
+        {manager
+          ? t`Privébrieven van ${name} leest ${manager} ook, net als de mensen met wie ze gedeeld zijn.`
+          : t`Privébrieven lezen alleen de mensen met wie ze gedeeld zijn.`}
+      </p>
     </section>
   );
 }
@@ -129,6 +139,10 @@ function PersonDetailPage() {
     return department ? [department.display_name] : [];
   });
   const sorting = visibility.data !== undefined && !visibility.data.everyone_sees_all;
+  // Who may manage somebody's post: the members (active people) other than this person.
+  const managers = (people.data ?? []).filter(
+    (candidate) => candidate.state === "active" && candidate.user_id && candidate.id !== person.id,
+  );
 
   return (
     <Shell workspace={workspace}>
@@ -191,6 +205,14 @@ function PersonDetailPage() {
               <dd>{departments.join(", ")}</dd>
             </div>
           ) : null}
+          {isAdmin && !active ? (
+            <div>
+              <dt>{t`Beheerd door`}</dt>
+              <dd>
+                <ManagerControl workspaceId={workspace.id} person={person} managers={managers} />
+              </dd>
+            </div>
+          ) : null}
           {isAdmin && (active || person.state === "deactivated") ? (
             <div>
               <dt>{t`Laatst ingelogd`}</dt>
@@ -236,6 +258,7 @@ function PersonDetailPage() {
             isAdmin={isAdmin}
             isOwn={person.user_id !== null && person.user_id === me?.id}
             isOnlyAdmin={person.role === "admin" && adminCount === 1}
+            managers={managers}
           />
           {isAdmin && settings.data?.emergency_access ? (
             <Button
@@ -262,7 +285,16 @@ function PersonDetailPage() {
         </div>
       </section>
       {active || !visibility.data ? null : (
-        <PostOfInactivePerson name={name} everyoneSeesAll={visibility.data.everyone_sees_all} />
+        <PostOfInactivePerson
+          name={name}
+          everyoneSeesAll={visibility.data.everyone_sees_all}
+          manager={
+            (people.data ?? []).find(
+              (candidate) =>
+                candidate.user_id !== null && candidate.user_id === person.managed_by_user_id,
+            )?.display_name ?? null
+          }
+        />
       )}
       <PersonDialog
         workspaceId={workspace.id}

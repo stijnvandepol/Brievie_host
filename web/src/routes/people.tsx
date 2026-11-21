@@ -213,6 +213,9 @@ function PeoplePage() {
                       isOwn={person.user_id !== null && person.user_id === me?.id}
                       isOnlyAdmin={person.role === "admin" && adminCount === 1}
                       isAlone={activeCount === 1}
+                      managers={all.filter(
+                        (candidate) => candidate.state === "active" && candidate.user_id,
+                      )}
                     />
                   </td>
                 </tr>

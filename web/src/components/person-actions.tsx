@@ -114,17 +114,111 @@ function LeaveExportOffer({ workspaceId, isAdmin }: { workspaceId: string; isAdm
 function PrivatePostWarning({
   workspaceId,
   person,
+  managers,
+  manager,
+  onManager,
 }: {
   workspaceId: string;
   person: PersonAccount;
+  /** Who could manage the post (active members other than this person). */
+  managers: PersonAccount[];
+  manager: string;
+  onManager: (userId: string) => void;
 }) {
   const { data } = useQuery(personPrivatePostQuery(workspaceId, person.id));
   if (!data?.has_private_post) return null;
   const name = person.display_name;
   return (
-    <MessageBar intent="warning">
-      {t`Op naam van ${name} staan privébrieven. Na uitschakelen kan niemand ze lezen, tot je ${name} opnieuw uitnodigt of iemand de post laat beheren.`}
-    </MessageBar>
+    <>
+      <MessageBar intent="warning">
+        {t`Op naam van ${name} staan privébrieven. Na uitschakelen kan niemand ze lezen, tot je ${name} opnieuw uitnodigt of iemand de post laat beheren.`}
+      </MessageBar>
+      {managers.length > 0 ? (
+        <div className="field">
+          <label htmlFor={`manager-after-${person.id}`}>{t`Laat de post beheren door`}</label>
+          <select
+            id={`manager-after-${person.id}`}
+            value={manager}
+            onChange={(event) => onManager(event.target.value)}
+          >
+            <option value="">{t`Niemand`}</option>
+            {managers.map((candidate) => (
+              <option key={candidate.id} value={candidate.user_id ?? ""}>
+                {candidate.display_name}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+/** Puts `userId` in charge of the person's post ("Beheerd door"), or nobody (`null`):
+ * a gain asks through the preview first; ending it needs none. */
+export function useSetManager(workspaceId: string, person: PersonAccount) {
+  const queryClient = useQueryClient();
+  const sight = useSightChange(workspaceId);
+  const mutation = useMutation({
+    mutationFn: ({ userId, name }: { userId: string | null; name: string }) =>
+      sight.tryFirst({
+        preview: previewBody({
+          member_change: "manage",
+          member_user_id: userId,
+          member_person_id: person.id,
+        }),
+        confirmLabel: t`Ja, ${name} beheert de post van ${person.display_name}`,
+        write: async (confirmation) => {
+          const { error } = await api.PUT(
+            "/api/v1/workspaces/{workspace_id}/persons/{person_id}/manager",
+            {
+              params: { path: { workspace_id: workspaceId, person_id: person.id } },
+              body: { user_id: userId, ...confirmation },
+            },
+          );
+          if (error !== undefined) throw new ApiFailure(error);
+        },
+      }),
+    onSettled: () => refreshPeople(queryClient, workspaceId),
+  });
+  return { mutation, dialog: sight.dialog };
+}
+
+/** "Beheerd door" of a person without an active account: a choice of member, or nobody. */
+export function ManagerControl({
+  workspaceId,
+  person,
+  managers,
+}: {
+  workspaceId: string;
+  person: PersonAccount;
+  managers: PersonAccount[];
+}) {
+  const { mutation, dialog } = useSetManager(workspaceId, person);
+  const name = person.display_name;
+  return (
+    <>
+      <select
+        className="inline-select"
+        aria-label={t`Beheerd door: ${name}`}
+        value={person.managed_by_user_id ?? ""}
+        disabled={mutation.isPending}
+        onChange={(event) => {
+          const userId = event.target.value || null;
+          const chosen = managers.find((candidate) => candidate.user_id === userId);
+          mutation.mutate({ userId, name: chosen?.display_name ?? "" });
+        }}
+      >
+        <option value="">{t`Niemand`}</option>
+        {managers.map((candidate) => (
+          <option key={candidate.id} value={candidate.user_id ?? ""}>
+            {candidate.display_name}
+          </option>
+        ))}
+      </select>
+      <ErrorAlert error={mutation.error} />
+      {dialog}
+    </>
   );
 }
 
@@ -142,6 +236,7 @@ export function PersonActions({
   isOwn,
   isOnlyAdmin,
   isAlone = false,
+  managers = [],
 }: {
   workspaceId: string;
   workspaceName: string;
@@ -152,6 +247,8 @@ export function PersonActions({
   isOnlyAdmin: boolean;
   /** Nobody else has an account here: the only admin has nothing to explain. */
   isAlone?: boolean;
+  /** The active members who could manage this person's post once it is switched off. */
+  managers?: PersonAccount[];
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -211,6 +308,9 @@ export function PersonActions({
     await refresh();
   }
 
+  const [managerAfter, setManagerAfter] = useState("");
+  const manage = useSetManager(workspaceId, person);
+
   async function switchOff() {
     if (!person.user_id) return;
     const { error, response } = await api.DELETE(
@@ -221,6 +321,11 @@ export function PersonActions({
     await refresh();
     // The dialog gave focus back to a button that is gone now.
     focusPageHeading();
+    if (managerAfter) {
+      // A separate change of sight with its own preview, once the account is off.
+      const chosen = managers.find((candidate) => candidate.user_id === managerAfter);
+      manage.mutation.mutate({ userId: managerAfter, name: chosen?.display_name ?? "" });
+    }
   }
 
   async function leave() {
@@ -317,7 +422,13 @@ export function PersonActions({
           <p>
             {t`${name} kan daarna niet meer bij deze werkruimte. De post blijft hier. Taken van ${name} hebben daarna niemand. Je kunt ${name} later opnieuw uitnodigen.`}
           </p>
-          <PrivatePostWarning workspaceId={workspaceId} person={person} />
+          <PrivatePostWarning
+            workspaceId={workspaceId}
+            person={person}
+            managers={managers.filter((candidate) => candidate.id !== person.id)}
+            manager={managerAfter}
+            onManager={setManagerAfter}
+          />
         </ConfirmAction>
       ) : null}
       {isAdmin && active && person.can_manage_account && !isOwn ? (
@@ -383,7 +494,9 @@ export function PersonActions({
         </ConfirmAction>
       ) : null}
       {renew.isError ? <ErrorAlert error={renew.error} /> : null}
+      {manage.mutation.isError ? <ErrorAlert error={manage.mutation.error} /> : null}
       {sight.dialog}
+      {manage.dialog}
       <InvitationLinkDialog created={renewed} onClose={() => setRenewed(null)} renewed />
     </span>
   );

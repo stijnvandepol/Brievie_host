@@ -158,6 +158,10 @@ msgstr "{length} of {REASON_MAX} characters, at least {REASON_MIN}."
 msgid "{letters, plural, one {Het gaat om # brief die jij kunt lezen.} other {Het gaat om # brieven die jij kunt lezen.}}"
 msgstr "{letters, plural, one {It concerns # letter you can read.} other {It concerns # letters you can read.}}"
 
+#: src/routes/people-detail.tsx
+msgid "{manager} beheert de post van {name} en ziet die als eigen post."
+msgstr "{manager} manages the mail of {name} and sees it as their own."
+
 #: src/routes/rule-editor.tsx
 msgid "{matched, plural, one {# van de nieuwste {checked} brieven past} other {# van de nieuwste {checked} brieven passen}}"
 msgstr "{matched, plural, one {# of the newest {checked} letters matches} other {# of the newest {checked} letters match}}"
@@ -822,6 +826,22 @@ msgstr "Start from an example"
 #: src/routes/automations.tsx
 msgid "Begin met een voorbeeld hieronder, met de startset, of maak zelf een regel."
 msgstr "Start from an example below, with the starter set, or create a rule yourself."
+
+#: src/routes/people-detail.tsx
+msgid "Beheerd door"
+msgstr "Managed by"
+
+#: src/components/audit-codes.ts
+msgid "Beheerd door beëindigd"
+msgstr "Managed by ended"
+
+#: src/components/audit-codes.ts
+msgid "Beheerd door ingesteld"
+msgstr "Managed by set"
+
+#: src/components/person-actions.tsx
+msgid "Beheerd door: {name}"
+msgstr "Managed by: {name}"
 
 #: src/components/role-dialog.tsx
 #: src/routes/home.tsx
@@ -2013,6 +2033,11 @@ msgstr "is exactly"
 msgid "Ja, {0} verdeelt post"
 msgstr "Yes, {0} sorts post"
 
+#. placeholder {0}: person.display_name
+#: src/components/person-actions.tsx
+msgid "Ja, {name} beheert de post van {0}"
+msgstr "Yes, {name} manages the mail of {0}"
+
 #: src/routes/visibility.tsx
 msgid "Ja, beheerders lezen alle post"
 msgstr "Yes, admins read all post"
@@ -2298,6 +2323,10 @@ msgstr "Pairing details"
 #: src/components/page.tsx
 msgid "Kruimelpad"
 msgstr "Breadcrumb"
+
+#: src/components/person-actions.tsx
+msgid "Laat de post beheren door"
+msgstr "Let the mail be managed by"
 
 #: src/routes/sessions.tsx
 msgid "Laatst gebruikt"
@@ -2654,6 +2683,7 @@ msgstr "Dismiss: {name}"
 msgid "Negeren: {text}"
 msgstr "Dismiss: {text}"
 
+#: src/components/person-actions.tsx
 #: src/components/person-picker.tsx
 msgid "Niemand"
 msgstr "Nobody"
@@ -3098,6 +3128,10 @@ msgstr "Private for {names}"
 #: src/routes/people-detail.tsx
 msgid "Privébrieven lezen alleen de mensen met wie ze gedeeld zijn."
 msgstr "Private letters are read only by the people they are shared with."
+
+#: src/routes/people-detail.tsx
+msgid "Privébrieven van {name} leest {manager} ook, net als de mensen met wie ze gedeeld zijn."
+msgstr "{manager} also reads the private letters of {name}, as do the people they are shared with."
 
 #: src/routes/labels.tsx
 msgid "Probeer"
