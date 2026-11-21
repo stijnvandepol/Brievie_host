@@ -2586,7 +2586,7 @@ def test_the_first_start_of_an_old_installation_writes_the_sheet(install: Instal
 
 def test_ci_has_shellcheck_for_the_backend_tests() -> None:
     ci = (REPO / ".github" / "workflows" / "ci.yml").read_text()
-    backend = ci.split("\n  backend:\n", 1)[1].split("\n  web:\n", 1)[0]
+    backend = ci.split("\n  backend-tests:\n", 1)[1].split("\n  backend-static:\n", 1)[0]
     assert "shellcheck" in backend
     assert backend.index("shellcheck") < backend.index("run: uv run pytest")
     assert "working-directory: backend" in backend
