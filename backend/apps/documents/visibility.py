@@ -68,6 +68,16 @@ def addressee_scope(document: Document) -> Iterator[None]:
     if depth == 0:
         sync_addressee_ids(document)
         recompute(document)
+        _release_assignees(document.workspace_id, [document.id])
+
+
+def _release_assignees(workspace_id: UUID, document_ids: Collection[UUID] | None) -> int:
+    """An assignment ends when the assignee may no longer read the letter (Mijn taken
+    S 5.3): after every change of who reads it. Imported here: the tasks app reads
+    letters through this module."""
+    from apps.tasks.assignment import release_unseeing_assignees
+
+    return release_unseeing_assignees(workspace_id=workspace_id, document_ids=document_ids)
 
 
 def in_addressee_scope(document_id: UUID) -> bool:
@@ -268,6 +278,8 @@ def viewers(document_ids: Collection[UUID]) -> dict[UUID, frozenset[UUID]]:
 class VisibilityCheck:
     addressee_ids_fixed: int
     reader_rows_fixed: int
+    # Assignments taken back because the assignee may no longer read the letter.
+    assignments_released: int = 0
 
 
 _REPAIR_ADDRESSEE_IDS = (
@@ -304,18 +316,28 @@ def verify_visibility(workspace_id: UUID) -> VisibilityCheck:
             .order_by("id")
         )
         fixed_readers = sum(recompute(d) for d in documents)
-    return VisibilityCheck(addressee_ids_fixed=fixed_ids, reader_rows_fixed=fixed_readers)
+        released = _release_assignees(workspace_id, None)
+    return VisibilityCheck(
+        addressee_ids_fixed=fixed_ids,
+        reader_rows_fixed=fixed_readers,
+        assignments_released=released,
+    )
 
 
 def verify_all() -> VisibilityCheck:
     """`verify_visibility` for every workspace, each in its own short transaction."""
-    fixed_ids = fixed_readers = 0
+    fixed_ids = fixed_readers = released = 0
     for workspace_id in Workspace.objects.order_by("id").values_list("id", flat=True):
         with workspace_context(workspace_id, actor=SYSTEM):
             check = verify_visibility(workspace_id)
         fixed_ids += check.addressee_ids_fixed
         fixed_readers += check.reader_rows_fixed
-    return VisibilityCheck(addressee_ids_fixed=fixed_ids, reader_rows_fixed=fixed_readers)
+        released += check.assignments_released
+    return VisibilityCheck(
+        addressee_ids_fixed=fixed_ids,
+        reader_rows_fixed=fixed_readers,
+        assignments_released=released,
+    )
 
 
 def _readable(membership: Membership) -> QuerySet[Document]:

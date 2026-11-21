@@ -59,9 +59,11 @@ def verify_visibility_job(timestamp: int) -> None:
     )
     logger.log(
         level,
-        "Visibility check: %d addressee lists and %d reader rows differed",
+        "Visibility check: %d addressee lists and %d reader rows differed;"
+        " %d task assignments released",
         check.addressee_ids_fixed,
         check.reader_rows_fixed,
+        check.assignments_released,
     )
 
 

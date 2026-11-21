@@ -171,3 +171,30 @@ def release_unseeing_assignees(
             )
             released += 1
         return released
+
+
+def release_member(*, workspace_id: UUID, user_id: UUID) -> int:
+    """Take back every assignment of one member, as the system: when they leave the
+    workspace or become a viewer. A task on a letter gets `task_unassigned` (origin
+    `system`); a task without a letter is only cleared. The number released."""
+    with transaction.atomic(), system_actor():
+        rows = list(
+            Task.objects.filter(workspace_id=workspace_id, assigned_to_id=user_id)
+            .select_for_update(of=("self",))
+            .select_related("document", "assigned_to")
+            .order_by("id")
+        )
+        for task in rows:
+            name = task.assigned_to.name if task.assigned_to is not None else ""
+            task.assigned_to = None
+            task.assigned_by = None
+            task.save(update_fields=["assigned_to", "assigned_by", "updated_at"])
+            if task.document is not None:
+                organise.record_task_event(
+                    task.document,
+                    DocumentEvent.Kind.TASK_UNASSIGNED,
+                    None,
+                    DocumentEvent.Origin.SYSTEM,
+                    person_name=name,
+                )
+        return len(rows)

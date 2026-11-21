@@ -1793,3 +1793,15 @@ section 16, recorded here as built.
   status = 'open'` serves the list and the counts.
 - **History origin `system`** (new): an assignment the server released because the
   assignee may no longer read the letter; no actor.
+- **MT5, MT6: assign, hand over, release; an assignment never outlives sight.**
+  `assignTask` gives a task on a letter only to a member who can read it (`viewers()`,
+  viewers left out): 422 `assignee_cannot_read`; a task without a letter is not given
+  (422 `task_without_letter`). The check runs as the caller under the task's row lock, the
+  write as the system (`apps/tasks/assignment.py` joins the system callers). History, not
+  the audit log: `task_assigned` / `task_unassigned` with the actor and the member's name.
+  Every writer that narrows sight releases as the system (origin `system`, no actor):
+  the end of `visibility.addressee_scope` (addressees, readers, privacy), the nightly
+  `verify_visibility` (counted as `assignments_released`), demoting to viewer and removing
+  a member (`release_member`, also clearing letterless tasks as before), and unlinking a
+  person from a member. `tests/test_task_release_callers.py` fails a new narrowing writer
+  outside that list; "Wie ziet wat" T24, T27, T37 and T38 add theirs there.
