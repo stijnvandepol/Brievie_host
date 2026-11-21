@@ -156,6 +156,13 @@ describe("ruleSentence", () => {
     );
   });
 
+  it("the sentence says maak de brief privé", () => {
+    const actions = [{ type: "make_private", label_id: null, person_id: null }];
+    expect(ruleSentence(rule({ actions }), labels, persons)).toBe(
+      "Als de tekst het woord APK bevat → maak de brief privé",
+    );
+  });
+
   it("says (verwijderd) for a label or person that no longer exists", () => {
     const gone = "e9999999-9999-4999-8999-999999999999";
     expect(

@@ -1854,6 +1854,10 @@ msgid "Een regel heeft %(min)d tot %(max)d acties."
 msgstr "A rule has %(min)d to %(max)d actions."
 
 #: apps/rules/definition.py
+msgid "Privé maken kan alleen in een regel die automatisch werkt."
+msgstr "Make private only works in a rule that applies itself."
+
+#: apps/rules/definition.py
 msgid "Een voorwaarde gaat over iets wat we niet kennen."
 msgstr "A condition is about something we don't know."
 
@@ -1889,6 +1893,10 @@ msgstr "A condition names a person we can't find."
 #: apps/rules/definition.py
 msgid "Deze actie kennen we niet."
 msgstr "We don't know this action."
+
+#: apps/rules/definition.py
+msgid "Een actie 'privé maken' noemt geen label en geen persoon."
+msgstr "A 'make private' action names no label and no person."
 
 #: apps/rules/definition.py
 msgid "Een actie 'label toevoegen' noemt alleen een label."

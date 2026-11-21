@@ -1915,3 +1915,14 @@ M3). "Iedereen ziet alle post" stays on everywhere until Task 40, so departments
   runs inside the confirm's write order, before the rules; a refused `workspace`
   (403 `cannot_make_public`) stores nothing. Lists and the letter carry `visibility` and
   `reader_names`; search, the trash and duplicate pairs carry `visibility` only.
+- **Rules and private letters (Task 32, PB T10/T19).** An automatic rule never widens a
+  private letter's readers: its addressee action becomes a proposal there (the engine
+  knows `DocumentFacts.restricted`, the executor checks the letter again), which only the
+  letter's readers see; labels are still added. "Privé maken" is a new action type in
+  format version 1 (no version bump; an older server reads such a rule as unreadable and
+  skips it whole), only in a rule with mode `auto` (422 otherwise, also when such a rule
+  is switched to proposing). It makes the letter private as the system with the current
+  user as a reader: the confirmer at confirm, the starter of a manual run. With nobody to
+  read it, nothing changes and no run is recorded (ruling d). The web offers it only
+  while "Automatisch toepassen" is on and sends an action type it does not know back
+  unchanged.

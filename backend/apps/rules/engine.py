@@ -25,7 +25,9 @@ OPERATORS: Mapping[str, frozenset[str]] = {
     "source": frozenset({"is"}),
 }
 
-ACTIONS = frozenset({"add_label", "add_addressee"})
+ACTIONS = frozenset({"add_label", "add_addressee", "make_private"})
+# "privé maken": no target; only in an automatic rule (format version 1, PB T19).
+MAKE_PRIVATE = "make_private"
 
 
 @dataclass(frozen=True)
@@ -38,7 +40,8 @@ class Condition:
 @dataclass(frozen=True)
 class Action:
     type: str
-    target_id: UUID
+    # None only for `make_private`.
+    target_id: UUID | None
 
 
 @dataclass(frozen=True)
@@ -71,13 +74,18 @@ class DocumentFacts:
     dismissed_label_ids: frozenset[UUID] = frozenset()
     dismissed_addressee_ids: frozenset[UUID] = frozenset()
 
+    # The letter is private: an automatic rule only proposes an addressee on it (an
+    # automatic action never widens its readers, PB T10).
+    restricted: bool = False
+
 
 @dataclass(frozen=True)
 class PlannedAction:
     rule_id: UUID
     rule_name: str
     action: str
-    target_id: UUID
+    # None only for `make_private`.
+    target_id: UUID | None
     mode: str
     quote: str
 
@@ -207,6 +215,7 @@ def evaluate(facts: DocumentFacts, rules: Sequence[RuleSpec]) -> Evaluation:
     dismissed = _State(set(facts.dismissed_label_ids), set(facts.dismissed_addressee_ids))
     matched: list[UUID] = []
     planned: list[PlannedAction] = []
+    restricted = facts.restricted
     for rule in rules:
         holds, quote = _matches(rule, facts, phrases, hoped)
         if not holds:
@@ -216,12 +225,32 @@ def evaluate(facts: DocumentFacts, rules: Sequence[RuleSpec]) -> Evaluation:
         for action in rule.actions:
             if action.type not in ACTIONS:
                 continue
+            if action.type == MAKE_PRIVATE:
+                # Never a proposal; once, and not on a letter that is private already.
+                if auto and not restricted:
+                    planned.append(
+                        PlannedAction(
+                            rule_id=rule.id,
+                            rule_name=rule.name,
+                            action=MAKE_PRIVATE,
+                            target_id=None,
+                            mode="auto",
+                            quote=quote,
+                        )
+                    )
+                    restricted = True
+                continue
             target = action.target_id
+            if target is None:
+                continue
             if target in settled.targets(action.type) or target in dismissed.targets(action.type):
                 continue
+            # On a private letter (or one this run makes private) an addressee is only
+            # proposed: an automatic action never widens the readers.
+            action_auto = auto and not (restricted and action.type == "add_addressee")
             # Already planned in this run: only an automatic action adds something (it
             # settles it).
-            if target in proposed.targets(action.type) and not auto:
+            if target in proposed.targets(action.type) and not action_auto:
                 continue
             planned.append(
                 PlannedAction(
@@ -229,13 +258,13 @@ def evaluate(facts: DocumentFacts, rules: Sequence[RuleSpec]) -> Evaluation:
                     rule_name=rule.name,
                     action=action.type,
                     target_id=target,
-                    mode="auto" if auto else "propose",
+                    mode="auto" if action_auto else "propose",
                     quote=quote,
                 )
             )
             hoped.targets(action.type).add(target)
             proposed.targets(action.type).add(target)
-            if auto:
+            if action_auto:
                 settled.targets(action.type).add(target)
         if rule.stop:
             break

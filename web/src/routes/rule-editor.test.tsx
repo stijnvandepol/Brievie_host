@@ -63,6 +63,75 @@ describe("rule editor", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Regel wijzigen" })).toBeVisible();
   });
 
+  it("Privé maken is offered only for an automatic rule", async () => {
+    const posts: unknown[] = [];
+    server.use(
+      http.post(`${base}/rules`, async ({ request }) => {
+        posts.push(await request.json());
+        return HttpResponse.json(
+          { ...apkRule, id: "f3333333-3333-4333-8333-333333333333" },
+          { status: 201 },
+        );
+      }),
+      ...loggedInHandlers(),
+      ...ruleHandlers([]),
+    );
+    const user = userEvent.setup();
+    renderApp(newPath);
+    await user.type(await screen.findByRole("textbox", { name: "Naam" }), "Zorg privé");
+    await user.type(within(condition(1)).getByRole("textbox", { name: "Waarde" }), "huisarts");
+    const kind = within(action(1)).getByRole("combobox", { name: "Actie" });
+    expect(within(kind).queryByRole("option", { name: "Privé maken" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("switch", { name: "Automatisch toepassen" }));
+    await user.selectOptions(kind, "Privé maken");
+    expect(within(action(1)).queryByRole("combobox", { name: "Label" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Opslaan" }));
+    await waitFor(() => expect(posts).toHaveLength(1));
+    expect(posts[0]).toMatchObject({
+      mode: "auto",
+      actions: [{ type: "make_private", label_id: null, person_id: null }],
+    });
+    expect(await screen.findByRole("heading", { level: 1, name: "Regel wijzigen" })).toBeVisible();
+  });
+
+  it("Privé maken disappears when the rule only proposes", async () => {
+    const privateRule = {
+      ...apkRule,
+      mode: "auto",
+      actions: [{ type: "make_private", label_id: null, person_id: null }],
+    };
+    server.use(...loggedInHandlers(), ...ruleHandlers([privateRule]));
+    const user = userEvent.setup();
+    renderApp(`/w/${workspace.id}/automatisering/${apkRule.id}`);
+    expect(await screen.findByRole("textbox", { name: "Naam" })).toHaveValue("APK naar Auto");
+    expect(screen.getByRole("button", { name: "Opslaan" })).toBeEnabled();
+    await user.click(screen.getByRole("switch", { name: "Automatisch toepassen" }));
+    expect(
+      await screen.findByText(/Privé maken kan alleen in een regel die automatisch werkt/),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Opslaan" })).toBeDisabled();
+  });
+
+  it("an unknown action type is sent back unchanged", async () => {
+    const unknown = { type: "send_fax", label_id: null, person_id: null };
+    const puts: { actions: unknown[] }[] = [];
+    const strange = { ...apkRule, actions: [...apkRule.actions, unknown] };
+    server.use(
+      http.put(`${base}/rules/${apkRule.id}`, async ({ request }) => {
+        puts.push((await request.json()) as { actions: unknown[] });
+        return HttpResponse.json(strange);
+      }),
+      ...loggedInHandlers(),
+      ...ruleHandlers([strange]),
+    );
+    const user = userEvent.setup();
+    renderApp(`/w/${workspace.id}/automatisering/${apkRule.id}`);
+    expect(await screen.findByRole("textbox", { name: "Naam" })).toHaveValue("APK naar Auto");
+    await user.click(screen.getByRole("button", { name: "Opslaan" }));
+    await waitFor(() => expect(puts).toHaveLength(1));
+    expect(puts[0]?.actions).toEqual([{ type: "add_label", label_id: sales.id }, unknown]);
+  });
+
   it("explains how the switch works together with the AI's autopilot", async () => {
     server.use(...loggedInHandlers(), ...ruleHandlers([]));
     renderApp(newPath);

@@ -17,7 +17,8 @@ class RuleConditionSchema(InputSchema):
 
 
 class RuleActionSchema(InputSchema):
-    # add_label (with label_id) or add_addressee (with person_id).
+    # add_label (with label_id), add_addressee (with person_id), or make_private ("privé
+    # maken", neither; only in a rule with mode auto). Send an unknown type back unchanged.
     type: str
     label_id: UUID | None = None
     person_id: UUID | None = None

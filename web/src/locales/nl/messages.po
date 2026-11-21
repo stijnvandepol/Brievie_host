@@ -1206,6 +1206,14 @@ msgstr "Dubbel?: {0}"
 msgid "E-mailadres"
 msgstr "E-mailadres"
 
+#: src/components/rule-sentence.ts
+msgid "een actie die deze versie niet kent"
+msgstr "een actie die deze versie niet kent"
+
+#: src/routes/rule-editor.tsx
+msgid "Een actie die deze versie van Brievie niet kent. Die blijft zoals hij is."
+msgstr "Een actie die deze versie van Brievie niet kent. Die blijft zoals hij is."
+
 #: src/routes/ai.tsx
 msgid "Een AI die je zelf thuis of op kantoor draait, zoals Ollama. Brievie stuurt de tekst alleen naar een adres op je eigen netwerk."
 msgstr "Een AI die je zelf thuis of op kantoor draait, zoals Ollama. Brievie stuurt de tekst alleen naar een adres op je eigen netwerk."
@@ -2067,6 +2075,10 @@ msgstr "Loonstrook"
 msgid "Lukt dat niet? Typ deze code in de app."
 msgstr "Lukt dat niet? Typ deze code in de app."
 
+#: src/components/rule-sentence.ts
+msgid "maak de brief privé"
+msgstr "maak de brief privé"
+
 #: src/routes/members.tsx
 msgid "Maak een ZIP-bestand met jouw post. Het staat 24 uur klaar om te downloaden."
 msgstr "Maak een ZIP-bestand met jouw post. Het staat 24 uur klaar om te downloaden."
@@ -2515,6 +2527,14 @@ msgstr "Persoon wijzigen"
 #: src/components/document-table.tsx
 msgid "Polis"
 msgstr "Polis"
+
+#: src/routes/rule-editor.tsx
+msgid "Privé maken"
+msgstr "Privé maken"
+
+#: src/routes/rule-editor.tsx
+msgid "Privé maken kan alleen in een regel die automatisch werkt. Zet Automatisch toepassen aan, of haal de actie weg."
+msgstr "Privé maken kan alleen in een regel die automatisch werkt. Zet Automatisch toepassen aan, of haal de actie weg."
 
 #: src/routes/search.tsx
 msgid "Probeer een andere spelling of het begin van het woord."
