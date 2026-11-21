@@ -177,6 +177,7 @@ msgstr "{name} will be deleted and removed from 1 letter. You can't undo this."
 msgid "{name} wordt verwijderd. Wat de regel al heeft gedaan, blijft staan."
 msgstr "{name} will be deleted. What the rule has already done stays."
 
+#: src/components/hand-over.ts
 #: src/routes/visibility.tsx
 #: src/task-time.ts
 msgid "{rest} en {last}"
@@ -575,6 +576,10 @@ msgstr "Only for another service that works like OpenAI. Starts with https://. I
 msgid "Alleen wie deze brief mag lezen, staat in de lijst."
 msgstr "Only people who may read this letter are in the list."
 
+#: src/routes/inbox.tsx
+msgid "Alles"
+msgstr "All"
+
 #: src/components/rule-sentence.ts
 #: src/components/rule-templates.tsx
 #: src/routes/rule-editor.tsx
@@ -841,6 +846,10 @@ msgstr "Letter"
 msgid "Brief {position}"
 msgstr "Letter {position}"
 
+#: src/routes/document.tsx
+msgid "Brief aan iemand anders geven?"
+msgstr "Give the letter to someone else?"
+
 #: src/components/task-row.tsx
 #: src/routes/tasks.tsx
 msgid "Brief bekijken"
@@ -866,6 +875,10 @@ msgstr "Open letter"
 #: src/components/audit-codes.ts
 msgid "Brief teruggezet"
 msgstr "Letter restored"
+
+#: src/routes/inbox.tsx
+msgid "Brief toewijzen?"
+msgstr "Assign the letter?"
 
 #: src/routes/document.tsx
 msgid "Brief verwijderen?"
@@ -1921,6 +1934,10 @@ msgstr "You get a link and a QR code. Whoever opens it creates an account or sig
 msgid "Je kunt daarna niet meer bij {workspaceName}. De post blijft hier voor de andere leden."
 msgstr "After this you can no longer reach {workspaceName}. The mail stays here for the other members."
 
+#: src/routes/inbox.tsx
+msgid "Je kunt deze brief niet meer openen."
+msgstr "You can no longer open this letter."
+
 #: src/routes/tasks.tsx
 msgid "Je kunt taken bekijken, maar niet afvinken."
 msgstr "You can view tasks, but not tick them off."
@@ -2356,6 +2373,14 @@ msgstr "Tomorrow"
 msgid "Na het wijzigen word je in je andere browsers uitgelogd. Je gekoppelde telefoon blijft werken."
 msgstr "After the change you are signed out in your other browsers. Your paired phone keeps working."
 
+#: src/components/hand-over.ts
+msgid "Na opslaan kun je deze brief niet meer zien. Hij gaat naar {target}."
+msgstr "After saving you can no longer see this letter. It goes to {target}."
+
+#: src/components/hand-over.ts
+msgid "Na toewijzen ziet {from} deze brief niet meer. Hij gaat naar {target}."
+msgstr "After assigning, {from} no longer sees this letter. It goes to {target}."
+
 #: src/routes/login.tsx
 msgid "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
 msgstr "After five failed attempts, signing in is blocked for a while."
@@ -2370,16 +2395,10 @@ msgstr "After five failed attempts, signing in is blocked for a while."
 msgid "Naam"
 msgstr "Name"
 
-#: src/components/document-table.tsx
-#: src/routes/inbox.tsx
+#: src/components/hand-over.ts
 #: src/routes/search.tsx
 msgid "Naam kiezen"
 msgstr "Choose a name"
-
-#. placeholder {0}: counts.unassigned
-#: src/routes/inbox.tsx
-msgid "Naam kiezen: {0}"
-msgstr "Choose a name: {0}"
 
 #: src/routes/setup.tsx
 msgid "Naam van de werkruimte"
@@ -2646,6 +2665,7 @@ msgstr "Export again"
 #: src/components/role-dialog.tsx
 #: src/routes/ai.tsx
 #: src/routes/departments.tsx
+#: src/routes/document.tsx
 #: src/routes/labels.tsx
 #: src/routes/persons.tsx
 #: src/routes/rule-editor.tsx
@@ -2698,6 +2718,7 @@ msgid "Periode"
 msgstr "Period"
 
 #: src/components/page.tsx
+#: src/components/person-picker.tsx
 #: src/routes/persons.tsx
 msgid "Personen"
 msgstr "Persons"
@@ -3126,6 +3147,11 @@ msgstr "Add"
 msgid "Toevoegen: {text}"
 msgstr "Add: {text}"
 
+#: src/components/hand-over.ts
+#: src/routes/inbox.tsx
+msgid "Toewijzen"
+msgstr "Assign"
+
 #: src/components/audit-table.tsx
 #: src/routes/search.tsx
 msgid "Tot"
@@ -3346,6 +3372,10 @@ msgstr "For you"
 msgid "Voor jou en {others}"
 msgstr "For you and {others}"
 
+#: src/routes/inbox.tsx
+msgid "Voor mij"
+msgstr "For me"
+
 #: src/routes/rule-editor.tsx
 msgid "Voorbeeld: {templateTitle}"
 msgstr "Example: {templateTitle}"
@@ -3472,6 +3502,10 @@ msgstr "Open again: {description}"
 #: src/routes/duplicate.tsx
 msgid "Welke brief houd je?"
 msgstr "Which letter do you keep?"
+
+#: src/routes/inbox.tsx
+msgid "Welke brieven"
+msgstr "Which letters"
 
 #: src/components/deadline-dialog.tsx
 msgid "Welke datum noemt de brief?"
@@ -3699,6 +3733,7 @@ msgstr "Search results"
 msgid "Zonder datum"
 msgstr "No date"
 
+#: src/routes/inbox.tsx
 #: src/task-time.ts
 msgid "Zonder naam"
 msgstr "No name"
