@@ -9,6 +9,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from django.db import transaction
+from django.db.models import Q
 from django.http import HttpRequest
 from django.utils import formats, timezone
 from django.utils.functional import Promise
@@ -224,10 +225,17 @@ def _current_session(request: HttpRequest) -> UserSession | None:
 
 
 def unseen_notices(request: HttpRequest) -> list[NoticeView]:
-    """The caller's notices not dismissed yet, oldest first."""
+    """The caller's notices not dismissed yet, oldest first: about the account, or about a
+    workspace they are still a member of (one they left may name its people, security
+    review of PR #44, point 4)."""
     user = current_user(request)
     session = _current_session(request)
-    notices = AccountNotice.objects.filter(user=user, seen_at=None).order_by("created_at", "id")
+    notices = (
+        AccountNotice.objects.filter(user=user, seen_at=None)
+        .filter(Q(workspace__isnull=True) | Q(workspace__memberships__user=user))
+        .distinct()
+        .order_by("created_at", "id")
+    )
     return [
         NoticeView(
             id=notice.id,

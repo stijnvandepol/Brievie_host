@@ -195,8 +195,11 @@ def test_notices_refuse_a_bearer_token() -> None:
 
 
 def test_workspace_notice_carries_its_workspace() -> None:
+    from apps.workspaces.models import Membership
+
     user = UserFactory.create()
     workspace = Workspace.objects.create(name="Kantoor", kind="business")
+    Membership.objects.create(user=user, workspace=workspace, role="member")
     notify(
         user,
         "emergency_access_switched_on",
@@ -240,3 +243,27 @@ def test_every_workspace_code_is_one_the_services_send_with_a_workspace() -> Non
         "server_admin_granted",
         "server_admin_revoked",
     }
+
+
+def test_notices_of_a_workspace_left_are_not_listed() -> None:
+    # Security review of PR #44, point 4: a notice about a workspace (with names in it)
+    # stops showing when the user is no longer a member there.
+    from apps.workspaces.models import Membership
+
+    user = UserFactory.create()
+    stays = Workspace.objects.create(name="Thuis", kind="home")
+    left = Workspace.objects.create(name="Kantoor", kind="business")
+    Membership.objects.create(user=user, workspace=stays, role="member")
+    Membership.objects.create(user=user, workspace=left, role="member")
+    for workspace in (stays, left):
+        notify(
+            user,
+            "sight_widened",
+            actor_name="Anne",
+            values={"category": "person", "person": "Piet"},
+            workspace_id=workspace.id,
+        )
+    notify(user, "sessions_ended", actor_name="Anne")
+    Membership.objects.filter(user=user, workspace=left).delete()
+    body = signed_in(user).get("/api/v1/me/notices").json()
+    assert sorted(str(n["workspace_id"]) for n in body) == sorted([str(stays.id), "None"])
