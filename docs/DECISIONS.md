@@ -2464,7 +2464,9 @@ Spec `docs/superpowers/specs/2026-11-21-mensen-en-accounts-design.md`, plan
   before the act; inviting relies on `email_required` and managing on its own refusal. Not
   removed: a warning after the switch-off would come too late. It tells an admin no more
   than `email_required` does for one invitation.
-- **Point 7, fixed:** linking locks the member's own person `FOR UPDATE`, which waits for a
-  letter putting that person on at the same moment, and then finds it in use (409) instead
-  of failing at commit. No test: it needs two transactions racing; the lock mode is in the
-  code with its reason.
+- **Point 7, fixed, not as proposed:** a `FOR UPDATE` on a person breaks the rule "documents
+  and persons are locked without their key" (`test_privacy_locks`: a running upload must
+  not wait on a person lock). Instead the deletion of the unused own person runs in a
+  savepoint and looks again after the DELETE, which waits for a transaction that put the
+  person on a letter meanwhile: a link or proposal found then undoes the deletion with a
+  clean 409 `member_already_linked`. No test: it needs two transactions racing.

@@ -18,7 +18,7 @@ from apps.common.privacy import holds_bsn, mask_bsns
 from apps.common.text import normalise
 from apps.documents import visibility
 from apps.documents.member_export import remove_member_exports
-from apps.documents.models import DocumentSuggestion
+from apps.documents.models import DocumentAddressee, DocumentSuggestion
 from apps.people.models import DepartmentMember, Person
 from apps.rules.definition import named_ids
 from apps.rules.models import Rule
@@ -564,11 +564,8 @@ def link_member(
         if user_id is not None:
             if not Membership.objects.filter(workspace=workspace, user_id=user_id).exists():
                 raise ApiError(404, "member_not_found", _("We kunnen dit lid niet vinden."))
-            # FOR UPDATE, not FOR NO KEY UPDATE: a letter that puts this person on it at
-            # the same moment holds a key-share lock, so this waits for it and then sees
-            # the person in use (security review of PR #43, point 7).
             own = (
-                Person.objects.select_for_update()
+                Person.objects.select_for_update(no_key=True)
                 .filter(workspace=workspace, user_id=user_id)
                 .exclude(id=person.id)
                 .first()
@@ -709,16 +706,28 @@ def _unused(person: Person) -> bool:
 
 
 def _delete_unused(person: Person, *, actor: AuditActor) -> None:
-    """Delete a member's own unused person to link them to another one (see `link_member`)."""
+    """Delete a member's own unused person to link them to another one (see `link_member`).
+
+    The person is locked without its key (the lock order of every person lock), so a
+    letter may put this person on it at the same moment. The DELETE waits for that
+    letter's transaction; afterwards a fresh look finds its link, and the deletion is
+    undone with a clean 409 instead of a foreign-key error at commit (security review of
+    PR #43, point 7)."""
     name = person.display_name
     person_id = person.id
-    with system_actor():
+    workspace_id = person.workspace_id
+    with transaction.atomic(), system_actor():
         person.delete()
+        if (
+            DocumentAddressee.objects.filter(person_id=person_id).exists()
+            or DocumentSuggestion.objects.filter(person_id=person_id).exists()
+        ):
+            raise _member_already_linked()
     record(
         AuditCode.PERSON_DELETED,
         actor=actor,
         target=AuditTarget(TargetKind.PERSON, person_id, name),
-        workspace_id=person.workspace_id,
+        workspace_id=workspace_id,
     )
 
 

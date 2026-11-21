@@ -321,8 +321,8 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
         person_users: list[UUID | None] = [*users, *([None] * shape.unlinked_persons)]
         c.execute(
             "INSERT INTO people_person (id, created_at, updated_at, workspace_id, display_name,"
-            " name_variants, user_id, archived_at, kind)"
-            " SELECT p, %s, %s, %s, 'Persoon ' || n, '[]', u, NULL, 'person'"
+            " name_variants, user_id, archived_at, kind, former_email)"
+            " SELECT p, %s, %s, %s, 'Persoon ' || n, '[]', u, NULL, 'person', ''"
             " FROM unnest(%s::uuid[], %s::uuid[]) WITH ORDINALITY AS t(p, u, n)",
             [now, now, workspace_id, persons, person_users],
         )
@@ -336,8 +336,8 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
         )
         c.execute(
             "INSERT INTO people_person (id, created_at, updated_at, workspace_id, display_name,"
-            " name_variants, user_id, archived_at, kind)"
-            " SELECT p, %s, %s, %s, 'Afdeling ' || n, '[]', NULL, NULL, 'department'"
+            " name_variants, user_id, archived_at, kind, former_email)"
+            " SELECT p, %s, %s, %s, 'Afdeling ' || n, '[]', NULL, NULL, 'department', ''"
             " FROM unnest(%s::uuid[]) WITH ORDINALITY AS t(p, n)",
             [now, now, workspace_id, departments],
         )
