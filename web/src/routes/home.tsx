@@ -18,7 +18,7 @@ function kindLabel(kind: string): string {
 function roleLabel(role: string): string {
   if (role === "admin") return t`Beheerder`;
   if (role === "member") return t`Lid`;
-  if (role === "viewer") return t`Meekijker`;
+  if (role === "viewer") return t`Alleen lezen`;
   return role;
 }
 

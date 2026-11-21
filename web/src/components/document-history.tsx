@@ -86,7 +86,7 @@ function sentence(
     case "confirmed":
       return t`${who} bevestigde deze brief`;
     case "reopened":
-      return t`${who} zette de brief terug op Te doen om te controleren`;
+      return t`${who} zette de brief terug in de Inbox om te controleren`;
     case "task_completed":
       return t`${who} rondde een taak af`;
     case "task_reopened":

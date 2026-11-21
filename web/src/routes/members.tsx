@@ -2,7 +2,7 @@ import { t } from "@lingui/core/macro";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { Button, Dialog, DialogTrigger, Popover } from "react-aria-components";
+import { Button, Dialog, DialogTrigger, Popover, Switch } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import {
   invitationsQuery,
@@ -10,6 +10,7 @@ import {
   meQuery,
   myExportQuery,
   personsQuery,
+  visibilityQuery,
   workspacesQuery,
 } from "../api/queries";
 import type { components } from "../api/schema";
@@ -25,7 +26,14 @@ import { ErrorAlert, focusPageHeading, PageHeader, Shell, usePageTitle } from ".
 import { ResetLinkDialog } from "../components/reset-link-dialog";
 import { RoleDialog, roleLabel } from "../components/role-dialog";
 import { Badge, EmptyState, Loading, Persona } from "../components/ui";
+import {
+  previewBody,
+  type useSightChange as SightHook,
+  useSightChange,
+} from "../components/visibility-preview-dialog";
 import { dateFormat } from "../format";
+import { departmentsTitle } from "./departments";
+import { putSortsPost } from "./visibility";
 import { workspaceRoute } from "./workspace";
 
 type Member = components["schemas"]["MemberOut"];
@@ -52,10 +60,18 @@ function MemberRow({
   isOnlyAdmin,
   isAlone,
   showRole,
+  sorting,
+  departments,
+  sight,
 }: {
   workspaceId: string;
   workspaceName: string;
   member: Member;
+  /** Who sorts post is shown (not everyone sees all post); the switch is an admin's. */
+  sorting: boolean;
+  /** The names of the departments the member is in, while departments are on. */
+  departments: string[] | null;
+  sight: ReturnType<typeof SightHook>;
   isOwn: boolean;
   isAdmin: boolean;
   /** This member is the workspace's only admin: they cannot leave or step down. */
@@ -71,6 +87,23 @@ function MemberRow({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [roleOpen, setRoleOpen] = useState(false);
+  const sortsPost = useMutation({
+    mutationFn: (on: boolean) =>
+      sight.tryFirst({
+        preview: previewBody({
+          member_change: "sorts_post",
+          member_user_id: member.user_id,
+          member_sorts_post: on,
+        }),
+        confirmLabel: t`Ja, ${member.name} verdeelt post`,
+        write: (confirmation) => putSortsPost(workspaceId, member.user_id, on, confirmation),
+      }),
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: membersQuery(workspaceId).queryKey }),
+        queryClient.invalidateQueries({ queryKey: visibilityQuery(workspaceId).queryKey }),
+      ]),
+  });
   const [resetOpen, setResetOpen] = useState(false);
 
   async function remove() {
@@ -112,6 +145,27 @@ function MemberRow({
           <Badge>{roleLabel(member.role)}</Badge>
         </td>
       ) : null}
+      {sorting ? (
+        <td>
+          <Switch
+            className="switch"
+            isSelected={member.sorts_post ?? false}
+            isDisabled={!isAdmin || member.role === "viewer" || sortsPost.isPending}
+            aria-label={t`Verdeelt post: ${member.name}`}
+            aria-describedby={member.role === "viewer" ? `viewer-${member.user_id}` : undefined}
+            onChange={(on) => sortsPost.mutate(on)}
+          >
+            <span className="switch-track" aria-hidden="true" />
+          </Switch>
+          {member.role === "viewer" ? (
+            <span id={`viewer-${member.user_id}`} className="cell-hint">
+              {t`Alleen lezen`}
+            </span>
+          ) : null}
+          {sortsPost.isError ? <ErrorAlert error={sortsPost.error} /> : null}
+        </td>
+      ) : null}
+      {departments ? <td>{departments.join(", ")}</td> : null}
       <td className="cell-action">
         <span className="row-actions">
           {isAdmin && !ownAndLast ? (
@@ -238,20 +292,39 @@ function InvitationRow({
 }) {
   const queryClient = useQueryClient();
   const name = invitationName(invitation);
+  const sight = useSightChange(workspaceId);
   const refresh = () =>
     queryClient.invalidateQueries({ queryKey: invitationsQuery(workspaceId).queryKey });
   const renew = useMutation({
     // The new link is handed to the page's dialog and kept nowhere else.
     gcTime: 0,
     mutationFn: async () => {
-      const { data, error } = await api.POST(
-        "/api/v1/workspaces/{workspace_id}/invitations/{invitation_id}/renew",
-        { params: { path: { workspace_id: workspaceId, invitation_id: invitation.id } } },
-      );
-      if (error !== undefined || !data) throw new ApiFailure(error);
-      return data;
+      let made: CreatedInvitation | null = null;
+      // A renewal gives its role and person again, in the state of now: what that widens
+      // is confirmed again.
+      await sight.tryFirst({
+        preview: previewBody({
+          member_change: "invite",
+          member_role: invitation.role,
+          member_person_id: invitation.person_id,
+        }),
+        confirmLabel: t`Ja, maak een nieuwe link`,
+        write: async (confirmation) => {
+          const { data, error } = await api.POST(
+            "/api/v1/workspaces/{workspace_id}/invitations/{invitation_id}/renew",
+            {
+              params: { path: { workspace_id: workspaceId, invitation_id: invitation.id } },
+              body: confirmation,
+            },
+          );
+          if (error !== undefined || !data) throw new ApiFailure(error);
+          made = data;
+        },
+      });
+      return made;
     },
     onSuccess: async (data) => {
+      if (data === null) return;
       onRenewed(data);
       renew.reset();
       await refresh();
@@ -313,6 +386,7 @@ function InvitationRow({
           </span>
         </td>
       </tr>
+      {sight.dialog}
       {renew.isError ? (
         <tr>
           <td colSpan={showRole ? 4 : 3}>
@@ -384,6 +458,16 @@ function MembersPage() {
   const showRole = workspace.kind !== "home";
   const [inviting, setInviting] = useState(false);
   const [renewed, setRenewed] = useState<CreatedInvitation | null>(null);
+  const visibility = useQuery(visibilityQuery(workspace.id));
+  const persons = useQuery(personsQuery(workspace.id));
+  const sight = useSightChange(workspace.id);
+  const sorting = visibility.data !== undefined && !visibility.data.everyone_sees_all;
+  const departmentsOn = visibility.data?.departments_enabled === true;
+  const departmentNames = (member: Member) =>
+    (member.department_ids ?? []).flatMap((id) => {
+      const department = persons.data?.find((person) => person.id === id);
+      return department ? [department.display_name] : [];
+    });
 
   return (
     <Shell workspace={workspace}>
@@ -416,6 +500,10 @@ function MembersPage() {
               <tr>
                 <th scope="col">{t`Naam`}</th>
                 {showRole ? <th scope="col">{t`Rol`}</th> : null}
+                {sorting ? <th scope="col">{t`Verdeelt post`}</th> : null}
+                {departmentsOn ? (
+                  <th scope="col">{departmentsTitle(visibility.data?.kind ?? "business")}</th>
+                ) : null}
                 <th scope="col">
                   <span className="visually-hidden">{t`Acties`}</span>
                 </th>
@@ -433,12 +521,16 @@ function MembersPage() {
                   isOnlyAdmin={member.role === "admin" && adminCount === 1}
                   isAlone={members.data.length === 1}
                   showRole={showRole}
+                  sorting={sorting}
+                  departments={departmentsOn ? departmentNames(member) : null}
+                  sight={sight}
                 />
               ))}
             </tbody>
           </table>
         </section>
       ) : null}
+      {sight.dialog}
       <section className="panel panel-pad" aria-labelledby="my-export">
         <h2 id="my-export">{t`Mijn post`}</h2>
         <p className="muted">{t`Maak een ZIP-bestand met jouw post. Het staat 24 uur klaar om te downloaden.`}</p>

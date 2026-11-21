@@ -4,7 +4,13 @@ import { createRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { Button, Dialog, Heading, Modal, ModalOverlay, Switch } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
-import { labelsQuery, personsQuery, rulesQuery, ruleTemplatesQuery } from "../api/queries";
+import {
+  labelsQuery,
+  personsQuery,
+  rulesQuery,
+  ruleTemplatesQuery,
+  visibilityQuery,
+} from "../api/queries";
 import type { components } from "../api/schema";
 import { Icon } from "../components/icons";
 import { ErrorAlert, focusPageHeading, PageHeader, Shell, usePageTitle } from "../components/page";
@@ -80,10 +86,13 @@ function RuleItem({
   isLast,
   onMove,
   onError,
+  note,
 }: {
   workspaceId: string;
   rule: RuleOut;
   sentence: string;
+  /** A sentence under the rule, such as where its post goes while departments are off. */
+  note?: string;
   canEdit: boolean;
   isFirst: boolean;
   isLast: boolean;
@@ -149,6 +158,7 @@ function RuleItem({
           {canEdit || rule.active ? null : <Badge>{t`Uit`}</Badge>}
         </div>
         <p className="rule-sentence">{sentence}</p>
+        {note ? <p className="rule-note muted">{note}</p> : null}
         <p className="rule-counts">{t`${applied} keer toegepast, ${proposed} keer voorgesteld`}</p>
       </div>
       {canEdit ? (
@@ -211,6 +221,25 @@ function AutomationsPage() {
   const rules = useQuery({ ...rulesQuery(workspace.id), enabled: canRead });
   const labels = useQuery({ ...labelsQuery(workspace.id), enabled: canRead });
   const persons = useQuery({ ...personsQuery(workspace.id), enabled: canRead });
+  const visibility = useQuery(visibilityQuery(workspace.id));
+  // While departments are off a rule's department counts as nobody: its post goes to
+  // whoever sorts post (S 4.4, R35).
+  const departmentsOff = visibility.data !== undefined && !visibility.data.departments_enabled;
+  const departmentIds = new Set(
+    (persons.data ?? []).filter((person) => person.kind === "department").map((p) => p.id),
+  );
+  const noteFor = (rule: RuleOut): string | undefined =>
+    departmentsOff &&
+    rule.actions.some(
+      (action) =>
+        action.type === "add_addressee" &&
+        typeof action.person_id === "string" &&
+        departmentIds.has(action.person_id),
+    )
+      ? visibility.data?.kind === "home"
+        ? t`Groepen staan uit: deze post gaat nu naar wie post verdeelt.`
+        : t`Afdelingen staan uit: deze post gaat nu naar wie post verdeelt.`
+      : undefined;
   const [rowError, setRowError] = useState<unknown>(null);
   const canEdit = workspace.role === "admin";
   // Only an admin can make a rule from an example.
@@ -341,6 +370,7 @@ function AutomationsPage() {
               workspaceId={workspace.id}
               rule={rule}
               sentence={ruleSentence(rule, labels.data ?? [], persons.data ?? [])}
+              note={noteFor(rule)}
               canEdit={canEdit}
               isFirst={index === 0}
               isLast={index === list.length - 1}

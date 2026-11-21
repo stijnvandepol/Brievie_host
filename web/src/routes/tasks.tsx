@@ -53,7 +53,7 @@ function WaitingLine({ workspaceId, count }: { workspaceId: string; count: numbe
         other: "Er wachten nog # brieven op nakijken. Daar kunnen nieuwe taken uit komen.",
       })}{" "}
       <Link to="/w/$workspaceId/inbox" params={{ workspaceId }}>
-        {t`Naar Te doen`}
+        {t`Naar Inbox`}
       </Link>
     </MessageBar>
   );

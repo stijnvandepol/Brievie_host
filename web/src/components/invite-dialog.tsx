@@ -25,6 +25,7 @@ import { OneTimeLink } from "./one-time-link";
 import { ErrorAlert } from "./page";
 import { type Role, RoleChoice } from "./role-dialog";
 import { MessageBar } from "./ui";
+import { previewBody, useSightChange } from "./visibility-preview-dialog";
 
 export type CreatedInvitation = components["schemas"]["CreatedInvitationOut"];
 
@@ -128,27 +129,42 @@ function InviteForm({
   // Somebody who already has an account is no one to invite.
   const free = (persons ?? []).filter((person) => person.user_id === null && !person.archived);
 
+  const sight = useSightChange(workspaceId);
   const create = useMutation({
     // The result goes to the caller's state; the mutation cache keeps nothing of it.
     gcTime: 0,
     mutationFn: async () => {
-      const { data, error } = await api.POST("/api/v1/workspaces/{workspace_id}/invitations", {
-        params: { path: { workspace_id: workspaceId } },
-        body: {
-          role,
-          expires_in_days: days,
-          email: email.trim(),
-          person_id: personId === "" ? null : personId,
-          note: note.trim(),
-          // The confirmation dialog of "Wie ziet wat" comes with the web pages (plan Task 42).
-          confirmed: false,
-          preview_token: "",
+      const person = personId === "" ? null : personId;
+      let made: CreatedInvitation | null = null;
+      // An invitation that gives the newcomer more than a plain member invitation (the
+      // admin role, or a person's post) asks through the preview first (S 4.4).
+      await sight.tryFirst({
+        preview: previewBody({
+          member_change: "invite",
+          member_role: role,
+          member_person_id: person,
+        }),
+        confirmLabel: t`Ja, maak de uitnodiging`,
+        write: async (confirmation) => {
+          const { data, error } = await api.POST("/api/v1/workspaces/{workspace_id}/invitations", {
+            params: { path: { workspace_id: workspaceId } },
+            body: {
+              role,
+              expires_in_days: days,
+              email: email.trim(),
+              person_id: person,
+              note: note.trim(),
+              ...confirmation,
+            },
+          });
+          if (error !== undefined || !data) throw new ApiFailure(error);
+          made = data;
         },
       });
-      if (error !== undefined || !data) throw new ApiFailure(error);
-      return data;
+      return made;
     },
     onSuccess: async (data) => {
+      if (data === null) return;
       onCreated(data);
       await queryClient.invalidateQueries({ queryKey: invitationsQuery(workspaceId).queryKey });
     },
@@ -233,6 +249,7 @@ function InviteForm({
           </Button>
         </div>
       </Form>
+      {sight.dialog}
     </>
   );
 }

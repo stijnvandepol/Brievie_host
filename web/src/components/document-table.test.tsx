@@ -52,7 +52,7 @@ describe("post on a phone", () => {
 });
 
 describe("status in Alle post", () => {
-  it("says Naam kiezen for a read letter without a name, as Te doen does", async () => {
+  it("says Naam kiezen for a read letter without a name, as Inbox does", async () => {
     server.use(
       http.get(`*${API}/workspaces/${workspace.id}/documents`, () =>
         HttpResponse.json([{ ...documentSummary, status: "done", inbox_state: "unassigned" }]),

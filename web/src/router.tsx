@@ -3,6 +3,7 @@ import { createRouter, type RouterHistory } from "@tanstack/react-router";
 import { aiRoute } from "./routes/ai";
 import { auditLogRoute } from "./routes/audit-log";
 import { automationsRoute } from "./routes/automations";
+import { departmentsRoute } from "./routes/departments";
 import { documentRoute } from "./routes/document";
 import { duplicateRoute } from "./routes/duplicate";
 import { homeRoute } from "./routes/home";
@@ -27,6 +28,7 @@ import { settingsRoute } from "./routes/settings";
 import { setupRoute } from "./routes/setup";
 import { tasksRoute } from "./routes/tasks";
 import { trashRoute } from "./routes/trash";
+import { visibilityRoute } from "./routes/visibility";
 import { workspaceRoute } from "./routes/workspace";
 
 const routeTree = rootRoute.addChildren([
@@ -49,10 +51,12 @@ const routeTree = rootRoute.addChildren([
     documentRoute,
     duplicateRoute,
     personsRoute,
+    departmentsRoute,
     membersRoute,
     memberDevicesRoute,
     settingsRoute,
     auditLogRoute,
+    visibilityRoute,
     labelsRoute,
     automationsRoute,
     aiRoute,

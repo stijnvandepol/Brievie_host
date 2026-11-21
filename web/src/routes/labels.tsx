@@ -17,7 +17,7 @@ import {
   TextField,
 } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
-import { labelsQuery } from "../api/queries";
+import { labelsQuery, meQuery, personsQuery, visibilityQuery } from "../api/queries";
 import type { components } from "../api/schema";
 import { ExternalAiNotice } from "../components/external-ai-notice";
 import { Icon } from "../components/icons";
@@ -28,6 +28,12 @@ import { workspaceRoute } from "./workspace";
 
 type LabelOut = components["schemas"]["LabelOut"];
 type LabelBody = components["schemas"]["LabelIn"];
+type Person = components["schemas"]["PersonOut"];
+
+/** "Finance: Facturen": the suggestion when a label's name is taken (S 4.6). */
+function prefixed(department: Person | undefined, name: string): string {
+  return department ? `${department.display_name}: ${name}` : name;
+}
 
 /** How many labels the start set of each kind holds (the server's `presets.py`). */
 const PRESET_SIZE: Record<string, number> = { home: 10, business: 9 };
@@ -49,19 +55,30 @@ function LabelDialog({
   workspaceId,
   editing,
   onClose,
+  departments,
+  departmentWord,
 }: {
   workspaceId: string;
   editing: Editing;
   onClose: () => void;
+  /** The departments the caller may give a label to (all for an admin, their own for a
+   * lead); empty when they may not, or departments are off. */
+  departments: Person[];
+  departmentWord: string;
 }) {
   const refresh = useRefreshLabels(workspaceId);
   const label = editing === "new" ? null : editing;
   const [name, setName] = useState(label?.name ?? "");
   const [color, setColor] = useState(label?.color ?? "grey");
+  const [owner, setOwner] = useState(label?.department_id ?? "");
+  const ownerChanged = owner !== (label?.department_id ?? "");
+  const chosen = departments.find((department) => department.id === owner);
 
   const save = useMutation({
     mutationFn: async () => {
       const body: LabelBody = { name: name.trim(), color };
+      // Only a change is sent: an update without department_id never moves a label.
+      if (label ? ownerChanged : owner !== "") body.department_id = owner === "" ? null : owner;
       const path = { workspace_id: workspaceId };
       const { error } = label
         ? await api.PUT("/api/v1/workspaces/{workspace_id}/labels/{label_id}", {
@@ -96,6 +113,27 @@ function LabelDialog({
           <Label>{t`Naam`}</Label>
           <Input />
         </TextField>
+        <p className="muted">{t`Noem een label niet naar een persoon of een gevoelig onderwerp.`}</p>
+        {departments.length > 0 ? (
+          <div className="field">
+            <label htmlFor="label-owner">{t`Van`}</label>
+            <select
+              id="label-owner"
+              value={owner}
+              onChange={(event) => setOwner(event.target.value)}
+            >
+              <option value="">{t`Iedereen`}</option>
+              {departments.map((department) => (
+                <option key={department.id} value={department.id}>
+                  {department.display_name}
+                </option>
+              ))}
+            </select>
+            <span className="muted small">
+              {t`Een label van ${departmentWord} zien alleen de mensen die erin zitten, en de beheerders.`}
+            </span>
+          </div>
+        ) : null}
         <RadioGroup className="choice" value={color} onChange={setColor}>
           <Label className="choice-label">{t`Kleur`}</Label>
           <div className="color-options">
@@ -107,6 +145,20 @@ function LabelDialog({
           </div>
         </RadioGroup>
         <ErrorAlert error={save.error} />
+        {save.error instanceof ApiFailure && save.error.code === "label_exists" && chosen ? (
+          <p>
+            {t`Probeer`}{" "}
+            <Button
+              className="button-text"
+              onPress={() => {
+                setName(prefixed(chosen, name.trim()));
+                save.reset();
+              }}
+            >
+              {prefixed(chosen, name.trim())}
+            </Button>
+          </p>
+        ) : null}
         <div className="dialog-actions">
           <Button className="button secondary" onPress={onClose}>
             {t`Annuleren`}
@@ -266,9 +318,12 @@ function LabelRow({
   onEdit,
   onError,
   onDone,
+  owner,
 }: {
   workspaceId: string;
   label: LabelOut;
+  /** "Iedereen" or the department's name, while departments are on. */
+  owner: string | null;
   canEdit: boolean;
   onEdit: () => void;
   onError: (error: unknown) => void;
@@ -297,6 +352,7 @@ function LabelRow({
       <th scope="row" className="cell-strong">
         <LabelChip label={label} />
       </th>
+      {owner !== null ? <td>{owner}</td> : null}
       <td className="num">{label.document_count}</td>
       <td className="cell-action">
         {canEdit ? (
@@ -320,7 +376,31 @@ function LabelsPage() {
   usePageTitle(t`Labels`);
   const { workspace } = labelsRoute.useRouteContext();
   const labels = useQuery(labelsQuery(workspace.id));
+  const visibility = useQuery(visibilityQuery(workspace.id));
+  const departmentsOn = visibility.data?.departments_enabled === true;
+  const persons = useQuery({ ...personsQuery(workspace.id), enabled: departmentsOn });
+  const me = useQuery(meQuery);
+  const { van } = labelsRoute.useSearch();
   const refresh = useRefreshLabels(workspace.id);
+  const allDepartments = (persons.data ?? []).filter((person) => person.kind === "department");
+  // An admin gives a label to any department, a lead to their own (S 4.6).
+  const ownable = departmentsOn
+    ? allDepartments.filter(
+        (department) =>
+          !department.archived &&
+          (workspace.role === "admin" ||
+            (department.lead_user_ids ?? []).includes(me.data?.id ?? "")),
+      )
+    : [];
+  const ownerName = (label: LabelOut): string | null => {
+    if (!departmentsOn) return null;
+    if (!label.department_id) return t`Iedereen`;
+    return (
+      allDepartments.find((department) => department.id === label.department_id)?.display_name ?? ""
+    );
+  };
+  const shown = (labels.data ?? []).filter((label) => !van || label.department_id === van);
+  const departmentWord = visibility.data?.kind === "home" ? t`een groep` : t`een afdeling`;
   const [open, setOpen] = useState<Open>(null);
   const [rowError, setRowError] = useState<unknown>(null);
   const canEdit = workspace.role !== "viewer";
@@ -401,6 +481,7 @@ function LabelsPage() {
             <thead>
               <tr>
                 <th scope="col">{t`Label`}</th>
+                {departmentsOn ? <th scope="col">{t`Van`}</th> : null}
                 <th scope="col">{t`Aantal brieven`}</th>
                 <th scope="col">
                   <span className="visually-hidden">{t`Acties`}</span>
@@ -408,9 +489,10 @@ function LabelsPage() {
               </tr>
             </thead>
             <tbody>
-              {labels.data.map((label) => (
+              {shown.map((label) => (
                 <LabelRow
                   key={label.id}
+                  owner={ownerName(label)}
                   workspaceId={workspace.id}
                   label={label}
                   canEdit={canEdit}
@@ -448,6 +530,8 @@ function LabelsPage() {
               workspaceId={workspace.id}
               editing={open}
               onClose={() => setOpen(null)}
+              departments={ownable}
+              departmentWord={departmentWord}
             />
           )}
         </Modal>
@@ -459,5 +543,8 @@ function LabelsPage() {
 export const labelsRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: "labels",
+  // `?van=<department>`: only that department's labels (from the Afdelingen page).
+  validateSearch: (search: Record<string, unknown>): { van?: string } =>
+    typeof search.van === "string" ? { van: search.van } : {},
   component: LabelsPage,
 });

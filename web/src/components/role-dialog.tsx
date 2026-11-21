@@ -16,6 +16,7 @@ import {
 import { ApiFailure, api } from "../api/client";
 import { membersQuery, meQuery, workspacesQuery } from "../api/queries";
 import { ErrorAlert } from "./page";
+import { previewBody, useSightChange } from "./visibility-preview-dialog";
 
 export const ROLES = ["admin", "member", "viewer"] as const;
 export type Role = (typeof ROLES)[number];
@@ -27,14 +28,14 @@ export function isRole(value: string): value is Role {
 export function roleLabel(role: string): string {
   if (role === "admin") return t`Beheerder`;
   if (role === "member") return t`Lid`;
-  if (role === "viewer") return t`Meekijker`;
+  if (role === "viewer") return t`Alleen lezen`;
   return role;
 }
 
 function roleSentence(role: Role): string {
   if (role === "admin") return t`Kan leden uitnodigen en alles instellen.`;
   if (role === "member") return t`Kan post scannen, controleren en ordenen.`;
-  return t`Kan alles lezen, maar niets wijzigen.`;
+  return t`Kan post lezen, maar niets wijzigen.`;
 }
 
 /** Three roles, each with one plain sentence. The name of a choice is the role alone;
@@ -94,16 +95,30 @@ function RoleForm({
   const router = useRouter();
   const { data: me } = useQuery(meQuery);
   const [role, setRole] = useState<Role>(isRole(member.role) ? member.role : "member");
+  const sight = useSightChange(workspaceId);
   const save = useMutation({
-    mutationFn: async () => {
-      const { error } = await api.PUT("/api/v1/workspaces/{workspace_id}/members/{user_id}/role", {
-        params: { path: { workspace_id: workspaceId, user_id: member.user_id } },
-        // The confirmation dialog of "Wie ziet wat" comes with the web pages (plan Task 42).
-        body: { role, confirmed: false, preview_token: "" },
-      });
-      if (error !== undefined) throw new ApiFailure(error);
-    },
-    onSuccess: async () => {
+    // A role that lets the member see more asks through the preview first (S 4.4).
+    mutationFn: () =>
+      sight.tryFirst({
+        preview: previewBody({
+          member_change: "role",
+          member_user_id: member.user_id,
+          member_role: role,
+        }),
+        confirmLabel: t`Ja, maak ${member.name} ${roleLabel(role)}`,
+        write: async (confirmation) => {
+          const { error } = await api.PUT(
+            "/api/v1/workspaces/{workspace_id}/members/{user_id}/role",
+            {
+              params: { path: { workspace_id: workspaceId, user_id: member.user_id } },
+              body: { role, ...confirmation },
+            },
+          );
+          if (error !== undefined) throw new ApiFailure(error);
+        },
+      }),
+    onSuccess: async (done) => {
+      if (!done) return;
       await queryClient.invalidateQueries({ queryKey: membersQuery(workspaceId).queryKey });
       if (member.user_id === me?.id) {
         // My own role changed: the pages know it from the route, so ask the server again
@@ -137,6 +152,7 @@ function RoleForm({
           </Button>
         </div>
       </Form>
+      {sight.dialog}
     </>
   );
 }

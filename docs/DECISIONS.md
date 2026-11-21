@@ -2141,8 +2141,8 @@ installation starts in own post.
   the newcomer is not told. This replaces "accepting an invitation tells nobody" above;
   still no memberships lock there. `on_member_added` releases the sorters' assignments on
   the person's letters at once, and `test_task_release_callers` now checks per function
-  that every writer of sight releases (or runs `sight_change`). A renewed admin
-  invitation asks nothing again: it replaces one that was confirmed.
+  that every writer of sight releases (or runs `sight_change`). (A renewed admin
+  invitation asked nothing again; replaced in slice A2d below.)
 - **The people writers use the locked role (finding 3).** `link_member` and the
   department writers (`add_`, `remove_`, `update_department_member`) read the acting
   member's role from the memberships they lock, not from the endpoint's earlier read: an
@@ -2167,3 +2167,34 @@ installation starts in own post.
   kind's values are applied only to a new workspace (no member but its first admin, or
   none); a later preset switch goes through `updateVisibility` (preview, confirmation,
   notices); the migration left existing workspaces as they were.
+
+## 2026-11-21: Wie ziet wat, slice A2d (the web)
+
+Plan `docs/superpowers/plans/2026-11-20-host-wie-ziet-wat.md`, Tasks 42-47 (merge point
+M5), and two gaps the server still had.
+
+- **An invitation for a person is confirmed when it is made (S 4.4).** The table's row
+  "person linked to a member" says confirm "yes (the link dialog; an accepted invitation
+  was confirmed when it was made)", but `createInvitation` with a `person_id` asked
+  nothing. Now every invitation is compared with a plain member invitation without a
+  person (`visibility_settings.invitation_changes`, pure): the admin role adds all post
+  while admins read all post, or the unnamed post as a fallback sorter; a person adds
+  that person's post (in own post, not in Thuis). When the newcomer gains, it needs the
+  confirmed preview of the new `member_change` "invite" with `member_role` and
+  `member_person_id` (409 `confirmation_required`, `preview_outdated`); the token is over
+  the role and the person, so a preview for Kees never confirms an invitation for Jan.
+  "invite_admin" stays and is the same change as "invite" with role admin and no person.
+  The preview lets a placeholder ("Nieuw lid" or "Nieuwe beheerder") join and links the
+  person as accepting would, all rolled back. A linked or archived person answers its
+  usual 404/409 at preview and at creation, before any question. Accepting still asks
+  nothing. Cost if wrong: an admin confirms one extra dialog per person invitation in an
+  Organisatie.
+- **A renewal asks again when it widens at that moment.** `renewInvitation` re-issues the
+  link with the role and person it had, so it goes through the same check with the
+  state of now: an admin invitation made while admins did not read all post, renewed
+  after "Beheerders lezen alle post" went on, needs the confirmation. Its body
+  (`RenewInvitationIn`: `confirmed`, `preview_token`) is optional, so a client that sends
+  none keeps working wherever nobody gains. The invitation is read without a lock to learn
+  its role and person, then the memberships are locked, then the invitation (the lock
+  order). This replaces "a renewed admin invitation asks nothing again".
+

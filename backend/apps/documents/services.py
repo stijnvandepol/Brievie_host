@@ -262,7 +262,7 @@ def inbox_counts(membership: Membership) -> dict[str, int]:
 
 
 def waiting_letters(membership: Membership) -> int:
-    """How many letters the member sees wait to be checked or named ("Te doen"'s review
+    """How many letters the member sees wait to be checked or named ("Inbox"'s review
     and unassigned states), for the line on top of "Mijn taken"."""
     letters = visibility.visible_documents(membership)
     # Two counts, each on its own partial index (`documents_document_review`,

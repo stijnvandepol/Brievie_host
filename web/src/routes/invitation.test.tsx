@@ -183,8 +183,8 @@ describe("accept an invitation", () => {
   it("explains the role in a plain sentence", async () => {
     server.use(lookup({ ...info, role: "viewer" }));
     renderApp(`/uitnodiging#${TOKEN}`);
-    expect(await screen.findByText(/meekijker/)).toBeInTheDocument();
-    expect(screen.getByText(/alles lezen, maar niets wijzigen/)).toBeInTheDocument();
+    expect(await screen.findByText(/alleen lezen/)).toBeInTheDocument();
+    expect(screen.getByText(/post lezen, maar niets wijzigen/)).toBeInTheDocument();
   });
 
   it("hints at the one address and never prefills it", async () => {

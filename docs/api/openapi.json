@@ -2831,6 +2831,23 @@
         "title": "ReauthenticateIn",
         "type": "object"
       },
+      "RenewInvitationIn": {
+        "properties": {
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "preview_token": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Preview Token",
+            "type": "string"
+          }
+        },
+        "title": "RenewInvitationIn",
+        "type": "object"
+      },
       "RuleActionSchema": {
         "properties": {
           "label_id": {
@@ -4208,7 +4225,7 @@
           },
           "member_change": {
             "default": "",
-            "pattern": "^(|role|sorts_post|department_add|department_remove|link|unlink|remove|invite_admin)$",
+            "pattern": "^(|role|sorts_post|department_add|department_remove|link|unlink|remove|invite|invite_admin)$",
             "title": "Member Change",
             "type": "string"
           },
@@ -10411,7 +10428,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/invitations/{invitation_id}/renew": {
       "post": {
-        "description": "Web session only: a bearer token answers 401 not_authenticated. For the workspace's admins: another role answers 403 forbidden, a workspace the caller is not a member of 404 workspace_not_found. A new link with the same role, person, email address, note and validity; the old link stops. Shown only here (Cache-Control: no-store). 404 invitation_not_found; 409 and 422 as when making one.",
+        "description": "Web session only: a bearer token answers 401 not_authenticated. For the workspace's admins: another role answers 403 forbidden, a workspace the caller is not a member of 404 workspace_not_found. A new link with the same role, person, email address, note and validity; the old link stops. Shown only here (Cache-Control: no-store). 404 invitation_not_found; 409 and 422 as when making one. The body is optional: a renewal that would give the newcomer more sight at this moment (the admin role, or the person) answers 409 confirmation_required until it sends `confirmed` and the `preview_token` of previewVisibilityChange with member_change invite, its role and person.",
         "operationId": "renewInvitation",
         "parameters": [
           {
@@ -10435,6 +10452,20 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/RenewInvitationIn"
+                  }
+                ]
+              }
+            }
+          },
+          "required": false
+        },
         "responses": {
           "201": {
             "content": {
@@ -10445,6 +10476,16 @@
               }
             },
             "description": "Created"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
           },
           "401": {
             "content": {
@@ -10485,6 +10526,26 @@
               }
             },
             "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
           },
           "422": {
             "content": {

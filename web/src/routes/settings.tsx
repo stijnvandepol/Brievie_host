@@ -40,6 +40,19 @@ function SettingsPage() {
       />
       {settings.isPending ? <Loading /> : null}
       <ErrorAlert error={settings.error ?? save.error} />
+      <section className="panel panel-pad" aria-labelledby="settings-visibility">
+        <h2 id="settings-visibility">{t`Wie ziet wat`}</h2>
+        <p className="muted">{t`Wie welke post ziet: iedereen alles, of ieder zijn eigen post en die van zijn afdelingen.`}</p>
+        <div>
+          <Link
+            to="/w/$workspaceId/instellingen/wie-ziet-wat"
+            params={{ workspaceId: workspace.id }}
+            className="button secondary"
+          >
+            {t`Wie ziet wat`}
+          </Link>
+        </div>
+      </section>
       {settings.data ? (
         <section className="panel panel-pad" aria-labelledby="settings-members">
           <h2 id="settings-members">{t`Leden`}</h2>

@@ -64,14 +64,14 @@ describe("post", () => {
     expect(screen.queryByText("Onbekende afzender")).not.toBeInTheDocument();
   });
 
-  it("is named Alle post and says how it differs from Te doen", async () => {
+  it("is named Alle post and says how it differs from Inbox", async () => {
     server.use(...loggedInHandlers(), ...documentHandlers());
     renderApp(`/w/${workspace.id}/post`);
     expect(await screen.findByRole("heading", { level: 1, name: "Alle post" })).toBeInTheDocument();
     await waitFor(() => expect(document.title).toBe("Alle post - Brievie"));
     expect(
       screen.getByText(
-        "Al je brieven, ook de afgehandelde. Zoek op persoon of label. Wat nog op jou wacht, staat bij Te doen.",
+        "Al je brieven, ook de afgehandelde. Zoek op persoon of label. Wat nog op jou wacht, staat in de Inbox.",
       ),
     ).toBeInTheDocument();
   });
@@ -196,7 +196,7 @@ describe("post", () => {
     );
     renderApp(`/w/${workspace.id}/post`);
     const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
-    const todo = await within(nav).findByRole("link", { name: "Te doen, 3 brieven" });
+    const todo = await within(nav).findByRole("link", { name: "Inbox, 3 brieven" });
     expect(todo).toHaveAttribute("href", `/w/${workspace.id}/inbox`);
     expect(within(nav).getByRole("link", { name: "Personen" })).toHaveAttribute(
       "href",
@@ -214,7 +214,7 @@ describe("post", () => {
     );
     renderApp(`/w/${workspace.id}/post`);
     const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
-    expect(await within(nav).findByRole("link", { name: "Te doen, 1 brief" })).toBeInTheDocument();
+    expect(await within(nav).findByRole("link", { name: "Inbox, 1 brief" })).toBeInTheDocument();
   });
 
   it("shows a filter value that is not in the list as '(verwijderd)'", async () => {

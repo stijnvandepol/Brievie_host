@@ -75,16 +75,16 @@ describe("members", () => {
     expect(radios.map((radio) => radio.getAttribute("aria-label"))).toEqual([
       "Beheerder",
       "Lid",
-      "Meekijker",
+      "Alleen lezen",
     ]);
     expect(within(dialog).getByRole("radio", { name: "Lid" })).toBeChecked();
     expect(within(dialog).getByRole("radio", { name: "Beheerder" })).toHaveAccessibleDescription(
       "Kan leden uitnodigen en alles instellen.",
     );
-    expect(within(dialog).getByRole("radio", { name: "Meekijker" })).toHaveAccessibleDescription(
-      "Kan alles lezen, maar niets wijzigen.",
+    expect(within(dialog).getByRole("radio", { name: "Alleen lezen" })).toHaveAccessibleDescription(
+      "Kan post lezen, maar niets wijzigen.",
     );
-    await u.click(within(dialog).getByRole("radio", { name: "Meekijker" }));
+    await u.click(within(dialog).getByRole("radio", { name: "Alleen lezen" }));
     await u.click(within(dialog).getByRole("button", { name: "Opslaan" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(body).toEqual({ role: "viewer", confirmed: false, preview_token: "" });
@@ -361,7 +361,7 @@ describe("members", () => {
     renderApp(path);
     await u.click(await screen.findByRole("button", { name: "Rol wijzigen: Bram" }));
     const dialog = await screen.findByRole("dialog", { name: /Rol van Bram/ });
-    await u.click(within(dialog).getByRole("radio", { name: "Meekijker" }));
+    await u.click(within(dialog).getByRole("radio", { name: "Alleen lezen" }));
     await u.click(within(dialog).getByRole("button", { name: "Opslaan" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(screen.getByRole("button", { name: "Uitnodigen" })).toBeInTheDocument();

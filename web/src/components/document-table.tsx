@@ -1,8 +1,11 @@
 import { t } from "@lingui/core/macro";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { visibilityQuery } from "../api/queries";
 import type { components } from "../api/schema";
 import { dateFormat } from "../format";
+import { assignWord } from "./hand-over";
 import { LabelChips } from "./label-chip";
 import { SuggestionMark } from "./suggestion-list";
 import { Badge, EmptyState, type Intent, Personas, useMediaQuery } from "./ui";
@@ -79,10 +82,19 @@ function statusIntent(status: string): Intent | "brand" | undefined {
 }
 
 /** The status of a letter as a badge: its word, a tint and an icon. A read letter that still
- * waits for a name says so, in the word "Te doen" uses; "Klaar" only when nothing waits. */
-export function StatusBadge({ status, inboxState }: { status: string; inboxState?: string }) {
+ * waits for a name says so, in the word "Inbox" uses; "Klaar" only when nothing waits. */
+export function StatusBadge({
+  status,
+  inboxState,
+  departments = false,
+}: {
+  status: string;
+  inboxState?: string;
+  /** Departments are on: such a letter waits to be assigned ("Toewijzen"). */
+  departments?: boolean;
+}) {
   if (status === "done" && inboxState === "unassigned") {
-    return <Badge intent="warning">{t`Naam kiezen`}</Badge>;
+    return <Badge intent="warning">{assignWord(departments)}</Badge>;
   }
   return <Badge intent={statusIntent(status)}>{statusLabel(status)}</Badge>;
 }
@@ -205,6 +217,7 @@ export function DocumentTable<D extends DocumentSummary = DocumentSummary>({
   caption?: string;
 }) {
   const name = caption ?? t`Alle post`;
+  const departments = useQuery(visibilityQuery(workspaceId)).data?.departments_enabled === true;
   // A phone shows a card per letter: seven columns do not fit, and a sideways scroll hides
   // the status. Tests (no media queries) and wider screens get the table.
   const phone = useMediaQuery(PHONE);
@@ -231,7 +244,11 @@ export function DocumentTable<D extends DocumentSummary = DocumentSummary>({
                 >
                   <SenderText document={document} />
                 </Link>
-                <StatusBadge status={document.status} inboxState={document.inbox_state} />
+                <StatusBadge
+                  status={document.status}
+                  inboxState={document.inbox_state}
+                  departments={departments}
+                />
               </div>
               {fragment?.(document)}
               <p className="letter-card-meta">
@@ -295,7 +312,11 @@ export function DocumentTable<D extends DocumentSummary = DocumentSummary>({
               </td>
               <td>
                 <span className="cell-badges">
-                  <StatusBadge status={document.status} inboxState={document.inbox_state} />
+                  <StatusBadge
+                    status={document.status}
+                    inboxState={document.inbox_state}
+                    departments={departments}
+                  />
                   <SuggestionMark count={document.open_suggestion_count} />
                   <AutomaticBadge document={document} />
                 </span>

@@ -30,7 +30,7 @@ type Account = "new" | "existing";
 
 function roleSentence(role: string): string {
   if (role === "admin") return t`Je wordt beheerder: je kunt leden uitnodigen en alles instellen.`;
-  if (role === "viewer") return t`Je wordt meekijker: je kunt alles lezen, maar niets wijzigen.`;
+  if (role === "viewer") return t`Je kunt alleen lezen: je kunt post lezen, maar niets wijzigen.`;
   return t`Je wordt lid: je kunt post scannen, controleren en ordenen.`;
 }
 
