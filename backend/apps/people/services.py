@@ -1,5 +1,6 @@
 import unicodedata
 from collections.abc import Collection
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from django.db import IntegrityError, connection, models, transaction
@@ -32,6 +33,9 @@ from apps.workspaces.visibility_settings import (
     notify_self_grant,
     sight_change,
 )
+
+if TYPE_CHECKING:
+    from apps.people.accounts import PersonAccount
 
 _NAME_UNIQUE = "people_person_name_unique"
 _USER_UNIQUE = "people_person_user_unique"
@@ -802,3 +806,19 @@ def open_emergency_access(
     if person is None:
         raise ApiError(404, "person_not_found", _("We kunnen deze persoon niet vinden."))
     return visibility.open_emergency(workspace=workspace, person=person, actor=actor, reason=reason)
+
+
+def list_people(
+    workspace: Workspace, *, viewer: Membership, state: str = ""
+) -> "list[PersonAccount]":
+    """Mensen: every person with their account state (`apps.people.accounts`)."""
+    from apps.people import accounts
+
+    return accounts.list_people(workspace, viewer=viewer, state=state)
+
+
+def person_has_private_post(workspace: Workspace, person_id: UUID) -> bool:
+    """Whether a private letter is on the person's name (`apps.people.accounts`)."""
+    from apps.people import accounts
+
+    return accounts.person_has_private_post(workspace, person_id)

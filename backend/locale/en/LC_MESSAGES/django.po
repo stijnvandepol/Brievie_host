@@ -1539,7 +1539,7 @@ msgstr "Private"
 msgid "Een document staat op naam van hoogstens %(max)d personen."
 msgstr "A document is addressed to at most %(max)d persons."
 
-#: apps/documents/organise.py apps/people/services.py apps/workspaces/invitations.py
+#: apps/documents/organise.py apps/people/accounts.py apps/people/services.py apps/workspaces/invitations.py
 msgid "We kunnen deze persoon niet vinden."
 msgstr "We can't find this person."
 
@@ -1809,6 +1809,10 @@ msgstr "This workspace has the largest number of labels. Delete one first."
 #, python-format
 msgid "De regel '%(rule)s' gebruikt dit label. Pas die regel eerst aan."
 msgstr "The rule '%(rule)s' uses this label. Change that rule first."
+
+#: apps/people/accounts.py
+msgid "Kies een status uit de lijst."
+msgstr "Choose a status from the list."
 
 #: apps/people/models.py
 msgid "Afdeling"
