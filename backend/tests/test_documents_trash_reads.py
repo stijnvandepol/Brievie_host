@@ -12,6 +12,7 @@ from django.utils import timezone
 from apps.accounts.models import User
 from apps.documents import export, member_export, visibility
 from apps.documents.models import Document, DocumentAddressee, DocumentLabel
+from apps.labels import services as label_services
 from apps.labels.models import Label
 from apps.people.models import Person
 from apps.tasks.models import Task
@@ -181,6 +182,24 @@ def test_person_and_label_counts_leave_out_trashed(client_a: Client, ws_a: Works
 
     assert next(p for p in persons if p["id"] == str(person.id))["document_count"] == 1
     assert next(lb for lb in labels if lb["id"] == str(label.id))["document_count"] == 1
+
+
+def test_label_count_follows_the_policies_and_the_trash() -> None:
+    """Every user counts the live letters they may see: neither a trashed letter (seen
+    or not) nor a live one they may not see."""
+    o = office()
+    with workspace_context(o.workspace.id, actor=SYSTEM):
+        label = Label.objects.create(workspace=o.workspace, name="Zwaluwstaart")
+        for letter in o.letters.values():
+            DocumentLabel.objects.create(workspace=o.workspace, document=letter, label=label)
+    gone = {name for index, name in enumerate(sorted(o.letters)) if index % 2 == 0}
+    for name in gone:
+        trashed(o.letters[name])
+
+    for user in o.users.values():
+        with as_actor(o.workspace, user.id):
+            counts = {lb.id: lb.document_count for lb in label_services.list_labels(o.workspace)}  # type: ignore[attr-defined]
+        assert counts[label.id] == len(o.visible(user.id) - gone), user.name
 
 
 def test_automatic_list_and_count_leave_out_trashed(client_a: Client, ws_a: Workspace) -> None:
