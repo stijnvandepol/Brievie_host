@@ -138,6 +138,13 @@ class TaskOut(Schema):
     completed_at: datetime | None = None
     # Made by the AI when it confirmed the letter itself.
     created_by_ai: bool = False
+    # What a payment costs, a decimal string ("1234.56"); empty when unknown.
+    amount: str = ""
+    # For a task without a date: the letter's words that name a term ("Datum nodig").
+    term_quote: str = ""
+    # The member it is given to ("Aan Anne gegeven"); empty and null when nobody.
+    assigned_to_name: str = ""
+    assigned_to_id: UUID | None = None
 
 
 class SuggestionOut(Schema):
@@ -182,6 +189,9 @@ class TaskIn(InputSchema):
     # "in_document" (then `deadline` and `deadline_quote` are required) or "manual".
     deadline_source: str
     deadline_quote: str = ""
+    # What a payment costs, as "1234.56" or "1234,56"; empty when unknown (older clients
+    # send nothing: no amount is stored).
+    amount: str = Field(default="", max_length=20)
 
 
 class ConfirmIn(InputSchema):

@@ -13,6 +13,7 @@ from tests.documents_support import admin_of
 from tests.factories import UserFactory
 from tests.helpers import post_json
 from tests.rules_support import make_document
+from tests.visibility_support import as_actor, office
 
 if TYPE_CHECKING:
     from tests.helpers import Response
@@ -78,6 +79,21 @@ def test_list_open_tasks_by_deadline_nulls_last(client_a: Client, ws_a: Workspac
         "sender",
         "updated_at",
         "created_by_ai",
+        # Mijn taken (additive, every one defaulted).
+        "deadline_quote",
+        "term_quote",
+        "needs_deadline",
+        "amount",
+        "days_left",
+        "group",
+        "reason",
+        "for_names",
+        "assigned_to_id",
+        "assigned_to_name",
+        "assigned_by_name",
+        "completed_by_name",
+        "document_type",
+        "can_edit",
     }
 
 
@@ -195,3 +211,89 @@ def test_a_task_says_whether_the_ai_made_it(client_a: Client, ws_a: Workspace) -
     assert flags == {str(by_hand.id): False, str(by_ai.id): True}
     done = tick(client_a, ws_a.id, by_ai)
     assert done.json()["created_by_ai"] is True
+
+
+# Mijn taken (plan Task 8): who ticked it off, and "Datum invullen".
+
+
+def _deadline(client: Client, workspace_id: object, task: Task, day: str | None) -> "Response":
+    return post_json(
+        client, f"/workspaces/{workspace_id}/tasks/{task.id}/deadline", {"deadline": day}
+    )
+
+
+def _stored(workspace: Workspace, task: Task) -> Task:
+    with workspace_context(workspace.id, actor=SYSTEM):
+        return Task.objects.get(id=task.id)
+
+
+def test_complete_records_who(client_a: Client, ws_a: Workspace) -> None:
+    task = make_task(ws_a, document=make_document(ws_a, "Brief"))
+    r = tick(client_a, ws_a.id, task)
+    assert r.status_code == 200
+    admin = admin_of(ws_a)
+    assert _stored(ws_a, task).completed_by_id == admin.id
+    assert r.json()["completed_by_name"] == admin.name
+
+
+def test_reopen_clears_who(client_a: Client, ws_a: Workspace) -> None:
+    task = make_task(ws_a, document=make_document(ws_a, "Brief"))
+    tick(client_a, ws_a.id, task)
+    r = tick(client_a, ws_a.id, task, "reopen")
+    assert r.status_code == 200
+    assert _stored(ws_a, task).completed_by_id is None
+    assert r.json()["completed_by_name"] == ""
+    kinds = [e.kind for e in events(ws_a)]
+    assert kinds == ["task_completed", "task_reopened"]  # the history stays
+
+
+def test_set_deadline_moves_task_out_of_no_date(client_a: Client, ws_a: Workspace) -> None:
+    task = make_task(ws_a, document=make_document(ws_a, "Brief"))
+    assert client_a.get(tasks_url(ws_a.id)).json()[0]["group"] == "no_date"
+    r = _deadline(client_a, ws_a.id, task, "2099-01-01")
+    assert r.status_code == 200, r.json()
+    assert r.json()["deadline"] == "2099-01-01"
+    assert r.json()["deadline_source"] == "manual"
+    assert r.json()["group"] == "later"
+    assert [e.kind for e in events(ws_a)] == ["task_deadline_set"]
+    again = _deadline(client_a, ws_a.id, task, "2099-01-01")
+    assert again.status_code == 200
+    assert len(events(ws_a)) == 1
+
+
+def test_set_deadline_keeps_term_quote(client_a: Client, ws_a: Workspace) -> None:
+    task = make_task(ws_a, document=make_document(ws_a, "Brief"))
+    with workspace_context(ws_a.id, actor=SYSTEM):
+        Task.objects.filter(id=task.id).update(term_quote="binnen zes weken na dagtekening")
+    before = client_a.get(tasks_url(ws_a.id)).json()[0]
+    assert before["needs_deadline"] is True
+    r = _deadline(client_a, ws_a.id, task, "2099-01-01")
+    assert r.json()["term_quote"] == "binnen zes weken na dagtekening"
+    assert r.json()["needs_deadline"] is False
+    assert _stored(ws_a, task).deadline_quote == ""
+
+
+def test_set_deadline_before_letter_date_is_422(client_a: Client, ws_a: Workspace) -> None:
+    document = make_document(ws_a, "Brief")
+    with workspace_context(ws_a.id, actor=SYSTEM):
+        Document.objects.filter(id=document.id).update(letter_date=datetime.date(2026, 11, 3))
+    task = make_task(ws_a, document=document)
+    r = _deadline(client_a, ws_a.id, task, "2026-11-02")
+    assert r.status_code == 422
+    assert r.json()["code"] == "validation_error"
+    assert _stored(ws_a, task).deadline is None
+
+
+def test_set_deadline_on_hidden_task_is_404(client: Client) -> None:
+    o = office()
+    with as_actor(o.workspace, SYSTEM):
+        task = Task.objects.get(document=o.letters["finance_letter"])
+    client.force_login(o.hr)
+    hidden = _deadline(client, o.workspace.id, task, "2099-01-01")
+    unknown = post_json(
+        client, f"/workspaces/{o.workspace.id}/tasks/{uuid.uuid4()}/deadline", {"deadline": None}
+    )
+    assert hidden.status_code == unknown.status_code == 404
+    assert hidden.json() == unknown.json()
+    with as_actor(o.workspace, SYSTEM):
+        assert Task.objects.get(id=task.id).deadline is None

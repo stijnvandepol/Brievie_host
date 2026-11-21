@@ -57,6 +57,7 @@ const PATHS = {
   globe:
     "M10 17a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM3 10h14M10 3c-2 2-2.8 4.4-2.8 7s.8 5 2.8 7M10 3c2 2 2.8 4.4 2.8 7s-.8 5-2.8 7",
   layers: "M10 3 17 6.5 10 10 3 6.5zM3 10l7 3.5 7-3.5M3 13.5 10 17l7-3.5",
+  checklist: "M3 5.5l1.5 1.5L7 4.5M3 11.5 4.5 13 7 10.5M9.5 6h7.5M9.5 12h7.5M9.5 16h7.5",
 } as const;
 
 export type IconName = keyof typeof PATHS;

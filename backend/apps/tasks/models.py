@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import ClassVar
 
 from django.conf import settings
@@ -60,9 +61,43 @@ class Task(WorkspaceModel):
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
+    # What a payment costs, as confirmed (or quoted by the letter for the autopilot); null
+    # when unknown. Never guessed for older tasks (MT14).
+    amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    # For a task without a date: the letter's words that name a term ("binnen zes weken na
+    # dagtekening"), BSN-masked, so the list can ask for a date ("Datum nodig"). Also a
+    # database default '' (migration 0005) for raw inserts.
+    term_quote = models.CharField(max_length=200, blank=True, default="")
+    # Who ticked it off (null for older tasks and once reopened), and who gave it to its
+    # assignee (null when nobody did, or the system released it).
+    completed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    assigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
 
     class Meta:
         ordering: ClassVar[list[str]] = ["deadline", "created_at", "id"]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.CheckConstraint(
+                condition=models.Q(amount__gte=0), name="tasks_task_amount_not_negative"
+            ),
+        ]
+        indexes: ClassVar[list[models.Index]] = [
+            # "Mijn taken" and its counts read open tasks by date (spec S 11).
+            models.Index(
+                fields=["workspace", "deadline"],
+                condition=models.Q(status="open"),
+                name="tasks_task_open",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.type}: {self.description}"
+
+
+def amount_text(amount: Decimal | None) -> str:
+    """An amount as the API sends it: a decimal string with two places, empty when unknown
+    (a nullable decimal would render as `anyOf` in the contract, MT8)."""
+    return "" if amount is None else f"{amount:.2f}"

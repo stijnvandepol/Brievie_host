@@ -194,6 +194,12 @@ class Document(WorkspaceModel):
                 condition=models.Q(status="done", addressee_ids=[]),
                 name="documents_document_unassigned",
             ),
+            # Letters to check ("Controleren"): "Mijn taken" counts them as waiting.
+            models.Index(
+                fields=["workspace"],
+                condition=models.Q(status__in=["needs_review", "failed"]),
+                name="documents_document_review",
+            ),
             GinIndex(fields=["search_vector"], name="documents_document_search"),
             # For the typo fallback of search (pg_trgm word similarity).
             GinIndex(
@@ -400,6 +406,11 @@ class DocumentEvent(WorkspaceModel):
         MERGED = "merged"
         DUPLICATE_DISMISSED = "duplicate_dismissed"
         TASK_MOVED = "task_moved"
+        # "Mijn taken": a task given to a member or released (origin `system` when the
+        # assignee lost sight of the letter), and a date filled in for a term.
+        TASK_ASSIGNED = "task_assigned"
+        TASK_UNASSIGNED = "task_unassigned"
+        TASK_DEADLINE_SET = "task_deadline_set"
 
     class Origin(models.TextChoices):
         USER = "user"
@@ -414,6 +425,9 @@ class DocumentEvent(WorkspaceModel):
         RULE_AUTOPILOT = "rule_autopilot"
         # A person merged two scans of one letter (never undoable through an undo).
         MERGE = "merge"
+        # The server did it on nobody's behalf: an assignment released because the
+        # assignee may no longer read the letter.
+        SYSTEM = "system"
 
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="events")
     kind = models.CharField(max_length=30, choices=Kind.choices)

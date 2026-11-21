@@ -29,7 +29,7 @@ from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
 from apps.documents.member_export import remove_member_exports
 from apps.people.models import Person
-from apps.tasks.models import Task
+from apps.tasks.assignment import release_member
 from apps.workspaces.access import on_member_removed
 from apps.workspaces.context import NOBODY, Actor, workspace_context
 from apps.workspaces.invitations import revoke_invitations_bound_to, revoke_invitations_made_by
@@ -115,6 +115,11 @@ def change_role(*, workspace: Workspace, user_id: UUID, role: str, actor: AuditA
         previous = member.role
         member.role = role
         member.save(update_fields=["role", "updated_at"])
+        if role == Membership.Role.VIEWER:
+            # A viewer is given no task (S 5.3): their assignments end with the role.
+            as_actor: Actor = actor.user_id if actor.user_id is not None else NOBODY
+            with workspace_context(workspace.id, actor=as_actor):
+                release_member(workspace_id=workspace.id, user_id=user_id)
         if previous == Membership.Role.ADMIN:
             _revoke_what_the_admin_made(workspace, user_id, actor)
         record(
@@ -148,9 +153,7 @@ def _unlink_and_unassign(workspace: Workspace, user_id: UUID, actor: AuditActor)
     with workspace_context(workspace.id, actor=as_actor):
         persons = list(Person.objects.filter(workspace=workspace, user_id=user_id).order_by("id"))
         Person.objects.filter(id__in=[p.id for p in persons]).update(user=None, updated_at=now)
-        Task.objects.filter(workspace=workspace, assigned_to_id=user_id).update(
-            assigned_to=None, updated_at=now
-        )
+        release_member(workspace_id=workspace.id, user_id=user_id)
         on_member_removed(workspace.id, user_id)
         # Their own export goes with them (its files once this transaction commits).
         remove_member_exports(workspace.id, user_id)

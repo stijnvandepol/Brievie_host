@@ -48,6 +48,10 @@ function sentence(
       return t`Automatisch bevestigd door AI`;
     }
   }
+  // The person may no longer read the letter (or became a viewer): Brievie took the task back.
+  if (event.origin === "system" && event.kind === "task_unassigned") {
+    return t`Brievie haalde een taak weg bij ${person}: die mag deze brief niet meer lezen`;
+  }
   // A merge of two scans of one letter, or the choice that they are two letters.
   const by = isMine(event, me) ? t`jou` : event.actor_name || t`iemand`;
   if (event.origin === "merge") {
@@ -87,6 +91,12 @@ function sentence(
       return t`${who} rondde een taak af`;
     case "task_reopened":
       return t`${who} zette een taak weer open`;
+    case "task_assigned":
+      return t`${who} gaf een taak aan ${person}`;
+    case "task_unassigned":
+      return t`${who} haalde een taak weg bij ${person}`;
+    case "task_deadline_set":
+      return t`${who} vulde de datum van een taak in`;
     case "trashed": {
       // Without anybody behind it, Brievie did it.
       const trasher = isMine(event, me) ? t`jou` : event.actor_name || t`Brievie`;

@@ -36,6 +36,7 @@ DIRECT_LOCKS: Final = {
 SEAM_READS: Final = {
     ("documents/services.py", "list_documents"),
     ("documents/services.py", "inbox_counts"),
+    ("documents/services.py", "waiting_letters"),
     ("documents/services.py", "get_document"),
     ("documents/search.py", "_filtered"),
     ("documents/trash.py", "trash_document"),

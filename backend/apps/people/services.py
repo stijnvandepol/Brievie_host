@@ -20,6 +20,7 @@ from apps.documents.models import DocumentSuggestion
 from apps.people.models import Person
 from apps.rules.definition import named_ids
 from apps.rules.models import Rule
+from apps.tasks.assignment import release_unseeing_assignees
 from apps.workspaces.context import system_actor
 from apps.workspaces.models import Membership, Workspace
 
@@ -424,6 +425,10 @@ def link_member(
         was_linked = person.user_id is not None
         person.user_id = user_id
         _save(person)
+        if was_linked:
+            # The former member may no longer read this person's post: their
+            # assignments there end (Mijn taken S 5.3).
+            release_unseeing_assignees(workspace_id=workspace.id)
         if user_id is not None or was_linked:
             record(
                 AuditCode.PERSON_LINKED if user_id is not None else AuditCode.PERSON_UNLINKED,

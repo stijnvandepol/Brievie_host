@@ -32,7 +32,7 @@ from apps.documents.schemas import (
 )
 from apps.documents.storage import default_storage
 from apps.pipeline.jobs import defer_processing
-from apps.tasks.models import Task
+from apps.tasks.models import Task, amount_text
 from apps.workspaces.context import current_actor
 from apps.workspaces.keys import workspace_key
 from apps.workspaces.locks import lock_own_membership
@@ -259,6 +259,19 @@ def inbox_counts(membership: Membership) -> dict[str, int]:
     }
 
 
+def waiting_letters(membership: Membership) -> int:
+    """How many letters the member sees wait to be checked or named ("Te doen"'s review
+    and unassigned states), for the line on top of "Mijn taken"."""
+    letters = visibility.visible_documents(membership)
+    # Two counts, each on its own partial index (`documents_document_review`,
+    # `documents_document_unassigned`): the policy then runs only for the few matching
+    # letters. One OR of the two (or an aggregate filter) runs it for every letter.
+    return sum(
+        letters.filter(_in_state(state)).count()
+        for state in (InboxState.REVIEW, InboxState.UNASSIGNED)
+    )
+
+
 def get_document(*, membership: Membership, document_id: UUID) -> Document:
     """A document the member sees, or 404 (one they may not see is not found either).
 
@@ -395,8 +408,14 @@ def document_out(document: Document, *, open_duplicate_count: int = 0) -> Docume
                 status=task.status,
                 completed_at=task.completed_at,
                 created_by_ai=task.created_by_ai,
+                amount=amount_text(task.amount),
+                term_quote=task.term_quote,
+                assigned_to_name=task.assigned_to.name if task.assigned_to is not None else "",
+                assigned_to_id=task.assigned_to_id,
             )
-            for task in document.tasks.order_by("deadline", "created_at", "id")
+            for task in document.tasks.select_related("assigned_to").order_by(
+                "deadline", "created_at", "id"
+            )
         ],
         suggestions=[
             SuggestionOut(

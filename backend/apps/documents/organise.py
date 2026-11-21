@@ -260,11 +260,19 @@ def record_label_deleted(label: Label, *, actor_id: UUID | None) -> None:
 
 
 def record_task_event(
-    document: Document, kind: str, actor: User, origin: str = DocumentEvent.Origin.USER
+    document: Document,
+    kind: str,
+    actor: User | None,
+    origin: str = DocumentEvent.Origin.USER,
+    *,
+    person_name: str = "",
 ) -> None:
-    """History entry for ticking a task off or reopening it (`task_completed`, `task_reopened`);
-    origin `merge` when a merge completed a twin task."""
-    _write_event(document, kind, actor, origin)
+    """History entry for a change of one of the letter's tasks: ticked off or reopened
+    (`task_completed`, `task_reopened`; origin `merge` when a merge completed a twin
+    task), given to a member or released (`task_assigned`, `task_unassigned`, with the
+    member's name; origin `system` and no actor when the server released it), or dated
+    (`task_deadline_set`)."""
+    _write_event(document, kind, actor, origin, person_name=person_name)
 
 
 _UNDOABLE = (DocumentEvent.Kind.LABEL_ADDED, DocumentEvent.Kind.ADDRESSEE_ADDED)
@@ -495,6 +503,7 @@ def _write_event(
     rule: Rule | None = None,
     undoes: DocumentEvent | None = None,
     related_document: Document | None = None,
+    person_name: str = "",
 ) -> None:
     DocumentEvent.objects.create(
         workspace_id=document.workspace_id,
@@ -503,7 +512,7 @@ def _write_event(
         origin=origin,
         actor=actor,
         person=person,
-        person_name=person.display_name if person is not None else "",
+        person_name=person.display_name if person is not None else person_name,
         label=label,
         label_name=label.name if label is not None else "",
         rule=rule,

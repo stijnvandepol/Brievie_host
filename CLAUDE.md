@@ -148,4 +148,10 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
   message (PostgreSQL's own log can hold a failing statement; see PRIVACY). A BSN, also with
   other separators, the literal `[BSN]` and the words "bsn"/"burgerservicenummer" are removed
   from the term before use. Search is `POST searchDocuments`, never a `q` on a `GET`.
+- "Mijn taken" is derived, never stored: `apps.tasks.services.my_tasks`/`count_my_tasks`
+  run as the member under the task policy. `apps.tasks.mine` stays pure: no database.
+- A task is given only to a member who can read its letter (`apps.tasks.assignment`).
+  Every writer that narrows sight of a letter calls
+  `tasks.assignment.release_unseeing_assignees` (or `release_member`);
+  `tests/test_task_release_callers.py` lists them.
 - Tests first for logic. Conventional commits.

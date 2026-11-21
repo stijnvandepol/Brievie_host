@@ -1334,6 +1334,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/my-tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Tasks
+         * @description "Mijn taken": the caller's tasks, derived from the post they may read. `part` is `mine` (default: given to them, or on their post), `to_pick_up` (an organisation's department and unnamed post; empty at home) or `all` (every task they see). `status` is `open` (default; by deadline, undated last, at most 500) or `done` (completed in the last 30 days, newest first, at most 200). 422 `validation_error` for another part or status.
+         */
+        get: operations["listMyTasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/my-tasks/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Count My Tasks
+         * @description The numbers of "Mijn taken" for the navigation: open tasks only.
+         */
+        get: operations["countMyTasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/persons": {
         parameters: {
             query?: never;
@@ -1565,6 +1605,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/tasks/{task_id}/assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Assign Task
+         * @description Give the task to a member who can read its letter (`user_id`), or take it back (`user_id` null). The same assignee again changes nothing. Writes a `task_assigned` or `task_unassigned` event on the letter. 404 `task_not_found` for a task the caller does not see; 422 `task_without_letter`; 422 `assignee_cannot_read` for someone who may not read the letter, a viewer or no member.
+         */
+        post: operations["assignTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/tasks/{task_id}/assignees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Task Assignees
+         * @description The members the task can be given to: those who can read its letter, viewers left out, by name. Empty for a task without a letter.
+         */
+        get: operations["listTaskAssignees"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/tasks/{task_id}/complete": {
         parameters: {
             query?: never;
@@ -1579,6 +1659,26 @@ export interface paths {
          * @description Idempotent. Writes a `task_completed` event on the task's document.
          */
         post: operations["completeTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/tasks/{task_id}/deadline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Task Deadline
+         * @description "Datum invullen": the date the letter names, filled in by hand (`deadline`; null takes it away). The source becomes `manual`; the term's words stay. The same date again changes nothing. Writes a `task_deadline_set` event on the letter. 422 `validation_error` for a date before the letter's date.
+         */
+        post: operations["setTaskDeadline"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1829,6 +1929,14 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** AssignIn */
+        AssignIn: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id?: string | null;
+        };
         /** AuditEventOut */
         AuditEventOut: {
             /**
@@ -1926,6 +2034,14 @@ export interface components {
             invitation: components["schemas"]["InvitationOut"];
             /** Link */
             link: string;
+        };
+        /** DeadlineIn */
+        DeadlineIn: {
+            /**
+             * Deadline
+             * Format: date
+             */
+            deadline?: string | null;
         };
         /** DeviceOut */
         DeviceOut: {
@@ -2679,6 +2795,37 @@ export interface components {
             /** Status */
             status: string;
         };
+        /** MyTaskCountsOut */
+        MyTaskCountsOut: {
+            /** Mine */
+            mine: number;
+            /** Needs Date */
+            needs_date: number;
+            /** Overdue */
+            overdue: number;
+            /** To Pick Up */
+            to_pick_up: number;
+            /** Within Week */
+            within_week: number;
+        };
+        /** MyTasksOut */
+        MyTasksOut: {
+            /** Has Person */
+            has_person: boolean;
+            /** Items */
+            items: components["schemas"]["TaskItemOut"][];
+            /** Split */
+            split: boolean;
+            /**
+             * Today
+             * Format: date
+             */
+            today: string;
+            /** Truncated */
+            truncated: boolean;
+            /** Waiting Letters */
+            waiting_letters: number;
+        };
         /** NoticeOut */
         NoticeOut: {
             /**
@@ -3140,8 +3287,25 @@ export interface components {
             /** Rule Name */
             rule_name: string;
         };
+        /** TaskAssigneeOut */
+        TaskAssigneeOut: {
+            /** Is Me */
+            is_me: boolean;
+            /** Name */
+            name: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
         /** TaskIn */
         TaskIn: {
+            /**
+             * Amount
+             * @default
+             */
+            amount: string;
             /**
              * Deadline
              * Format: date
@@ -3162,20 +3326,57 @@ export interface components {
         /** TaskItemOut */
         TaskItemOut: {
             /**
+             * Amount
+             * @default
+             */
+            amount: string;
+            /**
+             * Assigned By Name
+             * @default
+             */
+            assigned_by_name: string;
+            /**
+             * Assigned To Id
+             * Format: uuid
+             */
+            assigned_to_id?: string | null;
+            /**
+             * Assigned To Name
+             * @default
+             */
+            assigned_to_name: string;
+            /**
+             * Can Edit
+             * @default false
+             */
+            can_edit: boolean;
+            /**
              * Completed At
              * Format: date-time
              */
             completed_at: string | null;
             /**
+             * Completed By Name
+             * @default
+             */
+            completed_by_name: string;
+            /**
              * Created By Ai
              * @default false
              */
             created_by_ai: boolean;
+            /** Days Left */
+            days_left?: number | null;
             /**
              * Deadline
              * Format: date
              */
             deadline: string | null;
+            /**
+             * Deadline Quote
+             * @default
+             */
+            deadline_quote: string;
             /** Deadline Source */
             deadline_source: string;
             /** Description */
@@ -3186,14 +3387,41 @@ export interface components {
              */
             document_id: string | null;
             /**
+             * Document Type
+             * @default
+             */
+            document_type: string;
+            /** For Names */
+            for_names?: string[];
+            /**
+             * Group
+             * @default
+             */
+            group: string;
+            /**
              * Id
              * Format: uuid
              */
             id: string;
+            /**
+             * Needs Deadline
+             * @default false
+             */
+            needs_deadline: boolean;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
             /** Sender */
             sender: string;
             /** Status */
             status: string;
+            /**
+             * Term Quote
+             * @default
+             */
+            term_quote: string;
             /** Type */
             type: string;
             /**
@@ -3204,6 +3432,21 @@ export interface components {
         };
         /** TaskOut */
         TaskOut: {
+            /**
+             * Amount
+             * @default
+             */
+            amount: string;
+            /**
+             * Assigned To Id
+             * Format: uuid
+             */
+            assigned_to_id?: string | null;
+            /**
+             * Assigned To Name
+             * @default
+             */
+            assigned_to_name: string;
             /**
              * Completed At
              * Format: date-time
@@ -3232,6 +3475,11 @@ export interface components {
             id: string;
             /** Status */
             status: string;
+            /**
+             * Term Quote
+             * @default
+             */
+            term_quote: string;
             /** Type */
             type: string;
         };
@@ -8178,6 +8426,98 @@ export interface operations {
             };
         };
     };
+    listMyTasks: {
+        parameters: {
+            query?: {
+                part?: string;
+                status?: string;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyTasksOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    countMyTasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyTaskCountsOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     listPersons: {
         parameters: {
             query?: never;
@@ -9295,6 +9635,146 @@ export interface operations {
             };
         };
     };
+    assignTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskItemOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    listTaskAssignees: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskAssigneeOut"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     completeTask: {
         parameters: {
             query?: never;
@@ -9336,6 +9816,96 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    setTaskDeadline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeadlineIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskItemOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

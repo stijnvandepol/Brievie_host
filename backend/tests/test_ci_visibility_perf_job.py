@@ -26,6 +26,7 @@ WATCHED = [
     "backend/apps/people/services.py",
     "backend/apps/labels/services.py",
     "backend/apps/tasks/services.py",
+    "backend/apps/tasks/facts.py",  # Mijn taken's facts, read once per list
     "backend/apps/*/migrations/**",
     "backend/tests/perf/**",
     "backend/uv.lock",

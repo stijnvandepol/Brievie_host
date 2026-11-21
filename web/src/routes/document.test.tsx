@@ -32,6 +32,10 @@ const task = {
   status: "open",
   completed_at: null,
   created_by_ai: false,
+  amount: "",
+  term_quote: "",
+  assigned_to_name: "",
+  assigned_to_id: null,
 };
 const path = `/w/${workspace.id}/post/${documentSummary.id}`;
 

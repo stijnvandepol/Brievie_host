@@ -1,9 +1,11 @@
 """Confirming a document: the user's review becomes its fields and its tasks."""
 
 import logging
+import re
 from collections import Counter
 from dataclasses import dataclass
 from datetime import date, timedelta
+from decimal import Decimal
 from uuid import UUID
 
 from django.db import transaction
@@ -16,6 +18,7 @@ from apps.common.privacy import mask_bsns
 from apps.documents import duplicates, organise, visibility
 from apps.documents.models import LIVE, Document, DocumentEvent, DocumentSuggestion
 from apps.documents.schemas import ConfirmIn, TaskIn
+from apps.pipeline.autopilot import term_phrase
 from apps.pipeline.validation import dates_in, quote_in_text
 from apps.rules import triggers
 from apps.tasks.models import Task
@@ -38,6 +41,8 @@ class _StoredTask:
     deadline: date | None
     deadline_source: str
     deadline_quote: str
+    amount: Decimal | None = None
+    term_quote: str = ""
 
 
 def confirm_document(
@@ -161,8 +166,9 @@ def _write_confirmation(
         origin=DocumentEvent.Origin.AI if by_ai else DocumentEvent.Origin.USER,
     )
     # A task already on the document stays as it is (after a reopen a ticked-off task is
-    # still there): the same one is not made twice.
-    present = {task_key(task) for task in document.tasks.all()}
+    # still there): the same one is not made twice. A task dated later through "Datum
+    # invullen" still counts as the undated task it came from.
+    present = {key for task in document.tasks.all() for key in task_keys(task)}
     for task in _stored_tasks(data, document):
         if (task.type, task.description, task.deadline, task.deadline_source) in present:
             continue
@@ -174,6 +180,8 @@ def _write_confirmation(
             deadline=task.deadline,
             deadline_source=task.deadline_source,
             deadline_quote=task.deadline_quote,
+            amount=task.amount,
+            term_quote=task.term_quote,
             created_by_ai=by_ai,
             created_by=user,
         )
@@ -183,6 +191,16 @@ def _write_confirmation(
 
 def task_key(task: Task) -> tuple[str, str, date | None, str]:
     return (task.type, task.description, task.deadline, task.deadline_source)
+
+
+def task_keys(task: Task) -> list[tuple[str, str, date | None, str]]:
+    """The keys a confirm compares an existing task on: its own, and for a task whose date
+    was filled in for a term (`setTaskDeadline`: manual, with a term quote) also the
+    undated key it was confirmed with."""
+    keys = [task_key(task)]
+    if task.deadline_source == Task.DeadlineSource.MANUAL and task.term_quote:
+        keys.append((task.type, task.description, None, Task.DeadlineSource.MANUAL))
+    return keys
 
 
 def _rules_guarded(document: Document) -> None:
@@ -254,7 +272,29 @@ def _stored_task(task: TaskIn, document: Document) -> _StoredTask:
         deadline_source=source,
         # A deadline the user typed has no source in the document.
         deadline_quote=quote if source == Task.DeadlineSource.IN_DOCUMENT else "",
+        amount=parse_amount(task.amount),
+        # Without a date, the letter's words that name a term ask for one ("Datum nodig").
+        term_quote=term_phrase(document.ocr_text) if task.deadline is None else "",
     )
+
+
+# Digits, then at most two decimals after a point or comma; below 10^10 (max_digits 12).
+_AMOUNT = re.compile(r"[0-9]{1,10}(?:[.,][0-9]{1,2})?")
+
+
+def parse_amount(value: str) -> Decimal | None:
+    """`""` is no amount; otherwise a decimal of at least 0 and below 10^10 with at most two
+    decimals, written "1234.56" or "1234,56" (no thousands separators), else 422."""
+    text = value.strip()
+    if not text:
+        return None
+    if not _AMOUNT.fullmatch(text):
+        raise _bad_amount()
+    return Decimal(text.replace(",", ".")).quantize(Decimal("0.01"))
+
+
+def _bad_amount() -> ApiError:
+    return _invalid(_("Het bedrag klopt niet. Schrijf het als 1234,56."))
 
 
 def _is_repeat(data: ConfirmIn, document: Document) -> bool:
@@ -273,6 +313,8 @@ def _is_repeat(data: ConfirmIn, document: Document) -> bool:
             deadline=task.deadline,
             deadline_source=task.deadline_source,
             deadline_quote=task.deadline_quote,
+            amount=task.amount,
+            term_quote=task.term_quote,
         )
         for task in document.tasks.all()
     )
@@ -305,6 +347,7 @@ def _validate(data: ConfirmIn, document: Document) -> None:
 
 
 def _validate_task(task: TaskIn, document: Document) -> None:
+    parse_amount(task.amount)
     if task.type not in Task.Type.values:
         raise _invalid(_("Dit soort taak kennen we niet."))
     if not task.description.strip():

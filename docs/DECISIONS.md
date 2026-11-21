@@ -1774,3 +1774,75 @@ Finance's letter, with the owner as control.
   reader rows, shares and department memberships). Closing it inside the policy (the
   actor counted only while a member) needs a migration of the policies and a new
   measurement; left to the owner, not built here.
+
+## 2026-11-21: Mijn taken (a personal to-do list made from your post)
+
+Spec `docs/superpowers/specs/2026-11-21-mijn-taken-design.md`, plan
+`docs/superpowers/plans/2026-11-21-host-mijn-taken.md`; rulings MT1–MT14 are the spec's
+section 16, recorded here as built.
+
+- **MT3: derived, never copied.** "Mijn taken" is a query over `Task` and its letter per
+  request; no table or cache holds a member's list. Trash, restore, hand-over, link
+  changes and confirm show on the next read.
+- **MT8: `amount` is a decimal string in the API, empty when unknown.** The model holds a
+  `Decimal` (`tasks_task_amount_not_negative`); a nullable decimal would render as `anyOf`.
+- **MT14: no backfill** of `amount` or `term_quote`: a guess is worse than nothing.
+- **New columns keep raw inserts working.** `Task.term_quote` (not null) has a database
+  default `''` (tasks 0005, `RunSQL`, as documents 0017); the other new columns are
+  nullable. The partial index `tasks_task_open` (`workspace_id`, `deadline`) `WHERE
+  status = 'open'` serves the list and the counts.
+- **History origin `system`** (new): an assignment the server released because the
+  assignee may no longer read the letter; no actor.
+- **MT5, MT6: assign, hand over, release; an assignment never outlives sight.**
+  `assignTask` gives a task on a letter only to a member who can read it (`viewers()`,
+  viewers left out): 422 `assignee_cannot_read`; a task without a letter is not given
+  (422 `task_without_letter`). The check runs as the caller under the task's row lock, the
+  write as the system (`apps/tasks/assignment.py` joins the system callers). History, not
+  the audit log: `task_assigned` / `task_unassigned` with the actor and the member's name.
+  Every writer that narrows sight releases as the system (origin `system`, no actor):
+  the end of `visibility.addressee_scope` (addressees, readers, privacy), the nightly
+  `verify_visibility` (counted as `assignments_released`), demoting to viewer and removing
+  a member (`release_member`, also clearing letterless tasks as before), and unlinking a
+  person from a member. `tests/test_task_release_callers.py` fails a new narrowing writer
+  outside that list; "Wie ziet wat" T24, T27, T37 and T38 add theirs there.
+- **MT1, MT2: name and place.** "Mijn taken" (English "My tasks"), first in the
+  navigation above "Te doen", whose description now points to it. The start screen stays
+  "Te doen" (Q1 unanswered). "Op te pakken" is "To pick up" in English.
+- **MT4: whose task, one rule.** `apps.tasks.mine.reason_for` (pure) gives each visible
+  task one reason: `assigned`, `addressee`, `department`, `unassigned` (the sorter's post
+  nobody reads through, `brievie_covered_post_ids`), `other`. At home "Mijn taken" holds
+  the first four; an organisation keeps `department` and `unassigned` under "Op te
+  pakken". `services.my_tasks` builds the same rule as one filter on the member's facts
+  (read once per request through the visibility functions) and runs as the member under
+  the task policy. "Zonder naam" is said only for a letter without any addressee (P4); a
+  letter for Jan without an account says "Voor Jan". `for_names` leaves out the reader's
+  own persons ("Voor jou en Piet").
+- **MT7: `listMyTasks` next to `listTasks`.** `listTasks` keeps its meaning (the phone's
+  calendar trusts it) and only gains defaulted fields.
+- **MT9, MT10: groups and done.** "Binnen 7 dagen" is today up to today + 6, counted in
+  Europe/Amsterdam; "Afgerond" shows the last 30 days (200 rows), never deletes.
+- **MT11: task changes are letter history**, not audit rows.
+- **MT12: "Datum nodig".** At confirm an undated task stores the letter's term words
+  (`autopilot.term_phrase`, pure, the patterns of `mentions_term`); `setTaskDeadline`
+  fills in a manual date and keeps those words; a reconfirm recognises the dated task.
+- **MT13: reminders follow "mine"** (the app, `Brievie_ios`).
+- **"Waiting letters" is one count.** `documents.services.waiting_letters` counts review
+  and unnamed letters through `visible_documents` with a plain WHERE (on the seam list);
+  `inbox_counts`' aggregate would cost its ~165 ms again on every list.
+- **Web.** The list's query keys live under the documents key, so every existing refresh
+  of the letters refreshes the list; a ticked row stays with "Ongedaan maken" until the
+  page is left. "Datum invullen" uses the browser's date field (no new dependency).
+- **Measured at 100,000 letters (plan Task 10, `visibility-perf` run 44880951129, jit off,
+  medians in ms, budget 250).** Highest per list over the four actors:
+
+  | state | `list_my_tasks` | `list_my_tasks_to_pick_up` | `count_my_tasks` | `list_tasks_all` |
+  |---|---|---|---|---|
+  | E | 97 | 25 | 30 | 123 |
+  | own+D | 90 | 38 | 28 | 117 |
+  | own | 95 | 24 | 31 | 122 |
+
+  The first runs (up to 228 ms for a sorter's list, and `list_tasks_all` at 253 ms on a
+  slow runner) showed two costs, both fixed: the names around a task (three user joins
+  before the sort, now fetched for the shown rows only) and the waiting-letter count (an
+  OR the policy had to check on every letter, now two counts on partial indexes, with the
+  new `documents_document_review`). No `visible_documents` hint was needed.
