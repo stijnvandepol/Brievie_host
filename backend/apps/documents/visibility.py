@@ -53,6 +53,7 @@ _NON_EMERGENCY = (
     DocumentReader.Reason.ADDRESSEE,
     DocumentReader.Reason.DEPARTMENT,
     DocumentReader.Reason.SHARE,
+    DocumentReader.Reason.MANAGED,
 )
 
 

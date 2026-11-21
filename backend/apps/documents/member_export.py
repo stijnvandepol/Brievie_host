@@ -48,6 +48,8 @@ _OWN_READER_REASONS = (
     DocumentReader.Reason.ADDRESSEE,
     DocumentReader.Reason.DEPARTMENT,
     DocumentReader.Reason.SHARE,
+    # "Beheerd door": the managed person's private post is the manager's own post.
+    DocumentReader.Reason.MANAGED,
 )
 # How long a finished export can be downloaded.
 VALIDITY = timedelta(hours=24)
