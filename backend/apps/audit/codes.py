@@ -143,7 +143,7 @@ ALLOWED_VALUES: dict[AuditCode, frozenset[str]] = {
     AuditCode.EMERGENCY_ACCESS_USED: frozenset({"reason", "document_count"}),
     AuditCode.EXPORT_CREATED: frozenset({"document_count"}),
     AuditCode.EXPORT_DOWNLOADED: _NONE,
-    # reason: user (later duplicate).
+    # reason: user, duplicate.
     AuditCode.DOCUMENT_TRASHED: frozenset({"reason"}),
     AuditCode.DOCUMENT_RESTORED: _NONE,
     # reason: admin, emptied, expired.

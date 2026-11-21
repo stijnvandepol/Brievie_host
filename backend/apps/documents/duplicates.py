@@ -17,6 +17,7 @@ word of a letter.
 import re
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Final
@@ -27,7 +28,10 @@ from django.db.models import Q, QuerySet
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
+from apps.accounts.models import User
+from apps.audit.services import AuditActor
 from apps.common.errors import ApiError
+from apps.documents import organise, review, visibility
 from apps.documents.duplicates_facts import (
     Fact,
     LetterFacts,
@@ -38,8 +42,17 @@ from apps.documents.duplicates_facts import (
     payment_reference_in,
     strong,
 )
-from apps.documents.models import Document, DuplicateCandidate, Extraction
+from apps.documents.models import (
+    Document,
+    DocumentAddressee,
+    DocumentEvent,
+    DocumentLabel,
+    DuplicateCandidate,
+    Extraction,
+)
 from apps.documents.visibility import visible_documents
+from apps.tasks.models import Task
+from apps.workspaces.locks import lock_own_membership
 from apps.workspaces.models import Membership
 
 # A letter is compared with the live letters that arrived at most this long before it.
@@ -63,13 +76,231 @@ def ordered(a: UUID, b: UUID) -> tuple[UUID, UUID]:
 
 def visible_pairs(membership: Membership) -> QuerySet[DuplicateCandidate]:
     """The open pairs whose two letters `membership`'s user both sees (trash left out)."""
+    return _seen_pairs(membership).filter(state=DuplicateCandidate.State.OPEN)
+
+
+def _seen_pairs(membership: Membership) -> QuerySet[DuplicateCandidate]:
+    """The pairs in any state whose two letters the member sees: `visible_pairs` before
+    its state filter, so a decided pair answers `duplicate_not_open` and never tells
+    anything about a letter the member cannot see."""
     letters = visible_documents(membership).values("id")
     return DuplicateCandidate.objects.filter(
         workspace_id=membership.workspace_id,
-        state=DuplicateCandidate.State.OPEN,
         first_id__in=letters,
         second_id__in=letters,
     )
+
+
+def duplicate_not_open() -> ApiError:
+    return ApiError(409, "duplicate_not_open", _("Over deze twee brieven is al gekozen."))
+
+
+def visibility_differs() -> ApiError:
+    return ApiError(
+        409,
+        "duplicate_visibility_differs",
+        _(
+            "Deze twee brieven zijn niet voor dezelfde mensen zichtbaar. Kies 'Het zijn twee "
+            "brieven', of laat ze eerst voor dezelfde mensen zichtbaar zijn."
+        ),
+    )
+
+
+def viewers_differ(a: Document, b: Document) -> bool:
+    """Whether two letters are seen by other people: one is private and the other not, or
+    the members who see them (the policy's own condition, as the system) differ."""
+    if (a.visibility == Document.Visibility.RESTRICTED) != (
+        b.visibility == Document.Visibility.RESTRICTED
+    ):
+        return True
+    seen = visibility.viewers([a.id, b.id])
+    return seen.get(a.id) != seen.get(b.id)
+
+
+@dataclass(frozen=True)
+class TaskTwin:
+    """A done task on one letter with an equal open task on the other."""
+
+    done_document_id: UUID
+    open_document_id: UUID
+    type: str
+    description: str
+
+
+def task_twins(first: Document, second: Document) -> list[TaskTwin]:
+    """Every done task of either letter whose equal (type, description, deadline, source)
+    is open on the other one."""
+    tasks = list(
+        Task.objects.filter(document_id__in=[first.id, second.id]).order_by("created_at", "id")
+    )
+    return [
+        TaskTwin(done.document_id, task.document_id, task.type, task.description)
+        for done in tasks
+        if done.status == Task.Status.DONE and done.document_id is not None
+        for task in tasks
+        if task.status == Task.Status.OPEN
+        and task.document_id is not None
+        and task.document_id != done.document_id
+        and review.task_key(task) == review.task_key(done)
+    ]
+
+
+def merge(
+    *,
+    membership: Membership,
+    user: User,
+    actor: AuditActor,
+    candidate_id: UUID,
+    keep_id: UUID,
+    complete_twin_tasks: bool = True,
+) -> Document:
+    """The two letters are one: the kept letter gets the other's labels, addressees and
+    open tasks, and the other goes to the trash (30 days to take it back).
+
+    Runs as the member. Refused when the pair is not open, `keep_id` is not one of it,
+    either letter is still processing, or the letters are not seen by the same people
+    (before uniting, and again after: a merge never changes who sees a letter). Labels
+    and addressees are added through `organise` (origin `merge`, not automatic, not
+    undoable); an open task of the other letter without an equal on the kept one moves;
+    a done task completes its open twin on the kept letter only with
+    `complete_twin_tasks`. A refusal anywhere, the trash's retention hook included, rolls
+    the whole merge back.
+    """
+    with transaction.atomic():
+        candidate, letters = _lock_pair(membership, user, candidate_id)
+        if keep_id not in letters:
+            raise ApiError(422, "validation_error", _("Kies een van de twee brieven om te houden."))
+        if any(d.status == Document.Status.PROCESSING for d in letters.values()):
+            raise ApiError(
+                409,
+                "document_processing",
+                _("Dit document wordt nog verwerkt. Probeer het zo opnieuw."),
+            )
+        keep = letters[keep_id]
+        other = next(d for i, d in letters.items() if i != keep_id)
+        if viewers_differ(keep, other):
+            raise visibility_differs()
+        before = visibility.viewers([keep.id])
+        with visibility.addressee_scope(keep):
+            _unite(keep, other, user)
+        # The scope's end synced the addressee list and the readers.
+        if visibility.viewers([keep.id]) != before:
+            raise visibility_differs()
+        _merge_tasks(keep, other, user, complete_twin_tasks=complete_twin_tasks)
+        # Imported here: the trash reaches the job queues, whose pipeline jobs import this
+        # module (detection), so a module-level import would be circular.
+        from apps.documents import trash
+
+        trash.move_to_trash(
+            other, user=user, actor=actor, reason="duplicate", related_document=keep
+        )
+        organise.record_merged(keep, actor=user, related_document=other)
+        _decide(candidate, DuplicateCandidate.State.MERGED, user, kept=keep)
+    return keep
+
+
+def dismiss(*, membership: Membership, user: User, candidate_id: UUID) -> None:
+    """The two letters are two letters: the pair is never proposed again. History on both;
+    no audit row."""
+    with transaction.atomic():
+        candidate, letters = _lock_pair(membership, user, candidate_id)
+        first, second = letters[candidate.first_id], letters[candidate.second_id]
+        _decide(candidate, DuplicateCandidate.State.DISMISSED, user)
+        organise.record_duplicate_dismissed(first, actor=user, related_document=second)
+        organise.record_duplicate_dismissed(second, actor=user, related_document=first)
+
+
+def _lock_pair(
+    membership: Membership, user: User, candidate_id: UUID
+) -> tuple[DuplicateCandidate, dict[UUID, Document]]:
+    """The lock order: the member's own membership, both letters in id order (through the
+    seam), then the pair. A pair the member cannot see in full answers as a missing one;
+    a decided one as `duplicate_not_open`."""
+    lock_own_membership(membership.workspace_id, user.id)
+    ids = _seen_pairs(membership).filter(id=candidate_id).values_list("first_id", "second_id")
+    found = ids.first()
+    if found is None:
+        raise duplicate_not_found()
+    letters = {
+        d.id: d
+        for d in visible_documents(membership)
+        .select_for_update(no_key=True)
+        .filter(id__in=found)
+        .order_by("id")
+    }
+    candidate = _seen_pairs(membership).select_for_update().filter(id=candidate_id).first()
+    if len(letters) != 2 or candidate is None:
+        raise duplicate_not_found()
+    if candidate.state != DuplicateCandidate.State.OPEN:
+        raise duplicate_not_open()
+    return candidate, letters
+
+
+def _unite(keep: Document, other: Document, user: User) -> None:
+    """Every label and addressee of `other` that `keep` lacks, through `organise`."""
+    have_labels = set(
+        DocumentLabel.objects.filter(document=keep).values_list("label_id", flat=True)
+    )
+    for link in (
+        DocumentLabel.objects.filter(document=other)
+        .exclude(label_id__in=have_labels)
+        .select_related("label")
+        .order_by("created_at", "id")
+    ):
+        organise.add_label(keep, link.label, actor=user, origin=DocumentEvent.Origin.MERGE)
+    have_persons = set(
+        DocumentAddressee.objects.filter(document=keep).values_list("person_id", flat=True)
+    )
+    for person_link in (
+        DocumentAddressee.objects.filter(document=other)
+        .exclude(person_id__in=have_persons)
+        .select_related("person")
+        .order_by("created_at", "id")
+    ):
+        organise.add_addressee(
+            keep, person_link.person, actor=user, origin=DocumentEvent.Origin.MERGE
+        )
+
+
+def _merge_tasks(keep: Document, other: Document, user: User, *, complete_twin_tasks: bool) -> None:
+    """An open task of `other` without an equal on `keep` moves to `keep`; a done one
+    completes its open equal on `keep` when asked (only a task that was on `keep` before
+    the merge: the twins `task_twins` showed). Every other task stays with `other`."""
+    on_keep: dict[tuple[object, ...], list[Task]] = defaultdict(list)
+    for task in Task.objects.select_for_update().filter(document=keep).order_by("created_at", "id"):
+        on_keep[review.task_key(task)].append(task)
+    kept_before = {task.id for tasks in on_keep.values() for task in tasks}
+    now = timezone.now()
+    for task in (
+        Task.objects.select_for_update().filter(document=other).order_by("created_at", "id")
+    ):
+        equals = on_keep[review.task_key(task)]
+        if task.status == Task.Status.OPEN and not equals:
+            task.document = keep
+            task.save(update_fields=["document", "updated_at"])
+            equals.append(task)
+            organise.record_task_moved(keep, actor=user, related_document=other)
+            organise.record_task_moved(other, actor=user, related_document=keep)
+        elif task.status == Task.Status.DONE and complete_twin_tasks:
+            for twin in equals:
+                if twin.status != Task.Status.OPEN or twin.id not in kept_before:
+                    continue
+                twin.status = Task.Status.DONE
+                twin.completed_at = now
+                twin.save(update_fields=["status", "completed_at", "updated_at"])
+                organise.record_task_event(
+                    keep, DocumentEvent.Kind.TASK_COMPLETED, user, DocumentEvent.Origin.MERGE
+                )
+
+
+def _decide(
+    candidate: DuplicateCandidate, state: str, user: User, *, kept: Document | None = None
+) -> None:
+    candidate.state = state
+    candidate.kept = kept
+    candidate.decided_by = user
+    candidate.decided_at = timezone.now()
+    candidate.save(update_fields=["state", "kept", "decided_by", "decided_at", "updated_at"])
 
 
 def facts_of(document: Document) -> LetterFacts:

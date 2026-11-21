@@ -162,7 +162,7 @@ def _write_confirmation(
     )
     # A task already on the document stays as it is (after a reopen a ticked-off task is
     # still there): the same one is not made twice.
-    present = {_key_of(task) for task in document.tasks.all()}
+    present = {task_key(task) for task in document.tasks.all()}
     for task in _stored_tasks(data, document):
         if (task.type, task.description, task.deadline, task.deadline_source) in present:
             continue
@@ -181,7 +181,7 @@ def _write_confirmation(
     _rules_guarded(document)
 
 
-def _key_of(task: Task) -> tuple[str, str, date | None, str]:
+def task_key(task: Task) -> tuple[str, str, date | None, str]:
     return (task.type, task.description, task.deadline, task.deadline_source)
 
 
