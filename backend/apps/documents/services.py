@@ -517,7 +517,7 @@ def set_document_addressees(
     """The document's addressees become exactly `person_ids`."""
     with transaction.atomic():
         document = _lock_for_organising(workspace, document_id)
-        with visibility.addressee_scope(document):
+        with visibility.keep_own_access(document), visibility.addressee_scope(document):
             organise.set_addressees(document=document, person_ids=person_ids, actor=user)
     return document
 
@@ -665,6 +665,6 @@ def undo_document_event(
     """Reverse a change a rule made; the rule will not make it again on this document."""
     with transaction.atomic():
         document = _lock_for_organising(workspace, document_id)
-        with visibility.addressee_scope(document):
+        with visibility.keep_own_access(document), visibility.addressee_scope(document):
             organise.undo_event(document=document, event_id=event_id, actor=user)
     return document

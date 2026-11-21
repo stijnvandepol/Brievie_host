@@ -1846,3 +1846,20 @@ section 16, recorded here as built.
   before the sort, now fetched for the shown rows only) and the waiting-letter count (an
   OR the policy had to check on every letter, now two counts on partial indexes, with the
   new `documents_document_review`). No `visible_documents` hint was needed.
+
+## 2026-11-21: Wie ziet wat, slice A2b (private letters, departments, emergency access)
+
+Plan `docs/superpowers/plans/2026-11-20-host-wie-ziet-wat.md`, Tasks 24-34 (merge point
+M3). "Iedereen ziet alle post" stays on everywhere until Task 40, so departments only sort.
+
+- **Private letters and shares (Task 24, PB T7/T8).** `documents.visibility` is the one
+  writer of visibility, shares and readers: `make_private` (history line, then shares and
+  readers as the system, then the flip as the current actor), `make_public`, `set_shares`
+  (on every letter, R44), `keep_own_access`, the grants and `forget_member`. A letter an
+  automatic action would make private without any reader stays visible: a
+  `private_skipped` line (its kind is the explanation; no stored sentence, so it follows
+  the reader's language) and one admin notice per letter. `keep_own_access` wraps the
+  `addressee_scope` in the services (addressees, undo, confirm), because the readers are
+  recomputed only at the scope's end; it answers 409 `would_lose_access` for a private
+  letter only. "Reads private post" counts reader rows on private letters only: a share of
+  a letter that is not private is no private post.

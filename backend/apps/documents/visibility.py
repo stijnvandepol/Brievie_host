@@ -22,17 +22,26 @@ import threading
 from collections.abc import Collection, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
 from django.db import connection, transaction
 from django.db.models import Q, QuerySet
 from django.utils import timezone
+from django.utils.translation import gettext as _
 
-from apps.documents.models import LIVE, Document, DocumentReader, DocumentShare
+from apps.accounts.models import User
+from apps.audit.codes import AuditCode, TargetKind
+from apps.audit.services import AuditActor, AuditTarget, record
+from apps.common.errors import ApiError
+from apps.documents.models import LIVE, Document, DocumentEvent, DocumentReader, DocumentShare
 from apps.people.models import DepartmentMember, Person
 from apps.workspaces.context import SYSTEM, current_actor, system_actor, workspace_context
 from apps.workspaces.models import Membership, Workspace
 from apps.workspaces.visibility_sql import viewer_pairs_sql
+
+if TYPE_CHECKING:
+    from apps.rules.models import Rule
 
 logger = logging.getLogger(__name__)
 
@@ -108,12 +117,13 @@ def _members(workspace_id: UUID, user_ids: Collection[UUID]) -> set[UUID]:
 
 
 def desired_readers(
-    document: Document, *, extra_user_ids: Collection[UUID] = ()
+    document: Document, *, extra_user_ids: Collection[UUID] = (), private: bool | None = None
 ) -> set[tuple[UUID, str]]:
     """The non-emergency reader rows the letter should have: `share` rows for its shares
     (every letter, R44) and `extra_user_ids`; for a private letter also `addressee` rows
     for the accounts of its persons and `department` rows for the members of its
-    departments. Current members only. As the system."""
+    departments. Current members only. As the system. `private` None reads the letter's
+    stored visibility; `make_private` passes True before the flip."""
     with system_actor():
         wanted: set[tuple[UUID, str]] = set()
         shares = set(
@@ -121,9 +131,10 @@ def desired_readers(
         )
         for user_id in {*shares, *extra_user_ids}:
             wanted.add((user_id, DocumentReader.Reason.SHARE))
-        private = Document.objects.filter(
-            id=document.id, visibility=Document.Visibility.RESTRICTED
-        ).exists()
+        if private is None:
+            private = Document.objects.filter(
+                id=document.id, visibility=Document.Visibility.RESTRICTED
+            ).exists()
         if private:
             on = list(document.addressee_links.values_list("person_id", flat=True))
             for user_id in Person.objects.filter(
@@ -139,12 +150,12 @@ def desired_readers(
         return {(u, reason) for u, reason in wanted if u in members}
 
 
-def recompute(document: Document) -> int:
+def recompute(document: Document, *, private: bool | None = None) -> int:
     """Make the letter's non-emergency reader rows exactly `desired_readers`; the number
     of rows inserted plus deleted. Never raises because the caller loses sight: the
     caller decides that before (PB ruling c). Takes no row lock."""
     with transaction.atomic(), system_actor():
-        wanted = desired_readers(document)
+        wanted = desired_readers(document, private=private)
         rows = {
             (r.user_id, r.reason): r.id
             for r in DocumentReader.objects.filter(document=document, reason__in=_NON_EMERGENCY)
@@ -272,6 +283,354 @@ def viewers(document_ids: Collection[UUID]) -> dict[UUID, frozenset[UUID]]:
         for document_id, user_id in c.fetchall():
             found[document_id].add(user_id)
     return {d: frozenset(users) for d, users in found.items()}
+
+
+MakePrivateResult = Literal["made_private", "already_private", "nobody_could_read"]
+
+
+def _member_not_found() -> ApiError:
+    return ApiError(404, "member_not_found", _("We kunnen dit lid niet vinden."))
+
+
+def _history(
+    document: Document,
+    kind: str,
+    *,
+    actor_id: UUID | None,
+    origin: str,
+    rule: "Rule | None" = None,
+    person: Person | None = None,
+    person_name: str = "",
+    note: str = "",
+) -> None:
+    """A line in the letter's history about who reads it (no label or addressee change:
+    those are `organise`'s)."""
+    DocumentEvent.objects.create(
+        workspace_id=document.workspace_id,
+        document=document,
+        kind=kind,
+        origin=origin,
+        actor_id=actor_id,
+        rule=rule,
+        rule_name=rule.name if rule is not None else "",
+        person=person,
+        person_name=person.display_name if person is not None else person_name,
+        note=note,
+    )
+
+
+def _is_private(document: Document) -> bool:
+    with system_actor():
+        return Document.objects.filter(
+            id=document.id, visibility=Document.Visibility.RESTRICTED
+        ).exists()
+
+
+def _audit_visibility(document: Document, actor: AuditActor, values: dict[str, str]) -> None:
+    """`visibility_changed` on the letter by its id only (never a sender or text)."""
+    record(
+        AuditCode.VISIBILITY_CHANGED,
+        actor=actor,
+        target=AuditTarget(TargetKind.DOCUMENT, document.id),
+        workspace_id=document.workspace_id,
+        values=values,
+    )
+
+
+def make_private(
+    document: Document,
+    *,
+    actor: AuditActor,
+    origin: str,
+    rule: "Rule | None" = None,
+    share_user_ids: Collection[UUID] = (),
+) -> MakePrivateResult:
+    """Make the letter private (PB T7, S 4.8). The caller holds the letter's lock (and in a
+    request its own membership first).
+
+    The readers are the scanner (while a member), the current user, `share_user_ids` (each
+    a member, else 404 `member_not_found`) as shares, and the accounts of its persons and
+    the members of its departments. Nobody among them → nothing changes: a
+    `private_skipped` line, and the admins get one notice per letter (ruling d). Order:
+    the history line, the shares and readers as the system, then the flip **as the
+    current actor**, so the database proves the actor kept access (PB decision 6)."""
+    with transaction.atomic():
+        if _is_private(document):
+            document.visibility = Document.Visibility.RESTRICTED
+            return "already_private"
+        wanted = set(share_user_ids)
+        if wanted - _members(document.workspace_id, wanted):
+            raise _member_not_found()
+        extra = set(wanted)
+        if document.scanned_by_id is not None:
+            extra.add(document.scanned_by_id)
+        current = current_actor()
+        if isinstance(current, UUID):
+            extra.add(current)
+        extra &= _members(document.workspace_id, extra)
+        if not desired_readers(document, extra_user_ids=extra, private=True):
+            _private_skipped(document, actor=actor, origin=origin, rule=rule)
+            return "nobody_could_read"
+        _history(
+            document,
+            DocumentEvent.Kind.MADE_PRIVATE,
+            actor_id=actor.user_id,
+            origin=origin,
+            rule=rule,
+        )
+        with system_actor():
+            known = set(
+                DocumentShare.objects.filter(document=document).values_list("user_id", flat=True)
+            )
+            DocumentShare.objects.bulk_create(
+                DocumentShare(
+                    workspace_id=document.workspace_id,
+                    document=document,
+                    user_id=user_id,
+                    created_by_id=actor.user_id,
+                )
+                for user_id in sorted(extra - known)
+            )
+            recompute(document, private=True)
+        # As the current actor: 42501 when they would not read it afterwards.
+        flipped = Document.objects.filter(id=document.id).update(
+            visibility=Document.Visibility.RESTRICTED, updated_at=timezone.now()
+        )
+        if flipped != 1:
+            raise RuntimeError("make_private ran as an actor who does not see the letter.")
+        document.visibility = Document.Visibility.RESTRICTED
+        _release_assignees(document.workspace_id, [document.id])
+        _audit_visibility(
+            document, actor, {"visibility": Document.Visibility.RESTRICTED, "origin": origin}
+        )
+        return "made_private"
+
+
+def _private_skipped(
+    document: Document, *, actor: AuditActor, origin: str, rule: "Rule | None"
+) -> None:
+    """Ruling d: the letter stays visible; the history says so and every admin hears it
+    once per letter. The line's kind says why: no stored sentence (it would not follow
+    the reader's language)."""
+    from apps.accounts.notices import notify  # accounts imports this module's callers
+
+    with system_actor():
+        told = DocumentEvent.objects.filter(
+            document=document, kind=DocumentEvent.Kind.PRIVATE_SKIPPED
+        ).exists()
+        _history(
+            document,
+            DocumentEvent.Kind.PRIVATE_SKIPPED,
+            actor_id=actor.user_id,
+            origin=origin,
+            rule=rule,
+        )
+    if told:
+        return
+    workspace = Workspace.objects.get(id=document.workspace_id)
+    for membership in Membership.objects.filter(
+        workspace_id=document.workspace_id, role=Membership.Role.ADMIN
+    ).select_related("user"):
+        notify(
+            membership.user,
+            "private_without_readers",
+            actor_name="Brievie",
+            values={"document_id": str(document.id), "workspace": workspace.name},
+        )
+
+
+def can_make_public(document: Document, user_id: UUID) -> bool:
+    """A reader through an addressee or department row may; when the letter has no such
+    rows at all (no addressee with an account), any reader may. As the system."""
+    with system_actor():
+        rows = DocumentReader.objects.filter(document=document).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
+        )
+        own = set(
+            rows.filter(user_id=user_id)
+            .exclude(reason=DocumentReader.Reason.EMERGENCY)
+            .values_list("reason", flat=True)
+        )
+        if own & {DocumentReader.Reason.ADDRESSEE, DocumentReader.Reason.DEPARTMENT}:
+            return True
+        addressed = rows.filter(
+            reason__in=(DocumentReader.Reason.ADDRESSEE, DocumentReader.Reason.DEPARTMENT)
+        ).exists()
+        return bool(own) and not addressed
+
+
+def make_public(document: Document, *, actor: AuditActor, user_id: UUID) -> bool:
+    """Make a private letter visible by the switches again (PB T7); False when it was not
+    private. 403 `cannot_make_public` for someone not addressed while an addressee reads
+    it. Its shares go (switched private again it starts from scanner and actor, PB
+    decision 9). The flip runs as the current actor while their reader row still exists,
+    then the readers follow as the system."""
+    with transaction.atomic():
+        if not _is_private(document):
+            return False
+        if not can_make_public(document, user_id):
+            raise ApiError(
+                403,
+                "cannot_make_public",
+                _(
+                    "Alleen iemand op wiens naam deze brief staat, kan hem weer voor "
+                    "iedereen zichtbaar maken."
+                ),
+            )
+        _history(document, DocumentEvent.Kind.MADE_PUBLIC, actor_id=actor.user_id, origin="user")
+        Document.objects.filter(id=document.id).update(
+            visibility=Document.Visibility.WORKSPACE, updated_at=timezone.now()
+        )
+        document.visibility = Document.Visibility.WORKSPACE
+        with system_actor():
+            DocumentShare.objects.filter(document=document).delete()
+            DocumentReader.objects.filter(
+                document=document, reason=DocumentReader.Reason.EMERGENCY
+            ).delete()
+            recompute(document, private=False)
+        _release_assignees(document.workspace_id, [document.id])
+        _audit_visibility(
+            document, actor, {"visibility": Document.Visibility.WORKSPACE, "origin": "user"}
+        )
+        return True
+
+
+def shared_user_ids(document: Document) -> list[UUID]:
+    """The members the letter is shared with, as the system."""
+    with system_actor():
+        return list(
+            DocumentShare.objects.filter(document=document)
+            .order_by("user_id")
+            .values_list("user_id", flat=True)
+        )
+
+
+def set_shares(document: Document, *, user_ids: Collection[UUID], actor: AuditActor) -> None:
+    """The letter's shares become exactly `user_ids` ("Delen met"), on any letter (R44).
+
+    Each a current member (404 `member_not_found`). A history line and an audit row per
+    added or removed share; then the readers follow. Removing one's own share is allowed:
+    the caller may lose the letter (the endpoint answers `can_read` false)."""
+    wanted = set(user_ids)
+    with transaction.atomic():
+        if wanted - _members(document.workspace_id, wanted):
+            raise _member_not_found()
+        private = _is_private(document)
+        shown = Document.Visibility.RESTRICTED if private else Document.Visibility.WORKSPACE
+        with system_actor():
+            current = set(
+                DocumentShare.objects.filter(document=document).values_list("user_id", flat=True)
+            )
+            names = dict(User.objects.filter(id__in=wanted | current).values_list("id", "name"))
+            added = sorted(wanted - current)
+            removed = sorted(current - wanted)
+            for user_id in added:
+                DocumentShare.objects.create(
+                    workspace_id=document.workspace_id,
+                    document=document,
+                    user_id=user_id,
+                    created_by_id=actor.user_id,
+                )
+            DocumentShare.objects.filter(document=document, user_id__in=removed).delete()
+            for kind, ids in (
+                (DocumentEvent.Kind.SHARE_ADDED, added),
+                (DocumentEvent.Kind.SHARE_REMOVED, removed),
+            ):
+                for user_id in ids:
+                    _history(
+                        document,
+                        kind,
+                        actor_id=actor.user_id,
+                        origin="user",
+                        person_name=names.get(user_id, ""),
+                    )
+            recompute(document)
+        _release_assignees(document.workspace_id, [document.id])
+        for share, ids in (("added", added), ("removed", removed)):
+            for user_id in ids:
+                _audit_visibility(
+                    document,
+                    actor,
+                    {"visibility": shown, "share": share, "member": names.get(user_id, "")},
+                )
+
+
+@contextmanager
+def keep_own_access(document: Document) -> Iterator[None]:
+    """409 `would_lose_access` when the current user could read the private letter before
+    the block and cannot after it (PB ruling c): around an organising change of its
+    addressees, outside its `addressee_scope` so the readers are recomputed first. Only
+    for a private letter (S 4.9.3): handing over a letter that is not private is allowed
+    (`can_read` false). A no-op for the system and the empty actor."""
+    actor = current_actor()
+    before = isinstance(actor, UUID) and can_read(document.id)
+    yield
+    if before and _is_private(document) and not can_read(document.id):
+        raise ApiError(409, "would_lose_access", _("Dan kun je deze brief zelf niet meer lezen."))
+
+
+def has_private_post(person: Person) -> bool:
+    """Whether a private letter is on this person's (or department's) name; as the system."""
+    with system_actor():
+        return Document.objects.filter(
+            workspace_id=person.workspace_id,
+            visibility=Document.Visibility.RESTRICTED,
+            addressee_ids__contains=[person.id],
+        ).exists()
+
+
+def _private_reader_rows() -> QuerySet[DocumentReader]:
+    """Non-emergency, unexpired reader rows on private letters (the current workspace)."""
+    return DocumentReader.objects.filter(
+        reason__in=_NON_EMERGENCY, document__visibility=Document.Visibility.RESTRICTED
+    ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()))
+
+
+def reads_private_post(user_id: UUID) -> bool:
+    """Whether the user reads a private letter of the current workspace (not by emergency
+    access); as the system."""
+    with system_actor():
+        return _private_reader_rows().filter(user_id=user_id).exists()
+
+
+def private_post_readers() -> set[UUID]:
+    """The users who read a private letter of the current workspace; one query."""
+    with system_actor():
+        return set(_private_reader_rows().values_list("user_id", flat=True).distinct())
+
+
+def forget_member(workspace_id: UUID, user_id: UUID) -> None:
+    """A member leaves: their reader rows, shares and department memberships in this
+    workspace go, as the system. Nothing else changes: the readers of every letter are
+    then the old ones without this user."""
+    with transaction.atomic(), system_actor():
+        DocumentReader.objects.filter(workspace_id=workspace_id, user_id=user_id).delete()
+        DocumentShare.objects.filter(workspace_id=workspace_id, user_id=user_id).delete()
+        DepartmentMember.objects.filter(workspace_id=workspace_id, user_id=user_id).delete()
+
+
+def record_grant(person: Person, *, grantee: User, actor_user_id: UUID | None) -> int:
+    """Someone was given sight of the person's private post (linked, or added to the
+    department): an `access_granted` line on each of its private letters, which its
+    readers see. The number of letters."""
+    with transaction.atomic(), system_actor():
+        documents = list(
+            Document.objects.filter(
+                workspace_id=person.workspace_id,
+                visibility=Document.Visibility.RESTRICTED,
+                addressee_ids__contains=[person.id],
+            ).order_by("id")
+        )
+        for document in documents:
+            _history(
+                document,
+                DocumentEvent.Kind.ACCESS_GRANTED,
+                actor_id=actor_user_id,
+                origin="user",
+                person=person,
+                note=grantee.name,
+            )
+        return len(documents)
 
 
 @dataclass(frozen=True)

@@ -241,3 +241,99 @@ def office() -> Office:
     )
     result.state(e=False, d=True, a=False, s=True)
     return result
+
+
+@dataclass(frozen=True)
+class Home:
+    """A Thuis workspace ("Iedereen ziet alle post"): Anne admin, Bob and Carla members,
+    a person for each and Oma, a person without an account (PB's world)."""
+
+    workspace: Workspace
+    anne: User
+    bob: User
+    carla: User
+    persons: dict[str, Person]
+
+
+def home() -> Home:
+    anne = UserFactory.create(name="Anne")
+    workspace = create_workspace(name="Thuis", kind="home", admin=anne)
+    bob = _member(workspace, "Bob")
+    carla = _member(workspace, "Carla")
+    with as_actor(workspace, SYSTEM):
+        persons = {
+            user.name: ensure_person_for_member(workspace=workspace, user=user)
+            for user in (anne, bob, carla)
+        }
+        persons["Oma"] = Person.objects.create(workspace=workspace, display_name="Oma")
+    return Home(workspace=workspace, anne=anne, bob=bob, carla=carla, persons=persons)
+
+
+def letter(
+    workspace: Workspace,
+    *,
+    on: Sequence[Person] = (),
+    scanned_by: User | None = None,
+    status: str = "done",
+) -> Document:
+    """A letter that is not private, with an addressee row per person, a page and a task."""
+    with as_actor(workspace, SYSTEM):
+        document = Document.objects.create(
+            workspace=workspace,
+            client_id=uuid.uuid4(),
+            page_count=1,
+            status=status,
+            scanned_by=scanned_by,
+            addressee_ids=sorted(p.id for p in on),
+        )
+        for person in on:
+            DocumentAddressee.objects.create(workspace=workspace, document=document, person=person)
+        DocumentPage.objects.create(
+            workspace=workspace,
+            document=document,
+            index=1,
+            size=1,
+            sha256="0" * 64,
+            storage_path=f"test/{document.id}/1",
+        )
+        Task.objects.create(
+            workspace=workspace, document=document, type="pay", description="Betalen"
+        )
+    return document
+
+
+def private_letter(
+    workspace: Workspace,
+    *,
+    scanned_by: User | None = None,
+    addressees: Sequence[Person] = (),
+    shared_with: Sequence[User] = (),
+) -> Document:
+    """A confirmed letter made private through the service, as the system: its readers are
+    the scanner, the shares and the accounts of its persons."""
+    from apps.audit.services import AuditActor
+    from apps.documents import visibility
+
+    document = letter(workspace, on=addressees, scanned_by=scanned_by)
+    with as_actor(workspace, SYSTEM):
+        result = visibility.make_private(
+            document,
+            actor=AuditActor.system(),
+            origin="user",
+            share_user_ids=[u.id for u in shared_with],
+        )
+        assert result == "made_private", result
+        return Document.objects.get(id=document.id)
+
+
+def readers(document: Document) -> set[tuple[str, str]]:
+    """(user name, reason) of the letter's reader rows, as the system."""
+    with as_actor(document.workspace, SYSTEM):
+        return set(
+            DocumentReader.objects.filter(document=document).values_list("user__name", "reason")
+        )
+
+
+def sees(user: User, document: Document) -> bool:
+    with as_actor(document.workspace, user.id):
+        return Document.objects.filter(id=document.id).exists()

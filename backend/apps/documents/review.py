@@ -118,7 +118,9 @@ def _store_confirmation(
     """The one place a confirmed review is written: fields, history, tasks, rules (as
     the caller), then the addressee list and readers (the scope's end) and the status (as
     the system)."""
-    with visibility.addressee_scope(document):
+    # A private letter the confirmer would lose by its addressees is a 409 (PB ruling c);
+    # handing over a letter that is not private is allowed (`can_read` false).
+    with visibility.keep_own_access(document), visibility.addressee_scope(document):
         _write_confirmation(document, data, user=user, by_ai=by_ai)
     with system_actor():
         document.status = Document.Status.DONE
