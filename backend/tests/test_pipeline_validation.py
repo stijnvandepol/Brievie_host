@@ -313,7 +313,8 @@ def test_json_schema_matches_snapshot_and_has_no_refs() -> None:
     assert "$ref" not in rendered
     assert "$defs" not in rendered
     assert sorted(cast(dict[str, object], schema["properties"])) == [
-        "acties", "afzender", "dagtekening", "documenttype", "factuur", "samenvatting_b1",
+        "acties", "afzender", "dagtekening", "documenttype", "factuur", "nieuwe_personen",
+        "samenvatting_b1",
     ]  # fmt: skip
     assert rendered == SNAPSHOT.read_text(encoding="utf-8"), (
         "update tests/fixtures/extraction_schema.json"

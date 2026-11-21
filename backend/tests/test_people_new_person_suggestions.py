@@ -200,11 +200,17 @@ def test_the_autopilot_never_makes_the_person_and_does_not_confirm(ws_a: Workspa
         assert Document.objects.get(id=document.id).status == Document.Status.NEEDS_REVIEW
         assert Person.objects.count() == persons
     assert len(_open(ws_a, document)) == 1
-    # Without the unknown name the same letter is confirmed: the proposal is what stops it.
-    other = _letter(ws_a)
-    _run(ws_a, other, Answering({**ANSWER, "nieuwe_personen": []}))
+    # Dismissed: the guard rails hold again, and the next run confirms it.
+    (row,) = _open(ws_a, document)
+    client = as_user(admin_of(ws_a))
+    base = f"/workspaces/{ws_a.id}/documents/{document.id}/new-person-suggestions/{row.id}"
+    assert post_json(client, f"{base}/dismiss").status_code == 200
     with workspace_context(ws_a.id, actor=SYSTEM):
-        assert Document.objects.get(id=other.id).status == Document.Status.DONE
+        Document.objects.filter(id=document.id).update(status=Document.Status.PROCESSING)
+    _run(ws_a, document)
+    with workspace_context(ws_a.id, actor=SYSTEM):
+        assert Document.objects.get(id=document.id).status == Document.Status.DONE
+        assert Person.objects.count() == persons
 
 
 # --- accepting and dismissing ---
