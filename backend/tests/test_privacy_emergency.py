@@ -293,3 +293,55 @@ def test_emergency_reader_cannot_assign_or_share_a_non_private_letter() -> None:
             content_type=JSON,
         )
     )
+
+
+# The trash (security review of PR #38, finding 2): emergency access reads a letter in
+# the trash, as everywhere; it never restores or purges it.
+
+
+def _opened_then_trashed(h: Home) -> tuple[Document, Client]:
+    _on(h)
+    doc = private_letter(h.workspace, addressees=[h.persons["Bob"]])
+    admin = _admin(h)
+    assert _open(admin, h.persons["Bob"]).json()["opened_count"] == 1
+    bob = Client()
+    bob.force_login(h.bob)
+    r = bob.post(f"/api/v1/workspaces/{h.workspace.id}/documents/{doc.id}/trash")
+    assert r.status_code in (200, 201), r.json()
+    return doc, admin
+
+
+def _trash_state(h: Home, doc: Document) -> tuple[bool, bool]:
+    with as_actor(h.workspace, SYSTEM):
+        stored = Document.objects.get(id=doc.id)
+    return stored.trashed_at is not None, stored.purge_started_at is not None
+
+
+def test_a_trashed_letter_under_emergency_access_is_listed_read_only() -> None:
+    h = home()
+    doc, admin = _opened_then_trashed(h)
+    listed = admin.get(f"/api/v1/workspaces/{h.workspace.id}/trash").json()
+    assert [item["id"] for item in listed["items"]] == [str(doc.id)]
+
+
+def test_emergency_access_cannot_restore_from_the_trash() -> None:
+    h = home()
+    doc, admin = _opened_then_trashed(h)
+    _read_only(admin.post(f"/api/v1/workspaces/{h.workspace.id}/documents/{doc.id}/restore"))
+    assert _trash_state(h, doc) == (True, False)
+
+
+def test_emergency_access_cannot_purge_now() -> None:
+    h = home()
+    doc, admin = _opened_then_trashed(h)
+    _read_only(admin.delete(f"/api/v1/workspaces/{h.workspace.id}/trash/{doc.id}"))
+    assert _trash_state(h, doc) == (True, False)
+
+
+def test_emptying_the_trash_skips_letters_seen_only_through_emergency_access() -> None:
+    h = home()
+    doc, admin = _opened_then_trashed(h)
+    r = admin.post(f"/api/v1/workspaces/{h.workspace.id}/trash/empty", {}, content_type=JSON)
+    assert r.status_code == 200, r.json()
+    assert r.json()["document_count"] == 0
+    assert _trash_state(h, doc) == (True, False)

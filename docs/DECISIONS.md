@@ -1960,3 +1960,7 @@ M3). "Iedereen ziet alle post" stays on everywhere until Task 40, so departments
   applied in the same run where Zorg makes letters private: addressees are applied before
   labels, and a rule's Zorg proposal counts even though `rule_labels_to_apply` decides
   only later (the autopilot blocks rather than guesses).
+- **Emergency access and the trash (finding 2).** A letter in the trash that the admin
+  sees through emergency access is listed in their trash read-only, as everywhere else
+  (the trash has the seam's rights, S 4.10); restoring it or purging it now answers 403
+  `emergency_read_only`, and emptying the trash leaves it where it is.

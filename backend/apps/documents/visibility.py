@@ -771,15 +771,21 @@ def can_edit(document: Document, user: User) -> bool:
     return not _has_emergency(document, user.id) or _sees_without_emergency(document, user.id)
 
 
+def only_through_emergency(document: Document) -> bool:
+    """Whether the current user sees the letter only through emergency access (the system
+    never does). The caller found the letter as the user already."""
+    actor = current_actor()
+    if not isinstance(actor, UUID) or not _has_emergency(document, actor):
+        return False
+    return not _sees_without_emergency(document, actor)
+
+
 def require_editable(document: Document) -> None:
     """403 `emergency_read_only` when the current user sees the letter only through
     emergency access: no organising, sharing, publishing, confirming, retrying or task
     change, so an hour's access can never be kept or the letter sent to the AI again.
     A no-op for the system. The caller found the letter as the user already."""
-    actor = current_actor()
-    if not isinstance(actor, UUID) or not _has_emergency(document, actor):
-        return
-    if not _sees_without_emergency(document, actor):
+    if only_through_emergency(document):
         raise ApiError(
             403, "emergency_read_only", _("Met noodtoegang kun je deze brief alleen lezen.")
         )
