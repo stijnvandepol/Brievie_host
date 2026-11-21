@@ -33,13 +33,8 @@ from apps.tasks.assignment import release_member
 from apps.workspaces.access import on_member_removed
 from apps.workspaces.context import NOBODY, Actor, workspace_context
 from apps.workspaces.invitations import revoke_invitations_bound_to, revoke_invitations_made_by
+from apps.workspaces.locks import lock_memberships as lock_memberships
 from apps.workspaces.models import Membership, Workspace
-
-
-def lock_memberships(workspace: Workspace) -> list[Membership]:
-    """Lock every membership of the workspace, in id order: the one lock order of every
-    member change. Must run inside a transaction."""
-    return list(Membership.objects.select_for_update().filter(workspace=workspace).order_by("id"))
 
 
 def _forbidden() -> ApiError:

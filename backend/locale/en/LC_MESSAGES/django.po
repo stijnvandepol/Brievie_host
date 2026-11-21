@@ -139,6 +139,22 @@ msgstr "Private mail without readers"
 msgid "Privépost zonder lezers, brief niet genoemd"
 msgstr "Private post without readers, letter not named"
 
+#: apps/accounts/models.py
+msgid "Je ziet meer post"
+msgstr "You see more post"
+
+#: apps/accounts/models.py
+msgid "Je ziet minder post"
+msgstr "You see less post"
+
+#: apps/accounts/models.py
+msgid "Beheerders lezen alle post"
+msgstr "Admins read all post"
+
+#: apps/accounts/models.py
+msgid "Iemand gaf zichzelf toegang"
+msgstr "Someone gave themselves access"
+
 #: apps/accounts/notices.py
 #, python-format
 msgid "%(name)s heeft op %(date)s een herstellink voor je wachtwoord gemaakt."
@@ -208,6 +224,73 @@ msgstr "Some mail should have become private, but nobody would have been able to
 #, python-format
 msgid "Er is post in %(workspace)s die privé had moeten worden, maar niemand zou hem kunnen lezen. Hij is zichtbaar gebleven voor wie hem mag zien."
 msgstr "Some post in %(workspace)s should have become private, but nobody could have read it. It stayed visible to those who may see it."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je kunt nu alle post zien die niet privé is. Dat heeft %(name)s op %(date)s ingesteld."
+msgstr "You can now see all post that is not private. %(name)s set this on %(date)s."
+
+#: apps/accounts/notices.py
+msgid "Je ziet de post van anderen niet meer."
+msgstr "You no longer see other people's post."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "De beheerders kunnen nu alle post lezen die niet privé is, ook de jouwe. Dat heeft %(name)s op %(date)s ingesteld."
+msgstr "The admins can now read all post that is not private, yours too. %(name)s set this on %(date)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "%(name)s heeft zichzelf toegang gegeven tot post zonder naam."
+msgstr "%(name)s gave themselves access to unnamed post."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je kunt als beheerder nu alle post zien die niet privé is. Dat heeft %(name)s op %(date)s ingesteld."
+msgstr "As an admin you can now see all post that is not private. %(name)s set this on %(date)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je ziet nu ook de post van %(department)s. Dat heeft %(name)s op %(date)s ingesteld."
+msgstr "You now also see the post for %(department)s. %(name)s set this on %(date)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je ziet nu ook de post van %(person)s. Dat heeft %(name)s op %(date)s ingesteld."
+msgstr "You now also see the post for %(person)s. %(name)s set this on %(date)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je ziet nu post zonder naam, om er een naam op te zetten. Dat heeft %(name)s op %(date)s ingesteld."
+msgstr "You now see unnamed post, to put a name on it. %(name)s set this on %(date)s."
+
+#: apps/accounts/notices.py
+msgid "Je leest als beheerder niet meer alle post."
+msgstr "As an admin you no longer read all post."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je ziet de post van %(department)s niet meer."
+msgstr "You no longer see the post for %(department)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je ziet de post van %(person)s niet meer."
+msgstr "You no longer see the post for %(person)s."
+
+#: apps/accounts/notices.py
+msgid "Je ziet post zonder naam niet meer."
+msgstr "You no longer see unnamed post."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "%(name)s heeft zichzelf toegang gegeven tot de post van %(department)s."
+msgstr "%(name)s gave themselves access to the post for %(department)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "%(name)s heeft zichzelf toegang gegeven tot de post van %(person)s."
+msgstr "%(name)s gave themselves access to the post for %(person)s."
 
 #: apps/accounts/passwords.py
 #, python-format
@@ -389,6 +472,14 @@ msgstr "Member left"
 #: apps/audit/codes.py
 msgid "Instelling gewijzigd"
 msgstr "Setting changed"
+
+#: apps/audit/codes.py
+msgid "Standaard Thuis of Organisatie overgenomen"
+msgstr "Home or Business defaults taken over"
+
+#: apps/audit/codes.py
+msgid "Verdeelt post gewijzigd"
+msgstr "Sorts post changed"
 
 #: apps/audit/codes.py
 msgid "Regel gemaakt"
@@ -1663,7 +1754,7 @@ msgstr "There is already a label with this name."
 msgid "Kies een afdeling."
 msgstr "Choose a department."
 
-#: apps/labels/services.py apps/people/services.py apps/workspaces/deps.py apps/workspaces/members.py
+#: apps/labels/services.py apps/people/services.py apps/workspaces/deps.py apps/workspaces/members.py apps/workspaces/visibility_settings.py
 msgid "Je mag dit niet doen in deze werkruimte."
 msgstr "You are not allowed to do this in this workspace."
 
@@ -2486,6 +2577,22 @@ msgstr "Emergency access is off."
 #, python-format
 msgid "Wie de server zelf beheert, kan technisch bij alle gegevens. Dat is %(names)s."
 msgstr "Whoever manages the server itself can technically reach all data. That is %(names)s."
+
+#: apps/workspaces/visibility_settings.py
+msgid "Bevestig eerst dat deze mensen meer post gaan zien."
+msgstr "First confirm that these people will see more post."
+
+#: apps/workspaces/visibility_settings.py
+msgid "Er is intussen iets veranderd. Bekijk de wijziging opnieuw."
+msgstr "Something has changed in the meantime. Look at the change again."
+
+#: apps/workspaces/visibility_settings.py
+msgid "Kies Thuis of Organisatie."
+msgstr "Choose Home or Business."
+
+#: apps/workspaces/visibility_settings.py
+msgid "Deze wijziging kan Brievie nog niet laten zien."
+msgstr "Brievie cannot show this change yet."
 
 #: brievie/api.py
 msgid "De database is niet bereikbaar. Probeer het later opnieuw."

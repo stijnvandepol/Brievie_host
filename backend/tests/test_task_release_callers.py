@@ -30,6 +30,8 @@ RELEASE_CALLERS: Final = {
     "workspaces/members.py",
     "people/services.py",
     "workspaces/access.py",
+    # Every change of sight (switches, roles, sorters, departments, links) releases.
+    "workspaces/visibility_settings.py",
 }
 RELEASES: Final = {"release_unseeing_assignees", "release_member", "_release_assignees"}
 # What narrows sight: the reader rows are recomputed, or a role or a person link changes.

@@ -152,6 +152,14 @@ class AccountNotice(BaseModel):
             "private_without_readers_unnamed",
             _("Privépost zonder lezers, brief niet genoemd"),
         )
+        # Who sees what changed (S 4.4, 4.14): the member sees more, or less, post.
+        SIGHT_WIDENED = "sight_widened", _("Je ziet meer post")
+        SIGHT_NARROWED = "sight_narrowed", _("Je ziet minder post")
+        # Admins now read all post that is not private: every member is told (R37).
+        ADMINS_READ_ALL_ON = "admins_read_all_on", _("Beheerders lezen alle post")
+        # An admin gave themselves sight (S 4.7): the department's members, or the other
+        # admins, are told.
+        SELF_GRANT = "self_grant", _("Iemand gaf zichzelf toegang")
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notices")
     code = models.CharField(max_length=40, choices=Code.choices)

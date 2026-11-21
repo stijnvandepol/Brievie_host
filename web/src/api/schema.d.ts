@@ -1872,6 +1872,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/visibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Visibility
+         * @description Who sees what, for every member: the three switches, who sorts post, and the sentences of "Wie kan mijn post zien?" for the caller; an admin also gets the summary of the installation.
+         */
+        get: operations["getVisibility"];
+        /**
+         * Update Visibility
+         * @description Web session only: a bearer token answers 401 not_authenticated. For the workspace's admins: another role answers 403 forbidden, a workspace the caller is not a member of 404 workspace_not_found. Change who sees what; a value left out stays as it is. When anybody gains sight: 409 confirmation_required without `confirmed`, 409 preview_outdated when something changed since the preview whose token is sent. Every changed value is written to the log; the members whose sight changes get a notice, every member when admins gain all post. Labels and rules are never removed.
+         */
+        put: operations["updateVisibility"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/visibility/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Visibility Change
+         * @description Web session only: a bearer token answers 401 not_authenticated. For the workspace's admins: another role answers 403 forbidden, a workspace the caller is not a member of 404 workspace_not_found. What a change of the switches, or a planned member change (`member_change`), would do: per member what they start and stop seeing, the number of letters whose viewers change, whether it needs confirmation, the summary after it, and the token a confirmed change sends back. Changes nothing. A member change answers that change's own errors (404 member_not_found, 409 last_admin, 422 viewer_cannot_sort, ...).
+         */
+        post: operations["previewVisibilityChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2944,6 +2988,20 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** MemberChangeOut */
+        MemberChangeOut: {
+            /** Gains */
+            gains: string[];
+            /** Losses */
+            losses: string[];
+            /** Name */
+            name: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
         /** MemberOut */
         MemberOut: {
             /**
@@ -3899,6 +3957,121 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** VisibilityIn */
+        VisibilityIn: {
+            /**
+             * Add Start Set
+             * @default false
+             */
+            add_start_set: boolean;
+            /** Admins Read All */
+            admins_read_all?: boolean | null;
+            /** Allow Member Export */
+            allow_member_export?: boolean | null;
+            /**
+             * Apply Preset
+             * @default false
+             */
+            apply_preset: boolean;
+            /** Care Is Private */
+            care_is_private?: boolean | null;
+            /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
+            /** Departments Enabled */
+            departments_enabled?: boolean | null;
+            /** Everyone Sees All */
+            everyone_sees_all?: boolean | null;
+            /** Kind */
+            kind?: string | null;
+            /**
+             * Preview Token
+             * @default
+             */
+            preview_token: string;
+        };
+        /** VisibilityOut */
+        VisibilityOut: {
+            /** Admins Read All */
+            admins_read_all: boolean;
+            /** Departments Enabled */
+            departments_enabled: boolean;
+            /** Everyone Sees All */
+            everyone_sees_all: boolean;
+            /** Kind */
+            kind: string;
+            /** Sentences */
+            sentences: string[];
+            /** Sorter User Ids */
+            sorter_user_ids: string[];
+            /** Summary */
+            summary?: string[];
+        };
+        /** VisibilityPreviewIn */
+        VisibilityPreviewIn: {
+            /**
+             * Add Start Set
+             * @default false
+             */
+            add_start_set: boolean;
+            /** Admins Read All */
+            admins_read_all?: boolean | null;
+            /** Allow Member Export */
+            allow_member_export?: boolean | null;
+            /**
+             * Apply Preset
+             * @default false
+             */
+            apply_preset: boolean;
+            /** Care Is Private */
+            care_is_private?: boolean | null;
+            /** Departments Enabled */
+            departments_enabled?: boolean | null;
+            /** Everyone Sees All */
+            everyone_sees_all?: boolean | null;
+            /** Kind */
+            kind?: string | null;
+            /**
+             * Member Change
+             * @default
+             */
+            member_change: string;
+            /**
+             * Member Person Id
+             * Format: uuid
+             */
+            member_person_id?: string | null;
+            /**
+             * Member Role
+             * @default
+             */
+            member_role: string;
+            /**
+             * Member Sorts Post
+             * @default false
+             */
+            member_sorts_post: boolean;
+            /**
+             * Member User Id
+             * Format: uuid
+             */
+            member_user_id?: string | null;
+        };
+        /** VisibilityPreviewOut */
+        VisibilityPreviewOut: {
+            /** Changes */
+            changes: components["schemas"]["MemberChangeOut"][];
+            /** Letter Count */
+            letter_count: number;
+            /** Needs Confirmation */
+            needs_confirmation: boolean;
+            /** Preview Token */
+            preview_token: string;
+            /** Sentences */
+            sentences: string[];
+        };
         /** WorkspaceOut */
         WorkspaceOut: {
             /**
@@ -3924,6 +4097,11 @@ export interface components {
         };
         /** WorkspaceSettingsOut */
         WorkspaceSettingsOut: {
+            /**
+             * Admins Read All
+             * @default true
+             */
+            admins_read_all: boolean;
             /** Allow Member Export */
             allow_member_export: boolean;
             /**
@@ -3932,10 +4110,20 @@ export interface components {
              */
             care_is_private: boolean;
             /**
+             * Departments Enabled
+             * @default false
+             */
+            departments_enabled: boolean;
+            /**
              * Emergency Access
              * @default false
              */
             emergency_access: boolean;
+            /**
+             * Everyone Sees All
+             * @default true
+             */
+            everyone_sees_all: boolean;
             /**
              * Summary Language
              * @default nl
@@ -10948,6 +11136,242 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    getVisibility: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisibilityOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    updateVisibility: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VisibilityIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisibilityOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    previewVisibilityChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VisibilityPreviewIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisibilityPreviewOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

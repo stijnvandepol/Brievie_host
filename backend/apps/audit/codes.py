@@ -37,6 +37,11 @@ class AuditCode(models.TextChoices):
     MEMBER_REMOVED = "member_removed", _("Lid verwijderd")
     MEMBER_LEFT = "member_left", _("Lid vertrokken")
     WORKSPACE_SETTING_CHANGED = "workspace_setting_changed", _("Instelling gewijzigd")
+    WORKSPACE_PRESET_APPLIED = (
+        "workspace_preset_applied",
+        _("Standaard Thuis of Organisatie overgenomen"),
+    )
+    POST_SORTER_CHANGED = "post_sorter_changed", _("Verdeelt post gewijzigd")
     RULE_CREATED = "rule_created", _("Regel gemaakt")
     RULE_CHANGED = "rule_changed", _("Regel gewijzigd")
     RULE_DELETED = "rule_deleted", _("Regel verwijderd")
@@ -127,6 +132,10 @@ ALLOWED_VALUES: dict[AuditCode, frozenset[str]] = {
     AuditCode.MEMBER_REMOVED: frozenset({"account_deactivated"}),
     AuditCode.MEMBER_LEFT: frozenset({"account_deactivated"}),
     AuditCode.WORKSPACE_SETTING_CHANGED: frozenset({"setting", "value"}),
+    # preset: home or business, the kind whose values were taken.
+    AuditCode.WORKSPACE_PRESET_APPLIED: frozenset({"preset"}),
+    # value: whether the member now sorts post.
+    AuditCode.POST_SORTER_CHANGED: frozenset({"member", "value"}),
     AuditCode.RULE_CREATED: _NONE,
     AuditCode.RULE_CHANGED: _NONE,
     AuditCode.RULE_DELETED: _NONE,

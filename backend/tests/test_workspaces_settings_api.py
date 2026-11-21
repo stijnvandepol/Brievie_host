@@ -8,8 +8,14 @@ from apps.audit.codes import AuditCode
 from apps.workspaces.models import Membership, Workspace
 from tests.members_support import admin_of, as_user, bearer, join, paired, workspace_rows
 
-# The privacy settings of a home workspace (plan Task 29), in every answer.
-PRIVACY = {"care_is_private": True, "emergency_access": False}
+# The privacy settings and switches of a home workspace (plan Tasks 29, 37), in every answer.
+PRIVACY = {
+    "care_is_private": True,
+    "emergency_access": False,
+    "everyone_sees_all": True,
+    "departments_enabled": False,
+    "admins_read_all": True,
+}
 
 if TYPE_CHECKING:
     from tests.helpers import Response

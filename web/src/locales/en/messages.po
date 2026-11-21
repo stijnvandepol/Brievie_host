@@ -2733,6 +2733,10 @@ msgstr "Kind of task"
 msgid "Staat bij AI 'Brieven zelf onder personen en labels zetten' aan? Dan zet Brievie een voorgesteld label er toch zelf op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is van hetzelfde label. Staat het woord alleen verderop en is de AI niet zeker? Dan blijft het een voorstel."
 msgstr "Is 'File letters under persons and labels automatically' on under AI? Then Brievie still adds a suggested label by itself if the rule found the word in the sender or at the top of the letter, or if the AI is sure of the same label. Is the word only further down and is the AI not sure? Then it stays a suggestion."
 
+#: src/components/audit-codes.ts
+msgid "Standaard Thuis of Organisatie overgenomen"
+msgstr "Home or Business defaults taken over"
+
 #: src/routes/setup.tsx
 msgid "Start Brievie"
 msgstr "Start Brievie"
@@ -3010,6 +3014,10 @@ msgstr "Today"
 #: src/routes/rule-editor.tsx
 msgid "Veld"
 msgstr "Field"
+
+#: src/components/audit-codes.ts
+msgid "Verdeelt post gewijzigd"
+msgstr "Sorts post changed"
 
 #: src/routes/rule-editor.tsx
 msgid "Vergelijking"

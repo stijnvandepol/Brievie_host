@@ -213,6 +213,8 @@ def test_the_list_of_codes_is_the_closed_list_of_d11() -> None:
         "member_removed",
         "member_left",
         "workspace_setting_changed",
+        "workspace_preset_applied",
+        "post_sorter_changed",
         "rule_created",
         "rule_changed",
         "rule_deleted",

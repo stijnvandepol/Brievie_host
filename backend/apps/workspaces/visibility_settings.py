@@ -1,0 +1,623 @@
+"""Changing who sees what, safely (spec S 4.4, 4.13, 4.14).
+
+The switches and the kind change through `change`; roles, sorting flags, department
+members and person links change through their own writers (`workspaces.members`,
+`people.services`). Every one of them takes `lock_memberships` first and then runs the
+same steps through `sight_change`: a snapshot before, its own write, a snapshot after,
+`visibility_rules.diff`, `require_confirmation` (409 when somebody gains without a
+confirmed, current preview), its audit row, `notify_changes`, and the release of every
+assignment whose assignee no longer sees the letter (switching off ends what ran under it).
+
+`preview` runs any of those writes inside a savepoint that is rolled back, with the
+confirmation and the notices left out, and answers who gains, who loses, how many letters
+change viewers, and the token a confirmation must send back.
+
+Runs as the system where it reads the tables (`apps/workspaces/visibility_settings.py` is
+in the closed list of `tests/test_actor_callers.py`): it answers about letters and people
+the admin may not see, with counts and names of people only.
+"""
+
+import hashlib
+import json
+import threading
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from typing import Final
+from uuid import UUID
+
+from django.db import connection, transaction
+from django.db.models import Q
+from django.utils import timezone
+from django.utils.translation import gettext as _
+
+from apps.accounts.models import User
+from apps.audit.codes import AuditCode, TargetKind
+from apps.audit.services import AuditActor, AuditTarget, record
+from apps.common.errors import ApiError
+from apps.documents.models import DocumentReader
+from apps.people.models import DepartmentMember, Person
+from apps.workspaces.context import SYSTEM, workspace_context
+from apps.workspaces.locks import lock_memberships
+from apps.workspaces.models import Membership, Workspace
+from apps.workspaces.policy_text import PolicyFacts, category_phrase, describe
+from apps.workspaces.presets import ADMIN_PRESET_FIELDS, PRESETS
+from apps.workspaces.visibility_rules import (
+    ALL_AS_ADMIN,
+    Change,
+    MemberFacts,
+    PolicySnapshot,
+    Switches,
+    diff,
+    needs_confirmation,
+    split_category,
+)
+from apps.workspaces.visibility_sql import viewer_groups_sql, viewer_pairs_sql
+
+# --- the snapshot ---------------------------------------------------------------------
+
+
+def snapshot(workspace: Workspace) -> PolicySnapshot:
+    """The workspace's rule of sight now, read as the system: the switches, every member
+    with role, flag, persons and departments, and the names of persons and departments."""
+    switches_row = Workspace.objects.filter(id=workspace.id).values_list(
+        "everyone_sees_all", "departments_enabled", "admins_read_all"
+    )[0]
+    memberships = list(
+        Membership.objects.filter(workspace_id=workspace.id)
+        .order_by("user_id")
+        .values_list("user_id", "user__name", "role", "sorts_post")
+    )
+    with workspace_context(workspace.id, actor=SYSTEM):
+        persons = list(
+            Person.objects.filter(workspace_id=workspace.id).values_list(
+                "id", "kind", "user_id", "display_name"
+            )
+        )
+        departments = list(
+            DepartmentMember.objects.filter(workspace_id=workspace.id).values_list(
+                "user_id", "department_id"
+            )
+        )
+    linked: dict[UUID, set[UUID]] = {}
+    for person_id, kind, user_id, _name in persons:
+        if kind == Person.Kind.PERSON and user_id is not None:
+            linked.setdefault(user_id, set()).add(person_id)
+    member_of: dict[UUID, set[UUID]] = {}
+    for user_id, department_id in departments:
+        member_of.setdefault(user_id, set()).add(department_id)
+    return PolicySnapshot(
+        switches=Switches(*switches_row),
+        members=tuple(
+            MemberFacts(
+                user_id=user_id,
+                name=name,
+                role=role,
+                sorts_post=sorts_post,
+                person_ids=frozenset(linked.get(user_id, ())),
+                department_ids=frozenset(member_of.get(user_id, ())),
+            )
+            for user_id, name, role, sorts_post in memberships
+        ),
+        person_names={p: n for p, k, _u, n in persons if k == Person.Kind.PERSON},
+        department_names={p: n for p, k, _u, n in persons if k == Person.Kind.DEPARTMENT},
+    )
+
+
+def fingerprint(policy: PolicySnapshot) -> str:
+    """The preview token: a hash of everything a change of sight is computed from (the
+    switches, every member's role, flag, persons and departments; S 4.4 point 2)."""
+    canonical = {
+        "switches": [
+            policy.switches.everyone_sees_all,
+            policy.switches.departments_enabled,
+            policy.switches.admins_read_all,
+        ],
+        "members": sorted(
+            [
+                str(m.user_id),
+                m.role,
+                m.sorts_post,
+                sorted(str(p) for p in m.person_ids),
+                sorted(str(d) for d in m.department_ids),
+            ]
+            for m in policy.members
+        ),
+    }
+    return hashlib.sha256(json.dumps(canonical, sort_keys=True).encode()).hexdigest()
+
+
+# --- confirmation and notices ---------------------------------------------------------
+
+
+class _Previewing(threading.local):
+    def __init__(self) -> None:
+        self.depth = 0
+
+
+_previewing = _Previewing()
+
+
+def previewing() -> bool:
+    """Inside `preview`: nothing is confirmed, told or kept."""
+    return _previewing.depth > 0
+
+
+def confirmation_required() -> ApiError:
+    return ApiError(
+        409,
+        "confirmation_required",
+        _("Bevestig eerst dat deze mensen meer post gaan zien."),
+    )
+
+
+def preview_outdated() -> ApiError:
+    return ApiError(
+        409,
+        "preview_outdated",
+        _("Er is intussen iets veranderd. Bekijk de wijziging opnieuw."),
+    )
+
+
+def require_confirmation(
+    *,
+    changes: Sequence[Change],
+    before: PolicySnapshot,
+    narrowing: bool,
+    confirmed: bool,
+    preview_token: str,
+) -> None:
+    """409 `confirmation_required` when somebody gains sight and the admin did not
+    confirm; 409 `preview_outdated` when the confirmation was given for another state
+    than `before` (another admin changed something in between)."""
+    if previewing() or not needs_confirmation(changes, before=before, narrowing=narrowing):
+        return
+    if not confirmed:
+        raise confirmation_required()
+    if preview_token != fingerprint(before):
+        raise preview_outdated()
+
+
+def _notice_values(category: str, names: PolicySnapshot) -> dict[str, str]:
+    kind, item = split_category(category)
+    values = {"category": kind}
+    if kind == "department" and item is not None:
+        values["department"] = names.department_names.get(item, "")
+    elif kind == "person" and item is not None:
+        values["person"] = names.person_names.get(item, "")
+    return values
+
+
+def _names(before: PolicySnapshot, after: PolicySnapshot) -> PolicySnapshot:
+    """`after` with the names of `before` it lost (a person deleted in between)."""
+    return PolicySnapshot(
+        switches=after.switches,
+        members=after.members,
+        person_names={**before.person_names, **after.person_names},
+        department_names={**before.department_names, **after.department_names},
+    )
+
+
+def notify_changes(
+    workspace: Workspace,
+    changes: Sequence[Change],
+    *,
+    names: PolicySnapshot,
+    actor_name: str,
+    admins_gained_all: bool,
+) -> None:
+    """Content-free notices (S 4.4 point 4): `sight_widened` to each member who gains,
+    `sight_narrowed` to each who loses (one each, the broadest kind of post), and
+    `admins_read_all_on` to every member when admins gained all post (R37)."""
+    from apps.accounts.notices import notify  # notices import services that import this
+
+    if previewing():
+        return
+    # A member who left is not told what they no longer see here.
+    members = {m.user_id for m in names.members}
+    users = {
+        u.id: u
+        for u in User.objects.filter(id__in=[c.user_id for c in changes if c.user_id in members])
+    }
+    for change in changes:
+        user = users.get(change.user_id)
+        if user is None:
+            continue
+        if change.gains:
+            notify(
+                user,
+                "sight_widened",
+                actor_name=actor_name,
+                values=_notice_values(change.gains[0], names),
+            )
+        if change.loses:
+            notify(
+                user,
+                "sight_narrowed",
+                actor_name=actor_name,
+                values=_notice_values(change.loses[0], names),
+            )
+    if admins_gained_all:
+        for member in User.objects.filter(memberships__workspace=workspace).order_by("id"):
+            notify(member, "admins_read_all_on", actor_name=actor_name)
+
+
+def notify_self_grant(
+    users: Sequence[User], *, category: str, names: PolicySnapshot, actor_name: str
+) -> None:
+    """S 4.7: an admin gave themselves sight; `users` (the department's members, or the
+    other admins) are told."""
+    from apps.accounts.notices import notify
+
+    if previewing():
+        return
+    for user in users:
+        notify(user, "self_grant", actor_name=actor_name, values=_notice_values(category, names))
+
+
+def _release(workspace_id: UUID) -> None:
+    """An assignment ends with sight of its letter (Mijn taken S 5.3)."""
+    from apps.tasks.assignment import release_unseeing_assignees
+
+    with workspace_context(workspace_id, actor=SYSTEM):
+        release_unseeing_assignees(workspace_id=workspace_id)
+
+
+@dataclass
+class SightChange:
+    """What `sight_change` found: the snapshots and the changes per member."""
+
+    before: PolicySnapshot
+    after: PolicySnapshot | None = None
+    changes: list[Change] = field(default_factory=list)
+
+
+@contextmanager
+def sight_change(
+    workspace: Workspace,
+    *,
+    narrowing: bool,
+    confirmed: bool,
+    preview_token: str,
+    actor_name: str,
+    ask_confirmation: bool = True,
+) -> Iterator[SightChange]:
+    """The steps of S 4.4 around one write: the caller holds `lock_memberships`, writes
+    (and audits) inside the block; on the way out the change is diffed, confirmed (unless
+    `ask_confirmation` is False: a member's removal, S 4.4's "no"), told, and every
+    assignment that rested on lost sight released. Raises inside the caller's transaction,
+    so a refused confirmation undoes the write."""
+    result = SightChange(before=snapshot(workspace))
+    yield result
+    after = snapshot(workspace)
+    result.after = after
+    result.changes = diff(result.before, after)
+    if ask_confirmation:
+        require_confirmation(
+            changes=result.changes,
+            before=result.before,
+            narrowing=narrowing,
+            confirmed=confirmed,
+            preview_token=preview_token,
+        )
+    notify_changes(
+        workspace,
+        result.changes,
+        names=_names(result.before, after),
+        actor_name=actor_name,
+        admins_gained_all=any(ALL_AS_ADMIN in c.gains for c in result.changes),
+    )
+    if any(c.loses for c in result.changes):
+        _release(workspace.id)
+
+
+# --- the preview ----------------------------------------------------------------------
+
+
+def _letters_with_readers(workspace_id: UUID) -> list[UUID]:
+    """Letters with an unexpired reader row (private ones, shares, emergency): asked
+    one by one, the others in groups of alike letters (ruling M0)."""
+    return list(
+        DocumentReader.objects.filter(workspace_id=workspace_id)
+        .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()))
+        .values_list("document_id", flat=True)
+        .distinct()
+    )
+
+
+ViewerMap = dict[object, tuple[int, frozenset[UUID]]]
+
+
+def _viewer_map(workspace_id: UUID, one_by_one: list[UUID]) -> ViewerMap:
+    """Who sees what now: (letters, viewers) per group of alike letters, and per letter
+    for `one_by_one`; as the system."""
+    found: ViewerMap = {}
+    with workspace_context(workspace_id, actor=SYSTEM), connection.cursor() as c:
+        c.execute(
+            viewer_groups_sql("d.workspace_id = %s AND NOT (d.id = ANY(%s::uuid[]))"),
+            [workspace_id, one_by_one],
+        )
+        for addressees, scanner, status, letters, viewers in c.fetchall():
+            found[("group", tuple(addressees), scanner, status)] = (
+                int(letters),
+                frozenset(viewers),
+            )
+        c.execute(viewer_pairs_sql("d.id = ANY(%s::uuid[])"), [one_by_one])
+        per_letter: dict[UUID, set[UUID]] = {d: set() for d in one_by_one}
+        for document_id, user_id in c.fetchall():
+            per_letter[document_id].add(user_id)
+    for document_id, users in per_letter.items():
+        found[("letter", document_id)] = (1, frozenset(users))
+    return found
+
+
+def _changed_letters(before: ViewerMap, after: ViewerMap) -> int:
+    return sum(
+        letters
+        for key, (letters, viewers) in before.items()
+        if after.get(key, (0, frozenset()))[1] != viewers
+    )
+
+
+@dataclass(frozen=True)
+class PreviewResult:
+    changes: list[Change]
+    letter_count: int
+    needs_confirmation: bool
+    sentences: list[str]
+    preview_token: str
+    after: PolicySnapshot
+
+
+def policy_facts(
+    workspace: Workspace, policy: PolicySnapshot, viewer_id: UUID | None
+) -> PolicyFacts:
+    """Everything the sentences need beside the snapshot, read now."""
+    from apps.backup.models import BackupRun
+    from apps.pipeline import settings_service as ai_settings
+
+    row = Workspace.objects.get(id=workspace.id)
+    with workspace_context(workspace.id, actor=SYSTEM):
+        ai = ai_settings.status(workspace.id)
+    supplier = ""
+    if ai.mode == "external" and ai.since is not None:
+        preset = ai_settings.SUPPLIERS.get(ai.supplier or "")
+        supplier = preset.name if preset is not None else (ai.host or "")
+    return PolicyFacts(
+        snapshot=policy,
+        kind=row.kind,
+        viewer_id=viewer_id,
+        care_is_private=row.care_is_private,
+        emergency_access=row.emergency_access,
+        ai_supplier_name=supplier,
+        ai_local=ai.mode == "local",
+        has_backup=BackupRun.objects.filter(status=BackupRun.Status.SUCCEEDED).exists(),
+        server_admin_names=tuple(
+            User.objects.filter(is_server_admin=True, is_active=True)
+            .order_by("name")
+            .values_list("name", flat=True)
+        ),
+    )
+
+
+def preview(
+    workspace: Workspace,
+    apply: Callable[[], None],
+    *,
+    narrowing: bool,
+    viewer_id: UUID | None = None,
+) -> PreviewResult:
+    """Run `apply` (a change of sight) inside a savepoint that is rolled back, and say
+    what it would do: who gains and who loses, how many letters change viewers, whether
+    the admin must confirm, the summary sentences of the state after, and the token a
+    confirmation sends back (the fingerprint of the state now). Nothing is kept: no
+    write, no audit row, no notice. Errors of `apply` (403, 404, 409, 422) pass through."""
+    _previewing.depth += 1
+    try:
+        with transaction.atomic():
+            lock_memberships(workspace)
+            before = snapshot(workspace)
+            one_by_one = _letters_with_readers(workspace.id)
+            before_map = _viewer_map(workspace.id, one_by_one)
+            apply()
+            after = snapshot(workspace)
+            after_map = _viewer_map(workspace.id, one_by_one)
+            sentences = describe(policy_facts(workspace, after, viewer_id), audience="summary")
+            transaction.set_rollback(True)
+    finally:
+        _previewing.depth -= 1
+    changes = diff(before, after)
+    return PreviewResult(
+        changes=changes,
+        letter_count=_changed_letters(before_map, after_map),
+        needs_confirmation=needs_confirmation(changes, before=before, narrowing=narrowing),
+        sentences=sentences,
+        preview_token=fingerprint(before),
+        after=after,
+    )
+
+
+# --- the switches and the kind ----------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Proposal:
+    """A change of the switches or the kind; None leaves a value as it is."""
+
+    kind: str | None = None
+    everyone_sees_all: bool | None = None
+    departments_enabled: bool | None = None
+    admins_read_all: bool | None = None
+    care_is_private: bool | None = None
+    allow_member_export: bool | None = None
+    # From the preset dialog: the kind's values where the proposal leaves None, and one
+    # `workspace_preset_applied` row.
+    apply_preset: bool = False
+    # Also add the kind's start set of labels and rules (never removes anything).
+    add_start_set: bool = False
+
+
+SWITCH_FIELDS: Final = ("kind", *ADMIN_PRESET_FIELDS)
+
+
+def _validate(proposal: Proposal) -> None:
+    if proposal.kind is not None and proposal.kind not in Workspace.Kind.values:
+        raise ApiError(422, "validation_error", _("Kies Thuis of Organisatie."))
+
+
+def _apply_proposal(locked: Workspace, proposal: Proposal) -> dict[str, bool | str]:
+    """Write the proposal on the locked row; the fields that really changed."""
+    wanted: dict[str, bool | str] = {}
+    if proposal.kind is not None:
+        wanted["kind"] = proposal.kind
+    if proposal.apply_preset:
+        preset = PRESETS[proposal.kind or locked.kind]
+        for name in ADMIN_PRESET_FIELDS:
+            wanted[name] = getattr(preset, name)
+    for name in ADMIN_PRESET_FIELDS:
+        value = getattr(proposal, name)
+        if value is not None:
+            wanted[name] = value
+    changed = {name: value for name, value in wanted.items() if getattr(locked, name) != value}
+    for name, value in changed.items():
+        setattr(locked, name, value)
+    if changed:
+        locked.save(update_fields=[*changed, "updated_at"])
+    return changed
+
+
+def _forbidden() -> ApiError:
+    return ApiError(403, "forbidden", _("Je mag dit niet doen in deze werkruimte."))
+
+
+def _require_admin(locked: list[Membership], actor: AuditActor) -> None:
+    own = next((m for m in locked if m.user_id == actor.user_id), None)
+    if own is None or own.role != Membership.Role.ADMIN:
+        raise _forbidden()
+
+
+def preview_change(*, workspace: Workspace, proposal: Proposal, viewer_id: UUID) -> PreviewResult:
+    """What `change` would do with this proposal, without doing it."""
+    _validate(proposal)
+
+    def apply() -> None:
+        locked = Workspace.objects.select_for_update().get(id=workspace.id)
+        _apply_proposal(locked, proposal)
+
+    return preview(workspace, apply, narrowing=False, viewer_id=viewer_id)
+
+
+def change(
+    *,
+    workspace: Workspace,
+    proposal: Proposal,
+    actor: AuditActor,
+    confirmed: bool,
+    preview_token: str,
+) -> Workspace:
+    """Change the switches and the kind (S 4.4): admin by the locked memberships (403),
+    a confirmed and current preview when anybody gains (409), one audit row per changed
+    value and `workspace_preset_applied` for a preset, the notices, and the release of
+    assignments nobody may keep. Changing only "Afdelingen gebruiken" while everyone sees
+    all post moves nobody's sight: an audit row, no notice. Labels and rules are never
+    removed; `add_start_set` adds the kind's start set."""
+    _validate(proposal)
+    with transaction.atomic():
+        locked_members = lock_memberships(workspace)
+        _require_admin(locked_members, actor)
+        locked = Workspace.objects.select_for_update().get(id=workspace.id)
+        with sight_change(
+            locked,
+            narrowing=False,
+            confirmed=confirmed,
+            preview_token=preview_token,
+            actor_name=actor.name,
+        ):
+            changed = _apply_proposal(locked, proposal)
+            target = AuditTarget(TargetKind.WORKSPACE, locked.id, locked.name)
+            for name, value in changed.items():
+                record(
+                    AuditCode.WORKSPACE_SETTING_CHANGED,
+                    actor=actor,
+                    target=target,
+                    workspace_id=locked.id,
+                    values={"setting": name, "value": value},
+                )
+            if proposal.apply_preset:
+                record(
+                    AuditCode.WORKSPACE_PRESET_APPLIED,
+                    actor=actor,
+                    target=target,
+                    workspace_id=locked.id,
+                    values={"preset": locked.kind},
+                )
+        if proposal.add_start_set:
+            from apps.labels.presets import apply_preset
+
+            with workspace_context(locked.id, actor=SYSTEM):
+                apply_preset(locked)
+        return locked
+
+
+# --- reading ------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Visibility:
+    """What `getVisibility` answers."""
+
+    workspace: Workspace
+    sorter_ids: frozenset[UUID]
+    sentences: list[str]
+    summary: list[str]
+
+
+def visibility_for(membership: Membership) -> Visibility:
+    """The switches, who sorts post, and the sentences for this member: "Wie kan mijn
+    post zien?" for everyone, the installation's summary for an admin (P9: the switches
+    are stated in the member's own sentences, so they are no secret)."""
+    workspace = Workspace.objects.get(id=membership.workspace_id)
+    policy = snapshot(workspace)
+    facts = policy_facts(workspace, policy, membership.user_id)
+    admin = membership.role == Membership.Role.ADMIN
+    return Visibility(
+        workspace=workspace,
+        sorter_ids=policy.sorter_ids,
+        sentences=describe(facts, audience="member"),
+        summary=describe(facts, audience="summary") if admin else [],
+    )
+
+
+@dataclass(frozen=True)
+class MemberChange:
+    """A planned member change to preview (`previewVisibilityChange`); `kind` "" for none."""
+
+    kind: str = ""
+    user_id: UUID | None = None
+    person_id: UUID | None = None
+    role: str = ""
+    sorts_post: bool = False
+
+
+def preview_request(
+    *, workspace: Workspace, proposal: Proposal, member_change: MemberChange, actor: AuditActor
+) -> PreviewResult:
+    """The preview of a settings change, or of a planned member change."""
+    if not member_change.kind:
+        if actor.user_id is None:
+            raise _forbidden()
+        return preview_change(workspace=workspace, proposal=proposal, viewer_id=actor.user_id)
+    raise ApiError(422, "validation_error", _("Deze wijziging kan Brievie nog niet laten zien."))
+
+
+def in_words(result: PreviewResult) -> list[Change]:
+    """The preview's changes with every kind of post in words ("post van Finance")."""
+    return [
+        Change(
+            user_id=c.user_id,
+            name=c.name,
+            gains=tuple(category_phrase(g, result.after) for g in c.gains),
+            loses=tuple(category_phrase(lost, result.after) for lost in c.loses),
+        )
+        for c in result.changes
+    ]

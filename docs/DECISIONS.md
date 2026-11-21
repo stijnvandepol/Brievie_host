@@ -2027,3 +2027,32 @@ installation starts in own post.
   of a department, or unlinking the last account of a person, makes its letters post
   nobody reads: the sorters get them, with a `sight_widened` notice, though S 4.4's row
   says "Gains: nobody".
+- **Changing the switches (Task 37, S 4.4, 4.13).** `apps.workspaces.visibility_settings`:
+  `change` (admin by the locked memberships, then the workspace row), `preview` (any
+  change of sight inside a savepoint that is rolled back, with confirmations and notices
+  left out), `require_confirmation`, `notify_changes`, and `sight_change`, the steps every
+  writer of sight runs around its own write: snapshot, write, snapshot, diff, confirm,
+  notices, and the release of every assignment whose assignee lost sight (switching off
+  ends what ran under it). The preview token is the SHA-256 of the switches and every
+  member's role, flag, persons and departments; a confirmation with another token is 409
+  `preview_outdated`, so it never covers another admin's change. The preview's letter
+  count groups alike letters (ruling M0) and asks letters with reader rows one by one,
+  private letters included (a member change can change their readers).
+  `lock_memberships` moved to the leaf module `workspaces.locks` (people's writers take it
+  too, Task 38).
+- **P9: every member reads the switches.** `getVisibility` answers any member with the
+  switches, who sorts post and their own "Wie kan mijn post zien?" sentences; those
+  sentences state the switches, so hiding the booleans protects nothing. An admin also
+  gets `summary`, the sentences of "Zo is Brievie nu ingesteld" (an added field: the head
+  of the "Wie ziet wat" page needs them, the member sentences say something else).
+- **P10: notices name the kind of post.** `sight_widened` and `sight_narrowed` carry
+  `category` (`all`, `all_as_admin`, `department`, `person`, `unassigned`) and the
+  department's or person's name (a directory, like department names; no letter content).
+  One notice per member and change, for the broadest kind. `admins_read_all_on` goes to
+  every member when admins gain all post. The sentence follows the category
+  (`accounts.notices.CATEGORY_MESSAGES`). A member who left is not told.
+- **The preset switch.** `apply_preset` takes the target kind's values (`presets.PRESETS`)
+  for every value the request leaves out, except emergency access (the server admin's);
+  one `workspace_setting_changed` row per value that really changed, `kind` included, and
+  one `workspace_preset_applied`. `add_start_set` adds the kind's labels and rules and
+  removes nothing.

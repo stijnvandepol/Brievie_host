@@ -45,6 +45,11 @@ class WorkspaceSettingsOut(Schema):
     # admin switches it, `setEmergencyAccess`).
     emergency_access: bool = False
 
+    # Who sees what (S 4.1); changed through `updateVisibility`, never here.
+    everyone_sees_all: bool = True
+    departments_enabled: bool = False
+    admins_read_all: bool = True
+
     @staticmethod
     def of(workspace: Workspace) -> "WorkspaceSettingsOut":
         return WorkspaceSettingsOut(
@@ -52,6 +57,9 @@ class WorkspaceSettingsOut(Schema):
             summary_language=workspace.summary_language,
             care_is_private=workspace.care_is_private,
             emergency_access=workspace.emergency_access,
+            everyone_sees_all=workspace.everyone_sees_all,
+            departments_enabled=workspace.departments_enabled,
+            admins_read_all=workspace.admins_read_all,
         )
 
 
@@ -159,3 +167,81 @@ class AcceptInvitationIn(InputSchema):
     name: str = Field(default="", max_length=150)
     email: str = Field(max_length=254)
     password: str = Field(max_length=128)
+
+
+class VisibilitySettingsIn(InputSchema):
+    """A change of who sees what (S 4.13). A value left out (null) stays as it is.
+    Emergency access is not here: only the server admin switches it."""
+
+    # "home" (Thuis) or "business" (Organisatie): the kind changes no right by itself.
+    kind: str | None = Field(default=None, pattern="^(home|business)$")
+    everyone_sees_all: bool | None = None
+    departments_enabled: bool | None = None
+    admins_read_all: bool | None = None
+    care_is_private: bool | None = None
+    allow_member_export: bool | None = None
+    # From the preset dialog: the kind's values where a value is left out, and one
+    # `workspace_preset_applied` row in the log.
+    apply_preset: bool = False
+    # Also add the kind's start set of labels and rules (removes nothing).
+    add_start_set: bool = False
+
+
+class VisibilityIn(VisibilitySettingsIn):
+    # The admin confirmed that people gain sight; needed when anybody gains (409
+    # confirmation_required otherwise).
+    confirmed: bool = False
+    # The `preview_token` of the preview that was confirmed (409 preview_outdated when
+    # something changed since).
+    preview_token: str = Field(default="", max_length=64)
+
+
+class VisibilityPreviewIn(VisibilitySettingsIn):
+    # A planned member change instead of a settings change: "role", "sorts_post",
+    # "department_add", "department_remove", "link", "unlink" or "remove"; "" for none.
+    member_change: str = Field(
+        default="",
+        pattern="^(|role|sorts_post|department_add|department_remove|link|unlink|remove)$",
+    )
+    # The member concerned (role, sorts_post, department_add/remove, link, remove).
+    member_user_id: UUID | None = None
+    # The person or department concerned (department_add/remove, link, unlink).
+    member_person_id: UUID | None = None
+    # The new role (role).
+    member_role: str = Field(default="", pattern="^(|admin|member|viewer)$")
+    # The new flag (sorts_post).
+    member_sorts_post: bool = False
+
+
+class MemberChangeOut(Schema):
+    user_id: UUID
+    name: str
+    # The kinds of post the member starts or stops seeing, in words ("post van Finance").
+    gains: list[str]
+    losses: list[str]
+
+
+class VisibilityPreviewOut(Schema):
+    # Per member whose sight changes, by name.
+    changes: list[MemberChangeOut]
+    # Letters whose set of viewers changes.
+    letter_count: int
+    # The change can only be saved with `confirmed` and this preview's token.
+    needs_confirmation: bool
+    # The summary sentences of the state after the change.
+    sentences: list[str]
+    preview_token: str
+
+
+class VisibilityOut(Schema):
+    kind: str
+    everyone_sees_all: bool
+    departments_enabled: bool
+    admins_read_all: bool
+    # Who sorts post now: the flagged members, or the admins when nobody is flagged.
+    sorter_user_ids: list[UUID]
+    # "Wie kan mijn post zien?" for the caller.
+    sentences: list[str]
+    # For admins: the summary of the installation (the head of "Wie ziet wat"); empty
+    # for everyone else.
+    summary: list[str] = Field(default_factory=list)
