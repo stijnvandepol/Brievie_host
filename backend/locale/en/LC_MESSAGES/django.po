@@ -346,7 +346,7 @@ msgstr "Brievie is already set up."
 msgid "De installatiecode klopt niet. Je vindt hem in het log van de server."
 msgstr "The setup code is not correct. You can find it in the server log."
 
-#: apps/accounts/services.py
+#: apps/accounts/services.py apps/workspaces/management/commands/create_workspace.py
 msgid "Geef de werkruimte een naam."
 msgstr "Give the workspace a name."
 
@@ -444,6 +444,10 @@ msgstr "Device expired"
 #: apps/audit/codes.py
 msgid "Instellingen voor inloggen via organisatie gewijzigd"
 msgstr "Settings for signing in through your organization changed"
+
+#: apps/audit/codes.py
+msgid "Werkruimte gemaakt"
+msgstr "Workspace created"
 
 #: apps/audit/codes.py
 msgid "Uitnodiging gemaakt"
@@ -2379,6 +2383,10 @@ msgid "Iemand met dit e-mailadres is al lid."
 msgstr "Someone with this email address is already a member."
 
 #: apps/workspaces/invitations.py
+msgid "Vul een geldig e-mailadres in."
+msgstr "Fill in a valid email address."
+
+#: apps/workspaces/invitations.py
 msgid "We kunnen deze uitnodiging niet vinden."
 msgstr "We can't find this invitation."
 
@@ -2405,6 +2413,24 @@ msgstr "Choose a new account or an existing account."
 #: apps/workspaces/invitations.py
 msgid "Deze persoon is intussen aan iemand anders gekoppeld. Vraag een nieuwe uitnodiging."
 msgstr "This person has been linked to someone else in the meantime. Ask for a new invitation."
+
+#: apps/workspaces/management/commands/create_workspace.py
+msgid "Kies als soort home (Thuis) of business (Organisatie)."
+msgstr "Choose home or business as the kind."
+
+#: apps/workspaces/management/commands/create_workspace.py
+msgid "Dit e-mailadres klopt niet."
+msgstr "This email address is not right."
+
+#: apps/workspaces/management/commands/create_workspace.py
+#, python-format
+msgid "Werkruimte %(name)s is gemaakt. %(admin)s is beheerder."
+msgstr "Workspace %(name)s has been created. %(admin)s is its admin."
+
+#: apps/workspaces/management/commands/create_workspace.py
+#, python-format
+msgid "Werkruimte %(name)s is gemaakt. Stuur deze link naar %(email)s; die wordt de eerste beheerder. De link werkt 7 dagen en wordt maar één keer getoond:"
+msgstr "Workspace %(name)s has been created. Send this link to %(email)s, who becomes the first admin. The link works for 7 days and is shown only once:"
 
 #: apps/workspaces/members.py
 msgid "Een werkruimte heeft altijd minstens één beheerder. Maak eerst iemand anders beheerder."

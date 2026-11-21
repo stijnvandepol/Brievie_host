@@ -29,6 +29,8 @@ class AuditCode(models.TextChoices):
         "sso_settings_changed",
         _("Instellingen voor inloggen via organisatie gewijzigd"),
     )
+    # A workspace made on the server (`manage.py create_workspace`, S 5.2).
+    WORKSPACE_CREATED = "workspace_created", _("Werkruimte gemaakt")
     # Workspace: members, settings, rules, labels, people, private post, exports.
     INVITATION_CREATED = "invitation_created", _("Uitnodiging gemaakt")
     INVITATION_REVOKED = "invitation_revoked", _("Uitnodiging ingetrokken")
@@ -124,6 +126,8 @@ ALLOWED_VALUES: dict[AuditCode, frozenset[str]] = {
     AuditCode.SERVER_ADMIN_GRANTED: _NONE,
     AuditCode.SERVER_ADMIN_REVOKED: _NONE,
     AuditCode.SSO_SETTINGS_CHANGED: _NONE,
+    # kind: home or business.
+    AuditCode.WORKSPACE_CREATED: frozenset({"kind"}),
     AuditCode.INVITATION_CREATED: frozenset({"role", "expires_in_days"}),
     # reason: admin, renewed, creator_lost_role.
     AuditCode.INVITATION_REVOKED: frozenset({"reason"}),

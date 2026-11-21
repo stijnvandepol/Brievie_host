@@ -22,6 +22,7 @@ export const SERVER_CODES = [
   "server_admin_granted",
   "server_admin_revoked",
   "sso_settings_changed",
+  "workspace_created",
 ] as const;
 
 /** What a workspace log holds: members, settings, rules, labels, people, exports and the trash. */
@@ -97,6 +98,8 @@ function knownLabel(code: AuditCodeName): string {
       return t`Geen serverbeheerder meer`;
     case "sso_settings_changed":
       return t`Instellingen voor inloggen via organisatie gewijzigd`;
+    case "workspace_created":
+      return t`Werkruimte gemaakt`;
     case "invitation_created":
       return t`Uitnodiging gemaakt`;
     case "invitation_revoked":

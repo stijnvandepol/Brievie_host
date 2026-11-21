@@ -2084,3 +2084,21 @@ installation starts in own post.
   `confirmation_required` where somebody would. The web sends both as defaults until its
   preview dialog (Task 42); in an organisation a link or a department member then answers
   with the 409's sentence. `MemberOut` gains `sorts_post` and `department_ids`.
+- **R40: one choice at installation, P8 ended (Task 40).** `create_workspace` gives a new
+  workspace its kind's values through `apps.workspaces.presets.apply_preset_settings`:
+  Thuis E on, D off, A on, Zorg private, no emergency access, own export allowed;
+  Organisatie E off, D on, A off, Zorg not private, emergency access on, no own export. An
+  Organisatie installation now starts in own post (P8 is over: every leak path was closed
+  in Tasks 12-34). Existing workspaces keep what they have. `setupServer` is unchanged and
+  still accepts `extra_labels`.
+- **A second workspace on the command line (S 5.2).** `manage.py create_workspace --name
+  --kind home|business --admin-email`: with an account for that address it becomes the
+  admin; without one the workspace has no member yet and its first admin is invited
+  (`Invitation` role admin, for that address only, 7 days, `created_by` empty,
+  "Serverbeheerder"), the link printed once. An invitation without a maker is usable only
+  as long as the workspace has no admin at all, so a maker-less invitation (a deleted
+  account's) never revives elsewhere. Server audit `workspace_created` (`kind`), actor the
+  system. An unknown kind: exit code 2 with a Dutch sentence. The link uses the first
+  `BRIEVIE_PUBLIC_URLS` entry (a path only without one).
+- **R41: a preset is a starting point.** Switching the kind later goes through
+  `updateVisibility` with `apply_preset` (Task 37); labels and rules are never removed.

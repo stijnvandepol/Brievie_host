@@ -13,7 +13,7 @@ from uuid import UUID
 
 from django.core.validators import validate_email
 from django.db import IntegrityError, transaction
-from django.db.models import Exists, OuterRef, QuerySet
+from django.db.models import Exists, OuterRef, Q, QuerySet
 from django.http import HttpRequest
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -137,6 +137,38 @@ def _issue(
         link=fragment_link(request, INVITATION_PATH, token),
         home_network_only=home_network_only(request),
     )
+
+
+# Who made the invitation of a workspace's first admin on the server (shown to the invitee).
+SERVER_ADMIN_NAME = "Serverbeheerder"
+FIRST_ADMIN_DAYS = 7
+
+
+def invite_first_admin(*, workspace: Workspace, email: str) -> tuple[Invitation, str]:
+    """The invitation for the first admin of a workspace that has none (S 5.2): role
+    admin, only for `email`, 7 days, made by nobody ("Serverbeheerder"). Returns the
+    invitation and its token, which is shown once. Runs in the caller's transaction."""
+    address = _clean_email(email)
+    if not address:
+        raise ApiError(422, "email_required", _("Vul een geldig e-mailadres in."))
+    token, digest = new_token()
+    invitation = Invitation.objects.create(
+        workspace=workspace,
+        role=Membership.Role.ADMIN,
+        email=address,
+        token_hash=digest,
+        expires_at=timezone.now() + timedelta(days=FIRST_ADMIN_DAYS),
+        created_by=None,
+        created_by_name=SERVER_ADMIN_NAME,
+    )
+    record(
+        AuditCode.INVITATION_CREATED,
+        actor=AuditActor.system(),
+        target=_target(invitation),
+        workspace_id=workspace.id,
+        values={"role": Membership.Role.ADMIN, "expires_in_days": FIRST_ADMIN_DAYS},
+    )
+    return invitation, token
 
 
 def create_invitation(
@@ -314,8 +346,14 @@ def _usable(token: str, *, lock: bool = False) -> Invitation:
         role=Membership.Role.ADMIN,
         user__is_active=True,
     )
+    # The first admin of a workspace made on the server (`invite_first_admin`): no maker,
+    # and only while the workspace has no admin at all.
+    any_admin = Membership.objects.filter(
+        workspace_id=OuterRef("workspace_id"), role=Membership.Role.ADMIN
+    )
+    first_admin = Q(created_by__isnull=True, role=Membership.Role.ADMIN) & ~Exists(any_admin)
     invitations: QuerySet[Invitation] = Invitation.objects.select_related("workspace").filter(
-        Exists(maker_is_admin),
+        Exists(maker_is_admin) | first_admin,
         token_hash=token_hash(token),
         accepted_at=None,
         revoked_at=None,

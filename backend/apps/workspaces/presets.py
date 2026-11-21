@@ -5,8 +5,10 @@ values once, and a later switch of the kind offers the other values through
 `visibility_settings.change` (`apply_preset`), which audits every value it changes.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import Final
+
+from apps.workspaces.models import Workspace
 
 
 @dataclass(frozen=True)
@@ -47,3 +49,14 @@ ADMIN_PRESET_FIELDS: Final = (
     "care_is_private",
     "allow_member_export",
 )
+
+
+def apply_preset_settings(workspace: Workspace) -> None:
+    """Give a new workspace the values of its kind (S 4.2): only at creation, so no audit
+    row. A row that exists already is saved with the six fields."""
+    preset = PRESETS[workspace.kind]
+    names = [f.name for f in fields(PresetValues)]
+    for name in names:
+        setattr(workspace, name, getattr(preset, name))
+    if not workspace._state.adding:
+        workspace.save(update_fields=[*names, "updated_at"])

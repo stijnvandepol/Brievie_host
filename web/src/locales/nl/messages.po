@@ -3260,6 +3260,10 @@ msgstr "Welkom bij Brievie"
 msgid "Werkruimte"
 msgstr "Werkruimte"
 
+#: src/components/audit-codes.ts
+msgid "Werkruimte gemaakt"
+msgstr "Werkruimte gemaakt"
+
 #: src/routes/members.tsx
 msgid "Werkruimte verlaten"
 msgstr "Werkruimte verlaten"

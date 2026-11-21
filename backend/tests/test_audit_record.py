@@ -206,6 +206,7 @@ def test_the_list_of_codes_is_the_closed_list_of_d11() -> None:
         "server_admin_granted",
         "server_admin_revoked",
         "sso_settings_changed",
+        "workspace_created",
         "invitation_created",
         "invitation_revoked",
         "invitation_accepted",
