@@ -38,8 +38,13 @@ export function loggedInHandlers() {
     http.get(`*${API}/workspaces/${workspace.id}/inbox/counts`, () =>
       HttpResponse.json({ new: 0, review: 0, unassigned: 0 }),
     ),
+    http.get(`*${API}/workspaces/${workspace.id}/my-tasks/counts`, () =>
+      HttpResponse.json(noTaskCounts),
+    ),
   ];
 }
+
+export const noTaskCounts = { mine: 0, overdue: 0, within_week: 0, needs_date: 0, to_pick_up: 0 };
 
 /**
  * Two workspaces: `/` shows the list instead of going straight to the inbox. With one

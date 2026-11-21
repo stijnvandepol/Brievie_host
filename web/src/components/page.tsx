@@ -14,7 +14,7 @@ import {
   TextField,
 } from "react-aria-components";
 import { ApiFailure, api, errorMessage } from "../api/client";
-import { inboxCountsQuery, meQuery, workspacesQuery } from "../api/queries";
+import { inboxCountsQuery, meQuery, myTaskCountsQuery, workspacesQuery } from "../api/queries";
 import { resetSearch } from "../search-term";
 import { clearUndo } from "../undo-trash";
 import { Icon, type IconName } from "./icons";
@@ -173,10 +173,12 @@ function NavItem({
   exact = false,
   ariaLabel,
   count,
+  warn = false,
 }: {
   to:
     | "/"
     | "/koppel-app"
+    | "/w/$workspaceId/taken"
     | "/w/$workspaceId/inbox"
     | "/w/$workspaceId/post"
     | "/w/$workspaceId/prullenbak"
@@ -192,6 +194,8 @@ function NavItem({
   exact?: boolean;
   ariaLabel?: string;
   count?: number;
+  /** The count in the warning style (something is late); the label says it in words. */
+  warn?: boolean;
 }) {
   return (
     <Link
@@ -204,7 +208,7 @@ function NavItem({
       <Icon name={icon} className="nav-icon" />
       <span className="nav-label">{label}</span>
       {count ? (
-        <span className="nav-count" aria-hidden="true">
+        <span className={warn ? "nav-count nav-count-warning" : "nav-count"} aria-hidden="true">
           {count}
         </span>
       ) : null}
@@ -220,13 +224,31 @@ type NavWorkspace = { id: string; name: string; role?: string };
  * A viewer may not read the rules, so Automatisering is left out for them. */
 function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
   const { data: counts } = useQuery(inboxCountsQuery(workspace.id));
+  const { data: taskCounts } = useQuery(myTaskCountsQuery(workspace.id));
   const todo = counts ? counts.review + counts.unassigned : 0;
+  const mine = taskCounts?.mine ?? 0;
+  const late = taskCounts?.overdue ?? 0;
   const params = { workspaceId: workspace.id };
   return (
     <>
       <p className="nav-section">
         <span className="nav-section-name">{workspace.name}</span>
       </p>
+      <NavItem
+        to="/w/$workspaceId/taken"
+        params={params}
+        icon="checklist"
+        label={t`Mijn taken`}
+        ariaLabel={
+          mine > 0
+            ? late > 0
+              ? t`Mijn taken, ${mine} open, waarvan ${late} te laat`
+              : t`Mijn taken, ${mine} open`
+            : undefined
+        }
+        count={mine}
+        warn={late > 0}
+      />
       <NavItem
         to="/w/$workspaceId/inbox"
         params={params}

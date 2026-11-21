@@ -718,13 +718,13 @@ msgstr "Brief verwijderen?"
 msgid "Brief voorgoed wissen?"
 msgstr "Brief voorgoed wissen?"
 
+#: src/routes/inbox.tsx
+msgid "Brieven die je nog moet nakijken of een naam moet geven. Wat je daarna moet doen, staat bij Mijn taken."
+msgstr "Brieven die je nog moet nakijken of een naam moet geven. Wat je daarna moet doen, staat bij Mijn taken."
+
 #: src/routes/trash.tsx
 msgid "Brieven in de prullenbak worden na {days} dagen voorgoed gewist. Tot die tijd kun je ze terugzetten."
 msgstr "Brieven in de prullenbak worden na {days} dagen voorgoed gewist. Tot die tijd kun je ze terugzetten."
-
-#: src/routes/inbox.tsx
-msgid "Brieven waar jij nog iets mee moet doen. Al je brieven, ook de afgehandelde, staan bij Alle post."
-msgstr "Brieven waar jij nog iets mee moet doen. Al je brieven, ook de afgehandelde, staan bij Alle post."
 
 #: src/components/autopilot-panel.tsx
 msgid "Brieven worden niet automatisch verwerkt."
@@ -1954,6 +1954,19 @@ msgstr "Mijn post"
 #: src/components/export-panel.tsx
 msgid "Mijn post exporteren"
 msgstr "Mijn post exporteren"
+
+#: src/components/page.tsx
+#: src/routes/tasks.tsx
+msgid "Mijn taken"
+msgstr "Mijn taken"
+
+#: src/components/page.tsx
+msgid "Mijn taken, {mine} open"
+msgstr "Mijn taken, {mine} open"
+
+#: src/components/page.tsx
+msgid "Mijn taken, {mine} open, waarvan {late} te laat"
+msgstr "Mijn taken, {mine} open, waarvan {late} te laat"
 
 #: src/components/ai-status-line.tsx
 msgid "Mistral in Frankrijk ({host})"

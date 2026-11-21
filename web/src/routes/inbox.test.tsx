@@ -61,6 +61,16 @@ function rowOf(sender: string): HTMLElement {
 }
 
 describe("te doen", () => {
+  it("Te doen says where tasks are", async () => {
+    server.use(counts({ new: 0, review: 0, unassigned: 0 }), ...loggedInHandlers(), letters([]));
+    renderApp(path);
+    expect(
+      await screen.findByText(
+        "Brieven die je nog moet nakijken of een naam moet geven. Wat je daarna moet doen, staat bij Mijn taken.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("is named Te doen in the title, the heading and the navigation", async () => {
     server.use(counts({ new: 0, review: 0, unassigned: 0 }), ...loggedInHandlers(), letters([]));
     renderApp(path);
@@ -68,7 +78,7 @@ describe("te doen", () => {
     await waitFor(() => expect(document.title).toBe("Te doen - Brievie"));
     expect(
       screen.getByText(
-        "Brieven waar jij nog iets mee moet doen. Al je brieven, ook de afgehandelde, staan bij Alle post.",
+        "Brieven die je nog moet nakijken of een naam moet geven. Wat je daarna moet doen, staat bij Mijn taken.",
       ),
     ).toBeInTheDocument();
     const nav = screen.getByRole("navigation", { name: "Hoofdmenu" });

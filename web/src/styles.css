@@ -554,6 +554,12 @@ q {
   text-align: center;
 }
 
+/* Something in "Mijn taken" is late: the count says so in colour, the label in words. */
+.nav-count-warning {
+  background: var(--warning-icon);
+  color: #fff;
+}
+
 .nav-divider {
   width: 100%;
   margin: var(--s-xs) 0;

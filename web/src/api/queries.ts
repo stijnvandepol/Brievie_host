@@ -170,6 +170,39 @@ export const inboxCountsQuery = (workspaceId: string) =>
     },
   });
 
+export type TaskPart = "mine" | "to_pick_up" | "all";
+export type TaskStatus = "open" | "done";
+
+/**
+ * "Mijn taken": the caller's tasks of one part. Under the documents key on purpose: every
+ * change of a letter (confirm, tick, trash, restore, a name, a merge) already refreshes
+ * `["workspaces", id, "documents"]`, and the list is derived from the letters.
+ */
+export const myTasksQuery = (workspaceId: string, part: TaskPart, status: TaskStatus) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "documents", "my-tasks", part, status],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/my-tasks", {
+        params: { path: { workspace_id: workspaceId }, query: { part, status } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
+/** The numbers of "Mijn taken" for the navigation: open, overdue, to pick up. */
+export const myTaskCountsQuery = (workspaceId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "documents", "my-tasks", "counts"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/my-tasks/counts", {
+        params: { path: { workspace_id: workspaceId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
 export const documentEventsQuery = (workspaceId: string, documentId: string) =>
   queryOptions({
     // Under the document's key, so a change of the document refreshes its history too.

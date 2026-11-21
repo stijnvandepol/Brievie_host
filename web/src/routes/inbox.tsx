@@ -299,7 +299,7 @@ function InboxPage() {
     <Shell workspace={workspace}>
       <PageHeader
         title={t`Te doen`}
-        description={t`Brieven waar jij nog iets mee moet doen. Al je brieven, ook de afgehandelde, staan bij Alle post.`}
+        description={t`Brieven die je nog moet nakijken of een naam moet geven. Wat je daarna moet doen, staat bij Mijn taken.`}
       />
       <AiStatusLine workspaceId={workspace.id} />
       <ErrorAlert error={error} />
