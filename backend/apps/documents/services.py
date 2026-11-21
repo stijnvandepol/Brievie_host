@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import date
 from uuid import UUID
 
@@ -309,6 +310,47 @@ def waiting_letters(membership: Membership) -> int:
     return sum(
         letters.filter(_in_state(state)).count()
         for state in (InboxState.REVIEW, InboxState.UNASSIGNED)
+    )
+
+
+@dataclass(frozen=True)
+class MenuCounts:
+    inbox: int
+    my_post_unread: int
+    my_tasks: int
+    my_tasks_overdue: int
+    lingering: int
+    shows_lingering: bool
+    has_person: bool
+
+
+def menu_counts(membership: Membership) -> MenuCounts:
+    """The numbers of the menu in one answer (navigation spec S 9): letters waiting in the
+    Inbox, unread letters in Mijn post, the member's open and overdue tasks, and for the
+    sorters and admins of an organisation the letters that linger. Every number starts
+    from `visible_documents` (or the task policy): nothing hidden is counted."""
+    # Imported here: `tasks.services` reads letters through this module.
+    from apps.tasks.services import count_my_tasks
+
+    facts = member_facts(membership)
+    own = sorted(facts.person_ids)
+    unread = (
+        visibility.visible_documents(membership)
+        .filter(addressee_ids__overlap=own)
+        .filter(reading.unread_q(membership))
+        .count()
+        if own
+        else 0
+    )
+    tasks = count_my_tasks(membership)
+    return MenuCounts(
+        inbox=waiting_letters(membership),
+        my_post_unread=unread,
+        my_tasks=tasks.mine,
+        my_tasks_overdue=tasks.overdue,
+        lingering=lingering.count_lingering(membership),
+        shows_lingering=lingering.applies_to(membership),
+        has_person=bool(own),
     )
 
 

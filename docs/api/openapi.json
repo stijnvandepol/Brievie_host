@@ -2436,6 +2436,47 @@
         "title": "MemberRoleIn",
         "type": "object"
       },
+      "MenuCountsOut": {
+        "properties": {
+          "has_person": {
+            "default": true,
+            "title": "Has Person",
+            "type": "boolean"
+          },
+          "inbox": {
+            "default": 0,
+            "title": "Inbox",
+            "type": "integer"
+          },
+          "lingering": {
+            "default": 0,
+            "title": "Lingering",
+            "type": "integer"
+          },
+          "my_post_unread": {
+            "default": 0,
+            "title": "My Post Unread",
+            "type": "integer"
+          },
+          "my_tasks": {
+            "default": 0,
+            "title": "My Tasks",
+            "type": "integer"
+          },
+          "my_tasks_overdue": {
+            "default": 0,
+            "title": "My Tasks Overdue",
+            "type": "integer"
+          },
+          "shows_lingering": {
+            "default": false,
+            "title": "Shows Lingering",
+            "type": "boolean"
+          }
+        },
+        "title": "MenuCountsOut",
+        "type": "object"
+      },
       "MergeDuplicateIn": {
         "properties": {
           "complete_twin_tasks": {
@@ -12643,6 +12684,68 @@
         "summary": "Update Member Sorts Post",
         "tags": [
           "workspaces"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/menu/counts": {
+      "get": {
+        "description": "The numbers of the menu in one call: letters waiting in the Inbox, unread letters in \"Mijn post\", open and overdue tasks of \"Mijn taken\", and \"Blijft liggen\" for the sorters and admins of an organisation. Only this workspace; nothing the caller may not see is counted. `getInboxCounts` and `countMyTasks` stay as they are.",
+        "operationId": "getMenuCounts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MenuCountsOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Get Menu Counts",
+        "tags": [
+          "documents"
         ]
       }
     },

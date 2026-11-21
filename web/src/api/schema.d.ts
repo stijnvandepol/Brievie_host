@@ -1474,6 +1474,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/menu/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Menu Counts
+         * @description The numbers of the menu in one call: letters waiting in the Inbox, unread letters in "Mijn post", open and overdue tasks of "Mijn taken", and "Blijft liggen" for the sorters and admins of an organisation. Only this workspace; nothing the caller may not see is counted. `getInboxCounts` and `countMyTasks` stay as they are.
+         */
+        get: operations["getMenuCounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/my-export": {
         parameters: {
             query?: never;
@@ -3443,6 +3463,44 @@ export interface components {
              * @enum {string}
              */
             role: "admin" | "member" | "viewer";
+        };
+        /** MenuCountsOut */
+        MenuCountsOut: {
+            /**
+             * Has Person
+             * @default true
+             */
+            has_person: boolean;
+            /**
+             * Inbox
+             * @default 0
+             */
+            inbox: number;
+            /**
+             * Lingering
+             * @default 0
+             */
+            lingering: number;
+            /**
+             * My Post Unread
+             * @default 0
+             */
+            my_post_unread: number;
+            /**
+             * My Tasks
+             * @default 0
+             */
+            my_tasks: number;
+            /**
+             * My Tasks Overdue
+             * @default 0
+             */
+            my_tasks_overdue: number;
+            /**
+             * Shows Lingering
+             * @default false
+             */
+            shows_lingering: boolean;
         };
         /** MergeDuplicateIn */
         MergeDuplicateIn: {
@@ -10050,6 +10108,46 @@ export interface operations {
             };
             /** @description Unprocessable Content */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    getMenuCounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MenuCountsOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -36,6 +36,7 @@ from apps.documents.schemas import (
     LingeringOut,
     MarkReadIn,
     MarkReadOut,
+    MenuCountsOut,
     MyExportOut,
     TrashedDocumentOut,
     TrashListOut,
@@ -231,6 +232,31 @@ def search_documents(
 def get_inbox_counts(request: HttpRequest, workspace_id: UUID) -> InboxCountsOut:
     membership = workspace_member(request, workspace_id)
     return InboxCountsOut(**services.inbox_counts(membership))
+
+
+@router.get(
+    "/workspaces/{workspace_id}/menu/counts",
+    response={200: MenuCountsOut, 404: ErrorOut, **AUTH_ERRORS},
+    operation_id="getMenuCounts",
+    description=(
+        "The numbers of the menu in one call: letters waiting in the Inbox, unread letters "
+        'in "Mijn post", open and overdue tasks of "Mijn taken", and "Blijft liggen" for the '
+        "sorters and admins of an organisation. Only this workspace; nothing the caller may "
+        "not see is counted. `getInboxCounts` and `countMyTasks` stay as they are."
+    ),
+)
+def get_menu_counts(request: HttpRequest, workspace_id: UUID) -> MenuCountsOut:
+    membership = workspace_member(request, workspace_id)
+    counts = services.menu_counts(membership)
+    return MenuCountsOut(
+        inbox=counts.inbox,
+        my_post_unread=counts.my_post_unread,
+        my_tasks=counts.my_tasks,
+        my_tasks_overdue=counts.my_tasks_overdue,
+        lingering=counts.lingering,
+        shows_lingering=counts.shows_lingering,
+        has_person=counts.has_person,
+    )
 
 
 @router.get(

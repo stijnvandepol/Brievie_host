@@ -268,6 +268,23 @@ class LingeringOut(Schema):
     unopened_days: int
 
 
+class MenuCountsOut(Schema):
+    # Letters waiting in the Inbox (to check, or without a name), as `getInboxCounts`'s
+    # review + unassigned.
+    inbox: int = 0
+    # Unread letters in "Mijn post" (the caller's own persons).
+    my_post_unread: int = 0
+    # Open tasks in "Mijn taken", and of those overdue (as `countMyTasks`).
+    my_tasks: int = 0
+    my_tasks_overdue: int = 0
+    # "Blijft liggen": 0 unless `shows_lingering`.
+    lingering: int = 0
+    # The caller sorts post or is an admin of an organisation with "Blijft liggen" on.
+    shows_lingering: bool = False
+    # False when the caller's account is linked to no person: "Mijn post" is empty.
+    has_person: bool = True
+
+
 class MarkReadIn(InputSchema):
     # The letters to mark read ("Alles gelezen"): at most 200; ids the caller does not see
     # are skipped.
