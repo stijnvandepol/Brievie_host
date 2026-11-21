@@ -367,3 +367,40 @@ def test_switching_emergency_access_off_ends_a_running_hour() -> None:
     assert _get(admin, doc) == 404
     with as_actor(h.workspace, SYSTEM):
         assert not DocumentReader.objects.filter(reason="emergency").exists()
+
+
+# Security review of PR #38, finding 6: emergency access never makes an assignee.
+
+
+def test_an_admin_with_emergency_access_is_no_candidate_for_a_task() -> None:
+    o = office()
+    doc = o.letters["finance_letter"]
+    admin = Client()
+    admin.force_login(o.admin)
+    _open(admin, o.persons["Finance"])
+    with as_actor(o.workspace, SYSTEM):
+        task = Task.objects.get(document=doc)
+    femke = Client()
+    femke.force_login(o.finance)
+    base = f"/api/v1/workspaces/{o.workspace.id}/tasks/{task.id}"
+    names = [row["name"] for row in femke.get(f"{base}/assignees").json()]
+    assert "Anne" not in names
+    r = femke.post(f"{base}/assign", {"user_id": str(o.admin.id)}, content_type=JSON)
+    assert (r.status_code, r.json()["code"]) == (422, "assignee_cannot_read")
+
+
+def test_an_assignment_resting_on_emergency_access_is_released() -> None:
+    o = office()
+    doc = o.letters["finance_letter"]
+    admin = Client()
+    admin.force_login(o.admin)
+    _open(admin, o.persons["Finance"])
+    with as_actor(o.workspace, SYSTEM):
+        task = Task.objects.get(document=doc)
+        # As an older server could have given it.
+        Task.objects.filter(id=task.id).update(assigned_to=o.admin)
+        DocumentReader.objects.filter(reason="emergency").update(
+            expires_at=timezone.now() - timedelta(seconds=1)
+        )
+        visibility.verify_visibility(o.workspace.id)
+        assert Task.objects.get(id=task.id).assigned_to_id is None

@@ -1985,3 +1985,10 @@ M3). "Iedereen ziet alle post" stays on everywhere until Task 40, so departments
   `private_without_readers` with its id. When no admin sees it, every admin gets the new
   `private_without_readers_unnamed`: that it happened in the workspace, no id; its readers
   see the `private_skipped` line on the letter itself.
+- **Emergency access never makes an assignee (finding 6).** Assignment candidates and the
+  release ask `visibility.regular_viewers` (sight without emergency rows, the policy's own
+  condition with those rows rolled back), so a task is never given to whoever holds
+  emergency access, and any assignment that rested on it is released by the next release
+  (the nightly check, switching emergency access off). The same helper decides what an
+  emergency opening counts as already seen (an hour running is renewed) and which admins
+  the "nobody could read it" notice may name.

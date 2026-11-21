@@ -446,7 +446,7 @@ def _private_skipped(
     # The letter stays visible by the switches: only an admin who sees it learns which
     # letter it is. When none does, every admin hears that it happened, without the id
     # (the letter's readers see the history line on it).
-    seen = viewers([document.id]).get(document.id, frozenset())
+    seen = regular_viewers([document.id]).get(document.id, frozenset())
     named = [m for m in admins if m.user_id in seen]
     for membership in named:
         notify(
@@ -708,7 +708,8 @@ def open_emergency(
                 .filter(LIVE)
                 .order_by("id")
             )
-            seen = viewers([d.id for d in on_name])
+            # An hour already running is renewed: only regular sight counts as seeing.
+            seen = regular_viewers([d.id for d in on_name])
             opened = [d for d in on_name if admin_id not in seen.get(d.id, frozenset())]
             for document in opened:
                 DocumentReader.objects.update_or_create(
@@ -817,6 +818,23 @@ def require_editable(document: Document) -> None:
         raise ApiError(
             403, "emergency_read_only", _("Met noodtoegang kun je deze brief alleen lezen.")
         )
+
+
+def regular_viewers(document_ids: Collection[UUID]) -> dict[UUID, frozenset[UUID]]:
+    """`viewers` without emergency access: who reads each letter by the switches, links,
+    departments, scanning and shares. The emergency rows are taken away inside a savepoint
+    that is rolled back, so the condition stays the policy's own. For what lasts beyond an
+    emergency hour (an assignment) and for what that hour opens."""
+    ids = list(dict.fromkeys(document_ids))
+    if not ids:
+        return {}
+    with transaction.atomic(), system_actor():
+        DocumentReader.objects.filter(
+            document_id__in=ids, reason=DocumentReader.Reason.EMERGENCY
+        ).delete()
+        seen = viewers(ids)
+        transaction.set_rollback(True)
+    return seen
 
 
 @dataclass(frozen=True)
