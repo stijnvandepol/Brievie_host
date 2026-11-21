@@ -31,6 +31,11 @@ class Workspace(BaseModel):
     care_is_private = models.BooleanField(default=False)
     # A member may ask for emergency access to someone's hidden post (S 4.7).
     emergency_access = models.BooleanField(default=False)
+    # The language the AI writes a letter's summary and its task descriptions in. The
+    # letter itself and every value read from it stay as they are.
+    summary_language = models.CharField(
+        max_length=2, choices=[("nl", "Nederlands"), ("en", "English")], default="nl"
+    )
 
     def __str__(self) -> str:
         return self.name

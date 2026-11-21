@@ -11,22 +11,37 @@ from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, record
 from apps.workspaces.models import Workspace
 
+SUMMARY_LANGUAGES = ("nl", "en")
+
 
 def update_settings(
-    *, workspace: Workspace, actor: AuditActor, allow_member_export: bool | None = None
+    *,
+    workspace: Workspace,
+    actor: AuditActor,
+    allow_member_export: bool | None = None,
+    summary_language: str | None = None,
 ) -> Workspace:
     """Change the given settings and log each one that really changed, in the same
     transaction. The workspace row is locked, so two admins act one after the other."""
+    if summary_language is not None and summary_language not in SUMMARY_LANGUAGES:
+        raise ValueError(f"Unknown summary language {summary_language!r}")
+    changes: dict[str, bool | str] = {}
+    if allow_member_export is not None:
+        changes["allow_member_export"] = allow_member_export
+    if summary_language is not None:
+        changes["summary_language"] = summary_language
     with transaction.atomic():
         locked = Workspace.objects.select_for_update().get(id=workspace.id)
-        if allow_member_export is not None and locked.allow_member_export != allow_member_export:
-            locked.allow_member_export = allow_member_export
-            locked.save(update_fields=["allow_member_export", "updated_at"])
+        for setting, value in changes.items():
+            if getattr(locked, setting) == value:
+                continue
+            setattr(locked, setting, value)
+            locked.save(update_fields=[setting, "updated_at"])
             record(
                 AuditCode.WORKSPACE_SETTING_CHANGED,
                 actor=actor,
                 target=AuditTarget(TargetKind.WORKSPACE, locked.id, locked.name),
                 workspace_id=locked.id,
-                values={"setting": "allow_member_export", "value": allow_member_export},
+                values={"setting": setting, "value": value},
             )
         return locked

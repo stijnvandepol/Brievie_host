@@ -64,7 +64,7 @@ def list_workspaces(request: HttpRequest) -> list[WorkspaceOut]:
 )
 def get_workspace_settings(request: HttpRequest, workspace_id: UUID) -> WorkspaceSettingsOut:
     membership = workspace_member(request, workspace_id)
-    return WorkspaceSettingsOut(allow_member_export=membership.workspace.allow_member_export)
+    return WorkspaceSettingsOut.of(membership.workspace)
 
 
 @router.put(
@@ -84,8 +84,9 @@ def update_workspace_settings(
         workspace=membership.workspace,
         actor=actor_from_request(request),
         allow_member_export=payload.allow_member_export,
+        summary_language=payload.summary_language,
     )
-    return WorkspaceSettingsOut(allow_member_export=workspace.allow_member_export)
+    return WorkspaceSettingsOut.of(workspace)
 
 
 @router.get(
