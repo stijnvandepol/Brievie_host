@@ -2150,3 +2150,14 @@ installation starts in own post.
   through the policy at that moment (for one who reads all post: every letter that is not
   private, plus the private ones they read). The count says "letters you can read whose
   viewers change"; it may be 0 where others' post moves.
+- **"Wie kan mijn post zien?" says only what is true (finding 5).** "Je post zien alleen
+  jij ..." left out other addressees, the scanner until the letter is done and shares;
+  "Privé-post zie alleen jij ..." left out the members of a department a private letter
+  is on, and who scanned it or made it private (they keep a share). The sentences now
+  list exactly those (Thuis: "groep"), and `tests/test_policy_text_truth.py` checks in all
+  16 states that every viewer `viewers()` gives for a member's letter is someone their
+  sentences name. S 4.15's example sentences are amended by these.
+- **Presets and `create_workspace` widen nobody's sight (checked with the review).** The
+  kind's values are applied only to a new workspace (no member but its first admin, or
+  none); a later preset switch goes through `updateVisibility` (preview, confirmation,
+  notices); the migration left existing workspaces as they were.

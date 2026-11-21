@@ -33,11 +33,14 @@ def test_post_access_sentences_for_a_member_in_own_post(client: Client) -> None:
     r = _as(client, o.plain).get(f"/api/v1/workspaces/{o.workspace.id}/post-access")
     assert r.status_code == 200
     assert r.json()["sentences"] == [
-        "Je post zien alleen jij en, als hij op naam van een afdeling staat, de mensen van "
-        "die afdeling.",
+        "Je post zien: jij en de anderen op wier naam de brief ook staat, de mensen van een "
+        "afdeling als hij op naam van die afdeling staat, wie de brief scant (tot hij klaar "
+        "is) en met wie hij gedeeld is.",
         "De beheerders lezen je post niet.",
         "Post zonder naam zien: Sandra (verdeelt post).",
-        "Privé-post zie alleen jij, en wie je die brief geeft.",
+        "Privé-post zien alleen: de mensen op wier naam hij staat, de mensen van een afdeling "
+        "op wier naam hij staat, wie de brief scande of privé maakte, en met wie hij gedeeld "
+        "is.",
         "Noodtoegang staat aan. De beheerders kunnen je post openen. Ze moeten een reden "
         "geven, en jij krijgt dan een melding.",
         "Brieven worden niet door AI gelezen.",

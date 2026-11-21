@@ -2606,16 +2606,16 @@ msgid "Iedereen in Brievie ziet alle post, behalve privé-post."
 msgstr "Everyone in Brievie sees all post, except private post."
 
 #: apps/workspaces/policy_text.py
-msgid "Je post zien alleen jij en, als hij op naam van een groep staat, de mensen van die groep."
-msgstr "Your post is seen only by you and, when it is addressed to a group, the people in that group."
+msgid "Je post zien: jij en de anderen op wier naam de brief ook staat, de mensen van een groep als hij op naam van die groep staat, wie de brief scant (tot hij klaar is) en met wie hij gedeeld is."
+msgstr "Your post is seen by: you and the others the letter is also addressed to, the people in a group when it is addressed to that group, whoever scans the letter (until it is done) and whoever it is shared with."
 
 #: apps/workspaces/policy_text.py
-msgid "Je post zien alleen jij en, als hij op naam van een afdeling staat, de mensen van die afdeling."
-msgstr "Your post is seen only by you and, when it is addressed to a department, the people in that department."
+msgid "Je post zien: jij en de anderen op wier naam de brief ook staat, de mensen van een afdeling als hij op naam van die afdeling staat, wie de brief scant (tot hij klaar is) en met wie hij gedeeld is."
+msgstr "Your post is seen by: you and the others the letter is also addressed to, the people in a department when it is addressed to that department, whoever scans the letter (until it is done) and whoever it is shared with."
 
 #: apps/workspaces/policy_text.py
-msgid "Je post zien alleen jij."
-msgstr "Your post is seen only by you."
+msgid "Je post zien: jij en de anderen op wier naam de brief ook staat, wie de brief scant (tot hij klaar is) en met wie hij gedeeld is."
+msgstr "Your post is seen by: you and the others the letter is also addressed to, whoever scans the letter (until it is done) and whoever it is shared with."
 
 #: apps/workspaces/policy_text.py
 #, python-format
@@ -2627,8 +2627,12 @@ msgid "De beheerders lezen je post niet."
 msgstr "The admins do not read your post."
 
 #: apps/workspaces/policy_text.py
-msgid "Privé-post zie alleen jij, en wie je die brief geeft."
-msgstr "Private post is seen only by you, and by whoever you give that letter to."
+msgid "Privé-post zien alleen: de mensen op wier naam hij staat, de mensen van een groep op wier naam hij staat, wie de brief scande of privé maakte, en met wie hij gedeeld is."
+msgstr "Private post is seen only by: the people it is addressed to, the people in a group it is addressed to, whoever scanned the letter or made it private, and whoever it is shared with."
+
+#: apps/workspaces/policy_text.py
+msgid "Privé-post zien alleen: de mensen op wier naam hij staat, de mensen van een afdeling op wier naam hij staat, wie de brief scande of privé maakte, en met wie hij gedeeld is."
+msgstr "Private post is seen only by: the people it is addressed to, the people in a department it is addressed to, whoever scanned the letter or made it private, and whoever it is shared with."
 
 #: apps/workspaces/policy_text.py
 msgid "Noodtoegang staat aan. De beheerders kunnen je post openen. Ze moeten een reden geven, en jij krijgt dan een melding."

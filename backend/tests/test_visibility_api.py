@@ -231,8 +231,9 @@ def test_member_gets_sentences_from_get_visibility(client: Client) -> None:
     assert body["admins_read_all"] is False
     assert body["sorter_user_ids"] == [str(o.sorter.id)]
     assert body["sentences"][0] == (
-        "Je post zien alleen jij en, als hij op naam van een afdeling staat, de mensen van "
-        "die afdeling."
+        "Je post zien: jij en de anderen op wier naam de brief ook staat, de mensen van een "
+        "afdeling als hij op naam van die afdeling staat, wie de brief scant (tot hij klaar "
+        "is) en met wie hij gedeeld is."
     )
     assert "Post zonder naam zien: Sandra (verdeelt post)." in body["sentences"]
     assert body["summary"] == []

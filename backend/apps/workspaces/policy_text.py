@@ -149,17 +149,24 @@ def _member(facts: PolicyFacts) -> list[str]:
     elif switches.departments_enabled:
         lines.append(
             _(
-                "Je post zien alleen jij en, als hij op naam van een groep staat, de mensen "
-                "van die groep."
+                "Je post zien: jij en de anderen op wier naam de brief ook staat, de mensen "
+                "van een groep als hij op naam van die groep staat, wie de brief scant (tot "
+                "hij klaar is) en met wie hij gedeeld is."
             )
             if home
             else _(
-                "Je post zien alleen jij en, als hij op naam van een afdeling staat, de "
-                "mensen van die afdeling."
+                "Je post zien: jij en de anderen op wier naam de brief ook staat, de mensen "
+                "van een afdeling als hij op naam van die afdeling staat, wie de brief scant "
+                "(tot hij klaar is) en met wie hij gedeeld is."
             )
         )
     else:
-        lines.append(_("Je post zien alleen jij."))
+        lines.append(
+            _(
+                "Je post zien: jij en de anderen op wier naam de brief ook staat, wie de "
+                "brief scant (tot hij klaar is) en met wie hij gedeeld is."
+            )
+        )
     if not switches.everyone_sees_all:
         admins = _admin_names(snapshot)
         if switches.admins_read_all:
@@ -179,7 +186,20 @@ def _member(facts: PolicyFacts) -> list[str]:
             lines.append(
                 _("Post zonder naam zien de beheerders: %(names)s.") % {"names": join_names(admins)}
             )
-    lines.append(_("Privé-post zie alleen jij, en wie je die brief geeft."))
+    # Whatever the switches say: a private letter's readers (documents.visibility).
+    lines.append(
+        _(
+            "Privé-post zien alleen: de mensen op wier naam hij staat, de mensen van een "
+            "groep op wier naam hij staat, wie de brief scande of privé maakte, en met wie "
+            "hij gedeeld is."
+        )
+        if home
+        else _(
+            "Privé-post zien alleen: de mensen op wier naam hij staat, de mensen van een "
+            "afdeling op wier naam hij staat, wie de brief scande of privé maakte, en met "
+            "wie hij gedeeld is."
+        )
+    )
     if facts.emergency_access:
         lines.append(
             _(

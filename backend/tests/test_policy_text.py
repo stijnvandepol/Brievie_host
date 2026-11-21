@@ -78,15 +78,22 @@ def test_own_post_without_departments() -> None:
 
 EVERYONE = "Iedereen in Brievie ziet alle post, behalve privé-post."
 OWN_WITH_DEPARTMENTS = (
-    "Je post zien alleen jij en, als hij op naam van een afdeling staat, de mensen van die "
-    "afdeling."
+    "Je post zien: jij en de anderen op wier naam de brief ook staat, de mensen van een "
+    "afdeling als hij op naam van die afdeling staat, wie de brief scant (tot hij klaar is) "
+    "en met wie hij gedeeld is."
 )
-OWN = "Je post zien alleen jij."
+OWN = (
+    "Je post zien: jij en de anderen op wier naam de brief ook staat, wie de brief scant "
+    "(tot hij klaar is) en met wie hij gedeeld is."
+)
 ADMINS_READ = "De beheerders Anne lezen alle post die niet privé is."
 ADMINS_DO_NOT_READ = "De beheerders lezen je post niet."
 SORTER = "Post zonder naam zien: Sandra (verdeelt post)."
 FALLBACK = "Post zonder naam zien de beheerders: Anne."
-PRIVATE = "Privé-post zie alleen jij, en wie je die brief geeft."
+PRIVATE = (
+    "Privé-post zien alleen: de mensen op wier naam hij staat, de mensen van een afdeling op "
+    "wier naam hij staat, wie de brief scande of privé maakte, en met wie hij gedeeld is."
+)
 EMERGENCY_ON = (
     "Noodtoegang staat aan. De beheerders kunnen je post openen. Ze moeten een reden geven, "
     "en jij krijgt dan een melding."
@@ -132,8 +139,11 @@ def test_member_lines_at_home_say_group() -> None:
     snapshot = office_snapshot({"e": False, "d": True, "a": True, "s": False})
     lines = describe(_facts(snapshot, kind="home", viewer="Piet"), audience="member")
     assert lines[0] == (
-        "Je post zien alleen jij en, als hij op naam van een groep staat, de mensen van die groep."
+        "Je post zien: jij en de anderen op wier naam de brief ook staat, de mensen van een "
+        "groep als hij op naam van die groep staat, wie de brief scant (tot hij klaar is) en "
+        "met wie hij gedeeld is."
     )
+    assert any("de mensen van een groep op wier naam hij staat" in line for line in lines)
 
 
 def test_ai_line_names_the_supplier() -> None:
