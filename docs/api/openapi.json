@@ -2628,6 +2628,130 @@
         "title": "PasswordResetOut",
         "type": "object"
       },
+      "PersonAccountOut": {
+        "description": "A person on Mensen with the state of their account (spec 3.1, 8). Departments are\nnever listed. The account facts (`email`, the times, the invitation,\n`can_manage_account`, `role`, `sorts_post`) are filled for admins only; for anybody\nelse they are empty and `state` is only `active` or `inactive`.",
+        "properties": {
+          "archived": {
+            "title": "Archived",
+            "type": "boolean"
+          },
+          "can_manage_account": {
+            "default": false,
+            "title": "Can Manage Account",
+            "type": "boolean"
+          },
+          "deactivated_at": {
+            "format": "date-time",
+            "title": "Deactivated At",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "department_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Department Ids",
+            "type": "array"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "document_count": {
+            "title": "Document Count",
+            "type": "integer"
+          },
+          "email": {
+            "default": "",
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "invitation_expired": {
+            "default": false,
+            "title": "Invitation Expired",
+            "type": "boolean"
+          },
+          "invitation_expires_at": {
+            "format": "date-time",
+            "title": "Invitation Expires At",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "invitation_id": {
+            "format": "uuid",
+            "title": "Invitation Id",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_app_use_at": {
+            "format": "date-time",
+            "title": "Last App Use At",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_sign_in_at": {
+            "format": "date-time",
+            "title": "Last Sign In At",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name_variants": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Name Variants",
+            "type": "array"
+          },
+          "role": {
+            "default": "",
+            "title": "Role",
+            "type": "string"
+          },
+          "sorts_post": {
+            "default": false,
+            "title": "Sorts Post",
+            "type": "boolean"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "display_name",
+          "name_variants",
+          "archived",
+          "document_count",
+          "state"
+        ],
+        "title": "PersonAccountOut",
+        "type": "object"
+      },
       "PersonIn": {
         "properties": {
           "archived": {
@@ -2750,6 +2874,17 @@
           "document_count"
         ],
         "title": "PersonOut",
+        "type": "object"
+      },
+      "PersonPrivatePostOut": {
+        "properties": {
+          "has_private_post": {
+            "default": false,
+            "title": "Has Private Post",
+            "type": "boolean"
+          }
+        },
+        "title": "PersonPrivatePostOut",
         "type": "object"
       },
       "PostAccessOut": {
@@ -11950,6 +12085,89 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/people": {
+      "get": {
+        "description": "Web session only: a bearer token answers 401 not_authenticated. Mensen: every person (never a department) with the state of their account, active ones by name and archived ones last. `state` filters: inactive, invited, active or deactivated (empty: all). The account facts are filled for admins only; anybody else gets `state` active or inactive and may filter on those two only (422 validation_error otherwise).",
+        "operationId": "listPeople",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "State",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PersonAccountOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "List People",
+        "tags": [
+          "people"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/persons": {
       "get": {
         "operationId": "listPersons",
@@ -13028,6 +13246,85 @@
           }
         ],
         "summary": "Update Department Member",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/persons/{person_id}/private-post": {
+      "get": {
+        "description": "Web session only, admins (403 forbidden for others). Whether a private letter is on the person's name, also one the admin cannot read: a yes or no, for the dialogs that switch an account off or invite. 404 person_not_found for a department.",
+        "operationId": "getPersonHasPrivatePost",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "person_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Person Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonPrivatePostOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Get Person Has Private Post",
         "tags": [
           "people"
         ]

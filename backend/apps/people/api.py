@@ -13,15 +13,18 @@ from apps.people.schemas import (
     DepartmentMemberUpdateIn,
     EmergencyAccessUseIn,
     EmergencyAccessUseOut,
+    PersonAccountOut,
     PersonIn,
     PersonMemberIn,
     PersonOut,
+    PersonPrivatePostOut,
 )
 from apps.workspaces.deps import workspace_member
 from apps.workspaces.models import Membership
 
 router = Router(tags=["people"])
 
+_PEOPLE = "/workspaces/{workspace_id}/people"
 _PERSONS = "/workspaces/{workspace_id}/persons"
 _PERSON = "/workspaces/{workspace_id}/persons/{person_id}"
 
@@ -34,6 +37,69 @@ _PERSON = "/workspaces/{workspace_id}/persons/{person_id}"
 def list_persons(request: HttpRequest, workspace_id: UUID) -> list[Person]:
     membership = workspace_member(request, workspace_id)
     return services.list_persons(membership.workspace)
+
+
+@router.get(
+    _PEOPLE,
+    response={200: list[PersonAccountOut], 404: ErrorOut, 422: ErrorOut, **AUTH_ERRORS},
+    auth=session_auth,
+    operation_id="listPeople",
+    description=(
+        "Web session only: a bearer token answers 401 not_authenticated. Mensen: every "
+        "person (never a department) with the state of their account, active ones by name "
+        "and archived ones last. `state` filters: inactive, invited, active or deactivated "
+        "(empty: all). The account facts are filled for admins only; anybody else gets "
+        "`state` active or inactive and may filter on those two only (422 "
+        "validation_error otherwise)."
+    ),
+)
+def list_people(
+    request: HttpRequest, workspace_id: UUID, state: str = ""
+) -> list[PersonAccountOut]:
+    membership = workspace_member(request, workspace_id)
+    return [
+        PersonAccountOut(
+            id=a.person.id,
+            display_name=a.person.display_name,
+            name_variants=list(a.person.name_variants),
+            archived=a.person.archived_at is not None,
+            document_count=a.document_count,
+            state=str(a.state),
+            user_id=a.person.user_id,
+            role=a.role,
+            sorts_post=a.sorts_post,
+            department_ids=list(a.department_ids),
+            email=a.email,
+            last_sign_in_at=a.last_sign_in_at,
+            last_app_use_at=a.last_app_use_at,
+            deactivated_at=a.deactivated_at,
+            invitation_id=a.invitation_id,
+            invitation_expires_at=a.invitation_expires_at,
+            invitation_expired=a.invitation_expired,
+            can_manage_account=a.can_manage_account,
+        )
+        for a in services.list_people(membership.workspace, viewer=membership, state=state[:20])
+    ]
+
+
+@router.get(
+    f"{_PERSON}/private-post",
+    response={200: PersonPrivatePostOut, 403: ErrorOut, 404: ErrorOut, **AUTH_ERRORS},
+    auth=session_auth,
+    operation_id="getPersonHasPrivatePost",
+    description=(
+        "Web session only, admins (403 forbidden for others). Whether a private letter is on "
+        "the person's name, also one the admin cannot read: a yes or no, for the dialogs "
+        "that switch an account off or invite. 404 person_not_found for a department."
+    ),
+)
+def get_person_has_private_post(
+    request: HttpRequest, workspace_id: UUID, person_id: UUID
+) -> PersonPrivatePostOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
+    return PersonPrivatePostOut(
+        has_private_post=services.person_has_private_post(membership.workspace, person_id)
+    )
 
 
 @router.post(
