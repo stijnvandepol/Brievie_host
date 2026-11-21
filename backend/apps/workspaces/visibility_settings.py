@@ -161,6 +161,8 @@ _MEMBER_CHANGE_FIELDS: Final[dict[str, tuple[str, ...]]] = {
     "unlink": ("person_id",),
     "remove": ("user_id",),
     "invite": ("role", "person_id"),
+    # "Beheerd door": `user_id` None ends the management.
+    "manage": ("user_id", "person_id"),
 }
 
 
@@ -810,6 +812,14 @@ def _member_step(
             ),
             True,
         )
+    if change.kind == "manage":
+        manager = user_id
+        return (
+            lambda: people.set_manager(
+                workspace=workspace, person_id=person_id, user_id=manager, actor=actor
+            ),
+            manager is None,
+        )
     if change.kind == "link" and user_id is None:
         raise _incomplete()
     target = user_id if change.kind == "link" else None
@@ -903,7 +913,8 @@ def _preview_invitation(
             if person is None:
                 return
             with workspace_context(workspace.id, actor=SYSTEM):
-                Person.objects.filter(id=person.id).update(user=user)
+                # Accepting ends a management of the person (`_link_person`).
+                Person.objects.filter(id=person.id).update(user=user, managed_by=None)
             on_member_added(workspace.id, user.id, person_id=person.id, created_by_id=actor_id)
 
         result = preview(

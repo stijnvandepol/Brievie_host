@@ -74,6 +74,9 @@ class PersonAccountOut(Schema):
     invitation_expired: bool = False
     # Whether the caller may act on this account (reset link, sessions, devices).
     can_manage_account: bool = False
+    # "Beheerd door": the member who reads this person's post while they have no active
+    # account (admins only).
+    managed_by_user_id: UUID | None = None
 
 
 class PersonPrivatePostOut(Schema):
@@ -97,6 +100,14 @@ class PersonMemberIn(InputSchema):
     # The member to link; null unlinks.
     user_id: UUID | None = None
     # A link by which somebody gains sight needs these (S 4.4): see `previewVisibilityChange`.
+    confirmed: bool = False
+    preview_token: str = Field(default="", max_length=64)
+
+
+class PersonManagerIn(InputSchema):
+    # The member who manages the person's post ("Beheerd door"); null ends it.
+    user_id: UUID | None = None
+    # A gain needs these (S 4.4): see `previewVisibilityChange` with member_change "manage".
     confirmed: bool = False
     preview_token: str = Field(default="", max_length=64)
 

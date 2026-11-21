@@ -29,6 +29,7 @@ from apps.common.links import fragment_link, home_network_only
 from apps.common.net import valid_client_ip
 from apps.common.privacy import mask_bsns
 from apps.common.tokens import new_token, token_hash
+from apps.documents.member_export import remove_member_exports
 from apps.people.models import Person
 from apps.people.services import ensure_person_for_member
 from apps.pipeline import settings_service
@@ -689,13 +690,18 @@ def _link_person(invitation: Invitation, user: User) -> Person:
     )
     if person is None or person.user_id is not None:
         raise _person_taken_error()
+    former_manager = person.managed_by_id
     person.user = user
-    # Activated (again): no longer "uitgeschakeld" (spec 3.3).
+    # Activated (again): no longer "uitgeschakeld" (spec 3.3), and whoever managed the post
+    # stops (M6: an adult with an account decides who reads their post).
     person.deactivated_at = None
     person.former_user = None
+    person.managed_by = None
     try:
         with transaction.atomic():
-            person.save(update_fields=["user", "deactivated_at", "former_user", "updated_at"])
+            person.save(
+                update_fields=["user", "deactivated_at", "former_user", "managed_by", "updated_at"]
+            )
     except IntegrityError as exc:
         # The account is still linked to another person here (from an earlier
         # membership): one person per account, so this one cannot be theirs.
@@ -708,4 +714,27 @@ def _link_person(invitation: Invitation, user: User) -> Person:
         target=AuditTarget(kind=TargetKind.PERSON, id=person.id, name=person.display_name),
         workspace_id=invitation.workspace_id,
     )
+    if former_manager is not None:
+        # The manager's own export held this post; their assignments there end with
+        # `on_member_added`'s release, and they are told by `notify_join`.
+        remove_member_exports(invitation.workspace_id, former_manager)
+        record(
+            AuditCode.PERSON_MANAGER_CLEARED,
+            actor=AuditActor.for_user(user),
+            target=AuditTarget(kind=TargetKind.PERSON, id=person.id, name=person.display_name),
+            workspace_id=invitation.workspace_id,
+            values={"member": _member_name(invitation.workspace_id, former_manager)},
+        )
     return person
+
+
+def _member_name(workspace_id: UUID, user_id: UUID) -> str:
+    """A member as the log names them: their person's name, else the account's."""
+    name = (
+        Person.objects.filter(workspace_id=workspace_id, user_id=user_id)
+        .values_list("display_name", flat=True)
+        .first()
+    )
+    if name is not None:
+        return str(name)
+    return str(User.objects.filter(id=user_id).values_list("name", flat=True).first() or "")

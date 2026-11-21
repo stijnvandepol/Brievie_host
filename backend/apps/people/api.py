@@ -15,6 +15,7 @@ from apps.people.schemas import (
     EmergencyAccessUseOut,
     PersonAccountOut,
     PersonIn,
+    PersonManagerIn,
     PersonMemberIn,
     PersonOut,
     PersonPrivatePostOut,
@@ -78,6 +79,7 @@ def list_people(
             invitation_expires_at=a.invitation_expires_at,
             invitation_expired=a.invitation_expired,
             can_manage_account=a.can_manage_account,
+            managed_by_user_id=a.managed_by_user_id,
         )
         for a in services.list_people(membership.workspace, viewer=membership, state=state[:20])
     ]
@@ -199,6 +201,36 @@ def link_person_to_member(
         user_id=payload.user_id,
         actor=actor_from_request(request),
         actor_role=membership.role,
+        confirmed=payload.confirmed,
+        preview_token=payload.preview_token,
+    )
+
+
+@router.put(
+    f"{_PERSON}/manager",
+    response={200: PersonOut, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS, **BODY_ERRORS},
+    auth=session_auth,
+    operation_id="setPersonManager",
+    description=(
+        'Web session only, admins. "Beheerd door": a member (`user_id`) reads the post of '
+        "a person without an active account as their own, and that post no longer goes to "
+        "whoever sorts post; null ends it. 409 `is_a_department`, `person_has_account`, "
+        "`cannot_grant_self` (an admin naming themselves while private post is on the "
+        "person); 404 `member_not_found`. A gain needs `confirmed` and the token of "
+        "`previewVisibilityChange` with member_change `manage` (409 "
+        "`confirmation_required`, `preview_outdated`). Accepting an invitation for the "
+        "person, or the manager leaving the workspace, ends it."
+    ),
+)
+def set_person_manager(
+    request: HttpRequest, workspace_id: UUID, person_id: UUID, payload: PersonManagerIn
+) -> Person:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
+    return services.set_manager(
+        workspace=membership.workspace,
+        person_id=person_id,
+        user_id=payload.user_id,
+        actor=actor_from_request(request),
         confirmed=payload.confirmed,
         preview_token=payload.preview_token,
     )

@@ -72,6 +72,7 @@ class PersonAccount:
     invitation_expires_at: datetime | None = None
     invitation_expired: bool = False
     can_manage_account: bool = False
+    managed_by_user_id: UUID | None = None
 
 
 def _invalid_state() -> ApiError:
@@ -209,6 +210,7 @@ def list_people(
                 invitation_expires_at=invitation.expires_at if invitation is not None else None,
                 invitation_expired=invitation is not None and invitation.expires_at <= now,
                 can_manage_account=person.user_id in manageable,
+                managed_by_user_id=person.managed_by_id if person.user_id is None else None,
             )
         )
     return result

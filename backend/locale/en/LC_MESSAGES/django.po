@@ -514,6 +514,14 @@ msgid "Persoon toegevoegd"
 msgstr "Person added"
 
 #: apps/audit/codes.py
+msgid "Beheerd door ingesteld"
+msgstr "Managed by set"
+
+#: apps/audit/codes.py
+msgid "Beheerd door beëindigd"
+msgstr "Managed by ended"
+
+#: apps/audit/codes.py
 msgid "Zichtbaarheid gewijzigd"
 msgstr "Visibility changed"
 
@@ -1896,6 +1904,14 @@ msgstr "A department is not linked to one account. Add members instead."
 #, python-format
 msgid "Alleen %(name)s kan deze koppeling losmaken."
 msgstr "Only %(name)s can remove this link."
+
+#: apps/people/services.py
+msgid "Een afdeling heeft leden, geen beheerder. Voeg leden toe."
+msgstr "A department has members, not a manager. Add members."
+
+#: apps/people/services.py
+msgid "Deze persoon heeft een eigen account en leest de eigen post."
+msgstr "This person has their own account and reads their own mail."
 
 #: apps/people/services.py
 msgid "Dit is geen afdeling."

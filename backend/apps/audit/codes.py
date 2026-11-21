@@ -52,6 +52,9 @@ class AuditCode(models.TextChoices):
     PERSON_DELETED = "person_deleted", _("Persoon verwijderd")
     # Mensen: a person (or department) added by hand; every person has an account slot.
     PERSON_CREATED = "person_created", _("Persoon toegevoegd")
+    # "Beheerd door": a member reads the post of a person without an account (slice C).
+    PERSON_MANAGER_SET = "person_manager_set", _("Beheerd door ingesteld")
+    PERSON_MANAGER_CLEARED = "person_manager_cleared", _("Beheerd door beëindigd")
     VISIBILITY_CHANGED = "visibility_changed", _("Zichtbaarheid gewijzigd")
     PERSON_LINKED = "person_linked", _("Persoon gekoppeld aan een account")
     PERSON_UNLINKED = "person_unlinked", _("Persoon losgekoppeld van een account")
@@ -150,6 +153,9 @@ ALLOWED_VALUES: dict[AuditCode, frozenset[str]] = {
     AuditCode.LABEL_DELETED: _NONE,
     AuditCode.PERSON_DELETED: _NONE,
     AuditCode.PERSON_CREATED: _NONE,
+    # member: the name of the member who manages (or managed) the post.
+    AuditCode.PERSON_MANAGER_SET: frozenset({"member"}),
+    AuditCode.PERSON_MANAGER_CLEARED: frozenset({"member"}),
     # A share added or removed is a visibility change with `share` and `member`.
     AuditCode.VISIBILITY_CHANGED: frozenset({"visibility", "origin", "share", "member"}),
     AuditCode.PERSON_LINKED: _NONE,

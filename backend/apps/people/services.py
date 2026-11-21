@@ -596,18 +596,23 @@ def link_member(
             if unused_own is not None:
                 _delete_unused(unused_own, actor=actor)
             person.user_id = user_id
+            former_manager = person.managed_by_id if user_id is not None else None
             if user_id is not None:
-                # Linked: an account again, no longer "uitgeschakeld".
+                # Linked: an account again, no longer "uitgeschakeld", and nobody else
+                # manages the post any more (M6).
                 person.deactivated_at = None
                 person.former_user = None
+                person.managed_by = None
             _save(person)
             visibility.recompute_where(workspace_id=workspace.id, person_id=person.id)
-            if former is not None:
-                # The former member may no longer read this person's post: their
-                # assignments there end (Mijn taken S 5.3), and so does their own export,
-                # which held it.
+            if former is not None or former_manager is not None:
+                # The former member (or manager) may no longer read this person's post:
+                # their assignments there end (Mijn taken S 5.3), and so does their own
+                # export, which held it.
                 release_unseeing_assignees(workspace_id=workspace.id)
-                remove_member_exports(workspace.id, former)
+                for gone in (former, former_manager):
+                    if gone is not None:
+                        remove_member_exports(workspace.id, gone)
             if user_id is not None:
                 visibility.record_grant(
                     person, grantee=User.objects.get(id=user_id), actor_user_id=actor.user_id
@@ -688,6 +693,109 @@ def _delete_unused(person: Person, *, actor: AuditActor) -> None:
         target=AuditTarget(TargetKind.PERSON, person_id, name),
         workspace_id=person.workspace_id,
     )
+
+
+def _manager_name(workspace: Workspace, user_id: UUID) -> str:
+    """The manager as the log names a member: their person's name, else the account's."""
+    name = (
+        Person.objects.filter(workspace=workspace, user_id=user_id)
+        .values_list("display_name", flat=True)
+        .first()
+    )
+    if name is not None:
+        return str(name)
+    return str(User.objects.filter(id=user_id).values_list("name", flat=True).first() or "")
+
+
+def set_manager(
+    *,
+    workspace: Workspace,
+    person_id: UUID,
+    user_id: UUID | None,
+    actor: AuditActor,
+    confirmed: bool = False,
+    preview_token: str = "",
+) -> Person:
+    """ "Beheerd door" (Mensen slice C): a member reads the post of a person without an
+    active account as their own (the person counts as read through, so the sorters stop
+    getting it); `user_id` None ends it.
+
+    Admins only, by the locked rows (403 `forbidden`); 409 `is_a_department`; 409
+    `person_has_account` (an adult with an account decides who reads their post, M6);
+    404 `member_not_found`; 409 `cannot_grant_self` for an admin naming themselves while
+    private post is on the person (as linking). A gain needs the confirmed preview of
+    `member_change` "manage" (409 `confirmation_required`, `preview_outdated`); the new
+    manager is told (`sight_widened`) and so are the sorters (`sight_narrowed`). Ending it
+    sends the post back to the sorters without a confirmation (P6) and ends the former
+    manager's assignments there and their own export. Lock order: every membership, then
+    the person. The same manager again writes nothing."""
+    with transaction.atomic():
+        locked, role = _lock_for_sight(workspace, actor, actor_role=ACTING_AS_SYSTEM)
+        if not _acts_as_admin(role):
+            raise _forbidden()
+        person = _get_for_update(workspace, person_id)
+        if person.kind == Person.Kind.DEPARTMENT:
+            raise ApiError(
+                409,
+                "is_a_department",
+                _("Een afdeling heeft leden, geen beheerder. Voeg leden toe."),
+            )
+        if person.user_id is not None:
+            raise ApiError(
+                409,
+                "person_has_account",
+                _("Deze persoon heeft een eigen account en leest de eigen post."),
+            )
+        if user_id is not None and all(m.user_id != user_id for m in locked):
+            raise ApiError(404, "member_not_found", _("We kunnen dit lid niet vinden."))
+        if person.managed_by_id == user_id:
+            return _annotated(workspace, person.id)
+        if user_id is not None and user_id == actor.user_id and visibility.has_private_post(person):
+            raise _cannot_grant_self()
+        former = person.managed_by_id
+        named = user_id if user_id is not None else former
+        with sight_change(
+            workspace,
+            narrowing=user_id is None,
+            confirmed=confirmed,
+            preview_token=preview_token,
+            actor=actor,
+            change=member_change_key(
+                MemberChange(kind="manage", user_id=user_id, person_id=person.id)
+            ),
+        ) as sight:
+            person.managed_by_id = user_id
+            _save(person)
+            visibility.recompute_where(workspace_id=workspace.id, person_id=person.id)
+            if former is not None:
+                # The former manager may no longer read this post: their assignments there
+                # end (Mijn taken S 5.3), and so does their own export, which held it.
+                release_unseeing_assignees(workspace_id=workspace.id)
+                remove_member_exports(workspace.id, former)
+            if user_id is not None:
+                visibility.record_grant(
+                    person, grantee=User.objects.get(id=user_id), actor_user_id=actor.user_id
+                )
+            record(
+                AuditCode.PERSON_MANAGER_SET
+                if user_id is not None
+                else AuditCode.PERSON_MANAGER_CLEARED,
+                actor=actor,
+                target=AuditTarget(TargetKind.PERSON, person.id, person.display_name),
+                workspace_id=workspace.id,
+                values={"member": _manager_name(workspace, named) if named is not None else ""},
+            )
+        if user_id is not None and user_id == actor.user_id:
+            others = [
+                m.user for m in locked if m.role == Membership.Role.ADMIN and m.user_id != user_id
+            ]
+            notify_self_grant(
+                others,
+                category=person_category(person.id),
+                names=sight.before,
+                actor_name=actor.name,
+            )
+        return _annotated(workspace, person.id)
 
 
 def _forbidden() -> ApiError:

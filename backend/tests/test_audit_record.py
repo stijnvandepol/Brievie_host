@@ -223,6 +223,8 @@ def test_the_list_of_codes_is_the_closed_list_of_d11() -> None:
         "label_deleted",
         "person_deleted",
         "person_created",
+        "person_manager_set",
+        "person_manager_cleared",
         "visibility_changed",
         "person_linked",
         "person_unlinked",

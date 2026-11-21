@@ -238,13 +238,16 @@ def _server_admin_only() -> ApiError:
     )
 
 
-def _unlink_and_unassign(workspace: Workspace, user_id: UUID, actor: AuditActor) -> list[Person]:
+def _unlink_and_unassign(
+    workspace: Workspace, user_id: UUID, actor: AuditActor
+) -> tuple[list[Person], list[Person]]:
     """Inside the workspace's context: the member's person stays without its account
     link, marked "uitgeschakeld" (`deactivated_at`, `former_user`: display only, spec
     M4), their tasks here lose their assignee, and part B's seam runs. Returns the
-    unlinked persons. A queryset `update()`, before the membership goes, because
-    `Person.save` refuses a user who is no member; one statement, so the check
-    "former_user needs deactivated_at" holds at every moment."""
+    unlinked persons and the persons they managed ("Beheerd door" ends with them: P7,
+    that post goes back to the sorters). A queryset `update()`, before the membership
+    goes, because `Person.save` refuses a user who is no member; one statement, so the
+    check "former_user needs deactivated_at" holds at every moment."""
     now = timezone.now()
     as_actor: Actor = actor.user_id if actor.user_id is not None else NOBODY
     with workspace_context(workspace.id, actor=as_actor):
@@ -252,11 +255,17 @@ def _unlink_and_unassign(workspace: Workspace, user_id: UUID, actor: AuditActor)
         Person.objects.filter(id__in=[p.id for p in persons]).update(
             user=None, deactivated_at=now, former_user_id=user_id, updated_at=now
         )
+        managed = list(
+            Person.objects.filter(workspace=workspace, managed_by_id=user_id).order_by("id")
+        )
+        Person.objects.filter(id__in=[p.id for p in managed]).update(
+            managed_by=None, updated_at=now
+        )
         release_member(workspace_id=workspace.id, user_id=user_id)
         on_member_removed(workspace.id, user_id)
         # Their own export goes with them (its files once this transaction commits).
         remove_member_exports(workspace.id, user_id)
-    return persons
+    return persons, managed
 
 
 def remove_member(
@@ -316,7 +325,7 @@ def remove_member(
             change=member_change_key(MemberChange(kind="remove", user_id=user_id)),
             ask_confirmation=False,
         ):
-            persons = _unlink_and_unassign(workspace, user_id, actor)
+            persons, managed = _unlink_and_unassign(workspace, user_id, actor)
             member.delete()
         if last_membership:
             deactivate_account(user, actor=actor, current=request)
@@ -326,6 +335,14 @@ def remove_member(
                 actor=actor,
                 target=AuditTarget(kind=TargetKind.PERSON, id=person.id, name=person.display_name),
                 workspace_id=workspace.id,
+            )
+        for person in managed:
+            record(
+                AuditCode.PERSON_MANAGER_CLEARED,
+                actor=actor,
+                target=AuditTarget(kind=TargetKind.PERSON, id=person.id, name=person.display_name),
+                workspace_id=workspace.id,
+                values={"member": target.name},
             )
         record(
             AuditCode.MEMBER_LEFT if left else AuditCode.MEMBER_REMOVED,

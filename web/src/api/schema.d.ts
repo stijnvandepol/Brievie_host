@@ -1579,6 +1579,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/persons/{person_id}/manager": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Person Manager
+         * @description Web session only, admins. "Beheerd door": a member (`user_id`) reads the post of a person without an active account as their own, and that post no longer goes to whoever sorts post; null ends it. 409 `is_a_department`, `person_has_account`, `cannot_grant_self` (an admin naming themselves while private post is on the person); 404 `member_not_found`. A gain needs `confirmed` and the token of `previewVisibilityChange` with member_change `manage` (409 `confirmation_required`, `preview_outdated`). Accepting an invitation for the person, or the manager leaving the workspace, ends it.
+         */
+        put: operations["setPersonManager"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/persons/{person_id}/member": {
         parameters: {
             query?: never;
@@ -3536,6 +3556,11 @@ export interface components {
              * Format: date-time
              */
             last_sign_in_at?: string | null;
+            /**
+             * Managed By User Id
+             * Format: uuid
+             */
+            managed_by_user_id?: string | null;
             /** Name Variants */
             name_variants: string[];
             /**
@@ -3572,6 +3597,24 @@ export interface components {
             kind: string;
             /** Name Variants */
             name_variants?: string[];
+        };
+        /** PersonManagerIn */
+        PersonManagerIn: {
+            /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
+            /**
+             * Preview Token
+             * @default
+             */
+            preview_token: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id?: string | null;
         };
         /** PersonMemberIn */
         PersonMemberIn: {
@@ -10184,6 +10227,105 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EmergencyAccessUseOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    setPersonManager: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                person_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonManagerIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonOut"];
                 };
             };
             /** @description Bad Request */

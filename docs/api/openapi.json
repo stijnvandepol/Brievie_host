@@ -2753,6 +2753,14 @@
               "null"
             ]
           },
+          "managed_by_user_id": {
+            "format": "uuid",
+            "title": "Managed By User Id",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "name_variants": {
             "items": {
               "type": "string"
@@ -2824,6 +2832,31 @@
           "display_name"
         ],
         "title": "PersonIn",
+        "type": "object"
+      },
+      "PersonManagerIn": {
+        "properties": {
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "preview_token": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Preview Token",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "PersonManagerIn",
         "type": "object"
       },
       "PersonMemberIn": {
@@ -4402,7 +4435,7 @@
           },
           "member_change": {
             "default": "",
-            "pattern": "^(|role|sorts_post|department_add|department_remove|link|unlink|remove|invite|invite_admin)$",
+            "pattern": "^(|role|sorts_post|department_add|department_remove|link|unlink|remove|invite|invite_admin|manage)$",
             "title": "Member Change",
             "type": "string"
           },
@@ -12978,6 +13011,145 @@
           }
         ],
         "summary": "Open Emergency Access",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/persons/{person_id}/manager": {
+      "put": {
+        "description": "Web session only, admins. \"Beheerd door\": a member (`user_id`) reads the post of a person without an active account as their own, and that post no longer goes to whoever sorts post; null ends it. 409 `is_a_department`, `person_has_account`, `cannot_grant_self` (an admin naming themselves while private post is on the person); 404 `member_not_found`. A gain needs `confirmed` and the token of `previewVisibilityChange` with member_change `manage` (409 `confirmation_required`, `preview_outdated`). Accepting an invitation for the person, or the manager leaving the workspace, ends it.",
+        "operationId": "setPersonManager",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "person_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Person Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonManagerIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Set Person Manager",
         "tags": [
           "people"
         ]
