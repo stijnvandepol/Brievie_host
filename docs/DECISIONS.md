@@ -1774,3 +1774,22 @@ Finance's letter, with the owner as control.
   reader rows, shares and department memberships). Closing it inside the policy (the
   actor counted only while a member) needs a migration of the policies and a new
   measurement; left to the owner, not built here.
+
+## 2026-11-21: Mijn taken (a personal to-do list made from your post)
+
+Spec `docs/superpowers/specs/2026-11-21-mijn-taken-design.md`, plan
+`docs/superpowers/plans/2026-11-21-host-mijn-taken.md`; rulings MT1–MT14 are the spec's
+section 16, recorded here as built.
+
+- **MT3: derived, never copied.** "Mijn taken" is a query over `Task` and its letter per
+  request; no table or cache holds a member's list. Trash, restore, hand-over, link
+  changes and confirm show on the next read.
+- **MT8: `amount` is a decimal string in the API, empty when unknown.** The model holds a
+  `Decimal` (`tasks_task_amount_not_negative`); a nullable decimal would render as `anyOf`.
+- **MT14: no backfill** of `amount` or `term_quote`: a guess is worse than nothing.
+- **New columns keep raw inserts working.** `Task.term_quote` (not null) has a database
+  default `''` (tasks 0005, `RunSQL`, as documents 0017); the other new columns are
+  nullable. The partial index `tasks_task_open` (`workspace_id`, `deadline`) `WHERE
+  status = 'open'` serves the list and the counts.
+- **History origin `system`** (new): an assignment the server released because the
+  assignee may no longer read the letter; no actor.

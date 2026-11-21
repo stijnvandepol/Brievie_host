@@ -104,6 +104,12 @@ the translation. Add a line before introducing a new domain term.
 | samenvoegen, Het is dezelfde brief | merge (`mergeDuplicate`) |
 | Het zijn twee brieven | dismiss (`dismissDuplicate`) |
 | Taak ook afronden | complete twin tasks (`complete_twin_tasks`, `task_twins`) |
+| Mijn taken | my tasks (`listMyTasks`, `countMyTasks`, `part=mine`) |
+| Op te pakken | to pick up (`part=to_pick_up`) |
+| Alle taken | all tasks (`part=all`) |
+| Datum nodig, Datum invullen | needs a date (`needs_deadline`, `term_quote`), set a date (`setTaskDeadline`) |
+| Afgerond, Afgevinkt door | done (`status=done`), completed by (`completed_by`) |
+| Ik doe dit, Geef aan…, Niet meer aan mij | assign to self, hand over, release (`assignTask`) |
 
 ## English in the interface
 
@@ -153,6 +159,12 @@ the request that creates the workspace and keep that name.
 | dubbele brief | duplicate letter | Never "double" or "copy". Dubbel?: "Duplicate?"; Mogelijk dubbel: "Possible duplicate". |
 | samenvoegen, Het is dezelfde brief / Het zijn twee brieven | merge, "It is the same letter" / "They are two letters" | |
 | Taak ook afronden | Also complete the task | The checkbox when a merge would leave a twin task open. |
+| Mijn taken | My tasks | The page and the first navigation entry. |
+| Op te pakken | To pick up | Department and unnamed post in an organisation; "Ik doe dit": "I'll do it". |
+| Alle taken | All tasks | |
+| Datum nodig / Datum invullen | Needs a date / Set a date | |
+| Afgerond / Afgevinkt door Anne | Done / Ticked off by Anne | "Toch niet klaar": "Not done after all". |
+| Geef aan… / Niet meer aan mij | Hand over… / Not mine any more | |
 | herstellink | reset link | |
 | back-up | backup | |
 | logboek | log | Serverlogboek: Server log. |
