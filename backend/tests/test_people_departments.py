@@ -429,3 +429,32 @@ def test_an_admin_edits_a_linked_person(client: Client) -> None:
         JSON,
     )
     assert r.status_code == 200, r.json()
+
+
+def test_the_service_refuses_a_member_role_for_a_department_and_a_linked_person() -> None:
+    """The role is a required argument (no default that acts as admin); a member's role
+    is refused here too, not only at the endpoint."""
+    import inspect
+
+    import pytest
+
+    from apps.common.errors import ApiError
+    from apps.people import services
+
+    for function in (services.update_person, services.create_person, services.link_member):
+        role = inspect.signature(function).parameters["actor_role"]
+        assert role.default is inspect.Parameter.empty, function.__name__
+    h = home()
+    department = _department(h)
+    with as_actor(h.workspace, h.bob.id):
+        for person in (department, h.persons["Carla"]):
+            with pytest.raises(ApiError) as caught:
+                services.update_person(
+                    workspace=h.workspace,
+                    person_id=person.id,
+                    display_name=person.display_name,
+                    name_variants=["Belastingdienst"],
+                    archived=None,
+                    actor_role="member",
+                )
+            assert caught.value.code == "forbidden"

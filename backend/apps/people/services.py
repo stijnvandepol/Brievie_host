@@ -260,6 +260,16 @@ def _member_already_linked() -> ApiError:
 MAX_PERSONS = 500
 
 
+# `actor_role` of a call the system makes on nobody's behalf (a command, a test set-up):
+# stated by the caller, never a default, so a request that forgets its role is refused.
+ACTING_AS_SYSTEM = "system"
+
+
+def _acts_as_admin(actor_role: str) -> bool:
+    """Every permission check here asks this; `actor_role` has no default anywhere."""
+    return actor_role in (Membership.Role.ADMIN, ACTING_AS_SYSTEM)
+
+
 def _valid_kind(kind: str) -> str:
     if kind not in Person.Kind.values:
         raise ApiError(422, "validation_error", _("Kies een persoon of een afdeling."))
@@ -273,12 +283,12 @@ def create_person(
     name_variants: list[str],
     archived: bool = False,
     kind: str = Person.Kind.PERSON,
-    actor_role: str = Membership.Role.ADMIN,
+    actor_role: str,
 ) -> Person:
     """A person, or a department (`kind`; only an admin makes one: departments decide
     who reads post). The kind is set here only: an update never changes it."""
     _valid_kind(kind)
-    if kind == Person.Kind.DEPARTMENT and actor_role != Membership.Role.ADMIN:
+    if kind == Person.Kind.DEPARTMENT and not _acts_as_admin(actor_role):
         raise _forbidden()
     with transaction.atomic():
         if Person.objects.filter(workspace=workspace).count() >= MAX_PERSONS:
@@ -306,7 +316,7 @@ def update_person(
     display_name: str,
     name_variants: list[str] | None,
     archived: bool | None,
-    actor_role: str = Membership.Role.ADMIN,
+    actor_role: str,
 ) -> Person:
     """`name_variants` or `archived` None keeps the stored value.
 
@@ -316,7 +326,7 @@ def update_person(
     another member (review of PR #38). Members keep editing persons without an account."""
     with transaction.atomic():
         person = _get_for_update(workspace, person_id)
-        if actor_role != Membership.Role.ADMIN and (
+        if not _acts_as_admin(actor_role) and (
             person.kind == Person.Kind.DEPARTMENT or person.user_id is not None
         ):
             raise _forbidden()
@@ -450,7 +460,7 @@ def link_member(
     person_id: UUID,
     user_id: UUID | None,
     actor: AuditActor,
-    actor_role: str = Membership.Role.ADMIN,
+    actor_role: str,
 ) -> Person:
     """Link the person to a member of the workspace, or unlink it (`user_id` None): a grant
     of the person's post (PB T12, D 8.1).
@@ -470,7 +480,7 @@ def link_member(
                 "is_a_department",
                 _("Een afdeling koppel je niet aan één account. Voeg leden toe."),
             )
-        if user_id is not None and actor_role != Membership.Role.ADMIN:
+        if user_id is not None and not _acts_as_admin(actor_role):
             raise _forbidden()
         if person.user_id == user_id:
             # Nothing changes, so nothing is written to the log either.

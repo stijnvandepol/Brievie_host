@@ -91,7 +91,7 @@ def test_run_rule_writes_its_row(ws_a: Workspace) -> None:
 def test_label_deleted_writes_an_id_only_row(ws_a: Workspace) -> None:
     label = _label(ws_a)
     with workspace_context(ws_a.id, actor=SYSTEM):
-        label_services.delete_label(workspace=ws_a, label_id=label.id, actor=ACTOR)
+        label_services.delete_label(workspace=ws_a, label_id=label.id, actor=ACTOR, membership=None)
 
     (row,) = _rows(ws_a, AuditCode.LABEL_DELETED)
     assert (row.target_kind, row.target_id, row.target_name) == (TargetKind.LABEL, label.id, "")
@@ -102,9 +102,19 @@ def test_person_deleted_and_linked_rows_carry_the_name(ws_a: Workspace) -> None:
     member = join(ws_a)
     with workspace_context(ws_a.id, actor=SYSTEM):
         people_services.link_member(
-            workspace=ws_a, person_id=person.id, user_id=member.id, actor=ACTOR
+            workspace=ws_a,
+            person_id=person.id,
+            user_id=member.id,
+            actor=ACTOR,
+            actor_role=people_services.ACTING_AS_SYSTEM,
         )
-        people_services.link_member(workspace=ws_a, person_id=person.id, user_id=None, actor=ACTOR)
+        people_services.link_member(
+            workspace=ws_a,
+            person_id=person.id,
+            user_id=None,
+            actor=ACTOR,
+            actor_role=people_services.ACTING_AS_SYSTEM,
+        )
         people_services.delete_person(workspace=ws_a, person_id=person.id, actor=ACTOR)
 
     for code in (AuditCode.PERSON_LINKED, AuditCode.PERSON_UNLINKED, AuditCode.PERSON_DELETED):
@@ -121,7 +131,11 @@ def test_a_refused_change_writes_no_row(ws_a: Workspace) -> None:
     stranger = UserFactory.create()
     with workspace_context(ws_a.id, actor=SYSTEM), pytest.raises(ApiError):
         people_services.link_member(
-            workspace=ws_a, person_id=person.id, user_id=stranger.id, actor=ACTOR
+            workspace=ws_a,
+            person_id=person.id,
+            user_id=stranger.id,
+            actor=ACTOR,
+            actor_role=people_services.ACTING_AS_SYSTEM,
         )
 
     assert _rows(ws_a, AuditCode.PERSON_LINKED) == []
@@ -132,7 +146,11 @@ def test_one_link_writes_exactly_one_row(ws_a: Workspace) -> None:
     member = join(ws_a)
     with workspace_context(ws_a.id, actor=SYSTEM):
         people_services.link_member(
-            workspace=ws_a, person_id=person.id, user_id=member.id, actor=ACTOR
+            workspace=ws_a,
+            person_id=person.id,
+            user_id=member.id,
+            actor=ACTOR,
+            actor_role=people_services.ACTING_AS_SYSTEM,
         )
 
     assert len(_rows(ws_a, AuditCode.PERSON_LINKED)) == 1
@@ -142,7 +160,7 @@ def test_label_and_rule_rows_carry_no_name(ws_a: Workspace) -> None:
     label = _label(ws_a)
     rule = _rule(ws_a)
     with workspace_context(ws_a.id, actor=SYSTEM):
-        label_services.delete_label(workspace=ws_a, label_id=label.id, actor=ACTOR)
+        label_services.delete_label(workspace=ws_a, label_id=label.id, actor=ACTOR, membership=None)
         rule_services.delete_rule(workspace=ws_a, rule_id=rule.id, actor=ACTOR)
 
     with workspace_context(ws_a.id, actor=SYSTEM):
@@ -271,14 +289,28 @@ def test_linking_a_person_to_the_user_already_linked_writes_no_row(ws_a: Workspa
     member = join(ws_a)
     with workspace_context(ws_a.id, actor=SYSTEM):
         people_services.link_member(
-            workspace=ws_a, person_id=person.id, user_id=member.id, actor=ACTOR
+            workspace=ws_a,
+            person_id=person.id,
+            user_id=member.id,
+            actor=ACTOR,
+            actor_role=people_services.ACTING_AS_SYSTEM,
         )
         people_services.link_member(
-            workspace=ws_a, person_id=person.id, user_id=member.id, actor=ACTOR
+            workspace=ws_a,
+            person_id=person.id,
+            user_id=member.id,
+            actor=ACTOR,
+            actor_role=people_services.ACTING_AS_SYSTEM,
         )
         other = make_person(ws_a, "Opa")
         # Unlinking somebody who was never linked is no change either.
-        people_services.link_member(workspace=ws_a, person_id=other.id, user_id=None, actor=ACTOR)
+        people_services.link_member(
+            workspace=ws_a,
+            person_id=other.id,
+            user_id=None,
+            actor=ACTOR,
+            actor_role=people_services.ACTING_AS_SYSTEM,
+        )
 
     assert len(_rows(ws_a, AuditCode.PERSON_LINKED)) == 1
     assert _rows(ws_a, AuditCode.PERSON_UNLINKED) == []

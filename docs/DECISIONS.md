@@ -1975,3 +1975,8 @@ M3). "Iedereen ziet alle post" stays on everywhere until Task 40, so departments
 - **Off ends the hour (finding 4).** Switching emergency access off removes every running
   emergency reader row of the workspace in the same transaction and releases any
   assignment that rested on it.
+- **No permission parameter fails open (finding 3, follow-up).** `actor_role` of
+  `create_person`, `update_person` and `link_member` and the label services' membership
+  are required arguments; a call on nobody's behalf states it (`ACTING_AS_SYSTEM`, or
+  `None` for the label services). A caller that forgets its role does not compile under
+  mypy instead of acting as an admin.

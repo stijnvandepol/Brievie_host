@@ -141,7 +141,8 @@ def _department_of(workspace: Workspace, department_id: UUID) -> Person:
 
 def _may_manage(department_id: UUID | None, membership: Membership | None) -> None:
     """A department's label is managed by admins and that department's leads; a label for
-    everyone by every member (403 `forbidden` otherwise). `membership` None: the system."""
+    everyone by every member (403 `forbidden` otherwise). `membership` None: the system,
+    which every caller states explicitly (no default)."""
     if department_id is None or membership is None:
         return
     if membership.role == Membership.Role.ADMIN:
@@ -159,7 +160,7 @@ def create_label(
     name: str,
     color: str,
     department_id: UUID | None = None,
-    actor: Membership | None = None,
+    actor: Membership | None,
 ) -> Label:
     """A label for everyone, or of a department (`department_id`; admins and its leads)."""
     with transaction.atomic():
@@ -189,7 +190,7 @@ def update_label(
     color: str,
     move: bool = False,
     department_id: UUID | None = None,
-    actor: Membership | None = None,
+    actor: Membership | None,
 ) -> Label:
     """An empty `color` keeps the label's colour; without `move` the label keeps its
     department (an older client never moves a label), with it the department becomes
@@ -214,7 +215,7 @@ def delete_label(
     workspace: Workspace,
     label_id: UUID,
     actor: AuditActor,
-    membership: Membership | None = None,
+    membership: Membership | None,
 ) -> None:
     """Removes the label from its documents too; their events keep its name.
 

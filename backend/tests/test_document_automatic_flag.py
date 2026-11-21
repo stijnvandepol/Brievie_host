@@ -100,7 +100,9 @@ def test_deleting_the_label_clears_it_on_every_letter(ws_a: Workspace) -> None:
         organise.add_label(only_this, label, actor=None, origin=AI)
         organise.add_label(also_other, label, actor=None, origin=AI)
         organise.add_label(also_other, other, actor=None, origin=AI)
-        label_services.delete_label(workspace=ws_a, label_id=label.id, actor=AuditActor.system())
+        label_services.delete_label(
+            workspace=ws_a, label_id=label.id, actor=AuditActor.system(), membership=None
+        )
 
     assert _flag(ws_a, only_this) is False
     assert _flag(ws_a, also_other) is True
