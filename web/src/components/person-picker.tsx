@@ -1,6 +1,15 @@
 import { t } from "@lingui/core/macro";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button, ListBox, ListBoxItem, Popover, Select, SelectValue } from "react-aria-components";
+import {
+  Button,
+  Header,
+  ListBox,
+  ListBoxItem,
+  ListBoxSection,
+  Popover,
+  Select,
+  SelectValue,
+} from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import type { components } from "../api/schema";
 import { Icon } from "./icons";
@@ -15,23 +24,45 @@ export function personNames(persons: Person[], ids: string[]): string[] {
   });
 }
 
+function PersonOption({ person }: { person: Person }) {
+  return (
+    <ListBoxItem id={person.id} textValue={person.display_name} className="picker-option">
+      {person.display_name}
+      {person.archived ? ` ${t`(gearchiveerd)`}` : ""}
+    </ListBoxItem>
+  );
+}
+
 /**
  * Who a letter is addressed to: a multi-select over the workspace's persons. Archived persons
- * are only listed while they are selected, so they can still be taken off a letter.
+ * are only listed while they are selected, so they can still be taken off a letter. With
+ * `departments` ("Afdelingen" or, at home, "Groepen") the departments come first, under
+ * that heading, and the persons after them.
  */
 export function PersonPicker({
   persons,
   selectedIds,
   onChange,
   disabled = false,
+  departments,
 }: {
   persons: Person[];
   selectedIds: string[];
   onChange: (ids: string[]) => void;
   disabled?: boolean;
+  departments?: string;
 }) {
   const options = persons.filter((person) => !person.archived || selectedIds.includes(person.id));
   const names = personNames(persons, selectedIds);
+  const groups = departments
+    ? [
+        {
+          name: departments,
+          items: options.filter((person) => person.kind === "department"),
+        },
+        { name: t`Personen`, items: options.filter((person) => person.kind !== "department") },
+      ].filter((group) => group.items.length > 0)
+    : null;
   return (
     <Select
       aria-label={t`Op naam van`}
@@ -48,14 +79,22 @@ export function PersonPicker({
         <Icon name="chevronDown" className="picker-chevron" />
       </Button>
       <Popover className="picker-popover">
-        <ListBox className="picker-list" items={options}>
-          {(person) => (
-            <ListBoxItem id={person.id} textValue={person.display_name} className="picker-option">
-              {person.display_name}
-              {person.archived ? ` ${t`(gearchiveerd)`}` : ""}
-            </ListBoxItem>
-          )}
-        </ListBox>
+        {groups ? (
+          <ListBox className="picker-list" items={groups}>
+            {(group) => (
+              <ListBoxSection id={group.name} className="picker-section">
+                <Header className="picker-header">{group.name}</Header>
+                {group.items.map((person) => (
+                  <PersonOption key={person.id} person={person} />
+                ))}
+              </ListBoxSection>
+            )}
+          </ListBox>
+        ) : (
+          <ListBox className="picker-list" items={options}>
+            {(person) => <PersonOption person={person} />}
+          </ListBox>
+        )}
       </Popover>
     </Select>
   );

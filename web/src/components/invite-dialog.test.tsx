@@ -151,7 +151,7 @@ describe("inviting", () => {
     const dialog = await screen.findByRole("dialog");
     await u.click(within(dialog).getByRole("button", { name: "Meer opties" }));
     expect(within(dialog).getByRole("radio", { name: "Lid" })).toBeChecked();
-    await u.click(within(dialog).getByRole("radio", { name: "Meekijker" }));
+    await u.click(within(dialog).getByRole("radio", { name: "Alleen lezen" }));
     await u.selectOptions(within(dialog).getByRole("combobox", { name: "Geldig" }), "30 dagen");
     const email = within(dialog).getByRole("textbox", { name: "E-mailadres" });
     expect(email).toHaveAccessibleDescription("Alleen dit adres kan de uitnodiging gebruiken.");

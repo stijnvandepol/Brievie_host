@@ -9,6 +9,24 @@ Lees bij elke versie eerst **Voor je bijwerkt**, als die er staat.
 
 ### Toegevoegd
 
+- **Wie ziet wat.** Onder **Instellingen → Wie ziet wat** stel je in wie welke post ziet:
+  iedereen alles (Thuis), of ieder zijn eigen post en die van zijn afdeling (Organisatie),
+  beheerders die alle post lezen, en wie post zonder naam verdeelt. Elke wijziging laat
+  eerst zien wie meer of minder gaat zien; wie meer gaat zien, bevestig je. Ook een
+  rolwijziging, een uitnodiging (ook een nieuwe link) en iemand aan een afdeling toevoegen
+  vragen dat als iemand er meer door ziet.
+- **Afdelingen** (thuis: **Groepen**) met leden en leidinggevenden, labels van een
+  afdeling, en in de **Inbox** knoppen om te filteren (Voor mij, je afdeling, Zonder naam).
+- **Privé-brieven en delen.** Op een brief: **Privé maken**, **Delen met** en **Wie kan deze
+  brief zien?**. Een beheerder kan met een reden een uur lang **Noodtoegang** gebruiken, als
+  de serverbeheerder dat aanzet. Elk lid leest onder zijn account **Wie kan mijn post zien?**.
+- Na de installatie zie je **Zo is Brievie nu ingesteld**, met wat je daarna kunt doen.
+
+### Gewijzigd
+
+- **Te doen** heet nu **Inbox**. **Zakelijk** heet nu **Organisatie**, de rol meekijker heet
+  nu **Alleen lezen**.
+
 - **Prullenbak voor brieven.** Met **Verwijderen** op een brief gaat die 30 dagen naar de
   **Prullenbak**. Daar kun je hem terugzetten. Na 30 dagen wist Brievie de brief voorgoed,
   ook de bestanden van de pagina's. Je ziet in de prullenbak alleen brieven die je ook
@@ -19,7 +37,7 @@ Lees bij elke versie eerst **Voor je bijwerkt**, als die er staat.
   wordt na 30 dagen door Brievie zelf gewist.
 - Het logboek noemt verplaatsen naar de prullenbak, terugzetten en definitief wissen.
   Brievie houdt nog geen bewaartermijn per brief bij (zie SELFHOST, deel 23).
-- **Dubbele brieven.** Scant iemand een brief die er al is, dan zie je onder **Te doen**
+- **Dubbele brieven.** Scant iemand een brief die er al is, dan zie je in de **Inbox**
   het blok **Dubbel?**. Op de pagina **Mogelijk dubbel** staan de twee brieven naast
   elkaar, met wat hetzelfde is en wat verschilt. Kies **Het is dezelfde brief**: de brief
   die je houdt krijgt de labels, personen en open taken van allebei, en de andere gaat naar

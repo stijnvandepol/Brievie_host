@@ -1,11 +1,21 @@
 import { t } from "@lingui/core/macro";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
+import { Button } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
-import { documentQuery, labelsQuery, personsQuery } from "../api/queries";
+import {
+  documentQuery,
+  labelsQuery,
+  membersQuery,
+  meQuery,
+  personsQuery,
+  visibilityQuery,
+} from "../api/queries";
 import type { components } from "../api/schema";
 import { refreshAfterTrash, trashDocument } from "../api/trash";
-import { ConfirmAction } from "../components/confirm-dialog";
+import { ConfirmAction, ConfirmDialog } from "../components/confirm-dialog";
+import { DocumentAccess } from "../components/document-access";
 import { DocumentHistory } from "../components/document-history";
 import {
   AutomaticBadge,
@@ -13,13 +23,19 @@ import {
   StatusBadge,
   typeLabel,
 } from "../components/document-table";
+import { handOverSentence, losesLetter, ownSight } from "../components/hand-over";
+import { Icon } from "../components/icons";
 import { LabelPicker, useSetLabels } from "../components/label-picker";
 import { ErrorAlert, focusPageHeading, PageHeader, Shell, usePageTitle } from "../components/page";
 import { PersonPicker, useSetAddressees } from "../components/person-picker";
+import { PrivateLock } from "../components/private-lock";
+import { ShareDialog, useSetVisibility } from "../components/share-dialog";
 import { SuggestionList } from "../components/suggestion-list";
 import { TaskList } from "../components/task-list";
 import { Loading, MessageBar } from "../components/ui";
+import { showLetterGone } from "../lost-letter";
 import { showUndo } from "../undo-trash";
+import { departmentsTitle } from "./departments";
 import { workspaceRoute } from "./workspace";
 
 type Document = components["schemas"]["DocumentOut"];
@@ -91,7 +107,7 @@ function AutomaticHint({ names }: { names: string[] }) {
   return <p className="muted small">{t`Automatisch toegevoegd: ${list}`}</p>;
 }
 
-/** Hands a letter the AI confirmed back to "Te doen" (Controleren); the answer is the letter itself. */
+/** Hands a letter the AI confirmed back to "Inbox" (Controleren); the answer is the letter itself. */
 function useReopen(workspaceId: string, documentId: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -136,18 +152,68 @@ function useTrash(workspaceId: string, documentId: string) {
   });
 }
 
+/** After a change the caller can no longer read the letter: back to the Inbox, which says so. */
+export function useLetterGone(workspaceId: string) {
+  const navigate = useNavigate();
+  return () => {
+    showLetterGone(workspaceId);
+    void navigate({ to: "/w/$workspaceId/inbox", params: { workspaceId } });
+  };
+}
+
 function DocumentView({
   workspaceId,
   document,
   canEdit,
+  role,
 }: {
   workspaceId: string;
   document: Document;
   canEdit: boolean;
+  role: string;
 }) {
   const persons = useQuery(personsQuery(workspaceId));
   const labels = useQuery(labelsQuery(workspaceId));
+  const visibility = useQuery(visibilityQuery(workspaceId));
+  const members = useQuery(membersQuery(workspaceId));
+  const me = useQuery(meQuery);
   const setAddressees = useSetAddressees(workspaceId, document.id);
+  const gone = useLetterGone(workspaceId);
+  const [handOver, setHandOver] = useState<string[] | null>(null);
+  const [sharing, setSharing] = useState<"private" | "share" | null>(null);
+  const setVisibility = useSetVisibility(workspaceId, document.id);
+  const restricted = document.visibility === "restricted";
+  async function makePublic() {
+    const answer = await setVisibility.mutateAsync({
+      visibility: "workspace",
+      shared_user_ids: document.shared_user_ids ?? [],
+    });
+    if (answer.can_read === false) gone();
+  }
+  const departmentsOn = visibility.data?.departments_enabled === true;
+  const sight = ownSight(
+    visibility.data,
+    role,
+    me.data?.id,
+    members.data ?? [],
+    persons.data ?? [],
+  );
+  async function saveAddressees(ids: string[]) {
+    const answer = await setAddressees.mutateAsync(ids);
+    if (answer.can_read === false) gone();
+  }
+  function chooseAddressees(ids: string[]) {
+    if (
+      document.visibility !== "restricted" &&
+      losesLetter(sight, ids, persons.data ?? [], departmentsOn)
+    ) {
+      setHandOver(ids);
+      return;
+    }
+    saveAddressees(ids).catch(() => {
+      // Shown in the panel (setAddressees.error).
+    });
+  }
   const setLabels = useSetLabels(workspaceId, document.id);
   const reopen = useReopen(workspaceId, document.id);
   const trash = useTrash(workspaceId, document.id);
@@ -175,6 +241,11 @@ function DocumentView({
       </div>
       <div className="document-side">
         <StatusNotice document={document} />
+        <PrivateLock
+          visibility={document.visibility}
+          readerNames={document.reader_names}
+          variant="page"
+        />
         <section className="panel" aria-label={t`Gegevens`}>
           <dl className="detail-list">
             <div>
@@ -193,7 +264,11 @@ function DocumentView({
               <dt>{t`Status`}</dt>
               <dd>
                 <span className="cell-badges">
-                  <StatusBadge status={document.status} inboxState={document.inbox_state} />
+                  <StatusBadge
+                    status={document.status}
+                    inboxState={document.inbox_state}
+                    departments={departmentsOn}
+                  />
                   <AutomaticBadge document={document} />
                 </span>
               </dd>
@@ -204,9 +279,35 @@ function DocumentView({
                 <PersonPicker
                   persons={persons.data ?? []}
                   selectedIds={document.addressee_ids ?? []}
-                  onChange={(ids) => setAddressees.mutate(ids)}
+                  onChange={chooseAddressees}
                   disabled={!canEdit || document.status === "processing" || setAddressees.isPending}
+                  departments={
+                    departmentsOn
+                      ? departmentsTitle(visibility.data?.kind ?? "business")
+                      : undefined
+                  }
                 />
+                {sight && handOver ? (
+                  <ConfirmDialog
+                    isOpen
+                    onOpenChange={(open) => {
+                      if (!open) setHandOver(null);
+                    }}
+                    title={t`Brief aan iemand anders geven?`}
+                    confirmLabel={t`Opslaan`}
+                    tone="primary"
+                    onConfirm={() => saveAddressees(handOver)}
+                  >
+                    <p>
+                      {handOverSentence(
+                        sight,
+                        document.addressee_ids ?? [],
+                        handOver,
+                        persons.data ?? [],
+                      )}
+                    </p>
+                  </ConfirmDialog>
+                ) : null}
                 <AutomaticHint names={autoPeople} />
               </dd>
             </div>
@@ -237,7 +338,29 @@ function DocumentView({
                   tone="primary"
                   onConfirm={() => reopen.mutateAsync()}
                 >
-                  <p>{t`De brief komt terug op Te doen, bij Controleren. De taken die de AI maakte en die nog open staan, verdwijnen. Je controleert de brief daarna in de app.`}</p>
+                  <p>{t`De brief komt terug in de Inbox, bij Controleren. De taken die de AI maakte en die nog open staan, verdwijnen. Je controleert de brief daarna in de app.`}</p>
+                </ConfirmAction>
+              ) : null}
+              {restricted ? null : (
+                <Button className="button-text" onPress={() => setSharing("private")}>
+                  <Icon name="lock" />
+                  {t`Privé maken`}
+                </Button>
+              )}
+              <Button className="button-text" onPress={() => setSharing("share")}>
+                <Icon name="share" />
+                {restricted ? t`Delen` : t`Delen met`}
+              </Button>
+              {restricted && document.can_make_public ? (
+                <ConfirmAction
+                  label={t`Niet meer privé`}
+                  icon="lock"
+                  title={t`Niet meer privé maken?`}
+                  confirmLabel={t`Niet meer privé`}
+                  tone="primary"
+                  onConfirm={makePublic}
+                >
+                  <p>{t`Wie deze brief mag zien, volgt daarna weer de instellingen van Wie ziet wat. Met wie je hem deelde, houdt hem.`}</p>
                 </ConfirmAction>
               ) : null}
               {/* Primary, not danger: the letter can be put back for 30 days. */}
@@ -286,6 +409,16 @@ function DocumentView({
             />
           </section>
         ) : null}
+        {sharing ? (
+          <ShareDialog
+            workspaceId={workspaceId}
+            document={document}
+            mode={sharing}
+            onClose={() => setSharing(null)}
+            onGone={gone}
+          />
+        ) : null}
+        <DocumentAccess workspaceId={workspaceId} documentId={document.id} />
         <DocumentHistory workspaceId={workspaceId} documentId={document.id} canEdit={canEdit} />
         <details className="panel letter-text">
           <summary>{t`Tekst van de brief`}</summary>
@@ -335,6 +468,7 @@ function DocumentPage() {
           workspaceId={workspace.id}
           document={data}
           canEdit={workspace.role !== "viewer"}
+          role={workspace.role}
         />
       ) : null}
     </Shell>

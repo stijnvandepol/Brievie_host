@@ -16,12 +16,19 @@ import {
   TextField,
 } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
-import { membersQuery, personsQuery } from "../api/queries";
+import {
+  membersQuery,
+  personsQuery,
+  visibilityQuery,
+  workspaceSettingsQuery,
+} from "../api/queries";
 import type { components } from "../api/schema";
+import { EmergencyDialog } from "../components/emergency-dialog";
 import { ExternalAiNotice } from "../components/external-ai-notice";
 import { Icon } from "../components/icons";
 import { ErrorAlert, focusPageHeading, PageHeader, Shell, usePageTitle } from "../components/page";
 import { Badge, Loading, Persona } from "../components/ui";
+import { previewBody, useSightChange } from "../components/visibility-preview-dialog";
 import { workspaceRoute } from "./workspace";
 
 type Person = components["schemas"]["PersonOut"];
@@ -121,8 +128,13 @@ function PersonRow({
   onEdit,
   onError,
   onDone,
+  sight,
+  onEmergency,
 }: {
+  /** Opens emergency access for this person; only for an admin while it is on. */
+  onEmergency?: () => void;
   workspaceId: string;
+  sight: ReturnType<typeof useSightChange>;
   person: Person;
   members: Member[];
   isAdmin: boolean;
@@ -174,13 +186,23 @@ function PersonRow({
     onError,
   });
   const link = useMutation({
-    mutationFn: async (userId: string) => {
-      const { error } = await api.PUT(
-        "/api/v1/workspaces/{workspace_id}/persons/{person_id}/member",
-        { params: { path }, body: { user_id: userId, confirmed: false, preview_token: "" } },
-      );
-      if (error !== undefined) throw new ApiFailure(error);
-    },
+    // Linking is a grant: when the member gains sight, the preview asks first (S 4.4).
+    mutationFn: (member: Member) =>
+      sight.tryFirst({
+        preview: previewBody({
+          member_change: "link",
+          member_user_id: member.user_id,
+          member_person_id: person.id,
+        }),
+        confirmLabel: t`Ja, koppel ${person.display_name} aan ${member.name}`,
+        write: async (confirmation) => {
+          const { error } = await api.PUT(
+            "/api/v1/workspaces/{workspace_id}/persons/{person_id}/member",
+            { params: { path }, body: { user_id: member.user_id, ...confirmation } },
+          );
+          if (error !== undefined) throw new ApiFailure(error);
+        },
+      }),
     onSuccess: refresh,
     onError,
   });
@@ -236,13 +258,24 @@ function PersonRow({
               {isAdmin ? <DeleteButton person={person} onConfirm={() => remove.mutate()} /> : null}
             </>
           ) : null}
+          {onEmergency ? (
+            <Button
+              className="button-text"
+              aria-label={t`Noodtoegang: ${person.display_name}`}
+              onPress={onEmergency}
+            >
+              <Icon name="shield" />
+              {t`Noodtoegang`}
+            </Button>
+          ) : null}
           {canLink ? (
             <select
               className="inline-select"
               aria-label={t`Koppel aan account: ${person.display_name}`}
               value=""
               onChange={(event) => {
-                if (event.target.value) link.mutate(event.target.value);
+                const member = free.find((m) => m.user_id === event.target.value);
+                if (member) link.mutate(member);
               }}
             >
               <option value="">{t`Kies een account`}</option>
@@ -304,7 +337,17 @@ function PersonsPage() {
   const { workspace } = personsRoute.useRouteContext();
   const persons = useQuery(personsQuery(workspace.id));
   const members = useQuery(membersQuery(workspace.id));
+  const visibility = useQuery(visibilityQuery(workspace.id));
+  const sight = useSightChange(workspace.id);
+  const isAdmin = workspace.role === "admin";
+  const settings = useQuery({ ...workspaceSettingsQuery(workspace.id), enabled: isAdmin });
+  const emergencyOn = isAdmin && settings.data?.emergency_access === true;
+  const [emergency, setEmergency] = useState<Person | null>(null);
   const [editing, setEditing] = useState<Editing>(null);
+  // While departments are on they have their own page (Afdelingen); off, they are names.
+  const shown = (persons.data ?? []).filter(
+    (person) => !(visibility.data?.departments_enabled && person.kind === "department"),
+  );
   const [rowError, setRowError] = useState<unknown>(null);
   const canEdit = workspace.role !== "viewer";
 
@@ -347,9 +390,11 @@ function PersonsPage() {
               </tr>
             </thead>
             <tbody>
-              {persons.data.map((person) => (
+              {shown.map((person) => (
                 <PersonRow
                   key={person.id}
+                  sight={sight}
+                  onEmergency={emergencyOn ? () => setEmergency(person) : undefined}
                   workspaceId={workspace.id}
                   person={person}
                   members={members.data ?? []}
@@ -385,6 +430,14 @@ function PersonsPage() {
           />
         </Modal>
       </ModalOverlay>
+      {sight.dialog}
+      {emergency ? (
+        <EmergencyDialog
+          workspaceId={workspace.id}
+          person={emergency}
+          onClose={() => setEmergency(null)}
+        />
+      ) : null}
     </Shell>
   );
 }

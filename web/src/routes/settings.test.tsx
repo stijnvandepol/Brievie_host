@@ -63,12 +63,16 @@ describe("settings", () => {
     );
     const u = userEvent.setup();
     renderApp(path);
-    const toggle = await screen.findByRole("switch");
+    const toggle = await screen.findByRole("switch", {
+      name: "Leden mogen hun eigen post exporteren",
+    });
     await u.click(toggle);
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Alleen een beheerder mag dit doen.",
     );
-    expect(await screen.findByRole("switch")).toBeChecked();
+    expect(
+      await screen.findByRole("switch", { name: "Leden mogen hun eigen post exporteren" }),
+    ).toBeChecked();
   });
 
   it("is in the navigation for an admin only", async () => {

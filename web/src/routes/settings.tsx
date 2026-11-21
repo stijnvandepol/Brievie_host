@@ -6,6 +6,7 @@ import { Label, Radio, RadioGroup, Switch } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import { workspaceSettingsQuery } from "../api/queries";
 import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
+import { PrivacySettings } from "../components/privacy-settings";
 import { Loading } from "../components/ui";
 import { isLocale, LANGUAGE_NAMES, LOCALES } from "../i18n";
 import { workspaceRoute } from "./workspace";
@@ -40,6 +41,20 @@ function SettingsPage() {
       />
       {settings.isPending ? <Loading /> : null}
       <ErrorAlert error={settings.error ?? save.error} />
+      <section className="panel panel-pad" aria-labelledby="settings-visibility">
+        <h2 id="settings-visibility">{t`Wie ziet wat`}</h2>
+        <p className="muted">{t`Wie welke post ziet: iedereen alles, of ieder zijn eigen post en die van zijn afdelingen.`}</p>
+        <div>
+          <Link
+            to="/w/$workspaceId/instellingen/wie-ziet-wat"
+            params={{ workspaceId: workspace.id }}
+            className="button secondary"
+          >
+            {t`Wie ziet wat`}
+          </Link>
+        </div>
+      </section>
+      <PrivacySettings workspaceId={workspace.id} />
       {settings.data ? (
         <section className="panel panel-pad" aria-labelledby="settings-members">
           <h2 id="settings-members">{t`Leden`}</h2>

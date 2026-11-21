@@ -41,8 +41,22 @@ export function loggedInHandlers() {
     http.get(`*${API}/workspaces/${workspace.id}/my-tasks/counts`, () =>
       HttpResponse.json(noTaskCounts),
     ),
+    http.get(`*${API}/workspaces/${workspace.id}/visibility`, () =>
+      HttpResponse.json(homeVisibility),
+    ),
   ];
 }
+
+/** "Wie ziet wat" of a Thuis workspace: everyone sees all post, no departments. */
+export const homeVisibility: components["schemas"]["VisibilityOut"] = {
+  kind: "home",
+  everyone_sees_all: true,
+  departments_enabled: false,
+  admins_read_all: true,
+  sorter_user_ids: [],
+  sentences: [],
+  summary: [],
+};
 
 export const noTaskCounts = { mine: 0, overdue: 0, within_week: 0, needs_date: 0, to_pick_up: 0 };
 

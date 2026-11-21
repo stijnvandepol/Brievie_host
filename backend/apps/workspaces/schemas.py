@@ -109,8 +109,17 @@ class InvitationIn(InputSchema):
     person_id: UUID | None = None
     # Optional: the admin's own name for it; never shown to the invitee.
     note: str = Field(default="", max_length=100)
-    # An admin invitation by which the new admin gains sight needs these (S 4.4): the
-    # confirmed preview of `member_change` "invite_admin".
+    # An invitation by which the newcomer gains sight (the admin role, or a person) needs
+    # these (S 4.4): the confirmed preview of `member_change` "invite" with the same
+    # `member_role` and `member_person_id` ("invite_admin": role admin, no person).
+    confirmed: bool = False
+    preview_token: str = Field(default="", max_length=64)
+
+
+class RenewInvitationIn(InputSchema):
+    # As for making one: a renewal that would give the newcomer more sight at this moment
+    # needs the confirmed preview of the same invitation. Optional body: without it,
+    # nothing is confirmed.
     confirmed: bool = False
     preview_token: str = Field(default="", max_length=64)
 
@@ -217,18 +226,20 @@ class VisibilityIn(VisibilitySettingsIn):
 
 class VisibilityPreviewIn(VisibilitySettingsIn):
     # A planned member change instead of a settings change: "role", "sorts_post",
-    # "department_add", "department_remove", "link", "unlink" or "remove"; "" for none.
+    # "department_add", "department_remove", "link", "unlink", "remove", "invite" (an
+    # invitation with `member_role` and `member_person_id`) or "invite_admin" (an admin
+    # invitation without a person); "" for none.
     member_change: str = Field(
         default="",
         pattern=(
-            "^(|role|sorts_post|department_add|department_remove|link|unlink|remove|invite_admin)$"
+            "^(|role|sorts_post|department_add|department_remove|link|unlink|remove|invite|invite_admin)$"
         ),
     )
     # The member concerned (role, sorts_post, department_add/remove, link, remove).
     member_user_id: UUID | None = None
-    # The person or department concerned (department_add/remove, link, unlink).
+    # The person or department concerned (department_add/remove, link, unlink, invite).
     member_person_id: UUID | None = None
-    # The new role (role).
+    # The new role (role, invite).
     member_role: str = Field(default="", pattern="^(|admin|member|viewer)$")
     # The new flag (sorts_post).
     member_sorts_post: bool = False

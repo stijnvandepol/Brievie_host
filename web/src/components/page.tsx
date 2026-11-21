@@ -14,7 +14,13 @@ import {
   TextField,
 } from "react-aria-components";
 import { ApiFailure, api, errorMessage } from "../api/client";
-import { inboxCountsQuery, meQuery, myTaskCountsQuery, workspacesQuery } from "../api/queries";
+import {
+  inboxCountsQuery,
+  meQuery,
+  myTaskCountsQuery,
+  visibilityQuery,
+  workspacesQuery,
+} from "../api/queries";
 import { resetSearch } from "../search-term";
 import { clearUndo } from "../undo-trash";
 import { Icon, type IconName } from "./icons";
@@ -183,6 +189,7 @@ function NavItem({
     | "/w/$workspaceId/post"
     | "/w/$workspaceId/prullenbak"
     | "/w/$workspaceId/personen"
+    | "/w/$workspaceId/afdelingen"
     | "/w/$workspaceId/leden"
     | "/w/$workspaceId/instellingen"
     | "/w/$workspaceId/labels"
@@ -219,12 +226,13 @@ function NavItem({
 /** The workspace a page belongs to, as far as the navigation needs it. */
 type NavWorkspace = { id: string; name: string; role?: string };
 
-/** The entries of one workspace; "Te doen" (route `inbox`) counts what waits for you (review
+/** The entries of one workspace; "Inbox" (route `inbox`) counts what waits for you (review
  * plus unassigned; a letter still being read waits for nobody).
  * A viewer may not read the rules, so Automatisering is left out for them. */
 function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
   const { data: counts } = useQuery(inboxCountsQuery(workspace.id));
   const { data: taskCounts } = useQuery(myTaskCountsQuery(workspace.id));
+  const { data: sight } = useQuery(visibilityQuery(workspace.id));
   const todo = counts ? counts.review + counts.unassigned : 0;
   const mine = taskCounts?.mine ?? 0;
   const late = taskCounts?.overdue ?? 0;
@@ -253,11 +261,9 @@ function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
         to="/w/$workspaceId/inbox"
         params={params}
         icon="inbox"
-        label={t`Te doen`}
+        label={t`Inbox`}
         ariaLabel={
-          todo > 0
-            ? plural(todo, { one: "Te doen, # brief", other: "Te doen, # brieven" })
-            : undefined
+          todo > 0 ? plural(todo, { one: "Inbox, # brief", other: "Inbox, # brieven" }) : undefined
         }
         count={todo}
       />
@@ -269,6 +275,14 @@ function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
         label={t`Prullenbak`}
       />
       <NavItem to="/w/$workspaceId/personen" params={params} icon="people" label={t`Personen`} />
+      {sight?.departments_enabled ? (
+        <NavItem
+          to="/w/$workspaceId/afdelingen"
+          params={params}
+          icon="people"
+          label={sight.kind === "home" ? t`Groepen` : t`Afdelingen`}
+        />
+      ) : null}
       <NavItem to="/w/$workspaceId/leden" params={params} icon="personAdd" label={t`Leden`} />
       <NavItem to="/w/$workspaceId/labels" params={params} icon="tag" label={t`Labels`} />
       {workspace.role === "viewer" ? null : (
@@ -352,9 +366,12 @@ function useNavPane() {
 function AccountMenu({
   me,
   onLogout,
+  workspaceId,
 }: {
   me: { name: string; email: string; is_server_admin?: boolean } | null | undefined;
   onLogout: () => void;
+  /** The workspace of the page, for "Wie kan mijn post zien?". */
+  workspaceId?: string;
 }) {
   return (
     <DialogTrigger>
@@ -377,6 +394,16 @@ function AccountMenu({
                 <span className="account-email">{me.email}</span>
               </div>
             </div>
+          ) : null}
+          {workspaceId ? (
+            <Link
+              to="/w/$workspaceId/wie-ziet-mijn-post"
+              params={{ workspaceId }}
+              className="menu-item"
+            >
+              <Icon name="people" />
+              {t`Wie kan mijn post zien?`}
+            </Link>
           ) : null}
           <Link to="/account/sessies" className="menu-item">
             <Icon name="grid" />
@@ -467,7 +494,7 @@ export function Shell({ children, workspace }: { children: ReactNode; workspace?
         </Link>
         {workspace ? <SearchField key={workspace.id} workspaceId={workspace.id} /> : null}
         <div className="topbar-end">
-          <AccountMenu me={me} onLogout={() => logout.mutate()} />
+          <AccountMenu me={me} onLogout={() => logout.mutate()} workspaceId={workspace?.id} />
         </div>
       </header>
       <div className="app-body">

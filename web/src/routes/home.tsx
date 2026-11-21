@@ -11,14 +11,14 @@ import { rootRoute } from "./root";
 
 function kindLabel(kind: string): string {
   if (kind === "home") return t`Thuis`;
-  if (kind === "business") return t`Zakelijk`;
+  if (kind === "business") return t`Organisatie`;
   return kind;
 }
 
 function roleLabel(role: string): string {
   if (role === "admin") return t`Beheerder`;
   if (role === "member") return t`Lid`;
-  if (role === "viewer") return t`Meekijker`;
+  if (role === "viewer") return t`Alleen lezen`;
   return role;
 }
 

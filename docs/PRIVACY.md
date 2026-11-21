@@ -25,9 +25,15 @@ sent to an AI service. The page image itself still shows it; that file is encryp
 Logs never contain document text, names of persons or labels, rule names or values,
 tokens or passwords.
 
-Every member and viewer of a workspace sees all its post, whoever the letters are
-addressed to. Members can be invited now; visibility per document and "Zorg private by
-default" are a later part. Until then, invite only people who may see everything.
+Who sees which letter follows the workspace's settings (**Instellingen → Wie ziet wat**),
+not the workspace alone. In *Thuis* everyone sees all post, except private letters. In an
+*Organisatie* everyone sees the post on their own name and that of their departments;
+whoever sorts post ("Verdeelt post", or the admins while nobody does) sees post that
+carries no name anybody reads; admins read all post only while "Beheerders lezen alle
+post" is on. A private letter is seen only by its readers (see "Privé-post" below). The
+database enforces this (row-level security), not only the screens, and every change that
+lets somebody see more is previewed and confirmed by an admin. Every member reads who can
+see their own post under **Wie kan mijn post zien?**, and on a letter who can see it.
 
 ## What leaves the server
 

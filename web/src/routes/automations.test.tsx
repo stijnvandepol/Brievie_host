@@ -268,8 +268,8 @@ describe("automations", () => {
       "De WOZ-beschikking van de gemeente",
       "Facturen van een leverancier",
     ]);
-    expect(within(gallery).getByText("Thuis en zakelijk")).toBeVisible();
-    expect(within(gallery).getByText("Zakelijk")).toBeVisible();
+    expect(within(gallery).getByText("Thuis en organisatie")).toBeVisible();
+    expect(within(gallery).getByText("Organisatie")).toBeVisible();
     expect(
       within(gallery).getByText("Stelt een label voor op alle post van één afzender."),
     ).toBeVisible();

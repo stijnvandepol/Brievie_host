@@ -52,10 +52,13 @@ phone and back-ups, are under [Installation](#installation).
   it. With AI off you fill in the review yourself.
 - **Ordering.** Post is addressed to persons (with name variants), carries labels and
   can be ordered by rules. A new workspace starts with a set of labels and rules for
-  *Thuis* (home) or *Zakelijk* (business). A rule builder with a test run, suggestions you
+  *Thuis* (home) or *Organisatie* (business). A rule builder with a test run, suggestions you
   accept or dismiss, a history per document with undo.
 - **Several people, several workspaces.** One server holds separate workspaces. Members
-  are invited by link and have a role: admin, member or viewer (*meekijker*). Sessions and
+  are invited by link and have a role: admin, member or read-only (*alleen lezen*). Who
+  sees which letter follows the workspace's settings (*Wie ziet wat*): at home everyone
+  sees all post; in an organisation everyone sees their own post and that of their
+  departments; any letter can be made private. Sessions and
   paired phones are listed and can be ended or revoked. An audit log per workspace and
   per server, with CSV export. A member can download their own export where the
   workspace allows it (on by default for *Thuis*).

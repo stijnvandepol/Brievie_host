@@ -61,7 +61,7 @@ describe("home", () => {
     server.use(...loggedInHandlers());
     const { router } = renderApp("/");
     await waitFor(() => expect(router.state.location.pathname).toBe(`/w/${workspace.id}/inbox`));
-    expect(await screen.findByRole("heading", { level: 1, name: "Te doen" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Inbox" })).toBeInTheDocument();
   });
 
   it("logs out with the CSRF token and returns to the login screen", async () => {

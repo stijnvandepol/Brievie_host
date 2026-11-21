@@ -2,6 +2,7 @@ from uuid import UUID
 
 from django.http import HttpRequest, HttpResponse
 from ninja import Router, Status
+from ninja.params import functions as ninja_params
 
 from apps.accounts.auth import session_auth
 from apps.accounts.schemas import AcceptedInvitationOut, UserOut
@@ -27,6 +28,7 @@ from apps.workspaces.schemas import (
     MemberOut,
     MemberRoleIn,
     PostAccessOut,
+    RenewInvitationIn,
     SortsPostIn,
     VisibilityIn,
     VisibilityOut,
@@ -44,6 +46,8 @@ ADMINS_ONLY = (
     " For the workspace's admins: another role answers 403 forbidden, a workspace the caller"
     " is not a member of 404 workspace_not_found."
 )
+# The renewal's body may be left out (an older web client sends none): its defaults apply.
+OPTIONAL_RENEW_BODY: RenewInvitationIn = ninja_params.Body(default=None)
 # Every new link counts, made or renewed, per admin: the table cannot be flooded.
 INVITATION_LINKS = CallerThrottle("invitation_link", "30/10m", per_path=False)
 # Opening and accepting share one count per client address.
@@ -471,6 +475,7 @@ def revoke_invitation(
         409: ErrorOut,
         422: ErrorOut,
         429: ErrorOut,
+        **BODY_ERRORS,
         **SESSION_WRITE_ERRORS,
     },
     auth=session_auth,
@@ -479,18 +484,28 @@ def revoke_invitation(
     + ADMINS_ONLY
     + " A new link with the same role, person, email address, note and validity; the old"
     " link stops. Shown only here (Cache-Control: no-store). 404 invitation_not_found;"
-    " 409 and 422 as when making one.",
+    " 409 and 422 as when making one. The body is optional: a renewal that would give the"
+    " newcomer more sight at this moment (the admin role, or the person) answers 409"
+    " confirmation_required until it sends `confirmed` and the `preview_token` of"
+    " previewVisibilityChange with member_change invite, its role and person.",
     operation_id="renewInvitation",
 )
 def renew_invitation(
-    request: HttpRequest, response: HttpResponse, workspace_id: UUID, invitation_id: UUID
+    request: HttpRequest,
+    response: HttpResponse,
+    workspace_id: UUID,
+    invitation_id: UUID,
+    payload: RenewInvitationIn = OPTIONAL_RENEW_BODY,
 ) -> Status[CreatedInvitationOut]:
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
+    confirmation = payload if payload is not None else RenewInvitationIn()
     issued = invitations.renew_invitation(
         membership=membership,
         actor=actor_from_request(request),
         request=request,
         invitation_id=invitation_id,
+        confirmed=confirmation.confirmed,
+        preview_token=confirmation.preview_token,
     )
     response["Cache-Control"] = "no-store"
     return Status(201, _created(issued))

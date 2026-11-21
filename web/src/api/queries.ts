@@ -356,6 +356,20 @@ export const workspaceSettingsQuery = (workspaceId: string) =>
     },
   });
 
+/** Who sees what in a workspace: the switches, who sorts post and the sentences (an admin
+ * also gets `summary`, the sentences of "Zo is Brievie nu ingesteld"). */
+export const visibilityQuery = (workspaceId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "visibility"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/visibility", {
+        params: { path: { workspace_id: workspaceId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
 /** How often the page asks again while an export is being built. */
 export const EXPORT_POLL_MS = 3000;
 

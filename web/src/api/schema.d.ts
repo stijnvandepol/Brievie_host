@@ -1205,7 +1205,7 @@ export interface paths {
         put?: never;
         /**
          * Renew Invitation
-         * @description Web session only: a bearer token answers 401 not_authenticated. For the workspace's admins: another role answers 403 forbidden, a workspace the caller is not a member of 404 workspace_not_found. A new link with the same role, person, email address, note and validity; the old link stops. Shown only here (Cache-Control: no-store). 404 invitation_not_found; 409 and 422 as when making one.
+         * @description Web session only: a bearer token answers 401 not_authenticated. For the workspace's admins: another role answers 403 forbidden, a workspace the caller is not a member of 404 workspace_not_found. A new link with the same role, person, email address, note and validity; the old link stops. Shown only here (Cache-Control: no-store). 404 invitation_not_found; 409 and 422 as when making one. The body is optional: a renewal that would give the newcomer more sight at this moment (the admin role, or the person) answers 409 confirmation_required until it sends `confirmed` and the `preview_token` of previewVisibilityChange with member_change invite, its role and person.
          */
         post: operations["renewInvitation"];
         delete?: never;
@@ -3461,6 +3461,19 @@ export interface components {
         ReauthenticateIn: {
             /** Password */
             password: string;
+        };
+        /** RenewInvitationIn */
+        RenewInvitationIn: {
+            /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
+            /**
+             * Preview Token
+             * @default
+             */
+            preview_token: string;
         };
         /** RuleActionSchema */
         RuleActionSchema: {
@@ -8426,7 +8439,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RenewInvitationIn"];
+            };
+        };
         responses: {
             /** @description Created */
             201: {
@@ -8435,6 +8452,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CreatedInvitationOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
                 };
             };
             /** @description Unauthorized */
@@ -8466,6 +8492,24 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
                 headers: {
                     [name: string]: unknown;
                 };

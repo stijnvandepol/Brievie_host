@@ -11,8 +11,8 @@ type RuleTemplate = components["schemas"]["RuleTemplateOut"];
 export function audienceLabel(kinds: string[]): string {
   const home = kinds.includes("home");
   const business = kinds.includes("business");
-  if (home && business) return t`Thuis en zakelijk`;
-  return business ? t`Zakelijk` : t`Thuis`;
+  if (home && business) return t`Thuis en organisatie`;
+  return business ? t`Organisatie` : t`Thuis`;
 }
 
 /** Wanneer, als, dan: what a rule is, in three lines. */

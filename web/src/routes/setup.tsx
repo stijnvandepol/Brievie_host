@@ -2,16 +2,7 @@ import { t } from "@lingui/core/macro";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createRoute, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
-import {
-  Button,
-  Form,
-  Input,
-  Label,
-  Radio,
-  RadioGroup,
-  Text,
-  TextField,
-} from "react-aria-components";
+import { Button, Form, Label, Radio, RadioGroup } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import { meQuery } from "../api/queries";
 import type { components } from "../api/schema";
@@ -21,14 +12,6 @@ import { requireVisitor } from "../guards";
 import { rootRoute } from "./root";
 
 type SetupBody = components["schemas"]["SetupIn"];
-
-/** "Sales, Finance" or one per line: the names, without empty ones. */
-function departments(text: string): string[] {
-  return text
-    .split(/[,\n]/)
-    .map((part) => part.trim())
-    .filter((part) => part !== "");
-}
 
 function SetupPage() {
   usePageTitle(t`Brievie instellen`);
@@ -44,7 +27,11 @@ function SetupPage() {
     onSuccess: async (result) => {
       // Setting up logs you in.
       queryClient.setQueryData(meQuery.queryKey, result.user);
-      await navigate({ to: "/" });
+      // The new workspace says how it is set up, with what to do next (S 4.2).
+      await navigate({
+        to: "/w/$workspaceId/ingesteld",
+        params: { workspaceId: result.workspace.id },
+      });
     },
   });
 
@@ -59,7 +46,8 @@ function SetupPage() {
       email: String(form.get("email")),
       password: String(form.get("password")),
       setup_token: String(form.get("setup_token")).trim(),
-      extra_labels: business ? departments(String(form.get("extra_labels") ?? "")) : [],
+      // Departments are made on Afdelingen after the start, not as labels (S 4.2).
+      extra_labels: [],
     });
   }
 
@@ -85,28 +73,23 @@ function SetupPage() {
                 <span className="radio-indicator" />
               </span>
               <strong>{t`Thuis`}</strong>
-              <span>{t`Voor je eigen post en die van je gezin. Alles bij elkaar, rustig en overzichtelijk.`}</span>
+              <span>{t`Voor jezelf en je gezin. Iedereen ziet alle post, behalve wat privé is.`}</span>
             </Radio>
             <Radio value="business" className="card">
               <span className="card-top" aria-hidden="true">
                 <Icon name="building" className="card-icon" />
                 <span className="radio-indicator" />
               </span>
-              <strong>{t`Zakelijk`}</strong>
-              <span>{t`Voor de post van je bedrijf.`}</span>
+              <strong>{t`Organisatie`}</strong>
+              <span>{t`Voor een bedrijf, praktijk of vereniging. Ieder ziet zijn eigen post en die van zijn afdeling.`}</span>
             </Radio>
           </div>
         </RadioGroup>
-        {kind === "business" ? (
-          <TextField name="extra_labels" className="field">
-            <Label>{t`Afdelingen`}</Label>
-            <Text slot="description">
-              {t`Bijvoorbeeld: Sales, Finance, HR. Je krijgt per afdeling een label.`}
-            </Text>
-            <Input autoComplete="off" />
-          </TextField>
-        ) : null}
-        <Field label={t`Naam van de werkruimte`} name="workspace_name" maxLength={150} />
+        <Field
+          label={t`Naam, bijvoorbeeld 'Familie de Vries' of 'Bakkerij Jansen'`}
+          name="workspace_name"
+          maxLength={150}
+        />
         <h2 className="form-section">{t`Jouw account`}</h2>
         <Field label={t`Je naam`} name="name" autoComplete="name" maxLength={150} />
         <Field label={t`E-mailadres`} name="email" type="email" autoComplete="username" />

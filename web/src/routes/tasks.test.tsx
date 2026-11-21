@@ -257,7 +257,7 @@ describe("Mijn taken", () => {
     expect(await screen.findByRole("checkbox", { name: "Klaar: Bekijk dit" })).toBeDisabled();
   });
 
-  it("the waiting-letters line links to Te doen", async () => {
+  it("the waiting-letters line links to Inbox", async () => {
     server.use(...loggedInHandlers(), lists({ "mine/open": answer([], { waiting_letters: 3 }) }));
     renderApp(path);
     expect(
@@ -265,7 +265,7 @@ describe("Mijn taken", () => {
         /Er wachten nog 3 brieven op nakijken\. Daar kunnen nieuwe taken uit komen\./,
       ),
     ).toBeVisible();
-    expect(screen.getByRole("link", { name: "Naar Te doen" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Naar Inbox" })).toHaveAttribute(
       "href",
       `/w/${workspace.id}/inbox`,
     );
