@@ -2031,6 +2031,14 @@ msgstr "Choose the label, for example a label of your own called Pay."
 msgid "Een van de voorwaarden is genoeg. Het soort post is bekend als de AI de brief heeft gelezen, of zodra jij hem bevestigt."
 msgstr "One of the conditions is enough. The kind of mail is known once the AI has read the letter, or as soon as you confirm it."
 
+#: apps/tasks/assignment.py
+msgid "Deze taak hoort niet bij een brief en kan niet worden gegeven."
+msgstr "This task does not belong to a letter and cannot be handed over."
+
+#: apps/tasks/assignment.py
+msgid "Deze persoon mag de brief niet lezen. Kies iemand anders."
+msgstr "This person may not read the letter. Choose someone else."
+
 #: apps/tasks/models.py
 msgid "Betalen"
 msgstr "Pay"

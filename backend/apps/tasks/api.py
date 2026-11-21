@@ -5,10 +5,12 @@ from ninja import Router
 
 from apps.accounts.services import current_user
 from apps.common.schemas import AUTH_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
-from apps.tasks import services
+from apps.tasks import assignment, services
 from apps.tasks.schemas import (
+    AssignIn,
     MyTaskCountsOut,
     MyTasksOut,
+    TaskAssigneeOut,
     TaskItemOut,
     my_task_counts_out,
     my_tasks_out,
@@ -98,3 +100,48 @@ def reopen_task(request: HttpRequest, workspace_id: UUID, task_id: UUID) -> Task
         workspace=membership.workspace, user=current_user(request), task_id=task_id
     )
     return task_item_out(task, can_edit=True, today=services.task_today())
+
+
+@router.post(
+    f"{_TASK}/assign",
+    response={200: TaskItemOut, 404: ErrorOut, 422: ErrorOut, **SESSION_WRITE_ERRORS},
+    operation_id="assignTask",
+    description=(
+        "Give the task to a member who can read its letter (`user_id`), or take it back "
+        "(`user_id` null). The same assignee again changes nothing. Writes a "
+        "`task_assigned` or `task_unassigned` event on the letter. 404 `task_not_found` "
+        "for a task the caller does not see; 422 `task_without_letter`; 422 "
+        "`assignee_cannot_read` for someone who may not read the letter, a viewer or no "
+        "member."
+    ),
+)
+def assign_task(
+    request: HttpRequest, workspace_id: UUID, task_id: UUID, payload: AssignIn
+) -> TaskItemOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    task = assignment.assign(
+        membership=membership,
+        user=current_user(request),
+        task_id=task_id,
+        assignee_id=payload.user_id,
+    )
+    return task_item_out(task, can_edit=True, today=services.task_today())
+
+
+@router.get(
+    f"{_TASK}/assignees",
+    response={200: list[TaskAssigneeOut], 404: ErrorOut, **SESSION_WRITE_ERRORS},
+    operation_id="listTaskAssignees",
+    description=(
+        "The members the task can be given to: those who can read its letter, viewers "
+        "left out, by name. Empty for a task without a letter."
+    ),
+)
+def list_task_assignees(
+    request: HttpRequest, workspace_id: UUID, task_id: UUID
+) -> list[TaskAssigneeOut]:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    return [
+        TaskAssigneeOut(user_id=a.user_id, name=a.name, is_me=a.is_me)
+        for a in assignment.assignees(membership, task_id)
+    ]
