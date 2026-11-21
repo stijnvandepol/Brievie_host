@@ -15,6 +15,7 @@ const dateTime = new Intl.DateTimeFormat("nl-NL", { dateStyle: "medium", timeSty
 function sentence(
   event: DocumentEvent,
   me: { id: string; name: string } | null | undefined,
+  trashedAsDuplicate: boolean,
 ): string | null {
   const ruleName = event.rule_name;
   const who =
@@ -46,7 +47,29 @@ function sentence(
       return t`Automatisch bevestigd door AI`;
     }
   }
+  // A merge of two scans of one letter, or the choice that they are two letters.
+  const by = isMine(event, me) ? t`jou` : event.actor_name || t`iemand`;
+  if (event.origin === "merge") {
+    switch (event.kind) {
+      case "trashed":
+        return t`Als dubbele brief naar de prullenbak verplaatst door ${by}`;
+      case "task_moved":
+        return trashedAsDuplicate
+          ? t`Taak verplaatst naar de dubbele brief`
+          : t`Taak verplaatst uit de dubbele brief`;
+      case "label_added":
+        return t`${who} zette het label ${label} erop (uit de dubbele brief)`;
+      case "addressee_added":
+        return t`${who} zette deze brief op naam van ${person} (uit de dubbele brief)`;
+      case "task_completed":
+        return t`${who} rondde een taak af (uit de dubbele brief)`;
+    }
+  }
   switch (event.kind) {
+    case "merged":
+      return t`Samengevoegd met een dubbele brief door ${by}`;
+    case "duplicate_dismissed":
+      return t`Gekozen: geen dubbele brief, door ${by}`;
     case "label_added":
       return t`${who} zette het label ${label} erop`;
     case "label_removed":
@@ -64,14 +87,12 @@ function sentence(
     case "task_reopened":
       return t`${who} zette een taak weer open`;
     case "trashed": {
-      // Without anybody behind it, Brievie did it (a later merge of a double scan).
-      const by = isMine(event, me) ? t`jou` : event.actor_name || t`Brievie`;
-      return t`Naar de prullenbak verplaatst door ${by}`;
+      // Without anybody behind it, Brievie did it.
+      const trasher = isMine(event, me) ? t`jou` : event.actor_name || t`Brievie`;
+      return t`Naar de prullenbak verplaatst door ${trasher}`;
     }
-    case "restored": {
-      const by = isMine(event, me) ? t`jou` : event.actor_name || t`iemand`;
+    case "restored":
       return t`Teruggezet uit de prullenbak door ${by}`;
-    }
     default:
       return null;
   }
@@ -130,8 +151,12 @@ export function DocumentHistory({
   const { data, error } = useQuery(documentEventsQuery(workspaceId, documentId));
   const { data: me } = useQuery(meQuery);
   const undo = useUndoEvent(workspaceId, documentId);
+  // This letter went to the trash in a merge: a task the merge moved went from here.
+  const trashedAsDuplicate = (data ?? []).some(
+    (event) => event.kind === "trashed" && event.origin === "merge",
+  );
   const lines = (data ?? []).flatMap((event) => {
-    const text = sentence(event, me);
+    const text = sentence(event, me, trashedAsDuplicate);
     return text === null ? [] : [{ event, text }];
   });
   return (

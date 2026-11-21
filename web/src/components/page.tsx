@@ -154,6 +154,7 @@ export function PageHeader({
 }
 
 type BreadcrumbTarget =
+  | "/w/$workspaceId/inbox"
   | "/w/$workspaceId/post"
   | "/w/$workspaceId/automatisering"
   | "/w/$workspaceId/leden"

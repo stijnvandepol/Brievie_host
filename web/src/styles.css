@@ -3058,3 +3058,88 @@ a.menu-item:hover {
   padding-left: var(--s-l);
   text-align: left;
 }
+
+/* Duplicates: "Dubbel?" on Te doen and the side-by-side page "Mogelijk dubbel" */
+
+.duplicate-list {
+  margin: 0;
+  padding: 0 var(--s-l) var(--s-m);
+  list-style: none;
+}
+
+.duplicate-list li + li {
+  border-top: 1px solid var(--neutral-stroke2);
+}
+
+.duplicate-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-xs) var(--s-m);
+  padding: var(--s-s) 0;
+}
+
+.duplicate-letters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-xxs);
+}
+
+.duplicate-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-l);
+  margin-top: var(--s-m);
+}
+
+/* Stacked on a phone. */
+@media (max-width: 639px) {
+  .duplicate-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.duplicate-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.duplicate-page {
+  display: block;
+  width: calc(100% - 2 * var(--s-l));
+  max-width: 420px;
+  height: auto;
+  margin: 0 var(--s-l);
+  aspect-ratio: auto 210 / 297;
+  background: var(--neutral-bg1);
+  box-shadow: var(--shadow4);
+}
+
+.keep-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-s);
+  margin: auto var(--s-l) var(--s-m);
+  padding-top: var(--s-s);
+  min-height: var(--control-height);
+  cursor: pointer;
+}
+
+.keep-choice[data-selected] .radio-indicator {
+  border-color: var(--brand-bg);
+  box-shadow: inset 0 0 0 3px var(--neutral-bg1);
+  background: var(--brand-bg);
+}
+
+.keep-choice[data-focus-visible] .radio-indicator {
+  outline: 2px solid var(--focus-stroke);
+  outline-offset: 2px;
+}
+
+.plain-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

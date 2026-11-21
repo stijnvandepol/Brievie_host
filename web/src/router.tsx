@@ -4,6 +4,7 @@ import { aiRoute } from "./routes/ai";
 import { auditLogRoute } from "./routes/audit-log";
 import { automationsRoute } from "./routes/automations";
 import { documentRoute } from "./routes/document";
+import { duplicateRoute } from "./routes/duplicate";
 import { homeRoute } from "./routes/home";
 import { inboxRoute } from "./routes/inbox";
 import { invitationRoute } from "./routes/invitation";
@@ -42,6 +43,7 @@ const routeTree = rootRoute.addChildren([
     trashRoute,
     searchRoute,
     documentRoute,
+    duplicateRoute,
     personsRoute,
     membersRoute,
     memberDevicesRoute,

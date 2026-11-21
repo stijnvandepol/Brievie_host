@@ -955,6 +955,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Duplicates
+         * @description The open pairs of letters that are probably one letter scanned twice, newest first (at most 100). A viewer gets an empty list. Only a pair whose two letters the caller both sees; any other answers as a missing one (404 `duplicate_not_found`).
+         */
+        get: operations["listDuplicates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/duplicates/{duplicate_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Duplicate
+         * @description One open pair with what is the same and what differs. 404 `duplicate_not_found` for a decided pair and for a viewer. Only a pair whose two letters the caller both sees; any other answers as a missing one (404 `duplicate_not_found`).
+         */
+        get: operations["getDuplicate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/duplicates/{duplicate_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Duplicate
+         * @description The two letters are two letters (role member or admin; a viewer gets 403): the pair is never proposed again. 409 `duplicate_not_open` when already decided. Only a pair whose two letters the caller both sees; any other answers as a missing one (404 `duplicate_not_found`).
+         */
+        post: operations["dismissDuplicate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/duplicates/{duplicate_id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge Duplicate
+         * @description The two letters are one (role member or admin; a viewer gets 403). The kept letter gets the other's labels, addressees and open tasks; with `complete_twin_tasks` a task done on the other letter completes its open equal on the kept one (`task_twins`). The other letter goes to the trash (`restoreDocument` takes it back for 30 days; the merge itself is not undone). Answers the kept letter. 409 `duplicate_not_open` when already decided, `duplicate_visibility_differs` when the letters are not seen by the same people (`can_merge`), `document_processing`, `document_retained`; 422 `validation_error` for a `keep_document_id` outside the pair. Written to the log (`document_trashed`, reason `duplicate`). Only a pair whose two letters the caller both sees; any other answers as a missing one (404 `duplicate_not_found`).
+         */
+        post: operations["mergeDuplicate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/folders": {
         parameters: {
             query?: never;
@@ -1881,6 +1961,11 @@ export interface components {
             origin: string;
             /** Person Name */
             person_name: string;
+            /**
+             * Related Document Id
+             * Format: uuid
+             */
+            related_document_id?: string | null;
             /** Rule Name */
             rule_name: string;
             /** Undone */
@@ -1937,6 +2022,11 @@ export interface components {
              * Format: date
              */
             letter_date: string | null;
+            /**
+             * Open Duplicate Count
+             * @default 0
+             */
+            open_duplicate_count: number;
             /**
              * Open Suggestion Count
              * @default 0
@@ -2020,6 +2110,11 @@ export interface components {
              * Format: date
              */
             letter_date: string | null;
+            /**
+             * Open Duplicate Count
+             * @default 0
+             */
+            open_duplicate_count: number;
             /**
              * Open Suggestion Count
              * @default 0
@@ -2159,6 +2254,11 @@ export interface components {
              */
             letter_date: string | null;
             /**
+             * Open Duplicate Count
+             * @default 0
+             */
+            open_duplicate_count: number;
+            /**
              * Open Suggestion Count
              * @default 0
              */
@@ -2184,6 +2284,64 @@ export interface components {
             sender: string;
             /** Status */
             status: string;
+        };
+        /** DuplicateDifferenceOut */
+        DuplicateDifferenceOut: {
+            /** Field */
+            field: string;
+            /** First */
+            first: string;
+            /** Second */
+            second: string;
+            /**
+             * Uncertain
+             * @default false
+             */
+            uncertain: boolean;
+        };
+        /**
+         * DuplicateOut
+         * @description Two letters that are probably one letter scanned twice. `first` and `second` are in
+         *     id order; the caller sees both.
+         */
+        DuplicateOut: {
+            /**
+             * Blocked Reason
+             * @default
+             */
+            blocked_reason: string;
+            /**
+             * Can Merge
+             * @default true
+             */
+            can_merge: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Differences */
+            differences?: components["schemas"]["DuplicateDifferenceOut"][];
+            first: components["schemas"]["DocumentSummaryOut"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Same */
+            same?: string[];
+            second: components["schemas"]["DocumentSummaryOut"];
+            /** State */
+            state: string;
+            /**
+             * Suggested Keep Id
+             * Format: uuid
+             */
+            suggested_keep_id: string;
+            /** Task Twins */
+            task_twins?: components["schemas"]["TaskTwinOut"][];
+            /** Text Similarity */
+            text_similarity: number;
         };
         /**
          * EmptyTrashIn
@@ -2259,6 +2417,11 @@ export interface components {
              * @default 0
              */
             automatic: number;
+            /**
+             * Duplicate
+             * @default 0
+             */
+            duplicate: number;
             /** New */
             new: number;
             /** Review */
@@ -2439,6 +2602,19 @@ export interface components {
              * @enum {string}
              */
             role: "admin" | "member" | "viewer";
+        };
+        /** MergeDuplicateIn */
+        MergeDuplicateIn: {
+            /**
+             * Complete Twin Tasks
+             * @default true
+             */
+            complete_twin_tasks: boolean;
+            /**
+             * Keep Document Id
+             * Format: uuid
+             */
+            keep_document_id: string;
         };
         /**
          * MyExportOut
@@ -3032,6 +3208,27 @@ export interface components {
             type: string;
         };
         /**
+         * TaskTwinOut
+         * @description A done task on one letter with an equal open task on the other: a merge that keeps
+         *     `open_document_id` can complete it (`complete_twin_tasks`).
+         */
+        TaskTwinOut: {
+            /** Description */
+            description: string;
+            /**
+             * Done Document Id
+             * Format: uuid
+             */
+            done_document_id: string;
+            /**
+             * Open Document Id
+             * Format: uuid
+             */
+            open_document_id: string;
+            /** Type */
+            type: string;
+        };
+        /**
          * TrashListOut
          * @description The caller's trash, the most recently trashed first (at most 500).
          */
@@ -3097,6 +3294,11 @@ export interface components {
              * Format: date
              */
             letter_date: string | null;
+            /**
+             * Open Duplicate Count
+             * @default 0
+             */
+            open_duplicate_count: number;
             /**
              * Open Suggestion Count
              * @default 0
@@ -6398,6 +6600,243 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    listDuplicates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateOut"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    getDuplicate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                duplicate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    dismissDuplicate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                duplicate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    mergeDuplicate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                duplicate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergeDuplicateIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
