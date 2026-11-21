@@ -110,3 +110,23 @@ def test_migration_keeps_every_viewer(migrated_forward_afterwards: None) -> None
 
     assert back == before
     assert after == before
+
+
+@pytest.mark.django_db(transaction=True)
+def test_function_migration_without_managers_keeps_every_viewer(
+    migrated_forward_afterwards: None,
+) -> None:
+    """workspaces/0009 replaces two helpers; with nobody managing anybody every letter keeps
+    its viewers, back to 0008 and forward again."""
+    workspaces = _seed()
+    with as_actor(workspaces[0], SYSTEM):
+        assert not Person.objects.filter(managed_by__isnull=False).exists()
+    before = _seen(workspaces)
+
+    _migrate([("workspaces", "0008_workspace_summary_language")])
+    back = _seen(workspaces)
+    _migrate(_leaves())
+    after = _seen(workspaces)
+
+    assert back == before
+    assert after == before

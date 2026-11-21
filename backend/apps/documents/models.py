@@ -502,6 +502,8 @@ class DocumentReader(WorkspaceModel):
         DEPARTMENT = "department"
         SHARE = "share"
         EMERGENCY = "emergency"
+        # The member who manages the post of a person without an account (Mensen slice C).
+        MANAGED = "managed"
 
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="readers")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")

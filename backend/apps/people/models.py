@@ -50,6 +50,16 @@ class Person(WorkspaceModel):
         on_delete=models.SET_NULL,
         related_name="+",
     )
+    # "Beheerd door" (Mensen slice C): the member who reads this person's post as their own
+    # while the person has no active account. Set only by `people.services.set_manager`
+    # (preview and confirmation); activating the person or removing the member ends it.
+    managed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
 
     class Meta:
         constraints: ClassVar[list[models.BaseConstraint]] = [
@@ -65,6 +75,10 @@ class Person(WorkspaceModel):
                 condition=models.Q(former_user__isnull=True)
                 | models.Q(deactivated_at__isnull=False),
                 name="people_person_former_user_needs_deactivated",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(managed_by__isnull=True) | models.Q(user__isnull=True),
+                name="people_person_managed_only_without_account",
             ),
         ]
 
@@ -87,6 +101,17 @@ class Person(WorkspaceModel):
             raise ValueError("A department has no account to switch off.")
         if self.former_user_id is not None and self.deactivated_at is None:
             raise ValueError("A former account needs the moment it was switched off.")
+        if self.managed_by_id is not None and (
+            self.kind == self.Kind.DEPARTMENT or self.user_id is not None
+        ):
+            raise ValueError("Only a person without an account is managed by a member.")
+        if (
+            self.managed_by_id is not None
+            and not Membership.objects.filter(
+                workspace_id=self.workspace_id, user_id=self.managed_by_id
+            ).exists()
+        ):
+            raise ValueError("A person's manager must be a member of the workspace.")
         if (
             self.user_id is not None
             and not Membership.objects.filter(

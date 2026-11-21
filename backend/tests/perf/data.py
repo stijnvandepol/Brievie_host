@@ -10,7 +10,8 @@ explicit, then `VACUUM ANALYZE`, as autovacuum would have done on a real server.
 Shape (S 4.9.5, plan Task 1): 100,000 letters, 10 % private; 25 members, each linked to
 a person, and 25 persons without an account; 5 departments of 5 members; 2 admins; 1
 flagged sorter; addressees 60 % one person, 25 % one department, 10 % a person and a
-department, 5 % none; 20 labels with 100,000 links; 20,000 tasks; 300,000 events; a
+department, 5 % none; 2 % of the persons managed by a member ("Beheerd door"); 20 labels
+with 100,000 links; 20,000 tasks; 300,000 events; a
 private letter has one `addressee` and one `share` reader row.
 """
 
@@ -31,6 +32,10 @@ ADMINS: Final = (0, 1)
 SORTER: Final = 2
 PLAIN: Final = 3
 OUTSIDE_DEPARTMENTS: Final = 5
+# "Beheerd door" (Mensen slice C): this member manages the first persons without an
+# account (2 % of all persons, at least one), so the managed-post arms are measured too.
+MANAGER: Final = 6
+MANAGED_PERCENT: Final = 2
 
 
 @dataclass(frozen=True)
@@ -320,6 +325,14 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
             " SELECT p, %s, %s, %s, 'Persoon ' || n, '[]', u, NULL, 'person'"
             " FROM unnest(%s::uuid[], %s::uuid[]) WITH ORDINALITY AS t(p, u, n)",
             [now, now, workspace_id, persons, person_users],
+        )
+        managed = persons[
+            shape.members : shape.members
+            + max(1, (shape.members + shape.unlinked_persons) * MANAGED_PERCENT // 100)
+        ]
+        c.execute(
+            "UPDATE people_person SET managed_by_id = %s WHERE id = ANY(%s::uuid[])",
+            [users[MANAGER], managed],
         )
         c.execute(
             "INSERT INTO people_person (id, created_at, updated_at, workspace_id, display_name,"
