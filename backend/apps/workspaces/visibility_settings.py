@@ -152,8 +152,15 @@ _MEMBER_CHANGE_FIELDS: Final[dict[str, tuple[str, ...]]] = {
     "link": ("user_id", "person_id"),
     "unlink": ("person_id",),
     "remove": ("user_id",),
-    "invite_admin": (),
+    "invite": ("role", "person_id"),
 }
+
+
+def invitation_change(*, role: str, person_id: UUID | None) -> MemberChange:
+    """The member change of an invitation: the role it gives and the person it links.
+    The preview kind "invite_admin" (an admin invitation without a person) is the same
+    change, so its token confirms exactly that invitation."""
+    return MemberChange(kind="invite", role=role, person_id=person_id)
 
 
 def member_change_key(change: MemberChange) -> str:
@@ -820,13 +827,15 @@ def _member_step(
     )
 
 
-def _with_newcomer(policy: PolicySnapshot, role: str) -> PolicySnapshot:
+def _with_newcomer(
+    policy: PolicySnapshot, role: str, person_id: UUID | None = None
+) -> PolicySnapshot:
     newcomer = MemberFacts(
         user_id=UUID(int=0),
         name="",
         role=role,
         sorts_post=False,
-        person_ids=frozenset(),
+        person_ids=frozenset() if person_id is None else frozenset({person_id}),
         department_ids=frozenset(),
     )
     return PolicySnapshot(
@@ -837,37 +846,64 @@ def _with_newcomer(policy: PolicySnapshot, role: str) -> PolicySnapshot:
     )
 
 
-def invited_admin_changes(workspace: Workspace) -> tuple[PolicySnapshot, list[Change]]:
-    """What inviting an admin changes beyond inviting a member (pure): the state now, and
-    the difference between the newcomer joining as a member and as an admin. Nothing in
-    Thuis (everyone sees all anyway); with admins reading all post, all post; with nobody
-    flagged, the unnamed post as a fallback sorter."""
+def invitation_changes(
+    workspace: Workspace, *, role: str, person_id: UUID | None
+) -> tuple[PolicySnapshot, list[Change]]:
+    """What an invitation changes beyond a plain member invitation without a person
+    (pure): the state now, and the difference between the newcomer joining as a member
+    with only their own person and joining with the invitation's role and person. Nothing
+    in Thuis (everyone sees all anyway); the admin role adds all post while admins read
+    all post, or the unnamed post as a fallback sorter while nobody is flagged; a person
+    adds that person's post (S 4.4: "an accepted invitation was confirmed when it was
+    made")."""
     before = snapshot(workspace)
-    as_member = _with_newcomer(before, Membership.Role.MEMBER)
-    as_admin = _with_newcomer(before, Membership.Role.ADMIN)
-    return before, diff(as_member, as_admin)
+    plain = _with_newcomer(before, Membership.Role.MEMBER)
+    invited = _with_newcomer(before, role, person_id)
+    return before, diff(plain, invited)
 
 
-def _preview_invite_admin(workspace: Workspace, actor_id: UUID) -> PreviewResult:
-    """The preview of an admin invitation: a placeholder newcomer joins as a member, and
-    the preview shows what making them admin changes; the token is over the state
-    without the placeholder, as `create_invitation` checks it. All rolled back."""
+def _preview_invitation(
+    workspace: Workspace, change: MemberChange, actor_id: UUID
+) -> PreviewResult:
+    """The preview of an invitation: a placeholder newcomer joins as a member, and the
+    preview shows what the invitation's role and person change (the person linked as
+    accepting links it, its private letters' readers recomputed); the token is over the
+    state without the placeholder, as `create_invitation` checks it. All rolled back."""
+    from apps.workspaces.access import on_member_added
+    from apps.workspaces.invitations import invitable_person
+
+    if change.role not in Membership.Role.values:
+        raise _incomplete()
     real = snapshot(workspace)
     with transaction.atomic():
-        user = User.objects.create(email=f"{uuid4()}@preview.invalid", name=_("Nieuwe beheerder"))
+        person = (
+            invitable_person(workspace, change.person_id, lock=False)
+            if change.person_id is not None
+            else None
+        )
+        placeholder = (
+            _("Nieuwe beheerder") if change.role == Membership.Role.ADMIN else _("Nieuw lid")
+        )
+        user = User.objects.create(email=f"{uuid4()}@preview.invalid", name=placeholder)
         membership = Membership.objects.create(
             user=user, workspace=workspace, role=Membership.Role.MEMBER
         )
+        role = change.role
 
-        def promote() -> None:
-            Membership.objects.filter(id=membership.id).update(role=Membership.Role.ADMIN)
+        def join() -> None:
+            Membership.objects.filter(id=membership.id).update(role=role)
+            if person is None:
+                return
+            with workspace_context(workspace.id, actor=SYSTEM):
+                Person.objects.filter(id=person.id).update(user=user)
+            on_member_added(workspace.id, user.id, person_id=person.id, created_by_id=actor_id)
 
         result = preview(
             workspace,
-            promote,
+            join,
             narrowing=False,
             actor_id=actor_id,
-            change=member_change_key(MemberChange(kind="invite_admin")),
+            change=member_change_key(change),
             token_state=real,
         )
         transaction.set_rollback(True)
@@ -884,7 +920,9 @@ def preview_request(
     if not member_change.kind:
         return preview_change(workspace=workspace, proposal=proposal, actor_id=actor.user_id)
     if member_change.kind == "invite_admin":
-        return _preview_invite_admin(workspace, actor.user_id)
+        member_change = invitation_change(role=Membership.Role.ADMIN, person_id=None)
+    if member_change.kind == "invite":
+        return _preview_invitation(workspace, member_change, actor.user_id)
     step, narrowing = _member_step(workspace, member_change, actor)
 
     def apply() -> None:

@@ -38,10 +38,11 @@ from apps.workspaces.context import NOBODY, workspace_context
 from apps.workspaces.locks import lock_memberships
 from apps.workspaces.models import Invitation, Membership, Workspace
 from apps.workspaces.visibility_settings import (
-    MemberChange,
-    invited_admin_changes,
+    invitation_change,
+    invitation_changes,
     member_change_key,
     notify_join,
+    preview_outdated,
     require_confirmation,
     snapshot,
 )
@@ -76,14 +77,12 @@ def _clean_email(email: str) -> str:
     return email
 
 
-def _invitable_person(workspace: Workspace, person_id: UUID) -> Person:
-    """The person, locked; needs the workspace's context. Another workspace's person and
-    an archived one answer as an unknown one."""
-    person = (
-        Person.objects.select_for_update(no_key=True)
-        .filter(workspace=workspace, id=person_id, archived_at__isnull=True)
-        .first()
-    )
+def invitable_person(workspace: Workspace, person_id: UUID, *, lock: bool = True) -> Person:
+    """The person, locked (unless `lock` is false: the preview, which takes the
+    memberships' lock after it); needs the workspace's context. Another workspace's
+    person and an archived one answer as an unknown one."""
+    persons = Person.objects.select_for_update(no_key=True) if lock else Person.objects.all()
+    person = persons.filter(workspace=workspace, id=person_id, archived_at__isnull=True).first()
     if person is None:
         raise ApiError(404, "person_not_found", _("We kunnen deze persoon niet vinden."))
     if person.user_id is not None:
@@ -110,7 +109,7 @@ def _issue(
     if expires_in_days not in VALIDITY_DAYS:
         raise ApiError(422, "validation_error", _("Een uitnodiging werkt 1, 7 of 30 dagen."))
     email = _clean_email(email)
-    person = _invitable_person(workspace, person_id) if person_id is not None else None
+    person = invitable_person(workspace, person_id) if person_id is not None else None
     if person is not None and not email and person_requires_email(person):
         raise ApiError(
             422,
@@ -180,6 +179,43 @@ def invite_first_admin(*, workspace: Workspace, email: str) -> tuple[Invitation,
     return invitation, token
 
 
+def _require_invitation_confirmed(
+    *,
+    workspace: Workspace,
+    actor: AuditActor,
+    role: str,
+    person_id: UUID | None,
+    confirmed: bool,
+    preview_token: str,
+) -> None:
+    """An invitation by which the newcomer would gain sight beyond a plain member
+    invitation (the admin role: all post while admins read all post, or the unnamed post
+    as a fallback sorter while nobody is flagged; a person: that person's post) needs the
+    confirmed preview of `member_change` "invite" with the same role and person (409
+    `confirmation_required`, `preview_outdated`; S 4.4: "an accepted invitation was
+    confirmed when it was made"). Takes the memberships' lock, which comes before the
+    invitations and the persons in the lock order; a member invitation without a person
+    gives nobody anything and takes no lock."""
+    if role not in Membership.Role.values:
+        return  # `_issue` refuses it
+    if role != Membership.Role.ADMIN and person_id is None:
+        return
+    lock_memberships(workspace)
+    if person_id is not None:
+        invitable_person(workspace, person_id)  # 404 or 409 before any question
+    before, changes = invitation_changes(workspace, role=role, person_id=person_id)
+    require_confirmation(
+        changes=changes,
+        before=before,
+        narrowing=False,
+        confirmed=confirmed,
+        preview_token=preview_token,
+        workspace_id=workspace.id,
+        actor_id=actor.user_id,
+        change=member_change_key(invitation_change(role=role, person_id=person_id)),
+    )
+
+
 def create_invitation(
     *,
     membership: Membership,
@@ -194,25 +230,17 @@ def create_invitation(
     preview_token: str = "",
 ) -> IssuedInvitation:
     """Make an invitation to `membership`'s workspace; the caller is its admin (checked
-    by the endpoint, which also entered the workspace's context). An admin invitation by
-    which the new admin would gain sight (all post while admins read all post, or the
-    unnamed post as a fallback sorter) needs the confirmed preview of `invite_admin`
-    (409 `confirmation_required`, `preview_outdated`; S 4.4), checked under the
-    memberships' lock, which comes before the invitations in the lock order."""
+    by the endpoint, which also entered the workspace's context). One by which the
+    newcomer would gain sight needs a confirmed preview (`_require_invitation_confirmed`)."""
     with transaction.atomic():
-        if role == Membership.Role.ADMIN:
-            lock_memberships(membership.workspace)
-            before, changes = invited_admin_changes(membership.workspace)
-            require_confirmation(
-                changes=changes,
-                before=before,
-                narrowing=False,
-                confirmed=confirmed,
-                preview_token=preview_token,
-                workspace_id=membership.workspace_id,
-                actor_id=actor.user_id,
-                change=member_change_key(MemberChange(kind="invite_admin")),
-            )
+        _require_invitation_confirmed(
+            workspace=membership.workspace,
+            actor=actor,
+            role=role,
+            person_id=person_id,
+            confirmed=confirmed,
+            preview_token=preview_token,
+        )
         return _issue(
             workspace=membership.workspace,
             creator=membership.user,
@@ -245,8 +273,12 @@ def _open_for_update(workspace: Workspace, invitation_id: UUID) -> Invitation:
         .first()
     )
     if invitation is None:
-        raise ApiError(404, "invitation_not_found", _("We kunnen deze uitnodiging niet vinden."))
+        raise _invitation_not_found()
     return invitation
+
+
+def _invitation_not_found() -> ApiError:
+    return ApiError(404, "invitation_not_found", _("We kunnen deze uitnodiging niet vinden."))
 
 
 def _revoke(invitation: Invitation, *, actor: AuditActor, reason: str) -> None:
@@ -273,15 +305,46 @@ def _validity_days(invitation: Invitation) -> int:
 
 
 def renew_invitation(
-    *, membership: Membership, actor: AuditActor, request: HttpRequest, invitation_id: UUID
+    *,
+    membership: Membership,
+    actor: AuditActor,
+    request: HttpRequest,
+    invitation_id: UUID,
+    confirmed: bool = False,
+    preview_token: str = "",
 ) -> IssuedInvitation:
     """A new link with the same role, person, email, note and validity; the old link
-    stops. The rules of a new invitation apply again (the person may be linked by now)."""
+    stops. The rules of a new invitation apply again (the person may be linked by now),
+    the confirmation included: the renewed link gives its role and person at this moment,
+    and what that widens is confirmed again with a preview of the same invitation. The
+    invitation is read first without a lock to learn its role and person, then the
+    memberships are locked (lock order), then the invitation."""
     with transaction.atomic():
-        old = _open_for_update(membership.workspace, invitation_id)
+        workspace = membership.workspace
+        planned = (
+            Invitation.objects.filter(
+                workspace=workspace, id=invitation_id, accepted_at=None, revoked_at=None
+            )
+            .values("role", "person_id")
+            .first()
+        )
+        if planned is None:
+            raise _invitation_not_found()
+        _require_invitation_confirmed(
+            workspace=workspace,
+            actor=actor,
+            role=planned["role"],
+            person_id=planned["person_id"],
+            confirmed=confirmed,
+            preview_token=preview_token,
+        )
+        old = _open_for_update(workspace, invitation_id)
+        if old.role != planned["role"] or old.person_id != planned["person_id"]:
+            # Changed in between (an invitation never changes; defensive): ask again.
+            raise preview_outdated()
         _revoke(old, actor=actor, reason="renewed")
         return _issue(
-            workspace=membership.workspace,
+            workspace=workspace,
             creator=membership.user,
             actor=actor,
             request=request,

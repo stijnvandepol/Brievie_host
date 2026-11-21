@@ -2667,6 +2667,10 @@ msgstr "Say which member, person or role this is about."
 msgid "Nieuwe beheerder"
 msgstr "New admin"
 
+#: apps/workspaces/visibility_settings.py
+msgid "Nieuw lid"
+msgstr "New member"
+
 #: brievie/api.py
 msgid "De database is niet bereikbaar. Probeer het later opnieuw."
 msgstr "The database cannot be reached. Try again later."
