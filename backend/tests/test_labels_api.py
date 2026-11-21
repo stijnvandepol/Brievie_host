@@ -38,7 +38,7 @@ def test_list_labels_by_name_with_counts(client_a: Client, ws_a: Workspace) -> N
     rows = r.json()
     assert [row["name"] for row in rows] == sorted((row["name"] for row in rows), key=str.lower)
     zorg = next(row for row in rows if row["name"] == "Zorg")
-    assert set(zorg) == {"id", "name", "color", "system_key", "document_count"}
+    assert set(zorg) == {"id", "name", "color", "system_key", "document_count", "department_id"}
     assert (zorg["color"], zorg["system_key"], zorg["document_count"]) == ("red", "zorg", 0)
 
 

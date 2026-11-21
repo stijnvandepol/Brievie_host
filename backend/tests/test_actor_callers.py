@@ -32,6 +32,9 @@ ALLOWED_SYSTEM_CALLERS = {
     # Mijn taken: an assignment is written after the reader check, and released when the
     # assignee loses sight of the letter, which the current actor may not see (S 15).
     "apps/tasks/assignment.py",
+    # The private-post seams answer yes or no about letters the caller may not see
+    # (invitations, member removal, account actions), PB T8.
+    "apps/workspaces/access.py",
     # Fills the derived automatic flag of every letter (documents/0014).
     "apps/documents/migrations/0014_document_has_automatic_link.py",
 }

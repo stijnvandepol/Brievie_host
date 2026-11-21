@@ -224,6 +224,7 @@ def test_the_list_of_codes_is_the_closed_list_of_d11() -> None:
         "person_unlinked",
         "department_member_added",
         "department_member_removed",
+        "department_lead_changed",
         "emergency_access_switched_on",
         "emergency_access_switched_off",
         "emergency_access_used",

@@ -1846,3 +1846,149 @@ section 16, recorded here as built.
   before the sort, now fetched for the shown rows only) and the waiting-letter count (an
   OR the policy had to check on every letter, now two counts on partial indexes, with the
   new `documents_document_review`). No `visible_documents` hint was needed.
+
+## 2026-11-21: Wie ziet wat, slice A2b (private letters, departments, emergency access)
+
+Plan `docs/superpowers/plans/2026-11-20-host-wie-ziet-wat.md`, Tasks 24-34 (merge point
+M3). "Iedereen ziet alle post" stays on everywhere until Task 40, so departments only sort.
+
+- **Private letters and shares (Task 24, PB T7/T8).** `documents.visibility` is the one
+  writer of visibility, shares and readers: `make_private` (history line, then shares and
+  readers as the system, then the flip as the current actor), `make_public`, `set_shares`
+  (on every letter, R44), `keep_own_access`, the grants and `forget_member`. A letter an
+  automatic action would make private without any reader stays visible: a
+  `private_skipped` line (its kind is the explanation; no stored sentence, so it follows
+  the reader's language) and one admin notice per letter. `keep_own_access` wraps the
+  `addressee_scope` in the services (addressees, undo, confirm), because the readers are
+  recomputed only at the scope's end; it answers 409 `would_lose_access` for a private
+  letter only. "Reads private post" counts reader rows on private letters only: a share of
+  a letter that is not private is no private post.
+- **Departments (Task 25, PB T11, S 4.5).** `addDepartmentMember`, `updateDepartmentMember`
+  (the lead, audit `department_lead_changed`) and `removeDepartmentMember` are admin and
+  web-session only (they administer people). Only an admin makes a department
+  (`createPerson` with `kind` "department"; a member gets 403); `kind` is read on create
+  only. A department with letters is in use; an empty one is deleted with its
+  memberships (S 4.5 over PB's "in use while it has members"). Name matching and the AI
+  are offered departments only while departments are on; an archived department is not
+  offered and cannot be newly put on a letter, its members keep its letters.
+- **Labels of a department (Task 26, S 4.6).** `Label.department` (nullable, `SET_NULL`).
+  `listLabels` leaves out, for a member who is no admin, the labels of departments they
+  are not in while departments are on; a label on a letter they see still comes with it.
+  Creating, renaming, moving or deleting a department's label needs an admin or a lead of
+  that department (403 `forbidden`); members keep managing labels for everyone.
+  `updateLabel` moves a label only when `department_id` is sent, so an older client never
+  moves one.
+- **Linking is a grant; removing a member (Task 27, PB T12/T13).** Linking a person needs
+  an admin, never to the admin's own account when the person has private post (409
+  `cannot_grant_self`); a linked person is unlinked or relinked only by its own member
+  (409 `cannot_unlink`; `linkPersonToMember` is now open to every role, the service
+  decides), or by removing the member. Every link or unlink recomputes the readers and
+  writes `access_granted` on the person's private letters. Removing a member removes
+  their reader rows, shares and department memberships (`access.on_member_removed`); an
+  invitation accepted for a person makes the new member its reader with the inviting
+  admin as the grant's actor, and one for a person with private post needs an address.
+  The removal itself is not wrapped in `system_actor()`: every step that must reach
+  letters the admin cannot see (releasing tasks, forgetting the member) runs as the system
+  on its own.
+- **Account actions follow who reads which post (Task 28, S 4.19; implements "6. Reset
+  links" above).** A workspace admin makes a reset link, ends sessions or lists and
+  revokes devices of a member only when the member belongs to that workspace alone and is
+  no server admin, reads no private letter there (emergency rows do not count), and the
+  admin reads all post there that is not private ("Iedereen ziet alle post", or
+  "Beheerders lezen alle post"). Otherwise 403 `server_admin_only` ("Dit kan alleen de
+  serverbeheerder."). A link made before the member became a reader stops working (the
+  rule is checked again at completion). `listMembers.can_manage_account` applies the
+  same conditions with one query for the readers.
+- **Zorg and the emergency-access switch (Task 29, PB T15).** `care_is_private` is a
+  workspace setting (`bool | None = None` in `updateWorkspaceSettings`, so an older client
+  never changes it; a change is audited and changes no existing letter).
+  `setEmergencyAccess` is the server admin's own operation (web session, no membership
+  needed, 403 `forbidden` for anyone else): audit `emergency_access_switched_on`/`_off` and
+  a notice to every member; the same value writes nothing. Both are shown to every member
+  in `getWorkspaceSettings`.
+- **Private by hand, by Zorg and at confirm (Task 30, PB T17/T18).** The Zorg label
+  arriving (by hand, by accepting it, by a rule, by the autopilot) makes a letter private
+  where `care_is_private` is on; a proposal of it does not. `setDocumentVisibility`:
+  `restricted` makes a letter private (or, already private, sets its shares);
+  `workspace` makes it visible again and then sets its shares to exactly the list sent,
+  on any letter (R44: an empty list removes them). `ConfirmIn.visibility` ("" leaves it)
+  runs inside the confirm's write order, before the rules; a refused `workspace`
+  (403 `cannot_make_public`) stores nothing. Lists and the letter carry `visibility` and
+  `reader_names`; search, the trash and duplicate pairs carry `visibility` only.
+- **Rules and private letters (Task 32, PB T10/T19).** An automatic rule never widens a
+  private letter's readers: its addressee action becomes a proposal there (the engine
+  knows `DocumentFacts.restricted`, the executor checks the letter again), which only the
+  letter's readers see; labels are still added. "Privé maken" is a new action type in
+  format version 1 (no version bump; an older server reads such a rule as unreadable and
+  skips it whole), only in a rule with mode `auto` (422 otherwise, also when such a rule
+  is switched to proposing). It makes the letter private as the system with the current
+  user as a reader: the confirmer at confirm, the starter of a manual run. With nobody to
+  read it, nothing changes and no run is recorded (ruling d). The web offers it only
+  while "Automatisch toepassen" is on and sends an action type it does not know back
+  unchanged.
+- **Emergency access (Task 33, PB T20, S 4.7).** `openEmergencyAccess` (admin, web session)
+  opens for one hour every letter on the person's or department's name the admin cannot
+  see at that moment, private or not (the set is asked of `viewers()`, so letters the
+  admin already sees are not counted or touched). It is read-only everywhere a letter or
+  its task changes: organising, sharing and visibility, confirm, reopen, retry (never
+  sent to the AI again), trash, merge, and completing, reopening, dating or assigning a
+  task answer 403 `emergency_read_only`. Whether someone sees a letter only through
+  emergency access is asked by taking their emergency rows away inside a savepoint that is
+  rolled back and running the policy's condition (`viewers`), so the answer is the
+  policy's own. The notice to the people concerned now says "brieven" (not only private
+  ones).
+- **The back-up check knows the visibility rules (Task 34, PB T21).** `verify_restore`
+  also checks, in its one read transaction, that the six helper functions exist, that the
+  letter table and every table with a letter key (the task table included) have their
+  three restrictive visibility policies, and that the reader table has `reader_scope`. A
+  back-up from before `workspaces.0007_visibility_functions` is not checked for them. A
+  problem names a table, never a person or a letter. **Merge point M3:** private letters,
+  shares, departments, department labels and emergency access are in; every workspace
+  still has "Iedereen ziet alle post" on, so departments only sort.
+- **Still open: the letter policy arms do not check membership** (recorded above with
+  Task 20). No task of this slice changes the policy; removing a member now also removes
+  their reader rows, shares and department memberships (Task 27), which closes the
+  reader-row arm in practice. Closing it inside the policy stays the owner's call (a
+  policy migration and a new measurement).
+
+### Security review of PR #38 (2026-11-21)
+
+- **The autopilot never widens a private letter's readers (finding 1).** On a letter that
+  is private (read from the database before every addressee: a rule of the same run may
+  have made it private, and a letter processed again may be private already) an AI or
+  name-match addressee stays a proposal. So does it when an open Zorg proposal could be
+  applied in the same run where Zorg makes letters private: addressees are applied before
+  labels, and a rule's Zorg proposal counts even though `rule_labels_to_apply` decides
+  only later (the autopilot blocks rather than guesses).
+- **Emergency access and the trash (finding 2).** A letter in the trash that the admin
+  sees through emergency access is listed in their trash read-only, as everywhere else
+  (the trash has the seam's rights, S 4.10); restoring it or purging it now answers 403
+  `emergency_read_only`, and emptying the trash leaves it where it is.
+- **Names that steer post are an admin's (finding 3).** `updatePerson` on a department,
+  or on a person linked to an account (the member's own included), needs an admin (403
+  `forbidden`). A name or variant decides through name matching, and with the autopilot
+  on through applying, whose post a letter becomes; a member adding "Belastingdienst" to
+  their own person would steer that post to themselves once "Iedereen ziet alle post" is
+  off. Members keep creating and editing persons without an account (that sends post to
+  whoever sorts it, not to themselves). Cost: a member asks an admin to correct the
+  spelling of their own name.
+- **Off ends the hour (finding 4).** Switching emergency access off removes every running
+  emergency reader row of the workspace in the same transaction and releases any
+  assignment that rested on it.
+- **No permission parameter fails open (finding 3, follow-up).** `actor_role` of
+  `create_person`, `update_person` and `link_member` and the label services' membership
+  are required arguments; a call on nobody's behalf states it (`ACTING_AS_SYSTEM`, or
+  `None` for the label services). A caller that forgets its role does not compile under
+  mypy instead of acting as an admin.
+- **The "nobody could read it" notice names the letter only to who may see it (finding
+  5).** Admins who see the letter (it stays visible by the switches) get
+  `private_without_readers` with its id. When no admin sees it, every admin gets the new
+  `private_without_readers_unnamed`: that it happened in the workspace, no id; its readers
+  see the `private_skipped` line on the letter itself.
+- **Emergency access never makes an assignee (finding 6).** Assignment candidates and the
+  release ask `visibility.regular_viewers` (sight without emergency rows, the policy's own
+  condition with those rows rolled back), so a task is never given to whoever holds
+  emergency access, and any assignment that rested on it is released by the next release
+  (the nightly check, switching emergency access off). The same helper decides what an
+  emergency opening counts as already seen (an hour running is renewed) and which admins
+  the "nobody could read it" notice may name.

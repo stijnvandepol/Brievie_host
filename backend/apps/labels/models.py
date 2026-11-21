@@ -10,7 +10,14 @@ COLORS = ("grey", "blue", "teal", "green", "yellow", "orange", "red", "purple")
 
 
 class Label(WorkspaceModel):
-    """A label the user puts on documents; one from a preset has a `system_key`."""
+    """A label the user puts on documents; one from a preset has a `system_key`.
+
+    A label of a department (`department`) is offered to that department's members and to
+    admins while departments are on, and managed by admins and the department's leads. It
+    grants nothing: who sees a letter never depends on its labels (S 4.6, R42).
+    """
+
+    same_workspace_fields = ("department",)
 
     # Trimmed and BSN-masked (see labels.services).
     name = models.CharField(max_length=50)
@@ -18,6 +25,9 @@ class Label(WorkspaceModel):
     # The preset label's stable key, so later features find it whatever its name; empty
     # for an own label.
     system_key = models.CharField(max_length=50, blank=True, default="")
+    department = models.ForeignKey(
+        "people.Person", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
 
     class Meta:
         constraints: ClassVar[list[models.BaseConstraint]] = [

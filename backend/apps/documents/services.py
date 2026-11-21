@@ -7,6 +7,7 @@ from django.utils.translation import gettext as _
 from psycopg import errors as pg_errors
 
 from apps.accounts.models import User
+from apps.audit.services import AuditActor
 from apps.common import crypto
 from apps.common.errors import ApiError
 from apps.documents import duplicates, organise, suggestions, visibility
@@ -25,6 +26,7 @@ from apps.documents.models import (
 from apps.documents.schemas import (
     DocumentOut,
     DocumentSummaryOut,
+    DocumentVisibilityOut,
     PageOut,
     ProposalOut,
     SuggestionOut,
@@ -287,10 +289,12 @@ def get_document(*, membership: Membership, document_id: UUID) -> Document:
 
 
 def document_summary_out(
-    document: Document, *, open_duplicate_count: int = 0
+    document: Document, *, open_duplicate_count: int = 0, reader_names: list[str] | None = None
 ) -> DocumentSummaryOut:
     """A row of a document list."""
-    return _summary_out(document, _open_suggestions(document), open_duplicate_count)
+    return _summary_out(
+        document, _open_suggestions(document), open_duplicate_count, reader_names or []
+    )
 
 
 def document_summaries_out(
@@ -299,7 +303,13 @@ def document_summaries_out(
     """Rows of a document list for the member, with the open duplicate pairs they see in
     full per letter (one query for all)."""
     counts = duplicates.pair_counts(membership, [d.id for d in documents])
-    return [document_summary_out(d, open_duplicate_count=counts.get(d.id, 0)) for d in documents]
+    names = visibility.reader_names(documents)
+    return [
+        document_summary_out(
+            d, open_duplicate_count=counts.get(d.id, 0), reader_names=names.get(d.id, [])
+        )
+        for d in documents
+    ]
 
 
 def document_out_as(membership: Membership, document: Document) -> DocumentOut:
@@ -312,6 +322,7 @@ def _summary_out(
     document: Document,
     open_suggestions: list[DocumentSuggestion],
     open_duplicate_count: int = 0,
+    reader_names: list[str] | None = None,
 ) -> DocumentSummaryOut:
     proposed = _headline_proposals(document)
     return DocumentSummaryOut(
@@ -339,6 +350,8 @@ def _summary_out(
         if document.letter_date
         else _iso_date(proposed.get(Extraction.Field.LETTER_DATE, "")),
         open_duplicate_count=open_duplicate_count,
+        visibility=document.visibility,
+        reader_names=reader_names or [],
     )
 
 
@@ -375,8 +388,14 @@ def document_out(document: Document, *, open_duplicate_count: int = 0) -> Docume
     """The document with its pages, proposals and tasks, as the API shows it."""
     models.prefetch_related_objects([document], SUGGESTIONS)
     open_suggestions = _open_suggestions(document)
+    names = visibility.reader_names([document]).get(document.id, [])
+    actor = current_actor()
     return DocumentOut(
-        **_summary_out(document, open_suggestions, open_duplicate_count).model_dump(),
+        **_summary_out(document, open_suggestions, open_duplicate_count, names).model_dump(),
+        shared_user_ids=visibility.shared_user_ids(document),
+        can_make_public=document.visibility == Document.Visibility.RESTRICTED
+        and isinstance(actor, UUID)
+        and visibility.can_make_public(document, actor),
         failure_code=document.failure_code,
         summary=document.summary,
         summary_by_ai=document.summary_by_ai,
@@ -459,6 +478,8 @@ def retry_processing(*, workspace: Workspace, document_id: UUID) -> Document:
         )
         if document is None:
             raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
+        # Never sent to the AI again by someone with emergency access only.
+        visibility.require_editable(document)
         if document.status != Document.Status.FAILED:
             raise ApiError(
                 409,
@@ -490,6 +511,7 @@ def reopen_document(*, workspace: Workspace, user: User, document_id: UUID) -> D
         )
         if document is None:
             raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
+        visibility.require_editable(document)
         if document.status != Document.Status.DONE or not document.confirmed_by_ai:
             raise ApiError(
                 409,
@@ -517,7 +539,7 @@ def set_document_addressees(
     """The document's addressees become exactly `person_ids`."""
     with transaction.atomic():
         document = _lock_for_organising(workspace, document_id)
-        with visibility.addressee_scope(document):
+        with visibility.keep_own_access(document), visibility.addressee_scope(document):
             organise.set_addressees(document=document, person_ids=person_ids, actor=user)
     return document
 
@@ -606,6 +628,7 @@ def _lock_for_organising(workspace: Workspace, document_id: UUID) -> Document:
             "document_processing",
             _("Dit document wordt nog verwerkt. Probeer het zo opnieuw."),
         )
+    visibility.require_editable(document)
     return document
 
 
@@ -665,6 +688,48 @@ def undo_document_event(
     """Reverse a change a rule made; the rule will not make it again on this document."""
     with transaction.atomic():
         document = _lock_for_organising(workspace, document_id)
-        with visibility.addressee_scope(document):
+        with visibility.keep_own_access(document), visibility.addressee_scope(document):
             organise.undo_event(document=document, event_id=event_id, actor=user)
     return document
+
+
+def set_document_visibility(
+    *,
+    workspace: Workspace,
+    user: User,
+    actor: AuditActor,
+    document_id: UUID,
+    visibility_value: str,
+    shared_user_ids: list[UUID],
+) -> DocumentVisibilityOut:
+    """ "Privé maken", "Voor iedereen zichtbaar maken" and "Delen met" (PB T17, R44).
+
+    `restricted`: a letter that is not private becomes private with these shares besides
+    the scanner and the caller; a private one gets exactly these shares. `workspace`: a
+    private letter becomes visible to everyone (403 `cannot_make_public` for someone not
+    addressed while an addressee reads it), then the shares become exactly these (also on
+    a letter that is not private). Anything else 422. The answer says whether the caller
+    still reads it (they may remove their own share)."""
+    if visibility_value not in Document.Visibility.values:
+        raise ApiError(422, "validation_error", _("Kies privé of zichtbaar voor iedereen."))
+    with transaction.atomic():
+        document = _lock_for_organising(workspace, document_id)
+        if visibility_value == Document.Visibility.RESTRICTED:
+            if document.visibility != Document.Visibility.RESTRICTED:
+                visibility.make_private(
+                    document, actor=actor, origin="user", share_user_ids=shared_user_ids
+                )
+            else:
+                visibility.set_shares(document, user_ids=shared_user_ids, actor=actor)
+        else:
+            visibility.make_public(document, actor=actor, user_id=user.id)
+            visibility.set_shares(document, user_ids=shared_user_ids, actor=actor)
+        readable = visibility.can_read(document.id)
+        return DocumentVisibilityOut(
+            visibility=visibility.visibility_of(document.id),
+            reader_names=visibility.reader_names([document]).get(document.id, [])
+            if readable
+            else [],
+            shared_user_ids=visibility.shared_user_ids(document) if readable else [],
+            can_read=readable,
+        )

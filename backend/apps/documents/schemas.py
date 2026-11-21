@@ -72,6 +72,11 @@ class DocumentSummaryOut(Schema):
     # Open duplicate pairs with this letter that the caller sees in full (`listDuplicates`):
     # show a chip "Dubbel?". 0 for a viewer.
     open_duplicate_count: int = 0
+    # "workspace", or "restricted": private, only its readers see it (show a lock).
+    visibility: str = "workspace"
+    # Of a private letter: who reads it ("Privé voor Anne en Bob"), by name. Filled in the
+    # list and on the letter; empty elsewhere and for a letter that is not private.
+    reader_names: list[str] = Field(default_factory=list)
 
 
 class TrashedDocumentOut(DocumentSummaryOut):
@@ -178,6 +183,10 @@ class DocumentOut(DocumentSummaryOut):
     # False after a change that handed the letter to someone else: the caller no longer
     # sees it, and this answer holds its id and status only (S 4.13).
     can_read: bool = True
+    # The members the letter is shared with ("Delen met"), any letter.
+    shared_user_ids: list[UUID] = Field(default_factory=list)
+    # Whether the caller may make this private letter visible to everyone again.
+    can_make_public: bool = False
 
 
 class TaskIn(InputSchema):
@@ -211,6 +220,9 @@ class ConfirmIn(InputSchema):
     sets_organisation: bool = False
     label_ids: list[UUID] = Field(default=[], max_length=30)
     addressee_ids: list[UUID] = Field(default=[], max_length=10)
+    # "" leaves the letter as it is (a Zorg label among the labels still makes it
+    # private), "restricted" makes it private, "workspace" visible to everyone again.
+    visibility: str = ""
 
 
 class AddresseesIn(InputSchema):
@@ -253,6 +265,9 @@ class DocumentEventOut(Schema):
     # The other letter of a duplicate pair (`merged`, `duplicate_dismissed`, `task_moved`,
     # and `trashed` with origin `merge`); null otherwise or once that letter is purged.
     related_document_id: UUID | None = None
+    # A short text with the line: the reason of an emergency opening, or the name of whom
+    # a grant gave sight (`access_granted`). Empty otherwise.
+    note: str = ""
 
     @staticmethod
     def resolve_actor_name(obj: DocumentEvent) -> str:
@@ -384,3 +399,18 @@ class DocumentSearchOut(Schema):
     fuzzy: bool = False
     # A BSN was taken out of the term before searching.
     bsn_removed: bool = False
+
+
+class DocumentVisibilityIn(InputSchema):
+    # "restricted" (private) or "workspace".
+    visibility: str
+    # The members the letter is shared with, afterwards exactly these (any letter).
+    shared_user_ids: list[UUID] = Field(default=[], max_length=50)
+
+
+class DocumentVisibilityOut(Schema):
+    visibility: str
+    reader_names: list[str] = Field(default_factory=list)
+    shared_user_ids: list[UUID] = Field(default_factory=list)
+    # False when the caller no longer reads the letter (they removed their own share).
+    can_read: bool = True

@@ -224,7 +224,8 @@ def test_presets_on_sample_letters(
             continue
         specs, keys = preset_specs(kind)
         planned = evaluate(facts, specs).planned
-        assert {keys[p.target_id] for p in planned} == expected, kind
+        assert {keys[p.target_id] for p in planned if p.target_id is not None} == expected, kind
+        assert all(p.target_id is not None for p in planned)
         assert all(p.mode == "propose" for p in planned)
 
 

@@ -29,6 +29,7 @@ RELEASE_CALLERS: Final = {
     "documents/visibility.py",
     "workspaces/members.py",
     "people/services.py",
+    "workspaces/access.py",
 }
 RELEASES: Final = {"release_unseeing_assignees", "release_member", "_release_assignees"}
 # What narrows sight: the reader rows are recomputed, or a role or a person link changes.
@@ -118,7 +119,8 @@ def test_unlinking_a_person_releases(client: Client) -> None:
     with as_actor(o.workspace, SYSTEM):
         task = Task.objects.get(document=o.letters["own_piet"])
         Task.objects.filter(id=task.id).update(assigned_to=o.plain)
-    client.force_login(o.admin)
+    # Only the linked member unlinks (PB T12): Piet himself.
+    client.force_login(o.plain)
     r = client.put(
         f"/api/v1/workspaces/{o.workspace.id}/persons/{o.persons['Piet'].id}/member",
         {"user_id": None},

@@ -57,7 +57,7 @@ def test_delete_label_locks_the_rules_first_in_id_order(ws_a: Workspace) -> None
     sql = locks(
         ws_a,
         lambda: label_services.delete_label(
-            workspace=ws_a, label_id=own.id, actor=AuditActor.system()
+            workspace=ws_a, label_id=own.id, actor=AuditActor.system(), membership=None
         ),
     )
 

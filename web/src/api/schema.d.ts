@@ -975,6 +975,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/visibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Document Visibility
+         * @description Make the letter private (`restricted`) or visible to everyone (`workspace`), and share it: afterwards it is shared with exactly `shared_user_ids` (any letter). 403 `cannot_make_public` for someone not addressed while an addressee reads it; 404 `member_not_found` for a share with somebody who is no member. `can_read` false when the caller removed their own share.
+         */
+        put: operations["setDocumentVisibility"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/duplicates": {
         parameters: {
             query?: never;
@@ -1049,6 +1069,26 @@ export interface paths {
          * @description The two letters are one (role member or admin; a viewer gets 403). The kept letter gets the other's labels, addressees and open tasks; with `complete_twin_tasks` a task done on the other letter completes its open equal on the kept one (`task_twins`). The other letter goes to the trash (`restoreDocument` takes it back for 30 days; the merge itself is not undone). Answers the kept letter. 409 `duplicate_not_open` when already decided, `duplicate_visibility_differs` when the letters are not seen by the same people (`can_merge`), `document_processing`, `document_retained`; 422 `validation_error` for a `keep_document_id` outside the pair. Written to the log (`document_trashed`, reason `duplicate`). Only a pair whose two letters the caller both sees; any other answers as a missing one (404 `duplicate_not_found`).
          */
         post: operations["mergeDuplicate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/emergency-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Emergency Access
+         * @description Web session only: a bearer token answers 401 not_authenticated. Switch emergency access for the workspace's admins. Server admins only (403 forbidden), also without a membership; every member gets a notice.
+         */
+        put: operations["setEmergencyAccess"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1384,7 +1424,10 @@ export interface paths {
         /** List Persons */
         get: operations["listPersons"];
         put?: never;
-        /** Create Person */
+        /**
+         * Create Person
+         * @description `kind` "department" makes a department: admins only (403 `forbidden`).
+         */
         post: operations["createPerson"];
         delete?: never;
         options?: never;
@@ -1402,7 +1445,7 @@ export interface paths {
         get?: never;
         /**
          * Update Person
-         * @description `name_variants` and `archived` left out keep the person's current value (a rename never archives, restores or clears the variants); sent, they replace it.
+         * @description `name_variants` and `archived` left out keep the person's current value (a rename never archives, restores or clears the variants); sent, they replace it. A department or a person linked to an account: admins only (403 `forbidden`).
          */
         put: operations["updatePerson"];
         post?: never;
@@ -1411,6 +1454,26 @@ export interface paths {
          * @description Admins only (403 `forbidden` for others): `person_in_use` also counts letters the caller cannot see, so only an admin learns that a person is in use.
          */
         delete: operations["deletePerson"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/persons/{person_id}/emergency-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Emergency Access
+         * @description Web session only, admins. Opens for one hour, read-only, every letter on the name of this person or department that the admin cannot see, with a reason of 10 to 200 characters: a history line on each, an audit row, a notice to the person or the department's members. 409 `emergency_access_off` when the workspace has it off.
+         */
+        post: operations["openEmergencyAccess"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1426,11 +1489,55 @@ export interface paths {
         get?: never;
         /**
          * Link Person To Member
-         * @description Web session only: a bearer token answers 401 not_authenticated. Link the person to a member of the workspace (`user_id`), or unlink it (null). Administrators only.
+         * @description Web session only: a bearer token answers 401 not_authenticated. Link the person to a member of the workspace (`user_id`; administrators only), or unlink it (null). A linked person is unlinked only by its own member (409 `cannot_unlink` for anybody else); 409 `cannot_grant_self` for an admin linking themselves to a person with private post; 409 `is_a_department`.
          */
         put: operations["linkPersonToMember"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/persons/{person_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Department Member
+         * @description Web session only. Admins put a member in a department (a grant). 409 `not_a_department`, 409 `cannot_grant_self` (an admin adding themselves where there is private post). A member already in it: 200, unchanged.
+         */
+        post: operations["addDepartmentMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/persons/{person_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Department Member
+         * @description Web session only. Admins make a department member its lead, or not.
+         */
+        put: operations["updateDepartmentMember"];
+        post?: never;
+        /**
+         * Remove Department Member
+         * @description Web session only. Admins take a member out of a department.
+         */
+        delete: operations["removeDepartmentMember"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2026,6 +2133,11 @@ export interface components {
             summary_by_ai: boolean;
             /** Tasks */
             tasks: components["schemas"]["TaskIn"][];
+            /**
+             * Visibility
+             * @default
+             */
+            visibility: string;
         };
         /** CreatedInvitationOut */
         CreatedInvitationOut: {
@@ -2042,6 +2154,24 @@ export interface components {
              * Format: date
              */
             deadline?: string | null;
+        };
+        /** DepartmentMemberIn */
+        DepartmentMemberIn: {
+            /**
+             * Is Lead
+             * @default false
+             */
+            is_lead: boolean;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /** DepartmentMemberUpdateIn */
+        DepartmentMemberUpdateIn: {
+            /** Is Lead */
+            is_lead: boolean;
         };
         /** DeviceOut */
         DeviceOut: {
@@ -2093,6 +2223,11 @@ export interface components {
             kind: string;
             /** Label Name */
             label_name: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
             /** Origin */
             origin: string;
             /** Person Name */
@@ -2117,6 +2252,11 @@ export interface components {
             auto_label_ids?: string[];
             /** Auto Rule Label Ids */
             auto_rule_label_ids?: string[];
+            /**
+             * Can Make Public
+             * @default false
+             */
+            can_make_public: boolean;
             /**
              * Can Read
              * @default true
@@ -2189,8 +2329,12 @@ export interface components {
              * @default
              */
             proposed_sender: string;
+            /** Reader Names */
+            reader_names?: string[];
             /** Sender */
             sender: string;
+            /** Shared User Ids */
+            shared_user_ids?: string[];
             /** Status */
             status: string;
             /** Suggestions */
@@ -2201,6 +2345,11 @@ export interface components {
             summary_by_ai: boolean;
             /** Tasks */
             tasks: components["schemas"]["TaskOut"][];
+            /**
+             * Visibility
+             * @default workspace
+             */
+            visibility: string;
         };
         /** DocumentSearchHitOut */
         DocumentSearchHitOut: {
@@ -2273,12 +2422,19 @@ export interface components {
              * @default
              */
             proposed_sender: string;
+            /** Reader Names */
+            reader_names?: string[];
             /** Sender */
             sender: string;
             /** Snippet */
             snippet?: components["schemas"]["SnippetPartOut"][];
             /** Status */
             status: string;
+            /**
+             * Visibility
+             * @default workspace
+             */
+            visibility: string;
         };
         /**
          * DocumentSearchIn
@@ -2416,10 +2572,41 @@ export interface components {
              * @default
              */
             proposed_sender: string;
+            /** Reader Names */
+            reader_names?: string[];
             /** Sender */
             sender: string;
             /** Status */
             status: string;
+            /**
+             * Visibility
+             * @default workspace
+             */
+            visibility: string;
+        };
+        /** DocumentVisibilityIn */
+        DocumentVisibilityIn: {
+            /**
+             * Shared User Ids
+             * @default []
+             */
+            shared_user_ids: string[];
+            /** Visibility */
+            visibility: string;
+        };
+        /** DocumentVisibilityOut */
+        DocumentVisibilityOut: {
+            /**
+             * Can Read
+             * @default true
+             */
+            can_read: boolean;
+            /** Reader Names */
+            reader_names?: string[];
+            /** Shared User Ids */
+            shared_user_ids?: string[];
+            /** Visibility */
+            visibility: string;
         };
         /** DuplicateDifferenceOut */
         DuplicateDifferenceOut: {
@@ -2478,6 +2665,31 @@ export interface components {
             task_twins?: components["schemas"]["TaskTwinOut"][];
             /** Text Similarity */
             text_similarity: number;
+        };
+        /** EmergencyAccessIn */
+        EmergencyAccessIn: {
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** EmergencyAccessOut */
+        EmergencyAccessOut: {
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** EmergencyAccessUseIn */
+        EmergencyAccessUseIn: {
+            /** Reason */
+            reason: string;
+        };
+        /** EmergencyAccessUseOut */
+        EmergencyAccessUseOut: {
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Opened Count */
+            opened_count: number;
         };
         /**
          * EmptyTrashIn
@@ -2668,6 +2880,11 @@ export interface components {
              * @default grey
              */
             color: string;
+            /**
+             * Department Id
+             * Format: uuid
+             */
+            department_id?: string | null;
             /** Name */
             name: string;
         };
@@ -2675,6 +2892,11 @@ export interface components {
         LabelOut: {
             /** Color */
             color: string;
+            /**
+             * Department Id
+             * Format: uuid
+             */
+            department_id?: string | null;
             /** Document Count */
             document_count: number;
             /**
@@ -2694,6 +2916,11 @@ export interface components {
              * @default
              */
             color: string;
+            /**
+             * Department Id
+             * Format: uuid
+             */
+            department_id?: string | null;
             /** Name */
             name: string;
         };
@@ -2972,6 +3199,11 @@ export interface components {
             archived: boolean;
             /** Display Name */
             display_name: string;
+            /**
+             * Kind
+             * @default person
+             */
+            kind: string;
             /** Name Variants */
             name_variants?: string[];
         };
@@ -2996,6 +3228,15 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Kind
+             * @default person
+             */
+            kind: string;
+            /** Lead User Ids */
+            lead_user_ids?: string[];
+            /** Member User Ids */
+            member_user_ids?: string[];
             /** Name Variants */
             name_variants: string[];
             /**
@@ -3602,6 +3843,8 @@ export interface components {
              * Format: date-time
              */
             purge_after: string;
+            /** Reader Names */
+            reader_names?: string[];
             /** Sender */
             sender: string;
             /** Status */
@@ -3616,6 +3859,11 @@ export interface components {
              * @default
              */
             trashed_by_name: string;
+            /**
+             * Visibility
+             * @default workspace
+             */
+            visibility: string;
         };
         /**
          * UploadMetadataIn
@@ -3669,6 +3917,8 @@ export interface components {
         WorkspaceSettingsIn: {
             /** Allow Member Export */
             allow_member_export?: boolean | null;
+            /** Care Is Private */
+            care_is_private?: boolean | null;
             /** Summary Language */
             summary_language?: string | null;
         };
@@ -3676,6 +3926,16 @@ export interface components {
         WorkspaceSettingsOut: {
             /** Allow Member Export */
             allow_member_export: boolean;
+            /**
+             * Care Is Private
+             * @default false
+             */
+            care_is_private: boolean;
+            /**
+             * Emergency Access
+             * @default false
+             */
+            emergency_access: boolean;
             /**
              * Summary Language
              * @default nl
@@ -6970,6 +7230,105 @@ export interface operations {
             };
         };
     };
+    setDocumentVisibility: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentVisibilityIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentVisibilityOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     listDuplicates: {
         parameters: {
             query?: never;
@@ -7171,6 +7530,95 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    setEmergencyAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmergencyAccessIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmergencyAccessOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8812,6 +9260,105 @@ export interface operations {
             };
         };
     };
+    openEmergencyAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                person_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmergencyAccessUseIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmergencyAccessUseOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     linkPersonToMember: {
         parameters: {
             query?: never;
@@ -8902,6 +9449,265 @@ export interface operations {
             };
             /** @description Unprocessable Content */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    addDepartmentMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                person_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepartmentMemberIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    updateDepartmentMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                person_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepartmentMemberUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    removeDepartmentMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                person_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

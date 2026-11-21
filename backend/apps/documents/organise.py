@@ -15,6 +15,7 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from apps.accounts.models import User
+from apps.audit.services import AuditActor
 from apps.common.errors import ApiError
 from apps.documents import suggestions, visibility
 from apps.documents.models import (
@@ -28,6 +29,7 @@ from apps.labels.models import Label
 from apps.labels.services import label_not_found
 from apps.people.models import Person
 from apps.rules.models import Rule
+from apps.workspaces.models import Workspace
 
 ADDRESSEES_MAX = 10
 LABELS_MAX = 30
@@ -221,7 +223,23 @@ def add_label(
         _write_event(
             document, DocumentEvent.Kind.LABEL_ADDED, actor, origin, label=label, rule=rule
         )
+        if label.system_key == ZORG and _care_is_private(document):
+            # The Zorg label arriving makes the letter private (S 4.6, PB T17); a proposal
+            # of it does not. Nobody to read it: it stays visible (ruling d).
+            visibility.make_private(
+                document,
+                actor=AuditActor.for_user(actor) if actor is not None else AuditActor.system(),
+                origin=origin,
+                rule=rule,
+            )
         return True
+
+
+ZORG = "zorg"
+
+
+def _care_is_private(document: Document) -> bool:
+    return Workspace.objects.filter(id=document.workspace_id, care_is_private=True).exists()
 
 
 def record_label_deleted(label: Label, *, actor_id: UUID | None) -> None:

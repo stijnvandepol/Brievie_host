@@ -21,6 +21,10 @@ msgstr "You manage your own account in your own settings."
 msgid "Dit kan alleen de serverbeheerder, omdat dit account ook buiten deze werkruimte bestaat."
 msgstr "Only the server admin can do this, because this account also exists outside this workspace."
 
+#: apps/accounts/authority.py apps/workspaces/settings_service.py
+msgid "Dit kan alleen de serverbeheerder."
+msgstr "Only the server administrator can do this."
+
 #: apps/accounts/management/commands/reset_password.py apps/accounts/management/commands/set_server_admin.py
 msgid "Er is geen account met dit e-mailadres."
 msgstr "There is no account with this email address."
@@ -131,6 +135,10 @@ msgstr "Emergency access used"
 msgid "Privépost zonder lezers"
 msgstr "Private mail without readers"
 
+#: apps/accounts/models.py
+msgid "Privépost zonder lezers, brief niet genoemd"
+msgstr "Private post without readers, letter not named"
+
 #: apps/accounts/notices.py
 #, python-format
 msgid "%(name)s heeft op %(date)s een herstellink voor je wachtwoord gemaakt."
@@ -188,13 +196,18 @@ msgstr "%(name)s switched off emergency access for the admin in %(workspace)s on
 
 #: apps/accounts/notices.py
 #, python-format
-msgid "%(name)s heeft op %(date)s met noodtoegang %(count)s privé-brieven van %(person)s geopend. De reden staat bij elke brief."
-msgstr "On %(date)s, %(name)s used emergency access to open %(count)s private letters of %(person)s. The reason is noted with each letter."
+msgid "%(name)s heeft op %(date)s met noodtoegang %(count)s brieven van %(person)s geopend. De reden staat bij elke brief."
+msgstr "On %(date)s, %(name)s used emergency access to open %(count)s letters of %(person)s. The reason is noted with each letter."
 
 #: apps/accounts/notices.py
 #, python-format
 msgid "Er is post die privé had moeten worden, maar niemand zou hem kunnen lezen. Hij is zichtbaar gebleven voor iedereen in %(workspace)s (document %(document_id)s)."
 msgstr "Some mail should have become private, but nobody would have been able to read it. It stayed visible to everyone in %(workspace)s (document %(document_id)s)."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Er is post in %(workspace)s die privé had moeten worden, maar niemand zou hem kunnen lezen. Hij is zichtbaar gebleven voor wie hem mag zien."
+msgstr "Some post in %(workspace)s should have become private, but nobody could have read it. It stayed visible to those who may see it."
 
 #: apps/accounts/passwords.py
 #, python-format
@@ -420,6 +433,10 @@ msgstr "Member added to department"
 #: apps/audit/codes.py
 msgid "Lid uit afdeling gehaald"
 msgstr "Member removed from department"
+
+#: apps/audit/codes.py
+msgid "Leidinggevende van afdeling gewijzigd"
+msgstr "Department lead changed"
 
 #: apps/audit/codes.py
 msgid "Export gemaakt"
@@ -942,6 +959,15 @@ msgid "Zo herstel je Brievie"
 msgstr "How to restore Brievie"
 
 #: apps/backup/verify.py
+msgid "De database mist de functies voor wie welke post ziet."
+msgstr "The database lacks the functions for who sees which post."
+
+#: apps/backup/verify.py
+#, python-format
+msgid "De database mist de regels voor wie welke post ziet in tabel %(table)s."
+msgstr "The database lacks the rules for who sees which post in table %(table)s."
+
+#: apps/backup/verify.py
 #, python-format
 msgid "Pagina %(index)s van document %(document)s in werkruimte %(workspace)s ligt buiten de opslag."
 msgstr "Page %(index)s of document %(document)s in workspace %(workspace)s is outside the storage."
@@ -1451,6 +1477,10 @@ msgstr "You can't confirm this document right now."
 msgid "Het bedrag klopt niet. Schrijf het als 1234,56."
 msgstr "That amount is not valid. Write it as 1234.56."
 
+#: apps/documents/review.py apps/documents/services.py
+msgid "Kies privé of zichtbaar voor iedereen."
+msgstr "Choose private or visible to everyone."
+
 #: apps/documents/review.py apps/rules/definition.py
 msgid "Dit soort document kennen we niet."
 msgstr "We don't know this kind of document."
@@ -1518,6 +1548,31 @@ msgstr "We can't find this suggestion."
 #: apps/documents/upload_limits.py
 msgid "Er zijn net heel veel brieven verstuurd. Wacht even, dan gaat het vanzelf verder."
 msgstr "A lot of letters were just sent. Wait a moment, it will continue by itself."
+
+#: apps/documents/visibility.py apps/people/services.py apps/workspaces/members.py
+msgid "We kunnen dit lid niet vinden."
+msgstr "We can't find this member."
+
+#: apps/documents/visibility.py
+msgid "Alleen iemand op wiens naam deze brief staat, kan hem weer voor iedereen zichtbaar maken."
+msgstr "Only someone this letter is addressed to can make it visible to everyone again."
+
+#: apps/documents/visibility.py
+msgid "Dan kun je deze brief zelf niet meer lezen."
+msgstr "You would no longer be able to read this letter yourself."
+
+#: apps/documents/visibility.py
+msgid "Noodtoegang staat uit in deze werkruimte."
+msgstr "Emergency access is off in this workspace."
+
+#: apps/documents/visibility.py
+#, python-format
+msgid "Geef een reden van %(min)d tot %(max)d tekens."
+msgstr "Give a reason of %(min)d to %(max)d characters."
+
+#: apps/documents/visibility.py
+msgid "Met noodtoegang kun je deze brief alleen lezen."
+msgstr "With emergency access you can only read this letter."
 
 #: apps/labels/presets.py
 msgid "Belastingdienst"
@@ -1605,6 +1660,14 @@ msgid "Er is al een label met deze naam."
 msgstr "There is already a label with this name."
 
 #: apps/labels/services.py
+msgid "Kies een afdeling."
+msgstr "Choose a department."
+
+#: apps/labels/services.py apps/people/services.py apps/workspaces/deps.py apps/workspaces/members.py
+msgid "Je mag dit niet doen in deze werkruimte."
+msgstr "You are not allowed to do this in this workspace."
+
+#: apps/labels/services.py
 msgid "Deze werkruimte heeft het grootste aantal labels. Verwijder er eerst een."
 msgstr "This workspace has the largest number of labels. Delete one first."
 
@@ -1658,6 +1721,10 @@ msgid "Dit lid hoort al bij een andere persoon."
 msgstr "This member already belongs to another person."
 
 #: apps/people/services.py
+msgid "Kies een persoon of een afdeling."
+msgstr "Choose a person or a department."
+
+#: apps/people/services.py
 msgid "Deze werkruimte heeft het grootste aantal personen. Verwijder er eerst een."
 msgstr "This workspace has the largest number of persons. Delete one first."
 
@@ -1674,9 +1741,22 @@ msgstr "This person is still in use. You can archive the person instead."
 msgid "De regel '%(rule)s' gebruikt deze persoon. Pas die regel eerst aan."
 msgstr "The rule '%(rule)s' uses this person. Change that rule first."
 
-#: apps/people/services.py apps/workspaces/members.py
-msgid "We kunnen dit lid niet vinden."
-msgstr "We can't find this member."
+#: apps/people/services.py
+msgid "Een afdeling koppel je niet aan één account. Voeg leden toe."
+msgstr "A department is not linked to one account. Add members instead."
+
+#: apps/people/services.py
+#, python-format
+msgid "Alleen %(name)s kan deze koppeling losmaken."
+msgstr "Only %(name)s can remove this link."
+
+#: apps/people/services.py
+msgid "Dit is geen afdeling."
+msgstr "This is not a department."
+
+#: apps/people/services.py
+msgid "Je kunt jezelf geen toegang geven tot privé-post. Gebruik een uitnodiging of noodtoegang."
+msgstr "You cannot give yourself access to private post. Use an invitation or emergency access."
 
 #: apps/pipeline/api.py
 msgid "Lees eerst wat er naar de AI-dienst gaat en geef akkoord."
@@ -1805,6 +1885,10 @@ msgid "Een regel heeft %(min)d tot %(max)d acties."
 msgstr "A rule has %(min)d to %(max)d actions."
 
 #: apps/rules/definition.py
+msgid "Privé maken kan alleen in een regel die automatisch werkt."
+msgstr "Make private only works in a rule that applies itself."
+
+#: apps/rules/definition.py
 msgid "Een voorwaarde gaat over iets wat we niet kennen."
 msgstr "A condition is about something we don't know."
 
@@ -1840,6 +1924,10 @@ msgstr "A condition names a person we can't find."
 #: apps/rules/definition.py
 msgid "Deze actie kennen we niet."
 msgstr "We don't know this action."
+
+#: apps/rules/definition.py
+msgid "Een actie 'privé maken' noemt geen label en geen persoon."
+msgstr "A 'make private' action names no label and no person."
 
 #: apps/rules/definition.py
 msgid "Een actie 'label toevoegen' noemt alleen een label."
@@ -2179,13 +2267,9 @@ msgstr "From version {installed} you cannot go to {target} in one step. First up
 msgid "Van versie {installed} is er geen weg naar {target} met ./brievie update. Lees \"Voor je bijwerkt\" in CHANGELOG.md."
 msgstr "From version {installed} there is no way to {target} with ./brievie update. Read \"Before you update\" in CHANGELOG.md."
 
-#: apps/workspaces/deps.py apps/workspaces/locks.py
+#: apps/workspaces/deps.py apps/workspaces/locks.py apps/workspaces/settings_service.py
 msgid "We kunnen deze werkruimte niet vinden."
 msgstr "We can't find this workspace."
-
-#: apps/workspaces/deps.py apps/workspaces/members.py
-msgid "Je mag dit niet doen in deze werkruimte."
-msgstr "You are not allowed to do this in this workspace."
 
 #: apps/workspaces/invitations.py
 msgid "Deze persoon is al gekoppeld aan een lid."

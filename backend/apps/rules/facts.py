@@ -20,7 +20,7 @@ from apps.documents.models import (
 from apps.labels.models import Label
 from apps.people.models import Person
 from apps.rules.definition import to_spec
-from apps.rules.engine import DocumentFacts, RuleSpec
+from apps.rules.engine import MAKE_PRIVATE, DocumentFacts, RuleSpec
 from apps.rules.models import Rule
 
 
@@ -40,6 +40,7 @@ def facts_for(document: Document) -> DocumentFacts:
     open_rows = rows.filter(state=DocumentSuggestion.State.OPEN)
     dismissed_rows = rows.filter(state=DocumentSuggestion.State.DISMISSED)
     return DocumentFacts(
+        restricted=document.visibility == Document.Visibility.RESTRICTED,
         text=document.ocr_text,
         sender=sender,
         document_type=document_type,
@@ -98,6 +99,7 @@ def facts_for_many(documents: Sequence[Document]) -> dict[UUID, DocumentFacts]:
         open_state = DocumentSuggestion.State.OPEN
         dismissed = DocumentSuggestion.State.DISMISSED
         facts[document.id] = DocumentFacts(
+            restricted=document.visibility == Document.Visibility.RESTRICTED,
             text=document.ocr_text,
             sender=sender,
             document_type=document_type,
@@ -141,7 +143,8 @@ def plannable(workspace_id: UUID, specs: list[RuleSpec]) -> list[RuleSpec]:
             actions=tuple(
                 action
                 for action in spec.actions
-                if action.target_id in (label_ids if action.type == "add_label" else person_ids)
+                if action.type == MAKE_PRIVATE
+                or action.target_id in (label_ids if action.type == "add_label" else person_ids)
             ),
         )
         for spec in specs

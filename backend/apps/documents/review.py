@@ -13,6 +13,7 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from apps.accounts.models import User
+from apps.audit.services import AuditActor
 from apps.common.errors import ApiError, is_try_again
 from apps.common.privacy import mask_bsns
 from apps.documents import duplicates, organise, visibility
@@ -86,6 +87,7 @@ def confirm_document(
         document = Document.objects.filter(LIVE, workspace=workspace, id=document_id).first()
         if document is None:
             raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
+        visibility.require_editable(document)
         if document.status not in _REVIEWABLE:
             raise ApiError(
                 409,
@@ -118,7 +120,9 @@ def _store_confirmation(
     """The one place a confirmed review is written: fields, history, tasks, rules (as
     the caller), then the addressee list and readers (the scope's end) and the status (as
     the system)."""
-    with visibility.addressee_scope(document):
+    # A private letter the confirmer would lose by its addressees is a 409 (PB ruling c);
+    # handing over a letter that is not private is allowed (`can_read` false).
+    with visibility.keep_own_access(document), visibility.addressee_scope(document):
         _write_confirmation(document, data, user=user, by_ai=by_ai)
     with system_actor():
         document.status = Document.Status.DONE
@@ -185,8 +189,21 @@ def _write_confirmation(
             created_by_ai=by_ai,
             created_by=user,
         )
+    if user is not None:
+        _set_visibility(document, data.visibility, user)
     # After the confirmed choices, now with the confirmed sender and type.
     _rules_guarded(document)
+
+
+def _set_visibility(document: Document, wanted: str, user: User) -> None:
+    """`ConfirmIn.visibility` (PB T18): "" leaves it (a Zorg label chosen above already made
+    it private), "restricted" makes it private with the confirmer as reader, "workspace"
+    makes a private letter visible again (403 `cannot_make_public` stores nothing)."""
+    actor = AuditActor.for_user(user)
+    if wanted == Document.Visibility.RESTRICTED:
+        visibility.make_private(document, actor=actor, origin=DocumentEvent.Origin.USER)
+    elif wanted == Document.Visibility.WORKSPACE:
+        visibility.make_public(document, actor=actor, user_id=user.id)
 
 
 def task_key(task: Task) -> tuple[str, str, date | None, str]:
@@ -336,6 +353,8 @@ LETTER_DATE_AHEAD = timedelta(days=366)
 
 
 def _validate(data: ConfirmIn, document: Document) -> None:
+    if data.visibility and data.visibility not in Document.Visibility.values:
+        raise _invalid(_("Kies privé of zichtbaar voor iedereen."))
     if data.document_type and data.document_type not in Document.Type.values:
         raise _invalid(_("Dit soort document kennen we niet."))
     if data.letter_date is not None and not (

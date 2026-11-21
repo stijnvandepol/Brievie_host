@@ -13,10 +13,11 @@ from apps.common.names import check_shown
 from apps.common.privacy import mask_bsns
 from apps.common.text import has_direction_control, is_visible
 from apps.labels.models import COLORS, Label
+from apps.people.models import DepartmentMember, Person
 from apps.rules.definition import named_ids, only_adds_label
 from apps.rules.models import Rule
 from apps.workspaces.context import system_actor
-from apps.workspaces.models import Workspace
+from apps.workspaces.models import Membership, Workspace
 
 _NAME_UNIQUE = "labels_label_name_unique"
 
@@ -30,8 +31,12 @@ def _labels(workspace: Workspace) -> "models.QuerySet[Label]":
     )
 
 
-def list_labels(workspace: Workspace) -> list[Label]:
+def list_labels(workspace: Workspace, *, offered_to: Membership | None = None) -> list[Label]:
     """Labels by name; needs the workspace's RLS context.
+
+    `offered_to`: a member who is no admin is not offered the labels of a department they
+    are not in while departments are on (S 4.6); a label on a letter they see still comes
+    with that letter (`label_ids`). With departments off every label is listed.
 
     `document_count` from one grouped count over the label links (each through its
     policy, the visible letters hashed once), not a join of every label to every link
@@ -45,6 +50,17 @@ def list_labels(workspace: Workspace) -> list[Label]:
     see needs no exclusion here: its links are hidden by their own policy.
     """
     labels = list(Label.objects.filter(workspace=workspace).order_by(Lower("name"), "id"))
+    if (
+        offered_to is not None
+        and offered_to.role != Membership.Role.ADMIN
+        and Workspace.objects.filter(id=workspace.id, departments_enabled=True).exists()
+    ):
+        mine = set(
+            DepartmentMember.objects.filter(
+                workspace=workspace, user_id=offered_to.user_id
+            ).values_list("department_id", flat=True)
+        )
+        labels = [label for label in labels if label.department_id in (None, *mine)]
     with connection.cursor() as cursor:
         cursor.execute(
             "SELECT l.label_id, pg_catalog.count(*) FROM public.documents_documentlabel l"
@@ -114,23 +130,79 @@ def _save(label: Label) -> None:
 MAX_LABELS = 200
 
 
-def create_label(*, workspace: Workspace, name: str, color: str) -> Label:
+def _department_of(workspace: Workspace, department_id: UUID) -> Person:
+    department = Person.objects.filter(
+        workspace=workspace, id=department_id, kind=Person.Kind.DEPARTMENT
+    ).first()
+    if department is None:
+        raise ApiError(422, "validation_error", _("Kies een afdeling."))
+    return department
+
+
+def _may_manage(department_id: UUID | None, membership: Membership | None) -> None:
+    """A department's label is managed by admins and that department's leads; a label for
+    everyone by every member (403 `forbidden` otherwise). `membership` None: the system,
+    which every caller states explicitly (no default)."""
+    if department_id is None or membership is None:
+        return
+    if membership.role == Membership.Role.ADMIN:
+        return
+    if DepartmentMember.objects.filter(
+        department_id=department_id, user_id=membership.user_id, is_lead=True
+    ).exists():
+        return
+    raise ApiError(403, "forbidden", _("Je mag dit niet doen in deze werkruimte."))
+
+
+def create_label(
+    *,
+    workspace: Workspace,
+    name: str,
+    color: str,
+    department_id: UUID | None = None,
+    actor: Membership | None,
+) -> Label:
+    """A label for everyone, or of a department (`department_id`; admins and its leads)."""
     with transaction.atomic():
+        if department_id is not None:
+            _may_manage(_department_of(workspace, department_id).id, actor)
         if Label.objects.filter(workspace=workspace).count() >= MAX_LABELS:
             raise ApiError(
                 409,
                 "too_many_labels",
                 _("Deze werkruimte heeft het grootste aantal labels. Verwijder er eerst een."),
             )
-        label = Label(workspace=workspace, name=_valid_name(name), color=_valid_color(color))
+        label = Label(
+            workspace=workspace,
+            name=_valid_name(name),
+            color=_valid_color(color),
+            department_id=department_id,
+        )
         _save(label)
         return _labels(workspace).get(id=label.id)
 
 
-def update_label(*, workspace: Workspace, label_id: UUID, name: str, color: str) -> Label:
-    """An empty `color` keeps the label's colour."""
+def update_label(
+    *,
+    workspace: Workspace,
+    label_id: UUID,
+    name: str,
+    color: str,
+    move: bool = False,
+    department_id: UUID | None = None,
+    actor: Membership | None,
+) -> Label:
+    """An empty `color` keeps the label's colour; without `move` the label keeps its
+    department (an older client never moves a label), with it the department becomes
+    `department_id` (None: for everyone). A department's label, and moving a
+    label to a department, need an admin or a lead of that department."""
     with transaction.atomic():
         label = _get_for_update(workspace, label_id)
+        _may_manage(label.department_id, actor)
+        if move:
+            if department_id is not None:
+                _may_manage(_department_of(workspace, department_id).id, actor)
+            label.department_id = department_id
         label.name = _valid_name(name)
         if color:
             label.color = _valid_color(color)
@@ -138,7 +210,13 @@ def update_label(*, workspace: Workspace, label_id: UUID, name: str, color: str)
         return _labels(workspace).get(id=label.id)
 
 
-def delete_label(*, workspace: Workspace, label_id: UUID, actor: AuditActor) -> None:
+def delete_label(
+    *,
+    workspace: Workspace,
+    label_id: UUID,
+    actor: AuditActor,
+    membership: Membership | None,
+) -> None:
     """Removes the label from its documents too; their events keep its name.
 
     The label's preset rule goes with it when adding this label is all it does. Another
@@ -148,6 +226,7 @@ def delete_label(*, workspace: Workspace, label_id: UUID, actor: AuditActor) -> 
         # Rules first, in id order: a running rule holds its rules and then needs the label.
         rules = list(Rule.objects.select_for_update().filter(workspace=workspace).order_by("id"))
         label = _get_for_update(workspace, label_id)
+        _may_manage(label.department_id, membership)
         own_rules: list[Rule] = []
         for rule in rules:
             if label.id not in named_ids(rule)[0]:

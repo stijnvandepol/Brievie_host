@@ -199,15 +199,16 @@ def organise_processed(
 
 
 def active_persons() -> list[PersonNames]:
-    """The workspace's non-archived persons with every way their name is written.
+    """The workspace's non-archived persons with every way their name is written; its
+    departments only while departments are on (S 4.5: off, nobody reads through them).
 
     A variant masked before a BSN was refused there is left out: it says nothing.
     """
     return [
         PersonNames(person_id, (name, *(v for v in variants if not holds_bsn(v))))
-        for person_id, name, variants in Person.objects.filter(
-            archived_at__isnull=True
-        ).values_list("id", "display_name", "name_variants")
+        for person_id, name, variants in Person.objects.filter(archived_at__isnull=True)
+        .exclude(kind=Person.Kind.DEPARTMENT, workspace__departments_enabled=False)
+        .values_list("id", "display_name", "name_variants")
     ]
 
 

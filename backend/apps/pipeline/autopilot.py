@@ -43,6 +43,7 @@ from apps.pipeline.validation import (
 from apps.rules.engine import evaluate, holds_on_settled
 from apps.rules.facts import active_specs, facts_for
 from apps.tasks.models import Task
+from apps.workspaces.models import Workspace
 
 AUTO_APPLY_FROM = Decimal("0.800")
 # More rule labels than this on one letter: the rules cast too wide a net, a person looks.
@@ -90,6 +91,11 @@ def _apply_open_proposals(document: Document) -> int:
         Person.objects.filter(workspace_id=document.workspace_id, archived_at__isnull=True)
     )
     rule_labels: frozenset[UUID] | None = None
+    # An automatic change never widens a private letter's readers (PB T10): on a letter
+    # that is private, or that a Zorg label this run may apply will make private, an
+    # addressee stays a proposal. Read from the database, before every addressee: a
+    # rule of this run may have made it private.
+    zorg_ahead = _zorg_may_be_applied(document, rows)
     applied = 0
     for row in rows:
         if row.action == _ADD_LABEL and rule_labels is None:
@@ -110,6 +116,11 @@ def _apply_open_proposals(document: Document) -> int:
             )
         else:
             if row.person is None or row.person.archived_at is not None:
+                continue
+            if (
+                zorg_ahead
+                or visibility.visibility_of(document.id) == Document.Visibility.RESTRICTED
+            ):
                 continue
             if row.origin == DocumentSuggestion.Origin.AI and (
                 not quote_names(row.quote, row.person)
@@ -210,6 +221,28 @@ def rule_labels_to_apply(document: Document, rows: Sequence[DocumentSuggestion])
         and (row.ai_confidence >= AUTO_APPLY_FROM or holds_on_settled(spec, settled))
     )
     return qualifying if len(qualifying) <= RULE_LABELS_MAX else frozenset()
+
+
+def _private(document: Document) -> bool:
+    return visibility.visibility_of(document.id) == Document.Visibility.RESTRICTED
+
+
+def _zorg_may_be_applied(document: Document, rows: Sequence[DocumentSuggestion]) -> bool:
+    """Whether an open Zorg label proposal could be applied in this run where Zorg makes a
+    letter private. A rule's proposal counts whatever `rule_labels_to_apply` will say:
+    that is decided after the addressees, so this blocks rather than guesses."""
+    if not Workspace.objects.filter(id=document.workspace_id, care_is_private=True).exists():
+        return False
+    return any(
+        row.action == _ADD_LABEL
+        and row.label is not None
+        and row.label.system_key == organise.ZORG
+        and (
+            row.origin == DocumentSuggestion.Origin.RULE
+            or _event_origin(row, frozenset()) is not None
+        )
+        for row in rows
+    )
 
 
 def _event_origin(row: DocumentSuggestion, rule_labels: frozenset[UUID]) -> str | None:

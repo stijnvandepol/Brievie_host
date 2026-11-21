@@ -72,7 +72,7 @@ def text_word(value: str) -> Condition:
 def test_operators_and_actions_table() -> None:
     assert engine.OPERATORS["label"] == frozenset({"has", "has_not"})
     assert engine.OPERATORS["addressee"] == frozenset({"is", "is_empty"})
-    assert frozenset({"add_label", "add_addressee"}) == engine.ACTIONS
+    assert frozenset({"add_label", "add_addressee", "make_private"}) == engine.ACTIONS
 
 
 def test_contains_word_respects_word_boundaries() -> None:

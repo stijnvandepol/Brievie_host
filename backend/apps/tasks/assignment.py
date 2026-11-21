@@ -49,12 +49,15 @@ def _visible(membership: Membership, task_id: UUID, *, lock: bool = False) -> Ta
     task = tasks.select_related(*TASK_RELATED).first()
     if task is None:
         raise task_not_found()
+    if lock and task.document is not None:
+        visibility.require_editable(task.document)
     return task
 
 
 def _readers(workspace_id: UUID, document_id: UUID) -> dict[UUID, str]:
     """Members (not viewers) who can read the letter, with their names."""
-    seen = visibility.viewers([document_id]).get(document_id, frozenset())
+    # Emergency access is read-only and ends: it never makes someone a candidate.
+    seen = visibility.regular_viewers([document_id]).get(document_id, frozenset())
     if not seen:
         return {}
     return dict(
@@ -143,7 +146,10 @@ def release_unseeing_assignees(
         )
         if not rows:
             return 0
-        seen = visibility.viewers({t.document_id for t in rows if t.document_id is not None})
+        # Sight through emergency access does not keep an assignment (it ends in an hour).
+        seen = visibility.regular_viewers(
+            {t.document_id for t in rows if t.document_id is not None}
+        )
         viewers = set(
             Membership.objects.filter(
                 workspace_id=workspace_id, role=Membership.Role.VIEWER

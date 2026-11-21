@@ -24,7 +24,7 @@ _LABEL = "/workspaces/{workspace_id}/labels/{label_id}"
 )
 def list_labels(request: HttpRequest, workspace_id: UUID) -> list[Label]:
     membership = workspace_member(request, workspace_id)
-    return services.list_labels(membership.workspace)
+    return services.list_labels(membership.workspace, offered_to=membership)
 
 
 @router.post(
@@ -35,7 +35,11 @@ def list_labels(request: HttpRequest, workspace_id: UUID) -> list[Label]:
 def create_label(request: HttpRequest, workspace_id: UUID, payload: LabelIn) -> Status[Label]:
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
     label = services.create_label(
-        workspace=membership.workspace, name=payload.name, color=payload.color
+        workspace=membership.workspace,
+        name=payload.name,
+        color=payload.color,
+        department_id=payload.department_id,
+        actor=membership,
     )
     return Status(201, label)
 
@@ -64,7 +68,13 @@ def update_label(
 ) -> Label:
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
     return services.update_label(
-        workspace=membership.workspace, label_id=label_id, name=payload.name, color=payload.color
+        workspace=membership.workspace,
+        label_id=label_id,
+        name=payload.name,
+        color=payload.color,
+        move="department_id" in payload.model_fields_set,
+        department_id=payload.department_id,
+        actor=membership,
     )
 
 
@@ -80,6 +90,9 @@ def update_label(
 def delete_label(request: HttpRequest, workspace_id: UUID, label_id: UUID) -> Status[None]:
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
     services.delete_label(
-        workspace=membership.workspace, label_id=label_id, actor=actor_from_request(request)
+        workspace=membership.workspace,
+        label_id=label_id,
+        actor=actor_from_request(request),
+        membership=membership,
     )
     return Status(204, None)

@@ -44,6 +44,7 @@ def test_list_is_newest_first_with_summary_fields(client_a: Client, ws_a: Worksp
         "confirmed_by_ai", "auto_label_ids", "auto_addressee_ids", "auto_rule_label_ids",
         "proposed_sender",
         "proposed_document_type", "proposed_letter_date", "open_duplicate_count",
+        "visibility", "reader_names",
     }  # fmt: skip
     assert rows[0]["page_count"] == 2
     assert rows[0]["status"] == "processing"

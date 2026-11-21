@@ -48,6 +48,8 @@ function PersonDialog({
   const save = useMutation({
     mutationFn: async () => {
       const body: PersonBody = {
+        // Read on create only; the server keeps a department a department.
+        kind: person?.kind ?? "person",
         display_name: name.trim(),
         name_variants: variants
           .split("\n")
@@ -144,7 +146,12 @@ function PersonRow({
     mutationFn: async (archived: boolean) => {
       const { error } = await api.PUT("/api/v1/workspaces/{workspace_id}/persons/{person_id}", {
         params: { path },
-        body: { display_name: person.display_name, name_variants: person.name_variants, archived },
+        body: {
+          display_name: person.display_name,
+          name_variants: person.name_variants,
+          archived,
+          kind: person.kind,
+        },
       });
       if (error !== undefined) throw new ApiFailure(error);
     },

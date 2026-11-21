@@ -106,6 +106,7 @@ def _fill(rule: Rule, workspace: Workspace, data: RuleIn, *, any_person: bool = 
         label_ids=set(Label.objects.filter(workspace=workspace).values_list("id", flat=True)),
         person_ids=allowed,
         archived_person_ids=set(persons) - allowed,
+        mode=data.mode,
     )
     rule.name = name
     rule.active = data.active

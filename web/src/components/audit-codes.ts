@@ -44,6 +44,7 @@ export const WORKSPACE_CODES = [
   "person_unlinked",
   "department_member_added",
   "department_member_removed",
+  "department_lead_changed",
   "emergency_access_switched_on",
   "emergency_access_switched_off",
   "emergency_access_used",
@@ -130,6 +131,8 @@ function knownLabel(code: AuditCodeName): string {
       return t`Lid aan afdeling toegevoegd`;
     case "department_member_removed":
       return t`Lid uit afdeling gehaald`;
+    case "department_lead_changed":
+      return t`Leidinggevende van afdeling gewijzigd`;
     case "emergency_access_switched_on":
       return t`Noodtoegang aangezet`;
     case "emergency_access_switched_off":

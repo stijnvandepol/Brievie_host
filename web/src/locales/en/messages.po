@@ -1206,6 +1206,14 @@ msgstr "Duplicate?: {0}"
 msgid "E-mailadres"
 msgstr "Email address"
 
+#: src/components/rule-sentence.ts
+msgid "een actie die deze versie niet kent"
+msgstr "an action this version does not know"
+
+#: src/routes/rule-editor.tsx
+msgid "Een actie die deze versie van Brievie niet kent. Die blijft zoals hij is."
+msgstr "An action this version of Brievie does not know. It stays as it is."
+
 #: src/routes/ai.tsx
 msgid "Een AI die je zelf thuis of op kantoor draait, zoals Ollama. Brievie stuurt de tekst alleen naar een adres op je eigen netwerk."
 msgstr "An AI you run yourself at home or at the office, such as Ollama. Brievie only sends the text to an address on your own network."
@@ -2010,6 +2018,10 @@ msgstr "Members may export their own mail"
 msgid "Leeg laten kiest {0}."
 msgstr "Leaving it empty chooses {0}."
 
+#: src/components/audit-codes.ts
+msgid "Leidinggevende van afdeling gewijzigd"
+msgstr "Department lead changed"
+
 #: src/routes/duplicate.tsx
 msgid "Let op: {fields} verschilt. Een herinnering of een tweede termijn lijkt vaak op de eerste brief, maar het is een andere brief."
 msgstr "Note: these differ: {fields}. A reminder or a second installment often looks like the first letter, but it is a different letter."
@@ -2062,6 +2074,10 @@ msgstr "Payslip"
 #: src/routes/invitation.tsx
 msgid "Lukt dat niet? Typ deze code in de app."
 msgstr "Doesn't that work? Type this code in the app."
+
+#: src/components/rule-sentence.ts
+msgid "maak de brief privé"
+msgstr "make the letter private"
 
 #: src/routes/members.tsx
 msgid "Maak een ZIP-bestand met jouw post. Het staat 24 uur klaar om te downloaden."
@@ -2511,6 +2527,14 @@ msgstr "Edit person"
 #: src/components/document-table.tsx
 msgid "Polis"
 msgstr "Policy"
+
+#: src/routes/rule-editor.tsx
+msgid "Privé maken"
+msgstr "Make private"
+
+#: src/routes/rule-editor.tsx
+msgid "Privé maken kan alleen in een regel die automatisch werkt. Zet Automatisch toepassen aan, of haal de actie weg."
+msgstr "Make private only works in a rule that applies itself. Turn on Apply automatically, or remove the action."
 
 #: src/routes/search.tsx
 msgid "Probeer een andere spelling of het begin van het woord."

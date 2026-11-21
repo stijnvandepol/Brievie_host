@@ -71,7 +71,12 @@ describe("persons", () => {
     await user.click(screen.getByRole("button", { name: "Opslaan" }));
     expect(await screen.findByRole("rowheader", { name: /Oma/ })).toBeInTheDocument();
     expect(created).toEqual([
-      { display_name: "Oma", name_variants: ["J. de Vries", "Oma de Vries"], archived: false },
+      {
+        kind: "person",
+        display_name: "Oma",
+        name_variants: ["J. de Vries", "Oma de Vries"],
+        archived: false,
+      },
     ]);
   });
 
@@ -114,6 +119,7 @@ describe("persons", () => {
       display_name: "Papa",
       name_variants: ["P. de Vries"],
       archived: true,
+      kind: "person",
     });
   });
 

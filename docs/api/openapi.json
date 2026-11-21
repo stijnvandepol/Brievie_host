@@ -502,6 +502,11 @@
             "maxItems": 20,
             "title": "Tasks",
             "type": "array"
+          },
+          "visibility": {
+            "default": "",
+            "title": "Visibility",
+            "type": "string"
           }
         },
         "required": [
@@ -548,6 +553,38 @@
           }
         },
         "title": "DeadlineIn",
+        "type": "object"
+      },
+      "DepartmentMemberIn": {
+        "properties": {
+          "is_lead": {
+            "default": false,
+            "title": "Is Lead",
+            "type": "boolean"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "title": "DepartmentMemberIn",
+        "type": "object"
+      },
+      "DepartmentMemberUpdateIn": {
+        "properties": {
+          "is_lead": {
+            "title": "Is Lead",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "is_lead"
+        ],
+        "title": "DepartmentMemberUpdateIn",
         "type": "object"
       },
       "DeviceOut": {
@@ -625,6 +662,11 @@
             "title": "Label Name",
             "type": "string"
           },
+          "note": {
+            "default": "",
+            "title": "Note",
+            "type": "string"
+          },
           "origin": {
             "title": "Origin",
             "type": "string"
@@ -698,6 +740,11 @@
             },
             "title": "Auto Rule Label Ids",
             "type": "array"
+          },
+          "can_make_public": {
+            "default": false,
+            "title": "Can Make Public",
+            "type": "boolean"
           },
           "can_read": {
             "default": true,
@@ -799,9 +846,24 @@
             "title": "Proposed Sender",
             "type": "string"
           },
+          "reader_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reader Names",
+            "type": "array"
+          },
           "sender": {
             "title": "Sender",
             "type": "string"
+          },
+          "shared_user_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Shared User Ids",
+            "type": "array"
           },
           "status": {
             "title": "Status",
@@ -828,6 +890,11 @@
             },
             "title": "Tasks",
             "type": "array"
+          },
+          "visibility": {
+            "default": "workspace",
+            "title": "Visibility",
+            "type": "string"
           }
         },
         "required": [
@@ -960,6 +1027,13 @@
             "title": "Proposed Sender",
             "type": "string"
           },
+          "reader_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reader Names",
+            "type": "array"
+          },
           "sender": {
             "title": "Sender",
             "type": "string"
@@ -973,6 +1047,11 @@
           },
           "status": {
             "title": "Status",
+            "type": "string"
+          },
+          "visibility": {
+            "default": "workspace",
+            "title": "Visibility",
             "type": "string"
           }
         },
@@ -1204,12 +1283,24 @@
             "title": "Proposed Sender",
             "type": "string"
           },
+          "reader_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reader Names",
+            "type": "array"
+          },
           "sender": {
             "title": "Sender",
             "type": "string"
           },
           "status": {
             "title": "Status",
+            "type": "string"
+          },
+          "visibility": {
+            "default": "workspace",
+            "title": "Visibility",
             "type": "string"
           }
         },
@@ -1224,6 +1315,62 @@
           "letter_date"
         ],
         "title": "DocumentSummaryOut",
+        "type": "object"
+      },
+      "DocumentVisibilityIn": {
+        "properties": {
+          "shared_user_ids": {
+            "default": [],
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Shared User Ids",
+            "type": "array"
+          },
+          "visibility": {
+            "title": "Visibility",
+            "type": "string"
+          }
+        },
+        "required": [
+          "visibility"
+        ],
+        "title": "DocumentVisibilityIn",
+        "type": "object"
+      },
+      "DocumentVisibilityOut": {
+        "properties": {
+          "can_read": {
+            "default": true,
+            "title": "Can Read",
+            "type": "boolean"
+          },
+          "reader_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reader Names",
+            "type": "array"
+          },
+          "shared_user_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Shared User Ids",
+            "type": "array"
+          },
+          "visibility": {
+            "title": "Visibility",
+            "type": "string"
+          }
+        },
+        "required": [
+          "visibility"
+        ],
+        "title": "DocumentVisibilityOut",
         "type": "object"
       },
       "DuplicateDifferenceOut": {
@@ -1328,6 +1475,66 @@
           "text_similarity"
         ],
         "title": "DuplicateOut",
+        "type": "object"
+      },
+      "EmergencyAccessIn": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "EmergencyAccessIn",
+        "type": "object"
+      },
+      "EmergencyAccessOut": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "EmergencyAccessOut",
+        "type": "object"
+      },
+      "EmergencyAccessUseIn": {
+        "properties": {
+          "reason": {
+            "maxLength": 200,
+            "minLength": 10,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "EmergencyAccessUseIn",
+        "type": "object"
+      },
+      "EmergencyAccessUseOut": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "opened_count": {
+            "title": "Opened Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "opened_count",
+          "expires_at"
+        ],
+        "title": "EmergencyAccessUseOut",
         "type": "object"
       },
       "EmptyTrashIn": {
@@ -1659,6 +1866,14 @@
             "title": "Color",
             "type": "string"
           },
+          "department_id": {
+            "format": "uuid",
+            "title": "Department Id",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "name": {
             "maxLength": 50,
             "minLength": 1,
@@ -1677,6 +1892,14 @@
           "color": {
             "title": "Color",
             "type": "string"
+          },
+          "department_id": {
+            "format": "uuid",
+            "title": "Department Id",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "document_count": {
             "title": "Document Count",
@@ -1712,6 +1935,14 @@
             "default": "",
             "title": "Color",
             "type": "string"
+          },
+          "department_id": {
+            "format": "uuid",
+            "title": "Department Id",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "name": {
             "maxLength": 50,
@@ -2285,6 +2516,11 @@
             "title": "Display Name",
             "type": "string"
           },
+          "kind": {
+            "default": "person",
+            "title": "Kind",
+            "type": "string"
+          },
           "name_variants": {
             "items": {
               "type": "string"
@@ -2331,6 +2567,27 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "kind": {
+            "default": "person",
+            "title": "Kind",
+            "type": "string"
+          },
+          "lead_user_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Lead User Ids",
+            "type": "array"
+          },
+          "member_user_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Member User Ids",
+            "type": "array"
           },
           "name_variants": {
             "items": {
@@ -3487,6 +3744,13 @@
             "title": "Purge After",
             "type": "string"
           },
+          "reader_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reader Names",
+            "type": "array"
+          },
           "sender": {
             "title": "Sender",
             "type": "string"
@@ -3503,6 +3767,11 @@
           "trashed_by_name": {
             "default": "",
             "title": "Trashed By Name",
+            "type": "string"
+          },
+          "visibility": {
+            "default": "workspace",
+            "title": "Visibility",
             "type": "string"
           }
         },
@@ -3621,6 +3890,13 @@
               "null"
             ]
           },
+          "care_is_private": {
+            "title": "Care Is Private",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "summary_language": {
             "pattern": "^(nl|en)$",
             "title": "Summary Language",
@@ -3637,6 +3913,16 @@
         "properties": {
           "allow_member_export": {
             "title": "Allow Member Export",
+            "type": "boolean"
+          },
+          "care_is_private": {
+            "default": false,
+            "title": "Care Is Private",
+            "type": "boolean"
+          },
+          "emergency_access": {
+            "default": false,
+            "title": "Emergency Access",
             "type": "boolean"
           },
           "summary_language": {
@@ -8443,6 +8729,148 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/visibility": {
+      "put": {
+        "description": "Make the letter private (`restricted`) or visible to everyone (`workspace`), and share it: afterwards it is shared with exactly `shared_user_ids` (any letter). 403 `cannot_make_public` for someone not addressed while an addressee reads it; 404 `member_not_found` for a share with somebody who is no member. `can_read` false when the caller removed their own share.",
+        "operationId": "setDocumentVisibility",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentVisibilityIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentVisibilityOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Set Document Visibility",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/duplicates": {
       "get": {
         "description": "The open pairs of letters that are probably one letter scanned twice, newest first (at most 100). A viewer gets an empty list. Only a pair whose two letters the caller both sees; any other answers as a missing one (404 `duplicate_not_found`).",
@@ -8805,6 +9233,125 @@
         "summary": "Merge Duplicate",
         "tags": [
           "duplicates"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/emergency-access": {
+      "put": {
+        "description": "Web session only: a bearer token answers 401 not_authenticated. Switch emergency access for the workspace's admins. Server admins only (403 forbidden), also without a membership; every member gets a notice.",
+        "operationId": "setEmergencyAccess",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmergencyAccessIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmergencyAccessOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Set Emergency Access",
+        "tags": [
+          "workspaces"
         ]
       }
     },
@@ -10751,6 +11298,7 @@
         ]
       },
       "post": {
+        "description": "`kind` \"department\" makes a department: admins only (403 `forbidden`).",
         "operationId": "createPerson",
         "parameters": [
           {
@@ -10965,7 +11513,7 @@
         ]
       },
       "put": {
-        "description": "`name_variants` and `archived` left out keep the person's current value (a rename never archives, restores or clears the variants); sent, they replace it.",
+        "description": "`name_variants` and `archived` left out keep the person's current value (a rename never archives, restores or clears the variants); sent, they replace it. A department or a person linked to an account: admins only (403 `forbidden`).",
         "operationId": "updatePerson",
         "parameters": [
           {
@@ -11105,9 +11653,148 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/persons/{person_id}/emergency-access": {
+      "post": {
+        "description": "Web session only, admins. Opens for one hour, read-only, every letter on the name of this person or department that the admin cannot see, with a reason of 10 to 200 characters: a history line on each, an audit row, a notice to the person or the department's members. 409 `emergency_access_off` when the workspace has it off.",
+        "operationId": "openEmergencyAccess",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "person_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Person Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmergencyAccessUseIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmergencyAccessUseOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Open Emergency Access",
+        "tags": [
+          "people"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/persons/{person_id}/member": {
       "put": {
-        "description": "Web session only: a bearer token answers 401 not_authenticated. Link the person to a member of the workspace (`user_id`), or unlink it (null). Administrators only.",
+        "description": "Web session only: a bearer token answers 401 not_authenticated. Link the person to a member of the workspace (`user_id`; administrators only), or unlink it (null). A linked person is unlinked only by its own member (409 `cannot_unlink` for anybody else); 409 `cannot_grant_self` for an admin linking themselves to a person with private post; 409 `is_a_department`.",
         "operationId": "linkPersonToMember",
         "parameters": [
           {
@@ -11239,6 +11926,391 @@
           }
         ],
         "summary": "Link Person To Member",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/persons/{person_id}/members": {
+      "post": {
+        "description": "Web session only. Admins put a member in a department (a grant). 409 `not_a_department`, 409 `cannot_grant_self` (an admin adding themselves where there is private post). A member already in it: 200, unchanged.",
+        "operationId": "addDepartmentMember",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "person_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Person Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepartmentMemberIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Add Department Member",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/persons/{person_id}/members/{user_id}": {
+      "delete": {
+        "description": "Web session only. Admins take a member out of a department.",
+        "operationId": "removeDepartmentMember",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "person_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Person Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Remove Department Member",
+        "tags": [
+          "people"
+        ]
+      },
+      "put": {
+        "description": "Web session only. Admins make a department member its lead, or not.",
+        "operationId": "updateDepartmentMember",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "person_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Person Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepartmentMemberUpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Update Department Member",
         "tags": [
           "people"
         ]

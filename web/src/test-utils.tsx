@@ -114,10 +114,14 @@ export const documentSummary = {
   proposed_document_type: "",
   proposed_letter_date: null,
   open_duplicate_count: 0,
+  visibility: "workspace",
+  reader_names: [],
 };
 
 export const documentDetail: components["schemas"]["DocumentOut"] = {
   ...documentSummary,
+  can_make_public: false,
+  shared_user_ids: [],
   failure_code: "",
   pages: [
     { index: 1, ocr_text: "Eerste pagina" },
@@ -157,6 +161,7 @@ export const papa: Person = {
   archived: false,
   document_count: 2,
   user_id: null,
+  kind: "person",
 };
 
 export const annaPerson: Person = {
@@ -166,6 +171,7 @@ export const annaPerson: Person = {
   archived: false,
   document_count: 0,
   user_id: user.id,
+  kind: "person",
 };
 
 export const members: components["schemas"]["MemberOut"][] = [

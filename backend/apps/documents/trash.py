@@ -108,6 +108,7 @@ def trash_document(
             if already is None:
                 raise _not_found()
             return already
+        visibility.require_editable(document)
         move_to_trash(document, user=user, actor=actor)
     return document
 
@@ -131,6 +132,8 @@ def restore_document(
             if live is None:
                 raise _not_found()
             return live
+        # Emergency access reads a letter in the trash, never restores it.
+        visibility.require_editable(document)
         document.trashed_at = None
         document.trashed_by = None
         document.save(update_fields=["trashed_at", "trashed_by", "updated_at"])
@@ -215,6 +218,7 @@ def purge_now(*, membership: Membership, actor: AuditActor, document_id: UUID) -
         )
         if document is None:
             raise _not_found()
+        visibility.require_editable(document)
         verdict = retention.check_removal(document, step="purge")
         if not verdict.allowed:
             raise retention.retained_error(verdict)
@@ -231,10 +235,12 @@ def empty_trash(*, membership: Membership, actor: AuditActor, up_to: datetime | 
         documents = visibility.trashed_documents(membership).select_for_update(no_key=True)
         if up_to is not None:
             documents = documents.filter(trashed_at__lte=up_to)
+        # A letter the admin sees only through emergency access stays: that access reads.
         marked = sum(
             1
             for document in documents.order_by("trashed_at", "id")
-            if mark_for_purge(document, actor=actor, reason="emptied")
+            if not visibility.only_through_emergency(document)
+            and mark_for_purge(document, actor=actor, reason="emptied")
         )
         if marked:
             defer_purge(membership.workspace_id)

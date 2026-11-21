@@ -23,6 +23,8 @@ from apps.documents.schemas import (
     DocumentSearchIn,
     DocumentSearchOut,
     DocumentSummaryOut,
+    DocumentVisibilityIn,
+    DocumentVisibilityOut,
     EmptyTrashIn,
     EmptyTrashOut,
     FolderIn,
@@ -382,6 +384,39 @@ def dismiss_suggestion(
         workspace=membership.workspace, document_id=document_id, suggestion_id=suggestion_id
     )
     return services.document_out_for(document)
+
+
+@router.put(
+    "/workspaces/{workspace_id}/documents/{document_id}/visibility",
+    response={
+        200: DocumentVisibilityOut,
+        403: ErrorOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    operation_id="setDocumentVisibility",
+    description=(
+        "Make the letter private (`restricted`) or visible to everyone (`workspace`), and"
+        " share it: afterwards it is shared with exactly `shared_user_ids` (any letter)."
+        " 403 `cannot_make_public` for someone not addressed while an addressee reads it;"
+        " 404 `member_not_found` for a share with somebody who is no member. `can_read`"
+        " false when the caller removed their own share."
+    ),
+)
+def set_document_visibility(
+    request: HttpRequest, workspace_id: UUID, document_id: UUID, payload: DocumentVisibilityIn
+) -> DocumentVisibilityOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    return services.set_document_visibility(
+        workspace=membership.workspace,
+        user=current_user(request),
+        actor=actor_from_request(request),
+        document_id=document_id,
+        visibility_value=payload.visibility,
+        shared_user_ids=payload.shared_user_ids,
+    )
 
 
 @router.get(
