@@ -698,7 +698,7 @@ export interface paths {
         };
         /**
          * List Documents
-         * @description The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`).
+         * @description The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`). `addressed_to_me=true` keeps "Mijn post": the letters on the caller's own persons (their own and those they manage), with `include_departments=true` also on their departments; empty for a member without a person. `unread_only=true` keeps the letters the caller has not read (`unread`).
          */
         get: operations["listDocuments"];
         put?: never;
@@ -707,6 +707,26 @@ export interface paths {
          * @description Upload a scanned document as multipart/form-data: `metadata` is a JSON string (schema `UploadMetadataIn`), followed by one `page` file (image/jpeg) per page in page order. Repeating an upload with the same `client_id` and pages answers 200 with the existing document. 429 `too_many_uploads` with Retry-After when the member or the workspace uploaded too much in a short time (by default 60 per member per 10 minutes, 600 per workspace per hour).
          */
         post: operations["createDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Documents Read
+         * @description "Alles gelezen": mark the given letters read for the caller (at most 200; 422 `validation_error` for more). Ids the caller does not see are skipped without a word. `marked`: how many were newly marked. The caller's own state only: nobody else sees it; no history line, no log.
+         */
+        post: operations["markDocumentsRead"];
         delete?: never;
         options?: never;
         head?: never;
@@ -913,6 +933,30 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Document Read
+         * @description The caller opened the letter: call once when the letter page or the reader shows it (a plain `getDocument` marks nothing). Idempotent. 404 as `getDocument`. The caller's own state only: nobody else sees it; no history line, no log.
+         */
+        post: operations["markDocumentRead"];
+        /**
+         * Mark Document Unread
+         * @description "Markeer als ongelezen": the caller's own mark goes; the letter is unread for them again. Idempotent. 404 as `getDocument`.
+         */
+        delete: operations["markDocumentUnread"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2570,6 +2614,11 @@ export interface components {
             /** Tasks */
             tasks: components["schemas"]["TaskOut"][];
             /**
+             * Unread
+             * @default false
+             */
+            unread: boolean;
+            /**
              * Visibility
              * @default workspace
              */
@@ -2654,6 +2703,11 @@ export interface components {
             snippet?: components["schemas"]["SnippetPartOut"][];
             /** Status */
             status: string;
+            /**
+             * Unread
+             * @default false
+             */
+            unread: boolean;
             /**
              * Visibility
              * @default workspace
@@ -2802,6 +2856,11 @@ export interface components {
             sender: string;
             /** Status */
             status: string;
+            /**
+             * Unread
+             * @default false
+             */
+            unread: boolean;
             /**
              * Visibility
              * @default workspace
@@ -3189,6 +3248,16 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /** MarkReadIn */
+        MarkReadIn: {
+            /** Document Ids */
+            document_ids: string[];
+        };
+        /** MarkReadOut */
+        MarkReadOut: {
+            /** Marked */
+            marked: number;
         };
         /** MemberChangeOut */
         MemberChangeOut: {
@@ -4332,6 +4401,11 @@ export interface components {
              * @default
              */
             trashed_by_name: string;
+            /**
+             * Unread
+             * @default false
+             */
+            unread: boolean;
             /**
              * Visibility
              * @default workspace
@@ -6721,6 +6795,9 @@ export interface operations {
                 person_id?: string | null;
                 label_id?: string | null;
                 automatic?: boolean;
+                addressed_to_me?: boolean;
+                include_departments?: boolean;
+                unread_only?: boolean;
             };
             header?: never;
             path: {
@@ -6889,6 +6966,95 @@ export interface operations {
             };
             /** @description Too Many Requests */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    markDocumentsRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarkReadIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkReadOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7629,6 +7795,102 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    markDocumentRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    markDocumentUnread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

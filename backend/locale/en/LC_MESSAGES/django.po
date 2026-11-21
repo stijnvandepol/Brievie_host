@@ -1572,6 +1572,10 @@ msgstr "We can't find this event."
 msgid "Deze wijziging kun je niet meer terugdraaien."
 msgstr "This change can no longer be undone."
 
+#: apps/documents/reading.py
+msgid "Kies hoogstens 200 brieven."
+msgstr "Choose 200 letters at most."
+
 #: apps/documents/retention.py
 msgid "Deze brief moet nog bewaard worden. Je kunt hem nu niet wissen."
 msgstr "This letter still has to be kept. You can't erase it now."

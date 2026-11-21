@@ -10,7 +10,7 @@ from apps.accounts.models import User
 from apps.audit.services import AuditActor
 from apps.common import crypto
 from apps.common.errors import ApiError
-from apps.documents import duplicates, new_persons, organise, suggestions, visibility
+from apps.documents import duplicates, new_persons, organise, reading, suggestions, visibility
 from apps.documents.intake import page_aad
 from apps.documents.models import (
     LIVE,
@@ -35,6 +35,7 @@ from apps.documents.schemas import (
 )
 from apps.documents.storage import default_storage
 from apps.pipeline.jobs import defer_processing
+from apps.tasks.facts import member_facts
 from apps.tasks.models import Task, amount_text
 from apps.workspaces.context import current_actor
 from apps.workspaces.keys import workspace_key
@@ -218,6 +219,20 @@ def _in_state(state: str) -> models.Q:
     return models.Q(status=Document.Status.DONE, addressee_ids=[])
 
 
+def my_post_filter(membership: Membership, *, include_departments: bool = False) -> models.Q:
+    """ "Mijn post" (navigation spec B2): letters on the member's own persons (their own and
+    those they manage), with `include_departments` also on their departments ("Ook mijn
+    afdeling"). Matches nothing for a member without any. The GIN index on
+    `addressee_ids`; only ever applied on top of `visible_documents`."""
+    facts = member_facts(membership)
+    ids = set(facts.person_ids)
+    if include_departments:
+        ids |= facts.department_ids
+    if not ids:
+        return models.Q(pk__in=[])
+    return models.Q(addressee_ids__overlap=sorted(ids))
+
+
 def list_documents(
     membership: Membership,
     *,
@@ -225,14 +240,25 @@ def list_documents(
     person_id: UUID | None = None,
     label_id: UUID | None = None,
     automatic: bool = False,
+    addressed_to_me: bool = False,
+    include_departments: bool = False,
+    unread_only: bool = False,
 ) -> list[Document]:
     """The newest documents the member sees (at most 200; paging comes later), filtered.
 
-    `automatic` keeps the documents the autopilot confirmed or organised.
+    `automatic` keeps the documents the autopilot confirmed or organised;
+    `addressed_to_me` the member's own post ("Mijn post", with `include_departments` also
+    their departments'); `unread_only` the letters they have not read (navigation S 5).
     """
     if inbox_state and inbox_state not in INBOX_STATES:
         raise ApiError(422, "validation_error", _("Deze stand van de inbox kennen we niet."))
     documents = visibility.visible_documents(membership)
+    if addressed_to_me:
+        documents = documents.filter(
+            my_post_filter(membership, include_departments=include_departments)
+        )
+    if unread_only:
+        documents = documents.filter(reading.unread_q(membership))
     if inbox_state:
         documents = documents.filter(_in_state(inbox_state))
     if person_id is not None:
@@ -308,11 +334,15 @@ def document_access(
 
 
 def document_summary_out(
-    document: Document, *, open_duplicate_count: int = 0, reader_names: list[str] | None = None
+    document: Document,
+    *,
+    open_duplicate_count: int = 0,
+    reader_names: list[str] | None = None,
+    unread: bool = False,
 ) -> DocumentSummaryOut:
     """A row of a document list."""
     return _summary_out(
-        document, _open_suggestions(document), open_duplicate_count, reader_names or []
+        document, _open_suggestions(document), open_duplicate_count, reader_names or [], unread
     )
 
 
@@ -323,9 +353,13 @@ def document_summaries_out(
     full per letter (one query for all)."""
     counts = duplicates.pair_counts(membership, [d.id for d in documents])
     names = visibility.reader_names(documents)
+    unread = reading.unread_ids(membership, documents)
     return [
         document_summary_out(
-            d, open_duplicate_count=counts.get(d.id, 0), reader_names=names.get(d.id, [])
+            d,
+            open_duplicate_count=counts.get(d.id, 0),
+            reader_names=names.get(d.id, []),
+            unread=d.id in unread,
         )
         for d in documents
     ]
@@ -342,6 +376,7 @@ def _summary_out(
     open_suggestions: list[DocumentSuggestion],
     open_duplicate_count: int = 0,
     reader_names: list[str] | None = None,
+    unread: bool = False,
 ) -> DocumentSummaryOut:
     proposed = _headline_proposals(document)
     return DocumentSummaryOut(
@@ -371,6 +406,7 @@ def _summary_out(
         open_duplicate_count=open_duplicate_count,
         visibility=document.visibility,
         reader_names=reader_names or [],
+        unread=unread,
     )
 
 
@@ -409,8 +445,11 @@ def document_out(document: Document, *, open_duplicate_count: int = 0) -> Docume
     open_suggestions = _open_suggestions(document)
     names = visibility.reader_names([document]).get(document.id, [])
     actor = current_actor()
+    unread = reading.is_unread_for_actor(document)
     return DocumentOut(
-        **_summary_out(document, open_suggestions, open_duplicate_count, names).model_dump(),
+        **_summary_out(
+            document, open_suggestions, open_duplicate_count, names, unread
+        ).model_dump(),
         shared_user_ids=visibility.shared_user_ids(document),
         new_person_suggestions=[
             NewPersonSuggestionOut(

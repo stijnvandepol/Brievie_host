@@ -77,6 +77,9 @@ class DocumentSummaryOut(Schema):
     # Of a private letter: who reads it ("Privé voor Anne en Bob"), by name. Filled in the
     # list and on the letter; empty elsewhere and for a letter that is not private.
     reader_names: list[str] = Field(default_factory=list)
+    # "Ongelezen": the caller has not read this letter yet (navigation spec S 5; their own
+    # state, nobody else's). Filled in `listDocuments` and the letter; false elsewhere.
+    unread: bool = False
 
 
 class TrashedDocumentOut(DocumentSummaryOut):
@@ -248,6 +251,17 @@ class AddresseesIn(InputSchema):
 class LabelsIn(InputSchema):
     # The document's labels become exactly these labels.
     label_ids: list[UUID] = Field(max_length=30)
+
+
+class MarkReadIn(InputSchema):
+    # The letters to mark read ("Alles gelezen"): at most 200; ids the caller does not see
+    # are skipped.
+    document_ids: list[UUID] = Field(max_length=200)
+
+
+class MarkReadOut(Schema):
+    # How many letters were newly marked read.
+    marked: int
 
 
 class InboxCountsOut(Schema):

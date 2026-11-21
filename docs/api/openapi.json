@@ -926,6 +926,11 @@
             "title": "Tasks",
             "type": "array"
           },
+          "unread": {
+            "default": false,
+            "title": "Unread",
+            "type": "boolean"
+          },
           "visibility": {
             "default": "workspace",
             "title": "Visibility",
@@ -1083,6 +1088,11 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "unread": {
+            "default": false,
+            "title": "Unread",
+            "type": "boolean"
           },
           "visibility": {
             "default": "workspace",
@@ -1332,6 +1342,11 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "unread": {
+            "default": false,
+            "title": "Unread",
+            "type": "boolean"
           },
           "visibility": {
             "default": "workspace",
@@ -2084,6 +2099,37 @@
           "password"
         ],
         "title": "LoginIn",
+        "type": "object"
+      },
+      "MarkReadIn": {
+        "properties": {
+          "document_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 200,
+            "title": "Document Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "document_ids"
+        ],
+        "title": "MarkReadIn",
+        "type": "object"
+      },
+      "MarkReadOut": {
+        "properties": {
+          "marked": {
+            "title": "Marked",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "marked"
+        ],
+        "title": "MarkReadOut",
         "type": "object"
       },
       "MemberChangeOut": {
@@ -4182,6 +4228,11 @@
             "default": "",
             "title": "Trashed By Name",
             "type": "string"
+          },
+          "unread": {
+            "default": false,
+            "title": "Unread",
+            "type": "boolean"
           },
           "visibility": {
             "default": "workspace",
@@ -7656,7 +7707,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/documents": {
       "get": {
-        "description": "The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`).",
+        "description": "The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`). `addressed_to_me=true` keeps \"Mijn post\": the letters on the caller's own persons (their own and those they manage), with `include_departments=true` also on their departments; empty for a member without a person. `unread_only=true` keeps the letters the caller has not read (`unread`).",
         "operationId": "listDocuments",
         "parameters": [
           {
@@ -7712,6 +7763,36 @@
             "schema": {
               "default": false,
               "title": "Automatic",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "addressed_to_me",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Addressed To Me",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_departments",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Departments",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "unread_only",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Unread Only",
               "type": "boolean"
             }
           }
@@ -7950,6 +8031,128 @@
           }
         ],
         "summary": "Create Document",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/read": {
+      "post": {
+        "description": "\"Alles gelezen\": mark the given letters read for the caller (at most 200; 422 `validation_error` for more). Ids the caller does not see are skipped without a word. `marked`: how many were newly marked. The caller's own state only: nobody else sees it; no history line, no log.",
+        "operationId": "markDocumentsRead",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkReadIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkReadOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Mark Documents Read",
         "tags": [
           "documents"
         ]
@@ -9121,6 +9324,154 @@
           }
         ],
         "summary": "Get Document Page",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/read": {
+      "delete": {
+        "description": "\"Markeer als ongelezen\": the caller's own mark goes; the letter is unread for them again. Idempotent. 404 as `getDocument`.",
+        "operationId": "markDocumentUnread",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Mark Document Unread",
+        "tags": [
+          "documents"
+        ]
+      },
+      "post": {
+        "description": "The caller opened the letter: call once when the letter page or the reader shows it (a plain `getDocument` marks nothing). Idempotent. 404 as `getDocument`. The caller's own state only: nobody else sees it; no history line, no log.",
+        "operationId": "markDocumentRead",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Mark Document Read",
         "tags": [
           "documents"
         ]

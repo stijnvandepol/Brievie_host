@@ -130,6 +130,7 @@ export const documentSummary = {
   open_duplicate_count: 0,
   visibility: "workspace",
   reader_names: [],
+  unread: false,
 };
 
 export const documentDetail: components["schemas"]["DocumentOut"] = {
