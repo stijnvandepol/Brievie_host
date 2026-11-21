@@ -132,8 +132,7 @@ function NewDepartmentDialog({
       setError(reason);
     } finally {
       setPending(false);
-      await queryClient.invalidateQueries({ queryKey: personsQuery(workspaceId).queryKey });
-      await queryClient.invalidateQueries({ queryKey: membersQuery(workspaceId).queryKey });
+      await queryClient.invalidateQueries({ queryKey: ["workspaces", workspaceId] });
     }
   }
 
@@ -230,8 +229,8 @@ function MembersDialog({
       setError(reason);
     } finally {
       setBusy(false);
-      await queryClient.invalidateQueries({ queryKey: personsQuery(workspaceId).queryKey });
-      await queryClient.invalidateQueries({ queryKey: membersQuery(workspaceId).queryKey });
+      // A member leaving narrows sight: every list and count of the workspace is stale.
+      await queryClient.invalidateQueries({ queryKey: ["workspaces", workspaceId] });
     }
   }
 

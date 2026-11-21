@@ -168,6 +168,28 @@ describe("afdelingen", () => {
     ).toBeInTheDocument();
   });
 
+  it("after a member leaves, the workspace's letters and counts are asked again", async () => {
+    let counted = 0;
+    server.use(
+      http.get(`${base}/inbox/counts`, () => {
+        counted += 1;
+        return HttpResponse.json({ new: 0, review: 0, unassigned: 0 });
+      }),
+      http.delete(`${base}/persons/${finance.id}/members/${bram}`, () =>
+        HttpResponse.json(finance),
+      ),
+      ...handlers(),
+    );
+    const u = userEvent.setup();
+    renderApp(path);
+    await u.click(await screen.findByRole("button", { name: "Leden: Finance" }));
+    const dialog = await screen.findByRole("dialog", { name: "Leden van Finance" });
+    await waitFor(() => expect(counted).toBeGreaterThan(0));
+    const before = counted;
+    await u.click(within(dialog).getByRole("checkbox", { name: "Bram" }));
+    await waitFor(() => expect(counted).toBeGreaterThan(before));
+  });
+
   it("a lead is marked Leidinggevende", async () => {
     let body: unknown = null;
     server.use(

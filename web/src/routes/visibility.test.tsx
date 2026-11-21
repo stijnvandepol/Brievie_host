@@ -159,6 +159,29 @@ describe("wie ziet wat", () => {
     });
   });
 
+  it("after a change, the workspace's letters and counts are asked again", async () => {
+    let counted = 0;
+    server.use(
+      http.get(`${base}/inbox/counts`, () => {
+        counted += 1;
+        return HttpResponse.json({ new: 0, review: 0, unassigned: 0 });
+      }),
+      ...handlers({ ...ownPost, everyone_sees_all: true }),
+      http.post(`${base}/visibility/preview`, () =>
+        HttpResponse.json({ ...gainingPreview(), needs_confirmation: false }),
+      ),
+      http.put(`${base}/visibility`, () => HttpResponse.json(ownPost)),
+    );
+    const u = userEvent.setup();
+    renderApp(path);
+    await u.click(await screen.findByRole("switch", { name: "Iedereen ziet alle post" }));
+    await waitFor(() => expect(counted).toBeGreaterThan(0));
+    const before = counted;
+    const dialog = await screen.findByRole("alertdialog");
+    await u.click(within(dialog).getByRole("button", { name: "Wijzigen" }));
+    await waitFor(() => expect(counted).toBeGreaterThan(before));
+  });
+
   it("turning it off shows who sees less and needs no Ja-button", async () => {
     let saved: unknown = null;
     server.use(

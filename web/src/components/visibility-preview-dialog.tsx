@@ -1,4 +1,5 @@
 import { plural, t } from "@lingui/core/macro";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
 import { Button, Dialog, Heading, Modal, ModalOverlay } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
@@ -158,6 +159,13 @@ type Run = {
  * made and `false` when the admin cancelled; another refusal rejects with it.
  */
 export function useSightChange(workspaceId: string) {
+  const queryClient = useQueryClient();
+  // After any change of sight, everything of the workspace is asked again: a letter, a
+  // count or a task the caller no longer sees must not linger in the cache.
+  const refreshAll = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ["workspaces", workspaceId] }),
+    [queryClient, workspaceId],
+  );
   const [run, setRun] = useState<Run | null>(null);
   const [preview, setPreview] = useState<VisibilityPreview | null>(null);
   const [notice, setNotice] = useState<string | undefined>(undefined);
@@ -199,6 +207,7 @@ export function useSightChange(workspaceId: string) {
     async (next: Run) => {
       try {
         await next.write(NOT_CONFIRMED);
+        await refreshAll();
         return true;
       } catch (reason) {
         if (reason instanceof ApiFailure && reason.code === "confirmation_required") {
@@ -207,7 +216,7 @@ export function useSightChange(workspaceId: string) {
         throw reason;
       }
     },
-    [ask],
+    [ask, refreshAll],
   );
 
   async function confirm() {
@@ -216,6 +225,7 @@ export function useSightChange(workspaceId: string) {
     setError(undefined);
     try {
       await run.write({ confirmed: true, preview_token: preview.preview_token });
+      await refreshAll();
       close(true);
     } catch (reason) {
       setPending(false);
