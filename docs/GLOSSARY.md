@@ -35,10 +35,10 @@ the translation. Add a line before introducing a new domain term.
 | voorstel | proposal |
 | label | label |
 | geschiedenis | history (`DocumentEvent`) |
-| Te doen (pagina: post die op jou wacht; route `inbox`) | inbox |
+| Inbox (pagina: post die op jou wacht; route `inbox`; heette eerder "Te doen") | inbox |
 | Alle post (pagina: alle brieven; route `post`) | documents list |
-| Controleren (wat een brief op Te doen nodig heeft) | `inbox_state` `review` (status `needs_review` or `failed`) |
-| Naam kiezen (wat een brief op Te doen nodig heeft) | `inbox_state` `unassigned` |
+| Controleren (wat een brief in de Inbox nodig heeft) | `inbox_state` `review` (status `needs_review` or `failed`) |
+| Naam kiezen (wat een brief in de Inbox nodig heeft) | `inbox_state` `unassigned` |
 | Bezig… (brief wordt nog gelezen, niets te doen) | `inbox_state` `new` (status `processing`) |
 | naamherkenning | name matching |
 | startset-regel | preset rule |
@@ -132,7 +132,7 @@ the request that creates the workspace and keep that name.
 | post (alle brieven samen) | mail | "All mail", "Search your mail", "My mail". Never "post". |
 | brief | letter | One item. "Letter date" for dagtekening. |
 | Alle post | All mail | |
-| Te doen | To do | |
+| Inbox | Inbox | The list of letters that wait for you; it was called "Te doen" / "To do" before. |
 | Controleren / Te controleren | Check / To check | "Check it yourself" for Zelf controleren. |
 | Naam kiezen | Choose a name | |
 | Bezig… | Processing… | |

@@ -72,7 +72,7 @@ describe("Werkruimtes in the navigation", () => {
     // A workspace page: its route has loaded the workspaces before the page shows.
     renderApp(`/w/${workspace.id}/personen`);
     const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
-    await within(nav).findByRole("link", { name: "Te doen" });
+    await within(nav).findByRole("link", { name: "Inbox" });
     expect(within(nav).queryByRole("link", { name: "Werkruimtes" })).not.toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: "Apparaten" })).toBeInTheDocument();
   });

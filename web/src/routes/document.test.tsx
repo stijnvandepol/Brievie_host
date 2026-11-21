@@ -608,7 +608,7 @@ describe("document made by the autopilot", () => {
       screen.getByText("Automatisch toegevoegd door regel Label Gemeente: label Gemeente"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Bram zette de brief terug op Te doen om te controleren"),
+      screen.getByText("Bram zette de brief terug in de Inbox om te controleren"),
     ).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /^Terugdraaien:/ })).toHaveLength(2);
   });
@@ -634,7 +634,7 @@ describe("document made by the autopilot", () => {
     const dialog = await screen.findByRole("alertdialog");
     expect(
       within(dialog).getByText(
-        "De brief komt terug op Te doen, bij Controleren. De taken die de AI maakte en die nog open staan, verdwijnen. Je controleert de brief daarna in de app.",
+        "De brief komt terug in de Inbox, bij Controleren. De taken die de AI maakte en die nog open staan, verdwijnen. Je controleert de brief daarna in de app.",
       ),
     ).toBeVisible();
     expect(within(dialog).getByRole("button", { name: "Annuleren" })).toHaveFocus();

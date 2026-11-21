@@ -1619,7 +1619,7 @@ input[type="checkbox"]:checked:disabled {
   color: var(--neutral-fg3);
 }
 
-/* What a letter on "Te doen" needs: its badge, then the picker or a hint. */
+/* What a letter on "Inbox" needs: its badge, then the picker or a hint. */
 .cell-todo {
   display: inline-flex;
   flex-wrap: wrap;
@@ -3108,7 +3108,7 @@ a.menu-item:hover {
   text-align: left;
 }
 
-/* Duplicates: "Dubbel?" on Te doen and the side-by-side page "Mogelijk dubbel" */
+/* Duplicates: "Dubbel?" on Inbox and the side-by-side page "Mogelijk dubbel" */
 
 .duplicate-list {
   margin: 0;

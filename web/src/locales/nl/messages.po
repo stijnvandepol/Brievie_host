@@ -174,8 +174,8 @@ msgid "{subject} het woord {0} niet bevat"
 msgstr "{subject} het woord {0} niet bevat"
 
 #: src/components/page.tsx
-msgid "{todo, plural, one {Te doen, # brief} other {Te doen, # brieven}}"
-msgstr "{todo, plural, one {Te doen, # brief} other {Te doen, # brieven}}"
+msgid "{todo, plural, one {Inbox, # brief} other {Inbox, # brieven}}"
+msgstr "{todo, plural, one {Inbox, # brief} other {Inbox, # brieven}}"
 
 #: src/components/document-history.tsx
 msgid "{who} bevestigde deze brief"
@@ -218,8 +218,8 @@ msgid "{who} wordt overal uitgelogd en krijgt daar een melding van. Gekoppelde t
 msgstr "{who} wordt overal uitgelogd en krijgt daar een melding van. Gekoppelde telefoons blijven werken."
 
 #: src/components/document-history.tsx
-msgid "{who} zette de brief terug op Te doen om te controleren"
-msgstr "{who} zette de brief terug op Te doen om te controleren"
+msgid "{who} zette de brief terug in de Inbox om te controleren"
+msgstr "{who} zette de brief terug in de Inbox om te controleren"
 
 #: src/components/document-history.tsx
 msgid "{who} zette deze brief op naam van {person}"
@@ -435,8 +435,8 @@ msgid "Akkoord"
 msgstr "Akkoord"
 
 #: src/routes/post.tsx
-msgid "Al je brieven, ook de afgehandelde. Zoek op persoon of label. Wat nog op jou wacht, staat bij Te doen."
-msgstr "Al je brieven, ook de afgehandelde. Zoek op persoon of label. Wat nog op jou wacht, staat bij Te doen."
+msgid "Al je brieven, ook de afgehandelde. Zoek op persoon of label. Wat nog op jou wacht, staat in de Inbox."
+msgstr "Al je brieven, ook de afgehandelde. Zoek op persoon of label. Wat nog op jou wacht, staat in de Inbox."
 
 #: src/routes/rule-editor.tsx
 msgid "alle"
@@ -991,8 +991,8 @@ msgid "De brief is teruggezet."
 msgstr "De brief is teruggezet."
 
 #: src/routes/document.tsx
-msgid "De brief komt terug op Te doen, bij Controleren. De taken die de AI maakte en die nog open staan, verdwijnen. Je controleert de brief daarna in de app."
-msgstr "De brief komt terug op Te doen, bij Controleren. De taken die de AI maakte en die nog open staan, verdwijnen. Je controleert de brief daarna in de app."
+msgid "De brief komt terug in de Inbox, bij Controleren. De taken die de AI maakte en die nog open staan, verdwijnen. Je controleert de brief daarna in de app."
+msgstr "De brief komt terug in de Inbox, bij Controleren. De taken die de AI maakte en die nog open staan, verdwijnen. Je controleert de brief daarna in de app."
 
 #: src/components/deadline-dialog.tsx
 msgid "De brief noemt een termijn: ‘{term}’."
@@ -1619,6 +1619,12 @@ msgstr "In deze link zit geen herstelcode. Open de link uit je bericht opnieuw."
 msgid "In deze link zit geen uitnodiging. Open de link uit je bericht opnieuw."
 msgstr "In deze link zit geen uitnodiging. Open de link uit je bericht opnieuw."
 
+#: src/components/page.tsx
+#: src/routes/duplicate.tsx
+#: src/routes/inbox.tsx
+msgid "Inbox"
+msgstr "Inbox"
+
 #: src/components/document-table.tsx
 msgid "Informatie"
 msgstr "Informatie"
@@ -2228,8 +2234,8 @@ msgstr "Naar de startpagina"
 
 #: src/routes/duplicate.tsx
 #: src/routes/tasks.tsx
-msgid "Naar Te doen"
-msgstr "Naar Te doen"
+msgid "Naar Inbox"
+msgstr "Naar Inbox"
 
 #: src/routes/labels.tsx
 msgid "Namen"
@@ -2808,12 +2814,6 @@ msgstr "Taken"
 #: src/routes/tasks.tsx
 msgid "Taken die bij jou horen. Taken van je afdeling en post zonder naam staan bij Op te pakken."
 msgstr "Taken die bij jou horen. Taken van je afdeling en post zonder naam staan bij Op te pakken."
-
-#: src/components/page.tsx
-#: src/routes/duplicate.tsx
-#: src/routes/inbox.tsx
-msgid "Te doen"
-msgstr "Te doen"
 
 #: src/task-time.ts
 msgid "Te laat"

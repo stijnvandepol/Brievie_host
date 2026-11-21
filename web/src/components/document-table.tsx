@@ -79,7 +79,7 @@ function statusIntent(status: string): Intent | "brand" | undefined {
 }
 
 /** The status of a letter as a badge: its word, a tint and an icon. A read letter that still
- * waits for a name says so, in the word "Te doen" uses; "Klaar" only when nothing waits. */
+ * waits for a name says so, in the word "Inbox" uses; "Klaar" only when nothing waits. */
 export function StatusBadge({ status, inboxState }: { status: string; inboxState?: string }) {
   if (status === "done" && inboxState === "unassigned") {
     return <Badge intent="warning">{t`Naam kiezen`}</Badge>;

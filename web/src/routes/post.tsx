@@ -47,7 +47,7 @@ function PostPage() {
     <Shell workspace={workspace}>
       <PageHeader
         title={t`Alle post`}
-        description={t`Al je brieven, ook de afgehandelde. Zoek op persoon of label. Wat nog op jou wacht, staat bij Te doen.`}
+        description={t`Al je brieven, ook de afgehandelde. Zoek op persoon of label. Wat nog op jou wacht, staat in de Inbox.`}
       />
       <AiStatusLine workspaceId={workspace.id} />
       <div className="filter-bar">

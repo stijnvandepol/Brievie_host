@@ -16,7 +16,7 @@ import {
   workspace,
 } from "../test-utils";
 
-// The page is "Te doen"; its path stays `/inbox` so bookmarks keep working.
+// The page is "Inbox"; its path stays `/inbox` so bookmarks keep working.
 const path = `/w/${workspace.id}/inbox`;
 const base = `*${API}/workspaces/${workspace.id}`;
 
@@ -60,8 +60,8 @@ function rowOf(sender: string): HTMLElement {
   return screen.getByRole("link", { name: sender }).closest("tr") as HTMLElement;
 }
 
-describe("te doen", () => {
-  it("Te doen says where tasks are", async () => {
+describe("inbox", () => {
+  it("Inbox says where tasks are", async () => {
     server.use(counts({ new: 0, review: 0, unassigned: 0 }), ...loggedInHandlers(), letters([]));
     renderApp(path);
     expect(
@@ -71,18 +71,18 @@ describe("te doen", () => {
     ).toBeInTheDocument();
   });
 
-  it("is named Te doen in the title, the heading and the navigation", async () => {
+  it("is named Inbox in the title, the heading and the navigation", async () => {
     server.use(counts({ new: 0, review: 0, unassigned: 0 }), ...loggedInHandlers(), letters([]));
     renderApp(path);
-    expect(await screen.findByRole("heading", { level: 1, name: "Te doen" })).toBeInTheDocument();
-    await waitFor(() => expect(document.title).toBe("Te doen - Brievie"));
+    expect(await screen.findByRole("heading", { level: 1, name: "Inbox" })).toBeInTheDocument();
+    await waitFor(() => expect(document.title).toBe("Inbox - Brievie"));
     expect(
       screen.getByText(
         "Brieven die je nog moet nakijken of een naam moet geven. Wat je daarna moet doen, staat bij Mijn taken.",
       ),
     ).toBeInTheDocument();
     const nav = screen.getByRole("navigation", { name: "Hoofdmenu" });
-    expect(within(nav).getByRole("link", { name: "Te doen" })).toHaveAttribute("href", path);
+    expect(within(nav).getByRole("link", { name: "Inbox" })).toHaveAttribute("href", path);
   });
 
   it("shows one list without tabs, each letter with what it needs", async () => {
@@ -213,7 +213,7 @@ describe("te doen", () => {
   });
 });
 
-describe("te doen labels and roles", () => {
+describe("inbox labels and roles", () => {
   it("shows the labels of a letter as chips", async () => {
     server.use(
       counts({ new: 0, review: 0, unassigned: 1 }),
@@ -241,7 +241,7 @@ describe("te doen labels and roles", () => {
   });
 });
 
-describe("te doen focus", () => {
+describe("inbox focus", () => {
   const second = {
     ...unassignedLetter,
     id: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b5555",
@@ -376,7 +376,7 @@ describe("te doen focus", () => {
       expect(within(row as HTMLElement).getByRole("button", { name: /Op naam van/ })).toHaveFocus(),
     );
   });
-  it("Te doen shows Dubbel? with its count and hides it at 0", async () => {
+  it("Inbox shows Dubbel? with its count and hides it at 0", async () => {
     const pair: components["schemas"]["DuplicateOut"] = {
       id: "c1111111-1111-4111-8111-111111111111",
       state: "open",

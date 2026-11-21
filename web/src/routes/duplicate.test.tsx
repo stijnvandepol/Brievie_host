@@ -210,7 +210,7 @@ describe("mogelijk dubbel", () => {
     expect(within(dialog).queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
-  it("Het zijn twee brieven dismisses and returns to Te doen", async () => {
+  it("Het zijn twee brieven dismisses and returns to Inbox", async () => {
     let dismissed = 0;
     server.use(
       ...pairHandlers(),
@@ -224,7 +224,7 @@ describe("mogelijk dubbel", () => {
     expect(
       await screen.findByText("Goed. We vragen het niet meer voor deze twee brieven."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 1, name: "Te doen" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Inbox" })).toBeInTheDocument();
     expect(dismissed).toBe(1);
   });
 
@@ -254,7 +254,7 @@ describe("mogelijk dubbel", () => {
     expect(
       await screen.findByText("Deze dubbele brieven zijn er niet (meer)."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Naar Te doen" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Naar Inbox" })).toHaveAttribute(
       "href",
       `/w/${workspace.id}/inbox`,
     );

@@ -416,7 +416,7 @@ function DuplicatePage() {
         breadcrumb={{
           to: "/w/$workspaceId/inbox",
           params: { workspaceId: workspace.id },
-          label: t`Te doen`,
+          label: t`Inbox`,
         }}
         description={t`Deze twee brieven lijken op elkaar. Is het dezelfde brief, twee keer gescand? Kijk wat hetzelfde is en wat verschilt.`}
       />
@@ -425,7 +425,7 @@ function DuplicatePage() {
         <MessageBar intent="info">
           {t`Deze dubbele brieven zijn er niet (meer).`}{" "}
           <Link to="/w/$workspaceId/inbox" params={{ workspaceId: workspace.id }}>
-            {t`Naar Te doen`}
+            {t`Naar Inbox`}
           </Link>
         </MessageBar>
       ) : (

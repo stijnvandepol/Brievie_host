@@ -74,7 +74,7 @@ describe("trash", () => {
       .getAllByRole("link")
       .map((link) => link.textContent);
     expect(names.indexOf("Prullenbak")).toBe(names.indexOf("Alle post") + 1);
-    expect(names).toContain("Te doen");
+    expect(names).toContain("Inbox");
   });
 
   it("shows De prullenbak is leeg. and no Prullenbak legen when empty", async () => {

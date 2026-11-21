@@ -63,7 +63,7 @@ class MyTasksOut(Schema):
     has_person: bool
     # More open tasks than the 500 shown (or done than the 200 shown).
     truncated: bool
-    # Letters the member sees that wait in "Te doen" (check or name); 0 unless part
+    # Letters the member sees that wait in "Inbox" (check or name); 0 unless part
     # `mine` and status `open`.
     waiting_letters: int
     # An organisation: department and unnamed post are a part of their own ("Op te pakken").

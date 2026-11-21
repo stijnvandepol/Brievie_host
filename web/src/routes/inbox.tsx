@@ -27,7 +27,7 @@ type Counts = components["schemas"]["InboxCountsOut"];
 type Duplicate = components["schemas"]["DuplicateOut"];
 
 /**
- * The page "Te doen" (route and API keep the name inbox). For the person, `review` and
+ * The page "Inbox" (route and API keep the name inbox). For the person, `review` and
  * `unassigned` are things to do, `new` is a letter still being read: nothing to do yet.
  */
 function ActionBadge({ state }: { state: string }) {
@@ -188,7 +188,7 @@ function TodoList({ workspaceId, canEdit }: { workspaceId: string; canEdit: bool
   }
   return (
     // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrolling box must be reachable by keyboard (WCAG 2.1.1).
-    <section className="panel table-scroll" aria-label={t`Te doen`} tabIndex={0}>
+    <section className="panel table-scroll" aria-label={t`Inbox`} tabIndex={0}>
       <ErrorAlert error={persons.error ?? labels.error} />
       <table className="table table-wide">
         <thead>
@@ -289,7 +289,7 @@ function Duplicates({ workspaceId, count }: { workspaceId: string; count: number
 }
 
 function InboxPage() {
-  usePageTitle(t`Te doen`);
+  usePageTitle(t`Inbox`);
   const { workspace } = inboxRoute.useRouteContext();
   const { data: counts, error } = useQuery(inboxCountsQuery(workspace.id));
   // "Het zijn twee brieven" brought the person here: say it once.
@@ -298,7 +298,7 @@ function InboxPage() {
   return (
     <Shell workspace={workspace}>
       <PageHeader
-        title={t`Te doen`}
+        title={t`Inbox`}
         description={t`Brieven die je nog moet nakijken of een naam moet geven. Wat je daarna moet doen, staat bij Mijn taken.`}
       />
       <AiStatusLine workspaceId={workspace.id} />
@@ -317,7 +317,7 @@ function InboxPage() {
 
 export const inboxRoute = createRoute({
   getParentRoute: () => workspaceRoute,
-  // The path stays "inbox" (bookmarks); the page is called "Te doen".
+  // The path stays "inbox" (bookmarks); the page is called "Inbox".
   path: "inbox",
   component: InboxPage,
 });

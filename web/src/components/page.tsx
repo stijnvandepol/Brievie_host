@@ -219,7 +219,7 @@ function NavItem({
 /** The workspace a page belongs to, as far as the navigation needs it. */
 type NavWorkspace = { id: string; name: string; role?: string };
 
-/** The entries of one workspace; "Te doen" (route `inbox`) counts what waits for you (review
+/** The entries of one workspace; "Inbox" (route `inbox`) counts what waits for you (review
  * plus unassigned; a letter still being read waits for nobody).
  * A viewer may not read the rules, so Automatisering is left out for them. */
 function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
@@ -253,11 +253,9 @@ function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
         to="/w/$workspaceId/inbox"
         params={params}
         icon="inbox"
-        label={t`Te doen`}
+        label={t`Inbox`}
         ariaLabel={
-          todo > 0
-            ? plural(todo, { one: "Te doen, # brief", other: "Te doen, # brieven" })
-            : undefined
+          todo > 0 ? plural(todo, { one: "Inbox, # brief", other: "Inbox, # brieven" }) : undefined
         }
         count={todo}
       />
