@@ -2252,3 +2252,78 @@ M5), and two gaps the server still had.
 - **Texts (point 5).** A department's label is offered to its members and the admins; whoever
   sees a letter with it sees the label. Admins who do not read all post still get unnamed
   post while nobody sorts it, and other post through emergency access.
+
+## 2026-11-21: Mensen (one list of people, each with an account state)
+
+Spec `docs/superpowers/specs/2026-11-21-mensen-en-accounts-design.md`, plan
+`docs/superpowers/plans/2026-11-21-host-mensen-en-accounts.md`.
+
+### The owner's answers to "Besluiten voor Stijn"
+
+- **B1: an inactive account is a person without a login** (the advised option, spec M1). No
+  `User` and no `Membership` exist before activation, so nobody's sight of any letter
+  changes. In the interface the user sees no difference: everyone is under Mensen with a
+  status.
+- **B2: "Beheerd door" is built now**, as the last part (slice C, plan Tasks 11–15).
+- **B3: the AI may propose an unknown name as a new person now.** Only as a proposal (a
+  `DocumentSuggestion` of its own kind), never created automatically, never repeated once
+  dismissed, behind the same consent and BSN rules as every other AI output (see "Mensen,
+  the AI proposes a new person" below).
+- **B4: ordinary members see name, state (active or not) and departments**; address, last
+  sign-in and invitations only admins (spec M5).
+- **B5: every non-archived person gets a scan subfolder**, inactive ones too. This belongs
+  to the intake plan (`docs/intake-and-2fa-design`); that branch is not touched here, and
+  whoever builds it applies the ruling.
+- Also decided by the owner: "Mensen" is its own item in the main menu, replacing Leden and
+  Personen; on the row of anyone who never signed in "Uitnodigen"; for a pending invitation
+  "Opnieuw versturen" and "Intrekken". A navigation redesign (`docs/navigation-design`)
+  moves menu items later, so "Mensen" sits where Leden and Personen were.
+
+### Slice A: the server (plan Tasks 1–5)
+
+- **Rulings M1–M5, M7 of the spec hold.** The account slot is the Person row (M1);
+  departments stay `kind = department` and are never in `listPeople` (M2); activation goes
+  only through `createInvitation` → `acceptInvitation` (M3, a test lists every writer of
+  `Person.user`); `Person.former_user` and `deactivated_at` are display only, read by no
+  visibility, lock or permission code (M4, a test reads `visibility_sql` for them); account
+  facts are for admins (M5); nothing automatic makes a person (M7).
+- **New audit code `person_created`** (target person, no values), written by `createPerson`
+  for a person and a department alike.
+- **Switched off is a mark, not a state of sight.** Removing a member or leaving sets
+  `deactivated_at` and `former_user` in the same statement that unlinks the person;
+  accepting an invitation for the person (and the old `linkPersonToMember`) clears both. A
+  member who unlinks themselves leaves a person "niet actief", not switched off. — Why:
+  only a removal ends an account. — Cost if wrong: a self-unlinked person shows "Nooit
+  ingelogd" instead of the former account's sign-in.
+- **M8, every member keeps exactly one person, is maintained.** An unlink by
+  `linkPersonToMember` gives the former member a fresh person at once, after the change of
+  sight is settled (`sight_change` has already diffed and told): a fresh person is on no
+  letter, so it gains nobody anything, and inside the block it would have counted as a gain
+  and asked a confirmation for a self-unlink. — Cost if wrong: none for sight; the member
+  has a second name ("Anne (2)") until an admin renames or archives one.
+- **`linkPersonToMember` cannot link a member to another person any more.** With M8 every
+  member has their own person, so a link answers 409 `member_already_linked`, as it did
+  already for every member with a person. The endpoint stays for old clients and for
+  unlinking; the way to give a person an account is the invitation with that person, and
+  joining two persons of one human is the later "merge" (spec 13). — Why: absorbing the
+  member's own person on link would delete a person behind the admin's back. — Cost if
+  wrong: an admin who wanted to link must invite instead.
+- **Archiving a person withdraws its open invitations** (`invitation_revoked`, reason
+  `person_archived`). Lock order of `updatePerson` when it archives: the person's open
+  invitations first, then the person (memberships, invitations, person: as renewing and
+  accepting take them). — Cost if wrong: none; a deadlock would be the alternative.
+- **An invitation without a person never reuses a switched-off person.** A former member
+  invited without a person gets a fresh person, as before: linking their old one would give
+  them its post (private letters included) without the confirmed preview of an invitation
+  with that person. "Opnieuw uitnodigen" on Mensen always sends the person.
+- **`listPeople`** (`GET /workspaces/{id}/people`, web session, every member) and
+  **`getPersonHasPrivatePost`** (`GET /workspaces/{id}/persons/{person_id}/private-post`, web
+  session, admins, a boolean only). The list never carries a private-post field (PR #39
+  findings 4 and 5). For somebody who is no admin `state` is `active` or `inactive` and the
+  filter accepts only those two (422 otherwise); role and "Verdeelt post" are left empty for
+  them too (B4 names only name, state and departments).
+- **Last sign-in** is `User.last_login` (set by `start_session` through Django's signal);
+  **last app use** the newest `last_seen_at` of an unrevoked device. A switched-off person
+  shows the former account's; both are the account's, the same in every workspace.
+- **Measured, not assumed:** `listPeople` runs a constant number of queries whatever the
+  number of people (test with 8 more people and invitations).
