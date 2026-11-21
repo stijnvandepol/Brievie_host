@@ -414,3 +414,18 @@ class DocumentVisibilityOut(Schema):
     shared_user_ids: list[UUID] = Field(default_factory=list)
     # False when the caller no longer reads the letter (they removed their own share).
     can_read: bool = True
+
+
+class DocumentViewerOut(Schema):
+    user_id: UUID
+    name: str
+    # Why this member sees the letter, in words: "op naam van Jan", "afdeling Finance",
+    # "verdeelt post", "heeft de brief gescand", "is gedeeld", "ziet alle post",
+    # "beheerder, leest alle post", "noodtoegang tot 14:30".
+    reasons: list[str]
+
+
+class DocumentAccessOut(Schema):
+    """Who can see this letter, by name ("Wie kan deze brief zien?")."""
+
+    viewers: list[DocumentViewerOut]

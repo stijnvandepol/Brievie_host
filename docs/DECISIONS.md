@@ -2102,3 +2102,13 @@ installation starts in own post.
   `BRIEVIE_PUBLIC_URLS` entry (a path only without one).
 - **R41: a preset is a starting point.** Switching the kind later goes through
   `updateVisibility` with `apply_preset` (Task 37); labels and rules are never removed.
+- **Who can see my post, and this letter (Task 41, S 4.15).** `getMyPostAccess` answers
+  any member (also with the app) with the sentences of "Wie kan mijn post zien?" for
+  them; `getVisibility` gives the same sentences beside the switches. `getDocumentAccess`
+  answers, for a letter the caller sees (through the seam; 404 `document_not_found` like
+  an unknown id otherwise, a case in the leak suite), every viewer by name with the
+  reasons that hold (`documents.visibility.viewer_reasons`, the S 4.1 arms on the snapshot
+  and the reader rows): "op naam van", "afdeling", "verdeelt post", "heeft de brief
+  gescand", "is gedeeld", "ziet alle post", "beheerder, leest alle post", "noodtoegang tot
+  14:30" (Dutch time). A member who sees the letter learns who else does: that is the
+  page's purpose. Merge point M4.

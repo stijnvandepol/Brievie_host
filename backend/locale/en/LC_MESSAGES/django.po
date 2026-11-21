@@ -1644,6 +1644,41 @@ msgstr "We can't find this suggestion."
 msgid "Er zijn net heel veel brieven verstuurd. Wacht even, dan gaat het vanzelf verder."
 msgstr "A lot of letters were just sent. Wait a moment, it will continue by itself."
 
+#: apps/documents/visibility.py
+msgid "ziet alle post"
+msgstr "sees all post"
+
+#: apps/documents/visibility.py
+msgid "beheerder, leest alle post"
+msgstr "admin, reads all post"
+
+#: apps/documents/visibility.py
+#, python-format
+msgid "op naam van %(person)s"
+msgstr "addressed to %(person)s"
+
+#: apps/documents/visibility.py
+#, python-format
+msgid "afdeling %(department)s"
+msgstr "department %(department)s"
+
+#: apps/documents/visibility.py
+msgid "verdeelt post"
+msgstr "sorts post"
+
+#: apps/documents/visibility.py
+msgid "heeft de brief gescand"
+msgstr "scanned the letter"
+
+#: apps/documents/visibility.py
+msgid "is gedeeld"
+msgstr "shared with them"
+
+#: apps/documents/visibility.py
+#, python-format
+msgid "noodtoegang tot %(time)s"
+msgstr "emergency access until %(time)s"
+
 #: apps/documents/visibility.py apps/people/services.py apps/workspaces/members.py
 msgid "We kunnen dit lid niet vinden."
 msgstr "We can't find this member."

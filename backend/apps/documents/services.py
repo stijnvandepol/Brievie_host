@@ -288,6 +288,24 @@ def get_document(*, membership: Membership, document_id: UUID) -> Document:
     return document
 
 
+def document_access(
+    *, membership: Membership, document_id: UUID
+) -> list[tuple[UUID, str, list[str]]]:
+    """Who can see a letter the member sees, and why: (user id, name, reasons) by name.
+    404 like `get_document` for a letter the member may not see."""
+    document = get_document(membership=membership, document_id=document_id)
+    reasons = visibility.viewer_reasons(document)
+    names = dict(
+        Membership.objects.filter(
+            workspace_id=membership.workspace_id, user_id__in=list(reasons)
+        ).values_list("user_id", "user__name")
+    )
+    return sorted(
+        ((user_id, names.get(user_id, ""), why) for user_id, why in reasons.items()),
+        key=lambda row: (row[1].casefold(), str(row[0])),
+    )
+
+
 def document_summary_out(
     document: Document, *, open_duplicate_count: int = 0, reader_names: list[str] | None = None
 ) -> DocumentSummaryOut:

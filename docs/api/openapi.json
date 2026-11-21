@@ -637,6 +637,23 @@
         "title": "DeviceOut",
         "type": "object"
       },
+      "DocumentAccessOut": {
+        "description": "Who can see this letter, by name (\"Wie kan deze brief zien?\").",
+        "properties": {
+          "viewers": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentViewerOut"
+            },
+            "title": "Viewers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "viewers"
+        ],
+        "title": "DocumentAccessOut",
+        "type": "object"
+      },
       "DocumentEventOut": {
         "properties": {
           "actor_id": {
@@ -1326,6 +1343,33 @@
           "letter_date"
         ],
         "title": "DocumentSummaryOut",
+        "type": "object"
+      },
+      "DocumentViewerOut": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "name",
+          "reasons"
+        ],
+        "title": "DocumentViewerOut",
         "type": "object"
       },
       "DocumentVisibilityIn": {
@@ -2695,6 +2739,23 @@
           "document_count"
         ],
         "title": "PersonOut",
+        "type": "object"
+      },
+      "PostAccessOut": {
+        "description": "\"Wie kan mijn post zien?\" for the caller, in sentences the server writes.",
+        "properties": {
+          "sentences": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sentences",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sentences"
+        ],
+        "title": "PostAccessOut",
         "type": "object"
       },
       "ProposalOut": {
@@ -7849,6 +7910,78 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/access": {
+      "get": {
+        "description": "Who can see this letter, and why, sorted by name; for any member who sees it (404 document_not_found otherwise, as for a letter that does not exist).",
+        "operationId": "getDocumentAccess",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentAccessOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Get Document Access",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}/addressees": {
       "put": {
         "operationId": "setDocumentAddressees",
@@ -12825,6 +12958,68 @@
         "summary": "Update Department Member",
         "tags": [
           "people"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/post-access": {
+      "get": {
+        "description": "\"Wie kan mijn post zien?\": who can see the caller's post, in sentences (the switches, the admins, who sorts post, private post, emergency access, the server admins, the AI service). For every member, also with the app.",
+        "operationId": "getMyPostAccess",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostAccessOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Get My Post Access",
+        "tags": [
+          "workspaces"
         ]
       }
     },

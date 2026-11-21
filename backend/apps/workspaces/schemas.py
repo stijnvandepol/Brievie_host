@@ -260,3 +260,9 @@ class VisibilityOut(Schema):
     # For admins: the summary of the installation (the head of "Wie ziet wat"); empty
     # for everyone else.
     summary: list[str] = Field(default_factory=list)
+
+
+class PostAccessOut(Schema):
+    """ "Wie kan mijn post zien?" for the caller, in sentences the server writes."""
+
+    sentences: list[str]

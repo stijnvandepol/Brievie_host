@@ -26,6 +26,7 @@ from apps.workspaces.schemas import (
     MemberChangeOut,
     MemberOut,
     MemberRoleIn,
+    PostAccessOut,
     SortsPostIn,
     VisibilityIn,
     VisibilityOut,
@@ -123,6 +124,19 @@ def _visibility_out(membership: Membership) -> VisibilityOut:
 def get_visibility(request: HttpRequest, workspace_id: UUID) -> VisibilityOut:
     membership = workspace_member(request, workspace_id)
     return _visibility_out(membership)
+
+
+@router.get(
+    "/workspaces/{workspace_id}/post-access",
+    response={200: PostAccessOut, 404: ErrorOut, **AUTH_ERRORS},
+    description='"Wie kan mijn post zien?": who can see the caller\'s post, in sentences'
+    " (the switches, the admins, who sorts post, private post, emergency access, the server"
+    " admins, the AI service). For every member, also with the app.",
+    operation_id="getMyPostAccess",
+)
+def get_my_post_access(request: HttpRequest, workspace_id: UUID) -> PostAccessOut:
+    membership = workspace_member(request, workspace_id)
+    return PostAccessOut(sentences=visibility_settings.post_access(membership))
 
 
 def _proposal(payload: VisibilityPreviewIn | VisibilityIn) -> visibility_settings.Proposal:

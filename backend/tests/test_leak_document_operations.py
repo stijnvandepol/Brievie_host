@@ -72,6 +72,7 @@ CONFIRM: Final[dict[str, object]] = {
 
 DOCUMENT_OPERATION_CASES: Final[dict[str, Case]] = {
     "getDocument": lambda c, ids, d: c.get(_url(ids, d)),
+    "getDocumentAccess": lambda c, ids, d: c.get(_url(ids, d, "/access")),
     "getDocumentPage": lambda c, ids, d: c.get(_url(ids, d, "/pages/1")),
     "retryDocumentProcessing": lambda c, ids, d: _post(c, _url(ids, d, "/retry")),
     "confirmDocument": lambda c, ids, d: _post(c, _url(ids, d, "/confirm"), CONFIRM),

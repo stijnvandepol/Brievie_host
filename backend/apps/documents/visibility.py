@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Literal
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from django.db import connection, transaction
 from django.db.models import Q, QuerySet
@@ -293,6 +294,71 @@ def viewers(document_ids: Collection[UUID]) -> dict[UUID, frozenset[UUID]]:
         for document_id, user_id in c.fetchall():
             found[document_id].add(user_id)
     return {d: frozenset(users) for d, users in found.items()}
+
+
+# Emergency access ends at a time of day in the Netherlands, whatever the server's zone.
+_REASON_ZONE = ZoneInfo("Europe/Amsterdam")
+
+
+def viewer_reasons(document: Document) -> dict[UUID, list[str]]:
+    """Who sees the letter and why ("Wie kan deze brief zien?", S 4.15): every viewer of
+    `viewers()`, each with the arms of S 4.1 that hold for them, read as the system. A
+    private letter's viewers are its readers: as addressee ("op naam van"), department
+    member, share or emergency access."""
+    from apps.workspaces.visibility_rules import ADMIN
+    from apps.workspaces.visibility_settings import snapshot
+
+    seen = viewers([document.id]).get(document.id, frozenset())
+    policy = snapshot(Workspace.objects.get(id=document.workspace_id))
+    now = timezone.now()
+    with system_actor():
+        letter = Document.objects.get(id=document.id)
+        rows = [
+            (user_id, reason, expires_at)
+            for user_id, reason, expires_at in DocumentReader.objects.filter(
+                document_id=document.id
+            ).values_list("user_id", "reason", "expires_at")
+            if expires_at is None or expires_at > now
+        ]
+    on = set(letter.addressee_ids)
+    private = letter.visibility == Document.Visibility.RESTRICTED
+    switches = policy.switches
+    unread = not on & policy.covered_ids
+    found: dict[UUID, list[str]] = {}
+    for member in policy.members:
+        if member.user_id not in seen:
+            continue
+        reasons: list[str] = []
+        readers = {reason: expires for user, reason, expires in rows if user == member.user_id}
+        persons = sorted(policy.person_names[p] for p in on & member.person_ids)
+        departments = sorted(policy.department_names[d] for d in on & member.department_ids)
+        if not private:
+            if switches.everyone_sees_all:
+                reasons.append(_("ziet alle post"))
+            elif switches.admins_read_all and member.role == ADMIN:
+                reasons.append(_("beheerder, leest alle post"))
+        if not private or DocumentReader.Reason.ADDRESSEE in readers:
+            reasons += [_("op naam van %(person)s") % {"person": p} for p in persons]
+        if (not private and switches.departments_enabled) or (
+            DocumentReader.Reason.DEPARTMENT in readers
+        ):
+            reasons += [_("afdeling %(department)s") % {"department": d} for d in departments]
+        if not private and unread and member.user_id in policy.sorter_ids:
+            reasons.append(_("verdeelt post"))
+        if (
+            not private
+            and letter.scanned_by_id == member.user_id
+            and letter.status != Document.Status.DONE
+        ):
+            reasons.append(_("heeft de brief gescand"))
+        if DocumentReader.Reason.SHARE in readers:
+            reasons.append(_("is gedeeld"))
+        expires = readers.get(DocumentReader.Reason.EMERGENCY)
+        if expires is not None:
+            until = timezone.localtime(expires, _REASON_ZONE).strftime("%H:%M")
+            reasons.append(_("noodtoegang tot %(time)s") % {"time": until})
+        found[member.user_id] = reasons
+    return found
 
 
 MakePrivateResult = Literal["made_private", "already_private", "nobody_could_read"]

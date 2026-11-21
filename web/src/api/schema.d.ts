@@ -750,6 +750,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Document Access
+         * @description Who can see this letter, and why, sorted by name; for any member who sees it (404 document_not_found otherwise, as for a letter that does not exist).
+         */
+        get: operations["getDocumentAccess"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}/addressees": {
         parameters: {
             query?: never;
@@ -1563,6 +1583,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/post-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get My Post Access
+         * @description "Wie kan mijn post zien?": who can see the caller's post, in sentences (the switches, the admins, who sorts post, private post, emergency access, the server admins, the AI service). For every member, also with the app.
+         */
+        get: operations["getMyPostAccess"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/rules": {
         parameters: {
             query?: never;
@@ -2272,6 +2312,14 @@ export interface components {
             /** Name */
             name: string;
         };
+        /**
+         * DocumentAccessOut
+         * @description Who can see this letter, by name ("Wie kan deze brief zien?").
+         */
+        DocumentAccessOut: {
+            /** Viewers */
+            viewers: components["schemas"]["DocumentViewerOut"][];
+        };
         /** DocumentEventOut */
         DocumentEventOut: {
             /**
@@ -2657,6 +2705,18 @@ export interface components {
              * @default workspace
              */
             visibility: string;
+        };
+        /** DocumentViewerOut */
+        DocumentViewerOut: {
+            /** Name */
+            name: string;
+            /** Reasons */
+            reasons: string[];
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
         };
         /** DocumentVisibilityIn */
         DocumentVisibilityIn: {
@@ -3359,6 +3419,14 @@ export interface components {
              * Format: uuid
              */
             user_id: string | null;
+        };
+        /**
+         * PostAccessOut
+         * @description "Wie kan mijn post zien?" for the caller, in sentences the server writes.
+         */
+        PostAccessOut: {
+            /** Sentences */
+            sentences: string[];
         };
         /** ProposalOut */
         ProposalOut: {
@@ -6672,6 +6740,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    getDocumentAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentAccessOut"];
                 };
             };
             /** @description Unauthorized */
@@ -10067,6 +10176,46 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    getMyPostAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostAccessOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

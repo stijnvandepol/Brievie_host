@@ -18,11 +18,13 @@ from apps.documents.models import DocumentEvent, Folder, MemberExport
 from apps.documents.schemas import (
     AddresseesIn,
     ConfirmIn,
+    DocumentAccessOut,
     DocumentEventOut,
     DocumentOut,
     DocumentSearchIn,
     DocumentSearchOut,
     DocumentSummaryOut,
+    DocumentViewerOut,
     DocumentVisibilityIn,
     DocumentVisibilityOut,
     EmptyTrashIn,
@@ -209,6 +211,26 @@ def get_document(request: HttpRequest, workspace_id: UUID, document_id: UUID) ->
     membership = workspace_member(request, workspace_id)
     document = services.get_document(membership=membership, document_id=document_id)
     return services.document_out_as(membership, document)
+
+
+@router.get(
+    "/workspaces/{workspace_id}/documents/{document_id}/access",
+    response={200: DocumentAccessOut, 404: ErrorOut, **AUTH_ERRORS},
+    operation_id="getDocumentAccess",
+    description="Who can see this letter, and why, sorted by name; for any member who sees"
+    " it (404 document_not_found otherwise, as for a letter that does not exist).",
+)
+def get_document_access(
+    request: HttpRequest, workspace_id: UUID, document_id: UUID
+) -> DocumentAccessOut:
+    membership = workspace_member(request, workspace_id)
+    rows = services.document_access(membership=membership, document_id=document_id)
+    return DocumentAccessOut(
+        viewers=[
+            DocumentViewerOut(user_id=user_id, name=name, reasons=reasons)
+            for user_id, name, reasons in rows
+        ]
+    )
 
 
 @router.get(

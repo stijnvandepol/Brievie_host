@@ -590,6 +590,13 @@ def visibility_for(membership: Membership) -> Visibility:
     )
 
 
+def post_access(membership: Membership) -> list[str]:
+    """ "Wie kan mijn post zien?" for this member (S 4.15)."""
+    workspace = Workspace.objects.get(id=membership.workspace_id)
+    facts = policy_facts(workspace, snapshot(workspace), membership.user_id)
+    return describe(facts, audience="member")
+
+
 @dataclass(frozen=True)
 class MemberChange:
     """A planned member change to preview (`previewVisibilityChange`); `kind` "" for none."""
