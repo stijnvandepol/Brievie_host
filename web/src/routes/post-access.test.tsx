@@ -53,7 +53,7 @@ describe("Zo is Brievie nu ingesteld", () => {
     renderApp(`/w/${workspace.id}/ingesteld`);
     const next = await screen.findByRole("navigation", { name: "Wat nu?" });
     expect(within(next).getByRole("link", { name: "Iemand uitnodigen" })).toBeInTheDocument();
-    expect(within(next).getByRole("link", { name: "Personen toevoegen" })).toBeInTheDocument();
+    expect(within(next).getByRole("link", { name: "Mensen toevoegen" })).toBeInTheDocument();
     expect(within(next).getByRole("link", { name: "Wie ziet wat wijzigen" })).toBeInTheDocument();
   });
 });

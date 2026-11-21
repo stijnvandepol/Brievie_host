@@ -16,6 +16,7 @@ user. No path takes them the other way round.
 from uuid import UUID
 
 from django.db import transaction
+from django.db.models import Max
 from django.http import HttpRequest
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -27,12 +28,17 @@ from apps.accounts.services import lock_active_server_admins
 from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
+from apps.devices.models import Device
 from apps.documents.member_export import remove_member_exports
 from apps.people.models import Person
 from apps.tasks.assignment import release_member
 from apps.workspaces.access import on_member_removed
 from apps.workspaces.context import NOBODY, Actor, workspace_context
-from apps.workspaces.invitations import revoke_invitations_bound_to, revoke_invitations_made_by
+from apps.workspaces.invitations import (
+    revoke_invitations_bound_to,
+    revoke_invitations_for_persons,
+    revoke_invitations_made_by,
+)
 from apps.workspaces.locks import lock_memberships as lock_memberships
 from apps.workspaces.models import Membership, Workspace
 from apps.workspaces.visibility_rules import UNASSIGNED
@@ -238,21 +244,46 @@ def _server_admin_only() -> ApiError:
     )
 
 
-def _unlink_and_unassign(workspace: Workspace, user_id: UUID, actor: AuditActor) -> list[Person]:
+def _unlink_and_unassign(
+    workspace: Workspace, user_id: UUID, actor: AuditActor
+) -> tuple[list[Person], list[Person]]:
     """Inside the workspace's context: the member's person stays without its account
-    link, their tasks here lose their assignee, and part B's seam runs. Returns the
-    unlinked persons. A queryset `update()`, before the membership goes, because
-    `Person.save` refuses a user who is no member."""
+    link, marked "uitgeschakeld" (`deactivated_at`, `former_user`: display only, spec
+    M4), their tasks here lose their assignee, and part B's seam runs. Returns the
+    unlinked persons and the persons they managed ("Beheerd door" ends with them: P7,
+    that post goes back to the sorters). A queryset `update()`, before the membership
+    goes, because `Person.save` refuses a user who is no member; one statement, so the
+    check "former_user needs deactivated_at" holds at every moment."""
     now = timezone.now()
     as_actor: Actor = actor.user_id if actor.user_id is not None else NOBODY
+    account = User.objects.filter(id=user_id).values_list("email", "last_login").first()
+    email, last_login = account if account is not None else ("", None)
+    app_use = Device.objects.filter(user_id=user_id, revoked_at__isnull=True).aggregate(
+        seen=Max("last_seen_at")
+    )["seen"]
     with workspace_context(workspace.id, actor=as_actor):
         persons = list(Person.objects.filter(workspace=workspace, user_id=user_id).order_by("id"))
-        Person.objects.filter(id__in=[p.id for p in persons]).update(user=None, updated_at=now)
+        # The account as it is now, frozen: the list never reads it live afterwards.
+        Person.objects.filter(id__in=[p.id for p in persons]).update(
+            user=None,
+            deactivated_at=now,
+            former_user_id=user_id,
+            former_email=email,
+            former_last_sign_in_at=last_login,
+            former_last_app_use_at=app_use,
+            updated_at=now,
+        )
+        managed = list(
+            Person.objects.filter(workspace=workspace, managed_by_id=user_id).order_by("id")
+        )
+        Person.objects.filter(id__in=[p.id for p in managed]).update(
+            managed_by=None, updated_at=now
+        )
         release_member(workspace_id=workspace.id, user_id=user_id)
         on_member_removed(workspace.id, user_id)
         # Their own export goes with them (its files once this transaction commits).
         remove_member_exports(workspace.id, user_id)
-    return persons
+    return persons, managed
 
 
 def remove_member(
@@ -291,6 +322,17 @@ def remove_member(
             actor=actor,
             reason="member_removed",
         )
+        # And every link for the member's person, whatever its address: a switched-off
+        # person comes back only by a new invitation (security review of PR #43, point 1).
+        with workspace_context(workspace.id, actor=NOBODY):
+            own_persons = list(
+                Person.objects.filter(workspace=workspace, user_id=user_id).values_list(
+                    "id", flat=True
+                )
+            )
+        revoke_invitations_for_persons(
+            workspace_id=workspace.id, person_ids=own_persons, actor=actor, reason="member_removed"
+        )
         server_admins = lock_active_server_admins()
         user = User.objects.select_for_update(no_key=True).get(id=user_id)
         last_membership = not (
@@ -312,7 +354,7 @@ def remove_member(
             change=member_change_key(MemberChange(kind="remove", user_id=user_id)),
             ask_confirmation=False,
         ):
-            persons = _unlink_and_unassign(workspace, user_id, actor)
+            persons, managed = _unlink_and_unassign(workspace, user_id, actor)
             member.delete()
         if last_membership:
             deactivate_account(user, actor=actor, current=request)
@@ -322,6 +364,14 @@ def remove_member(
                 actor=actor,
                 target=AuditTarget(kind=TargetKind.PERSON, id=person.id, name=person.display_name),
                 workspace_id=workspace.id,
+            )
+        for person in managed:
+            record(
+                AuditCode.PERSON_MANAGER_CLEARED,
+                actor=actor,
+                target=AuditTarget(kind=TargetKind.PERSON, id=person.id, name=person.display_name),
+                workspace_id=workspace.id,
+                values={"member": target.name},
             )
         record(
             AuditCode.MEMBER_LEFT if left else AuditCode.MEMBER_REMOVED,

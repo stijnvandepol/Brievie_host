@@ -165,7 +165,7 @@ type BreadcrumbTarget =
   | "/w/$workspaceId/inbox"
   | "/w/$workspaceId/post"
   | "/w/$workspaceId/automatisering"
-  | "/w/$workspaceId/leden"
+  | "/w/$workspaceId/mensen"
   | "/w/$workspaceId/instellingen";
 
 const NAV_LINK = "nav-link";
@@ -188,9 +188,8 @@ function NavItem({
     | "/w/$workspaceId/inbox"
     | "/w/$workspaceId/post"
     | "/w/$workspaceId/prullenbak"
-    | "/w/$workspaceId/personen"
+    | "/w/$workspaceId/mensen"
     | "/w/$workspaceId/afdelingen"
-    | "/w/$workspaceId/leden"
     | "/w/$workspaceId/instellingen"
     | "/w/$workspaceId/labels"
     | "/w/$workspaceId/automatisering"
@@ -274,7 +273,9 @@ function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
         icon="delete"
         label={t`Prullenbak`}
       />
-      <NavItem to="/w/$workspaceId/personen" params={params} icon="people" label={t`Personen`} />
+      {/* Mensen: one section for everybody who gets post, with their account (where Personen
+          and Leden were; the navigation redesign may move it). */}
+      <NavItem to="/w/$workspaceId/mensen" params={params} icon="people" label={t`Mensen`} />
       {sight?.departments_enabled ? (
         <NavItem
           to="/w/$workspaceId/afdelingen"
@@ -283,7 +284,6 @@ function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
           label={sight.kind === "home" ? t`Groepen` : t`Afdelingen`}
         />
       ) : null}
-      <NavItem to="/w/$workspaceId/leden" params={params} icon="personAdd" label={t`Leden`} />
       <NavItem to="/w/$workspaceId/labels" params={params} icon="tag" label={t`Labels`} />
       {workspace.role === "viewer" ? null : (
         <NavItem

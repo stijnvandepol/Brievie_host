@@ -10,7 +10,7 @@ from apps.accounts.models import User
 from apps.audit.services import AuditActor
 from apps.common import crypto
 from apps.common.errors import ApiError
-from apps.documents import duplicates, organise, suggestions, visibility
+from apps.documents import duplicates, new_persons, organise, suggestions, visibility
 from apps.documents.intake import page_aad
 from apps.documents.models import (
     LIVE,
@@ -27,6 +27,7 @@ from apps.documents.schemas import (
     DocumentOut,
     DocumentSummaryOut,
     DocumentVisibilityOut,
+    NewPersonSuggestionOut,
     PageOut,
     ProposalOut,
     SuggestionOut,
@@ -411,6 +412,12 @@ def document_out(document: Document, *, open_duplicate_count: int = 0) -> Docume
     return DocumentOut(
         **_summary_out(document, open_suggestions, open_duplicate_count, names).model_dump(),
         shared_user_ids=visibility.shared_user_ids(document),
+        new_person_suggestions=[
+            NewPersonSuggestionOut(
+                id=row.id, name=row.name, quote=row.quote, confidence=str(row.confidence)
+            )
+            for row in new_persons.open_for(document)
+        ],
         can_make_public=document.visibility == Document.Visibility.RESTRICTED
         and isinstance(actor, UUID)
         and visibility.can_make_public(document, actor),
@@ -595,6 +602,26 @@ def accept_suggestion(
                 organise.add_addressee(document, suggestion.person, actor=user, origin=origin)
         suggestion.state = DocumentSuggestion.State.ACCEPTED
         suggestion.save(update_fields=["state", "updated_at"])
+    return document
+
+
+def accept_new_person_suggestion(
+    *, membership: Membership, actor: AuditActor, document_id: UUID, suggestion_id: UUID
+) -> Document:
+    """A member makes the person the AI proposed and puts the letter on them."""
+    with transaction.atomic():
+        document = _lock_for_organising(membership.workspace, document_id)
+        new_persons.accept(document, suggestion_id, actor=actor, actor_role=membership.role)
+    return document
+
+
+def dismiss_new_person_suggestion(
+    *, workspace: Workspace, document_id: UUID, suggestion_id: UUID
+) -> Document:
+    """Say no to a proposed new person; the name is not proposed on this letter again."""
+    with transaction.atomic():
+        document = _lock_for_organising(workspace, document_id)
+        new_persons.dismiss(document, suggestion_id)
     return document
 
 

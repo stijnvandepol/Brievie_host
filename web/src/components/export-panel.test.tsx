@@ -16,7 +16,7 @@ import {
   workspace,
 } from "../test-utils";
 
-const path = `/w/${workspace.id}/leden`;
+const path = `/w/${workspace.id}/mensen`;
 const base = `*${API}/workspaces/${workspace.id}`;
 
 afterEach(() => vi.useRealTimers());

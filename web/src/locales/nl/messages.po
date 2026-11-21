@@ -88,17 +88,16 @@ msgstr "{0} kan daarna niet meer bij Brievie. {ownerName} kan het apparaat opnie
 msgid "{0} kan daarna niet meer bij Brievie. Je kunt het apparaat opnieuw koppelen."
 msgstr "{0} kan daarna niet meer bij Brievie. Je kunt het apparaat opnieuw koppelen."
 
-#. placeholder {0}: member.name
-#. placeholder {1}: member.name
-#: src/routes/members.tsx
-msgid "{0} kan daarna niet meer bij deze werkruimte. De post blijft hier. Taken van {1} hebben daarna niemand."
-msgstr "{0} kan daarna niet meer bij deze werkruimte. De post blijft hier. Taken van {1} hebben daarna niemand."
-
 #. placeholder {0}: info.invited_by
 #. placeholder {1}: info.workspace_name
 #: src/routes/invitation.tsx
 msgid "{0} nodigt je uit voor {1}"
 msgstr "{0} nodigt je uit voor {1}"
+
+#. placeholder {0}: person.name
+#: src/components/invite-dialog.tsx
+msgid "{0} uitnodigen"
+msgstr "{0} uitnodigen"
 
 #. placeholder {0}: member.name
 #: src/routes/visibility.tsx
@@ -106,9 +105,7 @@ msgid "{0} verdeelt post"
 msgstr "{0} verdeelt post"
 
 #. placeholder {0}: department.display_name
-#. placeholder {0}: member.name
 #: src/routes/departments.tsx
-#: src/routes/members.tsx
 msgid "{0} verwijderen?"
 msgstr "{0} verwijderen?"
 
@@ -116,11 +113,6 @@ msgstr "{0} verwijderen?"
 #: src/routes/departments.tsx
 msgid "{0} wordt verwijderd, met wie erin zit. Dit kun je niet ongedaan maken."
 msgstr "{0} wordt verwijderd, met wie erin zit. Dit kun je niet ongedaan maken."
-
-#. placeholder {0}: person.display_name
-#: src/routes/persons.tsx
-msgid "{0} wordt verwijderd. Dit kun je niet ongedaan maken."
-msgstr "{0} wordt verwijderd. Dit kun je niet ongedaan maken."
 
 #: src/routes/automations.tsx
 msgid "{applied} keer toegepast, {proposed} keer voorgesteld"
@@ -166,6 +158,10 @@ msgstr "{length} van {REASON_MAX} tekens, minstens {REASON_MIN}."
 msgid "{letters, plural, one {Het gaat om # brief die jij kunt lezen.} other {Het gaat om # brieven die jij kunt lezen.}}"
 msgstr "{letters, plural, one {Het gaat om # brief die jij kunt lezen.} other {Het gaat om # brieven die jij kunt lezen.}}"
 
+#: src/routes/people-detail.tsx
+msgid "{manager} beheert de post van {name} en ziet die als eigen post."
+msgstr "{manager} beheert de post van {name} en ziet die als eigen post."
+
 #: src/routes/rule-editor.tsx
 msgid "{matched, plural, one {# van de nieuwste {checked} brieven past} other {# van de nieuwste {checked} brieven passen}}"
 msgstr "{matched, plural, one {# van de nieuwste {checked} brieven past} other {# van de nieuwste {checked} brieven passen}}"
@@ -178,6 +174,10 @@ msgstr "{minutes, plural, one {# minuut} other {# minuten}}"
 msgid "{minutesText} en {secondsText}"
 msgstr "{minutesText} en {secondsText}"
 
+#: src/components/person-actions.tsx
+msgid "{name} kan daarna niet meer bij deze werkruimte. De post blijft hier. Taken van {name} hebben daarna niemand. Je kunt {name} later opnieuw uitnodigen."
+msgstr "{name} kan daarna niet meer bij deze werkruimte. De post blijft hier. Taken van {name} hebben daarna niemand. Je kunt {name} later opnieuw uitnodigen."
+
 #: src/routes/labels.tsx
 msgid "{name} wordt verwijderd en van {count} brieven gehaald. Dit kun je niet ongedaan maken."
 msgstr "{name} wordt verwijderd en van {count} brieven gehaald. Dit kun je niet ongedaan maken."
@@ -185,6 +185,10 @@ msgstr "{name} wordt verwijderd en van {count} brieven gehaald. Dit kun je niet 
 #: src/routes/labels.tsx
 msgid "{name} wordt verwijderd en van 1 brief gehaald. Dit kun je niet ongedaan maken."
 msgstr "{name} wordt verwijderd en van 1 brief gehaald. Dit kun je niet ongedaan maken."
+
+#: src/routes/people-detail.tsx
+msgid "{name} wordt verwijderd. Dit kun je niet ongedaan maken."
+msgstr "{name} wordt verwijderd. Dit kun je niet ongedaan maken."
 
 #: src/routes/automations.tsx
 msgid "{name} wordt verwijderd. Wat de regel al heeft gedaan, blijft staan."
@@ -362,7 +366,6 @@ msgstr "Aanslag"
 
 #: src/routes/departments.tsx
 #: src/routes/labels.tsx
-#: src/routes/persons.tsx
 msgid "Aantal brieven"
 msgstr "Aantal brieven"
 
@@ -371,8 +374,7 @@ msgid "Aanzetten"
 msgstr "Aanzetten"
 
 #: src/components/page.tsx
-#: src/routes/members.tsx
-#: src/routes/persons.tsx
+#: src/components/person-actions.tsx
 msgid "Account"
 msgstr "Account"
 
@@ -380,15 +382,17 @@ msgstr "Account"
 msgid "Account maken en meedoen"
 msgstr "Account maken en meedoen"
 
-#. placeholder {0}: member.name
-#: src/routes/members.tsx
-msgid "Account van {0}"
-msgstr "Account van {0}"
+#: src/components/person-actions.tsx
+msgid "Account van {name}"
+msgstr "Account van {name}"
 
-#. placeholder {0}: member.name
-#: src/routes/members.tsx
-msgid "Account: {0}"
-msgstr "Account: {0}"
+#: src/components/person-actions.tsx
+msgid "Account van {name} uitschakelen?"
+msgstr "Account van {name} uitschakelen?"
+
+#: src/components/person-actions.tsx
+msgid "Account: {name}"
+msgstr "Account: {name}"
 
 #: src/components/device-table.tsx
 #: src/routes/rule-editor.tsx
@@ -408,7 +412,9 @@ msgid "Actie toevoegen"
 msgstr "Actie toevoegen"
 
 #: src/components/device-table.tsx
+#: src/components/person-actions.tsx
 #: src/routes/automations.tsx
+#: src/routes/people.tsx
 #: src/routes/rule-editor.tsx
 msgid "Actief"
 msgstr "Actief"
@@ -417,10 +423,10 @@ msgstr "Actief"
 msgid "Actief: {name}"
 msgstr "Actief: {name}"
 
+#: src/components/open-invitations.tsx
 #: src/routes/departments.tsx
 #: src/routes/labels.tsx
-#: src/routes/members.tsx
-#: src/routes/persons.tsx
+#: src/routes/people.tsx
 #: src/routes/rule-editor.tsx
 #: src/routes/sessions.tsx
 #: src/routes/trash.tsx
@@ -544,6 +550,7 @@ msgstr "Al je brieven, ook de afgehandelde. Zoek op persoon of label. Wat nog op
 msgid "alle"
 msgstr "alle"
 
+#: src/routes/people.tsx
 #: src/routes/search.tsx
 msgid "Alle"
 msgstr "Alle"
@@ -618,9 +625,9 @@ msgstr "Alleen jij, wie de brief scande, de mensen op wier naam hij staat, de me
 msgid "Alleen leden en beheerders van deze werkruimte zien de regels."
 msgstr "Alleen leden en beheerders van deze werkruimte zien de regels."
 
+#: src/components/person-actions.tsx
 #: src/components/role-dialog.tsx
 #: src/routes/home.tsx
-#: src/routes/members.tsx
 msgid "Alleen lezen"
 msgstr "Alleen lezen"
 
@@ -655,6 +662,7 @@ msgstr "Als dubbele brief naar de prullenbak verplaatst door {by}"
 #: src/components/deadline-dialog.tsx
 #: src/components/emergency-dialog.tsx
 #: src/components/invite-dialog.tsx
+#: src/components/person-dialog.tsx
 #: src/components/role-dialog.tsx
 #: src/components/share-dialog.tsx
 #: src/components/visibility-preview-dialog.tsx
@@ -662,7 +670,6 @@ msgstr "Als dubbele brief naar de prullenbak verplaatst door {by}"
 #: src/routes/automations.tsx
 #: src/routes/departments.tsx
 #: src/routes/labels.tsx
-#: src/routes/persons.tsx
 #: src/routes/visibility.tsx
 msgid "Annuleren"
 msgstr "Annuleren"
@@ -697,8 +704,8 @@ msgstr "Apparaat verlopen"
 msgid "Apparaten"
 msgstr "Apparaten"
 
+#: src/components/person-actions.tsx
 #: src/routes/member-devices.tsx
-#: src/routes/members.tsx
 msgid "Apparaten en sessies"
 msgstr "Apparaten en sessies"
 
@@ -706,14 +713,9 @@ msgstr "Apparaten en sessies"
 msgid "Apparaten en sessies van {name}"
 msgstr "Apparaten en sessies van {name}"
 
-#: src/routes/persons.tsx
+#: src/routes/people-detail.tsx
 msgid "Archiveren"
 msgstr "Archiveren"
-
-#. placeholder {0}: person.display_name
-#: src/routes/persons.tsx
-msgid "Archiveren: {0}"
-msgstr "Archiveren: {0}"
 
 #: src/routes/automations.tsx
 msgid "Automatisch"
@@ -791,6 +793,16 @@ msgstr "Automatisering"
 msgid "Back-up instellen: typ op de server"
 msgstr "Back-up instellen: typ op de server"
 
+#. placeholder {0}: person.display_name
+#: src/components/person-picker.tsx
+msgid "Bedoel je {0}?"
+msgstr "Bedoel je {0}?"
+
+#. placeholder {0}: person.display_name
+#: src/components/person-picker.tsx
+msgid "Bedoel je {0}? (ook: {variant})"
+msgstr "Bedoel je {0}? (ook: {variant})"
+
 #: src/routes/duplicate.tsx
 msgid "bedrag"
 msgstr "bedrag"
@@ -814,6 +826,22 @@ msgstr "Begin met een voorbeeld"
 #: src/routes/automations.tsx
 msgid "Begin met een voorbeeld hieronder, met de startset, of maak zelf een regel."
 msgstr "Begin met een voorbeeld hieronder, met de startset, of maak zelf een regel."
+
+#: src/routes/people-detail.tsx
+msgid "Beheerd door"
+msgstr "Beheerd door"
+
+#: src/components/audit-codes.ts
+msgid "Beheerd door beëindigd"
+msgstr "Beheerd door beëindigd"
+
+#: src/components/audit-codes.ts
+msgid "Beheerd door ingesteld"
+msgstr "Beheerd door ingesteld"
+
+#: src/components/person-actions.tsx
+msgid "Beheerd door: {name}"
+msgstr "Beheerd door: {name}"
 
 #: src/components/role-dialog.tsx
 #: src/routes/home.tsx
@@ -950,6 +978,11 @@ msgstr "Brief verwijderen?"
 msgid "Brief voorgoed wissen?"
 msgstr "Brief voorgoed wissen?"
 
+#: src/routes/people-detail.tsx
+#: src/routes/people.tsx
+msgid "Brieven"
+msgstr "Brieven"
+
 #: src/routes/inbox.tsx
 msgid "Brieven die je nog moet nakijken of een naam moet geven. Wat je daarna moet doen, staat bij Mijn taken."
 msgstr "Brieven die je nog moet nakijken of een naam moet geven. Wat je daarna moet doen, staat bij Mijn taken."
@@ -957,6 +990,11 @@ msgstr "Brieven die je nog moet nakijken of een naam moet geven. Wat je daarna m
 #: src/routes/trash.tsx
 msgid "Brieven in de prullenbak worden na {days} dagen voorgoed gewist. Tot die tijd kun je ze terugzetten."
 msgstr "Brieven in de prullenbak worden na {days} dagen voorgoed gewist. Tot die tijd kun je ze terugzetten."
+
+#. placeholder {0}: person.document_count
+#: src/routes/people-detail.tsx
+msgid "Brieven van {name} ({0})"
+msgstr "Brieven van {name} ({0})"
 
 #: src/components/autopilot-panel.tsx
 msgid "Brieven worden niet automatisch verwerkt."
@@ -1183,9 +1221,18 @@ msgstr "De export is niet gelukt. Probeer het opnieuw."
 msgid "de groep"
 msgstr "de groep"
 
-#: src/routes/members.tsx
+#: src/components/open-invitations.tsx
+#: src/components/person-actions.tsx
 msgid "De link werkt daarna niet meer. Wie hem al heeft, kan er niet meer mee binnenkomen."
 msgstr "De link werkt daarna niet meer. Wie hem al heeft, kan er niet meer mee binnenkomen."
+
+#: src/components/invite-dialog.tsx
+msgid "De oude link werkt niet meer."
+msgstr "De oude link werkt niet meer."
+
+#: src/routes/people-detail.tsx
+msgid "De post van {name} gaat naar wie post verdeelt."
+msgstr "De post van {name} gaat naar wie post verdeelt."
 
 #: src/routes/trash.tsx
 msgid "De prullenbak is leeg."
@@ -1275,6 +1322,10 @@ msgstr "Deze brief houden"
 #: src/routes/duplicate.tsx
 msgid "Deze brief houden: brief {position}"
 msgstr "Deze brief houden: brief {position}"
+
+#: src/components/suggestion-list.tsx
+msgid "Deze brief is voor {name}. Die persoon staat nog niet in Brievie."
+msgstr "Deze brief is voor {name}. Die persoon staat nog niet in Brievie."
 
 #: src/components/document-history.tsx
 msgid "Deze brief kon niet privé worden: dan zou niemand hem kunnen lezen. Hij is zichtbaar gebleven."
@@ -1508,7 +1559,7 @@ msgstr "Export gedownload"
 msgid "Export gemaakt"
 msgstr "Export gemaakt"
 
-#: src/routes/members.tsx
+#: src/components/person-actions.tsx
 msgid "Exporteer eerst je post: na het verlaten kun je niet meer downloaden."
 msgstr "Exporteer eerst je post: na het verlaten kun je niet meer downloaden."
 
@@ -1541,7 +1592,7 @@ msgstr "Gaan meer zien"
 msgid "Gaan minder zien"
 msgstr "Gaan minder zien"
 
-#: src/routes/persons.tsx
+#: src/routes/people.tsx
 msgid "Gearchiveerd"
 msgstr "Gearchiveerd"
 
@@ -1630,6 +1681,10 @@ msgstr "Geen serverbeheerder meer"
 msgid "Gegevens"
 msgstr "Gegevens"
 
+#: src/routes/people-detail.tsx
+msgid "Gegevens van {name}"
+msgstr "Gegevens van {name}"
+
 #: src/components/one-time-link.tsx
 #: src/routes/pair-app.tsx
 msgid "Gekopieerd"
@@ -1648,7 +1703,7 @@ msgid "Gekozen: geen dubbele brief, door {by}"
 msgstr "Gekozen: geen dubbele brief, door {by}"
 
 #: src/components/invite-dialog.tsx
-#: src/routes/members.tsx
+#: src/components/open-invitations.tsx
 msgid "Geldig"
 msgstr "Geldig"
 
@@ -1751,7 +1806,7 @@ msgstr "Herkend in de brief"
 msgid "Herstellink gemaakt"
 msgstr "Herstellink gemaakt"
 
-#: src/routes/members.tsx
+#: src/components/person-actions.tsx
 msgid "Herstellink maken"
 msgstr "Herstellink maken"
 
@@ -1806,6 +1861,20 @@ msgstr "Huidig wachtwoord"
 msgid "Iedereen"
 msgstr "Iedereen"
 
+#. placeholder {0}: workspace.name
+#: src/routes/people.tsx
+msgid "Iedereen die in {0} post kan krijgen."
+msgstr "Iedereen die in {0} post kan krijgen."
+
+#. placeholder {0}: workspace.name
+#: src/routes/people.tsx
+msgid "Iedereen die in {0} post kan krijgen. Wie een account heeft, logt zelf in; anderen nodig je uit."
+msgstr "Iedereen die in {0} post kan krijgen. Wie een account heeft, logt zelf in; anderen nodig je uit."
+
+#: src/routes/people-detail.tsx
+msgid "Iedereen in deze werkruimte ziet de post van {name}."
+msgstr "Iedereen in deze werkruimte ziet de post van {name}."
+
 #: src/routes/visibility.tsx
 msgid "Iedereen ziet alle post"
 msgstr "Iedereen ziet alle post"
@@ -1817,6 +1886,10 @@ msgstr "iemand"
 #: src/components/document-history.tsx
 msgid "Iemand"
 msgstr "Iemand"
+
+#: src/components/person-dialog.tsx
+msgid "Iemand die post krijgt. Wil die zelf inloggen, nodig hem of haar daarna uit."
+msgstr "Iemand die post krijgt. Wil die zelf inloggen, nodig hem of haar daarna uit."
 
 #: src/components/invite-dialog.tsx
 msgid "Iemand nieuw"
@@ -1831,6 +1904,7 @@ msgid "Iemand toevoegen"
 msgstr "Iemand toevoegen"
 
 #: src/components/invite-dialog.tsx
+#: src/routes/people.tsx
 #: src/routes/setup-summary.tsx
 msgid "Iemand uitnodigen"
 msgstr "Iemand uitnodigen"
@@ -1921,7 +1995,8 @@ msgid "Instellingen voor inloggen via organisatie gewijzigd"
 msgstr "Instellingen voor inloggen via organisatie gewijzigd"
 
 #: src/components/device-table.tsx
-#: src/routes/members.tsx
+#: src/components/open-invitations.tsx
+#: src/components/person-actions.tsx
 msgid "Intrekken"
 msgstr "Intrekken"
 
@@ -1930,7 +2005,8 @@ msgstr "Intrekken"
 msgid "Intrekken: {0}"
 msgstr "Intrekken: {0}"
 
-#: src/routes/members.tsx
+#: src/components/open-invitations.tsx
+#: src/components/person-actions.tsx
 msgid "Intrekken: {name}"
 msgstr "Intrekken: {name}"
 
@@ -1950,11 +2026,22 @@ msgstr "is niet"
 msgid "is precies"
 msgstr "is precies"
 
+#. placeholder {0}: askAcknowledgement?.name ?? ""
+#: src/components/person-actions.tsx
+msgid "Ja, {0} leest ze"
+msgstr "Ja, {0} leest ze"
+
 #. placeholder {0}: member.name
-#: src/routes/members.tsx
+#. placeholder {0}: person.display_name
+#: src/components/person-actions.tsx
 #: src/routes/visibility.tsx
 msgid "Ja, {0} verdeelt post"
 msgstr "Ja, {0} verdeelt post"
+
+#. placeholder {0}: person.display_name
+#: src/components/person-actions.tsx
+msgid "Ja, {name} beheert de post van {0}"
+msgstr "Ja, {name} beheert de post van {0}"
 
 #: src/routes/visibility.tsx
 msgid "Ja, beheerders lezen alle post"
@@ -1969,12 +2056,6 @@ msgstr "Ja, gebruik {0}"
 msgid "Ja, iedereen mag alle post zien"
 msgstr "Ja, iedereen mag alle post zien"
 
-#. placeholder {0}: person.display_name
-#. placeholder {1}: member.name
-#: src/routes/persons.tsx
-msgid "Ja, koppel {0} aan {1}"
-msgstr "Ja, koppel {0} aan {1}"
-
 #. placeholder {0}: member.name
 #. placeholder {1}: roleLabel(role)
 #: src/components/role-dialog.tsx
@@ -1985,7 +2066,8 @@ msgstr "Ja, maak {0} {1}"
 msgid "Ja, maak de uitnodiging"
 msgstr "Ja, maak de uitnodiging"
 
-#: src/routes/members.tsx
+#: src/components/open-invitations.tsx
+#: src/components/person-actions.tsx
 msgid "Ja, maak een nieuwe link"
 msgstr "Ja, maak een nieuwe link"
 
@@ -2008,20 +2090,12 @@ msgid "Jaaropgave"
 msgstr "Jaaropgave"
 
 #: src/routes/tasks.tsx
-msgid "Je account hangt nog niet aan een naam. Daarom zie je hier alleen taken die iemand aan je geeft. Vraag een beheerder om je te koppelen bij Personen."
-msgstr "Je account hangt nog niet aan een naam. Daarom zie je hier alleen taken die iemand aan je geeft. Vraag een beheerder om je te koppelen bij Personen."
+msgid "Je account hangt nog niet aan een naam. Daarom zie je hier alleen taken die iemand aan je geeft. Vraag een beheerder om je te koppelen bij Mensen."
+msgstr "Je account hangt nog niet aan een naam. Daarom zie je hier alleen taken die iemand aan je geeft. Vraag een beheerder om je te koppelen bij Mensen."
 
-#: src/routes/members.tsx
+#: src/components/person-actions.tsx
 msgid "Je bent de enige beheerder. Maak eerst iemand anders beheerder als je wilt stoppen."
 msgstr "Je bent de enige beheerder. Maak eerst iemand anders beheerder als je wilt stoppen."
-
-#: src/routes/members.tsx
-msgid "Je bent hier nog alleen."
-msgstr "Je bent hier nog alleen."
-
-#: src/routes/members.tsx
-msgid "Je bent hier nog alleen. Nodig iemand uit om samen de post te doen."
-msgstr "Je bent hier nog alleen. Nodig iemand uit om samen de post te doen."
 
 #: src/routes/inbox.tsx
 msgid "Je bent klaar. Er is niets te doen."
@@ -2055,11 +2129,16 @@ msgstr "Je hebt nog geen regels."
 msgid "Je krijgt een link en een QR-code. Wie die opent, maakt een account of logt in en hoort daarna bij deze werkruimte."
 msgstr "Je krijgt een link en een QR-code. Wie die opent, maakt een account of logt in en hoort daarna bij deze werkruimte."
 
+#. placeholder {0}: person.name
+#: src/components/invite-dialog.tsx
+msgid "Je krijgt een link en een QR-code. Wie die opent, maakt een account of logt in en is daarna {0} in deze werkruimte."
+msgstr "Je krijgt een link en een QR-code. Wie die opent, maakt een account of logt in en is daarna {0} in deze werkruimte."
+
 #: src/routes/invitation.tsx
 msgid "Je kunt alleen lezen: je kunt post lezen, maar niets wijzigen."
 msgstr "Je kunt alleen lezen: je kunt post lezen, maar niets wijzigen."
 
-#: src/routes/members.tsx
+#: src/components/person-actions.tsx
 msgid "Je kunt daarna niet meer bij {workspaceName}. De post blijft hier voor de andere leden."
 msgstr "Je kunt daarna niet meer bij {workspaceName}. De post blijft hier voor de andere leden."
 
@@ -2180,10 +2259,6 @@ msgstr "Kies bij elke voorwaarde en actie een label of persoon."
 msgid "Kies bij Persoon of Label een andere waarde."
 msgstr "Kies bij Persoon of Label een andere waarde."
 
-#: src/routes/persons.tsx
-msgid "Kies een account"
-msgstr "Kies een account"
-
 #: src/routes/rule-editor.tsx
 msgid "Kies een label"
 msgstr "Kies een label"
@@ -2234,11 +2309,6 @@ msgstr "Kopiëren lukt niet. Kopieer de link hierboven zelf."
 msgid "Kopiëren lukt niet. Kopieer de tekst hieronder zelf."
 msgstr "Kopiëren lukt niet. Kopieer de tekst hieronder zelf."
 
-#. placeholder {0}: person.display_name
-#: src/routes/persons.tsx
-msgid "Koppel aan account: {0}"
-msgstr "Koppel aan account: {0}"
-
 #: src/routes/pair-app.tsx
 msgid "Koppel de Brievie-app op je telefoon aan deze server en zie welke telefoons gekoppeld zijn. Met de app scan je brieven."
 msgstr "Koppel de Brievie-app op je telefoon aan deze server en zie welke telefoons gekoppeld zijn. Met de app scan je brieven."
@@ -2259,9 +2329,27 @@ msgstr "Koppelgegevens"
 msgid "Kruimelpad"
 msgstr "Kruimelpad"
 
+#: src/components/person-actions.tsx
+msgid "Laat de post beheren door"
+msgstr "Laat de post beheren door"
+
 #: src/routes/sessions.tsx
 msgid "Laatst gebruikt"
 msgstr "Laatst gebruikt"
+
+#: src/routes/people-detail.tsx
+msgid "Laatst in de app"
+msgstr "Laatst in de app"
+
+#: src/routes/people-detail.tsx
+#: src/routes/people.tsx
+msgid "Laatst ingelogd"
+msgstr "Laatst ingelogd"
+
+#. placeholder {0}: dateTime.format(new Date(person.last_sign_in_at))
+#: src/components/person-actions.tsx
+msgid "Laatst ingelogd op {0}"
+msgstr "Laatst ingelogd op {0}"
 
 #: src/components/audit-codes.ts
 #: src/routes/labels.tsx
@@ -2320,10 +2408,7 @@ msgstr "Labels: {0}"
 msgid "Later"
 msgstr "Later"
 
-#: src/components/page.tsx
 #: src/routes/departments.tsx
-#: src/routes/member-devices.tsx
-#: src/routes/members.tsx
 #: src/routes/settings.tsx
 msgid "Leden"
 msgstr "Leden"
@@ -2410,7 +2495,7 @@ msgstr "Lukt dat niet? Typ deze code in de app."
 msgid "maak de brief privé"
 msgstr "maak de brief privé"
 
-#: src/routes/members.tsx
+#: src/routes/people.tsx
 msgid "Maak een ZIP-bestand met jouw post. Het staat 24 uur klaar om te downloaden."
 msgstr "Maak een ZIP-bestand met jouw post. Het staat 24 uur klaar om te downloaden."
 
@@ -2447,6 +2532,17 @@ msgstr "Meerdere tegelijk toevoegen"
 msgid "Meld {who} overal af als een account misbruikt kan zijn. Gekoppelde telefoons blijven werken."
 msgstr "Meld {who} overal af als een account misbruikt kan zijn. Gekoppelde telefoons blijven werken."
 
+#: src/components/page.tsx
+#: src/routes/member-devices.tsx
+#: src/routes/people-detail.tsx
+#: src/routes/people.tsx
+msgid "Mensen"
+msgstr "Mensen"
+
+#: src/routes/setup-summary.tsx
+msgid "Mensen toevoegen"
+msgstr "Mensen toevoegen"
+
 #: src/routes/setup-summary.tsx
 msgid "Mensen uitnodigen"
 msgstr "Mensen uitnodigen"
@@ -2471,7 +2567,7 @@ msgstr "Met labels zet je orde in je post, bijvoorbeeld Belasting of Zorg. Met d
 msgid "Methode"
 msgstr "Methode"
 
-#: src/routes/members.tsx
+#: src/routes/people.tsx
 msgid "Mijn post"
 msgstr "Mijn post"
 
@@ -2524,15 +2620,21 @@ msgstr "Na toewijzen ziet {from} deze brief niet meer. Hij gaat naar {target}."
 msgid "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
 msgstr "Na vijf mislukte pogingen is inloggen tijdelijk geblokkeerd."
 
+#: src/components/person-dialog.tsx
+#: src/components/person-picker.tsx
 #: src/routes/departments.tsx
 #: src/routes/home.tsx
 #: src/routes/invitation.tsx
 #: src/routes/labels.tsx
-#: src/routes/members.tsx
-#: src/routes/persons.tsx
+#: src/routes/people.tsx
 #: src/routes/rule-editor.tsx
 msgid "Naam"
 msgstr "Naam"
+
+#: src/components/person-dialog.tsx
+#: src/routes/people-detail.tsx
+msgid "Naam en schrijfwijzen"
+msgstr "Naam en schrijfwijzen"
 
 #: src/components/hand-over.ts
 #: src/routes/search.tsx
@@ -2543,8 +2645,9 @@ msgstr "Naam kiezen"
 msgid "Naam, bijvoorbeeld 'Familie de Vries' of 'Bakkerij Jansen'"
 msgstr "Naam, bijvoorbeeld 'Familie de Vries' of 'Bakkerij Jansen'"
 
+#: src/components/person-dialog.tsx
 #: src/routes/departments.tsx
-#: src/routes/persons.tsx
+#: src/routes/people-detail.tsx
 msgid "Naamvarianten"
 msgstr "Naamvarianten"
 
@@ -2578,12 +2681,26 @@ msgid "Negeren"
 msgstr "Negeren"
 
 #: src/components/suggestion-list.tsx
+msgid "Negeren: {name}"
+msgstr "Negeren: {name}"
+
+#: src/components/suggestion-list.tsx
 msgid "Negeren: {text}"
 msgstr "Negeren: {text}"
 
+#: src/components/person-actions.tsx
 #: src/components/person-picker.tsx
 msgid "Niemand"
 msgstr "Niemand"
+
+#: src/routes/people.tsx
+msgid "Niemand gevonden."
+msgstr "Niemand gevonden."
+
+#: src/components/person-actions.tsx
+#: src/routes/people.tsx
+msgid "Niet actief"
+msgstr "Niet actief"
 
 #: src/components/task-actions.tsx
 msgid "Niet meer aan mij"
@@ -2600,6 +2717,10 @@ msgstr "Niet meer privé"
 #: src/routes/document.tsx
 msgid "Niet meer privé maken?"
 msgstr "Niet meer privé maken?"
+
+#: src/components/person-actions.tsx
+msgid "Niet te zien"
+msgstr "Niet te zien"
 
 #: src/routes/search.tsx
 msgid "Niets gevonden"
@@ -2623,13 +2744,25 @@ msgstr "Nieuw wachtwoord kiezen"
 msgid "Nieuwe code"
 msgstr "Nieuwe code"
 
-#: src/routes/members.tsx
+#: src/components/open-invitations.tsx
 msgid "Nieuwe link"
 msgstr "Nieuwe link"
 
-#: src/routes/members.tsx
+#: src/components/open-invitations.tsx
 msgid "Nieuwe link: {name}"
 msgstr "Nieuwe link: {name}"
+
+#: src/components/person-picker.tsx
+msgid "Nieuwe persoon"
+msgstr "Nieuwe persoon"
+
+#: src/components/person-picker.tsx
+msgid "Nieuwe persoon: ‘{typed}’"
+msgstr "Nieuwe persoon: ‘{typed}’"
+
+#: src/components/suggestion-list.tsx
+msgid "Nieuwe persoon?"
+msgstr "Nieuwe persoon?"
 
 #: src/routes/automations.tsx
 #: src/routes/rule-editor.tsx
@@ -2653,7 +2786,7 @@ msgid "Nog {daysLeft} dagen ({date})"
 msgstr "Nog {daysLeft} dagen ({date})"
 
 #: src/routes/departments.tsx
-#: src/routes/persons.tsx
+#: src/routes/people-detail.tsx
 msgid "Noodtoegang"
 msgstr "Noodtoegang"
 
@@ -2686,11 +2819,18 @@ msgid "Noodtoegang voor de beheerder staat uit. Alleen de serverbeheerder kan di
 msgstr "Noodtoegang voor de beheerder staat uit. Alleen de serverbeheerder kan dit veranderen."
 
 #. placeholder {0}: department.display_name
-#. placeholder {0}: person.display_name
 #: src/routes/departments.tsx
-#: src/routes/persons.tsx
 msgid "Noodtoegang: {0}"
 msgstr "Noodtoegang: {0}"
+
+#: src/routes/people-detail.tsx
+msgid "Noodtoegang: {name}"
+msgstr "Noodtoegang: {name}"
+
+#: src/components/person-actions.tsx
+#: src/routes/people.tsx
+msgid "Nooit ingelogd"
+msgstr "Nooit ingelogd"
 
 #: src/components/invite-dialog.tsx
 msgid "Notitie voor jezelf"
@@ -2779,9 +2919,18 @@ msgstr "Op naam van"
 msgid "op naam van {name}"
 msgstr "op naam van {name}"
 
+#: src/components/person-actions.tsx
+msgid "Op naam van {name} staan privébrieven. Na uitschakelen leest {name} ze niet meer. Wie een brief gedeeld kreeg, leest hem nog. Staat noodtoegang aan, dan kan een beheerder ze met een reden openen. Moet iemand anders ze kunnen lezen, laat dan de post beheren of nodig {name} opnieuw uit."
+msgstr "Op naam van {name} staan privébrieven. Na uitschakelen leest {name} ze niet meer. Wie een brief gedeeld kreeg, leest hem nog. Staat noodtoegang aan, dan kan een beheerder ze met een reden openen. Moet iemand anders ze kunnen lezen, laat dan de post beheren of nodig {name} opnieuw uit."
+
 #: src/components/suggestion-list.tsx
 msgid "Op naam van {name}?"
 msgstr "Op naam van {name}?"
+
+#. placeholder {0}: askAcknowledgement?.name ?? ""
+#: src/components/person-actions.tsx
+msgid "Op naam van {personName} staan privébrieven. Als {0} de post beheert, leest die deze privébrieven ook."
+msgstr "Op naam van {personName} staan privébrieven. Als {0} de post beheert, leest die deze privébrieven ook."
 
 #: src/routes/rule-editor.tsx
 msgid "Op naam zetten van"
@@ -2790,10 +2939,6 @@ msgstr "Op naam zetten van"
 #: src/routes/tasks.tsx
 msgid "Op te pakken"
 msgstr "Op te pakken"
-
-#: src/routes/persons.tsx
-msgid "Op wiens naam brieven binnenkomen, ook iemand zonder account, zoals een kind. Wie zelf inlogt, staat bij Leden."
-msgstr "Op wiens naam brieven binnenkomen, ook iemand zonder account, zoals een kind. Wie zelf inlogt, staat bij Leden."
 
 #: src/routes/departments.tsx
 msgid "Opbergen"
@@ -2816,7 +2961,11 @@ msgstr "Open de app op je telefoon en scan de code. De telefoon moet op hetzelfd
 msgid "Open de Brievie-app"
 msgstr "Open de Brievie-app"
 
-#: src/routes/members.tsx
+#: src/components/person-actions.tsx
+msgid "Open uitnodiging"
+msgstr "Open uitnodiging"
+
+#: src/components/open-invitations.tsx
 msgid "Open uitnodigingen"
 msgstr "Open uitnodigingen"
 
@@ -2844,14 +2993,30 @@ msgstr "Opgeslagen."
 msgid "Opnieuw exporteren"
 msgstr "Opnieuw exporteren"
 
+#: src/components/person-actions.tsx
+msgid "Opnieuw uitnodigen"
+msgstr "Opnieuw uitnodigen"
+
+#: src/components/person-actions.tsx
+msgid "Opnieuw uitnodigen: {name}"
+msgstr "Opnieuw uitnodigen: {name}"
+
+#: src/components/person-actions.tsx
+msgid "Opnieuw versturen"
+msgstr "Opnieuw versturen"
+
+#: src/components/person-actions.tsx
+msgid "Opnieuw versturen: {name}"
+msgstr "Opnieuw versturen: {name}"
+
 #: src/components/deadline-dialog.tsx
+#: src/components/person-dialog.tsx
 #: src/components/role-dialog.tsx
 #: src/components/share-dialog.tsx
 #: src/routes/ai.tsx
 #: src/routes/departments.tsx
 #: src/routes/document.tsx
 #: src/routes/labels.tsx
-#: src/routes/persons.tsx
 #: src/routes/rule-editor.tsx
 msgid "Opslaan"
 msgstr "Opslaan"
@@ -2904,15 +3069,9 @@ msgstr "Pas de filters aan om andere gebeurtenissen te zien."
 msgid "Periode"
 msgstr "Periode"
 
-#: src/components/page.tsx
 #: src/components/person-picker.tsx
-#: src/routes/persons.tsx
 msgid "Personen"
 msgstr "Personen"
-
-#: src/routes/setup-summary.tsx
-msgid "Personen toevoegen"
-msgstr "Personen toevoegen"
 
 #: src/components/audit-codes.ts
 #: src/components/audit-table.tsx
@@ -2930,7 +3089,16 @@ msgstr "Persoon gekoppeld aan een account"
 msgid "Persoon losgekoppeld van een account"
 msgstr "Persoon losgekoppeld van een account"
 
-#: src/routes/persons.tsx
+#: src/routes/people-detail.tsx
+msgid "Persoon niet gevonden"
+msgstr "Persoon niet gevonden"
+
+#: src/components/audit-codes.ts
+msgid "Persoon toegevoegd"
+msgstr "Persoon toegevoegd"
+
+#: src/components/person-dialog.tsx
+#: src/routes/people.tsx
 msgid "Persoon toevoegen"
 msgstr "Persoon toevoegen"
 
@@ -2938,13 +3106,9 @@ msgstr "Persoon toevoegen"
 msgid "Persoon verwijderd"
 msgstr "Persoon verwijderd"
 
-#: src/routes/persons.tsx
+#: src/routes/people-detail.tsx
 msgid "Persoon verwijderen?"
 msgstr "Persoon verwijderen?"
-
-#: src/routes/persons.tsx
-msgid "Persoon wijzigen"
-msgstr "Persoon wijzigen"
 
 #: src/components/document-table.tsx
 msgid "Polis"
@@ -2973,6 +3137,18 @@ msgstr "Privé maken kan alleen in een regel die automatisch werkt. Zet Automati
 #: src/components/private-lock.tsx
 msgid "Privé voor {names}"
 msgstr "Privé voor {names}"
+
+#: src/components/person-actions.tsx
+msgid "Privébrieven laten lezen?"
+msgstr "Privébrieven laten lezen?"
+
+#: src/routes/people-detail.tsx
+msgid "Privébrieven lezen alleen de mensen met wie ze gedeeld zijn."
+msgstr "Privébrieven lezen alleen de mensen met wie ze gedeeld zijn."
+
+#: src/routes/people-detail.tsx
+msgid "Privébrieven van {name} leest {manager} ook, net als de mensen met wie ze gedeeld zijn."
+msgstr "Privébrieven van {name} leest {manager} ook, net als de mensen met wie ze gedeeld zijn."
 
 #: src/routes/labels.tsx
 msgid "Probeer"
@@ -3057,9 +3233,11 @@ msgid "Rekening"
 msgstr "Rekening"
 
 #: src/components/invite-dialog.tsx
+#: src/components/open-invitations.tsx
 #: src/components/role-dialog.tsx
 #: src/routes/home.tsx
-#: src/routes/members.tsx
+#: src/routes/people-detail.tsx
+#: src/routes/people.tsx
 msgid "Rol"
 msgstr "Rol"
 
@@ -3072,14 +3250,13 @@ msgstr "Rol gewijzigd"
 msgid "Rol van {0}"
 msgstr "Rol van {0}"
 
-#: src/routes/members.tsx
+#: src/components/person-actions.tsx
 msgid "Rol wijzigen"
 msgstr "Rol wijzigen"
 
-#. placeholder {0}: member.name
-#: src/routes/members.tsx
-msgid "Rol wijzigen: {0}"
-msgstr "Rol wijzigen: {0}"
+#: src/components/person-actions.tsx
+msgid "Rol wijzigen: {name}"
+msgstr "Rol wijzigen: {name}"
 
 #: src/components/label-chip.tsx
 msgid "Rood"
@@ -3205,6 +3382,8 @@ msgstr "Startset toevoegen"
 #: src/components/device-table.tsx
 #: src/components/document-table.tsx
 #: src/routes/document.tsx
+#: src/routes/people-detail.tsx
+#: src/routes/people.tsx
 #: src/routes/search.tsx
 msgid "Status"
 msgstr "Status"
@@ -3294,15 +3473,13 @@ msgid "Teruggezet uit de prullenbak door {by}"
 msgstr "Teruggezet uit de prullenbak door {by}"
 
 #: src/routes/departments.tsx
-#: src/routes/persons.tsx
+#: src/routes/people-detail.tsx
 #: src/routes/trash.tsx
 msgid "Terugzetten"
 msgstr "Terugzetten"
 
 #. placeholder {0}: department.display_name
-#. placeholder {0}: person.display_name
 #: src/routes/departments.tsx
-#: src/routes/persons.tsx
 msgid "Terugzetten: {0}"
 msgstr "Terugzetten: {0}"
 
@@ -3354,6 +3531,14 @@ msgstr "Toepassen op bestaande post?"
 #: src/routes/visibility.tsx
 msgid "Toevoegen"
 msgstr "Toevoegen"
+
+#: src/components/suggestion-list.tsx
+msgid "Toevoegen als persoon"
+msgstr "Toevoegen als persoon"
+
+#: src/components/suggestion-list.tsx
+msgid "Toevoegen als persoon: {name}"
+msgstr "Toevoegen als persoon: {name}"
 
 #: src/components/suggestion-list.tsx
 msgid "Toevoegen: {text}"
@@ -3410,6 +3595,24 @@ msgstr "Uiterlijk {0}"
 msgid "Uitgelogd"
 msgstr "Uitgelogd"
 
+#: src/components/person-actions.tsx
+#: src/routes/people.tsx
+msgid "Uitgenodigd"
+msgstr "Uitgenodigd"
+
+#: src/routes/people-detail.tsx
+msgid "Uitgenodigd tot"
+msgstr "Uitgenodigd tot"
+
+#: src/components/person-actions.tsx
+#: src/routes/people.tsx
+msgid "Uitgeschakeld"
+msgstr "Uitgeschakeld"
+
+#: src/routes/people-detail.tsx
+msgid "Uitgeschakeld op"
+msgstr "Uitgeschakeld op"
+
 #: src/routes/rule-editor.tsx
 msgid "Uitkomst van de test"
 msgstr "Uitkomst van de test"
@@ -3428,9 +3631,13 @@ msgstr "Uitloggen: {0}"
 msgid "Uitloggen?"
 msgstr "Uitloggen?"
 
-#: src/routes/members.tsx
+#: src/components/person-actions.tsx
 msgid "Uitnodigen"
 msgstr "Uitnodigen"
+
+#: src/components/person-actions.tsx
+msgid "Uitnodigen: {name}"
+msgstr "Uitnodigen: {name}"
 
 #: src/components/audit-codes.ts
 #: src/components/invite-dialog.tsx
@@ -3450,13 +3657,25 @@ msgstr "Uitnodiging gemaakt"
 msgid "Uitnodiging ingetrokken"
 msgstr "Uitnodiging ingetrokken"
 
-#: src/routes/members.tsx
+#: src/components/open-invitations.tsx
 msgid "Uitnodiging intrekken?"
 msgstr "Uitnodiging intrekken?"
 
-#: src/routes/members.tsx
+#: src/components/person-actions.tsx
+msgid "Uitnodiging van {name} intrekken?"
+msgstr "Uitnodiging van {name} intrekken?"
+
+#: src/components/open-invitations.tsx
 msgid "Uitnodiging zonder naam"
 msgstr "Uitnodiging zonder naam"
+
+#: src/components/person-actions.tsx
+msgid "Uitschakelen"
+msgstr "Uitschakelen"
+
+#: src/components/person-actions.tsx
+msgid "Uitschakelen: {name}"
+msgstr "Uitschakelen: {name}"
 
 #: src/components/rule-sentence.ts
 msgid "Upload"
@@ -3480,7 +3699,8 @@ msgstr "Vandaag"
 msgid "Veld"
 msgstr "Veld"
 
-#: src/routes/members.tsx
+#: src/routes/people-detail.tsx
+#: src/routes/people.tsx
 #: src/routes/visibility.tsx
 msgid "Verdeelt post"
 msgstr "Verdeelt post"
@@ -3489,8 +3709,8 @@ msgstr "Verdeelt post"
 msgid "Verdeelt post gewijzigd"
 msgstr "Verdeelt post gewijzigd"
 
-#. placeholder {0}: member.name
-#: src/routes/members.tsx
+#. placeholder {0}: person.display_name
+#: src/components/person-actions.tsx
 msgid "Verdeelt post: {0}"
 msgstr "Verdeelt post: {0}"
 
@@ -3502,16 +3722,17 @@ msgstr "Verder"
 msgid "Vergelijking"
 msgstr "Vergelijking"
 
-#: src/routes/members.tsx
+#: src/components/person-actions.tsx
 msgid "Verlaten"
 msgstr "Verlaten"
 
 #. placeholder {0}: dateTime.format(new Date(invitation.expires_at))
-#: src/routes/members.tsx
+#: src/components/open-invitations.tsx
 msgid "Verloopt op {0}"
 msgstr "Verloopt op {0}"
 
-#: src/routes/members.tsx
+#: src/components/open-invitations.tsx
+#: src/components/person-actions.tsx
 msgid "Verlopen"
 msgstr "Verlopen"
 
@@ -3543,23 +3764,19 @@ msgstr "Verwijderd op {when} door {who}"
 #: src/routes/departments.tsx
 #: src/routes/document.tsx
 #: src/routes/labels.tsx
-#: src/routes/members.tsx
-#: src/routes/persons.tsx
+#: src/routes/people-detail.tsx
 #: src/routes/rule-editor.tsx
 msgid "Verwijderen"
 msgstr "Verwijderen"
 
 #. placeholder {0}: department.display_name
-#. placeholder {0}: member.name
-#. placeholder {0}: person.display_name
 #: src/routes/departments.tsx
-#: src/routes/members.tsx
-#: src/routes/persons.tsx
 msgid "Verwijderen: {0}"
 msgstr "Verwijderen: {0}"
 
 #: src/routes/automations.tsx
 #: src/routes/labels.tsx
+#: src/routes/people-detail.tsx
 msgid "Verwijderen: {name}"
 msgstr "Verwijderen: {name}"
 
@@ -3567,7 +3784,7 @@ msgstr "Verwijderen: {name}"
 msgid "Voeg eerst een persoon toe."
 msgstr "Voeg eerst een persoon toe."
 
-#: src/routes/members.tsx
+#: src/components/open-invitations.tsx
 msgid "Voor"
 msgstr "Voor"
 
@@ -3718,6 +3935,10 @@ msgstr "Wat te doen"
 msgid "We kunnen de server niet bereiken. Controleer je verbinding en probeer het opnieuw."
 msgstr "We kunnen de server niet bereiken. Controleer je verbinding en probeer het opnieuw."
 
+#: src/routes/people-detail.tsx
+msgid "We kunnen deze persoon niet vinden."
+msgstr "We kunnen deze persoon niet vinden."
+
 #: src/routes/tasks.tsx
 msgid "Weer open: {description}"
 msgstr "Weer open: {description}"
@@ -3758,11 +3979,11 @@ msgstr "Werkruimte"
 msgid "Werkruimte gemaakt"
 msgstr "Werkruimte gemaakt"
 
-#: src/routes/members.tsx
+#: src/components/person-actions.tsx
 msgid "Werkruimte verlaten"
 msgstr "Werkruimte verlaten"
 
-#: src/routes/members.tsx
+#: src/components/person-actions.tsx
 msgid "Werkruimte verlaten?"
 msgstr "Werkruimte verlaten?"
 
@@ -3801,6 +4022,10 @@ msgstr "Wie is het?"
 msgid "Wie je aanvinkt, kan deze brief lezen, ook als die anders niet bij hem komt."
 msgstr "Wie je aanvinkt, kan deze brief lezen, ook als die anders niet bij hem komt."
 
+#: src/routes/people-detail.tsx
+msgid "Wie kan de post van {name} zien?"
+msgstr "Wie kan de post van {name} zien?"
+
 #: src/components/document-access.tsx
 msgid "Wie kan deze brief zien?"
 msgstr "Wie kan deze brief zien?"
@@ -3814,11 +4039,6 @@ msgstr "Wie kan mijn post zien?"
 #: src/routes/ai.tsx
 msgid "Wie leest je brieven?"
 msgstr "Wie leest je brieven?"
-
-#. placeholder {0}: workspace.name
-#: src/routes/members.tsx
-msgid "Wie met een eigen account inlogt in {0}. Op wiens naam brieven staan, regel je bij Personen."
-msgstr "Wie met een eigen account inlogt in {0}. Op wiens naam brieven staan, regel je bij Personen."
 
 #: src/routes/visibility.tsx
 msgid "Wie verdeelt post?"
@@ -3853,15 +4073,9 @@ msgstr "Wie ziet welke post"
 
 #: src/components/visibility-preview-dialog.tsx
 #: src/routes/labels.tsx
-#: src/routes/persons.tsx
 #: src/routes/visibility.tsx
 msgid "Wijzigen"
 msgstr "Wijzigen"
-
-#. placeholder {0}: person.display_name
-#: src/routes/persons.tsx
-msgid "Wijzigen: {0}"
-msgstr "Wijzigen: {0}"
 
 #: src/routes/labels.tsx
 msgid "Wijzigen: {name}"
@@ -3932,7 +4146,7 @@ msgstr "Zo is het nu in {0}. Alleen een beheerder kan dit veranderen."
 msgid "Zo staat de naam op brieven, bijvoorbeeld Afd. Financiën. Zet elke variant op een eigen regel."
 msgstr "Zo staat de naam op brieven, bijvoorbeeld Afd. Financiën. Zet elke variant op een eigen regel."
 
-#: src/routes/persons.tsx
+#: src/components/person-dialog.tsx
 msgid "Zo staat de naam op brieven, bijvoorbeeld J. de Vries. Zet elke variant op een eigen regel."
 msgstr "Zo staat de naam op brieven, bijvoorbeeld J. de Vries. Zet elke variant op een eigen regel."
 
@@ -3959,6 +4173,10 @@ msgstr "Zoek op afzender, onderwerp of tekst"
 #: src/routes/search.tsx
 msgid "Zoek op afzender, onderwerp, een woord uit de brief, een label of een naam. Het begin van een woord is genoeg."
 msgstr "Zoek op afzender, onderwerp, een woord uit de brief, een label of een naam. Het begin van een woord is genoeg."
+
+#: src/routes/people.tsx
+msgid "Zoek op naam"
+msgstr "Zoek op naam"
 
 #: src/components/search-field.tsx
 #: src/routes/search.tsx

@@ -153,7 +153,7 @@ function OpenTasks({
       ) : null}
       {data && scope === "mine" && !data.has_person ? (
         <MessageBar intent="info">
-          {t`Je account hangt nog niet aan een naam. Daarom zie je hier alleen taken die iemand aan je geeft. Vraag een beheerder om je te koppelen bij Personen.`}
+          {t`Je account hangt nog niet aan een naam. Daarom zie je hier alleen taken die iemand aan je geeft. Vraag een beheerder om je te koppelen bij Mensen.`}
         </MessageBar>
       ) : null}
       {list.isPending ? <Loading /> : null}

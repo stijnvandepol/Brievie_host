@@ -170,6 +170,18 @@ class SuggestionOut(Schema):
     preselected: bool
 
 
+class NewPersonSuggestionOut(Schema):
+    """The AI's proposal that the letter is for somebody nobody knows yet (Mensen, B3)."""
+
+    id: UUID
+    # The name as the letter writes it.
+    name: str
+    # The words in the letter that led to it; may be empty.
+    quote: str = ""
+    # Between 0 and 1, as a decimal string.
+    confidence: str = "0"
+
+
 class DocumentOut(DocumentSummaryOut):
     # Why processing failed; empty otherwise.
     failure_code: str
@@ -180,6 +192,9 @@ class DocumentOut(DocumentSummaryOut):
     tasks: list[TaskOut]
     # Open proposals only, preselected first, then by confidence.
     suggestions: list[SuggestionOut] = Field(default_factory=list)
+    # Open proposals of a new person (a name nobody has), most certain first. Accepting one
+    # makes the person (acceptNewPersonSuggestion); nothing makes it on its own.
+    new_person_suggestions: list[NewPersonSuggestionOut] = Field(default_factory=list)
     # False after a change that handed the letter to someone else: the caller no longer
     # sees it, and this answer holds its id and status only (S 4.13).
     can_read: bool = True

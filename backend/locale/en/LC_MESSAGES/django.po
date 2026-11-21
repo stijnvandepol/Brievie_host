@@ -510,6 +510,18 @@ msgid "Persoon verwijderd"
 msgstr "Person deleted"
 
 #: apps/audit/codes.py
+msgid "Persoon toegevoegd"
+msgstr "Person added"
+
+#: apps/audit/codes.py
+msgid "Beheerd door ingesteld"
+msgstr "Managed by set"
+
+#: apps/audit/codes.py
+msgid "Beheerd door beëindigd"
+msgstr "Managed by ended"
+
+#: apps/audit/codes.py
 msgid "Zichtbaarheid gewijzigd"
 msgstr "Visibility changed"
 
@@ -1530,12 +1542,16 @@ msgstr "Normal"
 msgid "Privé"
 msgstr "Private"
 
+#: apps/documents/new_persons.py apps/documents/services.py
+msgid "We kunnen dit voorstel niet vinden."
+msgstr "We can't find this suggestion."
+
 #: apps/documents/organise.py
 #, python-format
 msgid "Een document staat op naam van hoogstens %(max)d personen."
 msgstr "A document is addressed to at most %(max)d persons."
 
-#: apps/documents/organise.py apps/people/services.py apps/workspaces/invitations.py
+#: apps/documents/organise.py apps/people/accounts.py apps/people/services.py apps/workspaces/invitations.py
 msgid "We kunnen deze persoon niet vinden."
 msgstr "We can't find this person."
 
@@ -1636,10 +1652,6 @@ msgstr "This document does not need to be processed again."
 msgid "Dit document kun je niet opnieuw controleren."
 msgstr "You can't check this document again."
 
-#: apps/documents/services.py
-msgid "We kunnen dit voorstel niet vinden."
-msgstr "We can't find this suggestion."
-
 #: apps/documents/upload_limits.py
 msgid "Er zijn net heel veel brieven verstuurd. Wacht even, dan gaat het vanzelf verder."
 msgstr "A lot of letters were just sent. Wait a moment, it will continue by itself."
@@ -1656,6 +1668,11 @@ msgstr "admin, reads all post"
 #, python-format
 msgid "op naam van %(person)s"
 msgstr "addressed to %(person)s"
+
+#: apps/documents/visibility.py
+#, python-format
+msgid "beheert de post van %(person)s"
+msgstr "manages the mail of %(person)s"
 
 #: apps/documents/visibility.py
 #, python-format
@@ -1806,6 +1823,14 @@ msgstr "This workspace has the largest number of labels. Delete one first."
 msgid "De regel '%(rule)s' gebruikt dit label. Pas die regel eerst aan."
 msgstr "The rule '%(rule)s' uses this label. Change that rule first."
 
+#: apps/people/accounts.py
+msgid "Kies een status uit de lijst."
+msgstr "Choose a status from the list."
+
+#: apps/people/accounts.py
+msgid "Deze persoon heeft geen actief account."
+msgstr "This person has no active account."
+
 #: apps/people/models.py
 msgid "Afdeling"
 msgstr "Department"
@@ -1883,6 +1908,18 @@ msgstr "A department is not linked to one account. Add members instead."
 #, python-format
 msgid "Alleen %(name)s kan deze koppeling losmaken."
 msgstr "Only %(name)s can remove this link."
+
+#: apps/people/services.py
+msgid "Een afdeling heeft leden, geen beheerder. Voeg leden toe."
+msgstr "A department has members, not a manager. Add members."
+
+#: apps/people/services.py
+msgid "Deze persoon heeft een eigen account en leest de eigen post."
+msgstr "This person has their own account and reads their own mail."
+
+#: apps/people/services.py
+msgid "Op naam van deze persoon staan privébrieven. Wie de post beheert, leest die ook. Bevestig dat apart."
+msgstr "There are private letters addressed to this person. Whoever manages the mail reads them too. Confirm that separately."
 
 #: apps/people/services.py
 msgid "Dit is geen afdeling."
@@ -2602,6 +2639,11 @@ msgid "Er is nog geen back-up."
 msgstr "There is no backup yet."
 
 #: apps/workspaces/policy_text.py
+#, python-format
+msgid "%(member)s beheert de post van %(persons)s."
+msgstr "%(member)s manages the mail of %(persons)s."
+
+#: apps/workspaces/policy_text.py
 msgid "Iedereen in Brievie ziet alle post, behalve privé-post."
 msgstr "Everyone in Brievie sees all post, except private post."
 
@@ -2625,6 +2667,10 @@ msgstr "The admins %(names)s read all post that is not private."
 #: apps/workspaces/policy_text.py
 msgid "De beheerders lezen je post niet."
 msgstr "The admins do not read your post."
+
+#: apps/workspaces/policy_text.py
+msgid "Staat een brief ook op naam van iemand zonder account wiens post iemand beheert, dan ziet wie die post beheert hem ook."
+msgstr "When a letter is also addressed to someone without an account whose mail someone manages, whoever manages that mail sees it too."
 
 #: apps/workspaces/policy_text.py
 msgid "Privé-post zien alleen: de mensen op wier naam hij staat, de mensen van een groep op wier naam hij staat, wie de brief scande of privé maakte, en met wie hij gedeeld is."

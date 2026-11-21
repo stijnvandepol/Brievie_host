@@ -216,6 +216,23 @@ def _department(who: str, department: str, *, add: bool) -> Step:
     return Step(run, _member_key(kind, user=who, person=department))
 
 
+def _manage(*, on: bool) -> Step:
+    """Anne makes Piet the manager of Jan's post (a person without an account), or ends it."""
+
+    def run(o: Office, _client: Client, confirmed: bool, token: str) -> object:
+        with as_actor(o.workspace, o.admin.id):
+            return people.set_manager(
+                workspace=o.workspace,
+                person_id=o.persons["Jan"].id,
+                user_id=o.plain.id if on else None,
+                actor=_admin(o),
+                confirmed=confirmed,
+                preview_token=token,
+            )
+
+    return Step(run, _member_key("manage", user="plain" if on else "", person="Jan"))
+
+
 def _link(*, link: bool) -> Step:
     """Anne links Piet's person to Piet; Piet unlinks it himself (only he may, PB T12)."""
 
@@ -275,6 +292,8 @@ STEPS: Final[dict[str, Step]] = {
     "last department member removed": _department("finance", "Finance", add=False),
     "person linked to a member, E off": _link(link=True),
     "person unlinked, E off": _link(link=False),
+    "person managed by a member, E off": _manage(on=True),
+    "management ended, E off": _manage(on=False),
     "member made admin, A off, nobody flagged": _role("plain", "admin"),
     "admin made member, A off, nobody flagged": _role("plain", "member"),
     "sorter made viewer": _role("sorter", "viewer"),
@@ -301,6 +320,9 @@ def _setup(o: Office, row: Transition) -> None:
     if row.name == "person linked to a member, E off":
         with as_actor(o.workspace, SYSTEM):
             Person.objects.filter(id=o.persons["Piet"].id).update(user=None)
+    if row.name == "management ended, E off":
+        with as_actor(o.workspace, SYSTEM):
+            Person.objects.filter(id=o.persons["Jan"].id).update(managed_by=o.plain)
 
 
 def _counts(o: Office) -> tuple[int, int, int]:

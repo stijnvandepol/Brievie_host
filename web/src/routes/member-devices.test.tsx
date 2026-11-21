@@ -44,7 +44,7 @@ describe("a member's devices and sessions", () => {
     expect(screen.getByText("1.0.0")).toBeInTheDocument();
     expect(
       within(screen.getByRole("navigation", { name: "Kruimelpad" })).getByRole("link", {
-        name: "Leden",
+        name: "Mensen",
       }),
     ).toBeInTheDocument();
   });
@@ -118,7 +118,7 @@ describe("a member's devices and sessions", () => {
   it("a member is sent back to the list and gets no controls", async () => {
     server.use(asRole("member"), ...userHandlers());
     renderApp(path);
-    expect(await screen.findByRole("heading", { level: 1, name: "Leden" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Mensen" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Alle sessies beëindigen" }),
     ).not.toBeInTheDocument();

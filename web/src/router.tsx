@@ -13,11 +13,11 @@ import { labelsRoute } from "./routes/labels";
 import { languageRoute } from "./routes/language";
 import { loginRoute } from "./routes/login";
 import { memberDevicesRoute } from "./routes/member-devices";
-import { membersRoute } from "./routes/members";
 import { pairAppRoute } from "./routes/pair-app";
 import { passwordRoute } from "./routes/password";
 import { passwordResetRoute } from "./routes/password-reset";
-import { personsRoute } from "./routes/persons";
+import { membersRedirectRoute, peopleRoute, personsRedirectRoute } from "./routes/people";
+import { personDetailRoute } from "./routes/people-detail";
 import { postRoute } from "./routes/post";
 import { postAccessRoute } from "./routes/post-access";
 import { rootRoute } from "./routes/root";
@@ -52,9 +52,11 @@ const routeTree = rootRoute.addChildren([
     searchRoute,
     documentRoute,
     duplicateRoute,
-    personsRoute,
+    peopleRoute,
+    personDetailRoute,
+    personsRedirectRoute,
+    membersRedirectRoute,
     departmentsRoute,
-    membersRoute,
     memberDevicesRoute,
     settingsRoute,
     auditLogRoute,

@@ -227,12 +227,13 @@ class VisibilityIn(VisibilitySettingsIn):
 class VisibilityPreviewIn(VisibilitySettingsIn):
     # A planned member change instead of a settings change: "role", "sorts_post",
     # "department_add", "department_remove", "link", "unlink", "remove", "invite" (an
-    # invitation with `member_role` and `member_person_id`) or "invite_admin" (an admin
-    # invitation without a person); "" for none.
+    # invitation with `member_role` and `member_person_id`), "invite_admin" (an admin
+    # invitation without a person) or "manage" ("Beheerd door": `member_user_id` manages the
+    # post of `member_person_id`, null ends it); "" for none.
     member_change: str = Field(
         default="",
         pattern=(
-            "^(|role|sorts_post|department_add|department_remove|link|unlink|remove|invite|invite_admin)$"
+            "^(|role|sorts_post|department_add|department_remove|link|unlink|remove|invite|invite_admin|manage)$"
         ),
     )
     # The member concerned (role, sorts_post, department_add/remove, link, remove).

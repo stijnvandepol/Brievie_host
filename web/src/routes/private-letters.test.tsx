@@ -318,7 +318,7 @@ describe("noodtoegang en privé-instellingen", () => {
       ...personHandlers(),
     );
     const u = userEvent.setup();
-    renderApp(`/w/${workspace.id}/personen`);
+    renderApp(`/w/${workspace.id}/mensen/${papa.id}`);
     await u.click(await screen.findByRole("button", { name: "Noodtoegang: Papa" }));
     const dialog = await screen.findByRole("dialog", {
       name: "Noodtoegang tot de post van Papa",
@@ -341,7 +341,7 @@ describe("noodtoegang en privé-instellingen", () => {
       ...personHandlers(),
     );
     const u = userEvent.setup();
-    renderApp(`/w/${workspace.id}/personen`);
+    renderApp(`/w/${workspace.id}/mensen/${papa.id}`);
     await u.click(await screen.findByRole("button", { name: "Noodtoegang: Papa" }));
     const dialog = await screen.findByRole("dialog");
     await u.type(
@@ -362,8 +362,8 @@ describe("noodtoegang en privé-instellingen", () => {
       ...loggedInHandlers(),
       ...personHandlers(),
     );
-    renderApp(`/w/${workspace.id}/personen`);
-    await screen.findByRole("rowheader", { name: /Papa/ });
+    renderApp(`/w/${workspace.id}/mensen/${papa.id}`);
+    await screen.findByRole("heading", { level: 1, name: "Papa" });
     expect(screen.queryByRole("button", { name: "Noodtoegang: Papa" })).toBeNull();
   });
 

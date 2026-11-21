@@ -2252,3 +2252,228 @@ M5), and two gaps the server still had.
 - **Texts (point 5).** A department's label is offered to its members and the admins; whoever
   sees a letter with it sees the label. Admins who do not read all post still get unnamed
   post while nobody sorts it, and other post through emergency access.
+
+## 2026-11-21: Mensen (one list of people, each with an account state)
+
+Spec `docs/superpowers/specs/2026-11-21-mensen-en-accounts-design.md`, plan
+`docs/superpowers/plans/2026-11-21-host-mensen-en-accounts.md`.
+
+### The owner's answers to "Besluiten voor Stijn"
+
+- **B1: an inactive account is a person without a login** (the advised option, spec M1). No
+  `User` and no `Membership` exist before activation, so nobody's sight of any letter
+  changes. In the interface the user sees no difference: everyone is under Mensen with a
+  status.
+- **B2: "Beheerd door" is built now**, as the last part (slice C, plan Tasks 11–15).
+- **B3: the AI may propose an unknown name as a new person now.** Only as a proposal (a
+  `DocumentSuggestion` of its own kind), never created automatically, never repeated once
+  dismissed, behind the same consent and BSN rules as every other AI output (see "Mensen,
+  the AI proposes a new person" below).
+- **B4: ordinary members see name, state (active or not) and departments**; address, last
+  sign-in and invitations only admins (spec M5).
+- **B5: every non-archived person gets a scan subfolder**, inactive ones too. This belongs
+  to the intake plan (`docs/intake-and-2fa-design`); that branch is not touched here, and
+  whoever builds it applies the ruling.
+- Also decided by the owner: "Mensen" is its own item in the main menu, replacing Leden and
+  Personen; on the row of anyone who never signed in "Uitnodigen"; for a pending invitation
+  "Opnieuw versturen" and "Intrekken". A navigation redesign (`docs/navigation-design`)
+  moves menu items later, so "Mensen" sits where Leden and Personen were.
+
+### Slice A: the server (plan Tasks 1–5)
+
+- **Rulings M1–M5, M7 of the spec hold.** The account slot is the Person row (M1);
+  departments stay `kind = department` and are never in `listPeople` (M2); activation goes
+  only through `createInvitation` → `acceptInvitation` (M3, a test lists every writer of
+  `Person.user`); `Person.former_user` and `deactivated_at` are display only, read by no
+  visibility, lock or permission code (M4, a test reads `visibility_sql` for them); account
+  facts are for admins (M5); nothing automatic makes a person (M7).
+- **New audit code `person_created`** (target person, no values), written by `createPerson`
+  for a person and a department alike.
+- **Switched off is a mark, not a state of sight.** Removing a member or leaving sets
+  `deactivated_at` and `former_user` in the same statement that unlinks the person;
+  accepting an invitation for the person (and the old `linkPersonToMember`) clears both. A
+  member who unlinks themselves leaves a person "niet actief", not switched off. — Why:
+  only a removal ends an account. — Cost if wrong: a self-unlinked person shows "Nooit
+  ingelogd" instead of the former account's sign-in.
+- **M8, every member keeps exactly one person, is maintained.** An unlink by
+  `linkPersonToMember` gives the former member a fresh person at once, after the change of
+  sight is settled (`sight_change` has already diffed and told): a fresh person is on no
+  letter, so it gains nobody anything, and inside the block it would have counted as a gain
+  and asked a confirmation for a self-unlink. — Cost if wrong: none for sight; the member
+  has a second name ("Anne (2)") until an admin renames or archives one.
+- **Relinking takes the member's unused own person away.** With M8 every member has their
+  own person, so a link of a member to another person would always answer 409
+  `member_already_linked` (a self-unlink could never be undone). Now the member's own
+  person makes way when it looks exactly as Brievie made it (the member's name, or
+  "name (2)", at most that name as variant) and nothing uses it (no letter, also in the
+  trash, no proposal, no rule, no open invitation): it is deleted inside the change of
+  sight (`person_deleted` in the log). Any other person stays and the link is refused as
+  before. — Why: undoing an unlink must work; a person somebody named by hand is never
+  deleted behind the admin's back. — Cost if wrong: an unused auto-made person is gone; it
+  held nothing.
+- **The post of a person made or deleted by a change counts for nobody** (`visibility_rules
+  .diff`). A person that exists in only one of the two snapshots of a change of sight is on
+  no letter (a person on a letter is never deleted, a new one is on none yet), so the
+  fresh person of an unlink and the deleted one of a relink are no gain or loss: no
+  confirmation, no notice, nothing in the preview. A person in both snapshots counts as
+  before, also one without letters (its future post is a kind of post). — Cost if wrong:
+  none for letters; only the wording of a change.
+- **Archiving a person withdraws its open invitations** (`invitation_revoked`, reason
+  `person_archived`). Lock order of `updatePerson` when it archives: the person's open
+  invitations first, then the person (memberships, invitations, person: as renewing and
+  accepting take them). — Cost if wrong: none; a deadlock would be the alternative.
+- **An invitation without a person never reuses a switched-off person.** A former member
+  invited without a person gets a fresh person, as before: linking their old one would give
+  them its post (private letters included) without the confirmed preview of an invitation
+  with that person. "Opnieuw uitnodigen" on Mensen always sends the person.
+- **`listPeople`** (`GET /workspaces/{id}/people`, web session, every member) and
+  **`getPersonHasPrivatePost`** (`GET /workspaces/{id}/persons/{person_id}/private-post`, web
+  session, admins, a boolean only). The list never carries a private-post field (PR #39
+  findings 4 and 5). For somebody who is no admin `state` is `active` or `inactive` and the
+  filter accepts only those two (422 otherwise); role and "Verdeelt post" are left empty for
+  them too (B4 names only name, state and departments).
+- **Last sign-in** is `User.last_login` (set by `start_session` through Django's signal);
+  **last app use** the newest `last_seen_at` of an unrevoked device. A switched-off person
+  shows the former account's; both are the account's, the same in every workspace.
+- **Measured, not assumed:** `listPeople` runs a constant number of queries whatever the
+  number of people (test with 8 more people and invitations).
+
+### Slice B: the web (plan Tasks 6–10)
+
+- **Tasks 6, 7 and 8 are one commit.** The row actions and the person's page share
+  `components/person-actions.tsx`; built apart the steps would not have type-checked.
+- **One query, filtered in the browser.** Mensen asks `listPeople` once (no `state`) and
+  filters on status and name locally, so the filter is instant and the counts agree; the
+  server's `state` filter stays for other clients. — Cost if wrong: none below the 500
+  persons a workspace may have.
+- **"Verdeelt post" stays a switch on the row** for admins (as on Leden), and is on the
+  person's page too; both go through the preview (`useSightChange`).
+- **Invitations without a person stay in their own panel** ("Open uitnodigingen") under
+  the list; an invitation with a person shows on that person's row.
+- **"Uitschakelen" asks `getPersonHasPrivatePost` when its dialog opens**, never for the
+  list (PR #39 findings 4 and 5). The invite dialog for a person asks it too, to say the
+  address is required before the server answers `email_required`; that sentence is shown at
+  the address field.
+- **Linking a person to a member is not offered on Mensen** (M3: an account comes only by
+  invitation); `linkPersonToMember` stays for old clients.
+- **Departments while departments are off.** They are not people (M2), so Mensen never
+  lists them; the old Personen page showed them as names while departments were off.
+  Switching departments on shows them on Afdelingen again. — Cost if wrong: an admin who
+  wants to rename such a name switches departments on for a moment.
+- **"Nieuwe persoon" is a button beside the picker, not an option in its list.** The
+  picker is a select without free text; the button opens a small dialog with a name field
+  that offers a person who already has the name or writes it so first ("Bedoel je ...?
+  (ook: ...)"). Names compare as the server's `normalise` (`web/src/names.ts`).
+- **Words** in `docs/GLOSSARY.md`: Mensen/People and the account states; "persoon" stays
+  "person". `docs/SPEC.md` names Mensen where Leden stood.
+
+### Mensen, the AI proposes a new person (Besluit B3, plan Tasks B3a and B3b)
+
+- **Its own table, `documents.NewPersonSuggestion`.** CLAUDE.md's "A label or addressee
+  proposal is a `DocumentSuggestion`" stays true: this proposes to *make* a person, not to
+  put an existing one on a letter. In `DocumentSuggestion` it would have needed a third
+  action with neither label nor person, which `SuggestionOut` (read by the iPhone app),
+  the autopilot, the review and `target_id_of` cannot read; in its own table none of them
+  can ever apply or show it (M7 by construction). Same shape: one row per name per
+  letter, `dismissed` is the letter's memory of "no", nothing automatic repeats it.
+- **What the AI's name must be.** In the letter itself (the name, not only its quote),
+  no BSN (raw or masked), 2–100 characters, at most three per letter, confidence capped at
+  0.8 like every pick. Known is any person or department of the workspace, archived ones
+  included (a name taken there would be refused on accept), not only the 50 the AI sees.
+- **An open new-person proposal stops the autopilot's confirm**, like an open duplicate
+  pair: the AI itself says the letter is for somebody nobody knows. — Cost if wrong: such
+  a letter waits for a person instead of being confirmed.
+- **Accepting is a human's act by the normal paths.** `create_person` (its rules, the BSN
+  refusal, `person_created` with the member as actor) and `organise.add_addressee` (origin
+  suggestion) in one transaction, after the letter is locked for organising
+  (`require_editable`). A person who has the name by now is taken instead of a second one.
+  Members only (403 for read-only), device tokens as for the other proposals.
+- **Consent and privacy as for every AI output.** The name comes only from a run under the
+  recorded consent (`provider_for`); the text sent is BSN-masked; the stored name and quote
+  are masked again; the row is readable only with its letter (child policy).
+
+### Mensen, slice C: "Beheerd door" (plan Tasks 11–15)
+
+- **A manager reads the post of a person without an active account as their own**
+  (`Person.managed_by`, only kind person, only while `user_id` is null, only a member; a
+  check constraint and `save()`). `brievie_my_post_ids` gains those persons and
+  `brievie_covered_post_ids` counts them as read through, so the sorters stop getting that
+  post. A private letter on the person gets a reader row with reason `managed`.
+- **Migrations replay their own text.** `workspaces/0007` now reads the helpers frozen as
+  they were (`visibility_functions_sql_0007`); `0009` replaces the two helpers in place
+  (`CREATE OR REPLACE`: the policies call them) and its reverse restores the 0007 text, never
+  a drop. Without a manager no letter changes viewers (migration test, all four switch
+  combinations, both kinds of workspace).
+- **The snapshot is the same rule as the SQL.** `MemberFacts.person_ids` holds the managed
+  persons (`managed_ids` only for the wording "beheert de post van"), so previews, tokens,
+  notices, `expected_sight` and "Wie kan deze brief zien?" agree with the helpers.
+- **Setting it is a widening with a confirmation** (`setPersonManager`, member_change
+  `manage`); never the admin themself while private post is on the person
+  (`cannot_grant_self`); not a department, not a person with an account. Lock order:
+  memberships, then the person.
+- **M6: what ends it.** Accepting an invitation for the person (an adult with an account
+  decides who reads their post) — the manager is told by `notify_join`, their export goes,
+  `person_manager_cleared` is logged; the old link endpoint likewise; the manager leaving
+  or being removed (P7, the post goes back to the sorters, logged per person). Switching
+  it off ends what ran under it: the former manager's assignments there and their own
+  export.
+- **Audit codes** `person_manager_set` and `person_manager_cleared` (value `member`: the
+  manager's name; a member is a person, so a name is allowed).
+- **The web:** "Beheerd door" on the page of a person without an active account (admins),
+  with the preview on a gain; the "Uitschakelen" dialog of a person with private post
+  offers "Laat de post beheren door" and sets it, with its own preview, right after.
+- **Measured:** the perf world manages 2 % of its persons (one of fifty, by a member in a
+  department); `visibility-perf` stays within the M0 budget with no threshold raised (the
+  numbers are in the run's summary of the PR's last commit).
+
+### Security review of PR #43 (2026-11-21)
+
+- **Point 1 (high), fixed: one way in per person.** A new invitation for a person revokes
+  the earlier open ones (reason `replaced`); accepting revokes every other open invitation
+  for the person, whatever its address (`superseded`, skip-locked as for the address);
+  switching off (`member_removed`) and unlinking (`person_unlinked`) revoke every open
+  invitation naming the person. Accepting refuses (the one answer of a dead link) an
+  invitation without an address once private post is on the person: the rule of making one
+  holds at accepting too. Lock order stays memberships, invitations, person (unlink locks
+  the invitations before the person). Mensen shows an open invitation on any row ("Open
+  uitnodiging", Intrekken), also an active person's. — Ruling: replace, not refuse, a
+  second invitation: the admin's newest intent wins and "Opnieuw uitnodigen" keeps
+  working; the older link is logged as revoked.
+- **Point 2 (medium), fixed: no activity from elsewhere.** Sign-ins and devices are per
+  account, not per workspace, so the list shows them only for an account whose only
+  workspace this is; for any other `activity_hidden` is true and the times are null ("Niet
+  te zien"). A switched-off person shows the address and times frozen at switch-off
+  (`former_email`, `former_last_sign_in_at`, `former_last_app_use_at`); the former account
+  is never read live. — Cost: an admin no longer sees when a member of two workspaces was
+  last active; showing that "it is not shown" tells them the account is elsewhere too,
+  which listMembers' `can_manage_account` already implied.
+- **Point 3, fixed:** the switch-off warning says what stays true: the person no longer
+  reads them, shares still do, an admin can open them with emergency access when it is on.
+- **Point 4 (decided): managing private post needs its own yes.** With private post on the
+  person, `setPersonManager` answers 409 `private_post_acknowledgement_required` until
+  `private_post_acknowledged` is sent; the web asks "Privébrieven laten lezen?" naming the
+  manager, apart from the preview. Not refused: after a switch-off it is the one way (with
+  re-inviting) for anybody to read those letters, and every step is logged and told. Two
+  admins naming each other stays possible, each act audited and notified (S 4.7 rules out
+  only naming oneself). — Cost if wrong: an admin who agrees twice can read a former
+  colleague's private post through a colleague; the audit log shows both acts.
+- **Point 5, fixed generally:** every change of sight now removes the own export of
+  everybody who loses sight (`sight_change`), not only in the writers that did it by hand.
+- **Point 6 (decided): narrowed.** `getPersonHasPrivatePost` answers only for a person with
+  an active account (409 `person_has_no_account` otherwise): the switch-off dialog needs it
+  before the act; inviting relies on `email_required` and managing on its own refusal. Not
+  removed: a warning after the switch-off would come too late. It tells an admin no more
+  than `email_required` does for one invitation.
+- **Point 7, fixed, not as proposed:** a `FOR UPDATE` on a person breaks the rule "documents
+  and persons are locked without their key" (`test_privacy_locks`: a running upload must
+  not wait on a person lock). Instead the deletion of the unused own person runs in a
+  savepoint and looks again after the DELETE, which waits for a transaction that put the
+  person on a letter meanwhile: a link or proposal found then undoes the deletion with a
+  clean 409 `member_already_linked`. No test: it needs two transactions racing.
+- **Re-review, point 7 again:** a proposal naming the person is deleted with it
+  (`DocumentSuggestion.person` cascades), so looking after the DELETE could miss it. The
+  per-model counts of `person.delete()` decide now: anything deleted besides the person
+  (or a `ProtectedError`) undoes the deletion with 409 `member_already_linked`.
+- **Re-review: deleting a person stops its open invitations** (reason `person_deleted`,
+  locked after the rules and before the person): with the person gone an old link would
+  have worked as a plain invitation with its role.

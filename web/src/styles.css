@@ -3327,3 +3327,18 @@ a.menu-item:hover {
   margin: var(--s-s) 0 var(--s-xs);
   font-size: inherit;
 }
+
+/* The addressee picker with "Nieuwe persoon" beside it. */
+.picker-with-new {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-xs);
+}
+
+.new-person-dialog {
+  padding: var(--s-m);
+  min-width: 260px;
+  max-width: min(360px, calc(100vw - 32px));
+  outline: none;
+}

@@ -7,6 +7,7 @@ import {
   Dialog,
   Disclosure,
   DisclosurePanel,
+  FieldError,
   Form,
   Heading,
   Input,
@@ -46,9 +47,12 @@ function expiryLabel(days: ExpiryDays): string {
 export function InvitationLink({
   created,
   onClose,
+  renewed = false,
 }: {
   created: CreatedInvitation;
   onClose: () => void;
+  /** A new link for an invitation that was sent before: the old one stopped. */
+  renewed?: boolean;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
   // The button that made the link is gone: keyboard and screen reader users start here.
@@ -62,6 +66,7 @@ export function InvitationLink({
       <p>
         {t`Stuur deze link, of laat de QR-code scannen. Je ziet de link maar één keer: sluit je dit venster, dan maak je een nieuwe.`}
       </p>
+      {renewed ? <p>{t`De oude link werkt niet meer.`}</p> : null}
       {created.home_network_only ? (
         <MessageBar intent="info">{t`Deze link werkt alleen op je thuisnetwerk.`}</MessageBar>
       ) : null}
@@ -89,9 +94,11 @@ export function InvitationLink({
 export function InvitationLinkDialog({
   created,
   onClose,
+  renewed = false,
 }: {
   created: CreatedInvitation | null;
   onClose: () => void;
+  renewed?: boolean;
 }) {
   return (
     <ModalOverlay
@@ -103,28 +110,65 @@ export function InvitationLinkDialog({
     >
       <Modal className="modal">
         <Dialog className="dialog" aria-label={t`Uitnodiging`}>
-          {created ? <InvitationLink created={created} onClose={onClose} /> : null}
+          {created ? (
+            <InvitationLink created={created} onClose={onClose} renewed={renewed} />
+          ) : null}
         </Dialog>
       </Modal>
     </ModalOverlay>
   );
 }
 
+/** The person an invitation is for when it is made from Mensen: fixed, not chosen. */
+export type InvitedPerson = { id: string; name: string; email: string };
+
+/** The address field of an invitation for one person: in sight, prefilled, and required when
+ * private letters are on the person's name (only that address may then accept). */
+function PersonEmailField({
+  email,
+  onChange,
+  serverSentence,
+}: {
+  email: string;
+  onChange: (value: string) => void;
+  /** The server's `email_required` sentence: it alone says when an address is needed. */
+  serverSentence: string | undefined;
+}) {
+  return (
+    <TextField
+      type="email"
+      className="field"
+      value={email}
+      onChange={onChange}
+      isInvalid={serverSentence !== undefined}
+      validationBehavior="aria"
+    >
+      <Label>{t`E-mailadres`}</Label>
+      <Text slot="description">{t`Alleen dit adres kan de uitnodiging gebruiken.`}</Text>
+      <Input autoComplete="off" />
+      <FieldError>{serverSentence}</FieldError>
+    </TextField>
+  );
+}
+
 function InviteForm({
   workspaceId,
+  person,
   onCreated,
   onCancel,
 }: {
   workspaceId: string;
+  /** Fixed by the caller (Mensen): no choice of person, the address prefilled. */
+  person?: InvitedPerson;
   onCreated: (created: CreatedInvitation) => void;
   onCancel: () => void;
 }) {
   const queryClient = useQueryClient();
-  const { data: persons } = useQuery(personsQuery(workspaceId));
-  const [personId, setPersonId] = useState("");
+  const { data: persons } = useQuery({ ...personsQuery(workspaceId), enabled: !person });
+  const [personId, setPersonId] = useState(person?.id ?? "");
   const [role, setRole] = useState<Role>("member");
   const [days, setDays] = useState<ExpiryDays>(7);
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(person?.email ?? "");
   const [note, setNote] = useState("");
   // Somebody who already has an account is no one to invite.
   // A department is nobody to invite: it has no account of its own.
@@ -169,16 +213,28 @@ function InviteForm({
     onSuccess: async (data) => {
       if (data === null) return;
       onCreated(data);
-      await queryClient.invalidateQueries({ queryKey: invitationsQuery(workspaceId).queryKey });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: invitationsQuery(workspaceId).queryKey }),
+        queryClient.invalidateQueries({ queryKey: ["workspaces", workspaceId, "people"] }),
+      ]);
     },
   });
+  // The server's sentence when the address is missing goes to the address field itself.
+  const emailSentence =
+    create.error instanceof ApiFailure && create.error.code === "email_required"
+      ? create.error.message
+      : undefined;
 
   return (
     <>
       <Heading slot="title" className="dialog-title">
-        {t`Iemand uitnodigen`}
+        {person ? t`${person.name} uitnodigen` : t`Iemand uitnodigen`}
       </Heading>
-      <p>{t`Je krijgt een link en een QR-code. Wie die opent, maakt een account of logt in en hoort daarna bij deze werkruimte.`}</p>
+      <p>
+        {person
+          ? t`Je krijgt een link en een QR-code. Wie die opent, maakt een account of logt in en is daarna ${person.name} in deze werkruimte.`
+          : t`Je krijgt een link en een QR-code. Wie die opent, maakt een account of logt in en hoort daarna bij deze werkruimte.`}
+      </p>
       <Form
         className="form"
         onSubmit={(event) => {
@@ -186,7 +242,10 @@ function InviteForm({
           create.mutate();
         }}
       >
-        {free.length > 0 ? (
+        {person ? (
+          <PersonEmailField email={email} onChange={setEmail} serverSentence={emailSentence} />
+        ) : null}
+        {!person && free.length > 0 ? (
           <div className="field">
             <label htmlFor="invite-person">{t`Wie is het?`}</label>
             <select
@@ -230,11 +289,13 @@ function InviteForm({
                   ))}
                 </select>
               </div>
-              <TextField type="email" className="field" value={email} onChange={setEmail}>
-                <Label>{t`E-mailadres`}</Label>
-                <Text slot="description">{t`Alleen dit adres kan de uitnodiging gebruiken.`}</Text>
-                <Input autoComplete="off" />
-              </TextField>
+              {person ? null : (
+                <TextField type="email" className="field" value={email} onChange={setEmail}>
+                  <Label>{t`E-mailadres`}</Label>
+                  <Text slot="description">{t`Alleen dit adres kan de uitnodiging gebruiken.`}</Text>
+                  <Input autoComplete="off" />
+                </TextField>
+              )}
               <TextField className="field" value={note} onChange={setNote} maxLength={100}>
                 <Label>{t`Notitie voor jezelf`}</Label>
                 <Input autoComplete="off" />
@@ -242,7 +303,7 @@ function InviteForm({
             </div>
           </DisclosurePanel>
         </Disclosure>
-        <ErrorAlert error={create.error} />
+        <ErrorAlert error={emailSentence === undefined ? create.error : null} />
         <div className="dialog-actions">
           <Button className="button secondary" onPress={onCancel}>
             {t`Annuleren`}
@@ -264,10 +325,13 @@ function InviteForm({
  */
 export function InviteDialog({
   workspaceId,
+  person,
   isOpen,
   onOpenChange,
 }: {
   workspaceId: string;
+  /** Invite this person (Mensen): the person is fixed and its picker hidden. */
+  person?: InvitedPerson;
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -286,11 +350,21 @@ export function InviteDialog({
       className="overlay"
     >
       <Modal className="modal">
-        <Dialog className="dialog" aria-label={created ? t`Uitnodiging` : t`Iemand uitnodigen`}>
+        <Dialog
+          className="dialog"
+          aria-label={
+            created ? t`Uitnodiging` : person ? t`${person.name} uitnodigen` : t`Iemand uitnodigen`
+          }
+        >
           {created ? (
             <InvitationLink created={created} onClose={close} />
           ) : (
-            <InviteForm workspaceId={workspaceId} onCreated={setCreated} onCancel={close} />
+            <InviteForm
+              workspaceId={workspaceId}
+              person={person}
+              onCreated={setCreated}
+              onCancel={close}
+            />
           )}
         </Dialog>
       </Modal>

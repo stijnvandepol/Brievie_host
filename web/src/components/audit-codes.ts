@@ -42,6 +42,9 @@ export const WORKSPACE_CODES = [
   "rule_run",
   "label_deleted",
   "person_deleted",
+  "person_created",
+  "person_manager_set",
+  "person_manager_cleared",
   "visibility_changed",
   "person_linked",
   "person_unlinked",
@@ -130,6 +133,12 @@ function knownLabel(code: AuditCodeName): string {
       return t`Label verwijderd`;
     case "person_deleted":
       return t`Persoon verwijderd`;
+    case "person_created":
+      return t`Persoon toegevoegd`;
+    case "person_manager_set":
+      return t`Beheerd door ingesteld`;
+    case "person_manager_cleared":
+      return t`Beheerd door beëindigd`;
     case "visibility_changed":
       return t`Zichtbaarheid gewijzigd`;
     case "person_linked":

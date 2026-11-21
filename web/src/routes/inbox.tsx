@@ -135,6 +135,7 @@ function InboxRow({
               onChange={choose}
               disabled={!canEdit || setAddressees.isPending}
               departments={departments}
+              newPersonIn={canEdit ? workspaceId : undefined}
             />
           ) : null}
           {state === "review" ? (

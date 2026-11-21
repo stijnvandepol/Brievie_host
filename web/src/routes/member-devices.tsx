@@ -33,9 +33,9 @@ function MemberDevicesPage() {
       <PageHeader
         title={title}
         breadcrumb={{
-          to: "/w/$workspaceId/leden",
+          to: "/w/$workspaceId/mensen",
           params: { workspaceId: workspace.id },
-          label: t`Leden`,
+          label: t`Mensen`,
         }}
         description={t`De telefoons en browsers waarmee ${who} bij Brievie kan.`}
       />
@@ -71,7 +71,7 @@ export const memberDevicesRoute = createRoute({
   beforeLoad: ({ context }) => {
     if (context.workspace.role !== "admin") {
       throw redirect({
-        to: "/w/$workspaceId/leden",
+        to: "/w/$workspaceId/mensen",
         params: { workspaceId: context.workspace.id },
       });
     }

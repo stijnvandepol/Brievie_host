@@ -53,6 +53,7 @@ _NON_EMERGENCY = (
     DocumentReader.Reason.ADDRESSEE,
     DocumentReader.Reason.DEPARTMENT,
     DocumentReader.Reason.SHARE,
+    DocumentReader.Reason.MANAGED,
 )
 
 
@@ -146,6 +147,12 @@ def desired_readers(
             ).values_list("user_id", flat=True):
                 if user_id is not None:
                     wanted.add((user_id, DocumentReader.Reason.ADDRESSEE))
+            # "Beheerd door": the manager of a person without an account reads their post.
+            for manager_id in Person.objects.filter(
+                id__in=on, kind=Person.Kind.PERSON, user__isnull=True, managed_by__isnull=False
+            ).values_list("managed_by_id", flat=True):
+                if manager_id is not None:
+                    wanted.add((manager_id, DocumentReader.Reason.MANAGED))
             for user_id in DepartmentMember.objects.filter(department_id__in=on).values_list(
                 "user_id", flat=True
             ):
@@ -197,6 +204,9 @@ def recompute_where(
                 *Person.objects.filter(workspace_id=workspace_id, user_id=user_id).values_list(
                     "id", flat=True
                 ),
+                *Person.objects.filter(
+                    workspace_id=workspace_id, managed_by_id=user_id, user__isnull=True
+                ).values_list("id", flat=True),
                 *DepartmentMember.objects.filter(
                     workspace_id=workspace_id, user_id=user_id
                 ).values_list("department_id", flat=True),
@@ -330,7 +340,10 @@ def viewer_reasons(document: Document) -> dict[UUID, list[str]]:
             continue
         reasons: list[str] = []
         readers = {reason: expires for user, reason, expires in rows if user == member.user_id}
-        persons = sorted(policy.person_names[p] for p in on & member.person_ids)
+        persons = sorted(
+            policy.person_names[p] for p in on & (member.person_ids - member.managed_ids)
+        )
+        managed = sorted(policy.person_names[p] for p in on & member.managed_ids)
         departments = sorted(policy.department_names[d] for d in on & member.department_ids)
         if not private:
             if switches.everyone_sees_all:
@@ -339,6 +352,8 @@ def viewer_reasons(document: Document) -> dict[UUID, list[str]]:
                 reasons.append(_("beheerder, leest alle post"))
         if not private or DocumentReader.Reason.ADDRESSEE in readers:
             reasons += [_("op naam van %(person)s") % {"person": p} for p in persons]
+        if not private or DocumentReader.Reason.MANAGED in readers:
+            reasons += [_("beheert de post van %(person)s") % {"person": p} for p in managed]
         if (not private and switches.departments_enabled) or (
             DocumentReader.Reason.DEPARTMENT in readers
         ):

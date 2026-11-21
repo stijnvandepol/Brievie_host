@@ -757,3 +757,60 @@ describe("document made by the autopilot", () => {
     expect(screen.queryByRole("button", { name: "Zelf controleren" })).not.toBeInTheDocument();
   });
 });
+
+describe("a new person the AI proposes", () => {
+  const proposal = {
+    id: "f5555555-5555-4555-8555-555555555555",
+    name: "M. Jansen",
+    quote: "Aan M. Jansen",
+    confidence: "0.800",
+  };
+  const withProposal = { ...documentDetail, new_person_suggestions: [proposal] };
+  const base = `*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/new-person-suggestions/${proposal.id}`;
+
+  it("asks before anybody is made, and makes the person on Toevoegen als persoon", async () => {
+    let accepted = false;
+    server.use(
+      http.post(`${base}/accept`, () => {
+        accepted = true;
+        return HttpResponse.json({ ...documentDetail, addressee_ids: [papa.id] });
+      }),
+      ...loggedInHandlers(),
+      ...documentHandlers(withProposal),
+    );
+    const u = userEvent.setup();
+    renderApp(path);
+    const panel = await screen.findByRole("region", { name: "Nieuwe persoon?" });
+    expect(panel).toHaveTextContent(
+      "Deze brief is voor M. Jansen. Die persoon staat nog niet in Brievie.",
+    );
+    expect(panel).toHaveTextContent("Aan M. Jansen");
+    expect(accepted).toBe(false);
+    await u.click(within(panel).getByRole("button", { name: "Toevoegen als persoon: M. Jansen" }));
+    await waitFor(() => expect(accepted).toBe(true));
+  });
+
+  it("Negeren sends no to the server", async () => {
+    let dismissed = false;
+    server.use(
+      http.post(`${base}/dismiss`, () => {
+        dismissed = true;
+        return HttpResponse.json(documentDetail);
+      }),
+      ...loggedInHandlers(),
+      ...documentHandlers(withProposal),
+    );
+    const u = userEvent.setup();
+    renderApp(path);
+    const panel = await screen.findByRole("region", { name: "Nieuwe persoon?" });
+    await u.click(within(panel).getByRole("button", { name: "Negeren: M. Jansen" }));
+    await waitFor(() => expect(dismissed).toBe(true));
+  });
+
+  it("a viewer reads the proposal without buttons", async () => {
+    server.use(asRole("viewer"), ...loggedInHandlers(), ...documentHandlers(withProposal));
+    renderApp(path);
+    const panel = await screen.findByRole("region", { name: "Nieuwe persoon?" });
+    expect(within(panel).queryByRole("button")).toBeNull();
+  });
+});

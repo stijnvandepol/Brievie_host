@@ -10,6 +10,8 @@ import pytest
 from apps.workspaces import visibility_rules
 from apps.workspaces.visibility_rules import (
     LetterFacts,
+    MemberFacts,
+    PolicySnapshot,
     diff,
     expected_sight,
     needs_confirmation,
@@ -170,3 +172,37 @@ def test_module_imports_no_django() -> None:
             modules.append(node.module)
     assert modules
     assert not [m for m in modules if m.split(".")[0] in ("django", "apps")]
+
+
+def test_a_person_made_or_deleted_by_the_change_counts_for_nobody() -> None:
+    """Mensen M8: a fresh person (made by the change) or a deleted one is on no letter, so
+    nobody gains or loses by it; a person in both snapshots still counts."""
+    switches = visibility_rules.Switches(
+        everyone_sees_all=False, departments_enabled=False, admins_read_all=False
+    )
+    piet, kept, fresh, gone = (uuid.uuid4() for _ in range(4))
+
+    def state(person_ids: frozenset[uuid.UUID], names: dict[uuid.UUID, str]) -> PolicySnapshot:
+        member = MemberFacts(
+            user_id=piet,
+            name="Piet",
+            role="member",
+            sorts_post=False,
+            person_ids=person_ids,
+            department_ids=frozenset(),
+        )
+        return PolicySnapshot(
+            switches=switches, members=(member,), person_names=names, department_names={}
+        )
+
+    before = state(frozenset({gone}), {gone: "Piet (2)", kept: "Piet"})
+    after = state(frozenset({kept}), {kept: "Piet"})
+    (change,) = visibility_rules.diff(before, after)
+    assert change.gains == (f"person:{kept}",)
+    assert change.loses == ()
+
+    before = state(frozenset({kept}), {kept: "Piet"})
+    after = state(frozenset({fresh}), {kept: "Piet", fresh: "Piet (2)"})
+    (change,) = visibility_rules.diff(before, after)
+    assert change.gains == ()
+    assert change.loses == (f"person:{kept}",)

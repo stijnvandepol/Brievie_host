@@ -24,6 +24,7 @@ SHARED = "met wie hij gedeeld is"
 PRIVATE = "Privé-post zien alleen: de mensen op wier naam hij staat"
 PRIVATE_DEPARTMENTS = "de mensen van een afdeling op wier naam hij staat"
 PRIVATE_SCANNER = "wie de brief scande of privé maakte"
+MANAGERS = "wiens post iemand beheert, dan ziet wie die post beheert hem ook"
 
 
 def _says(lines: list[str], part: str) -> bool:
@@ -43,6 +44,11 @@ def _allowed(o: Office, document: Document, lines: list[str]) -> set[uuid.UUID]:
         shares = set(
             DocumentShare.objects.filter(document=document).values_list("user_id", flat=True)
         )
+        managers = set(
+            Person.objects.filter(
+                id__in=on, user__isnull=True, managed_by__isnull=False
+            ).values_list("managed_by_id", flat=True)
+        )
     members = set(
         Membership.objects.filter(workspace=o.workspace).values_list("user_id", flat=True)
     )
@@ -52,6 +58,8 @@ def _allowed(o: Office, document: Document, lines: list[str]) -> set[uuid.UUID]:
         )
     )
     allowed: set[uuid.UUID] = set()
+    if _says(lines, MANAGERS):
+        allowed |= {m for m in managers if m is not None}
     if document.visibility == Document.Visibility.RESTRICTED:
         assert _says(lines, PRIVATE)
         allowed |= accounts | shares
@@ -117,3 +125,24 @@ def _post_ids(o: Office, user_id: uuid.UUID) -> set[uuid.UUID]:
         return set(Person.objects.filter(user_id=user_id).values_list("id", flat=True)) | set(
             DepartmentMember.objects.filter(user_id=user_id).values_list("department_id", flat=True)
         )
+
+
+@pytest.mark.parametrize("state", ALL_16_STATES)
+def test_policy_text_names_every_viewer_with_manager(state: dict[str, bool]) -> None:
+    """Piet's letter is also on Jan, whose post Sandra manages: Piet's sentences name her."""
+    o = office()
+    with as_actor(o.workspace, SYSTEM):
+        Person.objects.filter(id=o.persons["Jan"].id).update(managed_by_id=o.sorter.id)
+    letters = [
+        letter(o.workspace, on=[o.persons["Piet"], o.persons["Jan"]]),
+        private_letter(o.workspace, addressees=[o.persons["Piet"], o.persons["Jan"]]),
+    ]
+    o.state(**state)
+    membership = Membership.objects.get(workspace=o.workspace, user=o.plain)
+    lines = visibility_settings.post_access(membership)
+    for document in letters:
+        with as_actor(o.workspace, SYSTEM):
+            fresh = Document.objects.get(id=document.id)
+            seen = visibility.viewers([fresh.id])[fresh.id]
+        assert o.sorter.id in seen
+        assert seen <= _allowed(o, fresh, lines), (state, lines)

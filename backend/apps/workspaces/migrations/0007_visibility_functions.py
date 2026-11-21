@@ -1,6 +1,6 @@
 from django.db import migrations
 
-from apps.workspaces.visibility_sql import DROP_VISIBILITY_FUNCTIONS, visibility_functions_sql
+from apps.workspaces.visibility_sql import DROP_VISIBILITY_FUNCTIONS, visibility_functions_sql_0007
 
 
 class Migration(migrations.Migration):
@@ -12,6 +12,7 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RunSQL(
-            sql=tuple(visibility_functions_sql()), reverse_sql=tuple(DROP_VISIBILITY_FUNCTIONS)
+            sql=tuple(visibility_functions_sql_0007()),
+            reverse_sql=tuple(DROP_VISIBILITY_FUNCTIONS),
         ),
     ]

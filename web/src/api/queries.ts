@@ -145,6 +145,36 @@ export const personsQuery = (workspaceId: string) =>
     },
   });
 
+/** Mensen: every person with the state of their account (account facts for admins only). */
+export const peopleQuery = (workspaceId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "people"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/people", {
+        params: { path: { workspace_id: workspaceId } },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
+/** Whether a private letter is on the person's name (admins; a yes or no only). */
+export const personPrivatePostQuery = (workspaceId: string, personId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "people", personId, "private-post"],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/persons/{person_id}/private-post",
+        { params: { path: { workspace_id: workspaceId, person_id: personId } } },
+      );
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+    // Asked when a dialog opens; a fresh answer every time.
+    staleTime: 0,
+    gcTime: 0,
+  });
+
 export const membersQuery = (workspaceId: string) =>
   queryOptions({
     queryKey: ["workspaces", workspaceId, "members"],

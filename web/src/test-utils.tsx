@@ -248,6 +248,7 @@ export function personHandlers(persons: Person[] = [papa, annaPerson]) {
     ...labelHandlers(),
     http.get(`*${API}/workspaces/${workspace.id}/persons`, () => HttpResponse.json(persons)),
     http.get(`*${API}/workspaces/${workspace.id}/members`, () => HttpResponse.json(members)),
+    http.get(`*${API}/workspaces/${workspace.id}/people`, () => HttpResponse.json(people)),
   ];
 }
 
@@ -428,10 +429,137 @@ export function memberHandlers(
 ) {
   return [
     http.get(`*${API}/workspaces/${workspace.id}/members`, () => HttpResponse.json(list)),
+    // Mensen shows the same members, each as an active person.
+    http.get(`*${API}/workspaces/${workspace.id}/people`, () =>
+      HttpResponse.json(list.map(memberAsPerson)),
+    ),
     http.get(`*${API}/workspaces/${workspace.id}/invitations`, () =>
       HttpResponse.json(invitations),
     ),
     http.get(`*${API}/workspaces/${workspace.id}/my-export`, () => HttpResponse.json(myExport)),
+  ];
+}
+
+/** A member as Mensen lists them: an active person with their account. */
+export function memberAsPerson(
+  member: components["schemas"]["MemberOut"],
+): components["schemas"]["PersonAccountOut"] {
+  return personAccount({
+    id: member.person_id ?? `p-${member.user_id}`,
+    display_name: member.name,
+    state: "active",
+    user_id: member.user_id,
+    role: member.role,
+    sorts_post: member.sorts_post ?? false,
+    department_ids: member.department_ids ?? [],
+    can_manage_account: member.can_manage_account ?? false,
+  });
+}
+
+type PersonAccount = components["schemas"]["PersonAccountOut"];
+
+/** A person on Mensen as an admin sees them; every account fact empty unless given. */
+export function personAccount(
+  overrides: Partial<PersonAccount> & { id: string; display_name: string },
+): PersonAccount {
+  return {
+    name_variants: [],
+    archived: false,
+    document_count: 0,
+    state: "inactive",
+    user_id: null,
+    role: "",
+    sorts_post: false,
+    department_ids: [],
+    email: "",
+    last_sign_in_at: null,
+    last_app_use_at: null,
+    deactivated_at: null,
+    invitation_id: null,
+    invitation_role: "",
+    invitation_expires_at: null,
+    invitation_expired: false,
+    can_manage_account: false,
+    activity_hidden: false,
+    ...overrides,
+  };
+}
+
+/** Anna (the caller, admin), Bram (member, never signed in), Papa (no account), Oma
+ * (invited), Kees (switched off): one person in every state. */
+export const people: PersonAccount[] = [
+  personAccount({
+    id: annaPerson.id,
+    display_name: "Anna",
+    state: "active",
+    user_id: user.id,
+    role: "admin",
+    email: user.email,
+    last_sign_in_at: "2026-11-20T08:15:00Z",
+  }),
+  personAccount({
+    id: "a3333333-3333-4333-8333-333333333333",
+    display_name: "Bram",
+    state: "active",
+    user_id: "b3333333-3333-4333-8333-333333333333",
+    role: "member",
+    email: "bram@example.nl",
+    can_manage_account: true,
+  }),
+  personAccount({
+    id: papa.id,
+    display_name: "Papa",
+    name_variants: ["P. de Vries"],
+    document_count: 2,
+  }),
+  personAccount({
+    id: "a4444444-4444-4444-8444-444444444444",
+    display_name: "Oma",
+    state: "invited",
+    invitation_id: "e4444444-4444-4444-8444-444444444444",
+    invitation_role: "member",
+    invitation_expires_at: "2099-11-24T10:00:00Z",
+  }),
+  personAccount({
+    id: "a5555555-5555-4555-8555-555555555555",
+    display_name: "Kees",
+    state: "deactivated",
+    email: "kees@example.nl",
+    last_sign_in_at: "2026-10-01T12:00:00Z",
+    deactivated_at: "2026-11-01T12:00:00Z",
+  }),
+];
+
+/** The same people as somebody who is no admin gets them: no account facts, active or not. */
+export const peopleForMember: PersonAccount[] = people.map((person) =>
+  personAccount({
+    id: person.id,
+    display_name: person.display_name,
+    name_variants: person.name_variants,
+    document_count: person.document_count,
+    user_id: person.user_id,
+    archived: person.archived,
+    state: person.state === "active" ? "active" : "inactive",
+  }),
+);
+
+/** What Mensen asks: the people, the persons (department names), invitations and export. */
+export function peopleHandlers(
+  list: PersonAccount[] = people,
+  invitations: components["schemas"]["InvitationOut"][] = [],
+) {
+  return [
+    http.get(`*${API}/workspaces/${workspace.id}/people`, () => HttpResponse.json(list)),
+    http.get(`*${API}/workspaces/${workspace.id}/persons`, () =>
+      HttpResponse.json([papa, annaPerson]),
+    ),
+    http.get(`*${API}/workspaces/${workspace.id}/members`, () => HttpResponse.json(members)),
+    http.get(`*${API}/workspaces/${workspace.id}/invitations`, () =>
+      HttpResponse.json(invitations),
+    ),
+    http.get(`*${API}/workspaces/${workspace.id}/my-export`, () =>
+      HttpResponse.json(exportState()),
+    ),
   ];
 }
 

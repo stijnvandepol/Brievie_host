@@ -25,6 +25,7 @@ from apps.documents.models import (
     DocumentEvent,
     DocumentLabel,
     DocumentSuggestion,
+    NewPersonSuggestion,
 )
 from apps.tasks.models import Task
 from apps.workspaces.context import SYSTEM
@@ -45,6 +46,7 @@ class Ids:
     workspace_id: uuid.UUID
     suggestion_id: uuid.UUID
     event_id: uuid.UUID
+    new_person_suggestion_id: uuid.UUID
 
 
 type Case = Callable[[Client, Ids, uuid.UUID], "Response"]
@@ -87,6 +89,12 @@ DOCUMENT_OPERATION_CASES: Final[dict[str, Case]] = {
     "dismissSuggestion": lambda c, ids, d: _post(
         c, _url(ids, d, f"/suggestions/{ids.suggestion_id}/dismiss")
     ),
+    "acceptNewPersonSuggestion": lambda c, ids, d: _post(
+        c, _url(ids, d, f"/new-person-suggestions/{ids.new_person_suggestion_id}/accept")
+    ),
+    "dismissNewPersonSuggestion": lambda c, ids, d: _post(
+        c, _url(ids, d, f"/new-person-suggestions/{ids.new_person_suggestion_id}/dismiss")
+    ),
     "listDocumentEvents": lambda c, ids, d: c.get(_url(ids, d, "/events")),
     "undoDocumentEvent": lambda c, ids, d: _post(c, _url(ids, d, f"/events/{ids.event_id}/undo")),
     "trashDocument": lambda c, ids, d: _post(c, _url(ids, d, "/trash")),
@@ -115,9 +123,20 @@ def _ids(o: Office, letter: Document) -> Ids:
     with as_actor(o.workspace, SYSTEM):
         suggestion = DocumentSuggestion.objects.filter(document=letter).first()
         event = DocumentEvent.objects.filter(document=letter).first()
+        new_person, _made = NewPersonSuggestion.objects.get_or_create(
+            workspace_id=o.workspace.id,
+            document=letter,
+            name_key="m. jansen",
+            defaults={"name": "M. Jansen"},
+        )
     assert suggestion is not None
     assert event is not None
-    return Ids(workspace_id=o.workspace.id, suggestion_id=suggestion.id, event_id=event.id)
+    return Ids(
+        workspace_id=o.workspace.id,
+        suggestion_id=suggestion.id,
+        event_id=event.id,
+        new_person_suggestion_id=new_person.id,
+    )
 
 
 def _snapshot(o: Office, letter: Document) -> tuple[object, ...]:

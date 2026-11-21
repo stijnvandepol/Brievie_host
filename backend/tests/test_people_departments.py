@@ -456,5 +456,6 @@ def test_the_service_refuses_a_member_role_for_a_department_and_a_linked_person(
                     name_variants=["Belastingdienst"],
                     archived=None,
                     actor_role="member",
+                    actor=AuditActor.for_user(h.bob),
                 )
             assert caught.value.code == "forbidden"

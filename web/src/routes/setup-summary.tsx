@@ -59,7 +59,7 @@ function SetupSummaryPage() {
                   </Link>
                 </li>
                 <li>
-                  <Link to="/w/$workspaceId/leden" params={params}>
+                  <Link to="/w/$workspaceId/mensen" params={params}>
                     {t`Mensen uitnodigen`}
                   </Link>
                 </li>
@@ -73,13 +73,13 @@ function SetupSummaryPage() {
             ) : (
               <>
                 <li>
-                  <Link to="/w/$workspaceId/leden" params={params}>
+                  <Link to="/w/$workspaceId/mensen" params={params}>
                     {t`Iemand uitnodigen`}
                   </Link>
                 </li>
                 <li>
-                  <Link to="/w/$workspaceId/personen" params={params}>
-                    {t`Personen toevoegen`}
+                  <Link to="/w/$workspaceId/mensen" params={params}>
+                    {t`Mensen toevoegen`}
                   </Link>
                 </li>
                 <BackupStep />

@@ -373,6 +373,29 @@ TRANSITIONS: Final[list[Transition]] = [
         audit=("person_linked",),
     ),
     Transition(
+        name="person managed by a member, E off",
+        start=lambda st: not st["e"],
+        apply_to_snapshot=edit_member(
+            "Piet", person_ids=frozenset({person_id("Piet"), person_id("Jan")})
+        ),
+        gains=only("Piet"),
+        loses=sorters_not_seeing_all,
+        confirm=_always,
+        audit=("person_manager_set",),
+    ),
+    Transition(
+        name="management ended, E off",
+        start=lambda st: not st["e"],
+        setup=edit_member("Piet", person_ids=frozenset({person_id("Piet"), person_id("Jan")})),
+        apply_to_snapshot=edit_member("Piet", person_ids=frozenset({person_id("Piet")})),
+        gains=sorters_not_seeing_all,
+        loses=only("Piet"),
+        confirm=_never,
+        narrowing=True,
+        reverse="person managed by a member, E off",
+        audit=("person_manager_cleared",),
+    ),
+    Transition(
         name="person unlinked, E off",
         start=lambda st: not st["e"],
         apply_to_snapshot=edit_member("Piet", person_ids=frozenset()),

@@ -4,8 +4,10 @@ import { describe, expect, it } from "vitest";
 import type { components } from "../api/schema";
 import {
   API,
+  annaPerson,
   belasting,
   documentSummary,
+  errorBody,
   HttpResponse,
   http,
   loggedInHandlers,
@@ -428,5 +430,132 @@ describe("inbox focus", () => {
     await screen.findByRole("link", { name: "Gemeente" });
     expect(within(rowOf("Gemeente")).getByText("Dubbel?")).toBeInTheDocument();
     expect(within(rowOf("Belastingdienst")).queryByText("Dubbel?")).not.toBeInTheDocument();
+  });
+});
+
+describe("Nieuwe persoon in the addressee picker", () => {
+  function setup(extra: Parameters<typeof server.use> = []) {
+    const puts: unknown[] = [];
+    server.use(
+      ...extra,
+      counts({ new: 0, review: 0, unassigned: 1 }),
+      http.put(`${base}/documents/${documentSummary.id}/addressees`, async ({ request }) => {
+        puts.push(await request.json());
+        return HttpResponse.json({ ...documentSummary, addressee_ids: [] });
+      }),
+      letters([unassignedLetter]),
+      ...loggedInHandlers(),
+      ...personHandlers(),
+    );
+    return puts;
+  }
+
+  async function typeName(name: string) {
+    const user = userEvent.setup();
+    renderApp(path);
+    const row = (await screen.findByRole("link", { name: "Belastingdienst" })).closest("tr");
+    await user.click(within(row as HTMLElement).getByRole("button", { name: "Nieuwe persoon" }));
+    const dialog = await screen.findByRole("dialog", { name: "Nieuwe persoon" });
+    await user.type(within(dialog).getByRole("textbox", { name: "Naam" }), name);
+    return { user, dialog };
+  }
+
+  it("offers a new person for an unknown name", async () => {
+    setup();
+    const { dialog } = await typeName("Opa");
+    expect(
+      within(dialog).getByRole("button", { name: "Nieuwe persoon: ‘Opa’" }),
+    ).toBeInTheDocument();
+  });
+
+  it("creates the person and puts the letter on them", async () => {
+    let made: unknown = null;
+    const puts = setup([
+      http.post(`${base}/persons`, async ({ request }) => {
+        made = await request.json();
+        return HttpResponse.json(
+          { ...papa, id: "a8888888-8888-4888-8888-888888888888", display_name: "Opa" },
+          { status: 201 },
+        );
+      }),
+    ]);
+    const { user, dialog } = await typeName("Opa");
+    await user.click(within(dialog).getByRole("button", { name: "Nieuwe persoon: ‘Opa’" }));
+    await waitFor(() =>
+      expect(puts).toEqual([{ person_ids: ["a8888888-8888-4888-8888-888888888888"] }]),
+    );
+    expect(made).toMatchObject({ display_name: "Opa", kind: "person" });
+  });
+
+  it("an existing name selects that person, nothing is made", async () => {
+    let made = false;
+    const puts = setup([
+      http.post(`${base}/persons`, () => {
+        made = true;
+        return HttpResponse.json({}, { status: 201 });
+      }),
+    ]);
+    const { user, dialog } = await typeName("papa");
+    expect(within(dialog).queryByRole("button", { name: /Nieuwe persoon:/ })).toBeNull();
+    await user.click(within(dialog).getByRole("button", { name: "Bedoel je Papa?" }));
+    await waitFor(() => expect(puts).toEqual([{ person_ids: [papa.id] }]));
+    expect(made).toBe(false);
+  });
+
+  it("a way the name is written lists that person first", async () => {
+    setup();
+    const { dialog } = await typeName("P. de Vries");
+    const offers = within(dialog).getAllByRole("button");
+    expect(offers[0]).toHaveAccessibleName("Bedoel je Papa? (ook: P. de Vries)");
+    expect(within(dialog).queryByRole("button", { name: /Nieuwe persoon:/ })).toBeNull();
+  });
+
+  it("a name the server knows already selects that person", async () => {
+    const puts = setup([
+      http.post(`${base}/persons`, () =>
+        HttpResponse.json(errorBody("person_exists", "Er is al een persoon met deze naam."), {
+          status: 409,
+        }),
+      ),
+    ]);
+    // The server has Papa under another accent the list did not show yet.
+    server.use(
+      http.get(`${base}/persons`, () =>
+        HttpResponse.json([
+          papa,
+          annaPerson,
+          { ...papa, id: "a9999999-9999-4999-8999-999999999999", display_name: "Opá" },
+        ]),
+      ),
+    );
+    const { user, dialog } = await typeName("Opa");
+    await user.click(await within(dialog).findByRole("button", { name: "Bedoel je Opá?" }));
+    await waitFor(() =>
+      expect(puts).toEqual([{ person_ids: ["a9999999-9999-4999-8999-999999999999"] }]),
+    );
+  });
+
+  it("a BSN in the name shows the server's sentence", async () => {
+    const sentence =
+      "Een BSN bewaren we nooit, dus het kan niet in een naam staan. Post herkennen we aan de naam, niet aan het BSN. Laat het nummer weg.";
+    setup([
+      http.post(`${base}/persons`, () =>
+        HttpResponse.json(errorBody("validation_error", sentence), { status: 422 }),
+      ),
+    ]);
+    const { user, dialog } = await typeName("Opa 111222333");
+    await user.click(
+      within(dialog).getByRole("button", { name: "Nieuwe persoon: ‘Opa 111222333’" }),
+    );
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(sentence);
+  });
+
+  it("a viewer cannot add a person", async () => {
+    setup([
+      http.get(`*${API}/workspaces`, () => HttpResponse.json([{ ...workspace, role: "viewer" }])),
+    ]);
+    renderApp(path);
+    await screen.findByRole("link", { name: "Belastingdienst" });
+    expect(screen.queryByRole("button", { name: "Nieuwe persoon" })).toBeNull();
   });
 });

@@ -30,7 +30,8 @@ AS $$
 $$"""  # noqa: S608 - fixed SQL, no input
 
 # Arms 2 and 3: the persons linked to the user, and the user's departments while on.
-_MY_POST_IDS: Final = f"""CREATE FUNCTION public.brievie_my_post_ids(uid uuid) RETURNS uuid[]
+# As created by workspaces/0007 (before "Beheerd door"); kept for that migration only.
+_MY_POST_IDS_0007: Final = f"""CREATE FUNCTION public.brievie_my_post_ids(uid uuid) RETURNS uuid[]
 {_ATTRIBUTES}
 AS $$
   SELECT COALESCE(pg_catalog.array_agg(id), '{{}}') FROM (
@@ -42,13 +43,46 @@ AS $$
      WHERE dm.user_id = uid AND w.departments_enabled) s
 $$"""  # noqa: S608 - fixed SQL, no input
 
+# Arms 2 and 3: the persons linked to the user, the persons without an account the user
+# manages ("Beheerd door", Mensen slice C), and the user's departments while on.
+_MY_POST_IDS: Final = f"""CREATE FUNCTION public.brievie_my_post_ids(uid uuid) RETURNS uuid[]
+{_ATTRIBUTES}
+AS $$
+  SELECT COALESCE(pg_catalog.array_agg(id), '{{}}') FROM (
+    SELECT p.id FROM public.people_person p
+     WHERE p.user_id = uid AND p.kind = 'person'
+    UNION ALL
+    SELECT p.id FROM public.people_person p
+     WHERE p.managed_by_id = uid AND p.user_id IS NULL AND p.kind = 'person'
+    UNION ALL
+    SELECT dm.department_id FROM public.people_departmentmember dm
+      JOIN public.workspaces_workspace w ON w.id = dm.workspace_id
+     WHERE dm.user_id = uid AND w.departments_enabled) s
+$$"""  # noqa: S608 - fixed SQL, no input
+
 # Arm 4: addressees somebody reads through: persons with an account, and departments
-# with members while departments are on.
+# with members while departments are on. As created by workspaces/0007.
+_COVERED_POST_IDS_0007: Final = f"""CREATE FUNCTION public.brievie_covered_post_ids() RETURNS uuid[]
+{_ATTRIBUTES}
+AS $$
+  SELECT COALESCE(pg_catalog.array_agg(id), '{{}}') FROM (
+    SELECT p.id FROM public.people_person p WHERE p.user_id IS NOT NULL
+    UNION
+    SELECT dm.department_id FROM public.people_departmentmember dm
+      JOIN public.workspaces_workspace w ON w.id = dm.workspace_id
+     WHERE w.departments_enabled) s
+$$"""  # noqa: S608 - fixed SQL, no input
+
+# Arm 4: addressees somebody reads through: persons with an account, persons without one
+# that a member manages, and departments with members while departments are on.
 _COVERED_POST_IDS: Final = f"""CREATE FUNCTION public.brievie_covered_post_ids() RETURNS uuid[]
 {_ATTRIBUTES}
 AS $$
   SELECT COALESCE(pg_catalog.array_agg(id), '{{}}') FROM (
     SELECT p.id FROM public.people_person p WHERE p.user_id IS NOT NULL
+    UNION
+    SELECT p.id FROM public.people_person p
+     WHERE p.managed_by_id IS NOT NULL AND p.user_id IS NULL
     UNION
     SELECT dm.department_id FROM public.people_departmentmember dm
       JOIN public.workspaces_workspace w ON w.id = dm.workspace_id
@@ -80,6 +114,26 @@ DROP_VISIBILITY_FUNCTIONS: Final[list[str]] = [
 def visibility_functions_sql() -> list[str]:
     """The four `CREATE FUNCTION` statements of S 4.9.1, the user as parameter."""
     return [_SEES_ALL, _MY_POST_IDS, _COVERED_POST_IDS, _SORTS_POST]
+
+
+def visibility_functions_sql_0007() -> list[str]:
+    """The four functions as workspaces/0007 created them (frozen: a migration replays the
+    text of its own time; the managed-post arms read a column made later)."""
+    return [_SEES_ALL, _MY_POST_IDS_0007, _COVERED_POST_IDS_0007, _SORTS_POST]
+
+
+def _or_replace(statement: str) -> str:
+    return statement.replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION", 1)
+
+
+def managed_post_functions_sql() -> list[str]:
+    """workspaces/0009: the two helpers with the managed-post arms ("Beheerd door")."""
+    return [_or_replace(_MY_POST_IDS), _or_replace(_COVERED_POST_IDS)]
+
+
+def managed_post_functions_reverse_sql() -> list[str]:
+    """Back to the text of workspaces/0007 (the policies call the helpers: never dropped)."""
+    return [_or_replace(_MY_POST_IDS_0007), _or_replace(_COVERED_POST_IDS_0007)]
 
 
 def document_condition(

@@ -1,8 +1,10 @@
 import unicodedata
 from collections.abc import Collection
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from django.db import IntegrityError, connection, models, transaction
+from django.db.models import ProtectedError
 from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -17,7 +19,7 @@ from apps.common.privacy import holds_bsn, mask_bsns
 from apps.common.text import normalise
 from apps.documents import visibility
 from apps.documents.member_export import remove_member_exports
-from apps.documents.models import DocumentSuggestion
+from apps.documents.models import DocumentAddressee, DocumentSuggestion
 from apps.people.models import DepartmentMember, Person
 from apps.rules.definition import named_ids
 from apps.rules.models import Rule
@@ -30,8 +32,12 @@ from apps.workspaces.visibility_settings import (
     MemberChange,
     member_change_key,
     notify_self_grant,
+    previewing,
     sight_change,
 )
+
+if TYPE_CHECKING:
+    from apps.people.accounts import PersonAccount
 
 _NAME_UNIQUE = "people_person_name_unique"
 _USER_UNIQUE = "people_person_user_unique"
@@ -292,9 +298,12 @@ def create_person(
     archived: bool = False,
     kind: str = Person.Kind.PERSON,
     actor_role: str,
+    actor: AuditActor,
 ) -> Person:
     """A person, or a department (`kind`; only an admin makes one: departments decide
-    who reads post). The kind is set here only: an update never changes it."""
+    who reads post). The kind is set here only: an update never changes it. Recorded
+    (`person_created`): under Mensen every person is an account slot (spec 6). Only a
+    human's request reaches this; nothing automatic makes a person (spec M7)."""
     _valid_kind(kind)
     if kind == Person.Kind.DEPARTMENT and not _acts_as_admin(actor_role):
         raise _forbidden()
@@ -314,6 +323,12 @@ def create_person(
         )
         _refuse_taken_names(person)
         _save(person)
+        record(
+            AuditCode.PERSON_CREATED,
+            actor=actor,
+            target=AuditTarget(TargetKind.PERSON, person.id, person.display_name),
+            workspace_id=workspace.id,
+        )
         return _annotated(workspace, person.id)
 
 
@@ -325,14 +340,30 @@ def update_person(
     name_variants: list[str] | None,
     archived: bool | None,
     actor_role: str,
+    actor: AuditActor,
 ) -> Person:
     """`name_variants` or `archived` None keeps the stored value.
+
+    Archiving stops the person's open invitations (`invitation_revoked`, reason
+    `person_archived`): an archived person cannot be invited, so an old link must not
+    activate them. Those invitations are locked before the person (lock order:
+    memberships, invitations, person).
 
     A department, and a person linked to an account, are changed by admins only (403
     `forbidden`): their names decide through name matching whose post a letter becomes,
     so a member renaming or adding a variant could steer letters to themselves or to
     another member (review of PR #38). Members keep editing persons without an account."""
+    from apps.workspaces.invitations import (
+        lock_open_invitations_for_person,
+        revoke_invitations_for_person,
+    )
+
     with transaction.atomic():
+        invitations = (
+            lock_open_invitations_for_person(workspace_id=workspace.id, person_id=person_id)
+            if archived
+            else []
+        )
         person = _get_for_update(workspace, person_id)
         if not _acts_as_admin(actor_role) and (
             person.kind == Person.Kind.DEPARTMENT or person.user_id is not None
@@ -353,6 +384,7 @@ def update_person(
                 DocumentSuggestion.objects.filter(
                     person=person, state=DocumentSuggestion.State.OPEN
                 ).delete()
+            revoke_invitations_for_person(invitations, actor=actor, reason="person_archived")
         _refuse_taken_names(person)
         _save(person)
         return _annotated(workspace, person.id)
@@ -367,10 +399,21 @@ def delete_person(
 ) -> None:
     """Delete a person nothing uses. The refusal names the trash only when `viewer` (the
     caller) sees each letter that keeps the person in their own trash; otherwise it says
-    "in use", so it never tells of a letter the caller may not see."""
+    "in use", so it never tells of a letter the caller may not see. Its open invitations
+    stop with it: without the person an old link would still work, as a plain invitation
+    with its role (re-review of PR #43)."""
+    from apps.workspaces.invitations import (
+        lock_open_invitations_for_person,
+        revoke_invitations_for_person,
+    )
+
     with transaction.atomic():
         # Rules first, in id order: a running rule holds its rules and then needs the person.
         rules = list(Rule.objects.select_for_update().filter(workspace=workspace).order_by("id"))
+        # The person's open invitations before the person (lock order).
+        invitations = lock_open_invitations_for_person(
+            workspace_id=workspace.id, person_id=person_id
+        )
         person = _get_for_update(workspace, person_id)
         # The caller is authorised above; the use and the delete reach letters the caller
         # cannot see (a hidden link would otherwise fail the commit). The message never
@@ -401,6 +444,7 @@ def delete_person(
                     _("De regel '%(rule)s' gebruikt deze persoon. Pas die regel eerst aan.")
                     % {"rule": rule.name},
                 )
+        revoke_invitations_for_person(invitations, actor=actor, reason="person_deleted")
         with system_actor():
             person.delete()
         record(
@@ -504,8 +548,19 @@ def link_member(
     themselves: the other admins are told (S 4.7). A member's rights are those of the
     locked membership; `actor_role` counts only for a call without a user, which must
     say `ACTING_AS_SYSTEM`. Lock order: every membership, then the person."""
+    from apps.workspaces.invitations import (
+        lock_open_invitations_for_person,
+        revoke_invitations_for_persons,
+    )
+
     with transaction.atomic():
         locked, locked_role = _lock_for_sight(workspace, actor, actor_role=actor_role)
+        # Its open invitations before the person (lock order); an unlink stops them.
+        open_links = (
+            lock_open_invitations_for_person(workspace_id=workspace.id, person_id=person_id)
+            if user_id is None
+            else []
+        )
         person = _get_for_update(workspace, person_id)
         if person.kind == Person.Kind.DEPARTMENT:
             raise ApiError(
@@ -518,15 +573,24 @@ def link_member(
         if person.user_id == user_id:
             # Nothing changes, so nothing is written to the log either.
             return _annotated(workspace, person.id)
+        unused_own: Person | None = None
         if user_id is not None:
             if not Membership.objects.filter(workspace=workspace, user_id=user_id).exists():
                 raise ApiError(404, "member_not_found", _("We kunnen dit lid niet vinden."))
-            if (
-                Person.objects.filter(workspace=workspace, user_id=user_id)
+            own = (
+                Person.objects.select_for_update(no_key=True)
+                .filter(workspace=workspace, user_id=user_id)
                 .exclude(id=person.id)
-                .exists()
-            ):
-                raise _member_already_linked()
+                .first()
+            )
+            if own is not None:
+                # Every member has their own person (M8). The one Brievie made for them
+                # (their name, nothing else) that nothing uses yet, such as the fresh
+                # person of a member who unlinked themselves, makes way; any other stays,
+                # and the link is refused as before.
+                if not (_made_for_member(own, user_id) and _unused(own)):
+                    raise _member_already_linked()
+                unused_own = own
         if (
             person.user_id is not None
             and actor.user_id is not None
@@ -541,6 +605,7 @@ def link_member(
         if user_id is not None and user_id == actor.user_id and visibility.has_private_post(person):
             raise _cannot_grant_self()
         former = person.user_id
+        former_stays_member = former is not None and any(m.user_id == former for m in locked)
         with sight_change(
             workspace,
             narrowing=user_id is None,
@@ -553,15 +618,38 @@ def link_member(
                 else MemberChange(kind="unlink", person_id=person.id)
             ),
         ) as sight:
+            if open_links:
+                # Unlinked, the person is "niet actief": an old link must not make them
+                # somebody's account (security review of PR #43, point 1).
+                revoke_invitations_for_persons(
+                    workspace_id=workspace.id,
+                    person_ids=[person.id],
+                    actor=actor,
+                    reason="person_unlinked",
+                )
+            if unused_own is not None:
+                _delete_unused(unused_own, actor=actor)
             person.user_id = user_id
+            former_manager = person.managed_by_id if user_id is not None else None
+            if user_id is not None:
+                # Linked: an account again, no longer "uitgeschakeld", and nobody else
+                # manages the post any more (M6).
+                person.deactivated_at = None
+                person.former_user = None
+                person.former_email = ""
+                person.former_last_sign_in_at = None
+                person.former_last_app_use_at = None
+                person.managed_by = None
             _save(person)
             visibility.recompute_where(workspace_id=workspace.id, person_id=person.id)
-            if former is not None:
-                # The former member may no longer read this person's post: their
-                # assignments there end (Mijn taken S 5.3), and so does their own export,
-                # which held it.
+            if former is not None or former_manager is not None:
+                # The former member (or manager) may no longer read this person's post:
+                # their assignments there end (Mijn taken S 5.3), and so does their own
+                # export, which held it.
                 release_unseeing_assignees(workspace_id=workspace.id)
-                remove_member_exports(workspace.id, former)
+                for gone in (former, former_manager):
+                    if gone is not None:
+                        remove_member_exports(workspace.id, gone)
             if user_id is not None:
                 visibility.record_grant(
                     person, grantee=User.objects.get(id=user_id), actor_user_id=actor.user_id
@@ -571,6 +659,200 @@ def link_member(
                 actor=actor,
                 target=AuditTarget(TargetKind.PERSON, person.id, person.display_name),
                 workspace_id=workspace.id,
+            )
+        if former is not None and former_stays_member:
+            # Every member keeps exactly one person (spec M8): the former member gets a
+            # fresh one at once, after the change of sight is settled. A new person is on
+            # no letter, so nobody's sight changes by it (and nobody is told of a "gain"
+            # of an empty name); the old person stays, "niet actief".
+            ensure_person_for_member(workspace=workspace, user=User.objects.get(id=former))
+        if user_id is not None and user_id == actor.user_id:
+            others = [
+                m.user for m in locked if m.role == Membership.Role.ADMIN and m.user_id != user_id
+            ]
+            notify_self_grant(
+                others,
+                category=person_category(person.id),
+                names=sight.before,
+                actor_name=actor.name,
+            )
+        return _annotated(workspace, person.id)
+
+
+def _made_for_member(person: Person, user_id: UUID) -> bool:
+    """Whether the person looks exactly as `ensure_person_for_member` makes one for this
+    member: the member's name (or "name (2)", ...) and at most that name as variant. A
+    person somebody named or gave variants by hand is never taken away."""
+    raw = User.objects.filter(id=user_id).values_list("name", flat=True).first()
+    if raw is None:
+        return False
+    name = _tidy(mask_bsns(raw))
+    base, _sep, number = person.display_name.rpartition(" (")
+    numbered = number.endswith(")") and number[:-1].isdigit()
+    shown = (base if numbered else person.display_name).casefold()
+    # The whole name, or (a name near the limit) cut short to make room for " (2)".
+    whole = len(shown) >= min(len(name), NAME_MAX - 10)
+    if not shown or not whole or not name.casefold().startswith(shown):
+        return False
+    return person.kind == Person.Kind.PERSON and person.name_variants in ([], [name])
+
+
+def _unused(person: Person) -> bool:
+    """Whether nothing uses this person: on no letter (also in the trash), in no proposal,
+    named by no rule and no open invitation. As the system: letters the caller cannot see
+    count too."""
+    from apps.workspaces.models import Invitation
+
+    with system_actor():
+        if person.document_links.exists():
+            return False
+        if DocumentSuggestion.objects.filter(person=person).exists():
+            return False
+    if Invitation.objects.filter(
+        person_id=person.id, accepted_at__isnull=True, revoked_at__isnull=True
+    ).exists():
+        return False
+    return not any(
+        person.id in named_ids(rule)[1]
+        for rule in Rule.objects.filter(workspace=person.workspace_id)
+    )
+
+
+def _delete_unused(person: Person, *, actor: AuditActor) -> None:
+    """Delete a member's own unused person to link them to another one (see `link_member`).
+
+    The person is locked without its key (the lock order of every person lock), so a
+    letter may put this person on it at the same moment. The DELETE waits for that
+    letter's transaction; afterwards a fresh look finds its link, and the deletion is
+    undone with a clean 409 instead of a foreign-key error at commit (security review of
+    PR #43, point 7)."""
+    name = person.display_name
+    person_id = person.id
+    workspace_id = person.workspace_id
+    with transaction.atomic(), system_actor():
+        try:
+            _total, deleted = person.delete()
+        except ProtectedError as exc:
+            raise _member_already_linked() from exc
+        # Anything deleted with it (a proposal naming the person, committed since the
+        # check) means it was in use after all: undo, and refuse cleanly.
+        if any(count for label, count in deleted.items() if label != "people.Person"):
+            raise _member_already_linked()
+        if (
+            DocumentAddressee.objects.filter(person_id=person_id).exists()
+            or DocumentSuggestion.objects.filter(person_id=person_id).exists()
+        ):
+            raise _member_already_linked()
+    record(
+        AuditCode.PERSON_DELETED,
+        actor=actor,
+        target=AuditTarget(TargetKind.PERSON, person_id, name),
+        workspace_id=workspace_id,
+    )
+
+
+def _manager_name(workspace: Workspace, user_id: UUID) -> str:
+    """The manager as the log names a member: their person's name, else the account's."""
+    name = (
+        Person.objects.filter(workspace=workspace, user_id=user_id)
+        .values_list("display_name", flat=True)
+        .first()
+    )
+    if name is not None:
+        return str(name)
+    return str(User.objects.filter(id=user_id).values_list("name", flat=True).first() or "")
+
+
+def set_manager(
+    *,
+    workspace: Workspace,
+    person_id: UUID,
+    user_id: UUID | None,
+    actor: AuditActor,
+    confirmed: bool = False,
+    preview_token: str = "",
+    private_post_acknowledged: bool = False,
+) -> Person:
+    """ "Beheerd door" (Mensen slice C): a member reads the post of a person without an
+    active account as their own (the person counts as read through, so the sorters stop
+    getting it); `user_id` None ends it.
+
+    Admins only, by the locked rows (403 `forbidden`); 409 `is_a_department`; 409
+    `person_has_account` (an adult with an account decides who reads their post, M6);
+    404 `member_not_found`; 409 `cannot_grant_self` for an admin naming themselves while
+    private post is on the person (as linking). A gain needs the confirmed preview of
+    `member_change` "manage" (409 `confirmation_required`, `preview_outdated`); the new
+    manager is told (`sight_widened`) and so are the sorters (`sight_narrowed`). Ending it
+    sends the post back to the sorters without a confirmation (P6) and ends the former
+    manager's assignments there and their own export. Lock order: every membership, then
+    the person. The same manager again writes nothing."""
+    with transaction.atomic():
+        locked, role = _lock_for_sight(workspace, actor, actor_role=ACTING_AS_SYSTEM)
+        if not _acts_as_admin(role):
+            raise _forbidden()
+        person = _get_for_update(workspace, person_id)
+        if person.kind == Person.Kind.DEPARTMENT:
+            raise ApiError(
+                409,
+                "is_a_department",
+                _("Een afdeling heeft leden, geen beheerder. Voeg leden toe."),
+            )
+        if person.user_id is not None:
+            raise ApiError(
+                409,
+                "person_has_account",
+                _("Deze persoon heeft een eigen account en leest de eigen post."),
+            )
+        if user_id is not None and all(m.user_id != user_id for m in locked):
+            raise ApiError(404, "member_not_found", _("We kunnen dit lid niet vinden."))
+        if person.managed_by_id == user_id:
+            return _annotated(workspace, person.id)
+        private = user_id is not None and visibility.has_private_post(person)
+        if private and user_id == actor.user_id:
+            raise _cannot_grant_self()
+        if private and not private_post_acknowledged and not previewing():
+            # The manager will read this person's private letters too: said and agreed
+            # to on its own, apart from the preview (security review of PR #43, point 4).
+            raise ApiError(
+                409,
+                "private_post_acknowledgement_required",
+                _(
+                    "Op naam van deze persoon staan privébrieven. Wie de post beheert, "
+                    "leest die ook. Bevestig dat apart."
+                ),
+            )
+        former = person.managed_by_id
+        named = user_id if user_id is not None else former
+        with sight_change(
+            workspace,
+            narrowing=user_id is None,
+            confirmed=confirmed,
+            preview_token=preview_token,
+            actor=actor,
+            change=member_change_key(
+                MemberChange(kind="manage", user_id=user_id, person_id=person.id)
+            ),
+        ) as sight:
+            person.managed_by_id = user_id
+            _save(person)
+            visibility.recompute_where(workspace_id=workspace.id, person_id=person.id)
+            if former is not None:
+                # The former manager may no longer read this post: their assignments there
+                # end (Mijn taken S 5.3), and so does their own export, which held it.
+                release_unseeing_assignees(workspace_id=workspace.id)
+                remove_member_exports(workspace.id, former)
+            if user_id is not None:
+                visibility.record_grant(
+                    person, grantee=User.objects.get(id=user_id), actor_user_id=actor.user_id
+                )
+            record(
+                AuditCode.PERSON_MANAGER_SET
+                if user_id is not None
+                else AuditCode.PERSON_MANAGER_CLEARED,
+                actor=actor,
+                target=AuditTarget(TargetKind.PERSON, person.id, person.display_name),
+                workspace_id=workspace.id,
+                values={"member": _manager_name(workspace, named) if named is not None else ""},
             )
         if user_id is not None and user_id == actor.user_id:
             others = [
@@ -765,3 +1047,19 @@ def open_emergency_access(
     if person is None:
         raise ApiError(404, "person_not_found", _("We kunnen deze persoon niet vinden."))
     return visibility.open_emergency(workspace=workspace, person=person, actor=actor, reason=reason)
+
+
+def list_people(
+    workspace: Workspace, *, viewer: Membership, state: str = ""
+) -> "list[PersonAccount]":
+    """Mensen: every person with their account state (`apps.people.accounts`)."""
+    from apps.people import accounts
+
+    return accounts.list_people(workspace, viewer=viewer, state=state)
+
+
+def person_has_private_post(workspace: Workspace, person_id: UUID) -> bool:
+    """Whether a private letter is on the person's name (`apps.people.accounts`)."""
+    from apps.people import accounts
+
+    return accounts.person_has_private_post(workspace, person_id)

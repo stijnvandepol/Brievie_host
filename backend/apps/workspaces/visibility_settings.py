@@ -72,7 +72,7 @@ def snapshot(workspace: Workspace) -> PolicySnapshot:
     with workspace_context(workspace.id, actor=SYSTEM):
         persons = list(
             Person.objects.filter(workspace_id=workspace.id).values_list(
-                "id", "kind", "user_id", "display_name"
+                "id", "kind", "user_id", "display_name", "managed_by_id"
             )
         )
         departments = list(
@@ -81,9 +81,16 @@ def snapshot(workspace: Workspace) -> PolicySnapshot:
             )
         )
     linked: dict[UUID, set[UUID]] = {}
-    for person_id, kind, user_id, _name in persons:
-        if kind == Person.Kind.PERSON and user_id is not None:
+    managed: dict[UUID, set[UUID]] = {}
+    for person_id, kind, user_id, _name, manager_id in persons:
+        if kind != Person.Kind.PERSON:
+            continue
+        if user_id is not None:
             linked.setdefault(user_id, set()).add(person_id)
+        elif manager_id is not None:
+            # "Beheerd door": the manager's own post (brievie_my_post_ids says the same).
+            linked.setdefault(manager_id, set()).add(person_id)
+            managed.setdefault(manager_id, set()).add(person_id)
     member_of: dict[UUID, set[UUID]] = {}
     for user_id, department_id in departments:
         member_of.setdefault(user_id, set()).add(department_id)
@@ -97,11 +104,12 @@ def snapshot(workspace: Workspace) -> PolicySnapshot:
                 sorts_post=sorts_post,
                 person_ids=frozenset(linked.get(user_id, ())),
                 department_ids=frozenset(member_of.get(user_id, ())),
+                managed_ids=frozenset(managed.get(user_id, ())),
             )
             for user_id, name, role, sorts_post in memberships
         ),
-        person_names={p: n for p, k, _u, n in persons if k == Person.Kind.PERSON},
-        department_names={p: n for p, k, _u, n in persons if k == Person.Kind.DEPARTMENT},
+        person_names={p: n for p, k, _u, n, _m in persons if k == Person.Kind.PERSON},
+        department_names={p: n for p, k, _u, n, _m in persons if k == Person.Kind.DEPARTMENT},
     )
 
 
@@ -153,6 +161,8 @@ _MEMBER_CHANGE_FIELDS: Final[dict[str, tuple[str, ...]]] = {
     "unlink": ("person_id",),
     "remove": ("user_id",),
     "invite": ("role", "person_id"),
+    # "Beheerd door": `user_id` None ends the management.
+    "manage": ("user_id", "person_id"),
 }
 
 
@@ -344,6 +354,18 @@ def _release(workspace_id: UUID) -> None:
         release_unseeing_assignees(workspace_id=workspace_id)
 
 
+def _end_exports(workspace_id: UUID, user_ids: Sequence[UUID]) -> None:
+    """An export ends with sight of what it holds: the own export of everybody who loses
+    sight goes, whatever the change (security review of PR #43, point 5)."""
+    from apps.documents.member_export import remove_member_exports
+
+    if previewing():
+        return
+    with workspace_context(workspace_id, actor=SYSTEM):
+        for user_id in user_ids:
+            remove_member_exports(workspace_id, user_id)
+
+
 @dataclass
 class SightChange:
     """What `sight_change` found: the snapshots and the changes per member."""
@@ -394,6 +416,7 @@ def sight_change(
     )
     if any(c.loses for c in result.changes):
         _release(workspace.id)
+        _end_exports(workspace.id, [c.user_id for c in result.changes if c.loses])
 
 
 # --- the preview ----------------------------------------------------------------------
@@ -802,6 +825,14 @@ def _member_step(
             ),
             True,
         )
+    if change.kind == "manage":
+        manager = user_id
+        return (
+            lambda: people.set_manager(
+                workspace=workspace, person_id=person_id, user_id=manager, actor=actor
+            ),
+            manager is None,
+        )
     if change.kind == "link" and user_id is None:
         raise _incomplete()
     target = user_id if change.kind == "link" else None
@@ -895,7 +926,8 @@ def _preview_invitation(
             if person is None:
                 return
             with workspace_context(workspace.id, actor=SYSTEM):
-                Person.objects.filter(id=person.id).update(user=user)
+                # Accepting ends a management of the person (`_link_person`).
+                Person.objects.filter(id=person.id).update(user=user, managed_by=None)
             on_member_added(workspace.id, user.id, person_id=person.id, created_by_id=actor_id)
 
         result = preview(
