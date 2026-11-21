@@ -335,8 +335,17 @@ def _readable(membership: Membership) -> QuerySet[Document]:
 
 
 def visible_documents(membership: Membership) -> QuerySet[Document]:
-    """The letters `membership`'s user may see in its workspace, the trash left out: the
-    seam of every member-facing read (list, inbox counts, detail, pages, history, search)."""
+    """The letters `membership`'s user may see in its workspace, the trash left out.
+
+    Every query that returns or counts letters to a user starts here or at its siblings
+    (`trashed_documents` for the trash, `readable_documents` for a reference): the list,
+    the inbox counts, a letter's detail, pages and history, search, and the duplicate
+    pairs (shown only when both letters are readable). It runs under the caller's actor;
+    the policy decides, the member filter only lets PostgreSQL use the indexes. A count
+    of hidden matches is never returned. A system-side comparison (duplicate detection)
+    runs inside `system_actor()` and answers the user only through these seams or
+    `can_read`. `tests/test_visibility_seams.py` fails a member-facing read that does not
+    start here."""
     return _readable(membership).filter(LIVE)
 
 

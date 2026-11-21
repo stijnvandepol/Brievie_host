@@ -1756,3 +1756,13 @@ Finance's letter, with the owner as control.
   touches only those, and `listRules` counts only runs on visible letters. The rules
   after processing and confirming run as the system and reach every letter. A job with an
   empty actor sees no letter and no row of one, also while "Iedereen ziet alle post" is on.
+- **One seam for every query that shows letters (Task 23).** `visibility.visible_documents(membership)`
+  (with `trashed_documents` and `readable_documents`) is where the list, counts, detail,
+  pages, history, search, the trash and duplicate pairs start; it takes the membership,
+  not the workspace (recorded with the search merge). `tests/test_visibility_seams.py`
+  fails when a member-facing documents module reads `Document.objects` outside the
+  known by-id write locks, when raw SQL on the letter table appears in a module not on
+  its list, or when a table with a letter key lacks the visibility policies. `testRule`
+  keeps its own query: it reads as the admin under the policies (Task 21 tests it), and
+  its query-count tests run as the system, which the seam refuses. The trash contract is
+  written on `Task.document`: a purge deletes the letter's tasks as the system first.

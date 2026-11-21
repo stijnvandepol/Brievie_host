@@ -1,3 +1,5 @@
+from collections.abc import Iterable
+
 from django.apps import apps
 from django.db import connection
 
@@ -86,6 +88,20 @@ def _tables_with_a_document_key_in_django() -> set[str]:
     }
 
 
+def missing_visibility_policies(tables: Iterable[str]) -> list[tuple[str, str]]:
+    """Per table with a letter key, each visibility policy it lacks or has in another
+    form (permissive, or not reading the letter): empty when every table follows its
+    letter. Any new table with a document key (a search index, a trash) is checked."""
+    missing: list[tuple[str, str]] = []
+    for table in sorted(tables):
+        policies = {p[0]: p for p in _policies(table)}
+        for name in VISIBILITY_POLICIES:
+            found = policies.get(name)
+            if found is None or found[1] or "documents_document" not in (found[3] or ""):
+                missing.append((table, name))
+    return missing
+
+
 def test_every_table_with_a_document_foreign_key_has_the_visibility_policies() -> None:
     with connection.cursor() as c:
         c.execute(
@@ -95,13 +111,7 @@ def test_every_table_with_a_document_foreign_key_has_the_visibility_policies() -
         in_database = {row[0].strip('"') for row in c.fetchall()}
     tables = in_database - {"documents_documentreader"}
     assert tables == _tables_with_a_document_key_in_django() - {"documents_documentreader"}
-    for table in tables:
-        policies = {p[0]: p for p in _policies(table)}
-        for name in VISIBILITY_POLICIES:
-            assert name in policies, (table, name)
-            _name, permissive, _command, using, _check = policies[name]
-            assert not permissive, (table, name)
-            assert "documents_document" in using, (table, name)
+    assert missing_visibility_policies(tables) == []
 
 
 def test_document_policies_read_the_reader_table_and_the_helpers() -> None:
