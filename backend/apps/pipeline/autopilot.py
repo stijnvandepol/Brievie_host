@@ -18,7 +18,7 @@ from uuid import UUID
 
 from django.db.models import Case, IntegerField, Value, When
 
-from apps.common.privacy import holds_bsn
+from apps.common.privacy import holds_bsn, mask_bsns
 from apps.documents import organise, suggestions, visibility
 from apps.documents.models import (
     NEEDS_ATTENTION_BELOW,
@@ -313,6 +313,41 @@ def mentions_term(text: str) -> bool:
         or _TERM_WORDS.search(text)
         or _ENGLISH.search(text)
     )
+
+
+_TERM_PATTERNS = (_WITHIN, _PAYMENT_TERM, _BEFORE_A_DATE, _TERM_WORDS, _ENGLISH)
+# The end of the sentence a term is in: a stop followed by a space or the end, or a line
+# break. A stop inside a date ("1.12.2026") or an amount does not end it.
+_SENTENCE_END = re.compile(r"[.!?;](?=\s|$)|\n")
+_WHITESPACE = re.compile(r"\s+")
+TERM_PHRASE_MAX = 200
+
+
+def term_phrase(text: str) -> str:
+    """The words of the letter that name a term, for a task without a date ("binnen zes
+    weken na dagtekening bezwaar maken"): from the first place `mentions_term` matches to
+    the end of that sentence, whitespace collapsed, BSNs masked, at most 200 characters
+    (cut on a word boundary). Empty exactly when `mentions_term(text)` is false.
+
+    Pure and linear in the text: the same compiled patterns as `mentions_term`, each
+    searched once, then one search for the sentence's end.
+    """
+    text = unicodedata.normalize("NFC", text)
+    found = [m for m in (p.search(text) for p in _TERM_PATTERNS) if m is not None]
+    if not found:
+        return ""
+    first = min(found, key=lambda m: m.start())
+    start = first.start()
+    end_match = _SENTENCE_END.search(text, first.end())
+    end = end_match.start() if end_match is not None else len(text)
+    # Room for masking and collapsing before the cut; never more than needed.
+    raw = text[start : min(end, start + 4 * TERM_PHRASE_MAX)]
+    phrase = _WHITESPACE.sub(" ", mask_bsns(raw)).strip()
+    if len(phrase) > TERM_PHRASE_MAX:
+        cut = phrase[: TERM_PHRASE_MAX + 1]
+        space = cut.rfind(" ")
+        phrase = cut[:space] if space > 0 else phrase[:TERM_PHRASE_MAX]
+    return phrase.rstrip(" ,:-")
 
 
 def decide_confirmation(
