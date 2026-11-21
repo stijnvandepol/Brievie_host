@@ -1176,7 +1176,7 @@
         "type": "object"
       },
       "EmptyTrashIn": {
-        "description": "Empty the trash up to the newest `trashed_at` the caller showed (all when absent):\na letter trashed while the admin read the question is not emptied.",
+        "description": "Empty the trash up to the newest `trashed_at` the caller showed (all when absent):\na letter trashed while the admin read the question is not emptied. With an offset\nonly (422 otherwise): a moment without one would be read in the server's zone.",
         "properties": {
           "up_to": {
             "format": "date-time",
@@ -2926,6 +2926,11 @@
           "retention_days": {
             "default": 30,
             "title": "Retention Days",
+            "type": "integer"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
             "type": "integer"
           }
         },
@@ -11392,7 +11397,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/trash": {
       "get": {
-        "description": "The letters in the trash the caller sees, the most recently trashed first (at most 500), with when and by whom, and `purge_after`.",
+        "description": "The letters in the trash the caller sees, the most recently trashed first (at most 500), with when and by whom, and `purge_after`; `total` counts them all.",
         "operationId": "listTrash",
         "parameters": [
           {

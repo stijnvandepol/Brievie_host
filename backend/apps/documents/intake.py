@@ -106,6 +106,13 @@ def _same_upload(existing: Document, hashes: list[str]) -> Document:
             "document_conflict",
             _("Er bestaat al een ander document met dit kenmerk."),
         )
+    if existing.purge_started_at is not None:
+        # Restoring it is no longer possible: no advice to do so.
+        raise ApiError(
+            409,
+            "document_trashed",
+            _("Deze brief staat in de prullenbak en wordt nu voorgoed gewist."),
+        )
     if existing.trashed_at is not None:
         raise ApiError(
             409,

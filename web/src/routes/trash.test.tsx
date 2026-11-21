@@ -183,6 +183,19 @@ describe("trash", () => {
     expect(await screen.findByText("De prullenbak is leeg.")).toBeVisible();
   });
 
+  it("counts every letter the empty takes, also beyond the listed ones", async () => {
+    server.use(...loggedInHandlers(), ...trashHandlers([trashedLetter(), older], 600));
+    const user = userEvent.setup();
+    renderApp(path);
+    await user.click(await screen.findByRole("button", { name: "Prullenbak legen" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Prullenbak legen?" });
+    expect(
+      within(dialog).getByText(
+        "600 brieven in de prullenbak worden voorgoed uit Brievie gewist. Dit kun je niet ongedaan maken. Een back-up die eerder is gemaakt, heeft deze brieven nog. Daar blijven ze in tot die back-up verloopt.",
+      ),
+    ).toBeVisible();
+  });
+
   it("keeps the question open with the server's sentence when a purge is refused", async () => {
     server.use(
       ...loggedInHandlers(),

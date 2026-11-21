@@ -244,6 +244,25 @@ def test_upload_same_client_id_of_trashed_letter_409(client_a: Client, ws_a: Wor
     assert _documents(ws_a) == 1
 
 
+def test_upload_of_letter_whose_purge_started_gives_no_restore_advice(
+    client_a: Client, ws_a: Workspace
+) -> None:
+    client_id = uuid.uuid4()
+    pages = [jpeg("een")]
+    first = upload(client_a, ws_a.id, pages, client_id=client_id)
+    assert first.status_code == 201, first.content
+    with workspace_context(ws_a.id, actor=SYSTEM):
+        trashed(Document.objects.get(id=first.json()["id"]), purge_started=True)
+
+    again = upload(client_a, ws_a.id, pages, client_id=client_id)
+
+    assert again.status_code == 409
+    assert again.json()["code"] == "document_trashed"
+    assert "voorgoed gewist" in again.json()["message"]
+    assert "terug" not in again.json()["message"]
+    assert _documents(ws_a) == 1
+
+
 def test_upload_of_trashed_letter_uploader_cannot_see_409_conflict(client: Client) -> None:
     o = office()
     client.force_login(o.plain)

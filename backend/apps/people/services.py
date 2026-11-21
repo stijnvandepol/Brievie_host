@@ -15,6 +15,7 @@ from apps.common.errors import ApiError
 from apps.common.names import check_shown
 from apps.common.privacy import holds_bsn, mask_bsns
 from apps.common.text import normalise
+from apps.documents import visibility
 from apps.documents.models import DocumentSuggestion
 from apps.people.models import Person
 from apps.rules.definition import named_ids
@@ -46,13 +47,23 @@ def _in_use(person: Person) -> bool:
     return person.user_id is not None or person.document_links.exists()
 
 
-def _only_in_trash(person: Person) -> bool:
-    """In use only through letters in the trash (no account, no link to a live letter):
-    after the purge it can go. As the system, like `_in_use`."""
-    return (
-        person.user_id is None
-        and not person.document_links.filter(document__trashed_at__isnull=True).exists()
-    )
+def _trashed_letter_ids(person: Person) -> set[UUID] | None:
+    """The letters in the trash that keep the person in use, when only such letters do
+    (no account, no link to a live letter): after the purge it can go. None otherwise.
+    As the system, like `_in_use`."""
+    if person.user_id is not None:
+        return None
+    if person.document_links.filter(document__trashed_at__isnull=True).exists():
+        return None
+    return set(person.document_links.values_list("document_id", flat=True))
+
+
+def _all_in_own_trash(viewer: Membership, document_ids: set[UUID]) -> bool:
+    """Whether the caller sees every one of these letters in their own trash (never one
+    they may not read, nor one whose purge started); as the caller."""
+    return bool(document_ids) and visibility.trashed_documents(viewer).filter(
+        id__in=document_ids
+    ).count() == len(document_ids)
 
 
 def list_persons(workspace: Workspace) -> list[Person]:
@@ -288,7 +299,16 @@ def update_person(
         return _annotated(workspace, person.id)
 
 
-def delete_person(*, workspace: Workspace, person_id: UUID, actor: AuditActor) -> None:
+def delete_person(
+    *,
+    workspace: Workspace,
+    person_id: UUID,
+    actor: AuditActor,
+    viewer: Membership | None = None,
+) -> None:
+    """Delete a person nothing uses. The refusal names the trash only when `viewer` (the
+    caller) sees each letter that keeps the person in their own trash; otherwise it says
+    "in use", so it never tells of a letter the caller may not see."""
     with transaction.atomic():
         # Rules first, in id order: a running rule holds its rules and then needs the person.
         rules = list(Rule.objects.select_for_update().filter(workspace=workspace).order_by("id"))
@@ -298,8 +318,8 @@ def delete_person(*, workspace: Workspace, person_id: UUID, actor: AuditActor) -
         # says what the use is.
         with system_actor():
             in_use = _in_use(person)
-            only_in_trash = in_use and _only_in_trash(person)
-        if only_in_trash:
+            in_trash = _trashed_letter_ids(person) if in_use else None
+        if viewer is not None and in_trash is not None and _all_in_own_trash(viewer, in_trash):
             raise ApiError(
                 409,
                 "person_in_use",

@@ -248,10 +248,11 @@ export function trashedLetter(overrides: Partial<Trashed> = {}): Trashed {
 }
 
 /** The trash of the first workspace; the list is read again from `items` on every call. */
-export function trashHandlers(items: Trashed[] = []) {
+/** `total`: how many letters the trash holds (the listed ones when absent). */
+export function trashHandlers(items: Trashed[] = [], total?: number) {
   return [
     http.get(`*${API}/workspaces/${workspace.id}/trash`, () =>
-      HttpResponse.json({ items, retention_days: 30 }),
+      HttpResponse.json({ items, retention_days: 30, total: total ?? items.length }),
     ),
   ];
 }

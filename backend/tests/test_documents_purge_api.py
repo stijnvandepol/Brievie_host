@@ -248,10 +248,12 @@ def test_purge_now_answer_carries_no_body(admin_a: Client, ws_a: Workspace) -> N
     assert r.content == b""
 
 
-def test_empty_trash_rejects_a_bad_up_to(admin_a: Client, ws_a: Workspace) -> None:
+@pytest.mark.parametrize("up_to", ["gisteren", "2026-11-20T10:00:00"])
+def test_empty_trash_rejects_a_bad_up_to(admin_a: Client, ws_a: Workspace, up_to: str) -> None:
+    # Without an offset the moment is unclear: it would be read in the server's zone.
     trashed(make_document(ws_a))
 
-    r = post_json(admin_a, empty_path(ws_a.id), {"up_to": "gisteren"})
+    r = post_json(admin_a, empty_path(ws_a.id), {"up_to": up_to})
 
     assert r.status_code == 422
     assert workspace_rows(ws_a, "document_purged") == []

@@ -138,9 +138,11 @@ def test_trash_follows_visibility(client: Client) -> None:
 
     for user in (o.plain, o.hr, o.admin):
         caller = as_user(user)
-        items = caller.get(list_url(o.workspace.id)).json()["items"]
+        listed = caller.get(list_url(o.workspace.id)).json()
+        items = listed["items"]
         assert str(private.id) not in {item["id"] for item in items}, user.name
         assert items == [], user.name
+        assert listed["total"] == 0, user.name
         for path in (
             restore_path(o.workspace.id, private.id),
             trash_path(o.workspace.id, private.id),
@@ -170,10 +172,13 @@ def test_trash_list_newest_first_and_capped(
 
     all_items = client_a.get(list_url(ws_a.id)).json()["items"]
     monkeypatch.setattr(trash, "TRASH_LIST_LIMIT", 2)
-    capped = client_a.get(list_url(ws_a.id)).json()["items"]
+    capped_out = client_a.get(list_url(ws_a.id)).json()
+    capped = capped_out["items"]
 
     assert [i["id"] for i in all_items] == [str(d.id) for d in (newest, middle, older)]
     assert [i["id"] for i in capped] == [str(newest.id), str(middle.id)]
+    # "Prullenbak legen" counts every letter it empties, beyond the cap too.
+    assert capped_out["total"] == 3
     assert all_items[0]["trashed_by_name"] == ""
 
 

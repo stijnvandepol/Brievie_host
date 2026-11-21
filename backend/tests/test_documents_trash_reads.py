@@ -211,6 +211,41 @@ def test_delete_person_on_trashed_letter_names_trash(client_a: Client, ws_a: Wor
     assert "prullenbak" in r.json()["message"]
 
 
+@pytest.mark.parametrize("purge_started", [False, True])
+def test_delete_person_on_trashed_letter_admin_cannot_see_keeps_the_plain_message(
+    client: Client, purge_started: bool
+) -> None:
+    o = office()
+    private = o.letters["private_femke"]
+    assert "private_femke" not in o.visible(o.admin.id)
+    with workspace_context(o.workspace.id, actor=SYSTEM):
+        person = Person.objects.create(workspace=o.workspace, display_name="Kees")
+        DocumentAddressee.objects.create(workspace=o.workspace, document=private, person=person)
+    trashed(private, by=o.finance, purge_started=purge_started)
+    client.force_login(o.admin)
+
+    r = client.delete(f"/api/v1/workspaces/{o.workspace.id}/persons/{person.id}")
+
+    assert r.status_code == 409
+    assert r.json()["code"] == "person_in_use"
+    assert "prullenbak" not in r.json()["message"]
+
+
+def test_delete_person_on_trashed_letter_purge_started_keeps_the_plain_message(
+    client_a: Client, ws_a: Workspace
+) -> None:
+    person = make_person(ws_a, "Oma")
+    document = make_document(ws_a, "done")
+    with workspace_context(ws_a.id, actor=SYSTEM):
+        DocumentAddressee.objects.create(workspace=ws_a, document=document, person=person)
+    trashed(document, purge_started=True)
+
+    r = client_a.delete(f"/api/v1/workspaces/{ws_a.id}/persons/{person.id}")
+
+    assert r.status_code == 409
+    assert "prullenbak" not in r.json()["message"]
+
+
 def test_delete_person_on_live_letter_keeps_the_plain_message(
     client_a: Client, ws_a: Workspace
 ) -> None:

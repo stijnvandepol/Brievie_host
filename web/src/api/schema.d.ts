@@ -1514,7 +1514,7 @@ export interface paths {
         };
         /**
          * List Trash
-         * @description The letters in the trash the caller sees, the most recently trashed first (at most 500), with when and by whom, and `purge_after`.
+         * @description The letters in the trash the caller sees, the most recently trashed first (at most 500), with when and by whom, and `purge_after`; `total` counts them all.
          */
         get: operations["listTrash"];
         put?: never;
@@ -2188,7 +2188,8 @@ export interface components {
         /**
          * EmptyTrashIn
          * @description Empty the trash up to the newest `trashed_at` the caller showed (all when absent):
-         *     a letter trashed while the admin read the question is not emptied.
+         *     a letter trashed while the admin read the question is not emptied. With an offset
+         *     only (422 otherwise): a moment without one would be read in the server's zone.
          */
         EmptyTrashIn: {
             /**
@@ -3042,6 +3043,11 @@ export interface components {
              * @default 30
              */
             retention_days: number;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
         };
         /**
          * TrashedDocumentOut

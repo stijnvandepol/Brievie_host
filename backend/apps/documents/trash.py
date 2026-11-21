@@ -122,6 +122,11 @@ def restore_document(
     return document
 
 
+def count_trash(membership: Membership) -> int:
+    """How many letters the member's trash holds, beyond the listing's cap too."""
+    return visibility.trashed_documents(membership).count()
+
+
 def list_trash(membership: Membership) -> list[Document]:
     """The letters in the member's trash, the most recently trashed first (at most
     `TRASH_LIST_LIMIT`)."""

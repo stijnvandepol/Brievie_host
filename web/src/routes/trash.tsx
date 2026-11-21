@@ -81,6 +81,8 @@ function TrashPage() {
     null,
   );
   const count = items.length;
+  // Every letter the empty takes, also beyond the listed ones (the list stops at LIST_CAP).
+  const emptyCount = Math.max(trash.data?.total ?? 0, count);
 
   return (
     <Shell workspace={workspace}>
@@ -217,7 +219,7 @@ function TrashPage() {
         }}
       >
         <p>
-          {plural(count, {
+          {plural(emptyCount, {
             one: "# brief in de prullenbak wordt voorgoed uit Brievie gewist. Dit kun je niet ongedaan maken. Een back-up die eerder is gemaakt, heeft deze brief nog. Daar blijft hij in tot die back-up verloopt.",
             other:
               "# brieven in de prullenbak worden voorgoed uit Brievie gewist. Dit kun je niet ongedaan maken. Een back-up die eerder is gemaakt, heeft deze brieven nog. Daar blijven ze in tot die back-up verloopt.",

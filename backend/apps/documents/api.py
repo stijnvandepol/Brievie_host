@@ -473,7 +473,7 @@ def restore_document(request: HttpRequest, workspace_id: UUID, document_id: UUID
     operation_id="listTrash",
     description=(
         "The letters in the trash the caller sees, the most recently trashed first (at most"
-        " 500), with when and by whom, and `purge_after`."
+        " 500), with when and by whom, and `purge_after`; `total` counts them all."
     ),
 )
 def list_trash(request: HttpRequest, workspace_id: UUID) -> TrashListOut:
@@ -481,6 +481,7 @@ def list_trash(request: HttpRequest, workspace_id: UUID) -> TrashListOut:
     return TrashListOut(
         items=[trash.trashed_out(document) for document in trash.list_trash(membership)],
         retention_days=trash.TRASH_RETENTION.days,
+        total=trash.count_trash(membership),
     )
 
 
