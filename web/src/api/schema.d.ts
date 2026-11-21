@@ -1445,7 +1445,7 @@ export interface paths {
         get?: never;
         /**
          * Update Person
-         * @description `name_variants` and `archived` left out keep the person's current value (a rename never archives, restores or clears the variants); sent, they replace it.
+         * @description `name_variants` and `archived` left out keep the person's current value (a rename never archives, restores or clears the variants); sent, they replace it. A department or a person linked to an account: admins only (403 `forbidden`).
          */
         put: operations["updatePerson"];
         post?: never;

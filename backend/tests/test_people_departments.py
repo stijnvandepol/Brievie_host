@@ -376,3 +376,56 @@ def test_department_on_several_letters_with_two_departments() -> None:
         assert Document.objects.get(id=both.id).addressee_ids == sorted(
             [o.persons["Finance"].id, o.persons["HR"].id]
         )
+
+
+# Security review of PR #38, finding 3: names decide whose post a letter becomes.
+
+
+def test_a_member_cannot_change_a_department(client: Client) -> None:
+    h = home()
+    department = _department(h)
+    client.force_login(h.bob)
+    for body in (
+        {"display_name": "Ouders"},
+        {"display_name": "Ouders", "archived": True},
+        {"display_name": "Ouders", "name_variants": ["Belastingdienst"]},
+    ):
+        r = client.put(f"{_persons_url(h.workspace)}/{department.id}", body, JSON)
+        assert (r.status_code, r.json()["code"]) == (403, "forbidden")
+    with as_actor(h.workspace, SYSTEM):
+        stored = Person.objects.get(id=department.id)
+    assert (stored.name_variants, stored.archived_at) == ([], None)
+
+
+def test_a_member_cannot_add_name_variants_to_a_person_with_an_account(client: Client) -> None:
+    h = home()
+    client.force_login(h.bob)
+    for person in (h.persons["Bob"], h.persons["Carla"]):
+        r = client.put(
+            f"{_persons_url(h.workspace)}/{person.id}",
+            {"display_name": person.display_name, "name_variants": ["Belastingdienst"]},
+            JSON,
+        )
+        assert (r.status_code, r.json()["code"]) == (403, "forbidden")
+
+
+def test_a_member_still_edits_a_person_without_an_account(client: Client) -> None:
+    h = home()
+    client.force_login(h.bob)
+    r = client.put(
+        f"{_persons_url(h.workspace)}/{h.persons['Oma'].id}",
+        {"display_name": "Oma", "name_variants": ["Oma de Vries"]},
+        JSON,
+    )
+    assert r.status_code == 200, r.json()
+
+
+def test_an_admin_edits_a_linked_person(client: Client) -> None:
+    h = home()
+    client.force_login(h.anne)
+    r = client.put(
+        f"{_persons_url(h.workspace)}/{h.persons['Bob'].id}",
+        {"display_name": "Bob", "name_variants": ["B. Jansen"]},
+        JSON,
+    )
+    assert r.status_code == 200, r.json()

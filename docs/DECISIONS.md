@@ -1964,3 +1964,11 @@ M3). "Iedereen ziet alle post" stays on everywhere until Task 40, so departments
   sees through emergency access is listed in their trash read-only, as everywhere else
   (the trash has the seam's rights, S 4.10); restoring it or purging it now answers 403
   `emergency_read_only`, and emptying the trash leaves it where it is.
+- **Names that steer post are an admin's (finding 3).** `updatePerson` on a department,
+  or on a person linked to an account (the member's own included), needs an admin (403
+  `forbidden`). A name or variant decides through name matching, and with the autopilot
+  on through applying, whose post a letter becomes; a member adding "Belastingdienst" to
+  their own person would steer that post to themselves once "Iedereen ziet alle post" is
+  off. Members keep creating and editing persons without an account (that sends post to
+  whoever sorts it, not to themselves). Cost: a member asks an admin to correct the
+  spelling of their own name.

@@ -66,7 +66,8 @@ def sent_fields(payload: PersonIn) -> set[str]:
     operation_id="updatePerson",
     description=(
         "`name_variants` and `archived` left out keep the person's current value (a rename "
-        "never archives, restores or clears the variants); sent, they replace it."
+        "never archives, restores or clears the variants); sent, they replace it. A "
+        "department or a person linked to an account: admins only (403 `forbidden`)."
     ),
 )
 def update_person(
@@ -80,6 +81,7 @@ def update_person(
         display_name=payload.display_name,
         name_variants=payload.name_variants if "name_variants" in sent else None,
         archived=payload.archived if "archived" in sent else None,
+        actor_role=membership.role,
     )
 
 

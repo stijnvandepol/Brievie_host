@@ -306,10 +306,20 @@ def update_person(
     display_name: str,
     name_variants: list[str] | None,
     archived: bool | None,
+    actor_role: str = Membership.Role.ADMIN,
 ) -> Person:
-    """`name_variants` or `archived` None keeps the stored value."""
+    """`name_variants` or `archived` None keeps the stored value.
+
+    A department, and a person linked to an account, are changed by admins only (403
+    `forbidden`): their names decide through name matching whose post a letter becomes,
+    so a member renaming or adding a variant could steer letters to themselves or to
+    another member (review of PR #38). Members keep editing persons without an account."""
     with transaction.atomic():
         person = _get_for_update(workspace, person_id)
+        if actor_role != Membership.Role.ADMIN and (
+            person.kind == Person.Kind.DEPARTMENT or person.user_id is not None
+        ):
+            raise _forbidden()
         kept = {person.display_name, *person.name_variants}
         person.display_name = _clean_name(display_name, kept)
         if name_variants is not None:
