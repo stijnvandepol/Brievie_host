@@ -79,6 +79,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     # After authentication: signs out a session without a record or past its limits.
     "apps.accounts.middleware.UserSessionMiddleware",
+    # The account's own language choice wins over Accept-Language (LocaleMiddleware).
+    "apps.accounts.middleware.AccountLanguageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
@@ -145,8 +147,11 @@ CACHES = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Dutch is the source language and the default; English has a catalogue in locale/
+# (apps.common.catalogue, `make messages`). Each language in its own name.
 LANGUAGE_CODE = "nl"
-LANGUAGES = [("nl", "Nederlands")]
+LANGUAGES = [("nl", "Nederlands"), ("en", "English")]
+LOCALE_PATHS = [BASE_DIR / "locale"]
 TIME_ZONE = "Europe/Amsterdam"
 USE_I18N = True
 USE_TZ = True

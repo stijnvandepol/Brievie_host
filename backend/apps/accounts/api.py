@@ -9,6 +9,7 @@ from apps.accounts.models import User
 from apps.accounts.notices import NoticeView
 from apps.accounts.resets import IssuedReset
 from apps.accounts.schemas import (
+    LanguageIn,
     LoginIn,
     NoticeOut,
     NoticesSeenIn,
@@ -93,6 +94,20 @@ def logout(request: HttpRequest) -> Status[None]:
 @router.get("/me", response={200: UserOut, **AUTH_ERRORS}, operation_id="getMe")
 def get_me(request: HttpRequest) -> User:
     return services.current_user(request)
+
+
+@router.put(
+    "/me/language",
+    response={200: UserOut, **SESSION_WRITE_ERRORS, **BODY_ERRORS},
+    description=(
+        "Choose the language of the interface and of the server's messages for the "
+        "caller's account (`nl`, `en`, or `` to follow Accept-Language again). The "
+        "choice wins over Accept-Language on every later request."
+    ),
+    operation_id="updateMyLanguage",
+)
+def update_my_language(request: HttpRequest, payload: LanguageIn) -> User:
+    return services.set_language(services.current_user(request), payload.language)
 
 
 WEB_SESSION_ONLY = "Web session only: a bearer token answers 401 not_authenticated."

@@ -517,3 +517,25 @@ def test_mentions_term_stays_fast_on_long_text(text: str) -> None:
     started = time.monotonic()
     mentions_term(text)
     assert time.monotonic() - started < 1.0
+
+
+def test_an_english_summary_changes_no_guard_rail() -> None:
+    # summary_language "en": the summary and descriptions are English, the letter stays
+    # Dutch. mentions_term and the deadline rules read the letter, never the summary.
+    english = {"samenvatting_b1": "You have to pay the tax assessment."}
+
+    def in_english(raw: dict[str, object]) -> None:
+        raw.update(english)
+        action(raw)["omschrijving"] = "Pay the tax assessment"
+
+    def in_english_without_deadline(raw: dict[str, object]) -> None:
+        in_english(raw)
+        action(raw)["deadline"] = dict(NO_DEADLINE)
+
+    data = build(in_english)
+    assert data is not None
+    assert data.summary == "You have to pay the tax assessment."
+    assert [task.description for task in data.tasks] == ["Pay the tax assessment"]
+    # The Dutch letter names a term ("vóór 1 december"): without a date, no confirm.
+    assert mentions_term(TEXT)
+    assert build(in_english_without_deadline) is None

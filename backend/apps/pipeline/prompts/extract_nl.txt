@@ -9,8 +9,8 @@ Regels:
 - "afzender": de organisatie of persoon die de brief stuurt.
 - "documenttype": kies één van: factuur, aanslag, beschikking, rekening, herinnering, aanmaning, polis, jaaropgave, loonstrook, keuring, contract, bonnetje, informatie, overig.
 - "dagtekening": de datum van de brief zelf.
-- "samenvatting_b1": leg in ten hoogste drie korte zinnen uit wat er in de brief staat, in eenvoudig Nederlands (taalniveau B1), in de je-vorm.
-- "acties": wat de ontvanger moet doen. Eén actie per ding dat moet gebeuren; een lege lijst als er niets hoeft. "type" is één van: betalen, reageren, bezwaar, aanvragen, keuring, opzeggen, verlengen, aangifte, overig. "omschrijving" is één korte zin in de je-vorm. "deadline" is de uiterste datum die in de brief staat voor deze actie; staat er geen datum, vul dan null in bij waarde en bron en 0 bij zekerheid. Reken zelf geen datum uit.
+- "samenvatting_b1": leg in ten hoogste drie korte zinnen uit wat er in de brief staat, {{samenvatting_taal}}.
+- "acties": wat de ontvanger moet doen. Eén actie per ding dat moet gebeuren; een lege lijst als er niets hoeft. "type" is één van: betalen, reageren, bezwaar, aanvragen, keuring, opzeggen, verlengen, aangifte, overig. "omschrijving" is één korte zin {{omschrijving_taal}}. "deadline" is de uiterste datum die in de brief staat voor deze actie; staat er geen datum, vul dan null in bij waarde en bron en 0 bij zekerheid. Reken zelf geen datum uit.
 - "factuur": alleen bij een factuur of rekening, anders null. "bedrag_incl" is het totaalbedrag inclusief btw.
 - "op_naam_van": voor wie de brief is. Kies alleen uit de lijst "Personen" onder de brief. Geef het id (P1, P2, …). Neem "bron" letterlijk over uit de brief. Geef een lege lijst als niemand past of als je het niet zeker weet.
 - "labels": ten hoogste drie labels uit de lijst "Labels" onder de brief die zeggen waar de brief over gaat. Geef het id (L1, L2, …). Geef een lege lijst als er geen label past.

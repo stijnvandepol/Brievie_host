@@ -87,6 +87,8 @@ jobs:
         run: uv run python manage.py makemigrations --check --dry-run
       - name: OpenAPI contract is up to date
         run: uv run python manage.py export_openapi --check
+      - name: English catalogue is complete and up to date
+        run: uv run python manage.py update_messages --check
       # Coverage is reported, not enforced: the minimum goes in pyproject.toml
       # ([tool.coverage.report] fail_under), the one place for it.
       - run: uv run pytest --cov --cov-report=term-missing:skip-covered --cov-report=xml

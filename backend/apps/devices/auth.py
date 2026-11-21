@@ -2,6 +2,7 @@ from django.http import HttpRequest
 from django.utils.translation import gettext as _
 from ninja.security import HttpBearer
 
+from apps.accounts.language import activate_account_language
 from apps.accounts.models import User
 from apps.common.errors import ApiError
 from apps.devices import services
@@ -25,4 +26,6 @@ class DeviceTokenAuth(HttpBearer):
             raise ApiError(401, "not_authenticated", _("Je bent niet ingelogd."))
         request.user = device.user
         request.device = device  # type: ignore[attr-defined]
+        # From here on the account's own language choice wins over Accept-Language.
+        activate_account_language(request, device.user)
         return device.user

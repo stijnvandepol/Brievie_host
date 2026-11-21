@@ -107,6 +107,16 @@ def current_user(request: HttpRequest) -> User:
     return user
 
 
+def set_language(user: User, language: str) -> User:
+    """Store the account's language choice ("" for none); later requests answer in it."""
+    if language and language not in User.Language.values:
+        raise ValueError(f"Unknown language {language!r}")
+    with transaction.atomic():
+        user.language = language
+        user.save(update_fields=["language", "updated_at"])
+    return user
+
+
 def needs_setup() -> bool:
     return not User.objects.exists()
 

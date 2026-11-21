@@ -6,6 +6,7 @@ from django.conf import settings
 from django.contrib.auth.signals import user_logged_in
 from django.db import connection
 from django.http import HttpRequest
+from django.utils import translation
 from psycopg.conninfo import make_conninfo
 from pytest_django import DjangoDbBlocker, Settings
 
@@ -42,6 +43,16 @@ def without_test_session_receiver() -> Iterator[None]:
     user_logged_in.disconnect(dispatch_uid=_TEST_SESSION_RECEIVER)
     yield
     user_logged_in.connect(record_test_session, dispatch_uid=_TEST_SESSION_RECEIVER)
+
+
+@pytest.fixture(autouse=True)
+def _default_language() -> Iterator[None]:
+    """Each test starts in the default language (Dutch). A request activates the
+    language it answers in for its thread and leaves it there, as Django does; the next
+    request activates its own, but code a test runs outside a request would inherit it."""
+    translation.activate(settings.LANGUAGE_CODE)
+    yield
+    translation.activate(settings.LANGUAGE_CODE)
 
 
 @pytest.fixture(scope="session")

@@ -30,6 +30,7 @@ from apps.pipeline.settings_service import autopilot_in_force, provider_for
 from apps.pipeline.validation import ValidatedChoice, ValidatedValue, validate, validate_choices
 from apps.rules import triggers
 from apps.workspaces.context import SYSTEM, workspace_context
+from apps.workspaces.models import Workspace
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,11 @@ def run_pipeline(
         persons = active_persons()
         request = None
         if provider is not None:
-            request = ExtractionRequest(text, *aliased(_as_choices(persons), _labels()))
+            request = ExtractionRequest(
+                text,
+                *aliased(_as_choices(persons), _labels()),
+                summary_language=_summary_language(workspace_id),
+            )
 
     values: list[ValidatedValue] = []
     choices: list[ValidatedChoice] = []
@@ -199,6 +204,10 @@ def active_persons() -> list[PersonNames]:
 
 def _as_choices(persons: Sequence[PersonNames]) -> list[tuple[UUID, str, Sequence[str]]]:
     return [(person.person_id, person.names[0], person.names[1:]) for person in persons]
+
+
+def _summary_language(workspace_id: UUID) -> str:
+    return str(Workspace.objects.values_list("summary_language", flat=True).get(id=workspace_id))
 
 
 def _labels() -> list[tuple[UUID, str]]:

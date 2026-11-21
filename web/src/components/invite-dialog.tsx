@@ -19,6 +19,7 @@ import {
 import { ApiFailure, api } from "../api/client";
 import { invitationsQuery, personsQuery } from "../api/queries";
 import type { components } from "../api/schema";
+import { dateFormat } from "../format";
 import { Icon } from "./icons";
 import { OneTimeLink } from "./one-time-link";
 import { ErrorAlert } from "./page";
@@ -27,7 +28,7 @@ import { MessageBar } from "./ui";
 
 export type CreatedInvitation = components["schemas"]["CreatedInvitationOut"];
 
-const dateTime = new Intl.DateTimeFormat("nl-NL", { dateStyle: "long", timeStyle: "short" });
+const dateTime = dateFormat({ dateStyle: "long", timeStyle: "short" });
 
 const EXPIRY_DAYS = [1, 7, 30] as const;
 type ExpiryDays = (typeof EXPIRY_DAYS)[number];

@@ -21,6 +21,24 @@ _PAGE_BREAK = "\f"
 # The SDK logs whole request bodies (the letter) at DEBUG; keep that out of every log.
 logging.getLogger("anthropic").setLevel(logging.WARNING)
 _PROMPT = Path(__file__).parent / "prompts" / "extract_nl.txt"
+# The language of the generated text (the summary and each action's description) per
+# workspace setting `summary_language`: only these two places of the prompt change. The
+# instructions stay Dutch, the letter is read as it is, and every other value and every
+# quote ("bron") is taken from the letter unchanged.
+_SUMMARY_LANGUAGE: dict[str, dict[str, str]] = {
+    "nl": {
+        "{{samenvatting_taal}}": "in eenvoudig Nederlands (taalniveau B1), in de je-vorm",
+        "{{omschrijving_taal}}": "in de je-vorm",
+    },
+    "en": {
+        "{{samenvatting_taal}}": (
+            'in eenvoudig Engels (plain English, niveau B1), gericht aan de lezer met "you". '
+            'Alleen deze samenvatting en elke "omschrijving" schrijf je in het Engels; elke '
+            'andere waarde en elke "bron" neem je over zoals ze in de brief staan'
+        ),
+        "{{omschrijving_taal}}": 'in eenvoudig Engels, gericht aan de lezer met "you"',
+    },
+}
 
 
 class ProviderUnavailable(RetryableError):  # noqa: N818 - named for what happened
@@ -67,7 +85,7 @@ class OpenAICompatibleProvider:
             "model": self.model,
             "temperature": 0,
             "messages": [
-                {"role": "system", "content": _system_prompt()},
+                {"role": "system", "content": system_prompt(request.summary_language)},
                 {"role": "user", "content": _user_message(request)},
             ],
             "response_format": {
@@ -137,7 +155,7 @@ class AnthropicProvider:
             response = self._client.messages.create(
                 model=self.model,
                 max_tokens=_MAX_OUTPUT_TOKENS,
-                system=_system_prompt(),
+                system=system_prompt(request.summary_language),
                 messages=[{"role": "user", "content": _user_message(request)}],
                 output_config={"format": {"type": "json_schema", "schema": json_schema(request)}},
             )
@@ -162,8 +180,13 @@ class AnthropicProvider:
 
 
 @cache
-def _system_prompt() -> str:
-    return _PROMPT.read_text(encoding="utf-8")
+def system_prompt(summary_language: str = "nl") -> str:
+    """The instructions, with the summary and descriptions asked in `summary_language`
+    (Dutch for a language it does not know)."""
+    prompt = _PROMPT.read_text(encoding="utf-8")
+    for token, text in _SUMMARY_LANGUAGE.get(summary_language, _SUMMARY_LANGUAGE["nl"]).items():
+        prompt = prompt.replace(token, text)
+    return prompt
 
 
 def _user_message(request: ExtractionRequest) -> str:

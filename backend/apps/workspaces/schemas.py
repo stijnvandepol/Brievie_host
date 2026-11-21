@@ -8,7 +8,7 @@ from pydantic import Field
 
 from apps.common.schemas import InputSchema
 from apps.pipeline.schemas import AiStatusOut
-from apps.workspaces.models import Invitation, Membership
+from apps.workspaces.models import Invitation, Membership, Workspace
 
 
 class WorkspaceOut(Schema):
@@ -37,11 +37,22 @@ class MemberOut(Schema):
 class WorkspaceSettingsOut(Schema):
     # Whether a member may export their own post.
     allow_member_export: bool
+    # The language of the AI's summaries and task descriptions: "nl" or "en".
+    summary_language: str = "nl"
+
+    @staticmethod
+    def of(workspace: Workspace) -> "WorkspaceSettingsOut":
+        return WorkspaceSettingsOut(
+            allow_member_export=workspace.allow_member_export,
+            summary_language=workspace.summary_language,
+        )
 
 
 class WorkspaceSettingsIn(InputSchema):
     # A setting left out stays as it is.
     allow_member_export: bool | None = None
+    # "nl" or "en" (a pattern, not an enum: the contract has no nullable enums).
+    summary_language: str | None = Field(default=None, pattern="^(nl|en)$")
 
 
 class MemberRoleIn(InputSchema):
