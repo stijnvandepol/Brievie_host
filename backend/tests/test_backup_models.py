@@ -4,6 +4,7 @@ from apps.common.models import WorkspaceModel
 
 EXPECTED_CODES = {
     "not_configured",
+    "backup_running",
     "destination_conflict",
     "destination_not_writable",
     "destination_not_ready",
