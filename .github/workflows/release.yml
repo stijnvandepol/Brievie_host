@@ -3,9 +3,11 @@ name: Release
 # A release is a tag vX.Y.Z on a commit whose backend/pyproject.toml, deploy/release.json
 # and newest CHANGELOG.md entry all say X.Y.Z (.github/scripts/release-check.py). The
 # tag is the owner's step; nothing here creates one. On such a tag this workflow builds
-# the backend image for amd64 and arm64, pushes it by digest, scans both images, tags
-# that digest with the version, attests it, and makes the GitHub release from the
-# CHANGELOG section. A run by hand (workflow_dispatch) checks, builds and scans without
+# the backend image and the proxy image (Caddy with Brievie's Caddyfile) for amd64 and
+# arm64, pushes each by digest, scans both architectures, tags that digest with the
+# version, attests it, and makes the GitHub release from the CHANGELOG section, with the
+# compose file (docker-compose.yml, and a copy with both images pinned by digest) as
+# assets. A run by hand (workflow_dispatch) checks, builds and scans without
 # publishing anything: the proof before the first tag.
 #
 # Only a tag pushed to this repository starts the publishing jobs: there is no
@@ -26,6 +28,7 @@ concurrency:
 
 env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/brievie-backend
+  PROXY_IMAGE: ghcr.io/${{ github.repository_owner }}/brievie-proxy
 
 jobs:
   # The version everywhere agrees, and the tag (when there is one) names it.
@@ -100,6 +103,40 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
           trivyignores: .trivyignore.yaml
+      - name: Build the proxy for arm64 (not kept)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/Dockerfile.proxy
+          platforms: linux/arm64
+          build-args: VERSION=${{ env.VERSION }}
+          push: false
+      - name: Build the proxy for amd64
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/Dockerfile.proxy
+          platforms: linux/amd64
+          build-args: VERSION=${{ env.VERSION }}
+          load: true
+          push: false
+          tags: brievie/proxy:release-scan
+      - name: The proxy accepts its own Caddyfile
+        run: |
+          docker run --rm --network none \
+            -e BRIEVIE_HOSTNAME=brievie.test -e BRIEVIE_HSTS_SECONDS=0 \
+            -e BRIEVIE_MAX_BODY_BYTES=2621440 -e BRIEVIE_MAX_UPLOAD_BYTES=33554432 \
+            brievie/proxy:release-scan caddy validate --config /etc/caddy/Caddyfile
+      - name: Scan the proxy image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.2
+          image-ref: brievie/proxy:release-scan
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          trivyignores: .trivyignore.yaml
 
   # Only on a tag: build both architectures and push them by digest only (no tag yet),
   # scan exactly those two images from the registry, and only then give that digest the
@@ -115,6 +152,8 @@ jobs:
       packages: write
       id-token: write
       attestations: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
     env:
       VERSION: ${{ needs.check.outputs.version }}
     steps:
@@ -179,10 +218,89 @@ jobs:
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
+  # The same for the proxy image (Caddy with Brievie's Caddyfile): what the compose file
+  # names next to the backend image. Parallel to `publish`, scanned and attested the same.
+  publish-proxy:
+    if: ${{ github.event_name == 'push' }}
+    needs: [check, scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Log in to the GitHub Container Registry
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build both architectures and push them by digest
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/Dockerfile.proxy
+          build-args: VERSION=${{ env.VERSION }}
+          platforms: linux/amd64,linux/arm64
+          provenance: false
+          outputs: type=image,name=${{ env.PROXY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+      - name: Scan the pushed proxy amd64 image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_PLATFORM: linux/amd64
+        with:
+          version: v0.76.2
+          image-ref: ${{ env.PROXY_IMAGE }}@${{ steps.build.outputs.digest }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          trivyignores: .trivyignore.yaml
+      - name: Scan the pushed proxy arm64 image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_PLATFORM: linux/arm64
+        with:
+          version: v0.76.2
+          image-ref: ${{ env.PROXY_IMAGE }}@${{ steps.build.outputs.digest }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          trivyignores: .trivyignore.yaml
+      - name: Tag the scanned digest with the version
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          docker buildx imagetools create --tag "$PROXY_IMAGE:$VERSION" "$PROXY_IMAGE@$DIGEST"
+          # The attestation below names this digest: :VERSION must point at exactly it.
+          tagged=$(docker buildx imagetools inspect "$PROXY_IMAGE:$VERSION" --format '{{json .Manifest}}' |
+            python3 -c 'import json, sys; print(json.load(sys.stdin)["digest"])')
+          echo "$PROXY_IMAGE:$VERSION -> $tagged"
+          test "$tagged" = "$DIGEST"
+      - name: Attest the build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.PROXY_IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
   # The GitHub release, with the CHANGELOG section as its text, after the image is out.
   release:
     if: ${{ github.event_name == 'push' }}
-    needs: [check, publish]
+    needs: [check, publish, publish-proxy]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -196,6 +314,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REF_NAME: ${{ github.ref_name }}
           VERSION: ${{ needs.check.outputs.version }}
+          BACKEND_DIGEST: ${{ needs.publish.outputs.digest }}
+          PROXY_DIGEST: ${{ needs.publish-proxy.outputs.digest }}
         run: |
           python3 .github/scripts/release-check.py --tag "$REF_NAME" --notes "$RUNNER_TEMP/notes.md"
-          gh release create "$REF_NAME" --verify-tag --title "Brievie $VERSION" --notes-file "$RUNNER_TEMP/notes.md"
+          # The compose file as the release has it, and a copy that names exactly the two
+          # images this release published, by digest.
+          cp deploy/compose/docker-compose.yml "$RUNNER_TEMP/docker-compose.yml"
+          python3 .github/scripts/pin-compose.py deploy/compose/docker-compose.yml \
+            "$RUNNER_TEMP/docker-compose.pinned.yml" --backend "$BACKEND_DIGEST" --proxy "$PROXY_DIGEST"
+          gh release create "$REF_NAME" --verify-tag --title "Brievie $VERSION" --notes-file "$RUNNER_TEMP/notes.md" \
+            "$RUNNER_TEMP/docker-compose.yml" "$RUNNER_TEMP/docker-compose.pinned.yml"

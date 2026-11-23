@@ -1,0 +1,20 @@
+# syntax=docker/dockerfile:1
+
+# The reverse proxy of a compose install: Caddy with Brievie's Caddyfile and the script
+# that publishes the CA's public root baked in, so one compose file needs no checkout next
+# to it (a Portainer or Synology stack has no files beside it). The Caddyfile is
+# deploy/Caddyfile, the same file the wrapper install mounts; backend/tests compare them.
+# The base is pinned by digest (the 2.11 line, multi-architecture); raise it on purpose.
+FROM caddy:2.11@sha256:4851e54a46b206517c574821bb5cc67f170d2156041e9fbc4c9193b45e84a75b
+
+ARG VERSION=dev
+LABEL org.opencontainers.image.title="brievie-proxy" \
+      org.opencontainers.image.source="https://github.com/stijnvandepol/Brievie_host" \
+      org.opencontainers.image.version="${VERSION}"
+
+COPY deploy/Caddyfile /etc/caddy/Caddyfile
+COPY deploy/caddy-publish-root.sh /etc/caddy/publish-root.sh
+
+# Root, as in the wrapper's compose: the script makes the authority copy for the back-up
+# and hands it to uid 10001.
+CMD ["/bin/sh", "/etc/caddy/publish-root.sh"]
