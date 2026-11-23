@@ -219,6 +219,40 @@ REASONS: dict[str, Promise] = {
         "Van versie {installed} kun je niet in één keer naar {target}. "
         "Werk eerst bij naar {go_first}: ./brievie update {go_first}"
     ),
+    "unknown_migrations": _(
+        "Je zet een oudere versie op nieuwere gegevens: de database heeft stappen die versie "
+        "{target} niet kent. Zet de nieuwere versie terug, of herstel de back-up van vóór het "
+        "bijwerken (pre-update-<versie>)."
+    ),
+    "jump_too_large": _(
+        "Van versie {installed} kun je niet in één keer naar {target}. "
+        "Zet eerst versie {go_first} in het compose-bestand en start; daarna versie {target}."
+    ),
+    "postgres_major_differs": _(
+        "Versie {target} hoort bij PostgreSQL {postgres_major}, maar de database draait op een "
+        "andere hoofdversie. Die overstap maakt het bijwerken niet. "
+        'Lees "Voor je bijwerkt" in CHANGELOG.md.'
+    ),
+    "compose_too_old": _(
+        "Dit compose-bestand is te oud voor versie {target}. Haal het nieuwe bestand op "
+        "(bij de release) en plak het in de plaats van dit bestand."
+    ),
+    "compose_too_new": _(
+        "Dit compose-bestand is nieuwer dan versie {target} kent. Gebruik het compose-bestand "
+        "van versie {target}, of zet de versie in het bestand op de nieuwere versie."
+    ),
+    "no_space": _(
+        "Er is te weinig vrije ruimte om bij te werken met een back-up vooraf. "
+        "Maak ruimte vrij en start opnieuw."
+    ),
+    "adopt_needed": _(
+        "Er zijn gegevens, maar niet vastgelegd welke versie erbij hoort. "
+        "Zet BRIEVIE_ADOPT_VERSION={target} in de instellingen als dit de versie is die nu draait."
+    ),
+    "adopt_differs": _(
+        "BRIEVIE_ADOPT_VERSION is niet gelijk aan de versie van dit image ({target}). "
+        "Neem de versie over die nu draait; bijwerken doe je daarna."
+    ),
     "no_path": _(
         "Van versie {installed} is er geen weg naar {target} met ./brievie update. "
         'Lees "Voor je bijwerkt" in CHANGELOG.md.'

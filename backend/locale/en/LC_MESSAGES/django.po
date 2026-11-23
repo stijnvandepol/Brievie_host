@@ -2443,6 +2443,38 @@ msgid "Van versie {installed} kun je niet in één keer naar {target}. Werk eers
 msgstr "From version {installed} you cannot go to {target} in one step. First update to {go_first}: ./brievie update {go_first}"
 
 #: apps/updates/release.py
+msgid "Je zet een oudere versie op nieuwere gegevens: de database heeft stappen die versie {target} niet kent. Zet de nieuwere versie terug, of herstel de back-up van vóór het bijwerken (pre-update-<versie>)."
+msgstr "You are putting an older version on newer data: the database has steps that version {target} does not know. Put the newer version back, or restore the back-up from before the update (pre-update-<version>)."
+
+#: apps/updates/release.py
+msgid "Van versie {installed} kun je niet in één keer naar {target}. Zet eerst versie {go_first} in het compose-bestand en start; daarna versie {target}."
+msgstr "From version {installed} you cannot go to {target} in one step. First put version {go_first} in the compose file and start; then version {target}."
+
+#: apps/updates/release.py
+msgid "Versie {target} hoort bij PostgreSQL {postgres_major}, maar de database draait op een andere hoofdversie. Die overstap maakt het bijwerken niet. Lees \"Voor je bijwerkt\" in CHANGELOG.md."
+msgstr "Version {target} goes with PostgreSQL {postgres_major}, but the database runs on another major version. Updating does not make that step. Read \"Before you update\" in CHANGELOG.md."
+
+#: apps/updates/release.py
+msgid "Dit compose-bestand is te oud voor versie {target}. Haal het nieuwe bestand op (bij de release) en plak het in de plaats van dit bestand."
+msgstr "This compose file is too old for version {target}. Get the new file (with the release) and paste it in place of this file."
+
+#: apps/updates/release.py
+msgid "Dit compose-bestand is nieuwer dan versie {target} kent. Gebruik het compose-bestand van versie {target}, of zet de versie in het bestand op de nieuwere versie."
+msgstr "This compose file is newer than version {target} knows. Use the compose file of version {target}, or set the version in the file to the newer version."
+
+#: apps/updates/release.py
+msgid "Er is te weinig vrije ruimte om bij te werken met een back-up vooraf. Maak ruimte vrij en start opnieuw."
+msgstr "There is too little free space to update with a back-up beforehand. Free some space and start again."
+
+#: apps/updates/release.py
+msgid "Er zijn gegevens, maar niet vastgelegd welke versie erbij hoort. Zet BRIEVIE_ADOPT_VERSION={target} in de instellingen als dit de versie is die nu draait."
+msgstr "There is data, but it is not recorded which version it belongs to. Set BRIEVIE_ADOPT_VERSION={target} in the settings if that is the version that runs now."
+
+#: apps/updates/release.py
+msgid "BRIEVIE_ADOPT_VERSION is niet gelijk aan de versie van dit image ({target}). Neem de versie over die nu draait; bijwerken doe je daarna."
+msgstr "BRIEVIE_ADOPT_VERSION is not equal to the version of this image ({target}). Give the version that runs now; update afterwards."
+
+#: apps/updates/release.py
 msgid "Van versie {installed} is er geen weg naar {target} met ./brievie update. Lees \"Voor je bijwerkt\" in CHANGELOG.md."
 msgstr "From version {installed} there is no way to {target} with ./brievie update. Read \"Before you update\" in CHANGELOG.md."
 
