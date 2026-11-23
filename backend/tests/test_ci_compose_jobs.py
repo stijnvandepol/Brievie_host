@@ -83,11 +83,13 @@ def test_no_job_writes_a_literal_secret() -> None:
         assert not re.search(r"(PASSWORD|SECRET_KEY|MASTER_KEY)=[A-Za-z0-9+/]{12,}", block), name
 
 
-def test_the_compose_update_job_proves_the_two_assumptions_of_the_design() -> None:
+def test_the_compose_update_job_proves_the_refusals_and_the_freeze() -> None:
     block = job("compose-update")
-    # 1. Refused: init exits non-zero and the containers of the old version keep running.
-    assert block.count('test "$running" = "api caddy keeper postgres worker "') == 2
-    # 2. The freeze: a write of the old version fails with the server's own sentence.
+    # A refusal: init exits 1, nothing is changed, and the old number brings the server back.
+    assert block.count('test "$rc" != 0') >= 4
+    assert "niet in één keer" in block
+    assert "oudere versie" in block
+    # The freeze: another session's write fails with the server's own sentence.
     assert "read-only transaction" in block
     assert "pg_db_role_setting" in block
 

@@ -74,8 +74,9 @@ services:
 
   # One-shot, at every start: the database roles, the check that this version may start on
   # this data (it refuses a step back, a jump that is too large and another PostgreSQL),
-  # the back-up before an update, the migrations. When it refuses, the running version
-  # stays up and `docker compose logs init` says why.
+  # the back-up before an update, the migrations. When it refuses it stops with exit 1 and
+  # `docker compose logs init` says why; no data changed. Put the old version number back and
+  # start again to get the old service back.
   init:
     <<: *backend
     restart: "no"

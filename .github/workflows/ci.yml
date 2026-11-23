@@ -773,7 +773,7 @@ jobs:
             grep '^{"token"' > "$RUNNER_TEMP/seed.json"
           echo "::add-mask::$(jq -r .token "$RUNNER_TEMP/seed.json")"
           test "$(jq '.workspaces | length' "$RUNNER_TEMP/seed.json")" = 2
-      - name: A jump that is too large is refused and the old containers keep running
+      - name: A jump that is too large is refused and changes nothing
         env:
           BRIEVIE_CI_TAG: ${{ steps.releases.outputs.bad }}
           INSTALLED: ${{ steps.releases.outputs.installed }}
@@ -785,14 +785,23 @@ jobs:
           $COMPOSE logs --no-color init | tee "$RUNNER_TEMP/jump-init.log"
           grep -q 'niet in één keer' "$RUNNER_TEMP/jump-init.log"
           grep -q 'Er is niets veranderd' "$RUNNER_TEMP/jump-init.log"
-          $COMPOSE ps --all --format '{{.Service}} {{.State}} {{.Status}}'
-          running=$($COMPOSE ps --status running --services | sort | tr '\n' ' ')
-          test "$running" = "api caddy keeper postgres worker "
-          curl --fail --silent --show-error --cacert "$RUNNER_TEMP/old-root.pem" https://localhost/api/v1/health |
+          test "$(docker inspect "$($COMPOSE ps -aq init)" --format '{{.State.ExitCode}}')" = 1
+          # Compose has taken the old api, worker, keeper and caddy down before `init` ran
+          # (they are only created, not started): the refusal leaves the data and the
+          # database as they were, and putting the old number back brings the service back.
+          sql() { $COMPOSE exec -T postgres psql -U postgres -d brievie -tA -c "$1"; }
+          test "$(sql "select count(*) from pg_db_role_setting s join pg_database d on d.oid = s.setdatabase where d.datname = 'brievie'")" = 0
+          test "$(sql "select version from updates_installedversion")" = "$INSTALLED"
+      - name: With the old number back, the same server answers again
+        env:
+          BRIEVIE_CI_TAG: ${{ steps.releases.outputs.installed }}
+          INSTALLED: ${{ steps.releases.outputs.installed }}
+        run: |
+          set -euo pipefail
+          $COMPOSE up -d --wait --wait-timeout 600
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors \
+            --cacert "$RUNNER_TEMP/old-root.pem" https://localhost/api/v1/health |
             jq -e --arg want "$INSTALLED" '.server_version == $want'
-          # Nothing was frozen: the old api can still write.
-          test "$($COMPOSE exec -T postgres psql -U postgres -d brievie -tA \
-            -c "select count(*) from pg_db_role_setting s join pg_database d on d.oid = s.setdatabase where d.datname = 'brievie'")" = 0
       - name: The same pages, devices and authority after the refusal
         run: .github/scripts/restore-check.sh "$RUNNER_TEMP/seed.json" "$RUNNER_TEMP/old-root.pem"
       - name: Update to the next release by changing the version
@@ -816,7 +825,7 @@ jobs:
           test "$(sql "select count(*) from pg_db_role_setting s join pg_database d on d.oid = s.setdatabase where d.datname = 'brievie'")" = 0
       - name: The updated server has the same pages, devices and authority
         run: .github/scripts/restore-check.sh "$RUNNER_TEMP/seed.json" "$RUNNER_TEMP/old-root.pem"
-      - name: A step back is refused, the newer containers keep running and the data stay
+      - name: A step back is refused and the data stay
         env:
           BRIEVIE_CI_TAG: ${{ steps.releases.outputs.installed }}
           GOOD: ${{ steps.releases.outputs.good }}
@@ -827,10 +836,16 @@ jobs:
           test "$rc" != 0
           $COMPOSE logs --no-color init | tee "$RUNNER_TEMP/back-init.log"
           grep -q 'oudere versie' "$RUNNER_TEMP/back-init.log"
-          $COMPOSE ps --all --format '{{.Service}} {{.State}} {{.Status}}'
-          running=$($COMPOSE ps --status running --services | sort | tr '\n' ' ')
-          test "$running" = "api caddy keeper postgres worker "
-          curl --fail --silent --show-error --cacert "$RUNNER_TEMP/old-root.pem" https://localhost/api/v1/health |
+          test "$($COMPOSE exec -T postgres psql -U postgres -d brievie -tA -c 'select version from updates_installedversion')" = "$GOOD"
+      - name: With the newer number back, the server answers again
+        env:
+          BRIEVIE_CI_TAG: ${{ steps.releases.outputs.good }}
+          GOOD: ${{ steps.releases.outputs.good }}
+        run: |
+          set -euo pipefail
+          $COMPOSE up -d --wait --wait-timeout 600
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors \
+            --cacert "$RUNNER_TEMP/old-root.pem" https://localhost/api/v1/health |
             jq -e --arg want "$GOOD" '.server_version == $want'
       - name: Another PostgreSQL major is refused (a release that says so)
         env:
@@ -855,19 +870,15 @@ jobs:
           $COMPOSE logs --no-color init | tee "$RUNNER_TEMP/failed-init.log"
           grep -q 'halverwege mislukt' "$RUNNER_TEMP/failed-init.log"
           grep -q "pre-update-$BAD" "$RUNNER_TEMP/failed-init.log"
-          # The database stays read-only; the old api still reads.
+          # The database stays read-only.
           test "$($COMPOSE exec -T postgres psql -U postgres -d brievie -tA \
             -c "select count(*) from pg_db_role_setting s join pg_database d on d.oid = s.setdatabase where d.datname = 'brievie'")" = 1
-          curl --fail --silent --show-error --cacert "$RUNNER_TEMP/old-root.pem" https://localhost/api/v1/health |
-            jq -e --arg want "$GOOD" '.server_version == $want'
-      - name: The frozen database refuses a write of the old version
-        env:
-          GOOD: ${{ steps.releases.outputs.good }}
+      - name: The frozen database refuses a write of any other session
         run: |
           set -euo pipefail
           rc=0
-          $COMPOSE exec -T api python manage.py shell -c \
-            "from apps.workspaces.models import Workspace; from django.db import connection; c = connection.cursor(); c.execute(\"create temp table ci_frozen (x int)\")" \
+          $COMPOSE exec -T postgres psql -U brievie_app -d brievie -v ON_ERROR_STOP=1 \
+            -c "insert into django_migrations (app, name, applied) values ('ci', 'frozen', now())" \
             > "$RUNNER_TEMP/frozen.log" 2>&1 || rc=$?
           cat "$RUNNER_TEMP/frozen.log"
           test "$rc" != 0

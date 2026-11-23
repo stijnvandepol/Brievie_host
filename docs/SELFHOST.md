@@ -787,12 +787,15 @@ Change the version (`BRIEVIE_VERSION`, or the default in the two image lines) an
 before it changes anything: it refuses a **step back** or data from a newer version, a jump
 past `min_upgrade_from` ("Werk eerst bij naar ..."), another PostgreSQL major, a compose
 file of another revision ("Dit compose-bestand is te oud") and too little free space. A
-refusal changes nothing: `init` stops with exit 1, the running version keeps running and
-`docker compose logs init` has the sentence (Portainer and Synology show `init` as
-"Exited (1)").
+refusal changes no data: `init` stops with exit 1 and `docker compose logs init` has the
+sentence (Portainer and Synology show `init` as "Exited (1)"). **The service is down until you
+fix it:** Compose has already taken the old api, worker, keeper and caddy down to make the new
+ones (they show as "Created"), and they wait for `init`. Put the old version number back and
+start again, and the same server comes back (CI proves this with a refused jump and a refused
+step back). This is different from `./brievie update`, which checks before it stops anything.
 
-When it may go on, `init` makes the database read-only for everything but itself (the old
-api and worker keep reading, writes fail until it is done), makes the back-up
+When it may go on, `init` makes the database read-only for every session but its own (so
+that nothing else can write while it backs up and migrates), makes the back-up
 `pre-update-<version>` to your back-up folder or, without one, to the volume
 `update-backup`, migrates, records the version and lifts the freeze. A failure before any migration
 lifts the freeze and changes nothing. A failure after one stays read-only and prints the way back:
@@ -849,7 +852,7 @@ wrapper is not supported; restoring a back-up onto a wrapper install is.
 Proven on GitHub's Linux runners (CI jobs `compose-stack`, `compose-oldest` on Compose 2.20.2,
 `adopt`, `compose-update`, `compose-restore`): a fresh start from the file alone, the modes
 and owners of the vault, the secrets leaking nowhere, a restart that keeps every secret, an
-update, a refused jump and step back that leave the old containers running, a failing
+update, a refused jump and step back that change no data and come back with the old number, a failing
 migration that leaves the database read-only, the way back, a restore onto an empty machine
 and over a running one, and moving from `./brievie`. **Not tried:** Synology Container
 Manager, Unraid, Portainer, Dockge, Podman (not supported), Docker Desktop on Windows and a

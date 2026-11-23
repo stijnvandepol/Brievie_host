@@ -2652,9 +2652,13 @@ recommendation D1 to D7 of the spec.
   `ALTER DATABASE ... SET default_transaction_read_only = on` plus ending the sessions of the
   app role; `init`'s own connections set it off (`BRIEVIE_INIT_WRITABLE`). A failure before
   any migration lifts it; after one it stays and the way back is printed; a second start resumes
-  only when the back-up of the first exists. The CI job `compose-update` proves the two
-  assumptions: a refusing `init` leaves the old containers running, and a frozen database
-  refuses an old api's write.
+  only when the back-up of the first exists. **Measured in CI (job `compose-update`), against the
+  design's assumption:** when `init` refuses, Compose has already removed the old api, worker,
+  keeper and caddy containers (they are "Created", waiting for `init`), so a refusal does not
+  leave the old version running; it leaves the data and the database untouched and the service
+  down until the old number is put back (then it returns, with the same pages and authority).
+  The freeze therefore matters for any other session (a console, a script, a container Compose
+  left running); the job proves that another session's write fails after a failed migration.
 - **D6: other platforms are labelled "Niet getest".** Synology Container Manager, Unraid,
   Portainer, Dockge, Podman (not supported), Docker Desktop on Windows and a Raspberry Pi are
   not tried. One of us tries each step on real hardware before a label changes.
