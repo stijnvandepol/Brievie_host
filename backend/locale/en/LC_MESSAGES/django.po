@@ -1725,6 +1725,47 @@ msgstr "Give a reason of %(min)d to %(max)d characters."
 msgid "Met noodtoegang kun je deze brief alleen lezen."
 msgstr "With emergency access you can only read this letter."
 
+#: apps/installer/init_secrets.py
+msgid "Er zijn al gegevens, maar de sleutels ontbreken. Zet het volume 'secrets' terug, of zet de sleutels van je herstelblad terug met 'init_secrets --import'. Er is niets veranderd."
+msgstr "There is already data, but the keys are missing. Put the 'secrets' volume back, or restore the keys of your recovery sheet with 'init_secrets --import'. Nothing has changed."
+
+#: apps/installer/init_secrets.py
+msgid "Het installatienummer in de sleutelkluis hoort niet bij de gegevens van deze installatie. Er is niets veranderd."
+msgstr "The installation number in the key vault does not belong to the data of this installation. Nothing has changed."
+
+#: apps/installer/init_secrets.py
+msgid "Een bestand in de sleutelkluis is een link, heeft de verkeerde rechten of is onleesbaar. Er is niets veranderd."
+msgstr "A file in the key vault is a link, has the wrong permissions or cannot be read. Nothing has changed."
+
+#: apps/installer/init_secrets.py
+msgid "Een map voor de sleutels bestaat niet of is een link. Er is niets veranderd."
+msgstr "A folder for the keys does not exist or is a link. Nothing has changed."
+
+#: apps/installer/init_secrets.py
+msgid "Het bestand met de sleutels kan niet worden gelezen. Er is niets veranderd."
+msgstr "The file with the keys cannot be read. Nothing has changed."
+
+#: apps/installer/init_secrets.py
+msgid "Het bestand met de sleutels klopt niet: een sleutel mist of heeft een verkeerde vorm. Er is niets veranderd."
+msgstr "The file with the keys is not right: a key is missing or has the wrong form. Nothing has changed."
+
+#: apps/installer/init_secrets.py
+msgid "Een sleutel in het bestand is niet gelijk aan de sleutel in de kluis. Er is niets veranderd."
+msgstr "A key in the file is not equal to the key in the vault. Nothing has changed."
+
+#: apps/installer/init_secrets.py
+msgid "Het eigen back-upwachtwoord kan niet worden gelezen. Er is niets veranderd."
+msgstr "The own back-up password cannot be read. Nothing has changed."
+
+#: apps/installer/init_secrets.py
+msgid "Gebruik: init_secrets [--import <bestand>]"
+msgstr "Usage: init_secrets [--import <file>]"
+
+#: apps/installer/init_secrets.py
+#, python-format
+msgid "De sleutels staan klaar: %(made)d nieuw in de kluis, %(placed)d bestanden geplaatst."
+msgstr "The keys are ready: %(made)d new in the vault, %(placed)d files placed."
+
 #: apps/labels/presets.py
 msgid "Belastingdienst"
 msgstr "Belastingdienst"

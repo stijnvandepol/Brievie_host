@@ -67,6 +67,7 @@ INSTALLED_APPS = [
     "apps.devices",
     "apps.backup",
     "apps.updates",
+    "apps.installer",
     "apps.audit",
 ]
 
