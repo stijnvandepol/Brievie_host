@@ -96,9 +96,9 @@ class Facts:
 def _facts(connect: Connect, names: Names) -> Facts:
     with connect("postgres") as server:
         roles = server.execute(
-            "SELECT rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolbypassrls,"
-            " rolinherit, rolpassword IS NOT NULL FROM pg_roles r"
-            " LEFT JOIN pg_authid a USING (rolname) WHERE rolname = ANY(%s) ORDER BY rolname",
+            "SELECT r.rolname, r.rolcanlogin, r.rolsuper, r.rolcreatedb, r.rolcreaterole,"
+            " r.rolbypassrls, r.rolinherit, a.rolpassword IS NOT NULL FROM pg_roles r"
+            " LEFT JOIN pg_authid a ON a.oid = r.oid WHERE r.rolname = ANY(%s) ORDER BY r.rolname",
             [[names.owner, names.app, names.backup]],
         ).fetchall()
         row = server.execute(

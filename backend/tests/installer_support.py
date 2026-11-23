@@ -26,7 +26,13 @@ def connect() -> Connect:
     user = os.environ.get("POSTGRES_USER", "postgres")
 
     def factory(dbname: str) -> psycopg.Connection[TupleRow]:
-        return psycopg.connect(dbname=dbname, user=user, autocommit=True)
+        # As `init`'s own connection: the freeze does not apply to it.
+        return psycopg.connect(
+            dbname=dbname,
+            user=user,
+            autocommit=True,
+            options="-c default_transaction_read_only=off",
+        )
 
     return factory
 

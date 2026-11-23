@@ -20,7 +20,7 @@ def _test_role_is_subject_to_rls() -> None:
 
 
 def test_the_base_is_caddy_2_11_pinned_by_digest() -> None:
-    assert re.search(r"^FROM caddy:2\.11@sha256:[0-9a-f]{64}$", PROXY, re.MULTILINE)
+    assert re.search(r"^FROM caddy:2\.11\.\d+@sha256:[0-9a-f]{64}$", PROXY, re.MULTILINE)
 
 
 def test_the_caddyfile_and_the_script_come_from_deploy() -> None:

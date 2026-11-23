@@ -137,3 +137,13 @@ vulnerabilities:
       - usr/local/bin/restic
     statement: "restic 0.19.1 ships stdlib Go 1.25.10; fixed in Go 1.26.10, not yet in a restic release."
     expired_at: 2027-01-31
+
+# The proxy image (deploy/Dockerfile.proxy): the Caddy binary of the official image.
+# caddy 2.11.9 is the newest 2.11 release (2026-11-23) and the image's base; it is built
+# with golang.org/x/net 0.60.0. Fixed upstream in 0.62.0, not yet in a Caddy release. The
+# finding is in the HTML parser; the proxy never parses HTML (it forwards bodies as bytes).
+  - id: CVE-2026-78661
+    paths:
+      - usr/bin/caddy
+    statement: "caddy 2.11.9 ships golang.org/x/net 0.60.0; fixed in 0.62.0, not yet in a Caddy release. The proxy does not parse HTML."
+    expired_at: 2027-01-31
