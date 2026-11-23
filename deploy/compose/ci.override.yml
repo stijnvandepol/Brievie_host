@@ -1,0 +1,18 @@
+# For CI only: the images of a pull request are not on ghcr, so the jobs build them to
+# these local tags and put this file over deploy/compose/docker-compose.yml. It changes
+# nothing but the image names; the compose file itself is what a user installs.
+services:
+  init-secrets:
+    image: brievie/backend:ci
+  init:
+    image: brievie/backend:ci
+  api:
+    image: brievie/backend:ci
+  worker:
+    image: brievie/backend:ci
+  keeper:
+    image: brievie/backend:ci
+  admin:
+    image: brievie/backend:ci
+  caddy:
+    image: brievie/proxy:ci
