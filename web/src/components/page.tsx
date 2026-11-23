@@ -457,10 +457,16 @@ function AccountMenu({
             {t`Taal`}
           </Link>
           {me?.is_server_admin ? (
-            <Link to="/server/logboek" className="menu-item">
-              <Icon name="document" />
-              {t`Serverlogboek`}
-            </Link>
+            <>
+              <Link to="/server/logboek" className="menu-item">
+                <Icon name="document" />
+                {t`Serverlogboek`}
+              </Link>
+              <Link to="/server/herstelblad" className="menu-item">
+                <Icon name="shield" />
+                {t`Herstelblad`}
+              </Link>
+            </>
           ) : null}
           <Button className="menu-item" onPress={onLogout}>
             <Icon name="signOut" />

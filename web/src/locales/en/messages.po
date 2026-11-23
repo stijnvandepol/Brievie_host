@@ -913,6 +913,7 @@ msgid "bevat niet het woord"
 msgstr "does not contain the word"
 
 #: src/routes/pair-app.tsx
+#: src/routes/recovery-sheet.tsx
 msgid "Bevestigen"
 msgstr "Confirm"
 
@@ -1488,6 +1489,14 @@ msgstr "Download ({letters}, valid until {0})"
 msgid "Download als CSV"
 msgstr "Download as CSV"
 
+#: src/routes/recovery-sheet.tsx
+msgid "Druk het af en bewaar het veilig. Het bestand bevat de sleutel: verwijder het daarna."
+msgstr "Print it and keep it safe. The file holds the key: delete it afterwards."
+
+#: src/routes/recovery-sheet.tsx
+msgid "Druk het blad af en bewaar het op een veilige plek, niet op deze server."
+msgstr "Print the sheet and keep it in a safe place, not on this server."
+
 #: src/routes/inbox.tsx
 msgid "Dubbel?"
 msgstr "Duplicate?"
@@ -1879,6 +1888,23 @@ msgstr "Reminder"
 msgid "Herkend in de brief"
 msgstr "Recognized in the letter"
 
+#: src/components/page.tsx
+#: src/routes/recovery-sheet.tsx
+msgid "Herstelblad"
+msgstr "Recovery sheet"
+
+#: src/components/audit-codes.ts
+msgid "Herstelblad bekeken"
+msgstr "Recovery sheet viewed"
+
+#: src/routes/recovery-sheet.tsx
+msgid "Herstelblad downloaden"
+msgstr "Download recovery sheet"
+
+#: src/routes/setup-summary.tsx
+msgid "Herstelblad downloaden en bewaren"
+msgstr "Download and keep the recovery sheet"
+
 #: src/components/audit-codes.ts
 msgid "Herstellink gemaakt"
 msgstr "Reset link created"
@@ -1894,6 +1920,10 @@ msgstr "Create a reset link for {name}?"
 #: src/components/reset-link-dialog.tsx
 msgid "Herstellink voor {name}"
 msgstr "Reset link for {name}"
+
+#: src/routes/recovery-sheet.tsx
+msgid "Het herstelblad is gedownload."
+msgstr "The recovery sheet has been downloaded."
 
 #: src/routes/duplicate.tsx
 msgid "Het is dezelfde brief"
@@ -2443,6 +2473,10 @@ msgstr "Breadcrumb"
 #: src/components/person-actions.tsx
 msgid "Laat de post beheren door"
 msgstr "Let the mail be managed by"
+
+#: src/routes/recovery-sheet.tsx
+msgid "Laat niemand de sleutel zien. Wie de sleutel en een back-up heeft, kan je documenten lezen."
+msgstr "Show the key to nobody. Whoever has the key and a backup can read your documents."
 
 #: src/routes/settings.tsx
 msgid "Laat zien welke post blijft liggen"
@@ -3047,6 +3081,10 @@ msgstr "The same on both letters: {sameFields}."
 #: src/routes/duplicate.tsx
 msgid "Op de andere scan is ''{task}'' al afgerond."
 msgstr "On the other scan, ''{task}'' is already completed."
+
+#: src/routes/recovery-sheet.tsx
+msgid "Op het herstelblad staat de hoofdsleutel van deze server. Zonder die sleutel kun je je documenten niet terugzetten als de server kapotgaat."
+msgstr "The recovery sheet holds the master key of this server. Without that key you cannot restore your documents if the server breaks."
 
 #: src/components/document-table.tsx
 #: src/components/person-picker.tsx
@@ -3898,6 +3936,10 @@ msgstr "Due date"
 msgid "Verwerken mislukt"
 msgstr "Processing failed"
 
+#: src/routes/recovery-sheet.tsx
+msgid "Verwijder het bestand daarna van je computer."
+msgstr "Delete the file from your computer afterwards."
+
 #: src/routes/trash.tsx
 msgid "Verwijderd op {when}"
 msgstr "Deleted on {when}"
@@ -4022,6 +4064,10 @@ msgstr "Fill in"
 msgid "Vul je wachtwoord in voordat je een telefoon koppelt. Zo weten we dat jij het bent."
 msgstr "Enter your password before you pair a phone. That way we know it's you."
 
+#: src/routes/recovery-sheet.tsx
+msgid "Vul je wachtwoord in voordat je het herstelblad downloadt. Zo weten we dat jij het bent."
+msgstr "Enter your password before you download the recovery sheet. That way we know it is you."
+
 #: src/routes/setup.tsx
 msgid "Waar gebruik je Brievie voor?"
 msgstr "What do you use Brievie for?"
@@ -4047,6 +4093,7 @@ msgstr "Value"
 #: src/routes/invitation.tsx
 #: src/routes/login.tsx
 #: src/routes/pair-app.tsx
+#: src/routes/recovery-sheet.tsx
 #: src/routes/sessions.tsx
 #: src/routes/setup.tsx
 msgid "Wachtwoord"
@@ -4315,6 +4362,10 @@ msgstr "Visibility changed"
 #: src/routes/sessions.tsx
 msgid "Zie je hier een browser die je niet kent? Log die uit en wijzig je wachtwoord."
 msgstr "Do you see a browser here you don't know? Sign it out and change your password."
+
+#: src/routes/recovery-sheet.tsx
+msgid "Zo ga je ermee om"
+msgstr "How to handle it"
 
 #: src/routes/setup-summary.tsx
 msgid "Zo is Brievie nu ingesteld"

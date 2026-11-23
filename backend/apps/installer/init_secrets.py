@@ -46,7 +46,9 @@ VAULT_NAMES = (
 # the superuser nor the owner password; only `init` and `admin` read the vault itself.
 ROLE_FILES: dict[str, tuple[str, ...]] = {
     "postgres": ("postgres_password",),
-    "api": ("secret_key", "app_password", "master_key"),
+    # The api shows the recovery sheet, which carries a separate back-up password when
+    # there is one; a derived one it can compute from the master key anyway.
+    "api": ("secret_key", "app_password", "master_key", "backup_password"),
     "keeper": ("secret_key", "app_password", "backup_db_password", "backup_password"),
 }
 INSTALLATION_ID_NAME = "installation-id"

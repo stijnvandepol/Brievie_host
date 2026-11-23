@@ -105,7 +105,12 @@ def test_role_volumes_hold_only_what_the_role_needs(tmp_path: Path) -> None:
     layout = make_layout(tmp_path)
     run(layout, {})
     assert names_in(layout.out["postgres"]) == {"postgres_password"}
-    assert names_in(layout.out["api"]) == {"secret_key", "app_password", "master_key"}
+    assert names_in(layout.out["api"]) == {
+        "secret_key",
+        "app_password",
+        "master_key",
+        "backup_password",
+    }
     assert names_in(layout.out["keeper"]) == {
         "secret_key",
         "app_password",
@@ -287,7 +292,12 @@ def test_a_crash_between_two_files_leaves_no_half_file_and_the_next_run_finishes
     assert "master_key" not in names_in(layout.vault)
     run(layout, {})
     assert set(vault_values(layout)) == set(VAULT_NAMES)
-    assert names_in(layout.out["api"]) == {"secret_key", "app_password", "master_key"}
+    assert names_in(layout.out["api"]) == {
+        "secret_key",
+        "app_password",
+        "master_key",
+        "backup_password",
+    }
 
 
 def test_leftover_temporary_files_are_removed(tmp_path: Path) -> None:

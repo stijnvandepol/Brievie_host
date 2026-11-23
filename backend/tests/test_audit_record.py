@@ -205,6 +205,7 @@ def test_the_list_of_codes_is_the_closed_list_of_d11() -> None:
         "device_expired",
         "server_admin_granted",
         "server_admin_revoked",
+        "recovery_sheet_viewed",
         "sso_settings_changed",
         "workspace_created",
         "invitation_created",

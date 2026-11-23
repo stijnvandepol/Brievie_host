@@ -338,6 +338,11 @@ BRIEVIE_BACKUP_REST_PASSWORD: str = env.str("BRIEVIE_BACKUP_REST_PASSWORD", defa
 BRIEVIE_BACKUP_CONFIG_DIR: str = env.str("BRIEVIE_BACKUP_CONFIG_DIR", default="/data/backup-config")
 BRIEVIE_AUTHORITY_COPY_DIR: str = env.str("BRIEVIE_AUTHORITY_COPY_DIR", default="/data/authority")
 BRIEVIE_HOSTNAME: str = env.str("BRIEVIE_HOSTNAME", default="")
+# Set by the compose file of a compose-only install (its structure revision); empty on a
+# `./brievie` install. The web interface shows the recovery sheet only where the api holds
+# everything the sheet needs (the back-up destination and password come from the compose
+# file's environment).
+BRIEVIE_COMPOSE_INSTALL: bool = env.str("BRIEVIE_COMPOSE_REVISION", default="") != ""
 
 # Audit rows older than this are removed every night (apps.audit.jobs). The database
 # refuses to remove rows younger than 90 days, so a lower value is a mistake.

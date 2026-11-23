@@ -392,7 +392,7 @@ msgstr "The start date is after the end date."
 msgid "Vraag tussen 1 en %(max)d gebeurtenissen tegelijk op."
 msgstr "Ask for between 1 and %(max)d events at a time."
 
-#: apps/audit/api.py
+#: apps/audit/api.py apps/backup/api.py
 msgid "Alleen een serverbeheerder mag dit doen."
 msgstr "Only a server admin may do this."
 
@@ -440,6 +440,10 @@ msgstr "Device unpaired"
 #: apps/audit/codes.py
 msgid "Apparaat verlopen"
 msgstr "Device expired"
+
+#: apps/audit/codes.py
+msgid "Herstelblad bekeken"
+msgstr "Recovery sheet viewed"
 
 #: apps/audit/codes.py
 msgid "Instellingen voor inloggen via organisatie gewijzigd"
@@ -604,6 +608,14 @@ msgstr "Workspace"
 #: apps/audit/codes.py
 msgid "Export"
 msgstr "Export"
+
+#: apps/backup/api.py
+msgid "Op deze server maak je het herstelblad met ./brievie recovery-sheet."
+msgstr "On this server you make the recovery sheet with ./brievie recovery-sheet."
+
+#: apps/backup/api.py apps/devices/services.py
+msgid "Vul eerst je wachtwoord opnieuw in."
+msgstr "Enter your password again first."
 
 #: apps/backup/errors.py
 msgid "De naam van een back-up van vóór het bijwerken ziet eruit als pre-update-0.3.0."
@@ -1308,10 +1320,6 @@ msgstr "BRIEVIE_MASTER_KEY in deploy/.env is missing or not 64 characters long (
 #: apps/common/names.py
 msgid "Een naam mag geen tekens bevatten die de leesrichting van de tekst omdraaien."
 msgstr "A name may not contain characters that reverse the direction of the text."
-
-#: apps/devices/services.py
-msgid "Vul eerst je wachtwoord opnieuw in."
-msgstr "Enter your password again first."
 
 #: apps/devices/services.py
 msgid "Geef het apparaat een naam."

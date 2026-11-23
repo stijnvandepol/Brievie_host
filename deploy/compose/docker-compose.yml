@@ -139,6 +139,12 @@ services:
       BRIEVIE_SESSION_IDLE_DAYS: ${BRIEVIE_SESSION_IDLE_DAYS:-14}
       BRIEVIE_SESSION_MAX_DAYS: ${BRIEVIE_SESSION_MAX_DAYS:-90}
       BRIEVIE_AI_AUTOPILOT_ALLOWED: ${BRIEVIE_AI_AUTOPILOT_ALLOWED:-true}
+      # For the recovery sheet that a server admin downloads in the web interface: where
+      # the back-ups go (no credentials) and the back-up password (a file).
+      BRIEVIE_BACKUP_PASSWORD_FILE: /run/brievie/backup_password
+      BRIEVIE_BACKUP_DIR_SET: ${BRIEVIE_BACKUP_DIR:+true}
+      BRIEVIE_BACKUP_DIR_HOST: ${BRIEVIE_BACKUP_DIR:-}
+      BRIEVIE_BACKUP_REPOSITORY: ${BRIEVIE_BACKUP_REPOSITORY:-}
     healthcheck:
       test:
         - CMD
