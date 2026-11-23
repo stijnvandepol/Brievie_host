@@ -105,16 +105,23 @@ def test_two_releases_on_top_of_the_installed_one(source: Path) -> None:
         assert f'name = "brievie"\nversion = "{version}"' in lock
         changelog = version_at(source, f"v{tag}", "CHANGELOG.md")
         assert re.findall(r"^## \[(\d[^\]]*)\]", changelog, re.M)[0] == version
-    migration = "backend/apps/updates/migrations/0002_ci_fails.py"
-    assert "RuntimeError" in version_at(source, f"v{bad}", migration)
-    with pytest.raises(subprocess.CalledProcessError):
-        version_at(source, f"v{good}", migration)
+    passing = "backend/apps/updates/migrations/0002_ci_ok.py"
+    failing = "backend/apps/updates/migrations/0003_ci_fails.py"
+    assert "RuntimeError" not in version_at(source, f"v{bad}", passing)
+    assert 'dependencies = [("updates", "0001_initial")]' in version_at(source, f"v{bad}", passing)
+    assert "RuntimeError" in version_at(source, f"v{bad}", failing)
+    assert 'dependencies = [("updates", "0002_ci_ok")]' in version_at(source, f"v{bad}", failing)
+    for name in (passing, failing):
+        with pytest.raises(subprocess.CalledProcessError):
+            version_at(source, f"v{good}", name)
 
 
-def test_the_failing_migration_compiles() -> None:
+def test_the_throwaway_migrations_compile() -> None:
     text = MAKER.read_text()
-    body = text.split("FAILING_MIGRATION = '''", 1)[1].split("'''", 1)[0]
-    compile(body, "0002_ci_fails.py", "exec")
+    body = text.split("MIGRATION_TEMPLATE = '''", 1)[1].split("'''", 1)[0]
+    for doc, code in (("passes", "return None"), ("fails", "raise RuntimeError('x')")):
+        source = body % {"doc": doc, "body": code, "previous": "0001_initial"}
+        compile(source, "migration.py", "exec")
 
 
 def test_a_clone_of_a_remote_repository_is_refused(source: Path) -> None:
