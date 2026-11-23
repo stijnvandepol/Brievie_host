@@ -630,6 +630,10 @@ msgid "Er is nog geen back-up ingesteld."
 msgstr "No backup has been set up yet."
 
 #: apps/backup/errors.py
+msgid "Er loopt al een back-up. Wacht tot die klaar is."
+msgstr "A backup is already running. Wait until it has finished."
+
+#: apps/backup/errors.py
 msgid "Je kunt maar één bestemming instellen: een map of een adres. Haal er één weg."
 msgstr "You can set only one destination: a folder or an address. Remove one of them."
 
@@ -1847,6 +1851,15 @@ msgstr "A password file cannot be used (%(code)s)."
 #: apps/installer/runtime.py
 msgid "De wachtwoorden van de database ontbreken."
 msgstr "The database passwords are missing."
+
+#: apps/installer/runtime.py
+#, python-format
+msgid "De back-upmap is niet vanzelf klaargezet: %(reason)s"
+msgstr "The backup folder could not be prepared automatically: %(reason)s"
+
+#: apps/installer/runtime.py
+msgid "De back-upmap is klaargezet voor de back-ups."
+msgstr "The backup folder is ready for the backups."
 
 #: apps/installer/runtime.py
 msgid "De versiegegevens van dit image kloppen niet."

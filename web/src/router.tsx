@@ -3,6 +3,7 @@ import { createRouter, type RouterHistory } from "@tanstack/react-router";
 import { aiRoute } from "./routes/ai";
 import { auditLogRoute } from "./routes/audit-log";
 import { automationsRoute } from "./routes/automations";
+import { backupRoute } from "./routes/backup";
 import { departmentsRoute } from "./routes/departments";
 import { documentRoute } from "./routes/document";
 import { duplicateRoute } from "./routes/duplicate";
@@ -47,6 +48,7 @@ const routeTree = rootRoute.addChildren([
   sessionsRoute,
   serverAuditLogRoute,
   recoverySheetRoute,
+  backupRoute,
   passwordRoute,
   languageRoute,
   workspaceRoute.addChildren([

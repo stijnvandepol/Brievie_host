@@ -335,6 +335,15 @@ BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY: str = env.str(
 )
 BRIEVIE_BACKUP_REST_USERNAME: str = env.str("BRIEVIE_BACKUP_REST_USERNAME", default="")
 BRIEVIE_BACKUP_REST_PASSWORD: str = env.str("BRIEVIE_BACKUP_REST_PASSWORD", default="")
+# The hour (server time, 0-23) of the nightly back-up that the keeper makes once a
+# destination is set (apps.backup.schedule). At most one every 20 hours, also after a
+# back-up made by hand.
+BRIEVIE_BACKUP_HOUR: int = env.int("BRIEVIE_BACKUP_HOUR", default=2)
+if not 0 <= BRIEVIE_BACKUP_HOUR <= 23:
+    raise ImproperlyConfigured("BRIEVIE_BACKUP_HOUR must be between 0 and 23.")
+# `init` prepares an empty back-up folder once (apps.installer): only a folder that is empty,
+# has no marker and is not on the data disk; never with the same-disk override.
+BRIEVIE_BACKUP_AUTO_INIT: bool = env.bool("BRIEVIE_BACKUP_AUTO_INIT", default=False)
 BRIEVIE_BACKUP_CONFIG_DIR: str = env.str("BRIEVIE_BACKUP_CONFIG_DIR", default="/data/backup-config")
 BRIEVIE_AUTHORITY_COPY_DIR: str = env.str("BRIEVIE_AUTHORITY_COPY_DIR", default="/data/authority")
 BRIEVIE_HOSTNAME: str = env.str("BRIEVIE_HOSTNAME", default="")

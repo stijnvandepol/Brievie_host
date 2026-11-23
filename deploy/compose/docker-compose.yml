@@ -97,6 +97,8 @@ services:
       DATABASE_SUPERUSER_URL: postgres://postgres@postgres:5432/postgres
       DATABASE_SUPERUSER_PASSWORD_FILE: /run/brievie/postgres_password
       BRIEVIE_BACKUP_PASSWORD_FILE: /run/brievie/backup_password
+      # <-- true: Brievie prepares an empty back-up folder itself, once.
+      BRIEVIE_BACKUP_AUTO_INIT: ${BRIEVIE_BACKUP_AUTO_INIT:-false}
       BRIEVIE_HTTP_PORT: ${BRIEVIE_HTTP_PORT:-80}
       BRIEVIE_HTTPS_PORT: ${BRIEVIE_HTTPS_PORT:-443}
       BRIEVIE_VERSION: ${BRIEVIE_VERSION:-0.4.0}
@@ -206,6 +208,9 @@ services:
       DATABASE_BACKUP_PASSWORD_FILE: /run/brievie/backup_db_password
       SECRET_KEY_FILE: /run/brievie/secret_key
       BRIEVIE_BACKUP_PASSWORD_FILE: /run/brievie/backup_password
+      # The hour of the nightly back-up (0-23, server time); it runs once a destination
+      # is set.
+      BRIEVIE_BACKUP_HOUR: ${BRIEVIE_BACKUP_HOUR:-2}
     volumes:
       - secrets-keeper:/run/brievie:ro
       - documents:/data/documents:ro

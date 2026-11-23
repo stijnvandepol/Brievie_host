@@ -89,6 +89,9 @@ class Deps:
     hostname: str
     known_migrations: frozenset[tuple[str, str]]
     own_apps: frozenset[str]
+    # Prepares an empty back-up folder when BRIEVIE_BACKUP_AUTO_INIT says so; the sentence
+    # to show, or "".
+    auto_init: Callable[[], str]
     migrate: Callable[[], None]
     backup: Callable[[str], BackupResult]
     earlier_backup: Callable[[str], UUID | None]
@@ -223,6 +226,9 @@ def run(deps: Deps) -> int:
             )
         )
         return 1
+    note = deps.auto_init()
+    if note:
+        deps.say(note)
     return _apply(deps, state, decision.outcome)
 
 

@@ -429,6 +429,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/server/backup-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Backup Run
+         * @description Web session only: a bearer token answers 401 not_authenticated; a session without a valid CSRF token answers 403. Server admins only. Queues one back-up now (the keeper makes it). 409 not_configured without a destination; 409 backup_running while one is open.
+         */
+        post: operations["createBackupRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/server/backup-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Backup Status
+         * @description Web session only: a bearer token answers 401 not_authenticated. Server admins only. What the back-up panel shows: the kind of destination (never its path or address), the last good back-up and the last failure since, and whether one is running or late.
+         */
+        get: operations["getBackupStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/server/ca-certificate": {
         parameters: {
             query?: never;
@@ -2400,6 +2440,45 @@ export interface components {
             values: {
                 [key: string]: string;
             };
+        };
+        /** BackupRunOut */
+        BackupRunOut: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+        };
+        /**
+         * BackupStatusOut
+         * @description What the web interface shows of the back-up. No path, key, credential or address.
+         */
+        BackupStatusOut: {
+            /** Destination */
+            destination: string;
+            /**
+             * Last Check At
+             * Format: date-time
+             */
+            last_check_at: string | null;
+            /**
+             * Last Failure At
+             * Format: date-time
+             */
+            last_failure_at: string | null;
+            /** Last Failure Reason */
+            last_failure_reason: string;
+            /**
+             * Last Success At
+             * Format: date-time
+             */
+            last_success_at: string | null;
+            /** Last Success Size Bytes */
+            last_success_size_bytes: number | null;
+            /** Late */
+            late: boolean;
+            /** Running */
+            running: boolean;
         };
         /** CaCertificateOut */
         CaCertificateOut: {
@@ -6109,6 +6188,100 @@ export interface operations {
             };
             /** @description Unprocessable Content */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    createBackupRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupRunOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    getBackupStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupStatusOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

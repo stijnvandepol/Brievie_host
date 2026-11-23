@@ -4,16 +4,19 @@ terminal): the recovery sheet. Web session only: a device token answers 401."""
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse
 from django.utils.translation import gettext as _
-from ninja import Router
+from ninja import Router, Status
 
 from apps.accounts.auth import session_auth
 from apps.accounts.services import current_user
 from apps.accounts.sessions import recently_authenticated
 from apps.audit.codes import AuditCode
 from apps.audit.services import actor_from_request, record
-from apps.backup import sheet
+from apps.backup import schedule, sheet
+from apps.backup.errors import REASONS, BackupError
+from apps.backup.schemas import BackupRunOut, BackupStatusOut
 from apps.common.errors import ApiError
-from apps.common.schemas import SESSION_WRITE_ERRORS, ErrorOut
+from apps.common.schemas import AUTH_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
+from apps.common.throttling import CallerThrottle
 
 router = Router(tags=["backup"])
 
@@ -46,9 +49,7 @@ _HTML_RESPONSE = {
     ),
 )
 def create_recovery_sheet(request: HttpRequest) -> HttpResponse:
-    user = current_user(request)
-    if not (user.is_active and user.is_server_admin):
-        raise ApiError(403, "forbidden", _("Alleen een serverbeheerder mag dit doen."))
+    _server_admin(request)
     if not settings.BRIEVIE_COMPOSE_INSTALL:
         raise ApiError(
             409,
@@ -65,3 +66,64 @@ def create_recovery_sheet(request: HttpRequest) -> HttpResponse:
     response["Cache-Control"] = "no-store"
     response["Content-Disposition"] = f'attachment; filename="{SHEET_FILE_NAME}"'
     return response
+
+
+def _server_admin(request: HttpRequest) -> None:
+    user = current_user(request)
+    if not (user.is_active and user.is_server_admin):
+        raise ApiError(403, "forbidden", _("Alleen een serverbeheerder mag dit doen."))
+
+
+@router.get(
+    "/server/backup-status",
+    response={200: BackupStatusOut, 403: ErrorOut, **AUTH_ERRORS},
+    auth=session_auth,
+    operation_id="getBackupStatus",
+    description=(
+        "Web session only: a bearer token answers 401 not_authenticated. Server admins "
+        "only. What the back-up panel shows: the kind of destination (never its path or "
+        "address), the last good back-up and the last failure since, and whether one is "
+        "running or late."
+    ),
+)
+def get_backup_status(request: HttpRequest) -> BackupStatusOut:
+    _server_admin(request)
+    found = schedule.status()
+    return BackupStatusOut(
+        destination=found.destination,
+        last_success_at=found.last_success_at,
+        last_success_size_bytes=found.last_success_size_bytes,
+        last_failure_at=found.last_failure_at,
+        last_failure_reason=found.last_failure_reason,
+        last_check_at=found.last_check_at,
+        running=found.running,
+        late=found.late,
+    )
+
+
+@router.post(
+    "/server/backup-runs",
+    response={
+        202: BackupRunOut,
+        403: ErrorOut,
+        409: ErrorOut,
+        429: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+    },
+    auth=session_auth,
+    throttle=CallerThrottle("backup_run", "10/h"),
+    operation_id="createBackupRun",
+    description=(
+        "Web session only: a bearer token answers 401 not_authenticated; a session without "
+        "a valid CSRF token answers 403. Server admins only. Queues one back-up now (the "
+        "keeper makes it). 409 not_configured without a destination; 409 backup_running "
+        "while one is open."
+    ),
+)
+def create_backup_run(request: HttpRequest) -> Status[BackupRunOut]:
+    _server_admin(request)
+    try:
+        run = schedule.request_manual()
+    except BackupError as error:
+        raise ApiError(409, error.code, str(REASONS[error.code])) from None
+    return Status(202, BackupRunOut(run_id=run.id))

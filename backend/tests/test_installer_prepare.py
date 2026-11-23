@@ -46,6 +46,12 @@ class Fakes:
         assert self.names is not None
         return freeze.is_frozen(self.connect, self.names)
 
+    auto_init_note: str = ""
+
+    def auto_init(self) -> str:
+        self.calls.append("auto_init")
+        return self.auto_init_note
+
     def migrate(self) -> None:
         self.calls.append("migrate")
         self.frozen_during["migrate"] = self.is_frozen()
@@ -92,6 +98,7 @@ def make_deps(
         hostname=hostname,
         known_migrations=known,
         own_apps=frozenset({"documents", "updates"}),
+        auto_init=fakes.auto_init,
         migrate=fakes.migrate,
         backup=fakes.backup,
         earlier_backup=fakes.earlier_backup,
@@ -173,7 +180,7 @@ def test_a_fresh_server_migrates_and_records_without_a_back_up(
 ) -> None:
     fakes = Fakes()
     assert prepare.run(make_deps(connect, scratch, fakes)) == 0
-    assert fakes.calls == ["migrate", "record", "copy"]
+    assert fakes.calls == ["auto_init", "migrate", "record", "copy"]
     assert fakes.recorded == [(None, IMAGE, None)]
     assert not fakes.is_frozen()
 
@@ -185,7 +192,7 @@ def test_the_same_version_migrates_without_a_back_up_or_a_freeze(
     seed(connect, scratch, installed="0.5.0")
     fakes = Fakes()
     assert prepare.run(make_deps(connect, scratch, fakes)) == 0
-    assert fakes.calls == ["migrate", "record", "copy"]
+    assert fakes.calls == ["auto_init", "migrate", "record", "copy"]
     assert fakes.frozen_during == {"migrate": False, "record": False}
 
 
@@ -196,7 +203,7 @@ def test_an_update_freezes_backs_up_migrates_records_and_thaws(
     seed(connect, scratch, installed="0.4.0")
     fakes = Fakes()
     assert prepare.run(make_deps(connect, scratch, fakes)) == 0
-    assert fakes.calls == ["backup:pre-update-0.5.0", "migrate", "record", "copy"]
+    assert fakes.calls == ["auto_init", "backup:pre-update-0.5.0", "migrate", "record", "copy"]
     assert fakes.frozen_during == {"backup": True, "migrate": True, "record": True}
     assert fakes.recorded == [(v("0.4.0"), IMAGE, RUN_ID)]
     assert not fakes.is_frozen()
@@ -213,7 +220,7 @@ def test_data_without_a_recorded_version_needs_the_adopt_version(
     assert refused.calls == []
     adopted = Fakes()
     assert prepare.run(make_deps(connect, scratch, adopted, adopt=IMAGE)) == 0
-    assert adopted.calls == ["migrate", "record", "copy"]
+    assert adopted.calls == ["auto_init", "migrate", "record", "copy"]
     assert adopted.recorded == [(None, IMAGE, None)]
 
 
@@ -291,7 +298,7 @@ def test_a_failed_back_up_thaws_and_stops_before_migrating(
     assert prepare.run(make_deps(connect, scratch, fakes)) == 1
     assert "De back-up vóór het bijwerken is mislukt" in fakes.complained[0]
     assert "Er is niets veranderd" in fakes.complained[0]
-    assert fakes.calls == ["backup:pre-update-0.5.0"]
+    assert fakes.calls == ["auto_init", "backup:pre-update-0.5.0"]
     assert not fakes.is_frozen()
 
 
@@ -327,7 +334,7 @@ def test_a_second_start_resumes_when_the_first_back_up_exists(
     prepare.run(make_deps(connect, scratch, first))
     second = Fakes(earlier=RUN_ID)
     assert prepare.run(make_deps(connect, scratch, second)) == 0
-    assert second.calls == ["earlier:pre-update-0.5.0", "migrate", "record", "copy"]
+    assert second.calls == ["auto_init", "earlier:pre-update-0.5.0", "migrate", "record", "copy"]
     assert second.recorded == [(v("0.4.0"), IMAGE, RUN_ID)]
     assert not second.is_frozen()
 
@@ -341,7 +348,7 @@ def test_a_second_start_without_the_first_back_up_refuses_and_stays_frozen(
     second = Fakes(earlier=None)
     assert prepare.run(make_deps(connect, scratch, second)) == 1
     assert "pre-update-0.5.0" in second.complained[0]
-    assert second.calls == ["earlier:pre-update-0.5.0"]
+    assert second.calls == ["auto_init", "earlier:pre-update-0.5.0"]
     assert second.is_frozen()
 
 
@@ -413,3 +420,14 @@ def test_thaw_removes_the_setting(connect: Connect, scratch: Names) -> None:
             [scratch.database],
         ).fetchone()
     assert rows == (0,)
+
+
+def test_the_back_up_folder_is_prepared_before_the_back_up_of_an_update(
+    connect: Connect, scratch: Names
+) -> None:
+    prepared(connect, scratch)
+    seed(connect, scratch, installed="0.4.0")
+    fakes = Fakes(auto_init_note="De back-upmap is klaargezet voor de back-ups.")
+    assert prepare.run(make_deps(connect, scratch, fakes)) == 0
+    assert fakes.calls.index("auto_init") < fakes.calls.index("backup:pre-update-0.5.0")
+    assert "De back-upmap is klaargezet voor de back-ups." in fakes.said

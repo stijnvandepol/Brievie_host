@@ -462,6 +462,10 @@ function AccountMenu({
                 <Icon name="document" />
                 {t`Serverlogboek`}
               </Link>
+              <Link to="/server/back-up" className="menu-item">
+                <Icon name="save" />
+                {t`Back-up`}
+              </Link>
               <Link to="/server/herstelblad" className="menu-item">
                 <Icon name="shield" />
                 {t`Herstelblad`}

@@ -21,6 +21,7 @@ from apps.backup.errors import BackupError
 from apps.backup.models import BackupRun
 from apps.common import secrets as secret_files
 from apps.common.version import server_version
+from apps.installer.autoinit import should_auto_init
 from apps.installer.database import Connect, Connection, Names, Passwords
 from apps.installer.prepare import BackupResult, Deps, MigrateError
 from apps.updates import gate, services
@@ -136,6 +137,26 @@ def _backup(label: str) -> BackupResult:
     return BackupResult(ok=run.status == BackupRun.Status.SUCCEEDED, run_id=run.id)
 
 
+def _auto_init() -> str:
+    """The back-up folder, prepared once when it is safe (apps.installer.autoinit)."""
+    if not settings.BRIEVIE_BACKUP_AUTO_INIT:
+        return ""
+    try:
+        kind = destination_kind()
+    except BackupError:
+        return ""
+    mount = Path(settings.BRIEVIE_BACKUP_MOUNT)
+    if not should_auto_init(enabled=True, kind=kind, mount=mount):
+        return ""
+    try:
+        backup_services.initialise_destination(allow_same_disk=False)
+    except BackupError as error:
+        if error.code == "already_initialised":
+            return ""
+        return _("De back-upmap is niet vanzelf klaargezet: %(reason)s") % {"reason": error.message}
+    return _("De back-upmap is klaargezet voor de back-ups.")
+
+
 def _earlier_backup(label: str) -> UUID | None:
     run = (
         BackupRun.objects.filter(
@@ -189,6 +210,7 @@ def build_deps(
         hostname=environ.get("BRIEVIE_HOSTNAME", ""),
         known_migrations=frozenset(loader.disk_migrations),
         own_apps=own,
+        auto_init=_auto_init,
         migrate=_migrate,
         backup=_backup,
         earlier_backup=_earlier_backup,

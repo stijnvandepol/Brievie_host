@@ -829,6 +829,11 @@ msgstr "Automatisch verwerken aanzetten?"
 msgid "Automatisering"
 msgstr "Automatisering"
 
+#: src/components/page.tsx
+#: src/routes/backup.tsx
+msgid "Back-up"
+msgstr "Back-up"
+
 #: src/routes/setup-summary.tsx
 msgid "Back-up instellen: typ op de server"
 msgstr "Back-up instellen: typ op de server"
@@ -899,6 +904,10 @@ msgstr "Bekijk alle post"
 #: src/components/document-table.tsx
 msgid "Beschikking"
 msgstr "Beschikking"
+
+#: src/routes/backup.tsx
+msgid "Bestemming"
+msgstr "Bestemming"
 
 #: src/components/rule-sentence.ts
 msgid "bevat de tekst"
@@ -1283,10 +1292,22 @@ msgstr "De export is niet gelukt. Probeer het opnieuw."
 msgid "de groep"
 msgstr "de groep"
 
+#: src/routes/backup.tsx
+msgid "De instellingen voor de back-up spreken elkaar tegen: je kunt een map óf een adres instellen, niet allebei."
+msgstr "De instellingen voor de back-up spreken elkaar tegen: je kunt een map óf een adres instellen, niet allebei."
+
+#: src/routes/backup.tsx
+msgid "De laatste gelukte back-up is meer dan anderhalve dag oud. Kijk hieronder wat er misging."
+msgstr "De laatste gelukte back-up is meer dan anderhalve dag oud. Kijk hieronder wat er misging."
+
 #: src/components/open-invitations.tsx
 #: src/components/person-actions.tsx
 msgid "De link werkt daarna niet meer. Wie hem al heeft, kan er niet meer mee binnenkomen."
 msgstr "De link werkt daarna niet meer. Wie hem al heeft, kan er niet meer mee binnenkomen."
+
+#: src/routes/backup.tsx
+msgid "De map moet op een andere schijf staan dan de gegevens en eigendom zijn van gebruiker 10001. Wil je een back-up op afstand? Zet dan BRIEVIE_BACKUP_REPOSITORY in plaats van de map."
+msgstr "De map moet op een andere schijf staan dan de gegevens en eigendom zijn van gebruiker 10001. Wil je een back-up op afstand? Zet dan BRIEVIE_BACKUP_REPOSITORY in plaats van de map."
 
 #: src/components/invite-dialog.tsx
 msgid "De oude link werkt niet meer."
@@ -1545,6 +1566,14 @@ msgstr "Een brief met het label Zorg wordt dan vanzelf privé. Brieven die er al
 msgid "Een label"
 msgstr "Een label"
 
+#: src/routes/backup.tsx
+msgid "Een map"
+msgstr "Een map"
+
+#: src/routes/backup.tsx
+msgid "Een plek op afstand"
+msgstr "Een plek op afstand"
+
 #: src/routes/automations.tsx
 msgid "Een regel zet labels of een naam op nieuwe post. De regels draaien van boven naar beneden."
 msgstr "Een regel zet labels of een naam op nieuwe post. De regels draaien van boven naar beneden."
@@ -1605,6 +1634,14 @@ msgstr "Er is iets misgegaan. Probeer het later opnieuw."
 msgid "Er is niemand meer om toe te voegen. Iemand met de rol Alleen lezen kan geen post verdelen."
 msgstr "Er is niemand meer om toe te voegen. Iemand met de rol Alleen lezen kan geen post verdelen."
 
+#: src/routes/backup.tsx
+msgid "Er is nog geen back-up ingesteld. Zonder back-up zijn je documenten weg als de schijf van deze server kapotgaat."
+msgstr "Er is nog geen back-up ingesteld. Zonder back-up zijn je documenten weg als de schijf van deze server kapotgaat."
+
+#: src/routes/backup.tsx
+msgid "Er is nog geen enkele back-up gelukt."
+msgstr "Er is nog geen enkele back-up gelukt."
+
 #: src/routes/my-post.tsx
 msgid "Er is nog geen post op jouw naam."
 msgstr "Er is nog geen post op jouw naam."
@@ -1624,6 +1661,10 @@ msgstr "Er is nog niets opgeslagen."
 #: src/routes/tasks.tsx
 msgid "Er ligt niets op te pakken."
 msgstr "Er ligt niets op te pakken."
+
+#: src/routes/backup.tsx
+msgid "Er loopt een back-up. Dit scherm ververst zichzelf."
+msgstr "Er loopt een back-up. Dit scherm ververst zichzelf."
 
 #: src/components/device-table.tsx
 msgid "Er zijn nog geen apparaten gekoppeld."
@@ -1863,6 +1904,10 @@ msgstr "Groepen staan uit: deze post gaat nu naar wie post verdeelt."
 msgid "Groepen staan uit."
 msgstr "Groepen staan uit."
 
+#: src/routes/backup.tsx
+msgid "Grootte"
+msgstr "Grootte"
+
 #: src/routes/invitation.tsx
 msgid "Heb je al een account?"
 msgstr "Heb je al een account?"
@@ -1948,6 +1993,10 @@ msgstr "Het zijn twee brieven"
 #: src/components/visibility-preview-dialog.tsx
 msgid "Hiermee gaat niemand iets anders zien."
 msgstr "Hiermee gaat niemand iets anders zien."
+
+#: src/routes/backup.tsx
+msgid "Hoe het staat met de back-up van deze server. Elke nacht maakt Brievie vanzelf een back-up zodra er een bestemming is ingesteld."
+msgstr "Hoe het staat met de back-up van deze server. Elke nacht maakt Brievie vanzelf een back-up zodra er een bestemming is ingesteld."
 
 #: src/routes/rule-editor.tsx
 msgid "Hoeveel voorwaarden moeten kloppen"
@@ -2500,6 +2549,18 @@ msgstr "Laatst ingelogd"
 msgid "Laatst ingelogd op {0}"
 msgstr "Laatst ingelogd op {0}"
 
+#: src/routes/backup.tsx
+msgid "Laatste back-up"
+msgstr "Laatste back-up"
+
+#: src/routes/backup.tsx
+msgid "Laatste controle"
+msgstr "Laatste controle"
+
+#: src/routes/backup.tsx
+msgid "Laatste gelukte back-up"
+msgstr "Laatste gelukte back-up"
+
 #: src/components/audit-codes.ts
 #: src/routes/labels.tsx
 #: src/routes/post.tsx
@@ -2944,6 +3005,10 @@ msgstr "Noem een label niet naar een persoon of een gevoelig onderwerp."
 msgid "Nog {daysLeft} dagen ({date})"
 msgstr "Nog {daysLeft} dagen ({date})"
 
+#: src/routes/backup.tsx
+msgid "nog geen"
+msgstr "nog geen"
+
 #: src/routes/departments.tsx
 #: src/routes/people-detail.tsx
 msgid "Noodtoegang"
@@ -2994,6 +3059,10 @@ msgstr "Nooit ingelogd"
 #: src/components/invite-dialog.tsx
 msgid "Notitie voor jezelf"
 msgstr "Notitie voor jezelf"
+
+#: src/routes/backup.tsx
+msgid "Nu back-uppen"
+msgstr "Nu back-uppen"
 
 #: src/routes/visibility.tsx
 msgid "Nu zien nog steeds alle mensen alle post; afdelingen helpen dan alleen bij het sorteren."
@@ -4343,6 +4412,10 @@ msgstr "Zelf controleren?"
 msgid "Zet Alleen ongelezen uit om al je post te zien."
 msgstr "Zet Alleen ongelezen uit om al je post te zien."
 
+#: src/routes/backup.tsx
+msgid "Zet deze regels bij de instellingen van Brievie (in het compose-bestand, Portainer of Synology) en start Brievie opnieuw:"
+msgstr "Zet deze regels bij de instellingen van Brievie (in het compose-bestand, Portainer of Synology) en start Brievie opnieuw:"
+
 #: src/components/export-panel.tsx
 msgid "Zet het aan bij Instellingen."
 msgstr "Zet het aan bij Instellingen."
@@ -4387,6 +4460,10 @@ msgstr "Zo staat de naam op brieven, bijvoorbeeld Afd. Financiën. Zet elke vari
 #: src/components/person-dialog.tsx
 msgid "Zo staat de naam op brieven, bijvoorbeeld J. de Vries. Zet elke variant op een eigen regel."
 msgstr "Zo staat de naam op brieven, bijvoorbeeld J. de Vries. Zet elke variant op een eigen regel."
+
+#: src/routes/backup.tsx
+msgid "Zo stel je een back-up in"
+msgstr "Zo stel je een back-up in"
 
 #: src/components/rule-templates.tsx
 msgid "Zo werkt een regel"

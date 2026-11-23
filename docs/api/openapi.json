@@ -428,6 +428,84 @@
         "title": "AuditEventOut",
         "type": "object"
       },
+      "BackupRunOut": {
+        "properties": {
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id"
+        ],
+        "title": "BackupRunOut",
+        "type": "object"
+      },
+      "BackupStatusOut": {
+        "description": "What the web interface shows of the back-up. No path, key, credential or address.",
+        "properties": {
+          "destination": {
+            "title": "Destination",
+            "type": "string"
+          },
+          "last_check_at": {
+            "format": "date-time",
+            "title": "Last Check At",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_failure_at": {
+            "format": "date-time",
+            "title": "Last Failure At",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_failure_reason": {
+            "title": "Last Failure Reason",
+            "type": "string"
+          },
+          "last_success_at": {
+            "format": "date-time",
+            "title": "Last Success At",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_success_size_bytes": {
+            "title": "Last Success Size Bytes",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "late": {
+            "title": "Late",
+            "type": "boolean"
+          },
+          "running": {
+            "title": "Running",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "destination",
+          "last_success_at",
+          "last_success_size_bytes",
+          "last_failure_at",
+          "last_failure_reason",
+          "last_check_at",
+          "running",
+          "late"
+        ],
+        "title": "BackupStatusOut",
+        "type": "object"
+      },
       "CaCertificateOut": {
         "properties": {
           "pem": {
@@ -6637,6 +6715,122 @@
         "summary": "Export Server Audit Events",
         "tags": [
           "audit"
+        ]
+      }
+    },
+    "/api/v1/server/backup-runs": {
+      "post": {
+        "description": "Web session only: a bearer token answers 401 not_authenticated; a session without a valid CSRF token answers 403. Server admins only. Queues one back-up now (the keeper makes it). 409 not_configured without a destination; 409 backup_running while one is open.",
+        "operationId": "createBackupRun",
+        "parameters": [],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupRunOut"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Create Backup Run",
+        "tags": [
+          "backup"
+        ]
+      }
+    },
+    "/api/v1/server/backup-status": {
+      "get": {
+        "description": "Web session only: a bearer token answers 401 not_authenticated. Server admins only. What the back-up panel shows: the kind of destination (never its path or address), the last good back-up and the last failure since, and whether one is running or late.",
+        "operationId": "getBackupStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupStatusOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Get Backup Status",
+        "tags": [
+          "backup"
         ]
       }
     },

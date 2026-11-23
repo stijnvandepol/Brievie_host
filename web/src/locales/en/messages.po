@@ -829,6 +829,11 @@ msgstr "Switch on the autopilot?"
 msgid "Automatisering"
 msgstr "Automation"
 
+#: src/components/page.tsx
+#: src/routes/backup.tsx
+msgid "Back-up"
+msgstr "Backup"
+
 #: src/routes/setup-summary.tsx
 msgid "Back-up instellen: typ op de server"
 msgstr "Set up the backup: on the server, type"
@@ -899,6 +904,10 @@ msgstr "See all mail"
 #: src/components/document-table.tsx
 msgid "Beschikking"
 msgstr "Decision"
+
+#: src/routes/backup.tsx
+msgid "Bestemming"
+msgstr "Destination"
 
 #: src/components/rule-sentence.ts
 msgid "bevat de tekst"
@@ -1283,10 +1292,22 @@ msgstr "The export did not succeed. Try again."
 msgid "de groep"
 msgstr "the group"
 
+#: src/routes/backup.tsx
+msgid "De instellingen voor de back-up spreken elkaar tegen: je kunt een map óf een adres instellen, niet allebei."
+msgstr "The backup settings contradict each other: you can set a folder or an address, not both."
+
+#: src/routes/backup.tsx
+msgid "De laatste gelukte back-up is meer dan anderhalve dag oud. Kijk hieronder wat er misging."
+msgstr "The last successful backup is more than a day and a half old. See below what went wrong."
+
 #: src/components/open-invitations.tsx
 #: src/components/person-actions.tsx
 msgid "De link werkt daarna niet meer. Wie hem al heeft, kan er niet meer mee binnenkomen."
 msgstr "After this the link no longer works. Anyone who already has it can no longer use it to get in."
+
+#: src/routes/backup.tsx
+msgid "De map moet op een andere schijf staan dan de gegevens en eigendom zijn van gebruiker 10001. Wil je een back-up op afstand? Zet dan BRIEVIE_BACKUP_REPOSITORY in plaats van de map."
+msgstr "The folder must be on another disk than the data and be owned by user 10001. Do you want a remote backup? Then set BRIEVIE_BACKUP_REPOSITORY instead of the folder."
 
 #: src/components/invite-dialog.tsx
 msgid "De oude link werkt niet meer."
@@ -1545,6 +1566,14 @@ msgstr "A letter with the label Healthcare then becomes private on its own. Lett
 msgid "Een label"
 msgstr "A label"
 
+#: src/routes/backup.tsx
+msgid "Een map"
+msgstr "A folder"
+
+#: src/routes/backup.tsx
+msgid "Een plek op afstand"
+msgstr "A remote place"
+
 #: src/routes/automations.tsx
 msgid "Een regel zet labels of een naam op nieuwe post. De regels draaien van boven naar beneden."
 msgstr "A rule puts labels or a name on new mail. The rules run from top to bottom."
@@ -1605,6 +1634,14 @@ msgstr "Something went wrong. Try again later."
 msgid "Er is niemand meer om toe te voegen. Iemand met de rol Alleen lezen kan geen post verdelen."
 msgstr "There is nobody left to add. Someone with the role Read only cannot sort post."
 
+#: src/routes/backup.tsx
+msgid "Er is nog geen back-up ingesteld. Zonder back-up zijn je documenten weg als de schijf van deze server kapotgaat."
+msgstr "No backup has been set up yet. Without a backup your documents are gone if the disk of this server breaks."
+
+#: src/routes/backup.tsx
+msgid "Er is nog geen enkele back-up gelukt."
+msgstr "No backup has succeeded yet."
+
 #: src/routes/my-post.tsx
 msgid "Er is nog geen post op jouw naam."
 msgstr "There is no post in your name yet."
@@ -1624,6 +1661,10 @@ msgstr "Nothing has been saved yet."
 #: src/routes/tasks.tsx
 msgid "Er ligt niets op te pakken."
 msgstr "There is nothing to pick up."
+
+#: src/routes/backup.tsx
+msgid "Er loopt een back-up. Dit scherm ververst zichzelf."
+msgstr "A backup is running. This screen refreshes itself."
 
 #: src/components/device-table.tsx
 msgid "Er zijn nog geen apparaten gekoppeld."
@@ -1863,6 +1904,10 @@ msgstr "Groups are off: this post now goes to whoever sorts post."
 msgid "Groepen staan uit."
 msgstr "Groups are off."
 
+#: src/routes/backup.tsx
+msgid "Grootte"
+msgstr "Size"
+
 #: src/routes/invitation.tsx
 msgid "Heb je al een account?"
 msgstr "Already have an account?"
@@ -1948,6 +1993,10 @@ msgstr "They are two letters"
 #: src/components/visibility-preview-dialog.tsx
 msgid "Hiermee gaat niemand iets anders zien."
 msgstr "Nobody will see anything different."
+
+#: src/routes/backup.tsx
+msgid "Hoe het staat met de back-up van deze server. Elke nacht maakt Brievie vanzelf een back-up zodra er een bestemming is ingesteld."
+msgstr "How the backup of this server is doing. Every night Brievie makes a backup by itself once a destination is set."
 
 #: src/routes/rule-editor.tsx
 msgid "Hoeveel voorwaarden moeten kloppen"
@@ -2500,6 +2549,18 @@ msgstr "Last signed in"
 msgid "Laatst ingelogd op {0}"
 msgstr "Last signed in on {0}"
 
+#: src/routes/backup.tsx
+msgid "Laatste back-up"
+msgstr "Last backup"
+
+#: src/routes/backup.tsx
+msgid "Laatste controle"
+msgstr "Last check"
+
+#: src/routes/backup.tsx
+msgid "Laatste gelukte back-up"
+msgstr "Last successful backup"
+
 #: src/components/audit-codes.ts
 #: src/routes/labels.tsx
 #: src/routes/post.tsx
@@ -2944,6 +3005,10 @@ msgstr "Do not name a label after a person or a sensitive subject."
 msgid "Nog {daysLeft} dagen ({date})"
 msgstr "{daysLeft} days left ({date})"
 
+#: src/routes/backup.tsx
+msgid "nog geen"
+msgstr "none yet"
+
 #: src/routes/departments.tsx
 #: src/routes/people-detail.tsx
 msgid "Noodtoegang"
@@ -2994,6 +3059,10 @@ msgstr "Never signed in"
 #: src/components/invite-dialog.tsx
 msgid "Notitie voor jezelf"
 msgstr "Note to yourself"
+
+#: src/routes/backup.tsx
+msgid "Nu back-uppen"
+msgstr "Back up now"
 
 #: src/routes/visibility.tsx
 msgid "Nu zien nog steeds alle mensen alle post; afdelingen helpen dan alleen bij het sorteren."
@@ -4343,6 +4412,10 @@ msgstr "Check it yourself?"
 msgid "Zet Alleen ongelezen uit om al je post te zien."
 msgstr "Turn off Unread only to see all your mail."
 
+#: src/routes/backup.tsx
+msgid "Zet deze regels bij de instellingen van Brievie (in het compose-bestand, Portainer of Synology) en start Brievie opnieuw:"
+msgstr "Put these lines in the settings of Brievie (in the compose file, Portainer or Synology) and start Brievie again:"
+
 #: src/components/export-panel.tsx
 msgid "Zet het aan bij Instellingen."
 msgstr "Switch it on under Settings."
@@ -4387,6 +4460,10 @@ msgstr "This is how the name appears on letters, for example Finance Dept. Put e
 #: src/components/person-dialog.tsx
 msgid "Zo staat de naam op brieven, bijvoorbeeld J. de Vries. Zet elke variant op een eigen regel."
 msgstr "This is how the name appears on letters, for example J. de Vries. Put each variant on its own line."
+
+#: src/routes/backup.tsx
+msgid "Zo stel je een back-up in"
+msgstr "How to set up a backup"
 
 #: src/components/rule-templates.tsx
 msgid "Zo werkt een regel"
