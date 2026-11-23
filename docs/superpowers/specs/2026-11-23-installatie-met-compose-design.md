@@ -192,12 +192,17 @@ terug of de sleutels van je herstelblad (`init-secrets import`)." Dat is de verv
 `check_settings` en voorkomt het ergste: een nieuwe hoofdsleutel naast bestaande documenten.
 De werker controleert daarnaast al met `check_master_key`.
 
-**Importeren.** Staan `BRIEVIE_MASTER_KEY`, `SECRET_KEY`, `POSTGRES_PASSWORD`,
-`BRIEVIE_OWNER_PASSWORD`, `BRIEVIE_APP_PASSWORD` en `BRIEVIE_BACKUP_DB_PASSWORD` als omgevingsvariabele in
-de container (uit `--env-file deploy/.env` van een wrapper-installatie, of uit het herstelblad),
-dan schrijft `init-secrets` die eenmalig naar de kluis. Verschilt een gegeven waarde van wat de
-kluis al heeft, dan weigert hij (nooit stil een andere sleutel). Na de import kan de gebruiker de
-variabelen weghalen. Dit is ook het herstelpad na verlies van het volume `secrets`.
+**Importeren (alleen uit een bestand, nooit uit de omgeving).** `--env-file` voedt alleen de
+`${}`-invulling van het compose-bestand; een geheim in de omgeving van `init-secrets` zou bovendien
+in `docker inspect` van die container blijven staan. Daarom leest de import een *bestand*:
+`docker compose run --rm -v "$PWD/deploy/.env:/import/env:ro" init-secrets python manage.py init_secrets --import /import/env`
+(`run --rm` laat geen container achter). Het bestand mag een `deploy/.env` van de wrapper zijn
+(`BRIEVIE_MASTER_KEY`, `SECRET_KEY`, `POSTGRES_PASSWORD`, `BRIEVIE_OWNER_PASSWORD`,
+`BRIEVIE_APP_PASSWORD`, `BRIEVIE_BACKUP_DB_PASSWORD`, `BRIEVIE_INSTALLATION_ID`) of een bestand met
+alleen de hoofdsleutel van het herstelblad. De import schrijft eenmalig naar de kluis en werkt alleen
+bij een lege kluis; verschilt een waarde van wat de kluis al heeft, dan weigert hij (nooit stil een
+andere sleutel). Wie wrapper-gegevens overzet had een terminal (hij draaide `./brievie`), dus dit is
+eerlijk. Dit is ook het herstelpad na verlies van het volume `secrets`.
 
 **Wat nooit in een log komt:** alleen de eenmalige installatiecode, zoals nu. Wie de log niet
 wil lezen zet zelf `BRIEVIE_SETUP_TOKEN` (minstens 16 tekens) in het bestand.
@@ -227,7 +232,13 @@ Eén commando, `python manage.py prepare_server`, in deze volgorde; elke stap is
 5. **Migraties** als owner, `createcachetable`.
 6. **Vastleggen:** `InstalledVersion` (nieuw, 4.6) en `record_update` (bestaat) met het nummer van
    de noodback-up.
-7. Uitvoer: alleen Nederlandse zinnen; geen geheim; geen documentinhoud.
+7. **Kopie van de instellingen voor de back-up.** De wrapper bewaart bij elke start een kopie van
+   `deploy/.env` zonder geheimen (`store_env_copy`; zonder die kopie weigert een back-up met
+   `env_copy_missing`). Zonder `.env` schrijft `init` die kopie zelf: de niet-geheime instellingen uit
+   zijn omgeving, door dezelfde bewaker (`apps.backup.envcopy`). Op een nieuwe machine is
+   "compose-bestand + herstelblad (hoofdsleutel via de import)" de vervanger van "het `.env`
+   opnieuw opbouwen uit die kopie".
+8. Uitvoer: alleen Nederlandse zinnen; geen geheim; geen documentinhoud.
 
 ### 4.6 Update zonder wrapper: de versiepoort
 
@@ -257,8 +268,11 @@ hetzelfde aan, in `init`, met `deploy/release.json` dat nu **in het image** komt
   api nog tot `init` klaar is. Daarom zet `init` vóór de noodback-up
   `ALTER DATABASE brievie SET default_transaction_read_only = on` en sluit bestaande sessies van de
   app-rol (`pg_terminate_backend`). Elke versie van de api, ook de oude, kan dan niet meer
-  schrijven; de migratie zet voor zichzelf `default_transaction_read_only=off` in de sessie;
-  na afloop gaat het weer uit. Bij een fout vóór de eerste migratie zet `init` het uit en de
+  schrijven. Elke verbinding die `init` zelf opent (superuser, owner, app, back-up) zet
+  `default_transaction_read_only=off` in haar eigen opties; de bevriezing geldt voor alle anderen.
+  Na afloop gaat het weer uit. Zichtbaar voor de gebruiker: tijdens een update beantwoordt de oude api
+  nog leesverzoeken, maar schrijven mislukt tot `init` klaar is (de wrapper stopt de api helemaal);
+  anders, niet slechter. Bij een fout vóór de eerste migratie zet `init` het uit en de
   oude versie werkt door; bij een fout ná een migratie blijft het aan en staat in het log de weg terug.
   *Dit is nieuw gedrag en niet eerder getest; het plan heeft er eigen taken voor (T6).*
 - **Compose-bestand versus image.** Een update is meestal alleen het versienummer. Verandert de
@@ -477,10 +491,12 @@ bij de versie hoort.
   1. `./brievie update` naar de versie die het compose-bestand heeft (minstens 0.5.0);
   2. `./brievie backup`, controleer met `./brievie status`;
   3. `./brievie` stoppen: `docker compose -p brievie ... stop` (staat in de uitleg);
-  4. bestand opslaan naast `deploy/.env`, dan
-     `docker compose --env-file deploy/.env -f brievie-compose.yml up -d`: `init-secrets` ziet de
-     waarden uit het `.env`, importeert ze naar de kluis en controleert dat ze overeenkomen met
-     het `installation-id` in `backup-config`;
+  4. bestand opslaan naast `deploy/.env`, dan eerst de import (4.4):
+     `docker compose -f brievie-compose.yml run --rm -v "$PWD/deploy/.env:/import/env:ro" init-secrets python manage.py init_secrets --import /import/env`,
+     die de geheimen naar de kluis schrijft en controleert dat ze overeenkomen met het
+     `installation-id` in `backup-config`; daarna
+     `docker compose --env-file deploy/.env -f brievie-compose.yml up -d` (het `--env-file` voedt
+     alleen de niet-geheime instellingen: naam, poorten, back-upmap, versie);
   5. na een gezonde start: hoofdsleutel op het herstelblad controleren, `deploy/.env` bewaren
      buiten de map en uit de checkout verwijderen.
   Volumes, CA, gekoppelde iPhones en de back-upbestemming blijven. CI-job `adopt` (T11) doet dit
