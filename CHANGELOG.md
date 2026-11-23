@@ -5,6 +5,34 @@ Alle veranderingen in Brievie (de server) die je als beheerder merkt. De vorm vo
 [Semantic Versioning](https://semver.org/lang/nl/). Elke versie heeft een tag `vX.Y.Z`.
 Lees bij elke versie eerst **Voor je bijwerkt**, als die er staat.
 
+## [Onuitgebracht]
+
+Installeren met alleen een compose-bestand.
+
+### Voor je bijwerkt
+
+- Een bestaande installatie met `./brievie` verandert niet. Het compose-bestand is een tweede
+  manier om te installeren (docs/SELFHOST.md, sectie 24); beide gebruiken dezelfde volumes,
+  start nooit allebei tegelijk. Verhuizen van de een naar de ander staat in dezelfde sectie.
+- De server maakt elke nacht vanzelf een back-up zodra er een bestemming is ingesteld (ook bij
+  `./brievie`), en een serverbeheerder ziet de stand onder Account, Back-up.
+- Bij het bijwerken komt de tabel `updates_installedversion` erbij (de versie waar de database bij hoort).
+
+### Toegevoegd
+
+- Het compose-bestand (`deploy/compose/docker-compose.yml`, bij elke release als
+  `docker-compose.yml` en als `docker-compose.pinned.yml` met de images op digest) en het
+  image `brievie-proxy` (Caddy met onze Caddyfile).
+- Sleutels worden bij de eerste start gemaakt en staan als bestanden in volumes (`X_FILE`
+  naast elke geheime instelling), per dienst alleen wat die nodig heeft; PostgreSQL staat op een
+  intern netwerk.
+- Bij elke start controleert `init` of deze versie op deze gegevens mag starten (geen stap
+  terug, geen te grote sprong, dezelfde PostgreSQL), maakt vóór een update de back-up
+  `pre-update-<versie>`, zet de database tijdens de update op alleen-lezen en legt de versie vast.
+- Herstelblad downloaden in de webinterface (serverbeheerder, na opnieuw inloggen), en
+  `manage.py restore_install` om een back-up terug te zetten zonder `./brievie`.
+- Back-up: elke nacht, een paneel met "Nu back-uppen", en `BRIEVIE_BACKUP_AUTO_INIT`.
+
 ## [0.4.0] - 2026-11-21
 
 Wie ziet welke post, een prullenbak, dubbele brieven, "Mijn taken" en de webinterface ook in

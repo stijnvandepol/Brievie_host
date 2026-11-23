@@ -127,6 +127,11 @@ Found a vulnerability? See [SECURITY.md](SECURITY.md); please do not open a publ
 
 ## Installation
 
+**With only a compose file** (Portainer, Synology Container Manager, Dockge, Unraid, or
+`docker compose up -d`; no checkout, no script): see
+[docs/SELFHOST.md](docs/SELFHOST.md) section 24. The file is `deploy/compose/docker-compose.yml`,
+attached to every release. The rest of this section is the `./brievie` way (a git checkout).
+
 ### Start
 
 ```sh

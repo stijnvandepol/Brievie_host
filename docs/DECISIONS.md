@@ -2611,3 +2611,73 @@ Every point was checked against the code before fixing; all four held.
   and admin read behind it (`updateWorkspaceSettings`, `updateVisibility`,
   `updateAiSettings`, `setEmergencyAccess`, `listWorkspaceAuditEvents`) still requires a
   web session and an admin (emergency access: a server admin) on the server.
+
+## 2026-11-23: Installing with only a compose file
+
+Design: `docs/superpowers/specs/2026-11-23-installatie-met-compose-design.md`, plan
+`docs/superpowers/plans/2026-11-23-host-installatie-met-compose.md`. The owner follows every
+recommendation D1 to D7 of the spec.
+
+- **D1: an own proxy image, `brievie-proxy`.** Caddy with `deploy/Caddyfile` and
+  `caddy-publish-root.sh` baked in (`deploy/Dockerfile.proxy`), built, scanned and attested
+  like the backend image. Rejected: inline `configs: content:`, which needs Compose 2.23.1 or
+  newer, and what a Synology or Unraid ships is unknown. The base is `caddy:2.11.9` pinned by
+  digest (multi-architecture). Its binary carries `golang.org/x/net` 0.60.0
+  (CVE-2026-78661, fixed in 0.62.0, not yet in a Caddy release; the proxy never parses
+  HTML): accepted in `.trivyignore.yaml` until 2027-01-31, like restic's findings. No new
+  Python or npm dependency.
+- **D2: nightly back-up, a status panel and "Nu back-uppen" in this round.** A periodic job on
+  the `backup` queue (02:30, `BRIEVIE_BACKUP_HOUR`; only with a destination; at most one in
+  20 hours, a back-up by hand counts) and `getBackupStatus` / `createBackupRun` for server
+  admins. The panel shows no live "reachable" or marker state: the api container mounts no
+  destination (only the keeper does), so it shows the last runs (late after 36 hours).
+  `BRIEVIE_BACKUP_AUTO_INIT` prepares an empty folder once, never with the same-disk override.
+- **D3: the recovery sheet through the web.** `createRecoverySheet`: POST only, session only,
+  server admin, `reauthenticate` within 15 minutes (403 `reauthentication_required`, as
+  `createPairingCode`; the plan's 401 name was not used), `Cache-Control: no-store`, audited as
+  `recovery_sheet_viewed`, no value in a log. Only on a compose install (409 otherwise): the
+  api of a wrapper install has no back-up password or destination, so its sheet would be
+  incomplete. The api volume therefore also holds `backup_password` (derivable from the master
+  key unless the owner chose another).
+- **D4: four volumes for the secrets.** `secrets` (the vault, only `init-secrets`, `init`, `admin`)
+  and `secrets-postgres`, `secrets-api`, `secrets-keeper`, each with only what that service
+  needs: the keeper holds no master key, the api no superuser or owner password. One shared
+  volume would be weaker than the wrapper. Every secret `X` also reads `X_FILE` (the variable
+  wins, so wrapper installs do not change); files are 0400 and refused when a link, over 4 KiB or
+  (with `BRIEVIE_STRICT_SECRET_FILES`) open to others. `init-secrets` runs as
+  `python -m apps.installer.init_secrets` (not `manage.py`: settings need a secret key and a
+  database URL, and that container has no network and no secret), refuses to make a master key
+  when data exists and the vault is empty, and imports only from a file.
+- **D5: the database is read-only for everyone but `init` during an update.**
+  `ALTER DATABASE ... SET default_transaction_read_only = on` plus ending the sessions of the
+  app role; `init`'s own connections set it off (`BRIEVIE_INIT_WRITABLE`). A failure before
+  any migration lifts it; after one it stays and the way back is printed; a second start resumes
+  only when the back-up of the first exists. The CI job `compose-update` proves the two
+  assumptions: a refusing `init` leaves the old containers running, and a frozen database
+  refuses an old api's write.
+- **D6: other platforms are labelled "Niet getest".** Synology Container Manager, Unraid,
+  Portainer, Dockge, Podman (not supported), Docker Desktop on Windows and a Raspberry Pi are
+  not tried. One of us tries each step on real hardware before a label changes.
+- **D7: this lands before "van buiten bereikbaar".** `compose-parity` (the wrapper's file and the
+  compose file have the same services, environment keys, ports, `depends_on` and Caddy
+  environment) makes whoever lands second add the tunnel profile to both.
+- **`BRIEVIE_COMPOSE_REVISION`** lives in the compose file and as `gate.COMPOSE_REVISION` in the
+  image, not in `deploy/release.json` (installed updaters refuse unknown keys there). The
+  Dockerfile's `ENV` is kept equal by a test but the container environment overrides it, so the
+  code constant is the truth. The compose file's default version must equal `pyproject.toml`
+  (`release-check.py`); until the first release that carries it, the file points at images
+  that do not exist yet.
+- **Oldest Compose: 2.20.2**, installed in CI by checksum (`compose-oldest`). It proves an old
+  Compose, not a Synology.
+- **Wrapper and compose file side by side**, same project name and volumes, never started
+  together; moving over is `init_secrets --import` of `deploy/.env` plus `BRIEVIE_ADOPT_VERSION`
+  (job `adopt`). Phase 2, not built: the wrapper using the compose file.
+- **`restore_install`** (not in the plan, which only named `admin restore`) is the compose
+  restore: it refuses while any service holds a database session, needs `--replace` over data,
+  and makes no safety back-up of what it replaces. A new machine puts the sheet's master key
+  in the vault first.
+- **Tests without PyYAML** (no new dependency): text rules for the file; `drift()` is unit-tested
+  with fixtures and run on `docker compose config` output only in CI. The plan's "land each job
+  with a deliberately broken fixture" is replaced by `compose-secrets-check.sh selftest`, which
+  plants a secret and requires the detector to find it.
+
