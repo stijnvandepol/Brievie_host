@@ -260,7 +260,7 @@ hetzelfde aan, in `init`, met `deploy/release.json` dat nu **in het image** komt
   schrijven; de migratie zet voor zichzelf `default_transaction_read_only=off` in de sessie;
   na afloop gaat het weer uit. Bij een fout vóór de eerste migratie zet `init` het uit en de
   oude versie werkt door; bij een fout ná een migratie blijft het aan en staat in het log de weg terug.
-  *Dit is nieuw gedrag en niet eerder getest; het plan heeft er eigen taken voor (T7).*
+  *Dit is nieuw gedrag en niet eerder getest; het plan heeft er eigen taken voor (T6).*
 - **Compose-bestand versus image.** Een update is meestal alleen het versienummer. Verandert de
   structuur (een nieuwe service, nieuw volume), dan staat dat in de releasenotes en gaat
   `BRIEVIE_COMPOSE_REVISION` omhoog (een `ENV` in het backend-image en een regel in het bestand;
