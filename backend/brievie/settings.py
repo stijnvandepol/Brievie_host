@@ -1,8 +1,11 @@
+import os
 from datetime import timedelta
 from pathlib import Path
 
 import environ
 from django.core.exceptions import ImproperlyConfigured
+
+from apps.common import secrets as _secrets
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -13,13 +16,32 @@ _dotenv = BASE_DIR.parent / "deploy" / ".env"
 if _dotenv.is_file():
     env.read_env(str(_dotenv))
 
-SECRET_KEY: str = env.str("SECRET_KEY")
+
+def _secret(name: str, default: str | None = None) -> str:
+    """A secret from `NAME` or the file `NAME_FILE` names (apps.common.secrets).
+
+    Without a default a missing secret stops the start. Errors carry no content."""
+    try:
+        value = _secrets.read_secret(name, os.environ, default=default or "")
+    except _secrets.SecretFileError as error:
+        raise ImproperlyConfigured(f"{name}_FILE cannot be used ({error.code}).") from None
+    if not value and default is None:
+        raise ImproperlyConfigured(f"Set {name} or {name}_FILE.")
+    return value
+
+
+def _database_url(name: str) -> str:
+    try:
+        return _secrets.database_url(name, os.environ)
+    except _secrets.SecretFileError as error:
+        raise ImproperlyConfigured(f"{name} password file cannot be used ({error.code}).") from None
+
+
+SECRET_KEY: str = _secret("SECRET_KEY")
 DEBUG: bool = env.bool("DEBUG", default=False)
-if not DEBUG and ("change-me" in SECRET_KEY or len(SECRET_KEY) < 50):
-    raise ImproperlyConfigured(
-        "SECRET_KEY is still the placeholder or shorter than 50 characters. "
-        "Generate one: openssl rand -base64 48 (see 'Run the whole stack' in the README)."
-    )
+_secret_key_problem = _secrets.check_secret_key(SECRET_KEY, debug=DEBUG)
+if _secret_key_problem:
+    raise ImproperlyConfigured(_secret_key_problem)
 ALLOWED_HOSTS: list[str] = env.list("ALLOWED_HOSTS", default=["localhost"])
 
 INSTALLED_APPS = [
@@ -107,22 +129,30 @@ TEMPLATES = [
 # (tests/conftest.py) get its credentials, never the serving process.
 _use_owner_role = env.str("BRIEVIE_DB_ROLE", default="app") == "owner"
 DATABASE_OWNER: dict[str, object] | None = (
-    env.db("DATABASE_OWNER_URL") if env.str("DATABASE_OWNER_URL", default="") else None
+    env.db_url_config(_database_url("DATABASE_OWNER_URL"))
+    if _database_url("DATABASE_OWNER_URL")
+    else None
 )
 # The read-only back-up role (BYPASSRLS, member of pg_read_all_data). On the host only
 # the test run uses it (tests/conftest.py); in the container only the keeper.
 DATABASE_BACKUP: dict[str, object] | None = (
-    env.db("DATABASE_BACKUP_URL") if env.str("DATABASE_BACKUP_URL", default="") else None
+    env.db_url_config(_database_url("DATABASE_BACKUP_URL"))
+    if _database_url("DATABASE_BACKUP_URL")
+    else None
 )
 # A superuser, only for the one-off container that restores a back-up (it creates roles
 # and extensions). Never set on the host or in the serving containers, nor in the tests.
 DATABASE_SUPERUSER: dict[str, object] | None = (
-    env.db("DATABASE_SUPERUSER_URL") if env.str("DATABASE_SUPERUSER_URL", default="") else None
+    env.db_url_config(_database_url("DATABASE_SUPERUSER_URL"))
+    if _database_url("DATABASE_SUPERUSER_URL")
+    else None
 )
 if _use_owner_role and DATABASE_OWNER is None:
     raise ImproperlyConfigured("BRIEVIE_DB_ROLE=owner needs DATABASE_OWNER_URL.")
 DATABASES = {
-    "default": DATABASE_OWNER if _use_owner_role and DATABASE_OWNER else env.db("DATABASE_URL")
+    "default": DATABASE_OWNER
+    if _use_owner_role and DATABASE_OWNER
+    else env.db_url_config(_database_url("DATABASE_URL") or _secret("DATABASE_URL"))
 }
 DATABASES["default"]["ATOMIC_REQUESTS"] = True
 # No JIT compilation, for every connection the app, the migrate run and the tests open.
@@ -275,7 +305,7 @@ PROCRASTINATE_AUTODISCOVER_MODULE_NAME = "jobs"
 
 # Wraps every workspace's data key. Read lazily (apps.common.crypto.master_key), so
 # migrate and export_openapi run without it; the api and worker check it at start.
-BRIEVIE_MASTER_KEY: str = env.str("BRIEVIE_MASTER_KEY", default="")
+BRIEVIE_MASTER_KEY: str = _secret("BRIEVIE_MASTER_KEY", default="")
 # The restic binary for back-ups (apps.backup.restic).
 BRIEVIE_RESTIC_BINARY: str = env.str("BRIEVIE_RESTIC_BINARY", default="restic")
 
@@ -286,7 +316,7 @@ BRIEVIE_STORAGE_ROOT: str = env.str("BRIEVIE_STORAGE_ROOT", default="/data/docum
 # derived in the container (`manage.py derive_backup_password`) and may be absent on
 # a first run. A folder (compose mounts it at BRIEVIE_BACKUP_MOUNT) or a remote
 # repository is set, never both.
-BRIEVIE_BACKUP_PASSWORD: str = env.str("BRIEVIE_BACKUP_PASSWORD", default="")
+BRIEVIE_BACKUP_PASSWORD: str = _secret("BRIEVIE_BACKUP_PASSWORD", default="")
 BRIEVIE_BACKUP_REPOSITORY: str = env.str("BRIEVIE_BACKUP_REPOSITORY", default="")
 BRIEVIE_BACKUP_DIR_SET: bool = env.bool("BRIEVIE_BACKUP_DIR_SET", default=False)
 BRIEVIE_BACKUP_MOUNT: str = env.str("BRIEVIE_BACKUP_MOUNT", default="/backup")
