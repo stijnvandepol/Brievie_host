@@ -785,6 +785,7 @@ jobs:
           $COMPOSE logs --no-color init | tee "$RUNNER_TEMP/jump-init.log"
           grep -q 'niet in één keer' "$RUNNER_TEMP/jump-init.log"
           grep -q 'Er is niets veranderd' "$RUNNER_TEMP/jump-init.log"
+          $COMPOSE ps --all --format '{{.Service}} {{.State}} {{.Status}}'
           running=$($COMPOSE ps --status running --services | sort | tr '\n' ' ')
           test "$running" = "api caddy keeper postgres worker "
           curl --fail --silent --show-error --cacert "$RUNNER_TEMP/old-root.pem" https://localhost/api/v1/health |
@@ -826,6 +827,7 @@ jobs:
           test "$rc" != 0
           $COMPOSE logs --no-color init | tee "$RUNNER_TEMP/back-init.log"
           grep -q 'oudere versie' "$RUNNER_TEMP/back-init.log"
+          $COMPOSE ps --all --format '{{.Service}} {{.State}} {{.Status}}'
           running=$($COMPOSE ps --status running --services | sort | tr '\n' ' ')
           test "$running" = "api caddy keeper postgres worker "
           curl --fail --silent --show-error --cacert "$RUNNER_TEMP/old-root.pem" https://localhost/api/v1/health |
