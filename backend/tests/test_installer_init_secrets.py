@@ -432,3 +432,14 @@ def test_the_module_needs_no_django_models_or_database() -> None:
     source = Path(init_secrets.__file__).read_text()
     assert "django.db" not in source
     assert ".models" not in source
+
+
+def test_a_large_wrapper_env_file_imports_through_the_command_line(
+    tmp_path: Path,
+) -> None:
+    layout = make_layout(tmp_path)
+    env_file = tmp_path / "import.env"
+    env_file.write_text("# comment line to make the file large\n" * 400 + import_text())
+    assert env_file.stat().st_size > 8000
+    assert init_secrets.main(["--import", str(env_file)], {}, layout) == 0
+    assert vault_values(layout)["master_key"] == "ab" * 32

@@ -449,6 +449,19 @@ CONTAINER_LAYOUT = Layout(
 )  # fmt: skip
 
 
+MAX_IMPORT_BYTES = 256 * 1024
+
+
+def _read_import_file(path: str) -> str:
+    """The text of the file to import (a deploy/.env is larger than a secret file; it is
+    still bounded and never a link)."""
+    info = os.lstat(path)
+    if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_IMPORT_BYTES:
+        raise OSError("not a usable import file")
+    with open(path, "rb") as handle:
+        return handle.read(MAX_IMPORT_BYTES).decode("utf-8")
+
+
 def _bootstrap_translation() -> None:
     """Dutch texts without the project's settings (this runs without a database)."""
     import django
@@ -479,9 +492,8 @@ def main(argv: Sequence[str], environ: Mapping[str, str], layout: Layout = CONTA
         import_values = None
         if import_path:
             try:
-                raw = secret_files.read_file(import_path, False)
-                import_values = parse_import(raw.decode("utf-8"))
-            except (secret_files.SecretFileError, UnicodeDecodeError):
+                import_values = parse_import(_read_import_file(import_path))
+            except (OSError, UnicodeDecodeError):
                 raise InitSecretsError("import_unreadable") from None
         report = run(layout, environ, import_values=import_values)
     except InitSecretsError as error:
