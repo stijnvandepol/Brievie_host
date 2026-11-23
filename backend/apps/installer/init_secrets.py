@@ -396,6 +396,23 @@ def _run(
     )
 
 
+def adopt_installation_id(vault_dir: Path, backup_config: Path, owner: tuple[int, int]) -> str:
+    """After a restore: the data's `installation-id` becomes this installation's (the id in
+    the vault), so the next start does not find two installations in one volume. Replaces
+    that one fixed file atomically; nothing else in the folder is touched."""
+    vault = _open_directory(vault_dir)
+    config = _open_directory(backup_config)
+    try:
+        value = _read(vault, "installation_id")
+        if value is None or len(value) != 32 or _HEX.fullmatch(value) is None:
+            raise InitSecretsError("vault_unsafe")
+        _write(config, INSTALLATION_ID_NAME, value, owner)
+        return value
+    finally:
+        os.close(vault)
+        os.close(config)
+
+
 def _read_config_id(config: int) -> str | None:
     value = _read(config, INSTALLATION_ID_NAME)
     if value is None:

@@ -251,6 +251,8 @@ services:
 
   # One-off maintenance; never started by `up`:
   #   docker compose --profile admin run --rm admin python manage.py <command>
+  # For example a restore (stop api, worker, keeper and caddy first):
+  #   docker compose --profile admin run --rm admin python manage.py restore_install --replace
   # Root, because a restore writes every volume; the only container that holds both the
   # master key and the superuser password.
   admin:
@@ -263,6 +265,7 @@ services:
       <<: [*settings, *backup]
       DATABASE_URL: postgres://brievie_app@postgres:5432/brievie
       DATABASE_PASSWORD_FILE: /run/brievie/app_password
+      DATABASE_OWNER_PASSWORD_FILE: /run/brievie/owner_password
       DATABASE_BACKUP_URL: postgres://brievie_backup@postgres:5432/brievie
       DATABASE_BACKUP_PASSWORD_FILE: /run/brievie/backup_db_password
       DATABASE_SUPERUSER_URL: postgres://postgres@postgres:5432/brievie
@@ -279,6 +282,9 @@ services:
       - caddy-authority:/data/authority
       - backup-config:/data/backup-config
       - ${BRIEVIE_BACKUP_DIR:-backup-unset}:/backup
+    # Where a restore opens the back-up's settings: gone with this container.
+    tmpfs:
+      - /out:mode=0700
     networks: [db, edge]
 
 networks:

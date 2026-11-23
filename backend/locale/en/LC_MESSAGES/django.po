@@ -1835,6 +1835,52 @@ msgstr "The database could not be updated. Nothing has changed."
 msgid "Brievie %(version)s is klaar om te starten."
 msgstr "Brievie %(version)s is ready to start."
 
+#: apps/installer/restore_install.py
+msgid "Brievie draait nog. Stop eerst de services die de database gebruiken: docker compose stop api worker keeper caddy. Er is niets veranderd."
+msgstr "Brievie is still running. First stop the services that use the database: docker compose stop api worker keeper caddy. Nothing has changed."
+
+#: apps/installer/restore_install.py
+msgid "Er staan al gegevens in deze installatie. Wil je ze vervangen door de back-up? Typ het commando opnieuw met --replace. Er is niets veranderd."
+msgstr "There is already data in this installation. Do you want to replace it with the backup? Type the command again with --replace. Nothing has changed."
+
+#: apps/installer/restore_install.py
+msgid "De back-up wordt geopend…"
+msgstr "The backup is being opened…"
+
+#: apps/installer/restore_install.py
+msgid "De database wordt vervangen…"
+msgstr "The database is being replaced…"
+
+#: apps/installer/restore_install.py
+msgid "De documenten worden teruggezet…"
+msgstr "The documents are being restored…"
+
+#: apps/installer/restore_install.py
+msgid "Het herstel wordt gecontroleerd…"
+msgstr "The restore is being checked…"
+
+#: apps/installer/restore_install.py
+msgid "Herstel gelukt. Start Brievie nu weer: docker compose up -d. Een telefoon die al gekoppeld was, blijft werken."
+msgstr "Restore succeeded. Start Brievie again now: docker compose up -d. A phone that was already paired keeps working."
+
+#: apps/installer/restore_runtime.py
+msgid "De database is niet bereikbaar. Start eerst: docker compose up -d postgres."
+msgstr "The database cannot be reached. First start it: docker compose up -d postgres."
+
+#: apps/installer/restore_runtime.py
+msgid "De oude database kon niet worden leeggemaakt. Er is niets teruggezet."
+msgstr "The old database could not be emptied. Nothing has been restored."
+
+#: apps/installer/restore_runtime.py
+#, python-format
+msgid "Het herstel is niet compleet: %(count)d probleem gevonden. Lees de logs."
+msgstr "The restore is not complete: %(count)d problem found. Read the logs."
+
+#: apps/installer/restore_runtime.py
+#, python-format
+msgid "Het herstel is gecontroleerd: %(workspaces)d werkruimtes, %(pages)d pagina's."
+msgstr "The restore has been checked: %(workspaces)d workspaces, %(pages)d pages."
+
 #: apps/installer/runtime.py
 msgid "Het bestand release.json ontbreekt in dit image."
 msgstr "The file release.json is missing in this image."
