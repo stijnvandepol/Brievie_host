@@ -71,3 +71,38 @@ def test_unreadable_secret_file_names_a_code_not_content(tmp_path: Path) -> None
     )
     assert result.returncode != 0
     assert "unreadable" in result.stderr
+
+
+def test_init_writable_adds_the_option_that_ignores_the_freeze() -> None:
+    script = (
+        "from django.conf import settings\n"
+        'print(settings.DATABASES["default"]["OPTIONS"]["options"])'
+    )
+    base = {"SECRET_KEY": "k" * 60, "DATABASE_URL": "postgres://u:p@h:5432/d"}
+    plain = subprocess.run(  # noqa: S603 - fixed interpreter and script
+        [sys.executable, "-c", script],
+        cwd=BACKEND,
+        env={
+            "PATH": os.environ.get("PATH", ""),
+            "DJANGO_SETTINGS_MODULE": "brievie.settings",
+            **base,
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    writable = subprocess.run(  # noqa: S603 - fixed interpreter and script
+        [sys.executable, "-c", script],
+        cwd=BACKEND,
+        env={
+            "PATH": os.environ.get("PATH", ""),
+            "DJANGO_SETTINGS_MODULE": "brievie.settings",
+            "BRIEVIE_INIT_WRITABLE": "true",
+            **base,
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert "default_transaction_read_only" not in plain.stdout
+    assert "-c default_transaction_read_only=off" in writable.stdout

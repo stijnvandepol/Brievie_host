@@ -1766,6 +1766,84 @@ msgstr "Usage: init_secrets [--import <file>]"
 msgid "De sleutels staan klaar: %(made)d nieuw in de kluis, %(placed)d bestanden geplaatst."
 msgstr "The keys are ready: %(made)d new in the vault, %(placed)d files placed."
 
+#: apps/installer/management/commands/prepare_server.py
+msgid "prepare_server draait als schema-eigenaar (BRIEVIE_DB_ROLE=owner)."
+msgstr "prepare_server runs as the schema owner (BRIEVIE_DB_ROLE=owner)."
+
+#: apps/installer/prepare.py
+#, python-format
+msgid "De database blijft alleen-lezen. Zet de versie in het compose-bestand terug op de vorige versie en herstel de back-up pre-update-%(version)s (docker compose run --rm admin restore pre-update-%(version)s)."
+msgstr "The database stays read-only. Put the version in the compose file back to the previous version and restore the back-up pre-update-%(version)s (docker compose run --rm admin restore pre-update-%(version)s)."
+
+#: apps/installer/prepare.py
+msgid "Zet BRIEVIE_HOSTNAME op de naam of het IP-adres waarmee je iPhone deze server bereikt, bijvoorbeeld mijnnas.local. Er is niets veranderd."
+msgstr "Set BRIEVIE_HOSTNAME to the name or IP address your iPhone uses to reach this server, for example mynas.local. Nothing has changed."
+
+#: apps/installer/prepare.py
+msgid "BRIEVIE_HOSTNAME mag alleen letters, cijfers, punten en streepjes hebben. Er is niets veranderd."
+msgstr "BRIEVIE_HOSTNAME may only contain letters, digits, dots and dashes. Nothing has changed."
+
+#: apps/installer/prepare.py
+#, python-format
+msgid "Let op: met de naam %(name)s kan een iPhone deze server niet bereiken. Zet BRIEVIE_HOSTNAME op de naam of het IP-adres van deze server."
+msgstr "Note: with the name %(name)s an iPhone cannot reach this server. Set BRIEVIE_HOSTNAME to the name or IP address of this server."
+
+#: apps/installer/prepare.py
+msgid "De database kon niet worden ingericht. Er is niets veranderd."
+msgstr "The database could not be set up. Nothing has changed."
+
+#: apps/installer/prepare.py
+#, python-format
+msgid "Een eerdere start van dit bijwerken is afgebroken en er is geen back-up %(label)s. Herstel eerst een back-up. Er is niets veranderd."
+msgstr "An earlier start of this update was interrupted and there is no back-up %(label)s. Restore a back-up first. Nothing has changed."
+
+#: apps/installer/prepare.py
+msgid "Het bijwerken wordt afgemaakt; de back-up van de eerdere start is er."
+msgstr "The update is being finished; the back-up of the earlier start exists."
+
+#: apps/installer/prepare.py
+#, python-format
+msgid "Brievie wordt bijgewerkt: eerst een back-up (%(label)s)."
+msgstr "Brievie is being updated: first a back-up (%(label)s)."
+
+#: apps/installer/prepare.py
+msgid "De back-up vóór het bijwerken is mislukt. Er is niets veranderd."
+msgstr "The back-up before the update failed. Nothing has changed."
+
+#: apps/installer/prepare.py
+msgid "Het bijwerken is halverwege mislukt."
+msgstr "The update failed halfway."
+
+#: apps/installer/prepare.py
+msgid "De database kon niet worden bijgewerkt. Er is niets veranderd."
+msgstr "The database could not be updated. Nothing has changed."
+
+#: apps/installer/prepare.py
+#, python-format
+msgid "Brievie %(version)s is klaar om te starten."
+msgstr "Brievie %(version)s is ready to start."
+
+#: apps/installer/runtime.py
+msgid "Het bestand release.json ontbreekt in dit image."
+msgstr "The file release.json is missing in this image."
+
+#: apps/installer/runtime.py
+msgid "DATABASE_SUPERUSER_URL ontbreekt: dit is geen compose-start."
+msgstr "DATABASE_SUPERUSER_URL is missing: this is not a compose start."
+
+#: apps/installer/runtime.py
+#, python-format
+msgid "Een wachtwoordbestand kan niet worden gebruikt (%(code)s)."
+msgstr "A password file cannot be used (%(code)s)."
+
+#: apps/installer/runtime.py
+msgid "De wachtwoorden van de database ontbreken."
+msgstr "The database passwords are missing."
+
+#: apps/installer/runtime.py
+msgid "De versiegegevens van dit image kloppen niet."
+msgstr "The version data of this image is not right."
+
 #: apps/labels/presets.py
 msgid "Belastingdienst"
 msgstr "Belastingdienst"

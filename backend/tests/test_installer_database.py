@@ -5,10 +5,7 @@ so the two ways to make a server cannot drift apart. Nothing here touches the re
 `brievie` roles or database: every real-server test makes and drops its own names.
 """
 
-import os
 import re
-import secrets
-from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -85,39 +82,6 @@ def test_the_database_is_made_with_the_owner_role_like_the_sql_file() -> None:
 
 
 # --- a real server ---
-
-
-@pytest.fixture
-def connect() -> Connect:
-    if not os.environ.get("PGPASSWORD"):
-        pytest.skip("needs the PostgreSQL superuser of the CI service (PGPASSWORD)")
-    user = os.environ.get("POSTGRES_USER", "postgres")
-
-    def factory(dbname: str) -> psycopg.Connection[TupleRow]:
-        return psycopg.connect(dbname=dbname, user=user, autocommit=True)
-
-    return factory
-
-
-@pytest.fixture
-def scratch(connect: Connect) -> Iterator[Names]:
-    tag = secrets.token_hex(4)
-    names = Names(
-        owner=f"scratch_owner_{tag}",
-        app=f"scratch_app_{tag}",
-        backup=f"scratch_backup_{tag}",
-        database=f"scratch_db_{tag}",
-    )
-    yield names
-    assert names.database.startswith("scratch_db_")
-    with connect("postgres") as server:
-        server.execute(
-            sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(
-                sql.Identifier(names.database)
-            )
-        )
-        for role in (names.owner, names.app, names.backup):
-            server.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(role)))
 
 
 @dataclass(frozen=True)

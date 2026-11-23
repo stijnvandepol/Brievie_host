@@ -165,6 +165,11 @@ DATABASES["default"]["ATOMIC_REQUESTS"] = True
 _db_options = DATABASES["default"].get("OPTIONS")
 _db_options = dict(_db_options) if isinstance(_db_options, dict) else {}
 _db_options["options"] = f"{_db_options.get('options', '')} -c jit=off".strip()
+# `init` (apps.installer) freezes the database during an update (apps.installer.freeze):
+# only a process that sets this may still write, and only `init` does.
+BRIEVIE_INIT_WRITABLE: bool = env.bool("BRIEVIE_INIT_WRITABLE", default=False)
+if BRIEVIE_INIT_WRITABLE:
+    _db_options["options"] = f"{_db_options['options']} -c default_transaction_read_only=off"
 DATABASES["default"]["OPTIONS"] = _db_options
 
 # The database cache is shared by all gunicorn workers (throttle counts).
