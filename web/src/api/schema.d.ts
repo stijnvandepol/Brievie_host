@@ -369,6 +369,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/second-factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get My Second Factor
+         * @description Whether the caller has two-step verification, whether a rule asks it, and how many recovery codes are left. A web session, or a sign-in that answered 202 with step `setup` (it reaches only the set-up operations).
+         */
+        get: operations["getMySecondFactor"];
+        put?: never;
+        post?: never;
+        /**
+         * Remove My Second Factor
+         * @description Web session only: a bearer token answers 401 not_authenticated. Switch two-step verification off with the password and a code; every other session ends. 400 wrong_password (counted like a sign-in), 400 second_factor_invalid; 409 second_factor_required while a rule asks it.
+         */
+        delete: operations["removeMySecondFactor"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/second-factor/recovery-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Renew Recovery Codes
+         * @description Web session only: a bearer token answers 401 not_authenticated. Ten new recovery codes after a code from the app; the old ones stop working. 400 second_factor_invalid; 429 second_factor_locked. The answer is shown once and not stored by the browser (Cache-Control: no-store).
+         */
+        post: operations["renewRecoveryCodes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/second-factor/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Begin Second Factor Setup
+         * @description Begin setting up two-step verification: a new secret to scan (an unfinished set-up is replaced). 409 second_factor_exists when it is on; 403 reauthentication_required from a session that signed in more than 15 minutes ago (call reauthenticate first). A web session, or a sign-in that answered 202 with step `setup` (it reaches only the set-up operations). The answer is shown once and not stored by the browser (Cache-Control: no-store).
+         */
+        post: operations["beginSecondFactorSetup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/second-factor/setup/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Second Factor Setup
+         * @description Switch two-step verification on with a code from the app; answers ten recovery codes. A sign-in at step `setup` is then signed in; every other session of the account ends. 400 second_factor_invalid for a wrong code; 409 second_factor_clock_drift when the phone's or the server's clock is off; 409 second_factor_setup_missing without a set-up begun. A web session, or a sign-in that answered 202 with step `setup` (it reaches only the set-up operations). The answer is shown once and not stored by the browser (Cache-Control: no-store).
+         */
+        post: operations["confirmSecondFactorSetup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/sessions": {
         parameters: {
             query?: never;
@@ -3993,6 +4077,21 @@ export interface components {
             /** Password */
             password: string;
         };
+        /**
+         * RecoveryCodesOut
+         * @description Shown once: ten recovery codes, each usable once instead of a code.
+         */
+        RecoveryCodesOut: {
+            /** Recovery Codes */
+            recovery_codes: string[];
+        };
+        /** RemoveSecondFactorIn */
+        RemoveSecondFactorIn: {
+            /** Code */
+            code: string;
+            /** Password */
+            password: string;
+        };
         /** RenewInvitationIn */
         RenewInvitationIn: {
             /**
@@ -4160,6 +4259,44 @@ export interface components {
             /** Total Count */
             total_count: number;
         };
+        /** SecondFactorCodeIn */
+        SecondFactorCodeIn: {
+            /** Code */
+            code: string;
+        };
+        /**
+         * SecondFactorOut
+         * @description The caller's two-step verification ("Beveiliging").
+         */
+        SecondFactorOut: {
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /** Grace Until */
+            grace_until?: string | null;
+            /**
+             * Recovery Codes Left
+             * @default 0
+             */
+            recovery_codes_left: number;
+            /**
+             * Required
+             * @default false
+             */
+            required: boolean;
+            /**
+             * Required By
+             * @default none
+             */
+            required_by: string;
+            /**
+             * Required By Workspaces
+             * @default []
+             */
+            required_by_workspaces: string[];
+        };
         /**
          * SessionOut
          * @description A web session of the caller ("Waar je bent ingelogd").
@@ -4224,6 +4361,17 @@ export interface components {
         SetupOut: {
             user: components["schemas"]["UserOut"];
             workspace: components["schemas"]["WorkspaceOut"];
+        };
+        /**
+         * SetupSecretOut
+         * @description Shown once: the secret for an authenticator app, as text in groups of four and as
+         *     the otpauth link a QR code carries.
+         */
+        SetupSecretOut: {
+            /** Otpauth Uri */
+            otpauth_uri: string;
+            /** Secret */
+            secret: string;
         };
         /** SetupStatusOut */
         SetupStatusOut: {
@@ -6042,6 +6190,368 @@ export interface operations {
             };
             /** @description Forbidden */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    getMySecondFactor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecondFactorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    removeMySecondFactor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoveSecondFactorIn"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    renewRecoveryCodes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecondFactorCodeIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecoveryCodesOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    beginSecondFactorSetup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupSecretOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    confirmSecondFactorSetup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecondFactorCodeIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecoveryCodesOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -141,3 +141,42 @@ class PasswordResetIn(InputSchema):
     # The fragment of the reset link.
     token: str = Field(max_length=100)
     password: str = Field(max_length=128)
+
+
+class SecondFactorOut(Schema):
+    """The caller's two-step verification ("Beveiliging")."""
+
+    enabled: bool = False
+    required: bool = False
+    # What asks it: none, server (the server's rule) or workspace.
+    required_by: str = "none"
+    # The names of the caller's workspaces that ask it.
+    required_by_workspaces: list[str] = Field(default=[])
+    # While a grace period runs: its end (ISO 8601). After it, signing in leads straight
+    # to setting it up.
+    grace_until: str | None = None
+    recovery_codes_left: int = 0
+
+
+class SetupSecretOut(Schema):
+    """Shown once: the secret for an authenticator app, as text in groups of four and as
+    the otpauth link a QR code carries."""
+
+    secret: str
+    otpauth_uri: str
+
+
+class SecondFactorCodeIn(InputSchema):
+    # The six digits the authenticator app shows.
+    code: str = Field(max_length=20)
+
+
+class RecoveryCodesOut(Schema):
+    """Shown once: ten recovery codes, each usable once instead of a code."""
+
+    recovery_codes: list[str]
+
+
+class RemoveSecondFactorIn(InputSchema):
+    password: str = Field(max_length=128)
+    code: str = Field(max_length=20)

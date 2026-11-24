@@ -416,6 +416,10 @@ msgstr "Two-step verification is required. You cannot switch it off, but you can
 msgid "Dit account heeft geen tweestapsverificatie."
 msgstr "This account does not have two-step verification."
 
+#: apps/accounts/second_factor_account.py apps/devices/services.py
+msgid "Vul eerst je wachtwoord opnieuw in."
+msgstr "Enter your password again first."
+
 #: apps/accounts/services.py
 msgid "Vul je naam in."
 msgstr "Enter your name."
@@ -1402,10 +1406,6 @@ msgstr "BRIEVIE_MASTER_KEY in deploy/.env is missing or not 64 characters long (
 #: apps/common/names.py
 msgid "Een naam mag geen tekens bevatten die de leesrichting van de tekst omdraaien."
 msgstr "A name may not contain characters that reverse the direction of the text."
-
-#: apps/devices/services.py
-msgid "Vul eerst je wachtwoord opnieuw in."
-msgstr "Enter your password again first."
 
 #: apps/devices/services.py
 msgid "Geef het apparaat een naam."

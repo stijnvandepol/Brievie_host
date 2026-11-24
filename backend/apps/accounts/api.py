@@ -4,10 +4,19 @@ from django.http import HttpRequest, HttpResponse
 from django.utils.translation import gettext as _
 from ninja import Router, Status
 
-from apps.accounts import notices, resets, services, signin, signin_limits, user_actions
+from apps.accounts import (
+    notices,
+    resets,
+    second_factor_account,
+    services,
+    signin,
+    signin_limits,
+    user_actions,
+)
 from apps.accounts.auth import session_auth
 from apps.accounts.models import User
 from apps.accounts.notices import NoticeView
+from apps.accounts.pending_auth import pending_setup_auth
 from apps.accounts.resets import IssuedReset
 from apps.accounts.schemas import (
     LanguageIn,
@@ -18,14 +27,21 @@ from apps.accounts.schemas import (
     PasswordResetIn,
     PasswordResetOut,
     ReauthenticateIn,
+    RecoveryCodesOut,
+    RemoveSecondFactorIn,
+    SecondFactorCodeIn,
+    SecondFactorOut,
     SessionOut,
     SetupIn,
     SetupOut,
+    SetupSecretOut,
     SetupStatusOut,
     SignInCodeIn,
     SignInStepOut,
     UserOut,
 )
+from apps.accounts.second_factor import SetupSecret
+from apps.accounts.second_factor_account import SecondFactorStatus
 from apps.accounts.services import SessionView
 from apps.accounts.signin import SignInResult, StepNeeded
 from apps.common.errors import ApiError
@@ -356,4 +372,115 @@ def list_user_devices(request: HttpRequest, user_id: UUID) -> list[Device]:
 )
 def revoke_user_device(request: HttpRequest, user_id: UUID, device_id: UUID) -> Status[None]:
     device_services.revoke_user_device(request, target_id=user_id, device_id=device_id)
+    return Status(204, None)
+
+
+SET_UP = (
+    " A web session, or a sign-in that answered 202 with step `setup` (it reaches only the"
+    " set-up operations)."
+)
+SHOWN_ONCE = " The answer is shown once and not stored by the browser (Cache-Control: no-store)."
+
+
+@router.get(
+    "/me/second-factor",
+    response={200: SecondFactorOut, **AUTH_ERRORS},
+    auth=[session_auth, pending_setup_auth],
+    description="Whether the caller has two-step verification, whether a rule asks it, and"
+    " how many recovery codes are left." + SET_UP,
+    operation_id="getMySecondFactor",
+)
+def get_my_second_factor(request: HttpRequest) -> SecondFactorStatus:
+    return second_factor_account.my_status(request)
+
+
+@router.post(
+    "/me/second-factor/setup",
+    response={200: SetupSecretOut, 403: ErrorOut, 409: ErrorOut, 429: ErrorOut, **AUTH_ERRORS},
+    auth=[session_auth, pending_setup_auth],
+    throttle=ClientAddressThrottle("second_factor_setup", "20/10m"),
+    description="Begin setting up two-step verification: a new secret to scan (an"
+    " unfinished set-up is replaced). 409 second_factor_exists when it is on; 403"
+    " reauthentication_required from a session that signed in more than 15 minutes ago"
+    " (call reauthenticate first)." + SET_UP + SHOWN_ONCE,
+    operation_id="beginSecondFactorSetup",
+)
+def begin_second_factor_setup(request: HttpRequest, response: HttpResponse) -> SetupSecretOut:
+    setup: SetupSecret = second_factor_account.begin_my_setup(request)
+    response["Cache-Control"] = "no-store"
+    return SetupSecretOut(secret=setup.secret_text, otpauth_uri=setup.otpauth_uri)
+
+
+@router.post(
+    "/me/second-factor/setup/confirm",
+    response={
+        200: RecoveryCodesOut,
+        400: ErrorOut,
+        401: ErrorOut,
+        409: ErrorOut,
+        429: ErrorOut,
+        **BODY_ERRORS,
+    },
+    auth=[session_auth, pending_setup_auth],
+    throttle=ClientAddressThrottle("second_factor_setup", "20/10m"),
+    description="Switch two-step verification on with a code from the app; answers ten"
+    " recovery codes. A sign-in at step `setup` is then signed in; every other session of"
+    " the account ends. 400 second_factor_invalid for a wrong code; 409"
+    " second_factor_clock_drift when the phone's or the server's clock is off; 409"
+    " second_factor_setup_missing without a set-up begun." + SET_UP + SHOWN_ONCE,
+    operation_id="confirmSecondFactorSetup",
+)
+def confirm_second_factor_setup(
+    request: HttpRequest, response: HttpResponse, payload: SecondFactorCodeIn
+) -> RecoveryCodesOut:
+    codes = second_factor_account.confirm_my_setup(request, code=payload.code)
+    response["Cache-Control"] = "no-store"
+    return RecoveryCodesOut(recovery_codes=codes)
+
+
+@router.post(
+    "/me/second-factor/recovery-codes",
+    response={
+        200: RecoveryCodesOut,
+        400: ErrorOut,
+        409: ErrorOut,
+        429: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    auth=session_auth,
+    throttle=CallerThrottle("second_factor", "10/10m"),
+    description=WEB_SESSION_ONLY
+    + " Ten new recovery codes after a code from the app; the old ones stop working. 400"
+    " second_factor_invalid; 429 second_factor_locked." + SHOWN_ONCE,
+    operation_id="renewRecoveryCodes",
+)
+def renew_recovery_codes(
+    request: HttpRequest, response: HttpResponse, payload: SecondFactorCodeIn
+) -> RecoveryCodesOut:
+    codes = second_factor_account.renew_my_recovery_codes(request, code=payload.code)
+    response["Cache-Control"] = "no-store"
+    return RecoveryCodesOut(recovery_codes=codes)
+
+
+@router.delete(
+    "/me/second-factor",
+    response={
+        204: None,
+        400: ErrorOut,
+        409: ErrorOut,
+        429: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    auth=session_auth,
+    throttle=CallerThrottle("second_factor", "10/10m"),
+    description=WEB_SESSION_ONLY
+    + " Switch two-step verification off with the password and a code; every other"
+    " session ends. 400 wrong_password (counted like a sign-in), 400"
+    " second_factor_invalid; 409 second_factor_required while a rule asks it.",
+    operation_id="removeMySecondFactor",
+)
+def remove_my_second_factor(request: HttpRequest, payload: RemoveSecondFactorIn) -> Status[None]:
+    second_factor_account.remove_my_factor(request, password=payload.password, code=payload.code)
     return Status(204, None)
