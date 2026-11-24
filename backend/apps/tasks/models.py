@@ -23,6 +23,9 @@ class Task(WorkspaceModel):
         RENEW = "renew", _("Verlengen")
         FILE_TAX = "file_tax", _("Aangifte")
         OTHER = "other", _("Overig")
+        # The reminder of an own document's end date ("Geldig tot"); made only by
+        # `apps.documents.reminders`, never by a review (archive spec S 7.1, AR6).
+        EXPIRY = "expiry", _("Verloopt")
 
     class DeadlineSource(models.TextChoices):
         IN_DOCUMENT = "in_document", _("Staat in het document")
@@ -86,6 +89,13 @@ class Task(WorkspaceModel):
         constraints: ClassVar[list[models.BaseConstraint]] = [
             models.CheckConstraint(
                 condition=models.Q(amount__gte=0), name="tasks_task_amount_not_negative"
+            ),
+            # At most one open end-date reminder per document: a second run (or a race)
+            # fails harmlessly. Letters' tasks are untouched.
+            models.UniqueConstraint(
+                fields=["document"],
+                condition=models.Q(type="expiry", status="open"),
+                name="tasks_task_one_reminder",
             ),
         ]
         indexes: ClassVar[list[models.Index]] = [

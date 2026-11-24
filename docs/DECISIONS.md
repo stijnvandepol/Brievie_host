@@ -2887,3 +2887,14 @@ Rulings of the spec, kept as written:
   groups years and the 50 most frequent senders, all over `visible_documents` with
   `status = done`; a value nobody visible has is never counted. `services.list_archive_facets`
   and `own._locked_for_edit` join the seam test's list.
+- **AR6, AR7 (plan Task 8).** "Geldig tot" becomes a task of the new type `expiry` ("Verloopt")
+  made by one writer, `apps.documents.reminders.start_reminder`, as the system: no creator,
+  no assignee, `deadline = expires_on`, `deadline_source = calculated`, description "Geldig tot
+  {datum}: {titel}" (never the text), history `reminder_started` with origin `system` and no
+  actor. The daily job `start_expiry_reminders` (04:10, no payload) walks every workspace in
+  short transactions, at most 500 per workspace a night. A partial unique index
+  (`tasks_task_one_reminder`) allows one open reminder per document; a reminder ticked off is
+  not made again for the same date, only for a later one. A changed end date moves the open
+  reminder; a cleared one ends it (`delete_tasks`). A review may not make an `expiry` task.
+  Every change goes through `letter_sync`, which keeps an own document's letter facts at
+  zero: the reminder counts in Mijn taken, never as an "Openstaand" letter.

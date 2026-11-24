@@ -76,6 +76,22 @@ def verify_visibility_job(timestamp: int) -> None:
     )
 
 
+@app.periodic(cron="10 4 * * *")
+@app.task(
+    name="start_expiry_reminders",
+    queue=QUEUE,
+    priority=EXPORT_PRIORITY,
+    queueing_lock="start_expiry_reminders",
+)
+def start_expiry_reminders_job(timestamp: int) -> None:
+    """Every night: the reminder task of every own document whose end date comes within
+    its lead (archive spec S 7.1). No payload; per workspace, short transactions, as the
+    system with no actor. The log gets a count only."""
+    from apps.documents import reminders
+
+    reminders.start_expiry_reminders()
+
+
 @app.periodic(cron="41 * * * *")
 @app.task(
     name="purge_trash",

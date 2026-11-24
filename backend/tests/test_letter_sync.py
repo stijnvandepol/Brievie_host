@@ -202,6 +202,8 @@ def test_every_task_writer_syncs() -> None:
         "documents/review.py": 1,
         "documents/services.py": 1,
         "documents/duplicates.py": 2,
+        # The end-date reminder of an own document: made, moved or ended (archive AR6).
+        "documents/reminders.py": 2,
     }
     for relative, at_least in wanted.items():
         text = (APP / relative).read_text()

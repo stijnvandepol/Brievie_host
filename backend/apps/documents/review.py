@@ -384,7 +384,8 @@ def _validate(data: ConfirmIn, document: Document) -> None:
 
 def _validate_task(task: TaskIn, document: Document) -> None:
     parse_amount(task.amount)
-    if task.type not in Task.Type.values:
+    # The end-date reminder is the system's (archive spec AR6), never a review's.
+    if task.type not in Task.Type.values or task.type == Task.Type.EXPIRY:
         raise _invalid(_("Dit soort taak kennen we niet."))
     if not task.description.strip():
         raise _invalid(_("Een taak heeft een omschrijving nodig."))

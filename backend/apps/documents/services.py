@@ -644,10 +644,29 @@ def document_summary_out(
     open_duplicate_count: int = 0,
     reader_names: list[str] | None = None,
     unread: bool = False,
+    reminder_task_id: UUID | None = None,
 ) -> DocumentSummaryOut:
     """A row of a document list."""
     return _summary_out(
-        document, _open_suggestions(document), open_duplicate_count, reader_names or [], unread
+        document,
+        _open_suggestions(document),
+        open_duplicate_count,
+        reader_names or [],
+        unread,
+        reminder_task_id,
+    )
+
+
+def reminder_task_ids(documents: list[Document]) -> dict[UUID, UUID]:
+    """The open end-date reminder of each own document among `documents` (already read
+    through the seam), in one query; the task policy follows the document's."""
+    own = [d.id for d in documents if d.kind == Document.Kind.DOCUMENT]
+    if not own:
+        return {}
+    return dict(
+        Task.objects.filter(
+            document_id__in=own, type=Task.Type.EXPIRY, status=Task.Status.OPEN
+        ).values_list("document_id", "id")
     )
 
 
@@ -659,12 +678,14 @@ def document_summaries_out(
     counts = duplicates.pair_counts(membership, [d.id for d in documents])
     names = visibility.reader_names(documents)
     unread = reading.unread_ids(membership, documents)
+    reminders = reminder_task_ids(documents)
     return [
         document_summary_out(
             d,
             open_duplicate_count=counts.get(d.id, 0),
             reader_names=names.get(d.id, []),
             unread=d.id in unread,
+            reminder_task_id=reminders.get(d.id),
         )
         for d in documents
     ]
@@ -682,6 +703,7 @@ def _summary_out(
     open_duplicate_count: int = 0,
     reader_names: list[str] | None = None,
     unread: bool = False,
+    reminder_task_id: UUID | None = None,
 ) -> DocumentSummaryOut:
     proposed = _headline_proposals(document)
     status, late = status_of(
@@ -728,6 +750,7 @@ def _summary_out(
         expires_on=document.expires_on,
         remind_days=document.remind_days,
         retain_until=document.retain_until,
+        reminder_task_id=reminder_task_id,
     )
 
 
@@ -777,9 +800,19 @@ def document_out(document: Document, *, open_duplicate_count: int = 0) -> Docume
     flags = flags_for_actor(document.workspace_id, tasks)
     today = _today()
     own = snooze.snoozed_until(tasks, actor, today) if isinstance(actor, UUID) else {}
+    reminder = next(
+        (
+            t.id
+            for t in tasks
+            if t.type == Task.Type.EXPIRY
+            and t.status == Task.Status.OPEN
+            and document.kind == Document.Kind.DOCUMENT
+        ),
+        None,
+    )
     return DocumentOut(
         **_summary_out(
-            document, open_suggestions, open_duplicate_count, names, unread
+            document, open_suggestions, open_duplicate_count, names, unread, reminder
         ).model_dump(),
         shared_user_ids=visibility.shared_user_ids(document),
         new_person_suggestions=[

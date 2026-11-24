@@ -24,7 +24,7 @@ from apps.accounts.models import User
 from apps.audit.services import AuditActor
 from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
-from apps.documents import organise, visibility
+from apps.documents import organise, reminders, visibility
 from apps.documents.models import DOCUMENT_TYPES, REMIND_DAYS, Document, DocumentEvent
 from apps.documents.schemas import DocumentDetailsIn, UploadMetadataIn
 from apps.labels.models import Label
@@ -256,6 +256,9 @@ def update_details(
         for name in changed:
             setattr(document, name, wanted[name])
         document.save(update_fields=[*changed, "updated_at"])
+        if "expires_on" in changed:
+            # The open reminder follows the new end date, or ends with a cleared one.
+            reminders.on_expiry_changed(document)
         for name in changed:
             if name == "retain_until":
                 organise.record_retention_changed(document, actor=user, until=document.retain_until)

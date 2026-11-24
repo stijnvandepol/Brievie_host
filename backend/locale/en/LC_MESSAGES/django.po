@@ -1692,6 +1692,11 @@ msgstr "Choose a new date or remove the date, not both."
 msgid "Kies hoogstens 200 brieven."
 msgstr "Choose 200 letters at most."
 
+#: apps/documents/reminders.py
+#, python-format
+msgid "Geldig tot %(date)s: %(title)s"
+msgstr "Valid until %(date)s: %(title)s"
+
 #: apps/documents/retention.py
 msgid "Deze brief moet nog bewaard worden. Je kunt hem nu niet wissen."
 msgstr "This letter still has to be kept. You can't erase it now."
@@ -2655,6 +2660,10 @@ msgstr "Renew"
 #: apps/tasks/models.py
 msgid "Aangifte"
 msgstr "File a return"
+
+#: apps/tasks/models.py
+msgid "Verloopt"
+msgstr "Expires"
 
 #: apps/tasks/models.py
 msgid "Staat in het document"
