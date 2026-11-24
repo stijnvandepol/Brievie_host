@@ -1,6 +1,7 @@
 """Authenticated encryption (AES-256-GCM) for document files and stored secrets."""
 
 import os
+from uuid import UUID
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -16,6 +17,10 @@ _TAG_BYTES = 16
 # Label of the back-up password derived from the master key. Never change it: existing
 # back-ups are encrypted with the password it gives (docs/DECISIONS.md, B1).
 BACKUP_PASSWORD_INFO = b"brievie/backup-password/v1"
+# Labels of the keys that seal second-factor secrets and key the recovery-code hashes
+# (two-step sign-in, S 2). Never change them: stored secrets and hashes depend on them.
+SECOND_FACTOR_INFO = b"brievie/second-factor/v1"
+RECOVERY_CODES_INFO = b"brievie/recovery-codes/v1"
 
 
 class DecryptionError(Exception):
@@ -72,3 +77,24 @@ def derive_backup_password(master_key: bytes) -> str:
     """
     derived = HKDFExpand(algorithm=SHA256(), length=KEY_BYTES, info=BACKUP_PASSWORD_INFO)
     return derived.derive(master_key).hex()
+
+
+def _derive(master_key: bytes, info: bytes) -> bytes:
+    """A 32-byte key for one purpose, HKDF-Expand of the master key (as the back-up
+    password): the purpose is bound in the key, and no key opens another's data."""
+    return HKDFExpand(algorithm=SHA256(), length=KEY_BYTES, info=info).derive(master_key)
+
+
+def derive_second_factor_key(master_key: bytes) -> bytes:
+    """The key that seals every account's authenticator secret."""
+    return _derive(master_key, SECOND_FACTOR_INFO)
+
+
+def derive_recovery_code_key(master_key: bytes) -> bytes:
+    """The key of the HMAC under which recovery codes are stored."""
+    return _derive(master_key, RECOVERY_CODES_INFO)
+
+
+def second_factor_aad(user_id: UUID) -> bytes:
+    """Binds a sealed authenticator secret to its account: it opens for no other."""
+    return f"second-factor/{user_id}".encode("ascii")

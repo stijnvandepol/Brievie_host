@@ -23,6 +23,7 @@ from apps.accounts.services import current_user
 from apps.accounts.sessions import recently_authenticated
 from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, actor_from_request, record
+from apps.common.alphabet import CODE_ALPHABET
 from apps.common.crypto import DecryptionError
 from apps.common.errors import ApiError
 from apps.devices import pki
@@ -38,7 +39,6 @@ from apps.devices.proof import (
 
 logger = logging.getLogger(__name__)
 
-CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 CODE_LENGTH = 8
 CODE_VALIDITY = timedelta(minutes=10)
 LAST_SEEN_INTERVAL = timedelta(minutes=1)

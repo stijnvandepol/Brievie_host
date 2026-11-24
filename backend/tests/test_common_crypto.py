@@ -1,6 +1,7 @@
 import io
 import logging
 import os
+from uuid import UUID
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
@@ -171,3 +172,22 @@ def test_derive_backup_password_says_what_is_wrong_in_dutch(settings: Settings, 
         "BRIEVIE_MASTER_KEY in deploy/.env ontbreekt of is geen 64 tekens lang "
         "(cijfers en a tot en met f). Zonder de juiste sleutel zijn de documenten niet te lezen."
     )
+
+
+def test_derived_keys_differ_from_each_other_and_from_the_master_key() -> None:
+    master = bytes.fromhex("5a" * 32)
+    second_factor = crypto.derive_second_factor_key(master)
+    recovery = crypto.derive_recovery_code_key(master)
+
+    assert len(second_factor) == len(recovery) == crypto.KEY_BYTES
+    assert len({master, second_factor, recovery}) == 3
+    assert crypto.derive_second_factor_key(master) == second_factor
+    assert crypto.derive_second_factor_key(bytes(32)) != second_factor
+    assert bytes.fromhex(crypto.derive_backup_password(master)) not in {second_factor, recovery}
+
+
+def test_second_factor_aad_names_the_user() -> None:
+    user_id = UUID("12345678-1234-5678-1234-567812345678")
+
+    expected = b"second-factor/12345678-1234-5678-1234-567812345678"
+    assert crypto.second_factor_aad(user_id) == expected
