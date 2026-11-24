@@ -3511,3 +3511,9 @@ tr.unread th,
 .lingering-age {
   color: var(--warning-fg);
 }
+
+/* Letter status: the count line above a list of post. */
+.letter-counts {
+  margin: 0 0 12px;
+  color: var(--neutral-fg3);
+}
