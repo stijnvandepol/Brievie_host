@@ -741,3 +741,32 @@ def test_a_new_phone_left_for_an_hour_is_forgotten(user: User) -> None:
         )
     )
     assert error.code == "second_factor_setup_missing"
+
+
+# --- Wrong codes when confirming (security review of PR #52, point 7) --------------------
+
+
+def test_five_wrong_codes_end_a_set_up(user: User) -> None:
+    begin_setup(user, host="brievie.local")
+    for _ in range(4):
+        error = api_error(lambda: confirm_setup(user, "000000", now=NOW, client_ip=None))
+        assert error.code == "second_factor_invalid"
+    assert SecondFactor.objects.get(user=user).failed_count == 4
+
+    error = api_error(lambda: confirm_setup(user, "000000", now=NOW, client_ip=None))
+
+    assert (error.status, error.code) == (409, "second_factor_setup_missing")
+    assert not SecondFactor.objects.filter(user=user).exists()
+
+
+def test_wrong_codes_of_a_new_phone_count_for_the_account(user: User) -> None:
+    factor = give_factor(user, now=NOW)
+    new_phone(user, factor)
+    for _ in range(4):
+        api_error(lambda: confirm_replacement(user, "000000", now=NOW, client_ip=None))
+
+    error = api_error(lambda: confirm_replacement(user, "000000", now=NOW, client_ip=None))
+
+    assert error.code == "second_factor_locked"
+    row = SecondFactor.objects.get(user=user)
+    assert open_secret(user.id, row.secret_sealed) == factor.secret

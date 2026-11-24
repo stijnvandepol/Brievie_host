@@ -239,21 +239,46 @@ def confirm_setup(user: User, code: str, *, now: datetime, client_ip: str | None
             )
         secret = open_secret(user.id, factor.secret_sealed)
         step = totp.match(secret, code, now=now, last_used_step=0)
+        failure: ApiError | None = None
         if step is None:
-            if totp.drift_steps(secret, code, now=now) is not None:
-                raise _drift_error()
-            raise _invalid(400)
-        factor.confirmed_at = now
-        factor.last_used_step = step
-        _reset_counters(factor)
-        factor.save()
-        codes = _store_new_recovery_codes(user)
-        record(
-            AuditCode.SECOND_FACTOR_ADDED,
-            actor=AuditActor.for_user(user, client_ip=client_ip),
-            target=_target(user),
-        )
+            failure = _wrong_new_code(secret, code, now=now)
+            # Counted on the set-up itself (per account, security review of PR #52,
+            # point 7): the fifth wrong code ends it, a new secret is needed.
+            factor.failed_count += 1
+            if factor.failed_count >= LOCK_AFTER:
+                factor.delete()
+                failure = _too_many_for_a_new_secret()
+            else:
+                factor.save(update_fields=["failed_count", "updated_at"])
+        else:
+            factor.confirmed_at = now
+            factor.last_used_step = step
+            _reset_counters(factor)
+            factor.save()
+            codes = _store_new_recovery_codes(user)
+            record(
+                AuditCode.SECOND_FACTOR_ADDED,
+                actor=AuditActor.for_user(user, client_ip=client_ip),
+                target=_target(user),
+            )
+    # Raised once the count is kept (the error answer does not roll back the request).
+    if failure is not None:
+        raise failure
     return ConfirmedSetup(recovery_codes=codes, passed=_passed(user, "totp"))
+
+
+def _wrong_new_code(secret: bytes, code: str, *, now: datetime) -> ApiError:
+    if totp.drift_steps(secret, code, now=now) is not None:
+        return _drift_error()
+    return _invalid(400)
+
+
+def _too_many_for_a_new_secret() -> ApiError:
+    return ApiError(
+        409,
+        "second_factor_setup_missing",
+        _("Te vaak een verkeerde code. Begin opnieuw: scan de nieuwe code."),
+    )
 
 
 # --- Checking a code ------------------------------------------------------------------
@@ -690,26 +715,36 @@ def confirm_replacement(
                 "second_factor_setup_missing",
                 _("Begin opnieuw met Nieuwe telefoon."),
             )
+        if factor.locked_until is not None and now < factor.locked_until:
+            raise _locked(factor.locked_until, now)
         secret = open_secret(user.id, factor.pending_secret_sealed)
         step = totp.match(secret, code, now=now, last_used_step=0)
+        failure: ApiError | None = None
         if step is None:
-            if totp.drift_steps(secret, code, now=now) is not None:
-                raise _drift_error()
-            raise _invalid(400)
-        factor.secret_sealed = factor.pending_secret_sealed
-        factor.pending_secret_sealed = None
-        factor.pending_since = None
-        factor.confirmed_at = now
-        factor.last_used_step = step
-        _reset_counters(factor)
-        factor.save()
-        codes = _store_new_recovery_codes(user)
-        record(
-            AuditCode.SECOND_FACTOR_ADDED,
-            actor=AuditActor.for_user(user, client_ip=client_ip),
-            target=_target(user),
-            values={"replaced": True},
-        )
+            # Counted for the account's lock (security review of PR #52, point 7).
+            failure = _wrong_new_code(secret, code, now=now)
+            actor = AuditActor.for_user(user, client_ip=client_ip)
+            _count_failure(factor, user, now=now, actor=actor, signing_in=False)
+            if factor.locked_until is not None and now < factor.locked_until:
+                failure = _locked(factor.locked_until, now)
+        else:
+            factor.secret_sealed = factor.pending_secret_sealed
+            factor.pending_secret_sealed = None
+            factor.pending_since = None
+            factor.confirmed_at = now
+            factor.last_used_step = step
+            _reset_counters(factor)
+            factor.save()
+            codes = _store_new_recovery_codes(user)
+            record(
+                AuditCode.SECOND_FACTOR_ADDED,
+                actor=AuditActor.for_user(user, client_ip=client_ip),
+                target=_target(user),
+                values={"replaced": True},
+            )
+    # Raised once the count is kept (the error answer does not roll back the request).
+    if failure is not None:
+        raise failure
     return ConfirmedSetup(recovery_codes=codes, passed=_passed(user, "totp"))
 
 

@@ -414,6 +414,10 @@ msgid "Begin opnieuw met het aanzetten van tweestapsverificatie."
 msgstr "Start switching on two-step verification again."
 
 #: apps/accounts/second_factor.py
+msgid "Te vaak een verkeerde code. Begin opnieuw: scan de nieuwe code."
+msgstr "Too many wrong codes. Start again: scan the new code."
+
+#: apps/accounts/second_factor.py
 msgid "Tweestapsverificatie is verplicht. Je kunt het niet uitzetten, wel naar een nieuwe telefoon zetten."
 msgstr "Two-step verification is required. You cannot switch it off, but you can move it to a new phone."
 
