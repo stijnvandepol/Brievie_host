@@ -114,6 +114,15 @@ def complete_locked(task: Task, user: User, origin: str = DocumentEvent.Origin.U
     return True
 
 
+def delete_tasks(tasks: QuerySet[Task]) -> None:
+    """Delete tasks, and every member's snooze of them first (as the system: the own-rows
+    policy lets a member delete only their own rows; the database cascade is the backstop).
+    The one way application code deletes tasks as a member."""
+    with system_actor():
+        TaskSnooze.objects.filter(task__in=tasks.values("id")).delete()
+    tasks.delete()
+
+
 def reopen_task(*, workspace: Workspace, user: User, task_id: UUID) -> Task:
     """Make the task open again; asking again changes nothing and writes no second event."""
     with transaction.atomic():

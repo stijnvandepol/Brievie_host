@@ -52,6 +52,7 @@ from apps.tasks import letter_sync
 from apps.tasks.facts import member_facts
 from apps.tasks.letter_state import LetterStatus, status_of
 from apps.tasks.models import Task, amount_text
+from apps.tasks.services import delete_tasks
 from apps.workspaces.context import current_actor
 from apps.workspaces.keys import workspace_key
 from apps.workspaces.locks import lock_own_membership
@@ -772,7 +773,9 @@ def reopen_document(*, workspace: Workspace, user: User, document_id: UUID) -> D
         document.summary_by_ai = False
         document.confirmed_by_ai = False
         document.save()
-        Task.objects.filter(document=document, created_by_ai=True, status=Task.Status.OPEN).delete()
+        delete_tasks(
+            Task.objects.filter(document=document, created_by_ai=True, status=Task.Status.OPEN)
+        )
         organise.record_reopened(document, actor=user)
         # Back to review: the facts follow the tasks that stay; no status line (the
         # letter is "Nieuw" again, the line above says why).

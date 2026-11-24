@@ -175,3 +175,54 @@ def test_a_hidden_task_is_404(client: Client) -> None:
     client.force_login(h.piet)
     r = _snooze(client, h, task, TODAY + timedelta(days=3))
     assert (r.status_code, r.json()["code"]) == (404, "task_not_found")
+
+
+def test_reopening_a_letter_is_not_blocked_by_anothers_snooze(client: Client) -> None:
+    from apps.documents import services as document_services
+    from apps.documents.models import Document
+
+    h = household()
+    document, (task,) = letter_with_tasks(h.workspace, [T()], on=[h.persons["Anne"]])
+    with as_actor(h.workspace, SYSTEM):
+        Task.objects.filter(id=task.id).update(created_by_ai=True)
+        Document.objects.filter(id=document.id).update(confirmed_by_ai=True)
+        TaskSnooze.objects.create(
+            workspace=h.workspace, task=task, user=h.piet, until=TODAY + timedelta(days=3)
+        )
+    with as_actor(h.workspace, h.anne.id):
+        document_services.reopen_document(
+            workspace=h.workspace, user=h.anne, document_id=document.id
+        )
+    with as_actor(h.workspace, SYSTEM):
+        assert not Task.objects.filter(id=task.id).exists()
+        assert TaskSnooze.objects.count() == 0
+
+
+def test_deleting_a_task_as_a_member_takes_every_snooze_with_it() -> None:
+    h = household()
+    _, (task,) = letter_with_tasks(h.workspace, [T()], on=[h.persons["Anne"]])
+    with as_actor(h.workspace, SYSTEM):
+        TaskSnooze.objects.create(
+            workspace=h.workspace, task=task, user=h.piet, until=TODAY + timedelta(days=3)
+        )
+    with as_actor(h.workspace, h.anne.id):
+        Task.objects.filter(id=task.id).delete()
+    with as_actor(h.workspace, SYSTEM):
+        assert TaskSnooze.objects.count() == 0
+
+
+def test_a_member_who_leaves_loses_their_snoozes() -> None:
+    from apps.documents import visibility
+
+    h = household()
+    _, (task,) = letter_with_tasks(h.workspace, [T()], on=[h.persons["Anne"]])
+    with as_actor(h.workspace, SYSTEM):
+        TaskSnooze.objects.create(
+            workspace=h.workspace, task=task, user=h.piet, until=TODAY + timedelta(days=3)
+        )
+        TaskSnooze.objects.create(
+            workspace=h.workspace, task=task, user=h.anne, until=TODAY + timedelta(days=3)
+        )
+    visibility.forget_member(h.workspace.id, h.piet.id)
+    with as_actor(h.workspace, SYSTEM):
+        assert list(TaskSnooze.objects.values_list("user_id", flat=True)) == [h.anne.id]
