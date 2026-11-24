@@ -232,3 +232,21 @@ def test_a_vault_without_an_id_changes_nothing(tmp_path: Path) -> None:
     with pytest.raises(init_secrets.InitSecretsError):
         init_secrets.adopt_installation_id(vault, config, (os.getuid(), os.getgid()))
     assert (config / "installation-id").read_text().strip() == "cd" * 16
+
+
+def test_the_printed_way_back_is_the_documented_one() -> None:
+    from apps.installer.prepare import way_back
+    from apps.installer.restore_install import restore_commands
+    from apps.updates.release import Version
+
+    selfhost = (Path(__file__).resolve().parents[2] / "docs" / "SELFHOST.md").read_text()
+    printed = way_back(Version.parse("0.5.0"))
+    for line in restore_commands("pre-update-0.5.0"):
+        assert line in printed
+    for line in restore_commands("pre-update-<version>"):
+        assert line in selfhost
+    # The old, wrong form must not come back.
+    assert "admin restore" not in printed
+    assert "--profile admin" in printed
+    assert "restore_install pre-update-0.5.0 --replace" in printed
+    assert "docker compose stop api worker keeper caddy" in printed

@@ -799,14 +799,18 @@ that nothing else can write while it backs up and migrates), makes the back-up
 `pre-update-<version>` to your back-up folder or, without one, to the volume
 `update-backup`, migrates, records the version and lifts the freeze. A failure before any migration
 lifts the freeze and changes nothing. A failure after one stays read-only and prints the way back:
-put the old version in the file, stop `api worker keeper caddy`, and
+put the old version number in the file, then type, one by one (these are the commands
+`init` prints; a test keeps them equal):
 
 ```
-BRIEVIE_BACKUP_DIR=update-backup docker compose --profile admin run --rm admin \
-  python manage.py restore_install pre-update-<version> --replace
+docker compose stop api worker keeper caddy
+BRIEVIE_BACKUP_DIR=update-backup docker compose --profile admin run --rm admin python manage.py restore_install pre-update-<version> --replace
+docker compose up -d
 ```
 
-(`BRIEVIE_BACKUP_DIR=` is your own folder when the back-up went there.) Then start again.
+(`update-backup` is the volume of the back-up before an update; use your own back-up folder
+there when the back-up went to it.) Only putting the old number back, without a restore,
+also lifts a freeze that an interrupted update left before any migration ran (see below).
 When the file itself changes ("Compose-bestand gewijzigd" in the release notes), take the new
 file of the release.
 

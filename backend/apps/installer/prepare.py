@@ -23,6 +23,7 @@ from apps.installer.database import (
     Passwords,
     ensure_roles_and_database,
 )
+from apps.installer.restore_install import restore_commands
 from apps.updates.gate import decide_start
 from apps.updates.release import Decision, Release, Version, refusal_message
 
@@ -159,11 +160,14 @@ def _installed_version(conn: Connection) -> Version | None:
 
 
 def way_back(image: Version) -> str:
+    """Printed after a migration failed halfway: the same commands as docs/SELFHOST.md."""
+    commands = "\n".join(f"  {line}" for line in restore_commands(f"pre-update-{image}"))
     return _(
         "De database blijft alleen-lezen. Zet de versie in het compose-bestand terug op de "
-        "vorige versie en herstel de back-up pre-update-%(version)s "
-        "(docker compose run --rm admin restore pre-update-%(version)s)."
-    ) % {"version": image}
+        "vorige versie en typ dan, een voor een:\n%(commands)s\n"
+        "Staat je back-up in een eigen map (BRIEVIE_BACKUP_DIR)? Gebruik die map in plaats van "
+        "update-backup."
+    ) % {"commands": commands}
 
 
 def run(deps: Deps) -> int:

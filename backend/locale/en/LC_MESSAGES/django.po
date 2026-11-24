@@ -1784,8 +1784,8 @@ msgstr "prepare_server runs as the schema owner (BRIEVIE_DB_ROLE=owner)."
 
 #: apps/installer/prepare.py
 #, python-format
-msgid "De database blijft alleen-lezen. Zet de versie in het compose-bestand terug op de vorige versie en herstel de back-up pre-update-%(version)s (docker compose run --rm admin restore pre-update-%(version)s)."
-msgstr "The database stays read-only. Put the version in the compose file back to the previous version and restore the back-up pre-update-%(version)s (docker compose run --rm admin restore pre-update-%(version)s)."
+msgid "De database blijft alleen-lezen. Zet de versie in het compose-bestand terug op de vorige versie en typ dan, een voor een:\n%(commands)s\nStaat je back-up in een eigen map (BRIEVIE_BACKUP_DIR)? Gebruik die map in plaats van update-backup."
+msgstr "The database stays read-only. Put the version in the compose file back to the previous version and then type, one by one:\n%(commands)s\nIs your backup in a folder of your own (BRIEVIE_BACKUP_DIR)? Use that folder instead of update-backup."
 
 #: apps/installer/prepare.py
 msgid "Zet BRIEVIE_HOSTNAME op de naam of het IP-adres waarmee je iPhone deze server bereikt, bijvoorbeeld mijnnas.local. Er is niets veranderd."

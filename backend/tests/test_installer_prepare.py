@@ -321,6 +321,7 @@ def test_a_migration_failing_after_one_applied_stays_frozen_with_the_way_back(
     assert prepare.run(make_deps(connect, scratch, fakes)) == 1
     assert "pre-update-0.5.0" in fakes.complained[0]
     assert "alleen-lezen" in fakes.complained[0]
+    assert "restore_install pre-update-0.5.0 --replace" in fakes.complained[0]
     assert fakes.is_frozen()
     assert "record" not in fakes.calls
 

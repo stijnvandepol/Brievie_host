@@ -27,7 +27,23 @@ STAGING = Path("/out")
 # The two files a restore writes to its staging folder (apps.backup.restore.fetch); they hold
 # the master key and are removed as soon as they are not needed.
 STAGING_FILES = ("env", "manifest.json")
-COMMAND = "docker compose --profile admin run --rm admin python manage.py restore_install"
+ADMIN = "docker compose --profile admin run --rm admin python manage.py"
+COMMAND = f"{ADMIN} restore_install"
+STOP_COMMAND = "docker compose stop api worker keeper caddy"
+START_COMMAND = "docker compose up -d"
+
+
+def restore_commands(label: str, backup_dir: str = "update-backup") -> list[str]:
+    """The three commands of the way back (or a restore): stop, restore, start again.
+
+    One source for the sentence `init` prints after a failed update and for
+    docs/SELFHOST.md (a test compares them). `backup_dir` is where the back-up is: the
+    volume `update-backup` for the emergency back-up of an update without a back-up folder."""
+    return [
+        STOP_COMMAND,
+        f"BRIEVIE_BACKUP_DIR={backup_dir} {COMMAND} {label} --replace",
+        START_COMMAND,
+    ]
 
 
 class StepError(Exception):
