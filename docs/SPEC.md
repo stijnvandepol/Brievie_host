@@ -457,7 +457,7 @@ De namen hieronder zijn de begrippen uit dit document. In de code zijn tabel- en
 | `person` | (Thuis) weergavenaam, naamvarianten, gekoppeld user_id |
 | `relation` | (Zakelijk) naam, kvk, btw_nummer, iban, soort (leverancier/klant), standaardcategorie |
 | `folder` | parent_id, naam, pad, sjabloon |
-| `document` | gescand_door, afzender, relation_id, type, dagtekening, samenvatting_b1, ocr_tekst (BSN gemaskeerd), zoekindex, zichtbaarheid, folder_id, status, bron, bewaren_tot, verwijderd_op, verwijderd_door, wissen_gestart_op |
+| `document` | soort (`kind`: brief of eigen document), titel (`title`), gescand_door, afzender, relation_id, type, dagtekening, samenvatting_b1, ocr_tekst (BSN gemaskeerd), zoekindex, zichtbaarheid, ~~folder_id~~ (niet gebouwd: label, persoon, type en jaar in plaats van mappen; DECISIONS "Archive"), status, bron, geldig_tot (`expires_on`), herinner_dagen (`remind_days`), bewaren_tot (`retain_until`), verwijderd_op, verwijderd_door, wissen_gestart_op |
 | `document_page` | document_id, volgorde, bestandspad (bestand versleuteld) |
 | `document_person` | document_id, person_id |
 | `document_acl` | document_id, user_id |

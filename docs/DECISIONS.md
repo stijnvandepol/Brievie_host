@@ -2811,3 +2811,36 @@ first; all nine held.
   `record` failing after a successful migration no longer thaws: the next start resumes and
   records. The accidental first `up` before an import is handled in SELFHOST (start over).
 
+## 2026-11-24: Archive (Archief replaces Alle post; own documents)
+
+Spec `docs/superpowers/specs/2026-11-24-archief-design.md`, plan
+`docs/superpowers/plans/2026-11-24-host-archief.md`.
+
+The owner's answers to "Besluiten voor Stijn" (Stijn, 2026-11-24): every recommendation.
+
+- **B1.** "Archief" replaces "Alle post" in the menu; the old link `/w/<id>/post` keeps working.
+- **B2.** Every checked letter is in the archive, also with an open task; "Afgehandeld" is a
+  filter.
+- **B3.** "Alleen voor deze persoon" is on from the start for identity document, medical,
+  payslip and tax return; the user can switch it off.
+- **B4.** "Bewaren tot": the trash is allowed with a warning; purge and emptying the trash
+  refuse until the date has passed or is removed.
+- **B5.** On the iPhone a + on the Archief screen; the round scan button stays for post.
+
+Rulings of the spec, kept as written:
+
+- **AR1.** One `Document` table with `kind` (`letter`, `document`), not a second model: every
+  protection (sealed pages, BSN mask, search, visibility, trash, purge, export, RLS) is on
+  `Document`.
+- **AR2.** `kind` is set by the server at creation and never changes; no API field writes it
+  afterwards.
+- **AR11.** No `folder_id`: the `Folder` model and `listFolders`/`createFolder` stay (the API is
+  additive), nothing points to a folder; labels, person, type and year do what a folder tree
+  would. SPEC section 8 strikes `folder_id`.
+- **Types.** `Document.Type` gains `identity`, `diploma`, `warranty`, `tax_return`, `medical`.
+  `LETTER_TYPES` (the fourteen of before) is what the AI returns and a review confirms (a
+  review with an own document's type is 422); `DOCUMENT_TYPES` is the closed list of an own
+  document.
+- **Database defaults.** `kind`, `title` and `remind_days` keep a Python default (no
+  `db_default`: PB decision 5) and get a database default by `RunSQL` (documents 0025).
+

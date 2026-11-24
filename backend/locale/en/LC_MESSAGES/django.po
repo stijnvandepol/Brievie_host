@@ -601,7 +601,7 @@ msgstr "Label"
 msgid "Persoon"
 msgstr "Person"
 
-#: apps/audit/codes.py
+#: apps/audit/codes.py apps/documents/models.py
 msgid "Document"
 msgstr "Document"
 
@@ -1479,6 +1479,10 @@ msgid "Een mapnaam mag geen / bevatten."
 msgstr "A folder name may not contain /."
 
 #: apps/documents/models.py
+msgid "Brief"
+msgstr "Letter"
+
+#: apps/documents/models.py
 msgid "Wordt verwerkt"
 msgstr "Processing"
 
@@ -1565,6 +1569,26 @@ msgstr "Information"
 #: apps/documents/models.py apps/tasks/models.py
 msgid "Overig"
 msgstr "Other"
+
+#: apps/documents/models.py
+msgid "Identiteitsbewijs"
+msgstr "ID document"
+
+#: apps/documents/models.py
+msgid "Diploma"
+msgstr "Diploma"
+
+#: apps/documents/models.py
+msgid "Garantiebewijs"
+msgstr "Warranty"
+
+#: apps/documents/models.py
+msgid "Belastingaangifte"
+msgstr "Tax return"
+
+#: apps/documents/models.py
+msgid "Medisch"
+msgstr "Medical"
 
 #: apps/documents/models.py
 msgid "Normaal"

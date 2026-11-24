@@ -69,7 +69,17 @@ class Folder(WorkspaceModel):
 
 
 class Document(WorkspaceModel):
-    """A letter or invoice: one or more pages, the recognised text and what was confirmed."""
+    """A letter or invoice: one or more pages, the recognised text and what was confirmed.
+
+    Or an own document (`kind = document`, archive spec S 4): paper that is not post (a
+    contract, a diploma, a passport copy), added straight to the archive by a member. It
+    skips the Inbox, gets no tasks from a review, no rules and no autopilot, and never
+    counts as unread or "Blijft liggen". `kind` is set by the server at creation and never
+    changes (AR2)."""
+
+    class Kind(models.TextChoices):
+        LETTER = "letter", gettext_lazy("Brief")
+        DOCUMENT = "document", gettext_lazy("Document")
 
     class Status(models.TextChoices):
         PROCESSING = "processing", gettext_lazy("Wordt verwerkt")
@@ -98,6 +108,12 @@ class Document(WorkspaceModel):
         RECEIPT = "receipt", gettext_lazy("Bonnetje")
         INFORMATION = "information", gettext_lazy("Informatie")
         OTHER = "other", gettext_lazy("Overig")
+        # Only for own documents (`DOCUMENT_TYPES`); the AI never returns them.
+        IDENTITY = "identity", gettext_lazy("Identiteitsbewijs")
+        DIPLOMA = "diploma", gettext_lazy("Diploma")
+        WARRANTY = "warranty", gettext_lazy("Garantiebewijs")
+        TAX_RETURN = "tax_return", gettext_lazy("Belastingaangifte")
+        MEDICAL = "medical", gettext_lazy("Medisch")
 
     class Visibility(models.TextChoices):
         # Who sees it follows the workspace's switches (S 4.1).
@@ -107,6 +123,18 @@ class Document(WorkspaceModel):
 
     # Chosen by the uploading client: a repeated upload finds the same document.
     client_id = models.UUIDField()
+    # Letter (post) or own document; never changes. No `db_default` (PB decision 5); the
+    # database default comes from migration 0025, for raw inserts.
+    kind = models.CharField(max_length=10, choices=Kind.choices, default=Kind.LETTER)
+    # The name of an own document ("Polis opstal"), BSN-masked; empty for a letter. Letter
+    # content: never in a log, an audit row or a URL.
+    title = models.CharField(max_length=200, blank=True, default="")
+    # "Geldig tot": the end date of an own document; its reminder task starts
+    # `remind_days` before it (`apps.documents.reminders`).
+    expires_on = models.DateField(null=True, blank=True)
+    remind_days = models.PositiveSmallIntegerField(default=30)
+    # "Bewaren tot": no permanent delete before this day (`retention.check_removal`).
+    retain_until = models.DateField(null=True, blank=True)
     scanned_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
     )
@@ -257,6 +285,59 @@ class Document(WorkspaceModel):
 # The one spelling of "not in the trash" for reads off the seam (greppable). Through a
 # relation: `models.Q(document__trashed_at__isnull=True)`.
 LIVE = models.Q(trashed_at__isnull=True)
+
+# Post that waits (Inbox, unread, "Blijft liggen", Mijn post, letter status) is letters
+# only; an own document is never post (archive spec S 8).
+LETTERS_ONLY = models.Q(kind=Document.Kind.LETTER)
+
+# The types a letter may have (what the AI may return and a review may confirm): the
+# fourteen of before; the AI's schema is not widened.
+LETTER_TYPES: frozenset[str] = frozenset(
+    {
+        Document.Type.INVOICE,
+        Document.Type.ASSESSMENT,
+        Document.Type.DECISION,
+        Document.Type.BILL,
+        Document.Type.REMINDER,
+        Document.Type.DEMAND,
+        Document.Type.POLICY,
+        Document.Type.ANNUAL_STATEMENT,
+        Document.Type.PAYSLIP,
+        Document.Type.INSPECTION,
+        Document.Type.CONTRACT,
+        Document.Type.RECEIPT,
+        Document.Type.INFORMATION,
+        Document.Type.OTHER,
+    }
+)
+# The closed list of an own document's types (spec S 4): few, so the filter stays one tap.
+DOCUMENT_TYPES: frozenset[str] = frozenset(
+    {
+        Document.Type.IDENTITY,
+        Document.Type.DIPLOMA,
+        Document.Type.WARRANTY,
+        Document.Type.TAX_RETURN,
+        Document.Type.MEDICAL,
+        Document.Type.CONTRACT,
+        Document.Type.POLICY,
+        Document.Type.PAYSLIP,
+        Document.Type.ANNUAL_STATEMENT,
+        Document.Type.RECEIPT,
+        Document.Type.INFORMATION,
+        Document.Type.OTHER,
+    }
+)
+# The types whose add form starts with "Alleen voor deze persoon" on (Besluit B3).
+SENSITIVE_TYPES: frozenset[str] = frozenset(
+    {
+        Document.Type.IDENTITY,
+        Document.Type.MEDICAL,
+        Document.Type.PAYSLIP,
+        Document.Type.TAX_RETURN,
+    }
+)
+# How many days before "Geldig tot" the reminder starts.
+REMIND_DAYS: tuple[int, ...] = (7, 30, 60, 90)
 
 
 class DocumentPage(WorkspaceModel):

@@ -17,7 +17,13 @@ from apps.audit.services import AuditActor
 from apps.common.errors import ApiError, is_try_again
 from apps.common.privacy import mask_bsns
 from apps.documents import duplicates, organise, reading, visibility
-from apps.documents.models import LIVE, Document, DocumentEvent, DocumentSuggestion
+from apps.documents.models import (
+    LETTER_TYPES,
+    LIVE,
+    Document,
+    DocumentEvent,
+    DocumentSuggestion,
+)
 from apps.documents.schemas import ConfirmIn, TaskIn
 from apps.pipeline.autopilot import term_phrase
 from apps.pipeline.validation import dates_in, quote_in_text
@@ -363,7 +369,8 @@ LETTER_DATE_AHEAD = timedelta(days=366)
 def _validate(data: ConfirmIn, document: Document) -> None:
     if data.visibility and data.visibility not in Document.Visibility.values:
         raise _invalid(_("Kies privé of zichtbaar voor iedereen."))
-    if data.document_type and data.document_type not in Document.Type.values:
+    # A letter's types only: the types of own documents are not post (archive spec S 4).
+    if data.document_type and data.document_type not in LETTER_TYPES:
         raise _invalid(_("Dit soort document kennen we niet."))
     if data.letter_date is not None and not (
         LETTER_DATE_FROM <= data.letter_date <= timezone.localdate() + LETTER_DATE_AHEAD
