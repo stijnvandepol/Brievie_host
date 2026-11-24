@@ -165,6 +165,13 @@ def test_exported_query_parameters_have_no_anyof() -> None:
         "unread_only",
         "letter_status",
         "overdue",
+        # Archief (archive plan Task 7).
+        "kind",
+        "document_type",
+        "year",
+        "sender",
+        "archived",
+        "expiring",
     }
     assert not any(p["required"] for p in parameters.values())
     assert "anyOf" not in json.dumps(parameters)

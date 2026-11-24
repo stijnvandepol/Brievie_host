@@ -128,7 +128,7 @@ def test_purge_now_of_unseen_letter_is_404() -> None:
     assert r.json() == missing
     emptied = post_json(admin, empty_path(ws.id), {})
     assert emptied.status_code == 200
-    assert emptied.json() == {"document_count": 1}
+    assert emptied.json() == {"document_count": 1, "retained": 0}
 
     assert fresh(private).trashed_at is not None
     assert fresh(private).purge_started_at is None
@@ -159,7 +159,7 @@ def test_empty_trash_respects_up_to(admin_a: Client, ws_a: Workspace) -> None:
     r = post_json(admin_a, empty_path(ws_a.id), {"up_to": up_to.isoformat()})
 
     assert r.status_code == 200, r.content
-    assert r.json() == {"document_count": 2}
+    assert r.json() == {"document_count": 2, "retained": 0}
     items = admin_a.get(list_url(ws_a.id)).json()["items"]
     assert [i["id"] for i in items] == [str(newer.id)]
     rows = workspace_rows(ws_a, "document_purged")
@@ -176,7 +176,7 @@ def test_empty_trash_without_up_to_takes_all(admin_a: Client, ws_a: Workspace) -
     r = post_json(admin_a, empty_path(ws_a.id))
 
     assert r.status_code == 200, r.content
-    assert r.json() == {"document_count": 3}
+    assert r.json() == {"document_count": 3, "retained": 0}
     assert admin_a.get(list_url(ws_a.id)).json()["items"] == []
     assert all(fresh(d).purge_started_at is not None for d in letters)
     assert fresh(live).trashed_at is None
@@ -187,7 +187,7 @@ def test_empty_of_an_empty_trash_queues_nothing(admin_a: Client, ws_a: Workspace
     r = post_json(admin_a, empty_path(ws_a.id), {"up_to": None})
 
     assert r.status_code == 200
-    assert r.json() == {"document_count": 0}
+    assert r.json() == {"document_count": 0, "retained": 0}
     assert purge_jobs(ws_a) == 0
 
 
@@ -229,7 +229,7 @@ def test_retention_hook_guards_every_purge_path(
 
     other = trashed(make_document(ws_a), days_ago=1)
     r = post_json(admin_a, empty_path(ws_a.id), {})
-    assert r.json() == {"document_count": 1}
+    assert r.json() == {"document_count": 1, "retained": 1}
     assert fresh(other).purge_started_at is not None
     assert fresh(kept).purge_started_at is None
     assert [i["id"] for i in admin_a.get(list_url(ws_a.id)).json()["items"]] == [str(kept.id)]
