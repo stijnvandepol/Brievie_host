@@ -31,6 +31,8 @@ function PasswordResetPage() {
       return data;
     },
     onSuccess: async (user) => {
+      // Two-step verification: signing in continues with its code.
+      if ("step" in user) return;
       // Completing a reset signs in.
       queryClient.setQueryData(meQuery.queryKey, user);
       await queryClient.invalidateQueries({ queryKey: workspacesQuery.queryKey });

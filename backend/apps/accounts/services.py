@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from axes.handlers.proxy import AxesProxyHandler
@@ -28,7 +29,6 @@ from apps.accounts.sessions import (
     end_sessions,
     mark_reauthenticated,
     rekey_session,
-    start_session,
 )
 from apps.audit.codes import ActorKind, AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, actor_from_request, record
@@ -37,6 +37,9 @@ from apps.common.net import valid_client_ip
 from apps.common.throttling import FailedAttemptThrottle
 from apps.workspaces.models import Membership
 from apps.workspaces.services import create_workspace
+
+if TYPE_CHECKING:
+    from apps.accounts.signin import SignInResult
 
 # pg_advisory_xact_lock key that serialises POST /setup and the generation of the
 # setup token ("brievie" in ASCII).
@@ -142,6 +145,19 @@ def build_user(*, email: str, name: str, password: str, is_server_admin: bool = 
     return user
 
 
+@dataclass(frozen=True)
+class SetUp:
+    membership: Membership
+    result: "SignInResult"
+
+
+def _begin_sign_in(request: HttpRequest, user: User, *, via: str) -> "SignInResult":
+    # Imported here: the sign-in module imports modules that import this one.
+    from apps.accounts.signin import begin_sign_in
+
+    return begin_sign_in(request, user, via=via)
+
+
 def setup_server(
     request: HttpRequest,
     *,
@@ -152,8 +168,9 @@ def setup_server(
     workspace_name: str,
     workspace_kind: str,
     extra_labels: Sequence[str] = (),
-) -> Membership:
-    """Create the first user, their workspace and admin membership, and log them in.
+) -> "SetUp":
+    """Create the first user, their workspace and admin membership, and sign them in
+    (or leave the step that must come first: a rule may ask a second factor at once).
 
     Only allowed while no user exists, and only with the setup code (see
     `prepare_setup_token`), which is deleted afterwards. The advisory lock lasts
@@ -179,8 +196,9 @@ def setup_server(
             extra_labels=extra_labels,
         )
         SetupToken.objects.all().delete()
-        start_session(request, user, via=UserSession.Via.SETUP)
-    return Membership.objects.select_related("workspace").get(user=user, workspace=workspace)
+        result = _begin_sign_in(request, user, via=UserSession.Via.SETUP)
+    membership = Membership.objects.select_related("workspace").get(user=user, workspace=workspace)
+    return SetUp(membership=membership, result=result)
 
 
 def lock_active_server_admins() -> list[User]:
@@ -204,9 +222,10 @@ def other_active_server_admin_exists(user: User) -> bool:
     return any(admin.id != user.id for admin in lock_active_server_admins())
 
 
-def login(request: HttpRequest, *, email: str, password: str) -> User:
+def login(request: HttpRequest, *, email: str, password: str) -> "SignInResult":
     """Log in with email and password, with django-axes' lockout per email + address and
-    the slow-down per account (`signin_limits`).
+    the slow-down per account (`signin_limits`). Signs in, or leaves the second step
+    (`apps.accounts.signin`).
 
     The password check runs outside `transaction.atomic`: a failure must keep the
     attempt that axes recorded and the `sign_in_failed` row, and the 401 response
@@ -221,8 +240,7 @@ def login(request: HttpRequest, *, email: str, password: str) -> User:
         _record_sign_in_problem(AuditCode.SIGN_IN_FAILED, request, email)
         raise ApiError(401, "invalid_credentials", _("Het e-mailadres of wachtwoord klopt niet."))
     signin_limits.clear(email)
-    start_session(request, user, via=UserSession.Via.PASSWORD)
-    return user
+    return _begin_sign_in(request, user, via=UserSession.Via.PASSWORD)
 
 
 def verify_password(request: HttpRequest, *, email: str, password: str) -> User:

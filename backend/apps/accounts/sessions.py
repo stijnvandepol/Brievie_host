@@ -7,6 +7,7 @@ session without one and enforces the idle and absolute limits of `session_policy
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
 from django.conf import settings
 from django.contrib.auth import login as django_login
@@ -20,6 +21,9 @@ from apps.accounts.models import User, UserSession
 from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.net import valid_client_ip
+
+if TYPE_CHECKING:
+    from apps.accounts.second_factor import SecondFactorPassed
 
 # Two authentication backends are configured (axes first); a session must name the one
 # that holds the user, also for a user object that did not come from `authenticate`.
@@ -52,7 +56,12 @@ def is_past_its_limits(row: UserSession, now: datetime) -> bool:
 
 
 def record_session(
-    request: HttpRequest, user: User, *, method: str, via: str = UserSession.Via.PASSWORD
+    request: HttpRequest,
+    user: User,
+    *,
+    method: str,
+    via: str = UserSession.Via.PASSWORD,
+    second_factor: bool = False,
 ) -> UserSession:
     """Record the request's session as a sign-in of `user` and set its expiry.
 
@@ -77,6 +86,7 @@ def record_session(
             "last_used_at": now,
             "client_ip": valid_client_ip(request),
             "browser": describe_user_agent(str(request.META.get("HTTP_USER_AGENT", ""))),
+            "second_factor": second_factor,
         },
     )
     if created and row.last_used_at != row.created_at:
@@ -94,24 +104,58 @@ def start_session(
     *,
     method: str = UserSession.Method.PASSWORD,
     via: str,
+    second_factor: "SecondFactorPassed | None",
 ) -> None:
     """Sign `user` in on this request: the only caller of Django's `login`.
 
-    `via` is how: password, setup, invitation or reset. A session that belonged to
-    somebody else before is ended (Django flushed it; its record goes too).
+    `via` is how: password, setup, invitation or reset. `second_factor` is the proof that
+    the sign-in passed the second step, made only by `apps.accounts.second_factor`; a
+    sign-in without it, or with "none" for an account that has a factor or must have one
+    by now, raises (a caller that forgets the second step fails in its tests). A session
+    that belonged to somebody else before is ended (Django flushed it; its record goes
+    too).
     """
+    passed = _require_second_step(user, second_factor)
     old_key = request.session.session_key
     with transaction.atomic():
         django_login(request, user, backend=MODEL_BACKEND)
-        record_session(request, user, method=method, via=via)
+        record_session(
+            request,
+            user,
+            method=method,
+            via=via,
+            second_factor=passed.method in PASSED_METHODS,
+        )
         if old_key and old_key != request.session.session_key:
             UserSession.objects.filter(session_key=old_key).delete()
         record(
             AuditCode.SIGN_IN_SUCCEEDED,
             actor=AuditActor.for_user(user, client_ip=valid_client_ip(request)),
             target=AuditTarget(kind=TargetKind.USER, id=user.id, name=user.name),
-            values={"via": via},
+            values={"via": via, "second_factor": passed.method},
         )
+
+
+# The ways of passing the second step that mark a session as having passed it.
+PASSED_METHODS = frozenset({"totp", "recovery_code", "sso"})
+
+
+def _require_second_step(user: User, passed: "SecondFactorPassed | None") -> "SecondFactorPassed":
+    """The proof, or an error when the sign-in skips a second step the account needs."""
+    # Imported here: the second-factor modules import this one.
+    from apps.accounts.second_factor_policy import has_factor, in_grace, requirement_for
+
+    if passed is None or passed.user_id != user.id:
+        raise RuntimeError("second factor not passed")
+    if passed.method != "none":
+        return passed
+    if has_factor(user):
+        raise RuntimeError("second factor not passed")
+    now = timezone.now()
+    requirement = requirement_for(user, now=now)
+    if requirement.required and not in_grace(requirement, now=now):
+        raise RuntimeError("second factor not passed")
+    return passed
 
 
 def rekey_session(request: HttpRequest, old_key: str) -> None:

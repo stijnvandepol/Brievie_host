@@ -25,6 +25,11 @@ function SetupPage() {
       return data;
     },
     onSuccess: async (result) => {
+      // A rule asks for two-step verification first: signing in continues there.
+      if ("step" in result) {
+        await navigate({ to: "/login" });
+        return;
+      }
       // Setting up logs you in.
       queryClient.setQueryData(meQuery.queryKey, result.user);
       // The new workspace says how it is set up, with what to do next (S 4.2).

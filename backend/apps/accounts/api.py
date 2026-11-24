@@ -21,9 +21,11 @@ from apps.accounts.schemas import (
     SetupIn,
     SetupOut,
     SetupStatusOut,
+    SignInStepOut,
     UserOut,
 )
 from apps.accounts.services import SessionView
+from apps.accounts.signin import SignInResult, StepNeeded
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.common.throttling import CallerThrottle, ClientAddressThrottle
 from apps.devices import services as device_services
@@ -32,6 +34,23 @@ from apps.devices.schemas import DeviceOut
 from apps.workspaces.schemas import WorkspaceOut
 
 router = Router(tags=["accounts"])
+
+SECOND_STEP = (
+    " 202 when a second step follows (SignInStepOut): the browser is not signed in yet;"
+    " `code` asks verifySignInCode, `setup` asks to set up two-step verification first."
+)
+
+
+def step_out(result: StepNeeded) -> Status[SignInStepOut]:
+    return Status(
+        202, SignInStepOut(step=result.step, expires_in_seconds=result.expires_in_seconds)
+    )
+
+
+def signed_in_or_step(result: SignInResult) -> Status[User] | Status[SignInStepOut]:
+    if isinstance(result, StepNeeded):
+        return step_out(result)
+    return Status(200, result.user)
 
 
 @router.get(
@@ -46,20 +65,33 @@ def get_setup_status(request: HttpRequest) -> SetupStatusOut:
 
 @router.post(
     "/setup",
-    response={201: SetupOut, 403: ErrorOut, 409: ErrorOut, 429: ErrorOut, **BODY_ERRORS},
+    response={
+        201: SetupOut,
+        202: SignInStepOut,
+        403: ErrorOut,
+        409: ErrorOut,
+        429: ErrorOut,
+        **BODY_ERRORS,
+    },
     auth=None,
     throttle=ClientAddressThrottle("setup", "10/10m"),
+    description="Create the first account and workspace, and sign in." + SECOND_STEP,
     operation_id="setupServer",
 )
-def setup_server(request: HttpRequest, payload: SetupIn) -> Status[SetupOut]:
-    membership = services.setup_server(request, **payload.model_dump())
+def setup_server(
+    request: HttpRequest, payload: SetupIn
+) -> Status[SetupOut] | Status[SignInStepOut]:
+    done = services.setup_server(request, **payload.model_dump())
+    if isinstance(done.result, StepNeeded):
+        return step_out(done.result)
+    membership = done.membership
     user = UserOut.model_validate(membership.user, from_attributes=True)
     return Status(201, SetupOut(user=user, workspace=WorkspaceOut.from_membership(membership)))
 
 
 @router.post(
     "/auth/login",
-    response={200: UserOut, 401: ErrorOut, 429: ErrorOut, **BODY_ERRORS},
+    response={200: UserOut, 202: SignInStepOut, 401: ErrorOut, 429: ErrorOut, **BODY_ERRORS},
     auth=None,
     # Counts failed sign-ins only (see services.LOGIN_FAILURES).
     throttle=services.LOGIN_FAILURES,
@@ -67,16 +99,21 @@ def setup_server(request: HttpRequest, payload: SetupIn) -> Status[SetupOut]:
         "429 too_many_attempts with Retry-After: five wrong passwords for this email from "
         "this address, thirty from this address, or, from a browser that never signed in "
         "to this account, more than ten for the account from anywhere (then a wait that "
-        "doubles from 15 seconds to at most 15 minutes)."
+        "doubles from 15 seconds to at most 15 minutes)." + SECOND_STEP
     ),
     operation_id="login",
 )
-def login(request: HttpRequest, response: HttpResponse, payload: LoginIn) -> User:
-    user = services.login(request, email=payload.email, password=payload.password)
+def login(
+    request: HttpRequest, response: HttpResponse, payload: LoginIn
+) -> Status[User] | Status[SignInStepOut]:
+    result = services.login(request, email=payload.email, password=payload.password)
+    if isinstance(result, StepNeeded):
+        # Not signed in yet: the browser becomes known only when the sign-in completes.
+        return step_out(result)
     # This browser is known for the account from now on: never slowed by somebody
     # else's wrong passwords (signin_limits).
     signin_limits.remember_browser(request, response, payload.email)
-    return user
+    return Status(200, result.user)
 
 
 @router.post(
@@ -225,22 +262,22 @@ def create_password_reset(
 
 @router.post(
     "/auth/password-reset",
-    response={200: UserOut, 429: ErrorOut, **BODY_ERRORS},
+    response={200: UserOut, 202: SignInStepOut, 429: ErrorOut, **BODY_ERRORS},
     auth=None,
     throttle=ClientAddressThrottle("password_reset", "10/10m"),
     description="Set a new password with the token from a reset link's fragment and sign"
     " in; every other session of the account ends. 400 reset_link_invalid for an unknown,"
     " used, expired or revoked link, or when its maker may no longer act on the account;"
     " 422 when the password rules refuse it (the link stays usable). Every paired device"
-    " and every other open reset link of the account is revoked.",
+    " and every other open reset link of the account is revoked." + SECOND_STEP,
     operation_id="completePasswordReset",
 )
 def complete_password_reset(
     request: HttpRequest, response: HttpResponse, payload: PasswordResetIn
-) -> User:
-    user = resets.complete_password_reset(request, token=payload.token, password=payload.password)
+) -> Status[User] | Status[SignInStepOut]:
+    result = resets.complete_password_reset(request, token=payload.token, password=payload.password)
     response["Cache-Control"] = "no-store"
-    return user
+    return signed_in_or_step(result)
 
 
 ADMIN_ACTION = (

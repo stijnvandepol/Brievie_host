@@ -22,6 +22,7 @@ from pytest_django import Settings
 import brievie.settings
 from apps.accounts import jobs
 from apps.accounts.models import User, UserSession
+from apps.accounts.second_factor import passed_without_factor
 from apps.accounts.sessions import (
     MODEL_BACKEND,
     describe_user_agent,
@@ -114,7 +115,10 @@ def test_setup_records_a_session_made_by_setup(client: Client, settings: Setting
 
     row = current_row(client)
     assert row.created_via == "setup"
-    assert server_events("sign_in_succeeded")[0].values == {"via": "setup"}
+    assert server_events("sign_in_succeeded")[0].values == {
+        "via": "setup",
+        "second_factor": "none",
+    }
 
 
 # --- Enforcement -------------------------------------------------------------------------
@@ -293,7 +297,7 @@ def test_start_session_uses_the_model_backend(rf: RequestFactory) -> None:
     request.session = SessionStore()
     request.user = user
 
-    start_session(request, user, via="invitation")
+    start_session(request, user, via="invitation", second_factor=passed_without_factor(user))
 
     assert request.session[BACKEND_SESSION_KEY] == MODEL_BACKEND
     assert request.session[SESSION_KEY] == str(user.pk)
@@ -568,7 +572,7 @@ def test_successful_sign_in_is_logged_with_via(client: Client) -> None:
 
     (event,) = server_events("sign_in_succeeded")
     assert (event.actor_kind, event.actor_id) == ("user", user.id)
-    assert event.values == {"via": "password"}
+    assert event.values == {"via": "password", "second_factor": "none"}
 
 
 # --- Browser description -----------------------------------------------------------------

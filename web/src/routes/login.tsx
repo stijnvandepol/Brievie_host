@@ -20,6 +20,8 @@ function LoginPage() {
       return data;
     },
     onSuccess: async (user) => {
+      // Two-step verification: signing in continues with its code.
+      if ("step" in user) return;
       queryClient.setQueryData(meQuery.queryKey, user);
       await navigate({ to: "/" });
     },

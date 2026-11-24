@@ -15,7 +15,7 @@ export interface paths {
         put?: never;
         /**
          * Login
-         * @description 429 too_many_attempts with Retry-After: five wrong passwords for this email from this address, thirty from this address, or, from a browser that never signed in to this account, more than ten for the account from anywhere (then a wait that doubles from 15 seconds to at most 15 minutes).
+         * @description 429 too_many_attempts with Retry-After: five wrong passwords for this email from this address, thirty from this address, or, from a browser that never signed in to this account, more than ten for the account from anywhere (then a wait that doubles from 15 seconds to at most 15 minutes). 202 when a second step follows (SignInStepOut): the browser is not signed in yet; `code` asks verifySignInCode, `setup` asks to set up two-step verification first.
          */
         post: operations["login"];
         delete?: never;
@@ -55,7 +55,7 @@ export interface paths {
         put?: never;
         /**
          * Complete Password Reset
-         * @description Set a new password with the token from a reset link's fragment and sign in; every other session of the account ends. 400 reset_link_invalid for an unknown, used, expired or revoked link, or when its maker may no longer act on the account; 422 when the password rules refuse it (the link stays usable). Every paired device and every other open reset link of the account is revoked.
+         * @description Set a new password with the token from a reset link's fragment and sign in; every other session of the account ends. 400 reset_link_invalid for an unknown, used, expired or revoked link, or when its maker may no longer act on the account; 422 when the password rules refuse it (the link stays usable). Every paired device and every other open reset link of the account is revoked. 202 when a second step follows (SignInStepOut): the browser is not signed in yet; `code` asks verifySignInCode, `setup` asks to set up two-step verification first.
          */
         post: operations["completePasswordReset"];
         delete?: never;
@@ -223,7 +223,7 @@ export interface paths {
         put?: never;
         /**
          * Accept Invitation
-         * @description Join with the invitation's role and sign in. account `new`: name, email address and password (the rules of every account; 409 account_exists when the address has an account, which says that it has one, as registering does). account `existing`: the account's email address and password, with the sign-in lockout (401 invalid_credentials, 429 too_many_attempts); a deactivated account is reactivated. 403 invitation_email_mismatch when the invitation is for another address; 409 already_member, invitation_person_taken; 422 for another account kind. 400 invitation_invalid for an unknown, used, expired or revoked link, or one whose maker is no admin of the workspace any more (one sentence for all).
+         * @description Join with the invitation's role and sign in. account `new`: name, email address and password (the rules of every account; 409 account_exists when the address has an account, which says that it has one, as registering does). account `existing`: the account's email address and password, with the sign-in lockout (401 invalid_credentials, 429 too_many_attempts); a deactivated account is reactivated. 403 invitation_email_mismatch when the invitation is for another address; 409 already_member, invitation_person_taken; 422 for another account kind. 400 invitation_invalid for an unknown, used, expired or revoked link, or one whose maker is no admin of the workspace any more (one sentence for all). 202 when a second step follows (SignInStepOut): the browser is not signed in yet; `code` asks verifySignInCode, `setup` asks to set up two-step verification first. An account with two-step verification joins at once; only its sign-in waits.
          */
         post: operations["acceptInvitation"];
         delete?: never;
@@ -456,7 +456,10 @@ export interface paths {
         /** Get Setup Status */
         get: operations["getSetupStatus"];
         put?: never;
-        /** Setup Server */
+        /**
+         * Setup Server
+         * @description Create the first account and workspace, and sign in. 202 when a second step follows (SignInStepOut): the browser is not signed in yet; `code` asks verifySignInCode, `setup` asks to set up two-step verification first.
+         */
         post: operations["setupServer"];
         delete?: never;
         options?: never;
@@ -4203,6 +4206,23 @@ export interface components {
             needs_setup: boolean;
         };
         /**
+         * SignInStepOut
+         * @description 202: the password (or the invitation, the reset, the setup) was right, and a second
+         *     step follows before the browser is signed in. `code`: send the code from the
+         *     authenticator app or a recovery code to `verifySignInCode`. `setup`: two-step
+         *     verification is required and must be set up first (`beginSecondFactorSetup`). The
+         *     browser holds the pending step for `expires_in_seconds`; it is not signed in.
+         */
+        SignInStepOut: {
+            /**
+             * Expires In Seconds
+             * @default 300
+             */
+            expires_in_seconds: number;
+            /** Step */
+            step: string;
+        };
+        /**
          * SnippetPartOut
          * @description A piece of the fragment; `hit` pieces are what matched. Plain text, never HTML.
          */
@@ -4888,6 +4908,15 @@ export interface operations {
                     "application/json": components["schemas"]["UserOut"];
                 };
             };
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInStepOut"];
+                };
+            };
             /** @description Bad Request */
             400: {
                 headers: {
@@ -5000,6 +5029,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserOut"];
+                };
+            };
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInStepOut"];
                 };
             };
             /** @description Bad Request */
@@ -5473,6 +5511,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AcceptedInvitationOut"];
+                };
+            };
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInStepOut"];
                 };
             };
             /** @description Bad Request */
@@ -6167,6 +6214,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SetupOut"];
+                };
+            };
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInStepOut"];
                 };
             };
             /** @description Bad Request */

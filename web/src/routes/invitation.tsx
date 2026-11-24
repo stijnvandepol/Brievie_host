@@ -145,6 +145,8 @@ function AcceptForm({ token, info }: { token: string; info: Info }) {
       return data;
     },
     onSuccess: (data) => {
+      // The account has two-step verification: signing in continues with its code.
+      if ("step" in data) return;
       // Accepting signs in: the rest of the app asks the server who this is.
       queryClient.setQueryData(meQuery.queryKey, data.user);
       void queryClient.invalidateQueries({ queryKey: workspacesQuery.queryKey });
@@ -158,7 +160,7 @@ function AcceptForm({ token, info }: { token: string; info: Info }) {
     },
   });
 
-  if (accept.data) {
+  if (accept.data && "workspace" in accept.data) {
     return (
       <ContinueInApp
         workspaceName={accept.data.workspace.name}

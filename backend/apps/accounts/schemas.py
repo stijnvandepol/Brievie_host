@@ -62,6 +62,17 @@ class LoginIn(InputSchema):
     password: str = Field(max_length=128)
 
 
+class SignInStepOut(Schema):
+    """202: the password (or the invitation, the reset, the setup) was right, and a second
+    step follows before the browser is signed in. `code`: send the code from the
+    authenticator app or a recovery code to `verifySignInCode`. `setup`: two-step
+    verification is required and must be set up first (`beginSecondFactorSetup`). The
+    browser holds the pending step for `expires_in_seconds`; it is not signed in."""
+
+    step: str
+    expires_in_seconds: int = 300
+
+
 class SessionOut(Schema):
     """A web session of the caller ("Waar je bent ingelogd")."""
 

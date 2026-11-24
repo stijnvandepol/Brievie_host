@@ -4,7 +4,8 @@ The token is shown once, in the link's fragment; only its hash is stored. The ro
 person and the email address are fixed when the link is made; the invitee chooses none
 of them. A link works once, until it expires or is revoked, and only while its maker is
 still an admin of the workspace; every link that does not work answers one sentence.
-Accepting signs the invitee in through `start_session`, as every sign-in does.
+Accepting signs the invitee in through `begin_sign_in`, as every sign-in does (or leaves
+the second step that must come first).
 """
 
 from dataclasses import dataclass
@@ -21,7 +22,7 @@ from psycopg import errors as pg_errors
 
 from apps.accounts.models import User, UserSession, normalise_email
 from apps.accounts.services import build_user, verify_password
-from apps.accounts.sessions import start_session
+from apps.accounts.signin import SignInResult, begin_sign_in
 from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
@@ -596,10 +597,18 @@ def _already_member_error() -> ApiError:
     return ApiError(409, "already_member", _("Je bent al lid van deze werkruimte."))
 
 
+@dataclass(frozen=True)
+class Accepted:
+    membership: Membership
+    result: SignInResult
+
+
 def accept_invitation(
     request: HttpRequest, *, token: str, account: str, name: str, email: str, password: str
-) -> Membership:
-    """Join the workspace with a new account or an existing one, and sign in.
+) -> Accepted:
+    """Join the workspace with a new account or an existing one, and sign in. An account
+    with a second factor joins, and its sign-in waits for the code (the invitation and the
+    password were proof enough to join, not to sign in).
 
     An existing account is found only by its address together with its password (the
     sign-in checks: lockout, counting, log), checked outside the transaction so a
@@ -693,8 +702,8 @@ def accept_invitation(
                 "account_reactivated": reactivated,
             },
         )
-        start_session(request, user, via=UserSession.Via.INVITATION)
-    return membership
+        result = begin_sign_in(request, user, via=UserSession.Via.INVITATION)
+    return Accepted(membership=membership, result=result)
 
 
 def _join(invitation: Invitation, user: User, *, is_new: bool) -> Membership:
