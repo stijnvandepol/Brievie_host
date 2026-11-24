@@ -120,7 +120,7 @@ def start_session(
         # The account's row first, as turning a factor on locks it: a sign-in decided at
         # the same moment sees the factor, or is done before the other sessions end.
         User.objects.select_for_update(no_key=True).filter(pk=user.pk).first()
-        passed = _require_second_step(user, second_factor)
+        passed = _require_second_step(user, second_factor, method=method)
         django_login(request, user, backend=MODEL_BACKEND)
         record_session(
             request,
@@ -143,12 +143,17 @@ def start_session(
 PASSED_METHODS = frozenset({"totp", "recovery_code", "sso"})
 
 
-def _require_second_step(user: User, passed: "SecondFactorPassed | None") -> "SecondFactorPassed":
+def _require_second_step(
+    user: User, passed: "SecondFactorPassed | None", *, method: str
+) -> "SecondFactorPassed":
     """The proof, or an error when the sign-in skips a second step the account needs."""
     # Imported here: the second-factor modules import this one.
     from apps.accounts.second_factor_policy import has_factor, in_grace, requirement_for
 
     if passed is None or passed.user_id != user.id:
+        raise RuntimeError("second factor not passed")
+    # The identity provider's pass counts only for a sign-in through it (review of #52).
+    if (passed.method == "sso") != (method == UserSession.Method.SSO):
         raise RuntimeError("second factor not passed")
     if passed.method != "none":
         return passed

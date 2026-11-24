@@ -284,3 +284,20 @@ def test_a_sign_in_records_how_the_second_step_was_passed() -> None:
 
     (row,) = ServerAuditEvent.objects.filter(code="sign_in_succeeded")
     assert row.values == {"via": "password", "second_factor": "none"}
+
+
+def test_the_sso_pass_counts_only_for_an_sso_sign_in() -> None:
+    from apps.accounts.second_factor import passed_by_sso
+
+    user = UserFactory.create()
+    give_factor(user)
+
+    with pytest.raises(RuntimeError, match="second factor"):
+        start_session(browser(), user, via="password", second_factor=passed_by_sso(user))
+    with pytest.raises(RuntimeError, match="second factor"):
+        start_session(
+            browser(), user, via="password", method="sso", second_factor=passed_without_factor(user)
+        )
+    assert not UserSession.objects.exists()
+    start_session(browser(), user, via="password", method="sso", second_factor=passed_by_sso(user))
+    assert UserSession.objects.get(user=user).second_factor is True
