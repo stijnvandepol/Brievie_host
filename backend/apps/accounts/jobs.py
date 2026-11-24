@@ -58,14 +58,16 @@ def remove_stale_sessions(timestamp: int) -> None:
 def keep_second_factor_rules(now: datetime) -> None:
     """Two-step verification (S 5), each step in its own short transaction: unfinished
     set-ups older than an hour go; a rule set in `.env` starts the grace period of every
-    account it asks, without waiting for a sign-in (and one taken away forgets it); once a
+    account it asks, without waiting for a sign-in (never cleared again); once a
     grace period is over, the sessions that did not pass the second step end. No notice:
     the next sign-in explains."""
     purged = purge_unconfirmed(now=now)
+    # Nothing asks a factor: nothing to start or end (when the rule went is kept: a rule
+    # missing for a while gives no new grace period, security review of PR #52).
     if settings.BRIEVIE_REQUIRE_SECOND_FACTOR == "none":
-        accounts = User.objects.filter(second_factor_required_since__isnull=False)
-    else:
-        accounts = User.objects.filter(is_active=True)
+        logger.info("Removed %d unfinished second-factor set-ups", purged)
+        return
+    accounts = User.objects.filter(is_active=True)
     ended = 0
     for user in accounts.order_by("id").iterator():
         note_required_since(user, now=now)

@@ -41,6 +41,9 @@ SETTINGS_COPY_KEYS = (
     "BRIEVIE_SESSION_IDLE_DAYS",
     "BRIEVIE_SESSION_MAX_DAYS",
     "BRIEVIE_AI_AUTOPILOT_ALLOWED",
+    # Two-step verification: who must use it, and the days to switch it on.
+    "BRIEVIE_REQUIRE_SECOND_FACTOR",
+    "BRIEVIE_SECOND_FACTOR_GRACE_DAYS",
 )
 
 

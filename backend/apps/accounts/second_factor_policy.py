@@ -5,8 +5,8 @@ of an account: the server-wide `BRIEVIE_REQUIRE_SECOND_FACTOR` (`server_admins` 
 `everyone`), and later a workspace's own switch (`_workspace_requirements`, plan Task 15).
 The strictest wins: any rule that asks it makes it required.
 
-From the moment a rule first asks it of an account (`second_factor_required_since`) the
-account has `BRIEVIE_SECOND_FACTOR_GRACE_DAYS` to add one; signing in during that time
+From the moment a rule first asks it of an account (`second_factor_required_since`, kept
+for good) the account has `BRIEVIE_SECOND_FACTOR_GRACE_DAYS` to add one; signing in during that time
 works with a notice, after it only through setting one up. An account that has a factor
 is never "in grace".
 """
@@ -77,21 +77,19 @@ def in_grace(requirement: Requirement, *, now: datetime) -> bool:
 
 def note_required_since(user: User, *, now: datetime) -> None:
     """Start the grace period the first time a rule asks a factor of `user` (one atomic
-    UPDATE, so two requests at once start it once), and forget it when no rule asks it
-    any more. Kept while the account has a factor: a factor cleared later gives no new
-    grace."""
-    required = _server_requires(user) or bool(_workspace_requirements(user))
+    UPDATE, so two requests at once start it once). Never cleared: a rule that is missing
+    for a while (a restore onto a new machine without it, a typo in `.env`) gives nobody a
+    new grace period when it is back, and a factor cleared later gives none either."""
+    if user.second_factor_required_since is not None:
+        return
+    if not (_server_requires(user) or _workspace_requirements(user)):
+        return
     with transaction.atomic():
-        if required:
-            if user.second_factor_required_since is None:
-                User.objects.filter(pk=user.pk, second_factor_required_since__isnull=True).update(
-                    second_factor_required_since=now
-                )
-                user.second_factor_required_since = (
-                    User.objects.filter(pk=user.pk)
-                    .values_list("second_factor_required_since", flat=True)
-                    .first()
-                )
-        elif user.second_factor_required_since is not None:
-            User.objects.filter(pk=user.pk).update(second_factor_required_since=None)
-            user.second_factor_required_since = None
+        User.objects.filter(pk=user.pk, second_factor_required_since__isnull=True).update(
+            second_factor_required_since=now
+        )
+        user.second_factor_required_since = (
+            User.objects.filter(pk=user.pk)
+            .values_list("second_factor_required_since", flat=True)
+            .first()
+        )

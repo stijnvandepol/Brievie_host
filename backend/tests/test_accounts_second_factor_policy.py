@@ -78,14 +78,21 @@ def test_a_stale_copy_does_not_restart_the_grace(settings: Settings, member: Use
     assert stale.second_factor_required_since == NOW
 
 
-def test_required_since_is_forgotten_when_no_rule_asks_it(settings: Settings, member: User) -> None:
+def test_required_since_is_kept_when_the_rule_goes(settings: Settings, member: User) -> None:
+    # Security review of PR #52, point 2: a rule missing for a while (a restore onto a new
+    # machine without it) must not give everybody a new grace period when it is back.
     settings.BRIEVIE_REQUIRE_SECOND_FACTOR = "everyone"
     note_required_since(member, now=NOW)
     settings.BRIEVIE_REQUIRE_SECOND_FACTOR = "server_admins"
 
-    note_required_since(member, now=NOW)
+    note_required_since(member, now=NOW + timedelta(days=3))
+    settings.BRIEVIE_REQUIRE_SECOND_FACTOR = "everyone"
+    note_required_since(member, now=NOW + timedelta(days=9))
 
-    assert User.objects.get(pk=member.pk).second_factor_required_since is None
+    assert User.objects.get(pk=member.pk).second_factor_required_since == NOW
+    assert not in_grace(
+        requirement_for(member, now=NOW + timedelta(days=9)), now=NOW + timedelta(days=9)
+    )
 
 
 def test_grace_ends_after_the_configured_days(settings: Settings, member: User) -> None:

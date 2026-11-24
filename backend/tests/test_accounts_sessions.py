@@ -753,13 +753,14 @@ def test_the_job_starts_the_grace_for_everyone_once(settings: Settings) -> None:
     assert {u.id: u.second_factor_required_since for u in User.objects.all()} == since
 
 
-def test_the_job_forgets_the_grace_when_the_rule_goes(settings: Settings) -> None:
-    user = UserFactory.create(second_factor_required_since=timezone.now())
+def test_the_job_keeps_the_grace_when_the_rule_goes(settings: Settings) -> None:
+    since = timezone.now() - timedelta(days=2)
+    user = UserFactory.create(second_factor_required_since=since)
     settings.BRIEVIE_REQUIRE_SECOND_FACTOR = "none"
 
     jobs.remove_stale_sessions(timestamp=0)
 
-    assert User.objects.get(pk=user.pk).second_factor_required_since is None
+    assert User.objects.get(pk=user.pk).second_factor_required_since == since
 
 
 def test_after_the_grace_sessions_without_the_second_step_end(settings: Settings) -> None:
