@@ -47,6 +47,7 @@ from apps.documents.schemas import (
     TaskOut,
 )
 from apps.documents.storage import default_storage
+from apps.people.models import Person
 from apps.pipeline.jobs import defer_processing
 from apps.tasks import letter_sync
 from apps.tasks.facts import member_facts
@@ -295,6 +296,11 @@ def status_counts(membership: Membership, *, person_id: UUID | None = None) -> L
     today = _today()
     documents = visibility.visible_documents(membership)
     if person_id is not None:
+        # An archived person (or an unknown one) is the counts of nothing, as the API says.
+        if not Person.objects.filter(
+            workspace_id=membership.workspace_id, id=person_id, archived_at__isnull=True
+        ).exists():
+            return LetterStatusCounts(new=0, open=0, waiting=0, handled=0, overdue=0)
         documents = documents.filter(addressee_ids__contains=[person_id])
     counts = documents.aggregate(
         **{

@@ -175,3 +175,25 @@ def test_a_new_status_is_not_the_unread_marker(client: Client) -> None:
     rows = {row["id"]: row for row in client.get(_documents(h)).json()}
     assert "unread" in rows[ids["open"]]
     assert rows[ids["open"]]["letter_status"] == "open"
+
+
+def test_counts_of_an_archived_person_are_zero(client: Client) -> None:
+    from django.utils import timezone
+
+    from apps.people.models import Person
+    from apps.workspaces.context import SYSTEM
+    from tests.visibility_support import as_actor
+
+    h = household()
+    _world(h)
+    with as_actor(h.workspace, SYSTEM):
+        Person.objects.filter(id=h.persons["Anne"].id).update(archived_at=timezone.now())
+    client.force_login(h.bas)
+    base = f"/api/v1/workspaces/{h.workspace.id}/documents/status-counts"
+    assert client.get(f"{base}?person_id={h.persons['Anne'].id}").json() == {
+        "new": 0,
+        "open": 0,
+        "waiting": 0,
+        "handled": 0,
+        "overdue": 0,
+    }
