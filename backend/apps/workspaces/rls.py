@@ -185,3 +185,17 @@ TASK_CONDITION: Final = (
 
 def task_visibility_policy() -> migrations.RunSQL:
     return _restrictive("tasks_task", TASK_CONDITION)
+
+
+TASK_SNOOZE_POLICY: Final = "task_snooze_own"
+
+
+def restrict_to_visible_tasks(table: str) -> migrations.RunSQL:
+    """A row of a task follows its task: visible, updatable and deletable only when the
+    task is (the task policy, and through it the document policy, runs inside the EXISTS)."""
+    table = _checked(table)
+    condition = (
+        'EXISTS (SELECT 1 FROM "tasks_task" t'  # noqa: S608 - checked table name
+        f' WHERE t.id = "{table}".task_id)'
+    )
+    return _restrictive(table, condition)

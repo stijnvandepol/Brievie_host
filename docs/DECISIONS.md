@@ -2611,3 +2611,45 @@ Every point was checked against the code before fixing; all four held.
   and admin read behind it (`updateWorkspaceSettings`, `updateVisibility`,
   `updateAiSettings`, `setEmergencyAccess`, `listWorkspaceAuditEvents`) still requires a
   web session and an admin (emergency access: a server admin) on the server.
+
+## 2026-11-24: Letter status (Nieuw, Openstaand, Wacht op reactie, Afgehandeld, Te laat)
+
+Spec `docs/superpowers/specs/2026-11-21-briefstatus-design.md`, plan
+`docs/superpowers/plans/2026-11-21-host-briefstatus.md`.
+
+Rulings of the spec (LS1 to LS8), kept as written:
+
+- **LS1.** A letter's status is never stored. Three facts about its tasks that do not
+  change with the date (`task_open_count`, `task_wait_until`, `task_overdue_from`) are
+  cached on `Document`, written only by `apps.tasks.letter_sync.sync` in the transaction
+  of every task change under the letter's row lock, and repaired nightly by
+  `verify_visibility_job`. Status and marker are computed at read time from them and today
+  (Europe/Amsterdam). Lock order: the letter first (`FOR NO KEY UPDATE`), then the task.
+- **LS2.** If `handled` in the counts misses 250 ms it is dropped from the count only.
+- **LS3.** "Te laat" is a marker; a waiting task is not late while it waits.
+- **LS4.** Whoever may edit the letter (`require_editable`; emergency access is read-only)
+  may set "wacht op reactie".
+- **LS5.** Waiting tasks sit in a collapsed group in "Mijn taken", not hidden.
+- **LS6.** "Brief afhandelen" sends the task ids and a payment confirmation; the server
+  refuses a mismatch (409 `tasks_changed`, `payment_not_confirmed`).
+- **LS7.** No job and no history line when a waiting date arrives.
+- **LS8.** `letter_handled` / `letter_reopened` only for a change into or out of Afgehandeld.
+
+Owner rulings (Stijn, 2026-11-24) on the three open questions:
+
+- **B1.** A checked letter without tasks is Afgehandeld at once.
+- **B2.** "Wacht op reactie" may run past the task's deadline; "uitgesteld" may not (422
+  `snooze_after_deadline`).
+- **B3.** No notice inside Brievie when waiting ends: the task returns in "Mijn taken" with
+  "Wachten voorbij sinds ...".
+
+Naming: the status "Nieuw" (the letter is not checked yet) is a different concept from the
+per-person "ongelezen" of "Mijn post"; the API says `letter_status=new` and `unread`.
+
+Applied lessons of the security reviews of PR #38 to #44: no permission parameter with a
+privileged default (`sync` writes as the system only after its caller was authorised, and
+takes no flag that widens anything); every admin check is re-read under the lock; every
+task write goes through `require_editable`; nothing automatic widens readers (a status is a
+fact about the letter's tasks, shown only to who reads the letter); a notice or error never
+names a letter or person to someone who may not know it; status and counts start at
+`visible_documents`.

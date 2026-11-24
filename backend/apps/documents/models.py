@@ -134,6 +134,15 @@ class Document(WorkspaceModel):
     # is on the letter. Derived from the links, written only by `documents.organise`, so
     # the inbox counts need no lookup in the link tables per letter (DECISIONS 2026-11-20).
     has_automatic_link = models.BooleanField(default=False)
+    # Three facts about the letter's tasks that do not change with the date; the letter's
+    # status is computed from them and today (`apps.tasks.letter_state`), never stored.
+    # Derived from the tasks; written only by `apps.tasks.letter_sync`. Also a database
+    # default 0 (migration 0024) for raw inserts.
+    task_open_count = models.PositiveIntegerField(default=0)
+    # When every open task waits for a reply: the earliest of their waiting dates.
+    task_wait_until = models.DateField(null=True, blank=True)
+    # The first day the letter is late ("Te laat").
+    task_overdue_from = models.DateField(null=True, blank=True)
     # The sorted label and addressee ids as the user confirmed them in the review
     # ({"label_ids": [...], "addressee_ids": [...]}); null when confirmed without them.
     confirmed_organisation = models.JSONField(null=True, blank=True)
@@ -222,6 +231,12 @@ class Document(WorkspaceModel):
                 & ~models.Q(addressee_ids=[])
                 & models.Q(trashed_at__isnull=True),
                 name="documents_document_opened",
+            ),
+            # Openstaand, Wacht op reactie and Te laat: a small share of all post.
+            models.Index(
+                fields=["workspace", "-created_at"],
+                condition=models.Q(status="done", task_open_count__gt=0),
+                name="documents_document_open_tasks",
             ),
             GinIndex(fields=["search_vector"], name="documents_document_search"),
             # For the typo fallback of search (pg_trgm word similarity).
@@ -434,6 +449,12 @@ class DocumentEvent(WorkspaceModel):
         TASK_ASSIGNED = "task_assigned"
         TASK_UNASSIGNED = "task_unassigned"
         TASK_DEADLINE_SET = "task_deadline_set"
+        # Letter status: a task waits for a reply until `on_date`, or no longer; the
+        # letter became handled (no open task left) or open again.
+        TASK_WAITING = "task_waiting"
+        TASK_WAITING_ENDED = "task_waiting_ended"
+        LETTER_HANDLED = "letter_handled"
+        LETTER_REOPENED = "letter_reopened"
 
     class Origin(models.TextChoices):
         USER = "user"
@@ -482,6 +503,8 @@ class DocumentEvent(WorkspaceModel):
     related_document = models.ForeignKey(
         Document, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
+    # The day an event names (`task_waiting`: until when).
+    on_date = models.DateField(null=True, blank=True)
 
     class Meta:
         ordering: ClassVar[list[str]] = ["-created_at", "-id"]
