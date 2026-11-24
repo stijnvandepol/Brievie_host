@@ -612,12 +612,15 @@ def document_out(document: Document, *, open_duplicate_count: int = 0) -> Docume
     actor = current_actor()
     unread = reading.is_unread_for_actor(document)
     # Imported here: the tasks app reads letters through this module.
+    from apps.tasks import snooze
     from apps.tasks.assignment import flags_for_actor
 
     tasks = list(
         document.tasks.select_related("assigned_to").order_by("deadline", "created_at", "id")
     )
     flags = flags_for_actor(document.workspace_id, tasks)
+    today = _today()
+    own = snooze.snoozed_until(tasks, actor, today) if isinstance(actor, UUID) else {}
     return DocumentOut(
         **_summary_out(
             document, open_suggestions, open_duplicate_count, names, unread
@@ -652,7 +655,7 @@ def document_out(document: Document, *, open_duplicate_count: int = 0) -> Docume
             )
             for e in document.extractions.order_by("group", "created_at", "id")
         ],
-        tasks=[_task_out(task, flags[task.id]) for task in tasks],
+        tasks=[_task_out(task, flags[task.id], today, own.get(task.id)) for task in tasks],
         suggestions=[
             SuggestionOut(
                 id=s.id,
@@ -670,7 +673,7 @@ def document_out(document: Document, *, open_duplicate_count: int = 0) -> Docume
     )
 
 
-def _task_out(task: Task, flags: "TaskFlags") -> TaskOut:
+def _task_out(task: Task, flags: "TaskFlags", today: date, snoozed: date | None = None) -> TaskOut:
     return TaskOut(
         id=task.id,
         type=task.type,
@@ -688,6 +691,9 @@ def _task_out(task: Task, flags: "TaskFlags") -> TaskOut:
         can_take=flags.can_take,
         can_hand_over=flags.can_hand_over,
         can_release=flags.can_release,
+        waiting_until=task.waiting_until,
+        wait_over=task.waiting_until is not None and task.waiting_until <= today,
+        snoozed_until=snoozed,
     )
 
 

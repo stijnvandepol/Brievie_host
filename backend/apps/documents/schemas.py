@@ -168,6 +168,10 @@ class TaskOut(Schema):
     can_take: bool = False
     can_hand_over: bool = False
     can_release: bool = False
+    # As `TaskItemOut`: waiting for a reply (shared), the day arrived, the caller's own snooze.
+    waiting_until: date | None = None
+    wait_over: bool = False
+    snoozed_until: date | None = None
 
 
 class SuggestionOut(Schema):

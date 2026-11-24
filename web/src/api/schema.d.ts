@@ -2096,6 +2096,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/tasks/{task_id}/snooze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Snooze Task
+         * @description "Uitgesteld tot": the task leaves the caller's own lists until `until` (after today, within a year, and not after the task's own date: 422 `validation_error` or `snooze_after_deadline`), `until` null ends it. Personal: nobody else sees it, the letter's status does not change, nothing is written to the history. Any role; not through emergency access. 409 `task_done` for a task that is done.
+         */
+        post: operations["snoozeTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/tasks/{task_id}/waiting": {
         parameters: {
             query?: never;
@@ -4405,6 +4425,14 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** SnoozeIn */
+        SnoozeIn: {
+            /**
+             * Until
+             * Format: date
+             */
+            until?: string | null;
+        };
         /** SortsPostIn */
         SortsPostIn: {
             /**
@@ -4681,6 +4709,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Snoozed Until
+             * Format: date
+             */
+            snoozed_until?: string | null;
             /** Status */
             status: string;
             /**
@@ -4690,6 +4723,16 @@ export interface components {
             term_quote: string;
             /** Type */
             type: string;
+            /**
+             * Wait Over
+             * @default false
+             */
+            wait_over: boolean;
+            /**
+             * Waiting Until
+             * Format: date
+             */
+            waiting_until?: string | null;
         };
         /**
          * TaskTwinOut
@@ -12873,6 +12916,105 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    snoozeTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SnoozeIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskItemOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

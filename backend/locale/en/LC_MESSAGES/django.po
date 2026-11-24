@@ -2390,6 +2390,10 @@ msgstr "Choose mine, to_pick_up or all."
 msgid "De status moet open of done zijn."
 msgstr "The status must be open or done."
 
+#: apps/tasks/snooze.py
+msgid "Je kunt niet uitstellen tot na de datum van de taak."
+msgstr "You cannot snooze past the task's date."
+
 #: apps/tasks/waiting.py
 msgid "Kies een datum na vandaag, binnen een jaar."
 msgstr "Choose a date after today, within a year."

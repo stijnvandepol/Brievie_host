@@ -39,6 +39,7 @@ const task = {
   can_take: true,
   can_hand_over: true,
   can_release: false,
+  wait_over: false,
 };
 const path = `/w/${workspace.id}/post/${documentSummary.id}`;
 

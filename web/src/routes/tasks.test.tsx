@@ -52,6 +52,7 @@ function task(overrides: Partial<Item> = {}): Item {
     can_take: true,
     can_hand_over: true,
     can_release: false,
+    wait_over: false,
     ...overrides,
   };
 }

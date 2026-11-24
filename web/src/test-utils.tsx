@@ -175,6 +175,9 @@ export const documentSummary = {
   visibility: "workspace",
   reader_names: [],
   unread: false,
+  letter_status: "open",
+  overdue: false,
+  open_task_count: 1,
 };
 
 export const documentDetail: components["schemas"]["DocumentOut"] = {
@@ -208,6 +211,7 @@ export const documentDetail: components["schemas"]["DocumentOut"] = {
       can_take: true,
       can_hand_over: true,
       can_release: false,
+      wait_over: false,
     },
   ],
   suggestions: [],

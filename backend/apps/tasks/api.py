@@ -5,13 +5,14 @@ from ninja import Router
 
 from apps.accounts.services import current_user
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
-from apps.tasks import assignment, services, waiting
+from apps.tasks import assignment, services, snooze, waiting
 from apps.tasks.models import Task
 from apps.tasks.schemas import (
     AssignIn,
     DeadlineIn,
     MyTaskCountsOut,
     MyTasksOut,
+    SnoozeIn,
     TaskAssigneeOut,
     TaskItemOut,
     WaitingIn,
@@ -28,7 +29,14 @@ router = Router(tags=["tasks"])
 def _one(membership: Membership, task: Task) -> TaskItemOut:
     """A task after a change, with the caller's flags."""
     flags = assignment.flags_for_tasks(membership, [task])[task.id]
-    return task_item_out(task, can_edit=True, flags=flags, today=services.task_today())
+    today = services.task_today()
+    return task_item_out(
+        task,
+        can_edit=True,
+        flags=flags,
+        today=today,
+        snoozed=snooze.snoozed_until([task], membership.user_id, today).get(task.id),
+    )
 
 
 _TASKS = "/workspaces/{workspace_id}/tasks"
@@ -50,8 +58,12 @@ def list_tasks(request: HttpRequest, workspace_id: UUID, status: str = "open") -
     today = services.task_today()
     can_edit = membership.has_role(Membership.Role.MEMBER)
     flags = assignment.flags_for_tasks(membership, tasks)
+    own = snooze.snoozed_until(tasks, membership.user_id, today)
     return [
-        task_item_out(task, can_edit=can_edit, flags=flags[task.id], today=today) for task in tasks
+        task_item_out(
+            task, can_edit=can_edit, flags=flags[task.id], today=today, snoozed=own.get(task.id)
+        )
+        for task in tasks
     ]
 
 
@@ -74,7 +86,12 @@ def list_my_tasks(
     membership = workspace_member(request, workspace_id)
     result = services.my_tasks(membership, part=part, status=status)
     flags = assignment.flags_for_tasks(membership, [item.task for item in result.items])
-    return my_tasks_out(result, can_edit=membership.has_role(Membership.Role.MEMBER), flags=flags)
+    own = snooze.snoozed_until(
+        [item.task for item in result.items], membership.user_id, result.today
+    )
+    return my_tasks_out(
+        result, can_edit=membership.has_role(Membership.Role.MEMBER), flags=flags, snoozed=own
+    )
 
 
 @router.get(
@@ -145,6 +162,32 @@ def set_task_waiting(
         task_id=task_id,
         until=payload.until,
     )
+    return _one(membership, task)
+
+
+@router.post(
+    f"{_TASK}/snooze",
+    response={
+        200: TaskItemOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    operation_id="snoozeTask",
+    description=(
+        '"Uitgesteld tot": the task leaves the caller\'s own lists until `until` (after '
+        "today, within a year, and not after the task's own date: 422 `validation_error` or "
+        "`snooze_after_deadline`), `until` null ends it. Personal: nobody else sees it, "
+        "the letter's status does not change, nothing is written to the history. Any role; "
+        "not through emergency access. 409 `task_done` for a task that is done."
+    ),
+)
+def snooze_task(
+    request: HttpRequest, workspace_id: UUID, task_id: UUID, payload: SnoozeIn
+) -> TaskItemOut:
+    membership = workspace_member(request, workspace_id)
+    task = snooze.snooze(membership=membership, task_id=task_id, until=payload.until)
     return _one(membership, task)
 
 

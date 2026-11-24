@@ -185,10 +185,23 @@ def task_item_out(
     )
 
 
-def my_tasks_out(result: MyTaskList, *, can_edit: bool, flags: dict[UUID, TaskFlags]) -> MyTasksOut:
+def my_tasks_out(
+    result: MyTaskList,
+    *,
+    can_edit: bool,
+    flags: dict[UUID, TaskFlags],
+    snoozed: dict[UUID, date] | None = None,
+) -> MyTasksOut:
+    own = snoozed or {}
     return MyTasksOut(
         items=[
-            task_item_out(item, can_edit=can_edit, flags=flags.get(item.task.id, NO_FLAGS))
+            task_item_out(
+                item,
+                can_edit=can_edit,
+                flags=flags.get(item.task.id, NO_FLAGS),
+                today=result.today,
+                snoozed=own.get(item.task.id),
+            )
             for item in result.items
         ],
         today=result.today,

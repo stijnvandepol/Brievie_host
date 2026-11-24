@@ -217,6 +217,7 @@ def test_emergency_reader_cannot_organise_share_publish_or_retry() -> None:
     _read_only(client.post(f"{tasks}/assign", {"user_id": str(h.anne.id)}, content_type=JSON))
     # Letter status: waiting for a reply, snoozing and handling are task writes too.
     _read_only(client.post(f"{tasks}/waiting", {"until": "2099-01-01"}, content_type=JSON))
+    _read_only(client.post(f"{tasks}/snooze", {"until": "2099-01-01"}, content_type=JSON))
     _read_only(
         client.post(
             f"{base}/{done.id}/handle",
