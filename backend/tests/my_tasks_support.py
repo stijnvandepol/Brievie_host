@@ -81,10 +81,17 @@ def membership(workspace: Workspace, user: User) -> Membership:
 
 
 def mine(
-    workspace: Workspace, user: User, *, part: str = "mine", status: str = "open"
+    workspace: Workspace,
+    user: User,
+    *,
+    part: str = "mine",
+    status: str = "open",
+    include_waiting: bool = False,
 ) -> services.MyTaskList:
     with workspace_context(workspace.id, actor=user.id):
-        return services.my_tasks(membership(workspace, user), part=part, status=status)
+        return services.my_tasks(
+            membership(workspace, user), part=part, status=status, include_waiting=include_waiting
+        )
 
 
 def counts(workspace: Workspace, user: User) -> services.MyTaskCounts:

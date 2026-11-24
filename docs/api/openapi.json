@@ -773,6 +773,14 @@
             "title": "Note",
             "type": "string"
           },
+          "on_date": {
+            "format": "date",
+            "title": "On Date",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "origin": {
             "title": "Origin",
             "type": "string"
@@ -906,6 +914,11 @@
               "null"
             ]
           },
+          "letter_status": {
+            "default": "",
+            "title": "Letter Status",
+            "type": "string"
+          },
           "new_person_suggestions": {
             "items": {
               "$ref": "#/components/schemas/NewPersonSuggestionOut"
@@ -922,6 +935,16 @@
             "default": 0,
             "title": "Open Suggestion Count",
             "type": "integer"
+          },
+          "open_task_count": {
+            "default": 0,
+            "title": "Open Task Count",
+            "type": "integer"
+          },
+          "overdue": {
+            "default": false,
+            "title": "Overdue",
+            "type": "boolean"
           },
           "page_count": {
             "title": "Page Count",
@@ -1013,6 +1036,14 @@
             "default": "workspace",
             "title": "Visibility",
             "type": "string"
+          },
+          "waiting_until": {
+            "format": "date",
+            "title": "Waiting Until",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -1113,6 +1144,11 @@
               "null"
             ]
           },
+          "letter_status": {
+            "default": "",
+            "title": "Letter Status",
+            "type": "string"
+          },
           "open_duplicate_count": {
             "default": 0,
             "title": "Open Duplicate Count",
@@ -1122,6 +1158,16 @@
             "default": 0,
             "title": "Open Suggestion Count",
             "type": "integer"
+          },
+          "open_task_count": {
+            "default": 0,
+            "title": "Open Task Count",
+            "type": "integer"
+          },
+          "overdue": {
+            "default": false,
+            "title": "Overdue",
+            "type": "boolean"
           },
           "page_count": {
             "title": "Page Count",
@@ -1176,6 +1222,14 @@
             "default": "workspace",
             "title": "Visibility",
             "type": "string"
+          },
+          "waiting_until": {
+            "format": "date",
+            "title": "Waiting Until",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -1374,6 +1428,11 @@
               "null"
             ]
           },
+          "letter_status": {
+            "default": "",
+            "title": "Letter Status",
+            "type": "string"
+          },
           "open_duplicate_count": {
             "default": 0,
             "title": "Open Duplicate Count",
@@ -1383,6 +1442,16 @@
             "default": 0,
             "title": "Open Suggestion Count",
             "type": "integer"
+          },
+          "open_task_count": {
+            "default": 0,
+            "title": "Open Task Count",
+            "type": "integer"
+          },
+          "overdue": {
+            "default": false,
+            "title": "Overdue",
+            "type": "boolean"
           },
           "page_count": {
             "title": "Page Count",
@@ -1430,6 +1499,14 @@
             "default": "workspace",
             "title": "Visibility",
             "type": "string"
+          },
+          "waiting_until": {
+            "format": "date",
+            "title": "Waiting Until",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -1792,6 +1869,27 @@
           "parent_id"
         ],
         "title": "FolderOut",
+        "type": "object"
+      },
+      "HandleDocumentIn": {
+        "description": "\"Brief afhandelen\": the ids of the open tasks the person was shown (all of them,\nwaiting ones included) and whether they confirmed that a payment among them was made\nor arranged. The server completes nothing when the ids differ from the letter's open\ntasks (409 `tasks_changed`) or a payment is not confirmed (409 `payment_not_confirmed`).",
+        "properties": {
+          "payments_confirmed": {
+            "default": false,
+            "title": "Payments Confirmed",
+            "type": "boolean"
+          },
+          "task_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 200,
+            "title": "Task Ids",
+            "type": "array"
+          }
+        },
+        "title": "HandleDocumentIn",
         "type": "object"
       },
       "HealthOut": {
@@ -2159,6 +2257,38 @@
         "title": "LanguageIn",
         "type": "object"
       },
+      "LetterStatusCountsOut": {
+        "description": "How many letters the caller sees in each status (and how many of them are late), of\nall post or of one person's. Only letters the caller may read are counted.",
+        "properties": {
+          "handled": {
+            "default": 0,
+            "title": "Handled",
+            "type": "integer"
+          },
+          "new": {
+            "default": 0,
+            "title": "New",
+            "type": "integer"
+          },
+          "open": {
+            "default": 0,
+            "title": "Open",
+            "type": "integer"
+          },
+          "overdue": {
+            "default": 0,
+            "title": "Overdue",
+            "type": "integer"
+          },
+          "waiting": {
+            "default": 0,
+            "title": "Waiting",
+            "type": "integer"
+          }
+        },
+        "title": "LetterStatusCountsOut",
+        "type": "object"
+      },
       "LingeringLetterOut": {
         "properties": {
           "addressee_ids": {
@@ -2243,6 +2373,11 @@
               "null"
             ]
           },
+          "letter_status": {
+            "default": "",
+            "title": "Letter Status",
+            "type": "string"
+          },
           "open_duplicate_count": {
             "default": 0,
             "title": "Open Duplicate Count",
@@ -2252,6 +2387,16 @@
             "default": 0,
             "title": "Open Suggestion Count",
             "type": "integer"
+          },
+          "open_task_count": {
+            "default": 0,
+            "title": "Open Task Count",
+            "type": "integer"
+          },
+          "overdue": {
+            "default": false,
+            "title": "Overdue",
+            "type": "boolean"
           },
           "page_count": {
             "title": "Page Count",
@@ -2299,6 +2444,14 @@
             "default": "workspace",
             "title": "Visibility",
             "type": "string"
+          },
+          "waiting_until": {
+            "format": "date",
+            "title": "Waiting Until",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -2641,8 +2794,18 @@
             "title": "Overdue",
             "type": "integer"
           },
+          "snoozed": {
+            "default": 0,
+            "title": "Snoozed",
+            "type": "integer"
+          },
           "to_pick_up": {
             "title": "To Pick Up",
+            "type": "integer"
+          },
+          "waiting": {
+            "default": 0,
+            "title": "Waiting",
             "type": "integer"
           },
           "within_week": {
@@ -3956,6 +4119,20 @@
         "title": "SnippetPartOut",
         "type": "object"
       },
+      "SnoozeIn": {
+        "properties": {
+          "until": {
+            "format": "date",
+            "title": "Until",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "SnoozeIn",
+        "type": "object"
+      },
       "SortsPostIn": {
         "properties": {
           "confirmed": {
@@ -4245,6 +4422,14 @@
             "title": "Sender",
             "type": "string"
           },
+          "snoozed_until": {
+            "format": "date",
+            "title": "Snoozed Until",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -4262,6 +4447,19 @@
             "format": "date-time",
             "title": "Updated At",
             "type": "string"
+          },
+          "wait_over": {
+            "default": false,
+            "title": "Wait Over",
+            "type": "boolean"
+          },
+          "waiting_until": {
+            "format": "date",
+            "title": "Waiting Until",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -4352,6 +4550,14 @@
             "title": "Id",
             "type": "string"
           },
+          "snoozed_until": {
+            "format": "date",
+            "title": "Snoozed Until",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -4364,6 +4570,19 @@
           "type": {
             "title": "Type",
             "type": "string"
+          },
+          "wait_over": {
+            "default": false,
+            "title": "Wait Over",
+            "type": "boolean"
+          },
+          "waiting_until": {
+            "format": "date",
+            "title": "Waiting Until",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -4513,6 +4732,11 @@
               "null"
             ]
           },
+          "letter_status": {
+            "default": "",
+            "title": "Letter Status",
+            "type": "string"
+          },
           "open_duplicate_count": {
             "default": 0,
             "title": "Open Duplicate Count",
@@ -4522,6 +4746,16 @@
             "default": 0,
             "title": "Open Suggestion Count",
             "type": "integer"
+          },
+          "open_task_count": {
+            "default": 0,
+            "title": "Open Task Count",
+            "type": "integer"
+          },
+          "overdue": {
+            "default": false,
+            "title": "Overdue",
+            "type": "boolean"
           },
           "page_count": {
             "title": "Page Count",
@@ -4584,6 +4818,14 @@
             "default": "workspace",
             "title": "Visibility",
             "type": "string"
+          },
+          "waiting_until": {
+            "format": "date",
+            "title": "Waiting Until",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -4914,6 +5156,20 @@
           "preview_token"
         ],
         "title": "VisibilityPreviewOut",
+        "type": "object"
+      },
+      "WaitingIn": {
+        "properties": {
+          "until": {
+            "format": "date",
+            "title": "Until",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "WaitingIn",
         "type": "object"
       },
       "WorkspaceOut": {
@@ -8277,7 +8533,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/documents": {
       "get": {
-        "description": "The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`). `addressed_to_me=true` keeps \"Mijn post\": the letters on the caller's own persons (their own and those they manage), with `include_departments=true` also on their departments; empty for a member without a person. `unread_only=true` keeps the letters the caller has not read (`unread`).",
+        "description": "The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`). `addressed_to_me=true` keeps \"Mijn post\": the letters on the caller's own persons (their own and those they manage), with `include_departments=true` also on their departments; empty for a member without a person. `unread_only=true` keeps the letters the caller has not read (`unread`). `letter_status` (`new`, `open`, `waiting` or `handled`; 422 for another) and `overdue=true` keep the letters in that status, with the marker \"Te laat\"; `new` here is the letter not checked yet, not `unread`.",
         "operationId": "listDocuments",
         "parameters": [
           {
@@ -8363,6 +8619,26 @@
             "schema": {
               "default": false,
               "title": "Unread Only",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "letter_status",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Letter Status",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "overdue",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Overdue",
               "type": "boolean"
             }
           }
@@ -8855,6 +9131,81 @@
           }
         ],
         "summary": "Search Documents",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/status-counts": {
+      "get": {
+        "description": "How many letters the caller sees per status (`new`, `open`, `waiting`, `handled`) and how many are late (`overdue`), of all post or, with `person_id`, of one person's. Only letters the caller may read are counted; an unknown or archived person gives zeros.",
+        "operationId": "countLetterStatuses",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "person_id",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "title": "Person Id",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LetterStatusCountsOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Count Letter Statuses",
         "tags": [
           "documents"
         ]
@@ -9458,6 +9809,148 @@
           }
         ],
         "summary": "Undo Document Event",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/handle": {
+      "post": {
+        "description": "\"Brief afhandelen\": ticks off every open task of a checked letter after the confirmation. `task_ids` must be exactly the letter's open tasks (waiting ones included): 409 `tasks_changed` otherwise, nothing is completed. With a payment among them `payments_confirmed` must be true (409 `payment_not_confirmed`). 409 `document_not_reviewed` for a letter not checked yet. An already handled letter with no ids changes nothing. Writes one `task_completed` line per task with the caller and one `letter_handled` line.",
+        "operationId": "handleDocument",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HandleDocumentIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Handle Document",
         "tags": [
           "documents"
         ]
@@ -13277,7 +13770,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/my-tasks": {
       "get": {
-        "description": "\"Mijn taken\": the caller's tasks, derived from the post they may read. `part` is `mine` (default: given to them, or on their post), `to_pick_up` (an organisation's department and unnamed post; empty at home) or `all` (every task they see). `status` is `open` (default; by deadline, undated last, at most 500) or `done` (completed in the last 30 days, newest first, at most 200). 422 `validation_error` for another part or status.",
+        "description": "\"Mijn taken\": the caller's tasks, derived from the post they may read. `part` is `mine` (default: given to them, or on their post), `to_pick_up` (an organisation's department and unnamed post; empty at home) or `all` (every task they see). `status` is `open` (default; by deadline, undated last, at most 500) or `done` (completed in the last 30 days, newest first, at most 200). 422 `validation_error` for another part or status. Tasks that wait for a reply (`waiting_until` after today) and the caller's own snoozed tasks are left out of the open list; with `include_waiting=true` they follow with `group` `waiting` and `snoozed` (default false: callers that do not know these groups never meet them).",
         "operationId": "listMyTasks",
         "parameters": [
           {
@@ -13308,6 +13801,16 @@
               "default": "open",
               "title": "Status",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_waiting",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Waiting",
+              "type": "boolean"
             }
           }
         ],
@@ -13369,7 +13872,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/my-tasks/counts": {
       "get": {
-        "description": "The numbers of \"Mijn taken\" for the navigation: open tasks only.",
+        "description": "The numbers of \"Mijn taken\" for the navigation: open tasks only, without those that wait for a reply and the caller's own snoozed ones (counted in `waiting` and `snoozed`).",
         "operationId": "countMyTasks",
         "parameters": [
           {
@@ -16452,6 +16955,290 @@
           }
         ],
         "summary": "Reopen Task",
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/tasks/{task_id}/snooze": {
+      "post": {
+        "description": "\"Uitgesteld tot\": the task leaves the caller's own lists until `until` (after today, within a year, and not after the task's own date: 422 `validation_error` or `snooze_after_deadline`), `until` null ends it. Personal: nobody else sees it, the letter's status does not change, nothing is written to the history. Any role; not through emergency access. 409 `task_done` for a task that is done.",
+        "operationId": "snoozeTask",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SnoozeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskItemOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Snooze Task",
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/tasks/{task_id}/waiting": {
+      "post": {
+        "description": "\"Wacht op reactie tot\": the task waits for a reply until `until` (after today, within a year; 422 `validation_error` otherwise), `until` null stops waiting. Shared: everyone who sees the letter sees it, and when every open task waits the letter is \"waiting\". May pass the task's own deadline. 409 `task_done` for a task that is done. The same day again changes nothing. Writes a `task_waiting` or `task_waiting_ended` line. Role member or higher; not through emergency access.",
+        "operationId": "setTaskWaiting",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WaitingIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskItemOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Set Task Waiting",
         "tags": [
           "tasks"
         ]

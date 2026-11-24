@@ -21,10 +21,11 @@ import { DocumentHistory } from "../components/document-history";
 import {
   AutomaticBadge,
   formatLetterDate,
-  StatusBadge,
+  RowStatus,
   typeLabel,
 } from "../components/document-table";
 import { handOverSentence, losesLetter, ownSight } from "../components/hand-over";
+import { HandleDialog } from "../components/handle-dialog";
 import { Icon } from "../components/icons";
 import { LabelPicker, useSetLabels } from "../components/label-picker";
 import { ErrorAlert, focusPageHeading, PageHeader, Shell, usePageTitle } from "../components/page";
@@ -182,6 +183,7 @@ function DocumentView({
   const gone = useLetterGone(workspaceId);
   const [handOver, setHandOver] = useState<string[] | null>(null);
   const [sharing, setSharing] = useState<"private" | "share" | null>(null);
+  const [handling, setHandling] = useState(false);
   const setVisibility = useSetVisibility(workspaceId, document.id);
   const restricted = document.visibility === "restricted";
   async function makePublic() {
@@ -265,11 +267,7 @@ function DocumentView({
               <dt>{t`Status`}</dt>
               <dd>
                 <span className="cell-badges">
-                  <StatusBadge
-                    status={document.status}
-                    inboxState={document.inbox_state}
-                    departments={departmentsOn}
-                  />
+                  <RowStatus document={document} departments={departmentsOn} letterStatus="all" />
                   <AutomaticBadge document={document} />
                 </span>
               </dd>
@@ -403,6 +401,13 @@ function DocumentView({
           <section className="panel" aria-labelledby="tasks-heading">
             <div className="panel-head">
               <h2 id="tasks-heading">{t`Taken`}</h2>
+              {canEdit &&
+              (document.letter_status === "open" || document.letter_status === "waiting") ? (
+                <Button className="button secondary" onPress={() => setHandling(true)}>
+                  <Icon name="checkmark" />
+                  {t`Brief afhandelen`}
+                </Button>
+              ) : null}
             </div>
             <TaskList
               workspaceId={workspaceId}
@@ -412,6 +417,13 @@ function DocumentView({
             />
           </section>
         ) : null}
+        <HandleDialog
+          workspaceId={workspaceId}
+          documentId={document.id}
+          tasks={document.tasks}
+          isOpen={handling}
+          onOpenChange={setHandling}
+        />
         {sharing ? (
           <ShareDialog
             workspaceId={workspaceId}

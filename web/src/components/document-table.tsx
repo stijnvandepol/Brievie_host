@@ -7,6 +7,7 @@ import type { components } from "../api/schema";
 import { dateFormat } from "../format";
 import { assignWord } from "./hand-over";
 import { LabelChips } from "./label-chip";
+import { LetterStatusBadge } from "./letter-status";
 import { PrivateLock } from "./private-lock";
 import { SuggestionMark } from "./suggestion-list";
 import { Badge, EmptyState, type Intent, Personas, useMediaQuery } from "./ui";
@@ -204,6 +205,46 @@ function UnreadMark() {
   );
 }
 
+/**
+ * The status badges of a row. With the letter status (`letterStatus`: every row, or only
+ * reviewed ones) the badge "Nieuw", "Openstaand", ... and the marker "Te laat" come first;
+ * the old word "Klaar" then goes (it said less), and the action words ("Controleren",
+ * "Toewijzen") stay. Without it, or for an older server, the row is as before.
+ */
+export function RowStatus({
+  document,
+  departments,
+  letterStatus,
+}: {
+  document: DocumentSummary;
+  departments: boolean;
+  letterStatus: "all" | "reviewed" | undefined;
+}) {
+  const reviewed = document.status === "done";
+  const shown = Boolean(
+    letterStatus && document.letter_status && (reviewed || letterStatus === "all"),
+  );
+  const replaced = shown && reviewed && document.inbox_state !== "unassigned";
+  return (
+    <>
+      {shown ? (
+        <LetterStatusBadge
+          status={document.letter_status}
+          overdue={document.overdue}
+          waitingUntil={document.waiting_until}
+        />
+      ) : null}
+      {replaced ? null : (
+        <StatusBadge
+          status={document.status}
+          inboxState={document.inbox_state}
+          departments={departments}
+        />
+      )}
+    </>
+  );
+}
+
 /** The post of one workspace: a row per document, the sender links to the document. */
 export function DocumentTable<D extends DocumentSummary = DocumentSummary>({
   workspaceId,
@@ -215,6 +256,7 @@ export function DocumentTable<D extends DocumentSummary = DocumentSummary>({
   fragment,
   caption,
   showUnread = false,
+  letterStatus,
 }: {
   workspaceId: string;
   documents: D[];
@@ -230,6 +272,9 @@ export function DocumentTable<D extends DocumentSummary = DocumentSummary>({
   caption?: string;
   /** Marks the letters the caller has not read (Mijn post, Alle post; never the Inbox). */
   showUnread?: boolean;
+  /** Shows the letter's status: on every row ("all"), or only on reviewed letters ("reviewed",
+   * the Inbox: its rows keep their action words). */
+  letterStatus?: "all" | "reviewed";
 }) {
   const name = caption ?? t`Alle post`;
   const departments = useQuery(visibilityQuery(workspaceId)).data?.departments_enabled === true;
@@ -263,10 +308,10 @@ export function DocumentTable<D extends DocumentSummary = DocumentSummary>({
                 >
                   <SenderText document={document} />
                 </Link>
-                <StatusBadge
-                  status={document.status}
-                  inboxState={document.inbox_state}
+                <RowStatus
+                  document={document}
                   departments={departments}
+                  letterStatus={letterStatus}
                 />
               </div>
               {fragment?.(document)}
@@ -337,10 +382,10 @@ export function DocumentTable<D extends DocumentSummary = DocumentSummary>({
               </td>
               <td>
                 <span className="cell-badges">
-                  <StatusBadge
-                    status={document.status}
-                    inboxState={document.inbox_state}
+                  <RowStatus
+                    document={document}
                     departments={departments}
+                    letterStatus={letterStatus}
                   />
                   <PrivateLock
                     visibility={document.visibility}

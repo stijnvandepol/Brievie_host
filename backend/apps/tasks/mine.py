@@ -30,6 +30,10 @@ class Group(StrEnum):
     WITHIN_WEEK = "within_week"
     LATER = "later"
     NO_DATE = "no_date"
+    # Only with `include_waiting` (letter status spec S 6.3): a task that waits for a
+    # reply, and one the caller snoozed; both sit outside the date groups.
+    WAITING = "waiting"
+    SNOOZED = "snoozed"
 
 
 class Part(StrEnum):

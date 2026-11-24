@@ -114,6 +114,14 @@ the translation. Add a line before introducing a new domain term.
 | Het zijn twee brieven | dismiss (`dismissDuplicate`) |
 | Taak ook afronden | complete twin tasks (`complete_twin_tasks`, `task_twins`) |
 | Mijn taken | my tasks (`listMyTasks`, `countMyTasks`, `part=mine`) |
+| briefstatus | letter status (`letter_status`; never stored, derived from the review and the tasks) |
+| Nieuw (status) | new (`letter_status=new`; not the per-user "ongelezen", which is `unread`) |
+| Openstaand | open |
+| Wacht op reactie | waiting (`Task.waiting_until`, shared) |
+| Afgehandeld | handled |
+| Te laat | overdue (marker `overdue`, not a status) |
+| Uitgesteld | snoozed (`TaskSnooze`, personal) |
+| Brief afhandelen | handle a letter (`handleDocument`) |
 | Op te pakken | to pick up (`part=to_pick_up`) |
 | Alle taken | all tasks (`part=all`) |
 | Datum nodig, Datum invullen | needs a date (`needs_deadline`, `term_quote`), set a date (`setTaskDeadline`) |
@@ -221,3 +229,7 @@ the request that creates the workspace and keep that name.
 | Belastingdienst, KVK, WOZ, APK, DUO | (unchanged) | Dutch names of Dutch things. |
 | Taak: betalen, reageren, bezwaar maken, aanvragen, keuring, opzeggen, verlengen, aangifte | Pay, Respond, File an objection, Apply, Inspection, Cancel contract, Renew, File a return | "Object" and "Cancel" alone read as a noun and a button. |
 | Soort: factuur, aanslag, beschikking, rekening, herinnering, aanmaning, polis, jaaropgave, loonstrook, bonnetje | Invoice, Tax assessment, Decision, Bill, Reminder, Payment demand, Policy, Annual statement, Payslip, Receipt | |
+| Nieuw / Openstaand / Wacht op reactie / Afgehandeld / Te laat | New / Open / Waiting for a reply / Handled / Overdue | Letter status. "Nieuw" is a status of the letter (not yet checked), unlike "ongelezen" (Unread), which is per person. |
+| Uitgesteld tot 1 dec | Snoozed until 1 Dec | Personal; only you see it. |
+| Brief afhandelen | Mark letter as handled | Button; the dialog lists the tasks it ticks off. |
+| Wachten voorbij sinds 3 dec | Waiting ended on 3 Dec | Marker on a task whose waiting date arrived. |

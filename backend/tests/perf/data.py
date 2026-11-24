@@ -24,11 +24,13 @@ confirmed; the workspace has "Blijft liggen" on.
 import random
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Final, NamedTuple
 from uuid import UUID
 
 from django.db import connection, transaction
+
+from apps.tasks.letter_state import LetterFacts, TaskFacts, facts_of
 
 SEED: Final = 20261120
 
@@ -301,6 +303,34 @@ class PerfWorld:
     own_person: dict[UUID, UUID]  # member -> the person linked to them
 
 
+def waiting_offset(n: int, is_open: bool) -> int | None:
+    """Days from today a task waits until, from its row number (1-based): 5 % of the open
+    tasks wait, a third of those for a day that has passed. The SQL that writes the tasks
+    uses the same rule."""
+    if not is_open or n % 20 != 7:
+        return None
+    return -(1 + n % 30) if n % 3 == 0 else 1 + n % 60
+
+
+def letter_task_facts(plan: Plan, today: date) -> list[LetterFacts]:
+    """The cached facts of every letter, from the plan (what `letter_sync` would compute)."""
+    per_letter: list[list[TaskFacts]] = [[] for _ in plan.letters]
+    for n, task in enumerate(plan.tasks, start=1):
+        if task.letter is None:
+            continue
+        offset = waiting_offset(n, task.open)
+        per_letter[task.letter].append(
+            TaskFacts(
+                open=task.open,
+                deadline=None
+                if task.deadline_days is None
+                else today + timedelta(days=task.deadline_days),
+                waiting_until=None if offset is None else today + timedelta(days=offset),
+            )
+        )
+    return [facts_of(tasks) for tasks in per_letter]
+
+
 def _ids(rng: random.Random, n: int) -> list[UUID]:
     return [UUID(int=rng.getrandbits(128), version=4) for _ in range(n)]
 
@@ -325,6 +355,8 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
     letters = _ids(rng, shape.letters)
     now = datetime.now(UTC)
     today = now.date()
+
+    task_facts = letter_task_facts(plan, today)
 
     def addressee_ids(plan: Plan, i: int) -> list[UUID]:
         letter = plan.letters[i]
@@ -415,7 +447,8 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
             " scanned_by_id, source, status, failure_code, page_count, ocr_text, sender,"
             " document_type, letter_date, summary, summary_by_ai, confirmed_by_id, confirmed_at,"
             " confirmed_by_ai, confirmed_organisation, visibility, addressee_ids,"
-            " has_automatic_link, addressee_opened_at)"
+            " has_automatic_link, addressee_opened_at, task_open_count, task_wait_until,"
+            " task_overdue_from)"
             " SELECT id, %s - make_interval(secs => age), %s - make_interval(secs => age), %s,"
             " gen_random_uuid(), scanner, 'scan', status,"
             " CASE WHEN status = 'failed' THEN 'ocr_failed' ELSE '' END, (1 + n %% 3)::int,"
@@ -428,11 +461,14 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
             " by_ai, NULL, CASE WHEN is_private THEN 'restricted' ELSE 'workspace' END,"
             " addressees::uuid[], false,"
             " CASE WHEN status = 'done' AND addressees <> '{}' AND NOT unopened"
-            "  THEN %s - make_interval(secs => age) END"
+            "  THEN %s - make_interval(secs => age) END,"
+            " open_count, wait_until, overdue_from"
             " FROM unnest(%s::uuid[], %s::uuid[], %s::text[], %s::int[], %s::boolean[],"
-            "             %s::text[], %s::text[], %s::boolean[], %s::text[], %s::boolean[])"
+            "             %s::text[], %s::text[], %s::boolean[], %s::text[], %s::boolean[],"
+            "             %s::int[], %s::date[], %s::date[])"
             "   WITH ORDINALITY AS t(id, scanner, status, age, is_private, sender, kind, by_ai,"
-            "                        addressees, unopened, n)",
+            "                        addressees, unopened, open_count, wait_until, overdue_from,"
+            "                        n)",
             [
                 now,
                 now,
@@ -457,6 +493,11 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
                     for i in range(shape.letters)
                 ],
                 [i in plan.unopened for i in range(shape.letters)],
+                # The cached task facts (letter status), written with the letter for the same
+                # reason: an UPDATE of every letter rewrites the table and its text indexes.
+                [f.open_count for f in task_facts],
+                [f.wait_until for f in task_facts],
+                [f.overdue_from for f in task_facts],
             ],
         )
         links = [(i, persons[p]) for i, x in enumerate(plan.letters) for p in x.persons]
@@ -500,7 +541,7 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
         c.execute(
             "INSERT INTO tasks_task (id, created_at, updated_at, workspace_id, document_id, type,"
             " description, deadline, deadline_source, deadline_quote, status, assigned_to_id,"
-            " completed_at, created_by_ai, created_by_id, amount, term_quote)"
+            " completed_at, created_by_ai, created_by_id, amount, term_quote, waiting_until)"
             " SELECT gen_random_uuid(), %s, %s, %s, d, (%s::text[])[1 + (n %% %s)::int],"
             " 'Taak ' || n, %s::date + days, 'in_document', '',"
             " CASE WHEN is_open THEN 'open' ELSE 'done' END, assignee,"
@@ -510,7 +551,11 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
             " CASE WHEN (%s::text[])[1 + (n %% %s)::int] = 'pay' AND n %% 10 < 3"
             "  THEN (n %% 100000) / 100.0 END,"
             " CASE WHEN days IS NULL AND n %% 2 = 0"
-            "  THEN 'binnen zes weken na dagtekening' ELSE '' END"
+            "  THEN 'binnen zes weken na dagtekening' ELSE '' END,"
+            # Letter status: 5 % of the open tasks wait for a reply, a third of those with a
+            # date that has passed (the waiting is over); again from the row number.
+            " CASE WHEN is_open AND n %% 20 = 7 THEN %s::date"
+            "  + (CASE WHEN n %% 3 = 0 THEN -(1 + n %% 30) ELSE 1 + n %% 60 END)::int END"
             " FROM unnest(%s::uuid[], %s::boolean[], %s::uuid[], %s::uuid[], %s::int[])"
             "   WITH ORDINALITY AS t(d, is_open, assignee, maker, days, n)",
             [
@@ -523,12 +568,23 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
                 now,
                 _TASK_TYPES,
                 len(_TASK_TYPES),
+                today,
                 [None if t.letter is None else letters[t.letter] for t in plan.tasks],
                 [t.open for t in plan.tasks],
                 [None if t.assigned_to is None else users[t.assigned_to] for t in plan.tasks],
                 [None if t.created_by is None else users[t.created_by] for t in plan.tasks],
                 [t.deadline_days for t in plan.tasks],
             ],
+        )
+        # 2 % of the open tasks of a member are snoozed by that member (a stable pick).
+        c.execute(
+            "INSERT INTO tasks_tasksnooze (id, created_at, updated_at, workspace_id, task_id,"
+            " user_id, until)"
+            " SELECT gen_random_uuid(), %s, %s, workspace_id, id, assigned_to_id, %s::date + 5"
+            " FROM tasks_task WHERE workspace_id = %s AND status = 'open'"
+            " AND assigned_to_id IS NOT NULL AND document_id IS NOT NULL"
+            " AND abs(hashtext(id::text)) %% 50 = 0",
+            [now, now, today, workspace_id],
         )
         c.execute(
             "INSERT INTO documents_documentevent (id, created_at, updated_at, workspace_id,"
@@ -589,6 +645,7 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
             "documents_documentreader",
             "documents_documentreadmark",
             "tasks_task",
+            "tasks_tasksnooze",
         ):
             c.execute(f'VACUUM (ANALYZE) "{table}"')
 

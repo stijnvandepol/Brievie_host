@@ -7,6 +7,7 @@ Callers hold the document locked (`select_for_update`) and the workspace's RLS c
 """
 
 from collections.abc import Collection, Sequence
+from datetime import date
 from uuid import UUID
 
 from django.db import transaction
@@ -293,6 +294,31 @@ def record_task_event(
     _write_event(document, kind, actor, origin, person_name=person_name)
 
 
+def record_letter_handled(document: Document, *, actor: User | None) -> None:
+    """The letter has no open task left. With `actor` a person handled it ("Brief
+    afhandelen"); without, its last task was ticked off or its review made none: origin
+    `system`, no actor (never a user for what nobody did)."""
+    origin = DocumentEvent.Origin.USER if actor is not None else DocumentEvent.Origin.SYSTEM
+    _write_event(document, DocumentEvent.Kind.LETTER_HANDLED, actor, origin)
+
+
+def record_letter_reopened(document: Document) -> None:
+    """A handled letter has an open task again (a task reopened, or moved here by a
+    merge): origin `system`, the task's own line names who."""
+    _write_event(document, DocumentEvent.Kind.LETTER_REOPENED, None, DocumentEvent.Origin.SYSTEM)
+
+
+def record_task_waiting(document: Document, *, actor: User, until: date | None) -> None:
+    """A task waits for a reply until `until` (`task_waiting`, with the day), or no longer
+    (`task_waiting_ended`). Nothing is written when the day arrives."""
+    kind = (
+        DocumentEvent.Kind.TASK_WAITING
+        if until is not None
+        else DocumentEvent.Kind.TASK_WAITING_ENDED
+    )
+    _write_event(document, kind, actor, DocumentEvent.Origin.USER, on_date=until)
+
+
 _UNDOABLE = (DocumentEvent.Kind.LABEL_ADDED, DocumentEvent.Kind.ADDRESSEE_ADDED)
 
 
@@ -522,6 +548,7 @@ def _write_event(
     undoes: DocumentEvent | None = None,
     related_document: Document | None = None,
     person_name: str = "",
+    on_date: date | None = None,
 ) -> None:
     DocumentEvent.objects.create(
         workspace_id=document.workspace_id,
@@ -537,4 +564,5 @@ def _write_event(
         rule_name=rule.name if rule is not None else "",
         undoes=undoes,
         related_document=related_document,
+        on_date=on_date,
     )

@@ -3,10 +3,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "react-aria-components";
 import { meQuery } from "../api/queries";
-import { assignTask, refreshAfterTask } from "../api/tasks";
+import { assignTask, refreshAfterTask, setTaskWaiting, snoozeTask } from "../api/tasks";
 import { AssignDialog } from "./assign-dialog";
 import { DeadlineDialog } from "./deadline-dialog";
 import { ErrorAlert } from "./page";
+import { SnoozeDialog } from "./snooze-dialog";
+import { WaitingDialog } from "./waiting-dialog";
 
 export type ActionFacts = {
   id: string;
@@ -20,6 +22,10 @@ export type ActionFacts = {
   can_take?: boolean;
   can_hand_over?: boolean;
   can_release?: boolean;
+  /** Letter status: waiting for a reply (shared), the day arrived, the caller's own snooze. */
+  waiting_until?: string | null;
+  wait_over?: boolean;
+  snoozed_until?: string | null;
 };
 
 /**
@@ -34,17 +40,28 @@ export function TaskActions({
   workspaceId,
   task,
   showTake = true,
+  canEdit = true,
 }: {
   workspaceId: string;
   task: ActionFacts;
   /** "Ik doe dit" here; "Op te pakken" shows its own. */
   showTake?: boolean;
+  /** False for a viewer: only "Uitstellen…" (it changes nothing anybody else sees). */
+  canEdit?: boolean;
 }) {
   const queryClient = useQueryClient();
   const me = useQuery(meQuery).data;
-  const [dialog, setDialog] = useState<"assign" | "deadline" | null>(null);
+  const [dialog, setDialog] = useState<"assign" | "deadline" | "waiting" | "snooze" | null>(null);
   const assign = useMutation({
     mutationFn: (userId: string | null) => assignTask(workspaceId, task.id, userId),
+    onSettled: () => refreshAfterTask(queryClient, workspaceId),
+  });
+  const stopWaiting = useMutation({
+    mutationFn: () => setTaskWaiting(workspaceId, task.id, null),
+    onSettled: () => refreshAfterTask(queryClient, workspaceId),
+  });
+  const stopSnooze = useMutation({
+    mutationFn: () => snoozeTask(workspaceId, task.id, null),
     onSettled: () => refreshAfterTask(queryClient, workspaceId),
   });
   const description = task.description;
@@ -59,6 +76,39 @@ export function TaskActions({
     takenBy !== "" &&
     !task.can_release &&
     !task.can_hand_over;
+  if (!canEdit) {
+    return (
+      <>
+        {task.snoozed_until ? (
+          <Button
+            className="button-text"
+            aria-label={t`Niet meer uitstellen: ${description}`}
+            isDisabled={stopSnooze.isPending}
+            onPress={() => stopSnooze.mutate()}
+          >
+            {t`Niet meer uitstellen`}
+          </Button>
+        ) : (
+          <Button
+            className="button-text"
+            aria-label={t`Uitstellen: ${description}`}
+            onPress={() => setDialog("snooze")}
+          >
+            {t`Uitstellen…`}
+          </Button>
+        )}
+        <ErrorAlert error={stopSnooze.error} />
+        <SnoozeDialog
+          workspaceId={workspaceId}
+          taskId={task.id}
+          description={description}
+          deadline={task.deadline}
+          isOpen={dialog === "snooze"}
+          onOpenChange={(open) => setDialog(open ? "snooze" : null)}
+        />
+      </>
+    );
+  }
   return (
     <>
       {needsDate ? (
@@ -115,7 +165,58 @@ export function TaskActions({
           {taken ? <span className="muted small">{t`Doet: ${takenBy}`}</span> : null}
         </>
       ) : null}
-      <ErrorAlert error={assign.error} />
+      {task.waiting_until ? (
+        <Button
+          className="button-text"
+          aria-label={t`Niet meer wachten: ${description}`}
+          isDisabled={stopWaiting.isPending}
+          onPress={() => stopWaiting.mutate()}
+        >
+          {t`Niet meer wachten`}
+        </Button>
+      ) : (
+        <Button
+          className="button-text"
+          aria-label={t`Wacht op reactie: ${description}`}
+          onPress={() => setDialog("waiting")}
+        >
+          {t`Wacht op reactie…`}
+        </Button>
+      )}
+      {task.snoozed_until ? (
+        <Button
+          className="button-text"
+          aria-label={t`Niet meer uitstellen: ${description}`}
+          isDisabled={stopSnooze.isPending}
+          onPress={() => stopSnooze.mutate()}
+        >
+          {t`Niet meer uitstellen`}
+        </Button>
+      ) : (
+        <Button
+          className="button-text"
+          aria-label={t`Uitstellen: ${description}`}
+          onPress={() => setDialog("snooze")}
+        >
+          {t`Uitstellen…`}
+        </Button>
+      )}
+      <ErrorAlert error={assign.error ?? stopWaiting.error ?? stopSnooze.error} />
+      <WaitingDialog
+        workspaceId={workspaceId}
+        taskId={task.id}
+        description={description}
+        isOpen={dialog === "waiting"}
+        onOpenChange={(open) => setDialog(open ? "waiting" : null)}
+      />
+      <SnoozeDialog
+        workspaceId={workspaceId}
+        taskId={task.id}
+        description={description}
+        deadline={task.deadline}
+        isOpen={dialog === "snooze"}
+        onOpenChange={(open) => setDialog(open ? "snooze" : null)}
+      />
       <AssignDialog
         workspaceId={workspaceId}
         taskId={task.id}

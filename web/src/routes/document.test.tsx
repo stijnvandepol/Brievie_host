@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
+import { addDays, amsterdamToday } from "../task-time";
 import {
   API,
   annaPerson,
@@ -39,6 +40,7 @@ const task = {
   can_take: true,
   can_hand_over: true,
   can_release: false,
+  wait_over: false,
 };
 const path = `/w/${workspace.id}/post/${documentSummary.id}`;
 
@@ -881,5 +883,220 @@ describe("read and unread (spec S 5.3)", () => {
     const nav = screen.getByRole("navigation", { name: "Hoofdmenu" });
     expect(await within(nav).findByRole("link", { name: "Mijn post, 1 ongelezen" })).toBeVisible();
     expect(menuAsked).toBeGreaterThan(1);
+  });
+});
+
+describe("document: letter status", () => {
+  const second = {
+    ...task,
+    id: "0f0e0d0c-0b0a-4908-8706-050403020102",
+    type: "respond",
+    description: "Bel terug",
+  };
+  const open = {
+    ...documentDetail,
+    letter_status: "open",
+    overdue: true,
+    open_task_count: 2,
+    tasks: [task, second],
+  };
+
+  function show(detail: typeof open | typeof documentDetail) {
+    server.use(...loggedInHandlers(), ...documentHandlers(detail));
+    renderApp(path);
+  }
+
+  it("shows the status and Te laat next to it", async () => {
+    show(open);
+    const panel = await screen.findByRole("region", { name: "Gegevens" });
+    expect(within(panel).getByText("Openstaand")).toBeInTheDocument();
+    expect(within(panel).getByText("Te laat")).toBeInTheDocument();
+    expect(within(panel).queryByText("Klaar")).not.toBeInTheDocument();
+  });
+
+  it("offers Brief afhandelen to an editor of an open letter only", async () => {
+    show(open);
+    expect(await screen.findByRole("button", { name: "Brief afhandelen" })).toBeInTheDocument();
+  });
+
+  it.each([
+    ["a handled letter", { ...open, letter_status: "handled", tasks: [] }, "admin"],
+    ["a viewer", open, "viewer"],
+  ] satisfies [string, typeof open, "admin" | "viewer"][])(
+    "does not offer Brief afhandelen to %s",
+    async (_name, detail, role) => {
+      server.use(asRole(role), ...loggedInHandlers(), ...documentHandlers(detail));
+      renderApp(path);
+      await screen.findByRole("region", { name: "Gegevens" });
+      expect(screen.queryByRole("button", { name: "Brief afhandelen" })).not.toBeInTheDocument();
+    },
+  );
+
+  it("names the tasks, asks for the payment first and sends the ids it showed", async () => {
+    const bodies: unknown[] = [];
+    server.use(
+      http.post(
+        `*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/handle`,
+        async ({ request }) => {
+          bodies.push(await request.json());
+          return HttpResponse.json({ ...open, letter_status: "handled", tasks: [] });
+        },
+      ),
+    );
+    show(open);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Brief afhandelen" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Brief afhandelen?" });
+    expect(within(dialog).getByText("Deze taken worden afgevinkt:")).toBeInTheDocument();
+    expect(within(dialog).getByText(/Betaal de aanslag/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Bel terug/)).toBeInTheDocument();
+    const confirm = within(dialog).getByRole("button", { name: "Afhandelen" });
+    expect(confirm).toBeDisabled();
+    await user.click(
+      within(dialog).getByRole("checkbox", { name: "De betaling is gedaan of geregeld" }),
+    );
+    await user.click(confirm);
+    await waitFor(() =>
+      expect(bodies).toEqual([{ task_ids: [task.id, second.id], payments_confirmed: true }]),
+    );
+  });
+
+  it("asks nothing about a payment when there is none", async () => {
+    show({ ...open, tasks: [second] });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Brief afhandelen" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Afhandelen" })).toBeEnabled();
+  });
+
+  it("shows the server's sentence when the tasks changed meanwhile", async () => {
+    server.use(
+      http.post(`*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/handle`, () =>
+        HttpResponse.json(
+          {
+            code: "tasks_changed",
+            message: "De taken van deze brief zijn net veranderd. Bekijk ze opnieuw.",
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+    show({ ...open, tasks: [second] });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Brief afhandelen" }));
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: "Afhandelen" }));
+    expect(
+      await within(dialog).findByText(
+        "De taken van deze brief zijn net veranderd. Bekijk ze opnieuw.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("asks for a new tick when a payment appeared meanwhile", async () => {
+    const extra = {
+      ...task,
+      id: "0f0e0d0c-0b0a-4908-8706-050403020199",
+      description: "Betaal de boete",
+    };
+    let reads = 0;
+    server.use(
+      http.get(`*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}`, () => {
+        reads += 1;
+        return HttpResponse.json(
+          reads > 1 ? { ...open, tasks: [task, extra] } : { ...open, tasks: [task] },
+        );
+      }),
+      http.post(`*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/handle`, () =>
+        HttpResponse.json(
+          {
+            code: "tasks_changed",
+            message: "De taken van deze brief zijn net veranderd. Bekijk ze opnieuw.",
+          },
+          { status: 409 },
+        ),
+      ),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
+    renderApp(path);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Brief afhandelen" }));
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(
+      within(dialog).getByRole("checkbox", { name: "De betaling is gedaan of geregeld" }),
+    );
+    await user.click(within(dialog).getByRole("button", { name: "Afhandelen" }));
+    expect(await within(dialog).findByText(/Betaal de boete/)).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("checkbox", { name: "De betaling is gedaan of geregeld" }),
+    ).not.toBeChecked();
+    expect(within(dialog).getByRole("button", { name: "Afhandelen" })).toBeDisabled();
+  });
+
+  it("sets a day to wait for a reply, within what the server accepts", async () => {
+    const bodies: unknown[] = [];
+    server.use(
+      http.post(
+        `*${API}/workspaces/${workspace.id}/tasks/${second.id}/waiting`,
+        async ({ request }) => {
+          bodies.push(await request.json());
+          return HttpResponse.json({ ...second, waiting_until: "2099-01-01" });
+        },
+      ),
+    );
+    show(open);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Wacht op reactie: Bel terug" }));
+    const dialog = await screen.findByRole("dialog", { name: "Wacht op reactie…" });
+    const field = within(dialog).getByLabelText("Tot wanneer wacht je op een reactie?");
+    const today = amsterdamToday();
+    expect(field).toHaveAttribute("min", addDays(today, 1));
+    expect(field).toHaveAttribute("max", addDays(today, 365));
+    expect(
+      within(dialog).getByText(
+        "Op die dag komt de taak terug in Mijn taken. Iedereen die deze brief ziet, ziet dat je wacht.",
+      ),
+    ).toBeInTheDocument();
+    await user.type(field, addDays(today, 5));
+    await user.click(within(dialog).getByRole("button", { name: "Opslaan" }));
+    await waitFor(() => expect(bodies).toEqual([{ until: addDays(today, 5) }]));
+  });
+
+  it("marks a waiting task, keeps its term visible and can stop waiting", async () => {
+    const bodies: unknown[] = [];
+    server.use(
+      http.post(
+        `*${API}/workspaces/${workspace.id}/tasks/${task.id}/waiting`,
+        async ({ request }) => {
+          bodies.push(await request.json());
+          return HttpResponse.json({ ...task, waiting_until: null });
+        },
+      ),
+    );
+    const waiting = { ...task, deadline: "2020-11-01", waiting_until: "2099-12-03" };
+    show({ ...open, letter_status: "waiting", overdue: false, tasks: [waiting] });
+    const user = userEvent.setup();
+    expect(await screen.findByText("Wacht op reactie tot 3 dec")).toBeInTheDocument();
+    expect(screen.getByText("termijn was 1 nov")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Niet meer wachten: Betaal de aanslag" }));
+    await waitFor(() => expect(bodies).toEqual([{ until: null }]));
+  });
+
+  it("marks a task whose waiting day has arrived", async () => {
+    const over = { ...task, waiting_until: "2026-11-20", wait_over: true };
+    show({ ...open, tasks: [over] });
+    expect(await screen.findByText("Wachten voorbij sinds 20 nov")).toBeInTheDocument();
+  });
+
+  it("lets a viewer snooze, and nothing else", async () => {
+    server.use(asRole("viewer"), ...loggedInHandlers(), ...documentHandlers(open));
+    renderApp(path);
+    expect(
+      await screen.findByRole("button", { name: "Uitstellen: Betaal de aanslag" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Wacht op reactie:/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Ik doe dit/ })).not.toBeInTheDocument();
   });
 });

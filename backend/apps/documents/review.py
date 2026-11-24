@@ -22,6 +22,7 @@ from apps.documents.schemas import ConfirmIn, TaskIn
 from apps.pipeline.autopilot import term_phrase
 from apps.pipeline.validation import dates_in, quote_in_text
 from apps.rules import triggers
+from apps.tasks import letter_sync
 from apps.tasks.models import Task
 from apps.workspaces.context import system_actor
 from apps.workspaces.locks import lock_own_membership
@@ -122,12 +123,16 @@ def _store_confirmation(
     the system)."""
     # A private letter the confirmer would lose by its addressees is a 409 (PB ruling c);
     # handing over a letter that is not private is allowed (`can_read` false).
+    reviewed_as = document.status
     with visibility.keep_own_access(document), visibility.addressee_scope(document):
         _write_confirmation(document, data, user=user, by_ai=by_ai)
     with system_actor():
         document.status = Document.Status.DONE
         document.confirmed_by = user
         document.save(update_fields=["status", "confirmed_by", "confirmed_at", "updated_at"])
+        # The tasks of the review are on the letter: its task facts follow, and a review
+        # without tasks leaves it handled at once (letter status S 4.3, Besluit B1).
+        letter_sync.sync(document, previous_status=reviewed_as)
         # Only openings of the confirmed letter count (security review of PR #44, point 3):
         # one during review is no opening, one of an earlier confirmation still is.
         reading.recompute_addressee_opened(document)

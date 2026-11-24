@@ -1404,6 +1404,22 @@ msgstr "Note: the BSN has been removed from the text and the details. On the pho
 msgid "Dit bestand is niet versleuteld zodra je het hebt gedownload. Bewaar het op een veilige plek en verwijder het als je het niet meer nodig hebt."
 msgstr "This file is not encrypted once you have downloaded it. Keep it in a safe place and delete it when you no longer need it."
 
+#: apps/documents/handle.py apps/documents/review.py apps/documents/services.py apps/documents/trash.py
+msgid "We kunnen dit document niet vinden."
+msgstr "We can't find this document."
+
+#: apps/documents/handle.py
+msgid "Deze brief is nog niet nagekeken."
+msgstr "This letter has not been checked yet."
+
+#: apps/documents/handle.py
+msgid "De taken van deze brief zijn net veranderd. Bekijk ze opnieuw."
+msgstr "The tasks of this letter just changed. Please look at them again."
+
+#: apps/documents/handle.py
+msgid "Vink aan dat de betaling is gedaan of geregeld."
+msgstr "Tick that the payment has been made or arranged."
+
 #: apps/documents/intake.py
 msgid "Er bestaat al een ander document met dit kenmerk."
 msgstr "Another document with this reference already exists."
@@ -1596,10 +1612,6 @@ msgstr "Choose 200 letters at most."
 msgid "Deze brief moet nog bewaard worden. Je kunt hem nu niet wissen."
 msgstr "This letter still has to be kept. You can't erase it now."
 
-#: apps/documents/review.py apps/documents/services.py apps/documents/trash.py
-msgid "We kunnen dit document niet vinden."
-msgstr "We can't find this document."
-
 #: apps/documents/review.py
 msgid "Dit document kun je nu niet bevestigen."
 msgstr "You can't confirm this document right now."
@@ -1655,6 +1667,10 @@ msgstr "We can't find this folder."
 #: apps/documents/services.py
 msgid "Er is al een map met deze naam op deze plek."
 msgstr "There is already a folder with this name in this place."
+
+#: apps/documents/services.py
+msgid "Deze status kennen we niet."
+msgstr "We do not know this status."
 
 #: apps/documents/services.py
 msgid "Deze brief staat in de prullenbak."
@@ -2032,7 +2048,7 @@ msgstr "There is already a label with this name."
 msgid "Kies een afdeling."
 msgstr "Choose a department."
 
-#: apps/labels/services.py apps/people/services.py apps/tasks/assignment.py apps/workspaces/deps.py apps/workspaces/members.py apps/workspaces/visibility_settings.py
+#: apps/labels/services.py apps/people/services.py apps/tasks/assignment.py apps/tasks/services.py apps/workspaces/deps.py apps/workspaces/members.py apps/workspaces/visibility_settings.py
 msgid "Je mag dit niet doen in deze werkruimte."
 msgstr "You are not allowed to do this in this workspace."
 
@@ -2591,6 +2607,18 @@ msgstr "Choose mine, to_pick_up or all."
 #: apps/tasks/services.py
 msgid "De status moet open of done zijn."
 msgstr "The status must be open or done."
+
+#: apps/tasks/snooze.py
+msgid "Je kunt niet uitstellen tot na de datum van de taak."
+msgstr "You cannot snooze past the task's date."
+
+#: apps/tasks/waiting.py
+msgid "Kies een datum na vandaag, binnen een jaar."
+msgstr "Choose a date after today, within a year."
+
+#: apps/tasks/waiting.py
+msgid "Deze taak is al afgerond."
+msgstr "This task is already done."
 
 #: apps/updates/management/commands/check_health.py
 msgid "De server antwoordt niet goed na het bijwerken."

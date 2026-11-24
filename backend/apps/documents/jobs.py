@@ -65,6 +65,15 @@ def verify_visibility_job(timestamp: int) -> None:
         check.reader_rows_fixed,
         check.assignments_released,
     )
+    # The task facts cached on the letters (letter status S 4.2): recomputed, counts only.
+    from apps.tasks import letter_sync
+
+    facts_fixed = letter_sync.verify_all()
+    logger.log(
+        logging.WARNING if facts_fixed else logging.INFO,
+        "Letter status check: the task facts of %d letters differed",
+        facts_fixed,
+    )
 
 
 @app.periodic(cron="41 * * * *")

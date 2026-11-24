@@ -559,3 +559,26 @@ describe("Nieuwe persoon in the addressee picker", () => {
     expect(screen.queryByRole("button", { name: "Nieuwe persoon" })).toBeNull();
   });
 });
+
+describe("inbox: letter status", () => {
+  it("shows the status and Te laat on a checked letter that needs a name, not on the rest", async () => {
+    server.use(
+      counts({ new: 1, review: 1, unassigned: 1 }),
+      ...loggedInHandlers(),
+      letters([
+        { ...reviewLetter, letter_status: "new" },
+        { ...unassignedLetter, letter_status: "open", overdue: true },
+        { ...readingLetter, letter_status: "new" },
+      ]),
+    );
+    renderApp(path);
+    await screen.findByRole("link", { name: "Belastingdienst" });
+    const unassigned = rowOf("Belastingdienst");
+    expect(within(unassigned).getByText("Openstaand")).toBeInTheDocument();
+    expect(within(unassigned).getByText("Te laat")).toBeInTheDocument();
+    for (const sender of ["Gemeente", "Zorgverzekeraar"]) {
+      expect(within(rowOf(sender)).queryByText("Nieuw")).not.toBeInTheDocument();
+    }
+    expect(within(rowOf("Gemeente")).getByText("Controleren")).toBeInTheDocument();
+  });
+});

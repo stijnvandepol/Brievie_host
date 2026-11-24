@@ -55,6 +55,8 @@ def test_count_my_tasks_shape(client: Client) -> None:
         "within_week": 0,
         "needs_date": 1,
         "to_pick_up": 0,
+        "waiting": 0,
+        "snoozed": 0,
     }
 
 
