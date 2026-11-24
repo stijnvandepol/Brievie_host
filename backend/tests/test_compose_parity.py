@@ -125,13 +125,16 @@ def test_the_tunnel_service_must_be_the_same_in_both() -> None:
         "image": "cloudflare/cloudflared:1@sha256:" + "0" * 64,
         "environment": {"TUNNEL_TOKEN": ""},
         "read_only": True,
+        "networks": {"tunnel": None},
     }
     wrapper["services"]["cloudflared"] = copy.deepcopy(tunnel)  # type: ignore[index]
-    compose["services"]["cloudflared"] = {**copy.deepcopy(tunnel), "networks": ["edge"]}  # type: ignore[index]
+    compose["services"]["cloudflared"] = copy.deepcopy(tunnel)  # type: ignore[index]
     assert drift(wrapper, compose) == []
     compose["services"]["cloudflared"]["read_only"] = False  # type: ignore[index]
     compose["services"]["cloudflared"]["environment"] = {"TUNNEL_TOKEN": "", "X": "1"}  # type: ignore[index]
+    compose["services"]["cloudflared"]["networks"] = {"edge": None}  # type: ignore[index]
     found = drift(wrapper, compose)
+    assert "cloudflared: networks differs" in found
     assert "cloudflared: read_only differs" in found
     assert "cloudflared: environment differs" in found
 

@@ -74,6 +74,7 @@ TUNNEL_KEYS = (
     "depends_on",
     "ports",
     "restart",
+    "networks",
 )
 
 

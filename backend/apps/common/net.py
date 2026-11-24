@@ -1,7 +1,40 @@
 import ipaddress
+import socket
+import time
 
 from django.conf import settings
 from django.http import HttpRequest
+
+# Caddy's addresses, resolved from its compose name and kept for a short while per process.
+_CADDY_TTL = 30.0
+_caddy: tuple[float, frozenset[str]] = (-_CADDY_TTL, frozenset())
+
+
+def caddy_addresses() -> frozenset[str]:
+    """The addresses of `BRIEVIE_CADDY_HOST` (compose: `caddy`); empty when it does not
+    resolve. Only a request whose socket peer is one of these is Caddy's."""
+    global _caddy
+    now = time.monotonic()
+    if now - _caddy[0] < _CADDY_TTL:
+        return _caddy[1]
+    try:
+        infos = socket.getaddrinfo(settings.BRIEVIE_CADDY_HOST, None, proto=socket.IPPROTO_TCP)
+        found = frozenset(str(info[4][0]) for info in infos)
+    except OSError:
+        found = frozenset()
+    _caddy = (now, found)
+    return found
+
+
+def from_caddy(request: HttpRequest) -> bool:
+    """Whether Brievie's own Caddy sent this request: behind Caddy, and the socket peer is
+    Caddy's address (security review of PR #53, point 2). Only then do its X-Brievie-*
+    headers count; anything else that reaches the api directly gets the most restricted
+    route and its own socket peer as client address."""
+    if not settings.BRIEVIE_BEHIND_CADDY:
+        return False
+    peer = str(request.META.get("REMOTE_ADDR", "")).strip()
+    return bool(peer) and peer in caddy_addresses()
 
 
 def client_ip(request: HttpRequest) -> str | None:
@@ -15,11 +48,14 @@ def client_ip(request: HttpRequest) -> str | None:
     # Behind Caddy (compose): the address Caddy wrote itself after its own trusted-proxy
     # rules (X-Brievie-Client-IP, S 7.3); a client's value never gets here. Never
     # CF-Connecting-IP: only Caddy reads that, on its unpublished tunnel listener.
+    remote_addr = request.META.get("REMOTE_ADDR")
     if settings.BRIEVIE_BEHIND_CADDY:
+        if not from_caddy(request):
+            # Not through Caddy: only the socket peer is known for sure.
+            return str(remote_addr) if remote_addr else None
         caddy = str(request.META.get("HTTP_X_BRIEVIE_CLIENT_IP", "")).strip()
         if caddy:
             return caddy
-    remote_addr = request.META.get("REMOTE_ADDR")
     proxies: int = settings.BRIEVIE_PROXY_COUNT
     if proxies <= 0:
         return str(remote_addr) if remote_addr else None

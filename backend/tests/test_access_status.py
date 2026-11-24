@@ -1,10 +1,10 @@
-"""The checks of the settings page "Van buiten bereikbaar" (S 8), probe and devices injected."""
+"""The checks of the page "Van buiten bereikbaar" (S 8); what was seen and devices injected."""
 
 import json
 import secrets
 from dataclasses import asdict
 from datetime import UTC, datetime
-from typing import Literal
+from pathlib import Path
 
 import pytest
 from django.http import HttpRequest
@@ -17,10 +17,20 @@ from apps.access.status import CHECK_CODES, external_access_status, needs_app_up
 # Made at run time: no token-like literal in the repository.
 TOKEN_LIKE = secrets.token_urlsafe(32)
 
+CADDY_PEERS = {"127.0.0.1"}
+
+
+@pytest.fixture(autouse=True)
+def _caddy_at(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Caddy is the peer of these requests (apps.common.net.from_caddy)."""
+    from apps.common import net
+
+    monkeypatch.setattr(net, "caddy_addresses", lambda: frozenset(CADDY_PEERS))
+
 
 @pytest.fixture(autouse=True)
 def _database() -> None:
-    """Overrides the suite's database fixture: devices and the probe are injected."""
+    """Overrides the suite's database fixture: devices and what was seen are injected."""
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -85,12 +95,14 @@ def request(
 def codes(
     made: HttpRequest | None = None,
     *,
-    probe: Literal["yes", "no"] = "yes",
+    tunnel_seen: bool = True,
     versions: list[str] | None = None,
 ) -> list[str]:
-    found = external_access_status(
-        made or request(), probe=lambda: probe, app_versions=lambda: versions or []
-    )
+    if tunnel_seen:
+        SEEN.setdefault("tunnel", datetime.now(UTC))
+    else:
+        SEEN.pop("tunnel", None)
+    found = external_access_status(made or request(), app_versions=lambda: versions or [])
     return [check.code for check in found.checks]
 
 
@@ -128,19 +140,22 @@ def test_check_public_url_overridden_without_public_host(home: Settings) -> None
     assert "public_url_overridden_without_public_host" in codes()
 
 
-def test_check_tunnel_not_running_when_token_set_and_probe_fails(home: Settings) -> None:
+def test_check_tunnel_not_seen_when_token_set_and_no_request_came_through(home: Settings) -> None:
     with_public(home)
     home.BRIEVIE_TUNNEL_TOKEN_SET = True
-    assert "tunnel_not_running" in codes(probe="no")
-    assert "tunnel_not_running" not in codes(probe="yes")
+    assert "tunnel_not_seen" in codes(tunnel_seen=False)
+    assert "tunnel_not_seen" not in codes(tunnel_seen=True)
 
 
-def test_without_a_token_the_tunnel_is_not_probed(home: Settings) -> None:
-    def fail() -> Literal["yes", "no"]:
-        raise AssertionError("probed")
-
-    found = external_access_status(request(), probe=fail, app_versions=list)
+def test_without_a_token_the_tunnel_is_not_set() -> None:
+    found = external_access_status(request(), app_versions=list)
     assert found.tunnel_connected == "not_set"
+
+
+def test_the_api_makes_no_outgoing_call() -> None:
+    source = (Path(__file__).resolve().parents[1] / "apps" / "access" / "status.py").read_text()
+    for needle in ("urllib.request", "http.client", "socket", "requests", "cloudflared:2000"):
+        assert needle not in source, needle
 
 
 def test_check_upload_limit_above_cloudflare(home: Settings) -> None:
@@ -200,7 +215,7 @@ def test_check_cloudflare_reads_along_always_with_the_tunnel(home: Settings) -> 
 def test_check_app_update_needed_lists_no_device_names(home: Settings) -> None:
     with_public(home)
     home.BRIEVIE_TUNNEL_TOKEN_SET = True
-    found = external_access_status(request(), probe=lambda: "yes", app_versions=lambda: ["1.0.0"])
+    found = external_access_status(request(), app_versions=lambda: ["1.0.0"])
     assert "app_update_needed" in [c.code for c in found.checks]
     assert "iPhone" not in json.dumps(asdict(found))
     assert "app_update_needed" not in codes(versions=[])
@@ -224,7 +239,7 @@ def test_status_never_contains_the_token(home: Settings, monkeypatch: pytest.Mon
     monkeypatch.setenv("TUNNEL_TOKEN", TOKEN_LIKE)
     with_public(home)
     home.BRIEVIE_TUNNEL_TOKEN_SET = True
-    found = external_access_status(request(), probe=lambda: "yes", app_versions=list)
+    found = external_access_status(request(), app_versions=list)
     assert TOKEN_LIKE not in json.dumps(asdict(found))
     assert found.tunnel_token_set is True
 
@@ -232,7 +247,6 @@ def test_status_never_contains_the_token(home: Settings, monkeypatch: pytest.Mon
 def test_seen_as_reports_route_client_and_peer() -> None:
     found = external_access_status(
         request(route="public", client="203.0.113.9", peer="192.168.1.5"),
-        probe=lambda: "yes",
         app_versions=list,
     )
     assert found.seen_as.route == "public"
@@ -250,7 +264,7 @@ def test_addresses_carry_their_kind_and_certificate(home: Settings) -> None:
         "https://brievie.example.nl",
     ]
     home.BRIEVIE_PUBLIC_CERTIFICATE_URLS = ["https://brievie.example.nl"]
-    found = external_access_status(request(), probe=lambda: "yes", app_versions=list)
+    found = external_access_status(request(), app_versions=list)
     assert [(a.kind, a.certificate) for a in found.addresses] == [
         ("home", "private_ca"),
         ("vpn", "private_ca"),
@@ -264,7 +278,7 @@ def test_check_public_name_from_untrusted_source_names_the_local_peer(home: Sett
     assert "public_name_from_untrusted_source" not in codes()
     SEEN["public_name_untrusted"] = datetime.now(UTC)
     PEERS["public_name_untrusted"] = "192.168.1.5"
-    found = external_access_status(request(), probe=lambda: "yes", app_versions=list)
+    found = external_access_status(request(), app_versions=list)
     assert "public_name_from_untrusted_source" in [c.code for c in found.checks]
     assert found.untrusted_public_name_peer == "192.168.1.5"
 

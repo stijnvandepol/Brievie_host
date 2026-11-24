@@ -9,6 +9,8 @@
 #   routes-check.sh session JAR  a signed-in server admin's view (getExternalAccess) on :443
 #                                with forged address headers, and on :8080 (closed unless
 #                                BRIEVIE_PUBLIC_WEB; then the route, https and the address)
+#   routes-check.sh isolation   the tunnel network reaches Caddy only; a request that reaches
+#                                the api without Caddy counts as public with its own address
 #   routes-check.sh token NAME   no value of the file NAME (a planted tunnel token) in any
 #                                container but cloudflared, `compose config`, a log or a process
 #
@@ -230,13 +232,46 @@ check_token() {
 	echo "The tunnel token is in no container but cloudflared, no log and no process list."
 }
 
+check_isolation() {
+	project=${COMPOSE_PROJECT:-brievie}
+	image=$(docker inspect "$($COMPOSE ps -q caddy)" --format '{{.Config.Image}}')
+	# A container on the tunnel network (where cloudflared lives) reaches caddy:8080 ...
+	docker run --rm --network "${project}_tunnel" --entrypoint wget "$image" \
+		-q -T 5 -O /dev/null http://caddy:8080/api/v1/health
+	# ... and never the api.
+	if docker run --rm --network "${project}_tunnel" --entrypoint wget "$image" \
+		-q -T 5 -O /dev/null http://api:8000/api/v1/health; then
+		echo "The tunnel network reaches the api." >&2
+		exit 1
+	fi
+	# A container that does reach the api directly (here the worker) cannot pose as Caddy.
+	$COMPOSE exec -T worker python - <<'PY' >"$work/bypass"
+import http.client, json
+conn = http.client.HTTPConnection("api", 8000, timeout=10)
+conn.request("GET", "/api/v1/server/audit-events", headers={
+    "Host": "localhost", "X-Brievie-Route": "private", "X-Brievie-Via": "home",
+    "X-Brievie-Client-IP": "198.51.100.2", "X-Forwarded-Proto": "https"})
+resp = conn.getresponse()
+print(resp.status)
+print(json.loads(resp.read())["code"])
+PY
+	if [ "${PUBLIC_WEB:-false}" = true ]; then
+		test "$(sed -n 2p "$work/bypass")" = not_authenticated
+	else
+		test "$(sed -n 1p "$work/bypass")" = 403
+		test "$(sed -n 2p "$work/bypass")" = public_web_off
+	fi
+	echo "Isolation: the tunnel network reaches Caddy only; a request around Caddy is public."
+}
+
 case ${1:-} in
 caddy) check_caddy ;;
+isolation) check_isolation ;;
 listeners) check_listeners ;;
 session) check_session "${2:-}" ;;
 token) check_token "${2:-}" ;;
 *)
-	echo "usage: routes-check.sh caddy|listeners|session JAR|token FILE" >&2
+	echo "usage: routes-check.sh caddy|listeners|isolation|session JAR|token FILE" >&2
 	exit 2
 	;;
 esac

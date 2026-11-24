@@ -2883,3 +2883,20 @@ all six held.
   problems and names the local address, so the admin finds the proxy's address at home
   without opening the web through the proxy. CI (`stack`, `compose-stack`) sends both cases
   and requires the page to show them.
+- **Point 2 (medium), fixed: cloudflared shared a network with the api** (and in the wrapper's
+  file with PostgreSQL). Both compose files now give cloudflared only a network `tunnel`,
+  shared with Caddy alone; a tunnel ingress set to `http://api:8000` reaches nothing. The api's
+  probe of `cloudflared:2000/ready` is gone with it: the page says whether a request came
+  through the tunnel listener in the last seven days (`tunnel_not_seen`, a warning), and the
+  api makes no outgoing call at all. Defence in depth, ruling: **the api believes
+  `X-Brievie-*` only from Caddy's own address** (`apps.common.net.from_caddy`: the socket
+  peer must be an address of `BRIEVIE_CADDY_HOST`, compose name `caddy`, resolved per process
+  for 30 seconds); a request that reaches the api any other way gets the public route and its
+  own socket peer as client address. Rejected: a shared header secret. It would need a new
+  secret in both installs (`init-env.sh`, `init-secrets`, a vault file and volume for Caddy,
+  the secrets checks), while the peer check needs nothing a user can get wrong; Docker does
+  not let a container without capabilities send from another container's address. Cost if
+  wrong: a container that can take Caddy's address could pose as Caddy (none of ours can).
+  CI (`routes-check.sh isolation`) proves the tunnel network reaches `caddy:8080` and not
+  `api:8000`, and that the worker, calling the api directly with forged headers, gets the
+  closed route.

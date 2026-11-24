@@ -282,7 +282,7 @@ services:
       # A copy of the CA for the back-up (keeper and admin only; see caddy-publish-root.sh).
       - caddy-authority:/authority
       - caddy-config:/config
-    networks: [edge]
+    networks: [edge, tunnel]
 
   # Optional: Cloudflare Tunnel ("Van buiten bereikbaar", docs/SELFHOST.md). Started only
   # with the profile `tunnel`: ./brievie does that when BRIEVIE_TUNNEL_TOKEN (or
@@ -309,7 +309,9 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
-    networks: [edge]
+    # Only the network it shares with Caddy: it can reach caddy:8080 and the internet,
+    # never the api, the worker or PostgreSQL.
+    networks: [tunnel]
     # No published port: it only dials out to Cloudflare.
 
   # One-off maintenance; never started by `up`:
@@ -356,6 +358,8 @@ networks:
   db:
     internal: true
   edge: {}
+  # Caddy and the optional cloudflared only (security review of PR #53).
+  tunnel: {}
 
 volumes:
   # The data. `docker compose down -v` removes all of it: never type -v.

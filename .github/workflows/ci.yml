@@ -543,6 +543,8 @@ jobs:
         run: .github/scripts/routes-check.sh listeners
       - name: A signed-in admin cannot pick an address, and the web is closed on the tunnel
         run: .github/scripts/routes-check.sh session "$RUNNER_TEMP/jar"
+      - name: The tunnel network reaches Caddy only, and nobody poses as Caddy
+        run: .github/scripts/routes-check.sh isolation
       - name: The tunnel starts on its own and its token stays in cloudflared
         run: |
           set -euo pipefail
@@ -649,6 +651,7 @@ jobs:
           .github/scripts/routes-check.sh caddy
           .github/scripts/routes-check.sh listeners
           .github/scripts/routes-check.sh session "$RUNNER_TEMP/jar"
+          .github/scripts/routes-check.sh isolation
       - name: A restart makes no new secret and the server still answers
         run: |
           set -euo pipefail

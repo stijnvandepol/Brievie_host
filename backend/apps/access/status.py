@@ -1,14 +1,13 @@
 """What the settings page "Van buiten bereikbaar" shows (S 8).
 
-Read from the settings (compose decides, the page only shows) and from the admin's own
-request. Never a token or secret: the api does not have the tunnel token, only whether
-one is set. The only outgoing call is the tunnel probe to a fixed address on the compose
-network (`TUNNEL_READY_URL`); no address from a request or a user is ever fetched.
+Read from the settings (compose decides, the page only shows), from the admin's own
+request and from what the server saw on the way in (apps.access.observed). Never a token
+or secret: the api does not have the tunnel token, only whether one is set. The api makes
+no outgoing call: it shares no network with cloudflared (security review of PR #53), so
+"connected" means a request came through the tunnel listener in the last seven days.
 """
 
 import ipaddress
-import urllib.error
-import urllib.request
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime
@@ -24,7 +23,6 @@ from apps.common.checks import CLOUDFLARE_MAX_BODY_BYTES
 from apps.common.net import client_ip
 from apps.devices.models import Device
 
-TUNNEL_READY_URL = "http://cloudflared:2000/ready"
 EXTERNAL_ACCESS_DOCS_URL = "https://brievie.com/docs/installeren#van-buiten"
 # The first app version that trusts each address the way it is served (iOS I1-I3). None
 # until that release is cut: until then every paired app needs the update.
@@ -41,7 +39,7 @@ CHECK_LEVELS: dict[str, Level] = {
     "hostname_mdns_over_vpn": "warning",
     "public_hostname_missing": "problem",
     "public_url_overridden_without_public_host": "problem",
-    "tunnel_not_running": "problem",
+    "tunnel_not_seen": "warning",
     "upload_limit_above_cloudflare": "warning",
     "public_web_without_second_factor": "problem",
     "public_web_off": "ok",
@@ -94,22 +92,6 @@ class ExternalAccess:
     # The local address a request for the public name last came from without being a
     # trusted proxy: your proxy's, to put in BRIEVIE_TRUSTED_PROXIES. Empty when none.
     untrusted_public_name_peer: str = ""
-
-
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, *args: object, **kwargs: object) -> None:
-        return None
-
-
-def probe_tunnel(timeout: float = 2.0) -> Literal["yes", "no"]:
-    """cloudflared's own readiness endpoint answers 200 when the tunnel is connected.
-    No proxy from the environment, no redirect, the body is not read."""
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
-    try:
-        with opener.open(TUNNEL_READY_URL, timeout=timeout) as response:
-            return "yes" if response.status == 200 else "no"
-    except (urllib.error.URLError, OSError, ValueError):
-        return "no"
 
 
 def _version(value: str) -> tuple[int, ...] | None:
@@ -176,11 +158,9 @@ def _addresses() -> list[Address]:
 def external_access_status(
     request: HttpRequest,
     *,
-    probe: Callable[[], Literal["yes", "no"]] | None = None,
     app_versions: Callable[[], list[str]] | None = None,
     seen: Callable[[str], datetime | None] | None = None,
 ) -> ExternalAccess:
-    probe = probe or probe_tunnel
     app_versions = app_versions or _active_app_versions
     seen = seen or observed.last_seen
     hostname: str = settings.BRIEVIE_HOSTNAME
@@ -191,7 +171,9 @@ def external_access_status(
     second_factor: bool = settings.BRIEVIE_SECOND_FACTOR_AVAILABLE
     public_way = token_set or bool(proxies)
 
-    connected: Connected = probe() if token_set else "not_set"
+    connected: Connected = "not_set"
+    if token_set:
+        connected = "yes" if seen("tunnel") is not None else "no"
     public = is_public_route(request)
     seen_as = SeenAs(
         route="public" if public else "private",
@@ -210,7 +192,7 @@ def external_access_status(
     if public_hostname and not settings.BRIEVIE_PUBLIC_CERTIFICATE_URLS:
         codes.append("public_url_overridden_without_public_host")
     if connected == "no":
-        codes.append("tunnel_not_running")
+        codes.append("tunnel_not_seen")
     if token_set and settings.BRIEVIE_MAX_UPLOAD_BYTES > CLOUDFLARE_MAX_BODY_BYTES:
         codes.append("upload_limit_above_cloudflare")
     if public_way and public_web and not second_factor:

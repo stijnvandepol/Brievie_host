@@ -1732,8 +1732,8 @@ msgid "Er is een tunnel of eigen reverse proxy ingesteld, maar geen BRIEVIE_PUBL
 msgstr "A tunnel or own reverse proxy is set up, but no BRIEVIE_PUBLIC_HOSTNAME. Set the public name, such as brievie.example.com."
 
 #: src/routes/server-external-access.tsx
-msgid "Er is een tunnel-token ingesteld, maar de tunnel antwoordt niet. Start Brievie opnieuw met ./brievie start. Start je zonder ./brievie? Zet dan COMPOSE_PROFILES=tunnel."
-msgstr "A tunnel token is set, but the tunnel does not answer. Start Brievie again with ./brievie start. Do you start without ./brievie? Then set COMPOSE_PROFILES=tunnel."
+msgid "Er is een tunnel-token ingesteld, maar de afgelopen 7 dagen kwam er geen verzoek via de tunnel binnen. Draait de tunnel? Start Brievie opnieuw met ./brievie start; zonder ./brievie zet je COMPOSE_PROFILES=tunnel. Kijk ook of de service in het Cloudflare-dashboard http://caddy:8080 is."
+msgstr "A tunnel token is set, but no request came through the tunnel in the last 7 days. Is the tunnel running? Start Brievie again with ./brievie start; without ./brievie set COMPOSE_PROFILES=tunnel. Also check that the service in the Cloudflare dashboard is http://caddy:8080."
 
 #: src/components/emergency-dialog.tsx
 msgid "Er is geen post van {name} die je nog niet kon zien."
@@ -4269,10 +4269,6 @@ msgstr "Today"
 msgid "Veld"
 msgstr "Field"
 
-#: src/routes/server-external-access.tsx
-msgid "Verbonden met Cloudflare"
-msgstr "Connected to Cloudflare"
-
 #: src/routes/people-detail.tsx
 #: src/routes/people.tsx
 #: src/routes/visibility.tsx
@@ -4361,6 +4357,10 @@ msgstr "Remove: {0}"
 #: src/routes/people-detail.tsx
 msgid "Verwijderen: {name}"
 msgstr "Remove: {name}"
+
+#: src/routes/server-external-access.tsx
+msgid "Verzoek via de tunnel gezien (laatste 7 dagen)"
+msgstr "Request through the tunnel seen (last 7 days)"
 
 #: src/routes/server-external-access.tsx
 msgid "Verzoeken voor de publieke naam kwamen van dit adres, dat (nog) niet vertrouwd wordt:"

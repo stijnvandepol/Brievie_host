@@ -250,6 +250,8 @@ services:
     ports:
       - "${BRIEVIE_HTTP_PORT:-80}:80"
       - "${BRIEVIE_HTTPS_PORT:-443}:443"
+    # Its own network with the optional tunnel; the rest of the stack on the default one.
+    networks: [default, tunnel]
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./caddy-publish-root.sh:/etc/caddy/publish-root.sh:ro
@@ -283,6 +285,9 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
+    # Only the network it shares with Caddy: it can reach caddy:8080 and the internet,
+    # never the api, the worker or PostgreSQL.
+    networks: [tunnel]
     # No published port: it only dials out to Cloudflare.
 
 volumes:
@@ -298,3 +303,7 @@ volumes:
   # it: ./brievie mounts it at /backup of the one-off admin container for one call
   # (BRIEVIE_BACKUP_DIR=update-backup), so only the update itself ever prunes it.
   update-backup:
+
+networks:
+  # Caddy and the optional cloudflared only (security review of PR #53).
+  tunnel: {}

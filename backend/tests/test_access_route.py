@@ -7,6 +7,16 @@ from pytest_django import Settings
 
 from apps.access.route import is_public_route, peer_ip
 
+CADDY_PEERS = {"172.18.0.5"}
+
+
+@pytest.fixture(autouse=True)
+def _caddy_at(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Caddy is the peer of these requests (apps.common.net.from_caddy)."""
+    from apps.common import net
+
+    monkeypatch.setattr(net, "caddy_addresses", lambda: frozenset(CADDY_PEERS))
+
 
 @pytest.fixture(autouse=True)
 def _database() -> None:

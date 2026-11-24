@@ -18,6 +18,16 @@ PUBLIC = {"X-Brievie-Route": "public"}
 PRIVATE = {"X-Brievie-Route": "private"}
 SENTENCE = "Op dit adres werkt alleen de Brievie-app. Gebruik de webinterface thuis of via VPN."
 
+CADDY_PEERS = {"127.0.0.1"}
+
+
+@pytest.fixture(autouse=True)
+def _caddy_at(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Caddy is the peer of these requests (apps.common.net.from_caddy)."""
+    from apps.common import net
+
+    monkeypatch.setattr(net, "caddy_addresses", lambda: frozenset(CADDY_PEERS))
+
 
 @pytest.fixture(autouse=True)
 def _behind_caddy(settings: Settings) -> None:

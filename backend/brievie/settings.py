@@ -275,6 +275,9 @@ BRIEVIE_PROXY_COUNT: int = env.int("BRIEVIE_PROXY_COUNT", default=0)
 # the route are then Caddy's X-Brievie-Client-IP and X-Brievie-Route, which Caddy writes
 # itself on every request (apps.common.net, apps.access.route; S 7.3).
 BRIEVIE_BEHIND_CADDY: bool = env.bool("BRIEVIE_BEHIND_CADDY", default=False)
+# Caddy's compose name: only a request whose socket peer has one of its addresses is Caddy's
+# (apps.common.net.from_caddy); a request that reaches the api any other way is public.
+BRIEVIE_CADDY_HOST: str = env.str("BRIEVIE_CADDY_HOST", default="caddy")
 # The web interface and its password sign-in on the public route (tunnel, own reverse
 # proxy). Off: there only the app works (device tokens and pairing; S 7.6).
 BRIEVIE_PUBLIC_WEB: bool = env.bool("BRIEVIE_PUBLIC_WEB", default=False)

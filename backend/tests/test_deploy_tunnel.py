@@ -187,7 +187,7 @@ def ci_job(name: str) -> str:
 def test_ci_checks_the_tunnel_listener() -> None:
     for name in ("stack", "compose-stack"):
         block = ci_job(name)
-        for mode in ("caddy", "listeners", "session"):
+        for mode in ("caddy", "listeners", "session", "isolation"):
             assert f"routes-check.sh {mode}" in block, (name, mode)
         assert "routes-check.sh token" in block, name
         assert "--profile tunnel down --volumes" in block, name
@@ -223,3 +223,21 @@ def test_the_routes_script_checks_what_the_review_asks() -> None:
         '"203.0.113.77"',
     ):
         assert needle in ROUTES, needle
+
+
+@both
+def test_cloudflared_shares_a_network_with_caddy_only(name: str) -> None:
+    # Security review of PR #53, point 2: a tunnel ingress set to http://api:8000 must not
+    # reach the api (nor the worker or PostgreSQL).
+    text = FILES[name]
+    assert "networks: [tunnel]" in service(text, "cloudflared")
+    assert re.search(r"networks: \[(default|edge), tunnel\]", service(text, "caddy"))
+    holders = [
+        part.split(":\n", 1)[0].strip()
+        for part in re.split(
+            r"\n(?=  [\w-]+:\n)", text.split("\nservices:\n", 1)[1].split("\nnetworks:\n")[0]
+        )
+        if re.search(r"networks: \[[^\]]*\btunnel\b", part)
+    ]
+    assert sorted(holders) == ["caddy", "cloudflared"]
+    assert re.search(r"^networks:\n(?:  .*\n)*  tunnel: \{\}", text, re.M)

@@ -35,8 +35,8 @@ function checkText(code: string): string {
       return t`Er is een tunnel of eigen reverse proxy ingesteld, maar geen BRIEVIE_PUBLIC_HOSTNAME. Zet de publieke naam, zoals brievie.voorbeeld.nl.`;
     case "public_url_overridden_without_public_host":
       return t`BRIEVIE_PUBLIC_URLS is met de hand gezet en bevat het publieke adres niet. Haal BRIEVIE_PUBLIC_URLS en ALLOWED_HOSTS weg, dan volgen ze vanzelf uit de namen.`;
-    case "tunnel_not_running":
-      return t`Er is een tunnel-token ingesteld, maar de tunnel antwoordt niet. Start Brievie opnieuw met ./brievie start. Start je zonder ./brievie? Zet dan COMPOSE_PROFILES=tunnel.`;
+    case "tunnel_not_seen":
+      return t`Er is een tunnel-token ingesteld, maar de afgelopen 7 dagen kwam er geen verzoek via de tunnel binnen. Draait de tunnel? Start Brievie opnieuw met ./brievie start; zonder ./brievie zet je COMPOSE_PROFILES=tunnel. Kijk ook of de service in het Cloudflare-dashboard http://caddy:8080 is.`;
     case "upload_limit_above_cloudflare":
       return t`BRIEVIE_MAX_UPLOAD_BYTES is groter dan Cloudflare doorlaat (100 MB). Grote scans komen dan niet door de tunnel.`;
     case "public_web_without_second_factor":
@@ -154,7 +154,7 @@ function Page({ found }: { found: ExternalAccess }) {
           <dl className="facts">
             <dt>{t`Tunnel-token`}</dt>
             <dd>{t`ingesteld (het token zelf staat nooit op dit scherm)`}</dd>
-            <dt>{t`Verbonden met Cloudflare`}</dt>
+            <dt>{t`Verzoek via de tunnel gezien (laatste 7 dagen)`}</dt>
             <dd>{found.tunnel.connected === "yes" ? t`Ja` : t`Nee`}</dd>
           </dl>
         ) : null}

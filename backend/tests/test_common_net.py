@@ -1,9 +1,25 @@
+import socket
+
 import pytest
 from django.http import HttpRequest
 from django.test import RequestFactory
 from pytest_django import Settings
 
+from apps.access.route import is_public_route, peer_ip, via
+from apps.common import net as net_module
 from apps.common.net import address_bucket, client_ip, valid_client_ip
+
+REAL_CADDY_ADDRESSES = net_module.caddy_addresses
+
+CADDY_PEERS = {"172.18.0.3", "172.18.0.5"}
+
+
+@pytest.fixture(autouse=True)
+def _caddy_at(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Caddy is the peer of these requests (apps.common.net.from_caddy)."""
+    from apps.common import net
+
+    monkeypatch.setattr(net, "caddy_addresses", lambda: frozenset(CADDY_PEERS))
 
 
 @pytest.fixture(autouse=True)
@@ -166,3 +182,54 @@ def test_axes_and_throttles_use_the_new_address(settings: Settings) -> None:
     key = ClientAddressThrottle("pairing", "10/10m").get_cache_key(request)
     assert "198.51.100.9" in key
     assert "192.0.2.44" not in key
+
+
+# --- Only Caddy's own requests count (security review of PR #53, point 2) ----------------
+
+
+def test_a_request_that_bypasses_caddy_gets_the_closed_route_and_its_own_peer(
+    settings: Settings,
+) -> None:
+    # A tunnel pointed at http://api:8000, or any container that reaches the api directly:
+    # the headers it sends are its own, so none of them counts.
+    settings.BRIEVIE_BEHIND_CADDY = True
+    settings.BRIEVIE_PROXY_COUNT = 1
+    forged = caddy_request(
+        remote_addr="172.18.0.9",
+        forwarded="198.51.100.1",
+        **{
+            "X-Brievie-Client-IP": "198.51.100.2",
+            "X-Brievie-Route": "private",
+            "X-Brievie-Peer-IP": "198.51.100.3",
+            "X-Brievie-Via": "home",
+        },
+    )
+    assert client_ip(forged) == "172.18.0.9"
+    assert is_public_route(forged) is True
+    assert peer_ip(forged) == "172.18.0.9"
+    assert via(forged) == ""
+
+
+def test_caddy_that_does_not_resolve_is_nobody(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fail(*args: object, **kwargs: object) -> object:
+        raise OSError("no such host")
+
+    monkeypatch.setattr(socket, "getaddrinfo", fail)
+    monkeypatch.setattr(net_module, "_caddy", (-1000.0, frozenset()))
+    settings.BRIEVIE_CADDY_HOST = "caddy"
+    assert REAL_CADDY_ADDRESSES() == frozenset()
+
+
+def test_caddy_addresses_resolve_its_name(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def resolve(host: str, *args: object, **kwargs: object) -> list[tuple[object, ...]]:
+        assert host == "caddy"
+        return [(2, 1, 6, "", ("172.18.0.5", 0)), (10, 1, 6, "", ("fd00::5", 0, 0, 0))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", resolve)
+    monkeypatch.setattr(net_module, "_caddy", (-1000.0, frozenset()))
+    settings.BRIEVIE_CADDY_HOST = "caddy"
+    assert REAL_CADDY_ADDRESSES() == frozenset({"172.18.0.5", "fd00::5"})
