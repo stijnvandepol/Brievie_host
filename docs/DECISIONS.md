@@ -2679,3 +2679,29 @@ All five points were checked against the code first; all five held.
 - **Point 5 (low), fixed: a payment tick outlived the task list.** In "Brief afhandelen" the
   tick resets whenever the set of open tasks changes, so a payment that appeared meanwhile
   is never confirmed unseen.
+
+### Security review of PR #50 (2026-11-24)
+
+All five points were checked against the code first; all five held.
+
+- **Point 1 (medium), fixed: a snooze of someone else blocked deleting its task.**
+  `TaskSnooze.task` cascaded in Django only, as the caller; the own-rows policy let the
+  caller delete just their own rows, so a colleague's (a viewer's, or a member who had left)
+  kept pointing at the deleted task and the commit failed (500 on "re-check"). Now the
+  foreign key is `ON DELETE CASCADE` in the database too (tasks/0007; the database's own
+  cascade is not bound by row-level security), so no path can forget it; application code
+  deletes tasks through `tasks.services.delete_tasks` (snoozes first, as the system, which
+  `reopen_document` uses), and `forget_member` removes the leaver's snoozes.
+- **Point 2 (medium), fixed: a letter with an open task could stay "Afgehandeld" after a
+  merge.** `letter_sync.sync` read the old facts from the instance it was given; the completion
+  of a twin had synced another instance of the same letter. It now reads the stored facts from
+  the database under the caller's lock, and brings the instance in line either way. A merge
+  that completes a twin and then moves an open task writes `letter_handled` once and then
+  `letter_reopened`.
+- **Point 3 (low), fixed: a snooze took row locks.** It reads the task as the member without
+  locks (still refused under emergency access, still 404 for a hidden task).
+- **Point 4 (low), fixed: code and text disagreed.** `countLetterStatuses` for an archived
+  person (as for an unknown one) now answers zeros, as the API text and the spec say.
+- **Point 5 (low), fixed: a payment tick outlived the task list.** In "Brief afhandelen" the
+  tick resets whenever the set of open tasks changes, so a payment that appeared meanwhile
+  is never confirmed unseen.
