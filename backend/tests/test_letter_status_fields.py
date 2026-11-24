@@ -122,8 +122,9 @@ def test_tasksnooze_rows_are_own_only() -> None:
 
 
 def test_the_backfill_statement_is_the_one_the_repair_uses() -> None:
+    # The newest backfill: documents 0029 made the facts a letter's only (archive AR7).
     migration = (
-        Path(__file__).parents[1] / "apps/documents/migrations/0024_letter_status.py"
+        Path(__file__).parents[1] / "apps/documents/migrations/0029_letter_facts_letters_only.py"
     ).read_text()
     match = re.search(r'RECOMPUTE: Final = """(.*?)"""', migration, re.DOTALL)
     assert match is not None
