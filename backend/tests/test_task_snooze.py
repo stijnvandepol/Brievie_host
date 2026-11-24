@@ -223,7 +223,8 @@ def test_a_member_who_leaves_loses_their_snoozes() -> None:
         TaskSnooze.objects.create(
             workspace=h.workspace, task=task, user=h.anne, until=TODAY + timedelta(days=3)
         )
-    visibility.forget_member(h.workspace.id, h.piet.id)
+    with as_actor(h.workspace, SYSTEM):
+        visibility.forget_member(h.workspace.id, h.piet.id)
     with as_actor(h.workspace, SYSTEM):
         assert list(TaskSnooze.objects.values_list("user_id", flat=True)) == [h.anne.id]
 

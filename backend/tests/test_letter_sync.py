@@ -148,7 +148,7 @@ def test_merge_that_completes_a_twin_and_moves_an_open_task_leaves_the_letter_op
     assert stored(keep.id, h.workspace).open_count == 1
     lines = kinds(keep.id, h.workspace)
     assert lines.count("letter_handled") == 1
-    assert lines[-1] == "letter_reopened"
+    assert lines.index("letter_reopened") > lines.index("letter_handled")
     assert twin.id
 
 

@@ -11,7 +11,7 @@ from collections.abc import Sequence
 from datetime import date
 from uuid import UUID
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils.translation import gettext as _
 
@@ -42,12 +42,20 @@ def snooze(*, membership: Membership, task_id: UUID, until: date | None) -> Task
                 "snooze_after_deadline",
                 _("Je kunt niet uitstellen tot na de datum van de taak."),
             )
-        TaskSnooze.objects.update_or_create(
-            workspace=membership.workspace,
-            task=task,
-            user_id=membership.user_id,
-            defaults={"until": until},
-        )
+        # No `update_or_create`: it locks the row it reads. The member's own row only, so a
+        # double click is the one race; the unique constraint settles it.
+        own = TaskSnooze.objects.filter(task=task, user_id=membership.user_id)
+        if not own.update(until=until):
+            try:
+                with transaction.atomic():
+                    TaskSnooze.objects.create(
+                        workspace=membership.workspace,
+                        task=task,
+                        user_id=membership.user_id,
+                        until=until,
+                    )
+            except IntegrityError:
+                own.update(until=until)
         return task
 
 
