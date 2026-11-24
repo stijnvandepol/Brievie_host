@@ -46,6 +46,7 @@ def test_list_is_newest_first_with_summary_fields(client_a: Client, ws_a: Worksp
         "proposed_document_type", "proposed_letter_date", "open_duplicate_count",
         "visibility", "reader_names", "unread",
         "letter_status", "overdue", "open_task_count", "waiting_until",
+        "kind", "title", "expires_on", "remind_days", "retain_until", "reminder_task_id",
     }  # fmt: skip
     assert rows[0]["page_count"] == 2
     assert rows[0]["status"] == "processing"

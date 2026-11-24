@@ -51,6 +51,8 @@ ALLOWED_SYSTEM_CALLERS = {
     # and the nightly repair; the migration fills them for every letter.
     "apps/tasks/letter_sync.py",
     "apps/documents/migrations/0024_letter_status.py",
+    # The same statement once more, joining no task of an own document (archive AR7).
+    "apps/documents/migrations/0029_letter_facts_letters_only.py",
     # Fills the derived automatic flag of every letter (documents/0014).
     "apps/documents/migrations/0014_document_has_automatic_link.py",
 }

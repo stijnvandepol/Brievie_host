@@ -31,11 +31,9 @@ def _document_metadata(page: bytes, **fields: object) -> dict[str, object]:
 
 
 def _label(h: Household) -> Label:
+    # A label of its own: the preset Zorg would make the document private (S 4.6).
     with as_actor(h.workspace, SYSTEM):
-        label = Label.objects.filter(workspace=h.workspace).order_by("id").first()
-        if label is None:
-            label = Label.objects.create(workspace=h.workspace, name="Thuis")
-    return label
+        return Label.objects.create(workspace=h.workspace, name="Paperassen")
 
 
 def _events(document_id: str, workspace: Workspace) -> list[tuple[str, str, object]]:
