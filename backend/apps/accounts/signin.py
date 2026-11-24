@@ -10,8 +10,8 @@ A pending sign-in is no session: the browser stays signed out (every normal endp
 answers 401) until `complete_sign_in`. It holds no secret: the account, how it began, the
 step, when, the wrong codes so far, the factor it must be checked against and the
 account's session hash (a password changed since ends it). It lives `PENDING_LIFETIME`
-(`SETUP_LIFETIME` for setting up a factor); clearing, removing or replacing the factor
-ends it too.
+(five minutes, also for setting up a factor: install the app first, or sign in again);
+clearing, removing or replacing the factor ends it too.
 
 Only this module calls `sessions.start_session`, which itself refuses a sign-in without
 the second step where one is needed.
@@ -47,8 +47,6 @@ from apps.common.net import valid_client_ip
 
 PENDING_KEY = "brievie_pending_sign_in"
 PENDING_LIFETIME = timedelta(minutes=5)
-# Setting up a factor means installing an app and scanning a code: a little longer.
-SETUP_LIFETIME = timedelta(minutes=15)
 PENDING_MAX_FAILURES = 5
 
 Step = Literal["code", "setup"]
@@ -82,7 +80,7 @@ class Pending:
 
 
 def _lifetime(step: Step) -> timedelta:
-    return SETUP_LIFETIME if step == "setup" else PENDING_LIFETIME
+    return PENDING_LIFETIME
 
 
 def _confirmed_factor_id(user: User) -> UUID | None:

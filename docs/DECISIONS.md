@@ -2769,7 +2769,7 @@ Task 15 (the per-workspace obligation).
   "brievie/second-factor/v1")` with the account in the AAD; recovery codes are HMAC-SHA256
   under `"brievie/recovery-codes/v1"`. Never change the labels.
 - **No session before the code.** A pending step in the anonymous Django session (key
-  cycled, five minutes for a code, fifteen for setting up, no secret in it); every normal
+  cycled, five minutes, also for setting up a factor, no secret in it); every normal
   endpoint answers 401. `begin_sign_in` decides for the password, the setup, accepting an
   invitation and completing a reset; `start_session` itself refuses a sign-in without the
   proof of the second step, and only `apps.accounts.signin` calls it (a test greps).

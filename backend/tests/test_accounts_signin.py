@@ -116,7 +116,7 @@ def test_the_setup_stops_at_setting_up_when_admins_must_and_no_grace(
 
     r = post_json(client, "/setup", SETUP_BODY)
 
-    assert (r.status_code, r.json()) == (202, {"step": "setup", "expires_in_seconds": 900})
+    assert (r.status_code, r.json()) == (202, {"step": "setup", "expires_in_seconds": 300})
     assert User.objects.get().is_server_admin
     assert not UserSession.objects.exists()
 
