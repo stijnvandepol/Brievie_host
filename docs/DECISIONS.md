@@ -2685,3 +2685,52 @@ recommendation D1 to D7 of the spec.
   with a deliberately broken fixture" is replaced by `compose-secrets-check.sh selftest`, which
   plants a secret and requires the detector to find it.
 
+
+### Security review of PR #45 (2026-11-24)
+
+An independent review of the compose-only install. Every point was checked against the code
+first; all nine held.
+
+- **Point 1 (high), fixed: the web recovery sheet on a `./brievie` install.** The image set
+  `BRIEVIE_COMPOSE_REVISION`, from which `BRIEVIE_COMPOSE_INSTALL` was derived, so the 409
+  `recovery_sheet_not_here` never fired in production and a wrapper install could fetch its master
+  key through the web (the test set the setting by hand and hid it). Now the image sets no such
+  variable (the gate knows its revision from `gate.COMPOSE_REVISION`; `release-check.py`
+  compares the compose file with that constant), and only the standalone compose file sets
+  `BRIEVIE_COMPOSE_INSTALL=true`, in its shared settings anchor. `tests/test_compose_flag.py` reads
+  the Dockerfile, both compose files and the dev file and starts settings in a fresh process; the
+  CI job `stack` (the wrapper) asks for the sheet through the web and requires 409, and
+  `compose-stack` requires 200 with `no-store` and the grouped master key of the vault.
+- **Point 2 (medium), fixed: the printed way back did not exist.** The sentence is built from
+  `restore_install.restore_commands` (stop the four services, restore with
+  `BRIEVIE_BACKUP_DIR=update-backup`, start); a test compares it with `docs/SELFHOST.md`.
+- **Point 3 (medium), fixed: an interrupted back-up left the database frozen and the next start
+  asked for a restore.** A `brievie.migrating` setting on the database is set only after the
+  back-up and its check, right before the first migration. Frozen without it: nothing was
+  migrated, the back-up is made again (and with the old number back, the freeze is simply lifted).
+  Frozen with it: the update is finished only when the back-up exists. A back-up that raises
+  anything thaws; a migration that raises something unknown stays read-only with the way back.
+- **Point 4 (medium), fixed: `--import` with only the master key next to a database.** Refused
+  (`import_incomplete`) before anything is written when `pgdata` holds a database and the
+  superuser password is not given; documents alone need no password and stay allowed.
+- **Point 5 (low), fixed: an unreadable data folder looked like "no data".** `os.walk` now raises
+  (`data_unreadable`) and `init-secrets` makes no keys.
+- **Point 6 (low), fixed:** the recovery sheet is limited to 6 an hour per admin; both new POSTs
+  have a CSRF test; "Nu back-uppen" writes `backup_requested` to the server log.
+- **Point 7 (low), fixed:** `init` judges the database (and the gate decides) before it creates a
+  role or sets a password, and the space check only runs for an update; a refusal on a new server
+  creates nothing, on an existing one touches no role.
+- **Point 8 (low), fixed:** `init` gets its own volume `secrets-init` with every password and
+  never the master key (no migration or back-up step decrypts a document), and drops all
+  capabilities with `no-new-privileges`. Only `admin` still mounts the whole vault (a restore
+  verifies pages with the master key).
+- **Point 9 (low), fixed:** `BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY_FILE` and
+  `BRIEVIE_BACKUP_REST_PASSWORD_FILE`, read from a folder set by `BRIEVIE_BACKUP_SECRETS_DIR`
+  (mounted read-only into `init`, the keeper and `admin`); the plain variables still win.
+- **Also: the emergency back-up is checked.** After a run reports success, restic's own check (a
+  subset of the data read back) runs as a run of its own; a back-up that fails it stops the update
+  before anything migrates. SELFHOST says in bold that a refused or failed update takes Brievie
+  down until the old version number is set back (the data are intact).
+- **Rejected:** none. One deviation: the CI assertion of point 1 on the wrapper stack asks the
+  real endpoint (set the server up with the installation code, sign in, POST) rather than only
+  reading a setting.
