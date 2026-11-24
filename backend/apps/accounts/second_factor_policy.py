@@ -75,6 +75,17 @@ def in_grace(requirement: Requirement, *, now: datetime) -> bool:
     )
 
 
+def must_set_up_first(user: User, *, now: datetime) -> bool:
+    """A rule asks a factor, the account has none, and the grace period is over: until it
+    is set up on the web, nothing else lets the account in (not even a paired phone)."""
+    requirement = requirement_for(user, now=now)
+    return (
+        requirement.required
+        and requirement.grace_until is not None
+        and now >= requirement.grace_until
+    )
+
+
 def note_required_since(user: User, *, now: datetime) -> None:
     """Start the grace period the first time a rule asks a factor of `user` (one atomic
     UPDATE, so two requests at once start it once). Never cleared: a rule that is missing

@@ -1436,6 +1436,10 @@ msgstr "BRIEVIE_MASTER_KEY in deploy/.env is missing or not 64 characters long (
 msgid "Een naam mag geen tekens bevatten die de leesrichting van de tekst omdraaien."
 msgstr "A name may not contain characters that reverse the direction of the text."
 
+#: apps/devices/auth.py apps/devices/services.py
+msgid "Stel eerst tweestapsverificatie in op de webinterface."
+msgstr "Set up two-step verification in the web interface first."
+
 #: apps/devices/services.py
 msgid "Geef het apparaat een naam."
 msgstr "Give the device a name."

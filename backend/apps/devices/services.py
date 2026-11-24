@@ -19,7 +19,7 @@ from django.utils.translation import gettext as _
 from apps.accounts.authority import account_authority
 from apps.accounts.models import AccountNotice, User, UserSession
 from apps.accounts.notices import notify
-from apps.accounts.second_factor_policy import has_factor
+from apps.accounts.second_factor_policy import has_factor, must_set_up_first
 from apps.accounts.services import current_user
 from apps.accounts.sessions import recently_authenticated, session_passed_second_factor
 from apps.audit.codes import AuditCode, TargetKind
@@ -123,6 +123,12 @@ def issue_pairing_code(request: HttpRequest) -> IssuedPairingCode:
     # A device token is a second factor of its own (two-step sign-in, S 8): getting one is
     # not easier than signing in, so with two-step verification on, only a session that
     # passed the code may make a pairing code.
+    if must_set_up_first(user, now=timezone.now()):
+        raise ApiError(
+            403,
+            "second_factor_required",
+            _("Stel eerst tweestapsverificatie in op de webinterface."),
+        )
     if has_factor(user) and not session_passed_second_factor(request):
         raise ApiError(
             403,
