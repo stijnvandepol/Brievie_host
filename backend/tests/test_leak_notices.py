@@ -24,6 +24,8 @@ ALLOWED = frozenset(
         "member",
         "setting",
         "device",
+        # The last day of a grace period for two-step verification ("4 december").
+        "until",
     }
 )
 CONTENT = ("sender", "summary", "label", "text", "description", "ocr_text", "quote", "title")

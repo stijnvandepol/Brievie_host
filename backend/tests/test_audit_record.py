@@ -197,6 +197,8 @@ def test_the_list_of_codes_is_the_closed_list_of_d11() -> None:
         "second_factor_added",
         "second_factor_removed",
         "second_factor_cleared",
+        "second_factor_recovery_used",
+        "second_factor_recovery_renewed",
         "password_changed",
         "password_reset_created",
         "session_ended",
@@ -318,3 +320,29 @@ def test_a_lockout_row_says_where_it_came_from() -> None:
     )
     with pytest.raises(ValueError, match="does not take"):
         record(AuditCode.SIGN_IN_LOCKED_OUT, actor=AuditActor.system(), values={"email": "x"})
+
+
+@pytest.mark.parametrize(
+    ("code", "keys"),
+    [
+        ("second_factor_added", {"replaced"}),
+        ("second_factor_cleared", {"via", "devices_revoked"}),
+        ("second_factor_recovery_used", {"left"}),
+        ("second_factor_recovery_renewed", set()),
+        ("sign_in_failed", {"step"}),
+        ("sign_in_succeeded", {"via", "second_factor"}),
+        ("sign_in_locked_out", {"via"}),
+        ("session_ended", {"count", "reason"}),
+    ],
+)
+def test_two_step_sign_in_codes_take_their_keys(code: str, keys: set[str]) -> None:
+    assert ALLOWED_VALUES[AuditCode(code)] == keys
+
+
+def test_a_second_factor_row_refuses_another_key() -> None:
+    with pytest.raises(ValueError, match="code"):
+        record(
+            AuditCode.SECOND_FACTOR_RECOVERY_USED,
+            actor=AuditActor.system(),
+            values={"code": "ABCDE-FGHJK"},
+        )

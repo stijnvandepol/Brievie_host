@@ -5,6 +5,7 @@ from uuid import UUID
 from ninja import Schema
 from pydantic import Field
 
+from apps.accounts.models import SecondFactor, User
 from apps.common.schemas import InputSchema
 from apps.workspaces.schemas import WorkspaceOut
 
@@ -18,6 +19,12 @@ class UserOut(Schema):
     language: str
     explanation_language: str
     is_server_admin: bool = False
+    # Whether the account has two-step verification on (a confirmed authenticator app).
+    has_second_factor: bool = False
+
+    @staticmethod
+    def resolve_has_second_factor(obj: User) -> bool:
+        return SecondFactor.objects.filter(user_id=obj.id, confirmed_at__isnull=False).exists()
 
 
 class LanguageIn(InputSchema):
@@ -62,6 +69,25 @@ class LoginIn(InputSchema):
     password: str = Field(max_length=128)
 
 
+class SignInStepOut(Schema):
+    """202: the password (or the invitation, the reset, the setup) was right, and a second
+    step follows before the browser is signed in. `code`: send the code from the
+    authenticator app or a recovery code to `verifySignInCode`. `setup`: two-step
+    verification is required and must be set up first (`beginSecondFactorSetup`). The
+    browser holds the pending step for `expires_in_seconds`; it is not signed in."""
+
+    step: str
+    expires_in_seconds: int = 300
+
+
+class SignInCodeIn(InputSchema):
+    """Exactly one of the two: the six digits from the authenticator app, or a recovery
+    code (XXXXX-XXXXX; case, spaces and hyphens do not matter)."""
+
+    code: str = Field(default="", max_length=20)
+    recovery_code: str = Field(default="", max_length=30)
+
+
 class SessionOut(Schema):
     """A web session of the caller ("Waar je bent ingelogd")."""
 
@@ -74,10 +100,15 @@ class SessionOut(Schema):
     browser: str
     # The session this request came with.
     current: bool
+    # The sign-in passed the second step (a code, a recovery code) or came through the
+    # organisation's sign-in ("met tweestapsverificatie").
+    second_factor: bool = False
 
 
 class ReauthenticateIn(InputSchema):
     password: str = Field(max_length=128)
+    # With two-step verification on: the six digits from the app as well.
+    code: str = Field(default="", max_length=20)
 
 
 class PasswordChangeIn(InputSchema):
@@ -112,3 +143,61 @@ class PasswordResetIn(InputSchema):
     # The fragment of the reset link.
     token: str = Field(max_length=100)
     password: str = Field(max_length=128)
+
+
+class SecondFactorOut(Schema):
+    """The caller's two-step verification ("Beveiliging")."""
+
+    enabled: bool = False
+    required: bool = False
+    # What asks it: none, server (the server's rule) or workspace.
+    required_by: str = "none"
+    # The names of the caller's workspaces that ask it.
+    required_by_workspaces: list[str] = Field(default=[])
+    # While a grace period runs: its end (ISO 8601). After it, signing in leads straight
+    # to setting it up.
+    grace_until: str | None = None
+    recovery_codes_left: int = 0
+
+
+class SetupSecretOut(Schema):
+    """Shown once: the secret for an authenticator app, as text in groups of four and as
+    the otpauth link a QR code carries."""
+
+    secret: str
+    otpauth_uri: str
+
+
+class SecondFactorCodeIn(InputSchema):
+    # The six digits the authenticator app shows.
+    code: str = Field(max_length=20)
+
+
+class RecoveryCodesOut(Schema):
+    """Shown once: ten recovery codes, each usable once instead of a code."""
+
+    recovery_codes: list[str]
+
+
+class RemoveSecondFactorIn(InputSchema):
+    password: str = Field(max_length=128)
+    code: str = Field(max_length=20)
+
+
+class ClearSecondFactorIn(InputSchema):
+    # The admin's own password.
+    password: str = Field(max_length=128)
+    # Also unpair the member's devices: a lost phone usually carries a paired app.
+    revoke_devices: bool = True
+
+
+class ClearSecondFactorOut(Schema):
+    devices_revoked: int = 0
+
+
+class ReplaceSecondFactorIn(InputSchema):
+    """Exactly one: a code from the old app, or a recovery code when the old phone is
+    gone."""
+
+    code: str = Field(default="", max_length=20)
+    recovery_code: str = Field(default="", max_length=30)

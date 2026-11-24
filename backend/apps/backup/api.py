@@ -7,8 +7,9 @@ from django.utils.translation import gettext as _
 from ninja import Router, Status
 
 from apps.accounts.auth import session_auth
+from apps.accounts.second_factor_policy import has_factor
 from apps.accounts.services import current_user
-from apps.accounts.sessions import recently_authenticated
+from apps.accounts.sessions import recently_authenticated, session_passed_second_factor
 from apps.audit.codes import AuditCode
 from apps.audit.services import actor_from_request, record
 from apps.backup import schedule, sheet
@@ -43,7 +44,9 @@ _HTML_RESPONSE = {
         "Web session only: a bearer token answers 401 not_authenticated; a session without "
         "a valid CSRF token answers 403. Server admins only (403 forbidden). The sheet "
         "carries the master key: the session must have signed in or called reauthenticate "
-        "within 15 minutes (403 reauthentication_required). Answers the page as a download "
+        "within 15 minutes (403 reauthentication_required), and with two-step verification "
+        "on it must have passed the code (403 second_factor_session_required). Answers the "
+        "page as a download "
         "(Cache-Control: no-store) and records recovery_sheet_viewed in the log. 409 "
         "recovery_sheet_not_here on a server that is not a compose install: there the sheet "
         "is made on the server with ./brievie recovery-sheet. POST, never GET: a GET would "
@@ -60,6 +63,14 @@ def create_recovery_sheet(request: HttpRequest) -> HttpResponse:
         )
     if not recently_authenticated(request):
         raise ApiError(403, "reauthentication_required", _("Vul eerst je wachtwoord opnieuw in."))
+    # The master key, so as pairing: with two-step verification on, only a session that
+    # passed the code (security review of PR #52, point 6).
+    if has_factor(current_user(request)) and not session_passed_second_factor(request):
+        raise ApiError(
+            403,
+            "second_factor_session_required",
+            _("Log opnieuw in met je code om dit te doen."),
+        )
     # Rendering first: a sheet that cannot be made is not recorded as shown. The key is
     # in `page` only; nothing below logs or echoes it.
     page = sheet.render_sheet(sheet.sheet_data())

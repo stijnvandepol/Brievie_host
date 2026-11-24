@@ -47,6 +47,22 @@ MESSAGES: dict[str, Promise] = {
         "Je bent op %(date)s geen serverbeheerder meer. Dat is op de server geregeld."
     ),
     Code.SECOND_FACTOR_CLEARED: _("%(name)s heeft op %(date)s je tweestapsverificatie gewist."),
+    Code.SECOND_FACTOR_CLEARED_BY_COMMAND: _(
+        "Je tweestapsverificatie is op %(date)s gewist op de server."
+    ),
+    # Fixed by the design (two-step sign-in, S 4 and S 5).
+    Code.SECOND_FACTOR_LOCKED: _(
+        "Iemand heeft op %(date)s met jouw wachtwoord geprobeerd in te loggen, maar had de "
+        "code niet. Verander je wachtwoord als jij dat niet was."
+    ),
+    Code.SECOND_FACTOR_REQUIRED: _(
+        "Zet tweestapsverificatie aan vóór %(until)s. Daarna kun je pas inloggen als je het "
+        "hebt aangezet."
+    ),
+    Code.SECOND_FACTOR_RECOVERY_USED: _(
+        "Op %(date)s is met een herstelcode op je account ingelogd. Je hebt nog %(count)s "
+        "herstelcodes."
+    ),
     Code.EMERGENCY_ACCESS_SWITCHED_ON: _(
         "%(name)s heeft op %(date)s noodtoegang voor de beheerder aangezet in %(workspace)s."
     ),
@@ -125,6 +141,12 @@ NOTICE_VALUE_KEYS: Final[dict[str, frozenset[str]]] = {
     Code.SERVER_ADMIN_GRANTED: frozenset(),
     Code.SERVER_ADMIN_REVOKED: frozenset(),
     Code.SECOND_FACTOR_CLEARED: frozenset(),
+    Code.SECOND_FACTOR_CLEARED_BY_COMMAND: frozenset(),
+    Code.SECOND_FACTOR_LOCKED: frozenset(),
+    # until: the last day of the grace period, as "4 december".
+    Code.SECOND_FACTOR_REQUIRED: frozenset({"until"}),
+    # count: the recovery codes left; never a code.
+    Code.SECOND_FACTOR_RECOVERY_USED: frozenset({"count"}),
     Code.EMERGENCY_ACCESS_SWITCHED_ON: frozenset({"workspace"}),
     Code.EMERGENCY_ACCESS_SWITCHED_OFF: frozenset({"workspace"}),
     Code.EMERGENCY_ACCESS_USED: frozenset({"count", "person"}),

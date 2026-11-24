@@ -5,11 +5,15 @@ msgstr "Content-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit
 msgid "Er is altijd minstens één serverbeheerder nodig. Dit account kan daarom niet weg."
 msgstr "There must always be at least one server admin. That is why this account cannot be removed."
 
+#: apps/accounts/api.py
+msgid "Vul de code uit de app in, of een herstelcode."
+msgstr "Enter the code from the app, or a recovery code."
+
 #: apps/accounts/auth.py
 msgid "Je sessie is niet meer geldig voor deze pagina. Ververs de pagina en probeer het opnieuw."
 msgstr "Your session is no longer valid for this page. Refresh the page and try again."
 
-#: apps/accounts/authority.py
+#: apps/accounts/authority.py apps/accounts/user_actions.py
 msgid "We kunnen dit account niet vinden."
 msgstr "We can't find this account."
 
@@ -25,9 +29,14 @@ msgstr "Only the server admin can do this, because this account also exists outs
 msgid "Dit kan alleen de serverbeheerder."
 msgstr "Only the server administrator can do this."
 
-#: apps/accounts/management/commands/reset_password.py apps/accounts/management/commands/set_server_admin.py
+#: apps/accounts/management/commands/clear_second_factor.py apps/accounts/management/commands/reset_password.py apps/accounts/management/commands/set_server_admin.py
 msgid "Er is geen account met dit e-mailadres."
 msgstr "There is no account with this email address."
+
+#: apps/accounts/management/commands/clear_second_factor.py
+#, python-format
+msgid "De tweestapsverificatie is gewist. Alle sessies van dit account zijn beëindigd; %(count)s apparaten zijn ontkoppeld."
+msgstr "Two-step verification is cleared. Every session of this account has ended; %(count)s devices are unpaired."
 
 #: apps/accounts/management/commands/reset_password.py
 msgid "Nieuw wachtwoord: "
@@ -110,6 +119,22 @@ msgstr "Device paired"
 #: apps/accounts/models.py
 msgid "Tweestapsverificatie gewist"
 msgstr "Two-step verification cleared"
+
+#: apps/accounts/models.py
+msgid "Tweestapsverificatie gewist op de server"
+msgstr "Two-step verification cleared on the server"
+
+#: apps/accounts/models.py
+msgid "Inlogpoging zonder code"
+msgstr "Sign-in attempt without the code"
+
+#: apps/accounts/models.py
+msgid "Tweestapsverificatie verplicht"
+msgstr "Two-step verification required"
+
+#: apps/accounts/models.py apps/audit/codes.py
+msgid "Herstelcode gebruikt"
+msgstr "Recovery code used"
 
 #: apps/accounts/models.py apps/audit/codes.py
 msgid "Serverbeheerder gemaakt"
@@ -199,6 +224,26 @@ msgstr "You are no longer a server admin since %(date)s. This was arranged on th
 #, python-format
 msgid "%(name)s heeft op %(date)s je tweestapsverificatie gewist."
 msgstr "%(name)s cleared your two-step verification on %(date)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je tweestapsverificatie is op %(date)s gewist op de server."
+msgstr "Your two-step verification was cleared on the server on %(date)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Iemand heeft op %(date)s met jouw wachtwoord geprobeerd in te loggen, maar had de code niet. Verander je wachtwoord als jij dat niet was."
+msgstr "On %(date)s someone tried to sign in with your password but did not have the code. Change your password if that was not you."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Zet tweestapsverificatie aan vóór %(until)s. Daarna kun je pas inloggen als je het hebt aangezet."
+msgstr "Switch on two-step verification before %(until)s. After that you can only sign in once you have switched it on."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Op %(date)s is met een herstelcode op je account ingelogd. Je hebt nog %(count)s herstelcodes."
+msgstr "On %(date)s someone signed in to your account with a recovery code. You have %(count)s recovery codes left."
 
 #: apps/accounts/notices.py
 #, python-format
@@ -334,6 +379,60 @@ msgstr "This account is switched off. Switch it on again first."
 msgid "Deze herstellink werkt niet meer. Vraag een nieuwe."
 msgstr "This reset link no longer works. Ask for a new one."
 
+#: apps/accounts/second_factor.py
+msgid "Code klopt niet. Probeer het opnieuw."
+msgstr "That code is not right. Try again."
+
+#: apps/accounts/second_factor.py
+#, python-format
+msgid "Te vaak een verkeerde code. Probeer het over %(minutes)s minuten opnieuw."
+msgstr "Too many wrong codes. Try again in %(minutes)s minutes."
+
+#: apps/accounts/second_factor.py
+#, python-format
+msgid "Te vaak een verkeerde code. Probeer het over %(hours)s uur opnieuw."
+msgstr "Too many wrong codes. Try again in %(hours)s hours."
+
+#: apps/accounts/second_factor.py
+msgid "Je bent te lang bezig geweest. Log opnieuw in."
+msgstr "This took too long. Sign in again."
+
+#: apps/accounts/second_factor.py
+msgid "Tweestapsverificatie staat niet aan voor dit account."
+msgstr "Two-step verification is not on for this account."
+
+#: apps/accounts/second_factor.py
+msgid "Tweestapsverificatie staat al aan. Kies Nieuwe telefoon om te wisselen."
+msgstr "Two-step verification is already on. Choose New phone to switch."
+
+#: apps/accounts/second_factor.py
+msgid "De klok van je telefoon of van de server loopt niet gelijk. Zet op je telefoon de tijd op automatisch."
+msgstr "The clock of your phone or of the server is off. Set the time on your phone to automatic."
+
+#: apps/accounts/second_factor.py
+msgid "Begin opnieuw met het aanzetten van tweestapsverificatie."
+msgstr "Start switching on two-step verification again."
+
+#: apps/accounts/second_factor.py
+msgid "Te vaak een verkeerde code. Begin opnieuw: scan de nieuwe code."
+msgstr "Too many wrong codes. Start again: scan the new code."
+
+#: apps/accounts/second_factor.py
+msgid "Tweestapsverificatie is verplicht. Je kunt het niet uitzetten, wel naar een nieuwe telefoon zetten."
+msgstr "Two-step verification is required. You cannot switch it off, but you can move it to a new phone."
+
+#: apps/accounts/second_factor.py
+msgid "Dit account heeft geen tweestapsverificatie."
+msgstr "This account does not have two-step verification."
+
+#: apps/accounts/second_factor.py
+msgid "Begin opnieuw met Nieuwe telefoon."
+msgstr "Start New phone again."
+
+#: apps/accounts/second_factor_account.py apps/backup/api.py apps/devices/services.py
+msgid "Vul eerst je wachtwoord opnieuw in."
+msgstr "Enter your password again first."
+
 #: apps/accounts/services.py
 msgid "Vul je naam in."
 msgstr "Enter your name."
@@ -378,6 +477,10 @@ msgstr "Unknown browser"
 #, python-format
 msgid "%(browser)s op %(system)s"
 msgstr "%(browser)s on %(system)s"
+
+#: apps/accounts/user_actions.py apps/backup/api.py apps/devices/services.py
+msgid "Log opnieuw in met je code om dit te doen."
+msgstr "Sign in again with your code to do this."
 
 #: apps/audit/api.py
 msgid "Deze gebeurtenis kennen we niet."
@@ -424,6 +527,10 @@ msgstr "Two-step verification switched off"
 #: apps/audit/codes.py
 msgid "Tweestapsverificatie gewist door beheerder"
 msgstr "Two-step verification cleared by an admin"
+
+#: apps/audit/codes.py
+msgid "Nieuwe herstelcodes"
+msgstr "New recovery codes"
 
 #: apps/audit/codes.py
 msgid "Wachtwoord gewijzigd"
@@ -616,10 +723,6 @@ msgstr "Export"
 #: apps/backup/api.py
 msgid "Op deze server maak je het herstelblad met ./brievie recovery-sheet."
 msgstr "On this server you make the recovery sheet with ./brievie recovery-sheet."
-
-#: apps/backup/api.py apps/devices/services.py
-msgid "Vul eerst je wachtwoord opnieuw in."
-msgstr "Enter your password again first."
 
 #: apps/backup/errors.py
 msgid "De naam van een back-up van vóór het bijwerken ziet eruit als pre-update-0.3.0."
@@ -1160,6 +1263,14 @@ msgstr "The server's certificate is not the same as in the backup."
 msgid "Choose a new password, see 'Run the whole stack' in the README."
 msgstr "Choose a new password, see 'Run the whole stack' in the README."
 
+#: apps/common/checks.py
+msgid "Nog geen serverbeheerder heeft tweestapsverificatie aan."
+msgstr "No server admin has two-step verification on yet."
+
+#: apps/common/checks.py
+msgid "Zet het aan onder Beveiliging, of houd een herstelcode bij de hand. Op de server wist `manage.py clear_second_factor` het voor wie de telefoon kwijt is."
+msgstr "Switch it on under Security, or keep a recovery code at hand. On the server, `manage.py clear_second_factor` clears it for whoever lost their phone."
+
 #: apps/common/errors.py
 msgid "Dit verzoek klopt niet."
 msgstr "This request is not correct."
@@ -1328,6 +1439,10 @@ msgstr "BRIEVIE_MASTER_KEY in deploy/.env is missing or not 64 characters long (
 #: apps/common/names.py
 msgid "Een naam mag geen tekens bevatten die de leesrichting van de tekst omdraaien."
 msgstr "A name may not contain characters that reverse the direction of the text."
+
+#: apps/devices/auth.py apps/devices/services.py
+msgid "Stel eerst tweestapsverificatie in op de webinterface."
+msgstr "Set up two-step verification in the web interface first."
 
 #: apps/devices/services.py
 msgid "Geef het apparaat een naam."

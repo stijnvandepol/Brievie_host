@@ -2,12 +2,13 @@ import { t } from "@lingui/core/macro";
 import { useQuery } from "@tanstack/react-query";
 import { createRoute, redirect } from "@tanstack/react-router";
 import { useState } from "react";
+import { Input, Label, TextField } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import { membersQuery } from "../api/queries";
 import { ConfirmAction } from "../components/confirm-dialog";
 import { DeviceTable } from "../components/device-table";
 import { PageHeader, Shell, usePageTitle } from "../components/page";
-import { MessageBar } from "../components/ui";
+import { CheckRow, MessageBar } from "../components/ui";
 import { workspaceRoute } from "./workspace";
 
 function MemberDevicesPage() {
@@ -19,6 +20,19 @@ function MemberDevicesPage() {
   usePageTitle(title);
   const [ended, setEnded] = useState(false);
   const who = name ?? t`Dit lid`;
+  const [password, setPassword] = useState("");
+  const [revokeDevices, setRevokeDevices] = useState(true);
+  const [cleared, setCleared] = useState<number | null>(null);
+
+  async function clearSecondFactor() {
+    const { data, error } = await api.POST("/api/v1/users/{user_id}/second-factor/clear", {
+      params: { path: { user_id: userId } },
+      body: { password, revoke_devices: revokeDevices },
+    });
+    if (error !== undefined || !data) throw new ApiFailure(error);
+    setPassword("");
+    setCleared(data.devices_revoked);
+  }
 
   async function endSessions() {
     const { error, response } = await api.DELETE("/api/v1/users/{user_id}/sessions", {
@@ -57,6 +71,43 @@ function MemberDevicesPage() {
             onConfirm={endSessions}
           >
             <p>{t`${who} wordt overal uitgelogd en krijgt daar een melding van. Gekoppelde telefoons blijven werken.`}</p>
+          </ConfirmAction>
+        </div>
+      </section>
+      <section className="panel panel-pad" aria-labelledby="member-second-factor">
+        <h2 id="member-second-factor">{t`Tweestapsverificatie`}</h2>
+        <p className="muted">{t`Is ${who} de telefoon met de authenticator-app kwijt, en zijn de herstelcodes ook weg? Wis dan de tweestapsverificatie. ${who} zet het daarna opnieuw aan.`}</p>
+        {cleared !== null ? (
+          <MessageBar intent="success" role="status">
+            {t`De tweestapsverificatie van ${who} is gewist. ${cleared} apparaten zijn ontkoppeld.`}
+          </MessageBar>
+        ) : null}
+        <div>
+          <ConfirmAction
+            label={t`Tweestapsverificatie wissen`}
+            icon="shield"
+            title={t`Tweestapsverificatie van ${who} wissen?`}
+            confirmLabel={t`Wissen`}
+            onConfirm={clearSecondFactor}
+          >
+            <p>{t`${who} wordt overal uitgelogd en krijgt daar een melding van. Dit komt in het logboek.`}</p>
+            <TextField
+              type="password"
+              className="field"
+              value={password}
+              onChange={setPassword}
+              isRequired
+            >
+              <Label>{t`Jouw wachtwoord`}</Label>
+              <Input autoComplete="current-password" />
+            </TextField>
+            <CheckRow
+              checked={revokeDevices}
+              onChange={setRevokeDevices}
+              hint={t`De verloren telefoon kan nog bij de post.`}
+            >
+              {t`Ontkoppel ook de apparaten van ${who}`}
+            </CheckRow>
           </ConfirmAction>
         </div>
       </section>

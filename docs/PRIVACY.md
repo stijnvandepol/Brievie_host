@@ -13,6 +13,8 @@ recorded consent for AI). It is updated with every phase.
 | The decisions about AI (see "Consent for AI") | Database | Not encrypted; row-level security per workspace. No API key, no full address, no document text |
 | Passwords, pairing codes, device tokens, invitation and reset links | Database | Only as hashes (the pairing code also as a key derived from it, sealed with the master key, for the ten minutes it lives) |
 | Accounts: name, e-mail address, whether the account is switched on, whether it is a server admin | Database | Not encrypted; the account belongs to the whole server, not to one workspace |
+| The secret of an authenticator app (two-step verification) | Database | Sealed (AES-256-GCM) under a key derived from the master key, bound to its account; a database dump without the master key gives no secret. In the back-up in its sealed form |
+| Recovery codes of two-step verification | Database | Only as HMAC-SHA256 under another key derived from the master key: a leaked dump cannot be tried against them without that key |
 | Web sessions: client address, a short description of the browser ("Firefox op Windows"), start and last use | Database | Not encrypted; removed when the session ends or runs out |
 | Devices: name, app version, when paired and last used | Database | Not encrypted |
 | The audit log (see "The log") | Database | Not encrypted; row-level security per workspace; the application cannot change or delete rows |
@@ -159,6 +161,15 @@ confirm them by itself. That is automated processing without a person in between
 - **Sessions and phones.** A member sees their own sessions (address, browser) and
   phones (name, app version). An admin sees a member's phones, not their sessions. A web
   session ends after 14 days unused or 90 days at most; a phone after 180 days unused.
+- **Two-step verification.** A code from an authenticator app after the password, or a
+  recovery code for a lost phone. The secret and the recovery codes are shown once, when
+  they are made (answers that are not cached), and are never in a log, a log row, a notice
+  or a later answer. A wrong code is logged as a failed sign-in (no code in it); after
+  five wrong codes within 15 minutes the second step of the account locks, for 15 minutes,
+  doubling each time up to a day, and the member gets a notice that somebody had the
+  password but not the code. An admin who clears a member's lost factor is logged, the
+  member is told and every session of the member ends; the admin types their own password
+  for it. A reset link does not skip the code: whoever holds the link still needs it.
 - **The e-mail on an invitation is not verified.** An admin may fix an address on an
   invitation, so that only that address can accept. Brievie sends no mail, so it only
   compares what is typed with what the admin entered. Anyone who has the link and knows
@@ -353,6 +364,10 @@ for it; see the table above.
   database volume on an encrypted disk.
 - A phone that is stolen works until it is revoked or 180 days pass without use. An
   admin or the member can revoke it at once.
+- Two-step verification with an authenticator app does not stop a fake sign-in page that
+  passes the code on at once (phishing). Passkeys would; they are not built yet.
+- Codes depend on the server's clock: on a server without NTP they may fail. A server
+  admin sees a warning when the server's clock is more than 30 seconds off.
 
 ## The master key
 

@@ -50,7 +50,14 @@ function SessionRow({ session }: { session: Session }) {
           {session.current ? <Badge intent="brand">{t`Deze browser`}</Badge> : null}
         </span>
       </th>
-      <td>{methodLabel(session.method)}</td>
+      <td>
+        <span className="cell-with-badge">
+          {methodLabel(session.method)}
+          {session.second_factor ? (
+            <Badge intent="success">{t`met tweestapsverificatie`}</Badge>
+          ) : null}
+        </span>
+      </td>
       <td>{session.client_ip}</td>
       <td className="num">
         <time dateTime={session.started_at}>{dateTime.format(new Date(session.started_at))}</time>

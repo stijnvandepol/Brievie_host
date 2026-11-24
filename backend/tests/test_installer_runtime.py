@@ -16,9 +16,14 @@ def test_the_settings_copy_holds_no_secret_and_passes_the_leak_guard() -> None:
         "DATABASE_PASSWORD": "hunter2-hunter2",
         "SECRET_KEY": "k" * 60,
         "BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY": "s3-secret-value",
+        "BRIEVIE_REQUIRE_SECOND_FACTOR": "everyone",
+        "BRIEVIE_SECOND_FACTOR_GRACE_DAYS": "3",
     }
     text = runtime.settings_copy_text(environ)
     assert "BRIEVIE_HOSTNAME=mijnnas.local" in text
+    # A restore on a new machine keeps the rule of two-step verification (review of #52).
+    assert "BRIEVIE_REQUIRE_SECOND_FACTOR=everyone" in text
+    assert "BRIEVIE_SECOND_FACTOR_GRACE_DAYS=3" in text
     assert "BRIEVIE_HTTPS_PORT=8443" in text
     for secret in ("ab" * 32, "hunter2", "k" * 60, "s3-secret-value"):
         assert secret not in text

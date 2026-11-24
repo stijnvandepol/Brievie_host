@@ -1,14 +1,16 @@
 import { plural, t } from "@lingui/core/macro";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { createRoute, useNavigate } from "@tanstack/react-router";
 import { QRCodeSVG } from "qrcode.react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Button, Form, Input, Label, Text, TextArea, TextField } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
+import { meQuery } from "../api/queries";
 import { formatTimeLeft, useSecondsLeft } from "../components/countdown";
 import { DeviceTable } from "../components/device-table";
 import { Icon } from "../components/icons";
 import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
+import { CodeField } from "../components/second-factor-setup";
 import { MessageBar } from "../components/ui";
 import { dateFormat } from "../format";
 import { requireUser } from "../guards";
@@ -73,18 +75,25 @@ function PairAppPage() {
   // An older session first types the password again: an open browser alone must not
   // be enough to add a phone to the account.
   const needsPassword =
-    create.error instanceof ApiFailure && create.error.code === "reauthentication_required";
+    create.error instanceof ApiFailure &&
+    (create.error.code === "reauthentication_required" ||
+      create.error.code === "second_factor_session_required");
+  // With two-step verification on, the code from the app as well (a device token is a
+  // second factor of its own).
+  const withCode = useQuery(meQuery).data?.has_second_factor === true;
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const confirm = useMutation({
     gcTime: 0,
     mutationFn: async () => {
       const { error, response } = await api.POST("/api/v1/auth/reauthenticate", {
-        body: { password },
+        body: { password, code: withCode ? code.replace(/\s/g, "") : "" },
       });
       if (!response.ok) throw new ApiFailure(error);
     },
     onSuccess: () => {
       setPassword("");
+      setCode("");
       create.mutate();
     },
   });
@@ -171,6 +180,9 @@ function PairAppPage() {
             <Text slot="description">{t`Vul je wachtwoord in voordat je een telefoon koppelt. Zo weten we dat jij het bent.`}</Text>
             <Input autoComplete="current-password" />
           </TextField>
+          {withCode ? (
+            <CodeField value={code} onChange={setCode} label={t`Code uit de app`} />
+          ) : null}
           <ErrorAlert error={confirm.error} />
           <div>
             <Button type="submit" className="button" isPending={confirm.isPending}>
