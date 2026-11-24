@@ -179,6 +179,8 @@ def test_the_admins_built_export_holds_only_what_the_admin_may_read(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     o = office()
+    # Admins read all post: every letter but the private ones not theirs.
+    o.state(e=False, d=True, a=True)
     member = membership_of(o.workspace, o.admin)
     # The office's page rows have no files: every page reads as one small picture.
     monkeypatch.setattr(export, "_open_page", lambda *args, **kwargs: jpeg())

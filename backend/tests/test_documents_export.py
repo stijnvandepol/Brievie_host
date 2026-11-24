@@ -103,6 +103,8 @@ def test_export_json_names_persons_labels_and_tasks(ws_a: Workspace) -> None:
             "description": "Betaal de aanslag",
             "deadline": timezone.now().date().isoformat(),
             "status": "open",
+            # Version 2: when it was ticked off (empty while open).
+            "completed_at": "",
         }
     ]
     assert entry["pages"] == [f"pagina's/{document.id}/1.jpg"]
