@@ -101,6 +101,16 @@ REASONS = {
         "Een sleutel in het bestand is niet gelijk aan de sleutel in de kluis. "
         "Er is niets veranderd."
     ),
+    "import_incomplete": gettext_lazy(
+        "Er is al een database. Met alleen de hoofdsleutel kan dat niet: de database heeft ook "
+        "zijn eigen wachtwoord nodig (POSTGRES_PASSWORD). Geef het hele bestand deploy/.env "
+        "van de installatie waar deze gegevens vandaan komen. Er is niets veranderd."
+    ),
+    "data_unreadable": gettext_lazy(
+        "De map met gegevens kan niet worden gelezen (controleer de rechten of de netwerkschijf). "
+        "Zonder te weten of er gegevens zijn, maakt Brievie geen nieuwe sleutels. "
+        "Er is niets veranderd."
+    ),
     "backup_password_invalid": gettext_lazy(
         "Het eigen back-upwachtwoord kan niet worden gelezen. Er is niets veranderd."
     ),
@@ -216,10 +226,14 @@ def _secure_directory(directory: int, owner: tuple[int, int]) -> None:
 # --- is there data? ---------------------------------------------------------------
 
 
+def _unreadable(error: OSError) -> None:
+    raise InitSecretsError("data_unreadable") from None
+
+
 def _has_pg_version(root: Path, depth: int = 4) -> bool:
     """A `PG_VERSION` file within `depth` levels (postgres:18 keeps it below `<major>/docker`)."""
     base = len(root.parts)
-    for current, directories, files in os.walk(root, followlinks=False):
+    for current, directories, files in os.walk(root, followlinks=False, onerror=_unreadable):
         if "PG_VERSION" in files:
             return True
         if len(Path(current).parts) - base >= depth:
@@ -228,7 +242,10 @@ def _has_pg_version(root: Path, depth: int = 4) -> bool:
 
 
 def _has_files(root: Path) -> bool:
-    return any(files for _current, _directories, files in os.walk(root, followlinks=False))
+    return any(
+        files
+        for _current, _directories, files in os.walk(root, followlinks=False, onerror=_unreadable)
+    )
 
 
 def data_exists(layout: Layout, backup_config_id: str | None) -> bool:
@@ -345,6 +362,14 @@ def _run(
     values = dict(present)
     created: list[str] = []
     if import_values is not None:
+        # An existing database keeps the superuser password it was made with: minting a new
+        # one here would never fit it, and the next import would then differ from the vault.
+        if (
+            _has_pg_version(layout.pgdata)
+            and "postgres_password" not in import_values
+            and "postgres_password" not in present
+        ):
+            raise InitSecretsError("import_incomplete")
         for name, value in import_values.items():
             if name in present and present[name] != value:
                 raise InitSecretsError("import_differs")

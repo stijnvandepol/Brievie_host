@@ -443,3 +443,52 @@ def test_a_large_wrapper_env_file_imports_through_the_command_line(
     assert env_file.stat().st_size > 8000
     assert init_secrets.main(["--import", str(env_file)], {}, layout) == 0
     assert vault_values(layout)["master_key"] == "ab" * 32
+
+
+def test_an_import_of_only_the_master_key_next_to_a_database_refuses_and_writes_nothing(
+    tmp_path: Path,
+) -> None:
+    layout = make_layout(tmp_path)
+    (layout.pgdata / "18" / "docker").mkdir(parents=True)
+    (layout.pgdata / "18" / "docker" / "PG_VERSION").write_text("18\n")
+    before = snapshot(tmp_path)
+    with pytest.raises(InitSecretsError) as caught:
+        run(layout, {}, import_values=parse_import(f"BRIEVIE_MASTER_KEY={'ab' * 32}\n"))
+    assert caught.value.code == "import_incomplete"
+    assert snapshot(tmp_path) == before
+    assert names_in(layout.vault) == set()
+    # With the superuser password of that database it goes through, and a second import is a no-op.
+    full = parse_import(import_text())
+    run(layout, {}, import_values=full)
+    again = run(layout, {}, import_values=full)
+    assert again.created == ()
+
+
+def test_only_the_master_key_is_enough_where_there_is_no_database_yet(tmp_path: Path) -> None:
+    layout = make_layout(tmp_path)
+    (layout.documents / "a.bin").write_bytes(b"x")  # documents alone have no password to fit
+    run(layout, {}, import_values=parse_import(f"BRIEVIE_MASTER_KEY={'ab' * 32}\n"))
+    assert vault_values(layout)["master_key"] == "ab" * 32
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads every folder")
+@pytest.mark.parametrize("which", ["pgdata", "documents"])
+def test_an_unreadable_data_folder_refuses_instead_of_looking_empty(
+    tmp_path: Path, which: str
+) -> None:
+    """Review of PR #45, point 5: an NFS root_squash folder must not read as "no data"."""
+    layout = make_layout(tmp_path)
+    folder = layout.pgdata if which == "pgdata" else layout.documents
+    hidden = folder / "locked"
+    hidden.mkdir()
+    (hidden / "x").write_text("x")
+    folder.chmod(0o000)
+    try:
+        with pytest.raises(InitSecretsError) as caught:
+            run(layout, {})
+    finally:
+        folder.chmod(0o700)
+    assert caught.value.code == "data_unreadable"
+    assert names_in(layout.vault) == set()
+    for role in ROLES:
+        assert names_in(layout.out[role]) == set()

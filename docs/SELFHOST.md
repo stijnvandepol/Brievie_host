@@ -828,7 +828,11 @@ there is data. The back-up is opened with the master key of the vault. **On a ne
 put the key of your recovery sheet in the vault first**: write a file with the line
 `BRIEVIE_MASTER_KEY=<the 64 characters, without spaces>` and run, before the first `up`,
 `docker compose run --rm -v "$PWD/key.env:/import/env:ro" init-secrets python -m apps.installer.init_secrets --import /import/env`
-(then `docker compose up -d postgres`, the restore, `docker compose up -d`). That is also the
+(then `docker compose up -d postgres`, the restore, `docker compose up -d`). Where a database
+already exists in the volume `pgdata`, the key alone is refused: give the whole `deploy/.env` of
+the installation it came from (the database keeps its own superuser password). An unreadable data
+folder (a network disk with `root_squash`) also stops `init-secrets`: it never makes new keys
+without knowing there is no data. That is also the
 way back when the volume `secrets` is lost. `restore_install` makes no safety back-up of what it
 replaces: make a back-up first if the data is worth anything.
 

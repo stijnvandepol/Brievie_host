@@ -1766,6 +1766,14 @@ msgid "Een sleutel in het bestand is niet gelijk aan de sleutel in de kluis. Er 
 msgstr "A key in the file is not equal to the key in the vault. Nothing has changed."
 
 #: apps/installer/init_secrets.py
+msgid "Er is al een database. Met alleen de hoofdsleutel kan dat niet: de database heeft ook zijn eigen wachtwoord nodig (POSTGRES_PASSWORD). Geef het hele bestand deploy/.env van de installatie waar deze gegevens vandaan komen. Er is niets veranderd."
+msgstr "There is already a database. That is not possible with only the master key: the database also needs its own password (POSTGRES_PASSWORD). Give the whole deploy/.env file of the installation these data come from. Nothing has changed."
+
+#: apps/installer/init_secrets.py
+msgid "De map met gegevens kan niet worden gelezen (controleer de rechten of de netwerkschijf). Zonder te weten of er gegevens zijn, maakt Brievie geen nieuwe sleutels. Er is niets veranderd."
+msgstr "The folder with data cannot be read (check the permissions or the network disk). Without knowing whether there is data, Brievie makes no new keys. Nothing has changed."
+
+#: apps/installer/init_secrets.py
 msgid "Het eigen back-upwachtwoord kan niet worden gelezen. Er is niets veranderd."
 msgstr "The own back-up password cannot be read. Nothing has changed."
 
