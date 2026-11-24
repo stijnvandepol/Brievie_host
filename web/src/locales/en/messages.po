@@ -308,8 +308,16 @@ msgid "{who} haalde {person} weg bij delen"
 msgstr "{who} stopped sharing with {person}"
 
 #: src/components/document-history.tsx
+msgid "{who} haalde Bewaren tot weg"
+msgstr "{who} removed Keep until"
+
+#: src/components/document-history.tsx
 msgid "{who} haalde een taak weg bij {person}"
 msgstr "{who} took a task back from {person}"
+
+#: src/components/document-history.tsx
+msgid "{who} haalde Geldig tot weg"
+msgstr "{who} removed Valid until"
 
 #: src/components/document-history.tsx
 msgid "{who} haalde het label {label} eraf"
@@ -332,12 +340,32 @@ msgid "{who} opende deze brief met noodtoegang: {reason}"
 msgstr "{who} opened this letter with emergency access: {reason}"
 
 #: src/components/document-history.tsx
+msgid "{who} paste de gegevens aan"
+msgstr "{who} changed the details"
+
+#: src/components/document-history.tsx
+msgid "{who} paste de herinnering aan"
+msgstr "{who} changed the reminder"
+
+#: src/components/document-history.tsx
+msgid "{who} paste de titel aan"
+msgstr "{who} changed the title"
+
+#: src/components/document-history.tsx
+msgid "{who} paste het type aan"
+msgstr "{who} changed the type"
+
+#: src/components/document-history.tsx
 msgid "{who} rondde een taak af"
 msgstr "{who} completed a task"
 
 #: src/components/document-history.tsx
 msgid "{who} rondde een taak af (uit de dubbele brief)"
 msgstr "{who} completed a task (from the duplicate letter)"
+
+#: src/components/document-history.tsx
+msgid "{who} voegde dit document toe aan het archief"
+msgstr "{who} added this document to the archive"
 
 #: src/components/document-history.tsx
 msgid "{who} vulde de datum van een taak in"
@@ -352,8 +380,16 @@ msgid "{who} wordt overal uitgelogd en krijgt daar een melding van. Gekoppelde t
 msgstr "{who} will be signed out everywhere and gets a notification about it. Paired phones keep working."
 
 #: src/components/document-history.tsx
+msgid "{who} zette Bewaren tot op {until}"
+msgstr "{who} set Keep until to {until}"
+
+#: src/components/document-history.tsx
 msgid "{who} zette de brief terug in de Inbox om te controleren"
 msgstr "{who} put the letter back in the Inbox to check"
+
+#: src/components/document-history.tsx
+msgid "{who} zette de datum op {date}"
+msgstr "{who} set the date to {date}"
 
 #: src/components/document-history.tsx
 msgid "{who} zette deze brief op naam van {person}"
@@ -366,6 +402,10 @@ msgstr "{who} addressed this letter to {person} (from the duplicate letter)"
 #: src/components/document-history.tsx
 msgid "{who} zette een taak weer open"
 msgstr "{who} reopened a task"
+
+#: src/components/document-history.tsx
+msgid "{who} zette Geldig tot op {date}"
+msgstr "{who} set Valid until to {date}"
 
 #: src/components/document-history.tsx
 msgid "{who} zette het label {label} erop"
@@ -1263,6 +1303,10 @@ msgstr "Brievie files letters under persons and labels by itself."
 #: src/components/autopilot-panel.tsx
 msgid "Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is. Een label dat een regel voorstelt, zet Brievie er ook op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is van hetzelfde label. Staat het woord alleen verderop in de brief en is de AI niet zeker? Dan blijft het een voorstel. Een regel die op 'Automatisch toepassen' staat, doet dat altijd."
 msgstr "Brievie puts a letter with the right person and the right label by itself if the AI or the name is clear. A label that a rule suggests is also added by Brievie if the rule found the word in the sender or at the top of the letter, or if the AI is sure of the same label. Is the word only further down in the letter and is the AI not sure? Then it stays a suggestion. A rule set to 'Apply automatically' always does this."
+
+#: src/components/document-history.tsx
+msgid "Brievie zette een herinnering in Mijn taken: geldig tot {until}"
+msgstr "Brievie put a reminder in My tasks: valid until {until}"
 
 #: src/components/page.tsx
 msgid "Brievie, naar Mijn post"

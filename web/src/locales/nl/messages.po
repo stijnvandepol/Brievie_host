@@ -308,8 +308,16 @@ msgid "{who} haalde {person} weg bij delen"
 msgstr "{who} haalde {person} weg bij delen"
 
 #: src/components/document-history.tsx
+msgid "{who} haalde Bewaren tot weg"
+msgstr "{who} haalde Bewaren tot weg"
+
+#: src/components/document-history.tsx
 msgid "{who} haalde een taak weg bij {person}"
 msgstr "{who} haalde een taak weg bij {person}"
+
+#: src/components/document-history.tsx
+msgid "{who} haalde Geldig tot weg"
+msgstr "{who} haalde Geldig tot weg"
 
 #: src/components/document-history.tsx
 msgid "{who} haalde het label {label} eraf"
@@ -332,12 +340,32 @@ msgid "{who} opende deze brief met noodtoegang: {reason}"
 msgstr "{who} opende deze brief met noodtoegang: {reason}"
 
 #: src/components/document-history.tsx
+msgid "{who} paste de gegevens aan"
+msgstr "{who} paste de gegevens aan"
+
+#: src/components/document-history.tsx
+msgid "{who} paste de herinnering aan"
+msgstr "{who} paste de herinnering aan"
+
+#: src/components/document-history.tsx
+msgid "{who} paste de titel aan"
+msgstr "{who} paste de titel aan"
+
+#: src/components/document-history.tsx
+msgid "{who} paste het type aan"
+msgstr "{who} paste het type aan"
+
+#: src/components/document-history.tsx
 msgid "{who} rondde een taak af"
 msgstr "{who} rondde een taak af"
 
 #: src/components/document-history.tsx
 msgid "{who} rondde een taak af (uit de dubbele brief)"
 msgstr "{who} rondde een taak af (uit de dubbele brief)"
+
+#: src/components/document-history.tsx
+msgid "{who} voegde dit document toe aan het archief"
+msgstr "{who} voegde dit document toe aan het archief"
 
 #: src/components/document-history.tsx
 msgid "{who} vulde de datum van een taak in"
@@ -352,8 +380,16 @@ msgid "{who} wordt overal uitgelogd en krijgt daar een melding van. Gekoppelde t
 msgstr "{who} wordt overal uitgelogd en krijgt daar een melding van. Gekoppelde telefoons blijven werken."
 
 #: src/components/document-history.tsx
+msgid "{who} zette Bewaren tot op {until}"
+msgstr "{who} zette Bewaren tot op {until}"
+
+#: src/components/document-history.tsx
 msgid "{who} zette de brief terug in de Inbox om te controleren"
 msgstr "{who} zette de brief terug in de Inbox om te controleren"
+
+#: src/components/document-history.tsx
+msgid "{who} zette de datum op {date}"
+msgstr "{who} zette de datum op {date}"
 
 #: src/components/document-history.tsx
 msgid "{who} zette deze brief op naam van {person}"
@@ -366,6 +402,10 @@ msgstr "{who} zette deze brief op naam van {person} (uit de dubbele brief)"
 #: src/components/document-history.tsx
 msgid "{who} zette een taak weer open"
 msgstr "{who} zette een taak weer open"
+
+#: src/components/document-history.tsx
+msgid "{who} zette Geldig tot op {date}"
+msgstr "{who} zette Geldig tot op {date}"
 
 #: src/components/document-history.tsx
 msgid "{who} zette het label {label} erop"
@@ -1263,6 +1303,10 @@ msgstr "Brievie zet brieven zelf onder personen en labels."
 #: src/components/autopilot-panel.tsx
 msgid "Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is. Een label dat een regel voorstelt, zet Brievie er ook op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is van hetzelfde label. Staat het woord alleen verderop in de brief en is de AI niet zeker? Dan blijft het een voorstel. Een regel die op 'Automatisch toepassen' staat, doet dat altijd."
 msgstr "Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is. Een label dat een regel voorstelt, zet Brievie er ook op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is van hetzelfde label. Staat het woord alleen verderop in de brief en is de AI niet zeker? Dan blijft het een voorstel. Een regel die op 'Automatisch toepassen' staat, doet dat altijd."
+
+#: src/components/document-history.tsx
+msgid "Brievie zette een herinnering in Mijn taken: geldig tot {until}"
+msgstr "Brievie zette een herinnering in Mijn taken: geldig tot {until}"
 
 #: src/components/page.tsx
 msgid "Brievie, naar Mijn post"

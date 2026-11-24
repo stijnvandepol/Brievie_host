@@ -5,6 +5,7 @@ import { ApiFailure, api } from "../api/client";
 import { documentEventsQuery, meQuery } from "../api/queries";
 import type { components } from "../api/schema";
 import { dateFormat } from "../format";
+import { formatLetterDate } from "./document-table";
 import { Icon } from "./icons";
 import { ErrorAlert } from "./page";
 
@@ -125,8 +126,45 @@ function sentence(
       return event.note
         ? event.note
         : t`Deze brief kon niet privé worden: dan zou niemand hem kunnen lezen. Hij is zichtbaar gebleven.`;
+    // Own documents (archive): added, a detail changed (the field's name; a date, never the
+    // title's words), "Bewaren tot", and the reminder Brievie made itself.
+    case "document_added":
+      return t`${who} voegde dit document toe aan het archief`;
+    case "details_changed":
+      return detailSentence(who, event.note ?? "", day(event));
+    case "retention_changed": {
+      const until = day(event);
+      return until ? t`${who} zette Bewaren tot op ${until}` : t`${who} haalde Bewaren tot weg`;
+    }
+    case "reminder_started": {
+      const until = day(event);
+      return t`Brievie zette een herinnering in Mijn taken: geldig tot ${until}`;
+    }
     default:
       return null;
+  }
+}
+
+/** The day an event names, as "12 mrt 2031"; empty when it names none. */
+function day(event: DocumentEvent): string {
+  return event.on_date ? formatLetterDate(event.on_date) : "";
+}
+
+/** One changed detail of an own document, by the field's name. */
+function detailSentence(who: string, field: string, date: string): string {
+  switch (field) {
+    case "title":
+      return t`${who} paste de titel aan`;
+    case "document_type":
+      return t`${who} paste het type aan`;
+    case "document_date":
+      return t`${who} zette de datum op ${date}`;
+    case "expires_on":
+      return date ? t`${who} zette Geldig tot op ${date}` : t`${who} haalde Geldig tot weg`;
+    case "remind_days":
+      return t`${who} paste de herinnering aan`;
+    default:
+      return t`${who} paste de gegevens aan`;
   }
 }
 

@@ -135,3 +135,41 @@ describe("history of tasks (Mijn taken)", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("history of an own document (archive)", () => {
+  it("says it was added, which detail changed with its date, and the reminder Brievie made", async () => {
+    server.use(
+      withEvents([
+        event(1, { kind: "document_added", related_document_id: null }),
+        event(2, { kind: "details_changed", note: "title", related_document_id: null }),
+        event(3, {
+          kind: "details_changed",
+          note: "expires_on",
+          on_date: "2031-03-12",
+          related_document_id: null,
+        }),
+        event(4, { kind: "retention_changed", on_date: "2033-01-01", related_document_id: null }),
+        event(5, { kind: "retention_changed", on_date: null, related_document_id: null }),
+        event(6, {
+          kind: "reminder_started",
+          origin: "system",
+          actor_id: null,
+          actor_name: "",
+          on_date: "2031-03-12",
+          related_document_id: null,
+        }),
+      ]),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
+    renderApp(path);
+    expect(await screen.findByText("Bram voegde dit document toe aan het archief")).toBeVisible();
+    expect(screen.getByText("Bram paste de titel aan")).toBeVisible();
+    expect(screen.getByText("Bram zette Geldig tot op 12 mrt 2031")).toBeVisible();
+    expect(screen.getByText("Bram zette Bewaren tot op 1 jan 2033")).toBeVisible();
+    expect(screen.getByText("Bram haalde Bewaren tot weg")).toBeVisible();
+    expect(
+      screen.getByText("Brievie zette een herinnering in Mijn taken: geldig tot 12 mrt 2031"),
+    ).toBeVisible();
+  });
+});
