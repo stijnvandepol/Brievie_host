@@ -21,6 +21,9 @@ umask 077
 : "${COMPOSE:?}" "${PUBLIC_HOST:?}" "${VPN_HOST:?}"
 work=$(mktemp -d "${RUNNER_TEMP:?}/routes-check.XXXXXX")
 trap 'rm -rf "${work:?}"' EXIT
+# Which check failed: the line, never a value.
+set -E
+trap 'echo "routes-check.sh: a check failed at line $LINENO." >&2' ERR
 
 # One HTTP request from inside the api container to Caddy (the compose network).
 # Prints "<status>\n<headers as JSON>\n<body>".

@@ -218,10 +218,9 @@ def test_caddy_that_does_not_resolve_is_nobody(
 
     monkeypatch.setattr(socket, "getaddrinfo", fail)
     monkeypatch.setattr(net_module, "_caddy", (-1000.0, frozenset()))
-    monkeypatch.setattr(net_module, "_caddy_lookup_at", -1000.0)
     settings.BRIEVIE_CADDY_HOST = "caddy"
     assert REAL_CADDY_ADDRESSES() == frozenset()
-    # An empty answer is not kept: the next lookup (after the retry pause) tries again.
+    # An empty answer is not kept: the next lookup tries again.
     assert net_module._caddy[1] == frozenset()
 
 
@@ -234,7 +233,6 @@ def test_caddy_addresses_resolve_its_name(
 
     monkeypatch.setattr(socket, "getaddrinfo", resolve)
     monkeypatch.setattr(net_module, "_caddy", (-1000.0, frozenset()))
-    monkeypatch.setattr(net_module, "_caddy_lookup_at", -1000.0)
     settings.BRIEVIE_CADDY_HOST = "caddy"
     assert REAL_CADDY_ADDRESSES() == frozenset({"172.18.0.5", "fd00::5"})
 
@@ -254,11 +252,9 @@ def test_a_caddy_found_late_is_believed_without_waiting_for_the_cache(
 
     monkeypatch.setattr(socket, "getaddrinfo", resolve)
     monkeypatch.setattr(net_module, "_caddy", (-1000.0, frozenset()))
-    monkeypatch.setattr(net_module, "_caddy_lookup_at", -1000.0)
     monkeypatch.setattr(net_module, "caddy_addresses", REAL_CADDY_ADDRESSES)
     settings.BRIEVIE_CADDY_HOST = "caddy"
     settings.BRIEVIE_BEHIND_CADDY = True
     assert REAL_CADDY_ADDRESSES() == frozenset()
-    monkeypatch.setattr(net_module, "_caddy_lookup_at", -1000.0)  # the retry pause passed
     request = caddy_request(remote_addr="172.18.0.6", **{"X-Brievie-Client-IP": "192.0.2.7"})
     assert client_ip(request) == "192.0.2.7"

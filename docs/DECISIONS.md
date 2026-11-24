@@ -2937,8 +2937,9 @@ all six held.
 - **Point 2, follow-up (found in CI):** the api starts before Caddy, so its first lookup of
   `caddy` found nothing and was kept for 30 seconds, during which Caddy's own requests counted
   as public. An empty answer is no longer kept, and a peer that is not among the known addresses
-  triggers a new lookup (at most every 2 seconds per process), which also covers a recreated
-  Caddy with a new address.
+  triggers a new lookup at once (first with a pause of 2 seconds, which CI showed still let
+  Caddy's first request through as public), which also covers a recreated Caddy with a new
+  address. Only the stack's own containers reach the api, so the extra lookups are few.
 ## 2026-11-24: Two-step sign-in (TOTP)
 
 Plan `docs/superpowers/plans/2026-11-21-host-tweestapsverificatie.md`, design

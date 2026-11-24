@@ -10,26 +10,21 @@ logger = logging.getLogger(__name__)
 _not_caddy_logged_at = -60.0
 
 # Caddy's addresses, resolved from its compose name per process: kept for `_CADDY_TTL`, and
-# looked up again (at most every `_CADDY_RETRY` seconds) when a peer is not among them, so a
-# lookup made before Caddy existed, or a recreated Caddy with a new address, is not believed
-# stale for long. An empty answer is never kept.
+# looked up again at once when a peer is not among them, so a lookup made before Caddy
+# existed, or a recreated Caddy with a new address, is never believed stale. An empty
+# answer is never kept. Only containers of the stack reach the api, so the extra lookups
+# are few (the api's own healthcheck, every 5 seconds).
 _CADDY_TTL = 30.0
-_CADDY_RETRY = 2.0
 _caddy: tuple[float, frozenset[str]] = (-_CADDY_TTL, frozenset())
-_caddy_lookup_at = -_CADDY_RETRY
 
 
 def caddy_addresses(*, refresh: bool = False) -> frozenset[str]:
     """The addresses of `BRIEVIE_CADDY_HOST` (compose: `caddy`); empty when it does not
     resolve. Only a request whose socket peer is one of these is Caddy's."""
-    global _caddy, _caddy_lookup_at
+    global _caddy
     now = time.monotonic()
-    fresh = now - _caddy[0] < _CADDY_TTL and bool(_caddy[1])
-    if fresh and not refresh:
+    if not refresh and now - _caddy[0] < _CADDY_TTL and _caddy[1]:
         return _caddy[1]
-    if now - _caddy_lookup_at < _CADDY_RETRY:
-        return _caddy[1] if fresh else frozenset()
-    _caddy_lookup_at = now
     try:
         infos = socket.getaddrinfo(settings.BRIEVIE_CADDY_HOST, None, proto=socket.IPPROTO_TCP)
         found = frozenset(str(info[4][0]) for info in infos)
