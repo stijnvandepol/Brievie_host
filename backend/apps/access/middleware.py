@@ -4,8 +4,8 @@ Through a tunnel or an own reverse proxy (Caddy marks the route, apps.access.rou
 web interface and its password sign-in stay closed by default. What passes is decided by
 the endpoint, never by a header the request carries:
 
-- the app's unauthenticated operations (`APP_OPERATIONS`: up check, the CA to pin,
-  pairing; the code itself is made in a signed-in web session at home), and
+- the app's unauthenticated operations (`APP_OPERATIONS`: up check and the CA to pin;
+  pairing happens over a CA-pinned connection only), and
 - operations that accept the device token (their auth includes `DeviceTokenAuth`); their
   own auth then checks the token as everywhere. Such an operation may also accept a web
   session, but `SessionAuth` refuses every session on this route (`session_allowed`).
@@ -35,16 +35,17 @@ from apps.common.errors import error_response
 from apps.common.net import client_ip
 from apps.devices.auth import DeviceTokenAuth
 
-APP_OPERATIONS: frozenset[str] = frozenset(
-    {
-        "getHealth",
-        "getCaCertificate",
-        "createPairingChallenge",
-        "pairDevice",
-        "pairDeviceWithProof",
-    }
+# Pairing is not here (security review of PR #53, point 5): the first pairing happens over
+# a CA-pinned connection, at home or through a VPN, never through a party that ends TLS.
+APP_OPERATIONS: frozenset[str] = frozenset({"getHealth", "getCaCertificate"})
+# Closed on the public route whatever BRIEVIE_PUBLIC_WEB says: the app pairs and learns its
+# addresses only over a connection pinned to the server's own CA, never through the party
+# that ends TLS for the public name (it could hand the app addresses of its choosing).
+CLOSED_ON_PUBLIC_ROUTE: frozenset[str] = frozenset(
+    {"getServerAddresses", "createPairingChallenge", "pairDevice", "pairDeviceWithProof"}
 )
 CODE = "public_web_off"
+PAIR_AT_HOME = "pair_at_home"
 
 
 def session_allowed(request: HttpRequest) -> bool:
@@ -69,6 +70,8 @@ def accepts_device_token(operation: Operation, api: NinjaAPI) -> bool:
 
 
 def open_on_public_route(operation: Operation, api: NinjaAPI) -> bool:
+    if operation.operation_id in CLOSED_ON_PUBLIC_ROUTE:
+        return False
     return operation.operation_id in APP_OPERATIONS or accepts_device_token(operation, api)
 
 
@@ -136,17 +139,29 @@ class PublicRouteGate:
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
         observe(request)
-        if session_allowed(request):
+        if not is_public_route(request):
             return self.get_response(request)
         path = request.path_info
         is_api = path == "/api" or path.startswith("/api/")
-        if is_api:
-            operation = operation_for(request)
-            if operation is not None and open_on_public_route(operation, _api()):
-                return self.get_response(request)
+        operation = operation_for(request) if is_api else None
+        always_closed = operation is not None and operation.operation_id in CLOSED_ON_PUBLIC_ROUTE
+        if settings.BRIEVIE_PUBLIC_WEB and not always_closed:
+            return self.get_response(request)
+        if operation is not None and open_on_public_route(operation, _api()):
+            return self.get_response(request)
         language = translation.get_language_from_request(request)
+        response: HttpResponse
         with translation.override(language):
-            response = error_response(403, CODE, _sentence()) if is_api else _page()
+            if always_closed:
+                response = error_response(
+                    403,
+                    PAIR_AT_HOME,
+                    _("Koppel de app thuis of via VPN. Daarna werkt hij ook via dit adres."),
+                )
+            elif is_api:
+                response = error_response(403, CODE, _sentence())
+            else:
+                response = _page()
         response["Cache-Control"] = "no-store"
         return response
 

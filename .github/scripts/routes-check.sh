@@ -140,6 +140,10 @@ check_listeners() {
 			--resolve "$PUBLIC_HOST:443:127.0.0.1" "https://$PUBLIC_HOST/")
 		test "$code" = 403
 	fi
+	# Pairing and the server's addresses never go through the party that ends TLS.
+	inside POST caddy:8080 /api/v1/devices/pairing-challenges '{"X-Forwarded-Proto": "https", "Content-Type": "application/json"}' 0 >"$work/t"
+	test "$(status_of "$work/t")" = 403
+	test "$(body_of "$work/t" | jq -r .code)" = pair_at_home
 	# The app's own paths stay open on the tunnel.
 	inside GET caddy:8080 /api/v1/server/ca-certificate '{"X-Forwarded-Proto": "https"}' 0 >"$work/t"
 	test "$(status_of "$work/t")" = 200

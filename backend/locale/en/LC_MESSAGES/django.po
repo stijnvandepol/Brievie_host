@@ -13,6 +13,10 @@ msgstr "Only the Brievie app works at this address. Use the web interface at hom
 msgid "Alleen de app"
 msgstr "Only the app"
 
+#: apps/access/middleware.py
+msgid "Koppel de app thuis of via VPN. Daarna werkt hij ook via dit adres."
+msgstr "Pair the app at home or through a VPN. After that it also works at this address."
+
 #: apps/accounts/account_state.py
 msgid "Er is altijd minstens één serverbeheerder nodig. Dit account kan daarom niet weg."
 msgstr "There must always be at least one server admin. That is why this account cannot be removed."

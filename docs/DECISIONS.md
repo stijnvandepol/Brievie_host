@@ -2913,3 +2913,13 @@ all six held.
   `BRIEVIE_TRUSTED_PROXIES_WIDE=true`. An error stops the api, and Caddy waits for a healthy
   api: closed, not open. `brievie.W005` warns about a single address that looks like Docker's
   gateway (`172.16.0.0/12`, ending in `.1`).
+- **Point 5 (low), fixed: addresses passed through the party that ends TLS.** On the public
+  route `getServerAddresses` and the three pairing operations answer 403 `pair_at_home`
+  ("Koppel de app thuis of via VPN"), also with `BRIEVIE_PUBLIC_WEB=true`. Ruling: **the first
+  pairing happens only over a CA-pinned connection** (home or VPN); a proof bound to the CA
+  cannot be checked by an app that reached the server through Cloudflare's certificate, so the
+  spec's second pairing pass with system trust (iOS I2) is dropped. Cost: pairing while away
+  needs the VPN. `public_urls` is the https entries of `urls` whose host is the configured public
+  name, nothing else. The QR payload gains `public_urls`, additively and only when a public name
+  exists (a home QR stays byte for byte the same; version stays 1). The spec says what changes for
+  the iOS plan.

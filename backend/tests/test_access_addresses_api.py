@@ -29,6 +29,7 @@ def session_client(client: Client, user: User) -> Client:
 
 @pytest.fixture
 def with_public_name(settings: Settings) -> None:
+    settings.BRIEVIE_PUBLIC_HOSTNAME = HOST
     settings.BRIEVIE_PUBLIC_URLS = [HOME, PUBLIC]
     settings.BRIEVIE_PUBLIC_CERTIFICATE_URLS = [PUBLIC]
 
@@ -79,9 +80,34 @@ def test_get_server_addresses_without_auth_is_401() -> None:
 
 
 @pytest.mark.usefixtures("with_public_name")
-def test_qr_payload_is_unchanged(session_client: Client) -> None:
+def test_qr_payload_marks_the_public_urls_additively(session_client: Client) -> None:
     body = post_json(session_client, "/devices/pairing-codes").json()
     payload = json.loads(body["qr_payload"])
-    assert set(payload) == {"v", "urls", "code", "ca_sha256"}
+    assert set(payload) == {"v", "urls", "code", "ca_sha256", "public_urls"}
     assert payload["v"] == 1
     assert payload["urls"] == [HOME, PUBLIC]
+    assert payload["public_urls"] == [PUBLIC]
+
+
+def test_a_home_qr_payload_is_unchanged(session_client: Client, settings: Settings) -> None:
+    settings.BRIEVIE_PUBLIC_URLS = [HOME]
+    settings.BRIEVIE_PUBLIC_CERTIFICATE_URLS = []
+    payload = json.loads(post_json(session_client, "/devices/pairing-codes").json()["qr_payload"])
+    assert set(payload) == {"v", "urls", "code", "ca_sha256"}
+
+
+def test_public_urls_are_only_https_urls_of_the_own_list_on_the_public_name(
+    settings: Settings,
+) -> None:
+    from apps.access.services import server_addresses
+
+    settings.BRIEVIE_PUBLIC_HOSTNAME = HOST
+    settings.BRIEVIE_PUBLIC_URLS = [HOME, PUBLIC]
+    settings.BRIEVIE_PUBLIC_CERTIFICATE_URLS = [
+        PUBLIC,
+        "https://other.example.nl",
+        "http://" + HOST,
+    ]
+    assert server_addresses().public_urls == [PUBLIC]
+    settings.BRIEVIE_PUBLIC_HOSTNAME = "other.example.nl"
+    assert server_addresses().public_urls == []

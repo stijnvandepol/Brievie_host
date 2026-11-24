@@ -344,6 +344,16 @@ Server side (additive, old apps unaffected):
   `{urls: list[str], public_urls: list[str]}`. The QR payload and server link stay version 1 and
   unchanged.
 
+> **Changed by the security review of PR #53 (DECISIONS, point 5):** the public route refuses
+> `createPairingChallenge`, `pairDevice`, `pairDeviceWithProof` and `getServerAddresses`
+> (403 `pair_at_home`), also with `BRIEVIE_PUBLIC_WEB=true`. Pairing and address refreshes
+> happen only over a CA-pinned connection (home or VPN). I2's second pass with system trust is
+> dropped: the app pairs CA-anchored only. The QR payload gains, additively and only when a
+> public name exists, `public_urls`: the subset of `urls` served with a public certificate,
+> from the admin's own screen. The app keeps public URLs only from the QR, `PairOut.public_urls`
+> or `getServerAddresses`, all received over a CA-pinned connection; a public URL must be an
+> https entry of `urls`.
+
 App side (Brievie_ios, section "iOS tasks" of the plan):
 
 - **I1 Per-address trust.** `ServerTrust` gets the set of public hosts. For a host in it: system

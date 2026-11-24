@@ -1022,6 +1022,12 @@ on the home and VPN names (`BRIEVIE_HSTS_SECONDS`), one year on the public route
 derives `ALLOWED_HOSTS` and `BRIEVIE_PUBLIC_URLS` from the names; invitation and reset links
 use the public address only while the web interface answers there.
 
+**Pair the app at home or through the VPN**, never through the public address (it answers
+403 "Koppel de app thuis of via VPN"): the first pairing, and every change of the app's
+addresses, go over a connection pinned to Brievie's own certificate authority, so the party
+that ends TLS for the public name (Cloudflare, a proxy) cannot hand the app addresses of its
+choosing. The QR code marks which addresses carry a public certificate.
+
 The iPhone app needs a version that trusts each address the way it is served (the private CA
 at home, the public certificate of the tunnel or proxy) and learns new addresses from the
 server without pairing again. Older apps keep working at home; while a public way is on, the page asks to update every

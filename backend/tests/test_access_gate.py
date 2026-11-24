@@ -105,24 +105,34 @@ def test_a_wrong_device_token_gets_the_normal_401() -> None:
     assert response.status_code == 401
 
 
-def test_public_route_allows_pairing_and_health() -> None:
+def test_public_route_allows_health_and_the_ca_but_no_pairing() -> None:
+    # Security review of PR #53, point 5: the first pairing happens over a CA-pinned
+    # connection only, never through the party that ends TLS for the public name.
     client = Client()
     assert client.get("/api/v1/health", headers=PUBLIC).status_code == 200
-    challenge = client.post(
-        "/api/v1/devices/pairing-challenges", {}, content_type="application/json", headers=PUBLIC
-    )
-    assert challenge.status_code == 201
-    pair = client.post(
-        "/api/v1/devices/pair",
-        {"code": "WRONG-CODE", "device_name": "iPhone"},
-        content_type="application/json",
-        headers=PUBLIC,
-    )
-    # The endpoint itself answers (a wrong code), not the gate.
-    assert pair.status_code != 403 or pair.json()["code"] != "public_web_off"
     ca = client.get("/api/v1/server/ca-certificate", headers=PUBLIC)
     assert ca.status_code in (200, 404)
-    assert ca.json().get("code") != "public_web_off"
+    assert ca.status_code == 404 or "pem" in ca.json()
+    for path, body in (
+        ("/api/v1/devices/pairing-challenges", {}),
+        ("/api/v1/devices/pair", {"code": "ABCD-EFGH", "device_name": "iPhone"}),
+        ("/api/v1/devices/pair-with-proof", {}),
+    ):
+        response = client.post(path, body, content_type="application/json", headers=PUBLIC)
+        assert response.status_code == 403
+        assert response.json()["code"] == "pair_at_home"
+
+
+def test_server_addresses_are_closed_on_the_public_route() -> None:
+    user = UserFactory.create()
+    _, token = paired(user)
+    response = Client().get("/api/v1/server/addresses", headers={**PUBLIC, **bearer(token)})
+    assert response.status_code == 403
+    assert response.json()["code"] == "pair_at_home"
+    assert (
+        Client().get("/api/v1/server/addresses", headers={**PRIVATE, **bearer(token)}).status_code
+        == 200
+    )
 
 
 def test_public_route_web_page_gets_the_html_sentence() -> None:
@@ -176,7 +186,6 @@ OPEN_ON_PUBLIC_ROUTE = frozenset(
         "createDocument",
         "createFolder",
         "createLabel",
-        "createPairingChallenge",
         "createPerson",
         "createRule",
         "deleteLabel",
@@ -197,7 +206,6 @@ OPEN_ON_PUBLIC_ROUTE = frozenset(
         "getMe",
         "getMenuCounts",
         "getMyPostAccess",
-        "getServerAddresses",
         "getVisibility",
         "handleDocument",
         "listAiSuppliers",
@@ -221,8 +229,6 @@ OPEN_ON_PUBLIC_ROUTE = frozenset(
         "markDocumentUnread",
         "markDocumentsRead",
         "mergeDuplicate",
-        "pairDevice",
-        "pairDeviceWithProof",
         "reopenDocument",
         "reopenTask",
         "reorderRules",
@@ -416,3 +422,19 @@ def test_a_well_set_proxy_notes_nothing(settings: Settings) -> None:
     Client().get("/api/v1/health", headers=headers)
     assert observed.last_seen("proxy_without_forwarding") is None
     assert observed.last_seen("host_not_forwarded") is None
+
+
+def test_pairing_and_addresses_stay_closed_with_the_public_web_on(settings: Settings) -> None:
+    settings.BRIEVIE_PUBLIC_WEB = True
+    assert_refused(
+        Client().post(
+            "/api/v1/devices/pairing-challenges",
+            {},
+            content_type="application/json",
+            headers=PUBLIC,
+        )
+    )
+    user = UserFactory.create()
+    _, token = paired(user)
+    assert_refused(Client().get("/api/v1/server/addresses", headers={**PUBLIC, **bearer(token)}))
+    assert Client().get("/api/v1/health", headers=PUBLIC).status_code == 200
