@@ -243,7 +243,7 @@ def test_a_wrong_code_is_counted_and_logged(user: User) -> None:
     api_error(lambda: verify_code(user, "000000", now=NOW, client_ip="192.0.2.7"))
 
     row = SecondFactor.objects.get(user=user)
-    assert (row.failed_count, row.first_failed_at) == (1, NOW)
+    assert (row.failed_count, row.last_failed_at) == (1, NOW)
     (failed,) = server_rows("sign_in_failed")
     assert failed.values == {"step": "second_factor"}
     assert failed.client_ip == "192.0.2.7"
@@ -296,15 +296,66 @@ def test_a_lockout_tells_the_account_and_the_log(user: User) -> None:
     assert len(server_rows("sign_in_failed")) == 5
 
 
-def test_wrong_codes_spread_over_more_than_15_minutes_do_not_lock(user: User) -> None:
+def test_four_wrong_then_one_more_16_minutes_later_locks(user: User) -> None:
+    # Security review of PR #52, point 1: no window that starts the count again.
     give_factor(user, now=NOW)
 
     wrong_codes(user, 4, now=at(0))
-    wrong_codes(user, 4, now=at(16))
+    error = wrong_codes(user, 1, now=at(16))
+
+    assert error.code == "second_factor_locked"
+    assert SecondFactor.objects.get(user=user).locked_until == at(16 + 15)
+
+
+def test_slow_guessing_keeps_locking_and_doubling(user: User) -> None:
+    give_factor(user, now=NOW)
+
+    for hour in range(4):
+        wrong_codes(user, 4, now=at(hour * 60))
+    row = SecondFactor.objects.get(user=user)
+
+    assert row.lockouts >= 2
+    assert row.locked_until is not None
+
+
+def test_the_count_starts_again_after_a_day_without_wrong_codes(user: User) -> None:
+    give_factor(user, now=NOW)
+
+    wrong_codes(user, 4, now=at(0))
+    wrong_codes(user, 1, now=at(24 * 60 + 1))
 
     row = SecondFactor.objects.get(user=user)
-    assert row.locked_until is None
-    assert row.failed_count == 4
+    assert (row.failed_count, row.locked_until) == (1, None)
+
+
+def test_a_right_code_starts_the_count_again(user: User) -> None:
+    factor = give_factor(user, now=NOW)
+    wrong_codes(user, 4, now=at(0))
+
+    verify_code(user, factor.code(at(1)), now=at(1), client_ip=None)
+
+    row = SecondFactor.objects.get(user=user)
+    assert (row.failed_count, row.last_failed_at) == (0, None)
+
+
+def test_the_first_wrong_code_at_sign_in_tells_the_account_once(user: User) -> None:
+    give_factor(user, now=NOW)
+    factor_id = SecondFactor.objects.get(user=user).id
+    for minute in range(3):
+        moment = at(minute)
+        with pytest.raises(ApiError):
+            verify_code(user, "000000", now=moment, client_ip=None, factor_id=factor_id)
+
+    (notice,) = AccountNotice.objects.filter(user=user, seen_at=None)
+    assert notice.code == "second_factor_locked"
+
+
+def test_a_wrong_code_in_a_session_tells_nobody(user: User) -> None:
+    give_factor(user, now=NOW)
+
+    wrong_codes(user, 1, now=NOW)
+
+    assert not AccountNotice.objects.filter(user=user).exists()
 
 
 def test_a_long_lock_is_told_in_hours(user: User) -> None:

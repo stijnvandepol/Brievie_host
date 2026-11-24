@@ -8,7 +8,8 @@ it.
 
 Checking a code locks the factor's row: a code is accepted for one step only once
 (`last_used_step`), also by two requests at the same moment. Wrong codes count per
-account: `LOCK_AFTER` within `LOCK_COUNT_WINDOW` lock the second step, for `FIRST_LOCK`,
+account: every `LOCK_AFTER` since the last right code (forgotten only after `FORGET_AFTER`
+without a wrong one) lock the second step, for `FIRST_LOCK`,
 doubling with each further lock up to `MAX_LOCK`. A failed check keeps its count: the
 counter's block ends before the error is raised (the error answer does not roll back the
 request).
@@ -48,7 +49,9 @@ from apps.devices.models import Device
 logger = logging.getLogger(__name__)
 
 LOCK_AFTER = 5
-LOCK_COUNT_WINDOW = timedelta(minutes=15)
+# Wrong codes are forgotten only after this long without one (or by a right code): no
+# window that starts the count again (security review of PR #52, point 1).
+FORGET_AFTER = timedelta(hours=24)
 FIRST_LOCK = timedelta(minutes=15)
 MAX_LOCK = timedelta(hours=24)
 # A set-up that was started but never confirmed is removed after this long.
@@ -265,34 +268,46 @@ class _Outcome(Enum):
 
 def _reset_counters(factor: SecondFactor) -> None:
     factor.failed_count = 0
-    factor.first_failed_at = None
+    factor.last_failed_at = None
     factor.locked_until = None
     factor.lockouts = 0
 
 
-def _count_failure(factor: SecondFactor, user: User, *, now: datetime, actor: AuditActor) -> None:
-    """One more wrong code for the account; the fifth within the window locks it."""
-    if factor.first_failed_at is None or now - factor.first_failed_at > LOCK_COUNT_WINDOW:
-        factor.failed_count = 1
-        factor.first_failed_at = now
-    else:
-        factor.failed_count += 1
+def _tell_the_account(user: User) -> None:
+    """Somebody had the password but not the code: one open notice at a time."""
+    open_one = AccountNotice.objects.filter(
+        user=user, code=AccountNotice.Code.SECOND_FACTOR_LOCKED, seen_at__isnull=True
+    ).exists()
+    if not open_one:
+        notify(user, AccountNotice.Code.SECOND_FACTOR_LOCKED, actor_name="")
+
+
+def _count_failure(
+    factor: SecondFactor, user: User, *, now: datetime, actor: AuditActor, signing_in: bool
+) -> None:
+    """One more wrong code for the account; every fifth since the last right code locks
+    it. A wrong code at sign-in proves somebody has the password: the account is told."""
+    if factor.last_failed_at is not None and now - factor.last_failed_at > FORGET_AFTER:
+        factor.failed_count = 0
+    factor.failed_count += 1
+    factor.last_failed_at = now
+    if signing_in:
+        _tell_the_account(user)
     if factor.failed_count >= LOCK_AFTER:
         factor.lockouts += 1
         factor.locked_until = now + lock_length(factor.lockouts)
         factor.failed_count = 0
-        factor.first_failed_at = None
         record(
             AuditCode.SIGN_IN_LOCKED_OUT,
             actor=actor,
             target=_target(user),
             values={"via": "second_factor"},
         )
-        notify(user, AccountNotice.Code.SECOND_FACTOR_LOCKED, actor_name="")
+        _tell_the_account(user)
     factor.save(
         update_fields=[
             "failed_count",
-            "first_failed_at",
+            "last_failed_at",
             "locked_until",
             "lockouts",
             "updated_at",
@@ -390,7 +405,7 @@ def _attempt(
             factor.save()
             return _Attempt(_Outcome.PASSED)
         record(AuditCode.SIGN_IN_FAILED, actor=actor, target=_target(user), values={"step": step})
-        _count_failure(factor, user, now=now, actor=actor)
+        _count_failure(factor, user, now=now, actor=actor, signing_in=factor_id is not None)
         if factor.locked_until is not None and now < factor.locked_until:
             return _Attempt(_Outcome.LOCKED, locked_until=factor.locked_until)
         return _Attempt(_Outcome.WRONG)

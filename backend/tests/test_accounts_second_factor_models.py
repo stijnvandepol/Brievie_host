@@ -32,7 +32,7 @@ def test_a_new_factor_starts_unconfirmed_with_clean_counters() -> None:
     assert factor.confirmed_at is None
     assert factor.last_used_step == 0
     assert factor.failed_count == 0
-    assert factor.first_failed_at is None
+    assert factor.last_failed_at is None
     assert factor.locked_until is None
     assert factor.lockouts == 0
     assert factor.pending_secret_sealed is None

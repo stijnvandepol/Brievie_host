@@ -145,9 +145,10 @@ class SecondFactor(BaseModel):
     confirmed_at = models.DateTimeField(null=True, blank=True)
     # The last step whose code was used: a code is accepted only for a later step.
     last_used_step = models.BigIntegerField(default=0)
-    # Wrong codes since `first_failed_at` (per account, whatever the address).
+    # Wrong codes since the last right one (per account, whatever the address); forgotten
+    # only after a day without a wrong code (`last_failed_at`).
     failed_count = models.IntegerField(default=0)
-    first_failed_at = models.DateTimeField(null=True, blank=True)
+    last_failed_at = models.DateTimeField(null=True, blank=True)
     locked_until = models.DateTimeField(null=True, blank=True)
     # How often the account was locked in a row: the lock doubles each time.
     lockouts = models.IntegerField(default=0)
