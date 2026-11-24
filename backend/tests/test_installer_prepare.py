@@ -5,6 +5,7 @@ so every branch is driven; the freeze is the real one on a real PostgreSQL.
 """
 
 import os
+import secrets
 from dataclasses import dataclass, field, replace
 from uuid import UUID, uuid4
 
@@ -476,7 +477,7 @@ def test_a_refusal_does_not_touch_the_roles(connect: Connect, scratch: Names) ->
     before = role_hash(connect, scratch)
     fakes = Fakes()
     deps = make_deps(connect, scratch, fakes)
-    other = replace(deps, passwords=replace(PASSWORDS, app="another-app-password"))
+    other = replace(deps, passwords=replace(PASSWORDS, app=secrets.token_hex(12)))
     assert prepare.run(other) == 1
     assert role_hash(connect, scratch) == before
 
