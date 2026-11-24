@@ -50,6 +50,13 @@ export function HandleDialog({
     onError: () => refreshAfterTask(queryClient, workspaceId),
   });
   const { reset } = run;
+  // A tick belongs to the payments it was given for: when the open tasks change (a refresh
+  // after `tasks_changed`), it goes, so a new payment is never confirmed unseen.
+  const openKey = open.map((task) => task.id).join(",");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the key is the trigger
+  useEffect(() => {
+    setConfirmed(false);
+  }, [openKey]);
   useEffect(() => {
     if (!isOpen) {
       reset();

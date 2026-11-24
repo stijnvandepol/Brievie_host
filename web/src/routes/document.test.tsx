@@ -994,6 +994,47 @@ describe("document: letter status", () => {
     ).toBeInTheDocument();
   });
 
+  it("asks for a new tick when a payment appeared meanwhile", async () => {
+    const extra = {
+      ...task,
+      id: "0f0e0d0c-0b0a-4908-8706-050403020199",
+      description: "Betaal de boete",
+    };
+    let reads = 0;
+    server.use(
+      http.get(`*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}`, () => {
+        reads += 1;
+        return HttpResponse.json(
+          reads > 1 ? { ...open, tasks: [task, extra] } : { ...open, tasks: [task] },
+        );
+      }),
+      http.post(`*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/handle`, () =>
+        HttpResponse.json(
+          {
+            code: "tasks_changed",
+            message: "De taken van deze brief zijn net veranderd. Bekijk ze opnieuw.",
+          },
+          { status: 409 },
+        ),
+      ),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
+    renderApp(path);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Brief afhandelen" }));
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(
+      within(dialog).getByRole("checkbox", { name: "De betaling is gedaan of geregeld" }),
+    );
+    await user.click(within(dialog).getByRole("button", { name: "Afhandelen" }));
+    expect(await within(dialog).findByText(/Betaal de boete/)).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("checkbox", { name: "De betaling is gedaan of geregeld" }),
+    ).not.toBeChecked();
+    expect(within(dialog).getByRole("button", { name: "Afhandelen" })).toBeDisabled();
+  });
+
   it("sets a day to wait for a reply, within what the server accepts", async () => {
     const bodies: unknown[] = [];
     server.use(
