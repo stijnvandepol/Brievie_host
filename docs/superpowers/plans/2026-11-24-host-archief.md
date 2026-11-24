@@ -42,7 +42,7 @@ From the spec, not left to the builder:
 - **`kind` is set by the server's validation and never changes** (AR2). **`private` only narrows** (S 8).
 - **Sensitive types** with the switch preselected: `identity`, `medical`, `payslip`, `tax_return` (S 8, B3).
 - **Own document types** `DOCUMENT_TYPES`: `identity`, `diploma`, `warranty`, `tax_return`, `medical`, `contract`, `policy`, `payslip`, `annual_statement`, `receipt`, `information`, `other` (S 4).
-- **Reminder lead** choices 7, 30, 60, 90 days (default 30); the task is `renew`, `deadline = expires_on`, `deadline_source = calculated`, no creator, no assignee (S 7.1).
+- **Reminder lead** choices 7, 30, 60, 90 days (default 30); the task is of the new type `expiry`, `deadline = expires_on`, `deadline_source = calculated`, no creator, no assignee (S 7.1).
 - **Retention** table of S 7.2 (trash warns, purge refuses, expiry purge skips).
 - **Copy** in the spec (S 11.4) is used verbatim; sentences this plan adds are marked "(plan)".
 
@@ -184,7 +184,7 @@ def test_uploader_does_not_see_their_own_document_as_unread(client): ...
 ### Task 5: The pipeline's document branch
 
 **Files:**
-- Modify: `backend/apps/pipeline/steps.py` (one `if document.kind == "document"` branch), `backend/apps/documents/services.py` (`retry_processing`), `backend/apps/documents/duplicates.py` (`detect` compares within `kind`), `backend/apps/pipeline/schema.py` / `prompts/` (a document prompt that asks only for title, type, date, end date, labels; no tasks)
+- Modify: `backend/apps/pipeline/steps.py` (one `if document.kind == "document"` branch; it skips `organise_processed`'s rules step), `backend/apps/documents/services.py` (`retry_processing`), `backend/apps/documents/duplicates.py` (`detect` compares within `kind`), `backend/apps/pipeline/schema.py` / `prompts/` (a document prompt that asks only for title, type, date, end date, labels; no tasks)
 - Create: `backend/tests/test_pipeline_document_branch.py`, `backend/tests/test_duplicates_kind.py`
 
 **Interfaces:**
@@ -205,6 +205,7 @@ def test_text_is_masked_and_no_bsn_reaches_the_ai_for_a_document(): ...
 def test_duplicates_only_between_the_same_kind(): ...
 def test_two_identical_documents_get_the_dubbel_block(): ...
 def test_confirm_document_on_a_document_is_409_not_reviewable(client): ...
+def test_rules_never_run_on_a_document(): ...                         # neither processed nor confirmed; a rule that would propose a task proposes nothing
 def test_summary_marked_by_ai_only_when_asked(): ...
 ```
 
@@ -276,17 +277,18 @@ def test_new_out_fields_have_defaults_and_old_fixtures_still_match(): ...
 - Modify: `backend/apps/documents/jobs.py` (periodic job), `backend/apps/documents/own.py` (calls `on_expiry_changed`), `backend/apps/tasks/models.py` (constraint), `backend/tests/test_task_writers_source.py` (or the existing source test of task writers; add the new writer by name), `backend/apps/documents/models.py` (event kind)
 
 **Interfaces:**
-- `reminders.start_reminder(document) -> Task | None`: runs as the system under the document's row lock and `transaction.atomic`; creates `Task(type=RENEW, description=_("Geldig tot {datum}: {titel}"), deadline=expires_on, deadline_source=CALCULATED, created_by=None, created_by_ai=False, status=OPEN, document=document)` unless one exists; history `reminder_started` (origin `system`, no actor). Description is title and date only (no document text), at most 500 characters.
+- `reminders.start_reminder(document) -> Task | None`: runs as the system under the document's row lock and `transaction.atomic`; creates `Task(type=EXPIRY, description=_("Geldig tot {datum}: {titel}"), deadline=expires_on, deadline_source=CALCULATED, created_by=None, created_by_ai=False, status=OPEN, document=document)` unless one exists; history `reminder_started` (origin `system`, no actor). Description is title and date only (no document text), at most 500 characters.
 - `reminders.on_expiry_changed(document)`: moves the open reminder's deadline; ends it (deletes the open system task, history line) when the date is cleared; creates nothing by itself (the job decides); when the reminder was completed and the date moved later, the job may make a new one.
-- Partial unique index `tasks_task_one_reminder` on `document_id` where `type = 'renew' AND deadline_source = 'calculated' AND status = 'open'`.
+- `Task.Type.EXPIRY = "expiry"` ("Verloopt" / "Expires"), additive; migration for the choice and the partial unique index `tasks_task_one_reminder` on `document_id` where `type = 'expiry' AND status = 'open'` (letters' `renew` and `calculated` tasks are untouched).
 - Job `start_expiry_reminders_job` (Procrastinate periodic, daily at 04:10 Europe/Amsterdam; no payload): per workspace, enters `workspace_context`, short transactions, selects `kind = document, status = done, trashed_at is null, expires_on - remind_days <= today` without an open reminder, batch of at most 500 per run; no external call.
-- Source test: `start_reminder` and `on_expiry_changed` are the only code that creates or deletes a task with `deadline_source = calculated`; `review._write_confirmation` stays the only other creator.
+- Source test: `start_reminder` and `on_expiry_changed` are the only code that creates or deletes a task of type `expiry`; `review._write_confirmation` stays the only other task creator.
 
 - [ ] **Step 1: Failing tests:**
 
 ```python
 def test_reminder_appears_when_the_lead_time_starts_and_not_before(): ...    # freeze time: day before lead, day of lead
 def test_reminder_is_one_task_even_if_the_job_runs_twice_or_races(): ...     # the partial unique index
+def test_a_letters_renew_task_is_not_blocked_or_touched_by_the_index(): ...
 def test_reminder_has_no_creator_no_ai_flag_no_assignee_and_a_system_history_line(): ...
 def test_reminder_shows_in_mijn_taken_for_the_documents_owners_and_nobody_else(client): ...
 def test_changing_the_date_moves_the_open_reminder_and_clearing_it_ends_it(): ...
@@ -333,7 +335,7 @@ def test_retention_message_names_no_content(): ...
 **Interfaces:**
 - `pdf.write_pdf(pages: Iterable[bytes], out: BinaryIO) -> None`: one JPEG per page (DCT embedded, page size from the JPEG header at 144 dpi), streamed, pure, no file written.
 - Export layout: `LEESMIJ.txt`, `brievie-export.json` (`version: 2`), `documents/<year>/<date>_<slug>_<id8>.pdf`; slug from sender or title (ASCII, at most 60 characters, the id8 makes it unique). JSON per document: `id`, `kind`, `title`, `sender`, `document_type`, `document_date`, `expires_on`, `retain_until`, `summary`, `ocr_text`, `source`, `created_at`, `status`, `persons` (name, id), `labels`, `tasks`, `history` (kind, date), `pdf`, `original` (null until INT).
-- `createMyExport` body + `scope: str = "mine"` (`mine`, `all`); `all` is `auth=session_auth`, admin only (403 `not_admin`), and includes only what `export_context(reader=admin)` lets the admin read (no private letter the admin may not read); an audit row `export_created` with `scope` and the count (existing code; value keys of the closed list).
+- `createMyExport` body + `scope: str = "mine"` (`mine`, `all`); `mine` obeys `allow_member_export` as today, `all` does not (AR13); `all` is `auth=session_auth`, admin only (403 `not_admin`), and includes only what `export_context(reader=admin)` lets the admin read (no private letter the admin may not read); an audit row `export_created` with `scope` and the count (existing code; value keys of the closed list).
 - `LEESMIJ.txt` (Dutch, B1) says what the files are, how to open the JSON in a spreadsheet, that private post the admin may not read is not in it, and that it is not a back-up.
 
 - [ ] **Step 1: Failing tests:**
@@ -347,6 +349,7 @@ def test_all_scope_is_session_only_and_admin_only(client): ...                  
 def test_pages_are_opened_one_at_a_time_and_nothing_unsealed_is_written(tmp_path): ...
 def test_files_go_only_through_export_files_guarded_functions(): ...              # source test
 def test_text_in_the_export_is_the_masked_text(): ...
+def test_mine_obeys_allow_member_export_and_all_does_not(client): ...   # AR13
 def test_v1_readers_still_find_their_fields(): ...                                # additive: version 2 keeps every v1 key
 ```
 
@@ -414,7 +417,7 @@ def test_emergency_access_reads_but_cannot_write_a_document(client): ...
 **Files:** to be fixed against INT's built layout (`intake/` app, `InboxFolder`); the design here is only the rule.
 
 **Interfaces (rule):**
-- Files in a subfolder `archief` of a workspace folder (or of a person's folder) become `kind = document`: title from the file name, type `other`, person from the folder (none for the workspace folder), `done` at once, no tasks, the INT reserved-name rules apply (`archief` joins `mislukt` as a reserved name that is never a person). Switch per workspace, off by default, audit `workspace_setting_changed`.
+- Files in a subfolder `archief` of a workspace folder (or of a person's folder) become `kind = document`: title from the file name, type `other`, person from the folder (none for the workspace folder), `done` at once, no tasks, the INT reserved-name rules apply (`archief` joins `mislukt` as a reserved name that is never a person). Switch per workspace, off by default, audit `workspace_setting_changed`. `scanned_by` is null for such a file, so `confirmed_by` stays null (AR3) and the history line has origin `watch_folder` and no actor.
 
 - [ ] **Steps:** failing tests first (file in `archief/` becomes a document, a person named "archief" is refused, a file elsewhere stays a letter), implement, CI, commit `feat(intake): scan folder for documents`. May be dropped without touching Tasks 1-14.
 
@@ -489,4 +492,4 @@ Same rules as the host plan: tests first (XCTest), strings in the String Catalog
 ## Self-review checklist (before handing over)
 
 - Spec coverage: S 4 → Tasks 1-3; S 5 → Tasks 7, W1; S 6 → Tasks 4, 5, W3, I3, 14; S 7.1 → Task 8; S 7.2 → Task 9; S 8 → Tasks 2, 4, 11; S 9 → Task 10, W4; S 10 → Tasks 4, 6, 7, 9, 10; S 11 → W1-W5, I1-I5; S 12 → Task 12; S 13 → Review Focus and Task 11; S 14 → "What depends on what"; Besluiten B1-B5 → W1 (B1), Task 7 (B2), Tasks 4 and W3 (B3), Task 9 (B4), I3 (B5).
-- Counts: 15 backend tasks (12 independent, 3 dependent), 5 web tasks, 5 iOS tasks: 25 in all.
+- Counts: 20 numbered tasks (15 host: 12 independent and 3 dependent; 5 web, one of them dependent) plus 5 iOS parts in their own section.

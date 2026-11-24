@@ -263,7 +263,9 @@ The pipeline gets a **document branch** (`pipeline.steps`, one `if document.kind
    accepts a `done` document of kind `document` with a `failure_code`). It never enters the Inbox: the
    Inbox is for post.
 
-`kind = "document"` rows never get tasks from review (`confirmDocument` on one is 409
+**The rules engine does not run on a document** (neither trigger: `processed` is skipped in the
+document branch, `confirmed` never fires because nothing is confirmed), so no rule can propose a
+task, label or person for one. `kind = "document"` rows never get tasks from review (`confirmDocument` on one is 409
 `document_not_reviewable`) and `createTask`-like paths do not exist for them. The only task a
 document can have is the expiry reminder (section 7.1).
 
@@ -283,16 +285,18 @@ the Inbox would put a diploma in the same queue as an unpaid invoice.
   nightly `verify_visibility_job`: no id payload, it enters `workspace_context` per workspace in
   short transactions) finds documents with `expires_on - remind_days <= today` and no reminder
   task yet, and creates **one** `Task` per document through one function,
-  `documents.reminders.start_reminder(document)`: `type = renew`, description "Geldig tot 12
+  `documents.reminders.start_reminder(document)`: `type = expiry` (a new task type, "Verloopt" /
+  "Expires", added to the closed `Task.Type` list; the existing `renew` and `calculated` are used
+  by letters' tasks, so the reminder needs a marker of its own), description "Geldig tot 12
   maart 2031: Paspoort" (title and date, no document text), `deadline = expires_on`,
   `deadline_source = calculated`, `created_by` null, `created_by_ai = false`, no assignee. The
   task follows the existing "Mijn taken" rules (it reaches the owners and managers of the
   document's persons, department rules as for letters); the system does not pick a person.
   "Calculated, no creator" is how the page and the history mark it "Door Brievie gemaakt".
-- Idempotent: for a `kind = document` the only `renew` task with `deadline_source =
-  calculated` is the reminder; the job looks it up before creating (and a partial unique index
-  `tasks_task_one_reminder` on `document_id` for that combination makes a race a harmless
-  error). Changing `expires_on` moves the open reminder's deadline (or ends it when the date is
+- Idempotent: a document has at most one open task of type `expiry`; the job looks it up
+  before creating, and a partial unique index `tasks_task_one_reminder` on `document_id`
+  `WHERE type = 'expiry' AND status = 'open'` makes a race a harmless error. Letters' `renew`
+  tasks are untouched. Changing `expires_on` moves the open reminder's deadline (or ends it when the date is
   cleared); ticking it off completes it. A new reminder is made again only when `expires_on`
   changes to a later date after the old one was completed (the document was renewed in place).
 - It is **not** a letter that waits: LS's status columns and `letter_state.sync` apply to
@@ -389,6 +393,9 @@ Extend the existing building block (`documents/export.py`, part E of Beheer 5), 
   of the back-up, with the existing expiry and one-time download rules; `LEESMIJ.txt` explains
   the layout and how to open the JSON in a spreadsheet or hand it to another system (Paperless'
   `post_document` API takes the PDF and these fields).
+- **`allow_member_export`** (on in Thuis, off in Zakelijk; DECISIONS, "The member export") keeps
+  governing `mine` as today. `all` is available whatever it says: the admin who may switch the
+  member export on may export what they read (session only, audited, AR13).
 - An audit row per export (`export_created`, scope, count; existing code) and `no-store` on
   the download.
 
@@ -471,7 +478,7 @@ never invented names ("je dochter", "de huurder", "de verhuurder").
 | Dit document bewaren / Bewaren | Keep this document / Keep | The form title and button. |
 | Titel | Title | |
 | Datum / Datum brief | Date / Letter date | `letter_date` shows "Datum" for a document. |
-| Van wie | Whose | The person or department; for a letter the existing "Op naam van" stays. |
+| Van wie | Belongs to | The person or department; for a letter the existing "Op naam van" stays. |
 | Geldig tot | Valid until | `expires_on`. |
 | Herinner me … vooraf | Remind me … ahead | 7, 30, 60 or 90 days; `remind_days`. |
 | Bewaren tot | Keep until | `retain_until`. "Bewaren tot 1 jan 2031. Weet je het zeker?" / "Keep until Jan 1, 2031. Are you sure?" |
@@ -569,16 +576,17 @@ The plan marks these tasks and orders them so that the first part ships alone.
 |---|---|---|---|
 | AR1 | One `Document` with `kind`, not a second model | every protection is on `Document`; a second table copies every leak test | a few `kind` conditions in lists and indexes |
 | AR2 | `kind` never changes after creation | a letter's review, tasks and status have no meaning for a document | re-scan to convert |
-| AR3 | An own document is `done` at the end of processing, confirmed by the uploader | the member supplied the facts; AI proposals are not applied | a wrong title is fixed by the member, not caught by a review step |
+| AR3 | An own document is `done` at the end of processing, confirmed by the uploader (a document without an uploader, from a scan folder, records no confirmer: `confirmed_by` null, history origin `watch_folder`) | the member supplied the facts; AI proposals are not applied | a wrong title is fixed by the member, not caught by a review step |
 | AR4 | AI proposes title, type, dates, labels as suggestions; none is applied by itself | "proposal, not automatism" | one extra tap |
 | AR5 | Document duplicates are compared with documents only | merging a letter into a document would trash the wrong thing | a letter and a document that are the same paper stay two |
-| AR6 | The expiry reminder is a `Task` made by one named writer, calculated, with no creator | it shows in "Mijn taken" without a second reminder system | the task writer list has a second entry |
+| AR6 | The expiry reminder is a `Task` of its own type `expiry`, made by one named writer, with no creator | it shows in "Mijn taken" without a second reminder system | the task writer list has a second entry |
 | AR7 | `letter_status` is empty for a document; the reminder does not make it "Openstaand" | an end date is not post that waits | a late reminder shows in Mijn taken, not as a status on Archief |
 | AR8 | A document never counts as unread, in Inbox or in "Blijft liggen" | it is not post | a document someone added for you shows no dot |
 | AR9 | `title` joins `search_vector` through a drop and re-add of the generated column | users search by title; weight A | a one-time table rewrite and index rebuild |
 | AR10 | The PDF for export is our own writer, no text layer until INT | no new dependency; the JSON holds the text | the exported PDFs are not searchable by themselves |
 | AR11 | The old `Folder` endpoints stay; no `folder_id` | the API is additive; no use | dead code stays until a major version |
 | AR12 | The archive is every reviewed (`done`) document, status is a filter | archive must find open letters too | "Afgehandeld" needs one more tap (until LS lands, no status at all) |
+| AR13 | The admin export (`all`) ignores `allow_member_export`; `mine` obeys it | the switch is about members exporting; the admin is who sets it and the export is audited | an admin of a Zakelijk workspace can export what they read without a member switch |
 
 ## 17. Besluiten voor Stijn
 
