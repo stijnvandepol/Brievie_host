@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { createRouter, type RouterHistory } from "@tanstack/react-router";
 import { aiRoute } from "./routes/ai";
+import { archiveRoute } from "./routes/archive";
 import { auditLogRoute } from "./routes/audit-log";
 import { automationsRoute } from "./routes/automations";
 import { backupRoute } from "./routes/backup";
@@ -55,6 +56,7 @@ const routeTree = rootRoute.addChildren([
     myPostRoute,
     tasksRoute,
     inboxRoute,
+    archiveRoute,
     postRoute,
     trashRoute,
     searchRoute,

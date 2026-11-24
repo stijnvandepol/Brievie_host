@@ -14,7 +14,7 @@ import {
 
 afterEach(() => window.localStorage.clear());
 
-const path = `/w/${workspace.id}/post`;
+const path = `/w/${workspace.id}/archief`;
 
 function setUp() {
   server.use(
@@ -31,7 +31,7 @@ describe("workspace switcher", () => {
     server.use(...loggedInHandlers(), ...documentHandlers());
     renderApp(path);
     const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
-    await within(nav).findByRole("link", { name: "Alle post" });
+    await within(nav).findByRole("link", { name: "Archief" });
     expect(within(nav).getAllByText("Thuis").length).toBeGreaterThan(0);
     expect(within(nav).queryByRole("button", { name: /Werkruimte/ })).not.toBeInTheDocument();
   });
@@ -96,14 +96,14 @@ describe("workspace switcher", () => {
   it("the page title names the workspace when there are several", async () => {
     setUp();
     renderApp(path);
-    await screen.findByRole("heading", { level: 1, name: "Alle post" });
-    await waitFor(() => expect(document.title).toBe("Alle post · Thuis - Brievie"));
+    await screen.findByRole("heading", { level: 1, name: "Archief" });
+    await waitFor(() => expect(document.title).toBe("Archief · Thuis - Brievie"));
   });
 
   it("the page title stays plain with one workspace", async () => {
     server.use(...loggedInHandlers(), ...documentHandlers());
     renderApp(path);
-    await screen.findByRole("heading", { level: 1, name: "Alle post" });
-    await waitFor(() => expect(document.title).toBe("Alle post - Brievie"));
+    await screen.findByRole("heading", { level: 1, name: "Archief" });
+    await waitFor(() => expect(document.title).toBe("Archief - Brievie"));
   });
 });

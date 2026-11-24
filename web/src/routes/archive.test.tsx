@@ -10,21 +10,22 @@ import {
   http,
   loggedInHandlers,
   menuCounts,
+  ownDocument,
   papa,
   renderApp,
   server,
   workspace,
 } from "../test-utils";
 
-describe("post", () => {
+describe("archive", () => {
   it("lists documents with a link per sender", async () => {
     server.use(...loggedInHandlers(), ...documentHandlers());
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     const link = await screen.findByRole("link", { name: "Belastingdienst" });
     expect(link).toHaveAttribute("href", expect.stringContaining("/post/"));
     const row = link.closest("tr") as HTMLElement;
     expect(within(row).getByText("Aanslag")).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "Datum brief" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Datum" })).toBeInTheDocument();
   });
 
   it("names an unknown sender", async () => {
@@ -34,7 +35,7 @@ describe("post", () => {
         HttpResponse.json([{ ...documentSummary, sender: "" }]),
       ),
     );
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     expect(await screen.findByRole("link", { name: "Onbekende afzender" })).toBeInTheDocument();
   });
 
@@ -56,7 +57,7 @@ describe("post", () => {
         ]),
       ),
     );
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     const link = await screen.findByRole("link", { name: "Gemeente Utrecht (voorstel)" });
     expect(within(link).getByText("Gemeente Utrecht").tagName).toBe("EM");
     const row = link.closest("tr") as HTMLElement;
@@ -65,29 +66,30 @@ describe("post", () => {
     expect(screen.queryByText("Onbekende afzender")).not.toBeInTheDocument();
   });
 
-  it("is named Alle post and says how it differs from Inbox", async () => {
+  it("is named Archief and says how it differs from Inbox", async () => {
     server.use(...loggedInHandlers(), ...documentHandlers());
-    renderApp(`/w/${workspace.id}/post`);
-    expect(await screen.findByRole("heading", { level: 1, name: "Alle post" })).toBeInTheDocument();
-    await waitFor(() => expect(document.title).toBe("Alle post - Brievie"));
+    renderApp(`/w/${workspace.id}/archief`);
+    expect(await screen.findByRole("heading", { level: 1, name: "Archief" })).toBeInTheDocument();
+    await waitFor(() => expect(document.title).toBe("Archief - Brievie"));
     expect(
       screen.getByText(
-        "Al je brieven, ook de afgehandelde. Zoek op persoon of label. Wat nog op jou wacht, staat in de Inbox.",
+        "Elke gecontroleerde brief en elk eigen document, om terug te vinden. Wat nog op jou wacht, staat in de Inbox.",
       ),
     ).toBeInTheDocument();
   });
 
-  it("names the workspace in the sidebar and links Alle post", async () => {
+  it("names the workspace in the sidebar and links Archief, not Alle post", async () => {
     server.use(...loggedInHandlers(), ...documentHandlers());
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     const nav = await screen.findByRole("navigation");
     // One workspace: its name on top of the menu, not a button (nothing to choose).
     expect(within(nav).getAllByText("Thuis")[0]).toBeInTheDocument();
     expect(within(nav).queryByRole("button", { name: /Werkruimte/ })).not.toBeInTheDocument();
-    expect(within(nav).getByRole("link", { name: "Alle post" })).toHaveAttribute(
+    expect(within(nav).getByRole("link", { name: "Archief" })).toHaveAttribute(
       "href",
-      `/w/${workspace.id}/post`,
+      `/w/${workspace.id}/archief`,
     );
+    expect(within(nav).queryByRole("link", { name: "Alle post" })).not.toBeInTheDocument();
     // One workspace: nothing to choose, so no "Werkruimtes".
     expect(within(nav).queryByRole("link", { name: "Werkruimtes" })).not.toBeInTheDocument();
   });
@@ -100,7 +102,7 @@ describe("post", () => {
       ),
       ...documentHandlers(),
     );
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     const link = await screen.findByRole("link", { name: "Belastingdienst" });
     expect(screen.getByRole("columnheader", { name: "Op naam van" })).toBeInTheDocument();
     await waitFor(() =>
@@ -119,8 +121,8 @@ describe("post", () => {
       ...documentHandlers(),
     );
     const user = userEvent.setup();
-    const { router } = renderApp(`/w/${workspace.id}/post`);
-    const filter = await screen.findByRole("combobox", { name: "Persoon" });
+    const { router } = renderApp(`/w/${workspace.id}/archief`);
+    const filter = await screen.findByRole("combobox", { name: "Van wie" });
     await screen.findByRole("option", { name: "Papa" });
     await user.selectOptions(filter, "Papa");
     await waitFor(() => expect(router.state.location.search).toEqual({ persoon: papa.id }));
@@ -129,8 +131,8 @@ describe("post", () => {
 
   it("reads the person filter from the URL", async () => {
     server.use(...loggedInHandlers(), ...documentHandlers());
-    renderApp(`/w/${workspace.id}/post?persoon=${papa.id}`);
-    const filter = await screen.findByRole("combobox", { name: "Persoon" });
+    renderApp(`/w/${workspace.id}/archief?persoon=${papa.id}`);
+    const filter = await screen.findByRole("combobox", { name: "Van wie" });
     await waitFor(() => expect(filter).toHaveValue(papa.id));
   });
 
@@ -142,7 +144,7 @@ describe("post", () => {
       ),
       ...documentHandlers(),
     );
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     const link = await screen.findByRole("link", { name: "Belastingdienst" });
     expect(screen.getByRole("columnheader", { name: "Labels" })).toBeInTheDocument();
     const chip = await within(link.closest("tr") as HTMLElement).findByText("Belastingdienst", {
@@ -162,7 +164,7 @@ describe("post", () => {
       ...documentHandlers(),
     );
     const user = userEvent.setup();
-    const { router } = renderApp(`/w/${workspace.id}/post`);
+    const { router } = renderApp(`/w/${workspace.id}/archief`);
     const filter = await screen.findByRole("combobox", { name: "Label" });
     await screen.findByRole("option", { name: "Belastingdienst" });
     await user.selectOptions(filter, "Belastingdienst");
@@ -172,7 +174,7 @@ describe("post", () => {
 
   it("reads the label filter from the URL", async () => {
     server.use(...loggedInHandlers(), ...documentHandlers());
-    renderApp(`/w/${workspace.id}/post?label=${belasting.id}`);
+    renderApp(`/w/${workspace.id}/archief?label=${belasting.id}`);
     const filter = await screen.findByRole("combobox", { name: "Label" });
     await waitFor(() => expect(filter).toHaveValue(belasting.id));
   });
@@ -180,7 +182,7 @@ describe("post", () => {
   it("keeps the person filter when a label is chosen", async () => {
     server.use(...loggedInHandlers(), ...documentHandlers());
     const user = userEvent.setup();
-    const { router } = renderApp(`/w/${workspace.id}/post?persoon=${papa.id}`);
+    const { router } = renderApp(`/w/${workspace.id}/archief?persoon=${papa.id}`);
     const filter = await screen.findByRole("combobox", { name: "Label" });
     await screen.findByRole("option", { name: "Belastingdienst" });
     await user.selectOptions(filter, "Belastingdienst");
@@ -191,7 +193,7 @@ describe("post", () => {
 
   it("shows the waiting letters as the Inbox count", async () => {
     server.use(menuCounts({ inbox: 3 }), ...loggedInHandlers(), ...documentHandlers());
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
     const todo = await within(nav).findByRole("link", { name: "Inbox, 3 brieven" });
     expect(todo).toHaveAttribute("href", `/w/${workspace.id}/inbox`);
@@ -203,7 +205,7 @@ describe("post", () => {
 
   it("names a single letter to do in the singular", async () => {
     server.use(menuCounts({ inbox: 1 }), ...loggedInHandlers(), ...documentHandlers());
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
     expect(await within(nav).findByRole("link", { name: "Inbox, 1 brief" })).toBeInTheDocument();
   });
@@ -211,35 +213,40 @@ describe("post", () => {
   it("shows a filter value that is not in the list as '(verwijderd)'", async () => {
     server.use(...loggedInHandlers(), ...documentHandlers());
     const gone = "c9999999-9999-4999-8999-999999999999";
-    renderApp(`/w/${workspace.id}/post?label=${gone}&persoon=${gone}`);
+    renderApp(`/w/${workspace.id}/archief?label=${gone}&persoon=${gone}`);
     const label = await screen.findByRole("combobox", { name: "Label" });
     await screen.findByRole("option", { name: "Belastingdienst" });
     await waitFor(() => expect(label).toHaveValue(gone));
     expect(within(label).getByRole("option", { name: "(verwijderd)" })).toBeInTheDocument();
-    const person = screen.getByRole("combobox", { name: "Persoon" });
+    const person = screen.getByRole("combobox", { name: "Van wie" });
     await waitFor(() => expect(person).toHaveValue(gone));
     expect(within(person).getByRole("option", { name: "(verwijderd)" })).toBeInTheDocument();
   });
 
-  it("says there are no letters for these filters, and no post at all without filters", async () => {
+  it("says nothing was found with these filters, and not that the archive is empty", async () => {
     server.use(
       ...loggedInHandlers(),
       http.get(`*${API}/workspaces/${workspace.id}/documents`, () => HttpResponse.json([])),
       ...documentHandlers(),
     );
-    renderApp(`/w/${workspace.id}/post?label=${belasting.id}`);
-    expect(await screen.findByText("Geen brieven met deze filters.")).toBeVisible();
-    expect(screen.queryByText("Er is nog geen post.")).not.toBeInTheDocument();
+    renderApp(`/w/${workspace.id}/archief?label=${belasting.id}`);
+    expect(await screen.findByText("Niets gevonden met deze filters.")).toBeVisible();
+    expect(screen.queryByText("Nog niets in je archief.")).not.toBeInTheDocument();
   });
 
-  it("says there is no post yet when nothing is filtered", async () => {
+  it("says the archive is empty when nothing is filtered, and how letters get there", async () => {
     server.use(
       ...loggedInHandlers(),
       http.get(`*${API}/workspaces/${workspace.id}/documents`, () => HttpResponse.json([])),
       ...documentHandlers(),
     );
-    renderApp(`/w/${workspace.id}/post`);
-    expect(await screen.findByText("Er is nog geen post.")).toBeVisible();
+    renderApp(`/w/${workspace.id}/archief`);
+    expect(await screen.findByText("Nog niets in je archief.")).toBeVisible();
+    expect(
+      screen.getByText(
+        "Brieven komen hier zodra je ze hebt gecontroleerd. Een eigen document toevoegen kan niet in de browser.",
+      ),
+    ).toBeVisible();
   });
   it("shows the badge only on a letter the AI had a hand in", async () => {
     server.use(
@@ -260,7 +267,7 @@ describe("post", () => {
       ),
       ...documentHandlers(),
     );
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     const rows = await screen.findAllByRole("row");
     const text = (name: string) =>
       within(rows.find((row) => within(row).queryByRole("link", { name })) as HTMLElement);
@@ -283,7 +290,7 @@ describe("post", () => {
       ...documentHandlers(),
     );
     const user = userEvent.setup();
-    const { router } = renderApp(`/w/${workspace.id}/post`);
+    const { router } = renderApp(`/w/${workspace.id}/archief`);
     const filter = await screen.findByRole("checkbox", { name: "Automatisch door Brievie" });
     expect(filter).not.toBeChecked();
     expect(seen).not.toContain("true");
@@ -295,12 +302,12 @@ describe("post", () => {
 
   it("reads the automatic filter from the URL", async () => {
     server.use(...loggedInHandlers(), ...documentHandlers());
-    renderApp(`/w/${workspace.id}/post?automatisch=true`);
+    renderApp(`/w/${workspace.id}/archief?automatisch=true`);
     expect(await screen.findByRole("checkbox", { name: "Automatisch door Brievie" })).toBeChecked();
   });
 });
 
-describe("post: letter status", () => {
+describe("archive: letter status", () => {
   const counts = { new: 2, open: 3, waiting: 2, handled: 14, overdue: 1 };
 
   function statusHandlers(asked: URLSearchParams[] = []) {
@@ -328,7 +335,7 @@ describe("post: letter status", () => {
 
   it("shows a status badge per row and Te laat in words", async () => {
     server.use(...statusHandlers());
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     const row = (await screen.findByRole("link", { name: "Gemeente" })).closest(
       "tr",
     ) as HTMLElement;
@@ -341,22 +348,15 @@ describe("post: letter status", () => {
     expect(within(other).queryByText("Klaar")).not.toBeInTheDocument();
   });
 
-  it("says the numbers above zero in one line", async () => {
-    server.use(...statusHandlers());
-    renderApp(`/w/${workspace.id}/post`);
-    expect(
-      await screen.findByText("Je post: 2 nieuw, 3 openstaand, 1 te laat, 2 wachten op reactie"),
-    ).toBeInTheDocument();
-  });
-
   it("filters on a status and keeps the choice in the URL", async () => {
     const asked: URLSearchParams[] = [];
     server.use(...statusHandlers(asked));
     const user = userEvent.setup();
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     await user.click(await screen.findByRole("radio", { name: "Openstaand (3)" }));
     await waitFor(() => expect(asked.at(-1)?.get("letter_status")).toBe("open"));
-    expect(screen.getByRole("radio", { name: "Nieuw (2)" })).toBeInTheDocument();
+    // A letter in the archive is checked: no "Nieuw".
+    expect(screen.queryByRole("radio", { name: "Nieuw (2)" })).not.toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "Wacht op reactie (2)" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "Afgehandeld (14)" })).toBeInTheDocument();
   });
@@ -365,7 +365,7 @@ describe("post: letter status", () => {
     const asked: URLSearchParams[] = [];
     server.use(...statusHandlers(asked));
     const user = userEvent.setup();
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     await user.click(await screen.findByRole("checkbox", { name: "Alleen te laat (1)" }));
     await waitFor(() => expect(asked.at(-1)?.get("overdue")).toBe("true"));
   });
@@ -373,7 +373,7 @@ describe("post: letter status", () => {
   it("reads the status from the URL", async () => {
     const asked: URLSearchParams[] = [];
     server.use(...statusHandlers(asked));
-    renderApp(`/w/${workspace.id}/post?status=wacht&telaat=true`);
+    renderApp(`/w/${workspace.id}/archief?status=wacht&telaat=true`);
     await waitFor(() => expect(asked.at(-1)?.get("letter_status")).toBe("waiting"));
     expect(asked.at(-1)?.get("overdue")).toBe("true");
   });
@@ -387,11 +387,136 @@ describe("post: letter status", () => {
       }),
       ...statusHandlers(),
     );
-    renderApp(`/w/${workspace.id}/post?persoon=${papa.id}`);
+    renderApp(`/w/${workspace.id}/archief?persoon=${papa.id}`);
     expect(
-      await screen.findByRole("heading", { level: 1, name: "Post van Papa" }),
+      await screen.findByRole("heading", { level: 1, name: "Archief van Papa" }),
     ).toBeInTheDocument();
     await waitFor(() => expect(counted.at(-1)?.get("person_id")).toBe(papa.id));
-    expect(await screen.findByText("3 openstaand, 2 wachten op reactie")).toBeInTheDocument();
+    expect(await screen.findByRole("radio", { name: "Openstaand (3)" })).toBeInTheDocument();
+  });
+});
+
+describe("archive: own documents and its filters", () => {
+  function archiveHandlers(asked: URLSearchParams[] = []) {
+    return [
+      ...loggedInHandlers(),
+      http.get(`*${API}/workspaces/${workspace.id}/documents/archive-facets`, () =>
+        HttpResponse.json({
+          kinds: [
+            { value: "letter", count: 1240 },
+            { value: "document", count: 12 },
+          ],
+          types: [
+            { value: "assessment", count: 40 },
+            { value: "identity", count: 3 },
+          ],
+          years: [
+            { value: "2026", count: 900 },
+            { value: "2025", count: 352 },
+          ],
+          senders: [{ value: "Belastingdienst", count: 40 }],
+        }),
+      ),
+      http.get(`*${API}/workspaces/${workspace.id}/documents`, ({ request }) => {
+        asked.push(new URL(request.url).searchParams);
+        return HttpResponse.json([documentSummary, ownDocument]);
+      }),
+      ...documentHandlers(),
+    ];
+  }
+
+  it("shows documents and reviewed letters, and asks only for the archive", async () => {
+    const asked: URLSearchParams[] = [];
+    server.use(...archiveHandlers(asked));
+    renderApp(`/w/${workspace.id}/archief`);
+    const own = await screen.findByRole("link", { name: "Paspoort" });
+    const row = own.closest("tr") as HTMLElement;
+    expect(within(row).getByText("Eigen document")).toBeInTheDocument();
+    expect(within(row).getByText("Identiteitsbewijs")).toBeInTheDocument();
+    expect(within(row).getByText("Geldig tot 12 mrt 2031")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Belastingdienst" })).toBeInTheDocument();
+    expect(asked.at(-1)?.get("archived")).toBe("true");
+    expect(screen.getByRole("columnheader", { name: "Afzender of titel" })).toBeInTheDocument();
+    expect(await screen.findByText("1.252 documenten")).toBeInTheDocument();
+  });
+
+  it("an expired document is marked in words", async () => {
+    server.use(
+      ...loggedInHandlers(),
+      http.get(`*${API}/workspaces/${workspace.id}/documents`, () =>
+        HttpResponse.json([{ ...ownDocument, expires_on: "2020-01-31" }]),
+      ),
+      ...documentHandlers(),
+    );
+    renderApp(`/w/${workspace.id}/archief`);
+    const row = (await screen.findByRole("link", { name: "Paspoort" })).closest(
+      "tr",
+    ) as HTMLElement;
+    expect(within(row).getByText("Verlopen op 31 jan 2020")).toBeInTheDocument();
+  });
+
+  it("facet counts come from the server", async () => {
+    server.use(...archiveHandlers());
+    renderApp(`/w/${workspace.id}/archief`);
+    expect(await screen.findByRole("radio", { name: "Documenten (12)" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Brieven (1240)" })).toBeInTheDocument();
+    const type = screen.getByRole("combobox", { name: "Type" });
+    expect(within(type).getByRole("option", { name: "Identiteitsbewijs (3)" })).toBeInTheDocument();
+    const year = screen.getByRole("combobox", { name: "Jaar" });
+    expect(within(year).getByRole("option", { name: "2025 (352)" })).toBeInTheDocument();
+    const sender = screen.getByRole("combobox", { name: "Afzender" });
+    expect(
+      within(sender).getByRole("option", { name: "Belastingdienst (40)" }),
+    ).toBeInTheDocument();
+  });
+
+  it("filters write to the URL and narrow the list", async () => {
+    const asked: URLSearchParams[] = [];
+    server.use(...archiveHandlers(asked));
+    const user = userEvent.setup();
+    const { router } = renderApp(`/w/${workspace.id}/archief`);
+    await user.click(await screen.findByRole("radio", { name: "Documenten (12)" }));
+    await waitFor(() => expect(router.state.location.search).toEqual({ soort: "documenten" }));
+    await waitFor(() => expect(asked.at(-1)?.get("kind")).toBe("document"));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Type" }), "identity");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Jaar" }), "2025");
+    await user.click(screen.getByRole("checkbox", { name: "Loopt af" }));
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({
+        soort: "documenten",
+        type: "identity",
+        jaar: 2025,
+        "loopt-af": true,
+      }),
+    );
+    await waitFor(() => expect(asked.at(-1)?.get("expiring")).toBe("true"));
+    const last = asked.at(-1);
+    expect([last?.get("document_type"), last?.get("year")]).toEqual(["identity", "2025"]);
+  });
+
+  it("chooses a sender from the list, never as typed text", async () => {
+    const asked: URLSearchParams[] = [];
+    server.use(...archiveHandlers(asked));
+    const user = userEvent.setup();
+    const { router } = renderApp(`/w/${workspace.id}/archief`);
+    const sender = await screen.findByRole("combobox", { name: "Afzender" });
+    await screen.findByRole("option", { name: "Belastingdienst (40)" });
+    await user.selectOptions(sender, "Belastingdienst");
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({ afzender: "Belastingdienst" }),
+    );
+    await waitFor(() => expect(asked.at(-1)?.get("sender")).toBe("Belastingdienst"));
+  });
+
+  it("/post goes to /archief keeping persoon and label", async () => {
+    server.use(...loggedInHandlers(), ...documentHandlers());
+    const { router } = renderApp(
+      `/w/${workspace.id}/post?persoon=${papa.id}&label=${belasting.id}`,
+    );
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/w/${workspace.id}/archief`));
+    expect(router.state.location.search).toEqual({ persoon: papa.id, label: belasting.id });
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Archief van Papa" }),
+    ).toBeInTheDocument();
   });
 });

@@ -48,10 +48,36 @@ export function typeLabel(type: string): string {
       return t`Informatie`;
     case "other":
       return t`Overig`;
+    case "identity":
+      return t`Identiteitsbewijs`;
+    case "diploma":
+      return t`Diploma`;
+    case "warranty":
+      return t`Garantiebewijs`;
+    case "tax_return":
+      return t`Belastingaangifte`;
+    case "medical":
+      return t`Medisch`;
     default:
       return "";
   }
 }
+
+/** The types an own document may have (archive spec S 4), in the order of the form. */
+export const DOCUMENT_TYPES = [
+  "identity",
+  "diploma",
+  "warranty",
+  "tax_return",
+  "medical",
+  "contract",
+  "policy",
+  "payslip",
+  "annual_statement",
+  "receipt",
+  "information",
+  "other",
+] as const;
 
 export function statusLabel(status: string): string {
   switch (status) {
@@ -152,6 +178,8 @@ export function formatLetterDate(value: string): string {
 
 type Headline = Pick<
   DocumentSummary,
+  | "kind"
+  | "title"
   | "sender"
   | "document_type"
   | "letter_date"
@@ -170,8 +198,10 @@ function Proposed({ children }: { children: string }) {
   );
 }
 
-/** The sender; before a review the AI's proposal, marked as one. */
+/** The sender; before a review the AI's proposal, marked as one. An own document shows its
+ * title where a letter shows its sender. */
 export function SenderText({ document }: { document: Headline }) {
+  if (document.kind === "document") return <>{document.title || t`Document zonder titel`}</>;
   if (document.sender) return <>{document.sender}</>;
   if (document.proposed_sender) return <Proposed>{document.proposed_sender}</Proposed>;
   return <>{t`Onbekende afzender`}</>;
@@ -193,6 +223,45 @@ export function LetterDateText({ document }: { document: Headline }) {
 }
 
 const PHONE = "(max-width: 639px)";
+
+/** Today as a date-only string in the browser's own day. */
+function today(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+/** Whether a "Geldig tot" has passed. */
+export function isExpired(expiresOn: string): boolean {
+  return expiresOn < today();
+}
+
+/**
+ * What an own document is, in a row: the word "Eigen document", and its end date ("Geldig tot
+ * 12 mrt 2031", or "Verlopen" in words with a warning tint once it passed; never colour
+ * alone). Nothing for a letter.
+ */
+export function ArchiveBadges({
+  document,
+}: {
+  document: Pick<DocumentSummary, "kind" | "expires_on">;
+}) {
+  if (document.kind !== "document") return null;
+  const ends = document.expires_on;
+  return (
+    <>
+      <Badge>{t`Eigen document`}</Badge>
+      {ends ? (
+        isExpired(ends) ? (
+          <Badge intent="warning">{t`Verlopen op ${formatLetterDate(ends)}`}</Badge>
+        ) : (
+          <Badge>{t`Geldig tot ${formatLetterDate(ends)}`}</Badge>
+        )
+      ) : null}
+    </>
+  );
+}
 
 /** "Ongelezen" (spec S 5.4): a dot in the brand colour, and the word for screen readers.
  * The caller's own state; the row is bold as well. */
@@ -257,6 +326,7 @@ export function DocumentTable<D extends DocumentSummary = DocumentSummary>({
   caption,
   showUnread = false,
   letterStatus,
+  archive = false,
 }: {
   workspaceId: string;
   documents: D[];
@@ -275,8 +345,10 @@ export function DocumentTable<D extends DocumentSummary = DocumentSummary>({
   /** Shows the letter's status: on every row ("all"), or only on reviewed letters ("reviewed",
    * the Inbox: its rows keep their action words). */
   letterStatus?: "all" | "reviewed";
+  /** Archief: letters and own documents together (a title where a sender is, "Datum"). */
+  archive?: boolean;
 }) {
-  const name = caption ?? t`Alle post`;
+  const name = caption ?? t`Archief`;
   const departments = useQuery(visibilityQuery(workspaceId)).data?.departments_enabled === true;
   // A phone shows a card per letter: seven columns do not fit, and a sideways scroll hides
   // the status. Tests (no media queries) and wider screens get the table.
@@ -333,6 +405,7 @@ export function DocumentTable<D extends DocumentSummary = DocumentSummary>({
                 />
                 <SuggestionMark count={document.open_suggestion_count} />
                 <AutomaticBadge document={document} />
+                <ArchiveBadges document={document} />
               </span>
             </li>
           ))}
@@ -346,9 +419,9 @@ export function DocumentTable<D extends DocumentSummary = DocumentSummary>({
       <table className="table table-wide">
         <thead>
           <tr>
-            <th scope="col">{t`Afzender`}</th>
+            <th scope="col">{archive ? t`Afzender of titel` : t`Afzender`}</th>
             <th scope="col">{t`Soort`}</th>
-            <th scope="col">{t`Datum brief`}</th>
+            <th scope="col">{archive ? t`Datum` : t`Datum brief`}</th>
             <th scope="col">{t`Op naam van`}</th>
             <th scope="col">{t`Labels`}</th>
             <th scope="col">{t`Status`}</th>
@@ -394,6 +467,7 @@ export function DocumentTable<D extends DocumentSummary = DocumentSummary>({
                   />
                   <SuggestionMark count={document.open_suggestion_count} />
                   <AutomaticBadge document={document} />
+                  <ArchiveBadges document={document} />
                 </span>
               </td>
               <td className="num">

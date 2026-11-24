@@ -19,7 +19,7 @@ msgid "(nog {0})"
 msgstr "({0} left)"
 
 #: src/components/rule-sentence.ts
-#: src/routes/post.tsx
+#: src/routes/archive.tsx
 #: src/routes/rule-editor.tsx
 msgid "(verwijderd)"
 msgstr "(deleted)"
@@ -256,6 +256,14 @@ msgstr "{subject} contains the word {0}"
 #: src/components/rule-sentence.ts
 msgid "{subject} het woord {0} niet bevat"
 msgstr "{subject} does not contain the word {0}"
+
+#: src/routes/archive.tsx
+msgid "{text} ({count})"
+msgstr "{text} ({count})"
+
+#: src/routes/archive.tsx
+msgid "{total, plural, one {# document} other {# documenten}}"
+msgstr "{total, plural, one {# document} other {# documents}}"
 
 #: src/components/page.tsx
 msgid "{unread, plural, one {Mijn post, # ongelezen} other {Mijn post, # ongelezen}}"
@@ -511,11 +519,11 @@ msgid "Afdelingen staan uit."
 msgstr "Departments are off."
 
 #: src/components/letter-status.tsx
-#: src/routes/post.tsx
+#: src/routes/archive.tsx
 msgid "Afgehandeld"
 msgstr "Handled"
 
-#: src/routes/post.tsx
+#: src/routes/archive.tsx
 msgid "Afgehandeld ({handled})"
 msgstr "Handled ({handled})"
 
@@ -553,12 +561,17 @@ msgid "afzender"
 msgstr "sender"
 
 #: src/components/document-table.tsx
+#: src/routes/archive.tsx
 #: src/routes/document.tsx
 #: src/routes/duplicate.tsx
 #: src/routes/inbox.tsx
 #: src/routes/trash.tsx
 msgid "Afzender"
 msgstr "Sender"
+
+#: src/components/document-table.tsx
+msgid "Afzender of titel"
+msgstr "Sender or title"
 
 #: src/routes/ai.tsx
 #: src/routes/settings.tsx
@@ -597,10 +610,6 @@ msgstr "AI is off: the text of letters goes to no AI service at all."
 msgid "Akkoord"
 msgstr "I agree"
 
-#: src/routes/post.tsx
-msgid "Al je brieven, ook de afgehandelde. Zoek op persoon of label. Wat nog op jou wacht, staat in de Inbox."
-msgstr "All your letters, including the ones that are done. Search by person or label. What still waits for you is in the Inbox."
-
 #: src/routes/rule-editor.tsx
 msgid "alle"
 msgstr "all"
@@ -610,22 +619,22 @@ msgstr "all"
 msgid "Alle"
 msgstr "All"
 
+#: src/routes/archive.tsx
+msgid "Alle afzenders"
+msgstr "All senders"
+
 #: src/components/audit-table.tsx
 msgid "Alle gebeurtenissen"
 msgstr "All events"
 
-#: src/routes/post.tsx
+#: src/routes/archive.tsx
+msgid "Alle jaren"
+msgstr "All years"
+
+#: src/routes/archive.tsx
 #: src/routes/search.tsx
 msgid "Alle labels"
 msgstr "All labels"
-
-#: src/components/document-table.tsx
-#: src/components/page.tsx
-#: src/routes/document.tsx
-#: src/routes/inbox.tsx
-#: src/routes/post.tsx
-msgid "Alle post"
-msgstr "All mail"
 
 #: src/routes/member-devices.tsx
 msgid "Alle sessies beëindigen"
@@ -639,9 +648,17 @@ msgstr "End all sessions?"
 msgid "Alle soorten"
 msgstr "All kinds"
 
+#: src/routes/archive.tsx
+msgid "Alle statussen"
+msgstr "All statuses"
+
 #: src/routes/tasks.tsx
 msgid "Alle taken"
 msgstr "All tasks"
+
+#: src/routes/archive.tsx
+msgid "Alle typen"
+msgstr "All types"
 
 #: src/components/workspace-switcher.tsx
 msgid "Alle werkruimtes"
@@ -699,15 +716,14 @@ msgid "Alleen om de regel terug te vinden."
 msgstr "Only to find the rule again."
 
 #: src/routes/my-post.tsx
-#: src/routes/post.tsx
 msgid "Alleen ongelezen"
 msgstr "Unread only"
 
-#: src/routes/post.tsx
+#: src/routes/archive.tsx
 msgid "Alleen te laat"
 msgstr "Overdue only"
 
-#: src/routes/post.tsx
+#: src/routes/archive.tsx
 msgid "Alleen te laat ({late})"
 msgstr "Overdue only ({late})"
 
@@ -719,8 +735,8 @@ msgstr "Only for another service that works like OpenAI. Starts with https://. I
 msgid "Alleen wie deze brief mag lezen, staat in de lijst."
 msgstr "Only people who may read this letter are in the list."
 
+#: src/routes/archive.tsx
 #: src/routes/inbox.tsx
-#: src/routes/post.tsx
 msgid "Alles"
 msgstr "All"
 
@@ -798,6 +814,18 @@ msgstr "Devices and sessions"
 msgid "Apparaten en sessies van {name}"
 msgstr "Devices and sessions of {name}"
 
+#: src/components/document-table.tsx
+#: src/components/page.tsx
+#: src/routes/archive.tsx
+#: src/routes/document.tsx
+#: src/routes/inbox.tsx
+msgid "Archief"
+msgstr "Archive"
+
+#: src/routes/archive.tsx
+msgid "Archief van {personName}"
+msgstr "Archive of {personName}"
+
 #: src/routes/people-detail.tsx
 msgid "Archiveren"
 msgstr "Archive"
@@ -823,7 +851,7 @@ msgstr "Added automatically by AI: {person}"
 msgid "Automatisch door AI toegevoegd: label {label}"
 msgstr "Added automatically by AI: label {label}"
 
-#: src/routes/post.tsx
+#: src/routes/archive.tsx
 msgid "Automatisch door Brievie"
 msgstr "Automatically by Brievie"
 
@@ -947,8 +975,12 @@ msgid "Beheerders lezen alle post"
 msgstr "Admins read all post"
 
 #: src/routes/search.tsx
-msgid "Bekijk alle post"
-msgstr "See all mail"
+msgid "Bekijk het archief"
+msgstr "Look in the archive"
+
+#: src/components/document-table.tsx
+msgid "Belastingaangifte"
+msgstr "Tax return"
 
 #: src/components/document-table.tsx
 msgid "Beschikking"
@@ -1090,10 +1122,15 @@ msgstr "Delete letter?"
 msgid "Brief voorgoed wissen?"
 msgstr "Erase letter for good?"
 
+#: src/routes/archive.tsx
 #: src/routes/people-detail.tsx
 #: src/routes/people.tsx
 msgid "Brieven"
 msgstr "Letters"
+
+#: src/routes/archive.tsx
+msgid "Brieven ({letters})"
+msgstr "Letters ({letters})"
 
 #: src/routes/inbox.tsx
 msgid "Brieven die je nog moet nakijken of een naam moet geven. Wat je daarna moet doen, staat bij Mijn taken."
@@ -1102,6 +1139,10 @@ msgstr "Letters you still need to check or give a name. What to do after that is
 #: src/routes/trash.tsx
 msgid "Brieven in de prullenbak worden na {days} dagen voorgoed gewist. Tot die tijd kun je ze terugzetten."
 msgstr "Letters in the trash are erased for good after {days} days. Until then you can restore them."
+
+#: src/routes/archive.tsx
+msgid "Brieven komen hier zodra je ze hebt gecontroleerd. Een eigen document toevoegen kan niet in de browser."
+msgstr "Letters arrive here once you have checked them. You cannot add an own document in the browser."
 
 #. placeholder {0}: person.document_count
 #: src/routes/people-detail.tsx
@@ -1233,6 +1274,7 @@ msgstr "Then"
 msgid "datum"
 msgstr "date"
 
+#: src/components/document-table.tsx
 #: src/routes/duplicate.tsx
 msgid "Datum"
 msgstr "Date"
@@ -1546,6 +1588,10 @@ msgstr "these conditions match"
 msgid "Deze werkruimte gebruikt nu een eigen adres ({0}). Vul dat adres opnieuw in onder Geavanceerd als je het wilt houden."
 msgstr "This workspace now uses an address of its own ({0}). Enter that address again under Advanced if you want to keep it."
 
+#: src/components/document-table.tsx
+msgid "Diploma"
+msgstr "Diploma"
+
 #: src/routes/visibility.tsx
 msgid "Dit bepaalt welke standaard Brievie voorstelt. Het verandert zelf niemands rechten."
 msgstr "This decides which defaults Brievie suggests. By itself it changes nobody's rights."
@@ -1561,6 +1607,18 @@ msgstr "This example does not exist (any more)."
 #: src/components/audit-codes.ts
 msgid "Document"
 msgstr "Document"
+
+#: src/components/document-table.tsx
+msgid "Document zonder titel"
+msgstr "Document without a title"
+
+#: src/routes/archive.tsx
+msgid "Documenten"
+msgstr "Documents"
+
+#: src/routes/archive.tsx
+msgid "Documenten ({documents})"
+msgstr "Documents ({documents})"
 
 #: src/components/task-actions.tsx
 msgid "Doet: {takenBy}"
@@ -1663,6 +1721,10 @@ msgstr "Own address"
 msgid "Eigen CA, vingerafdruk zit in de code"
 msgstr "Own CA, fingerprint is in the code"
 
+#: src/components/document-table.tsx
+msgid "Eigen document"
+msgstr "Own document"
+
 #: src/routes/language.tsx
 msgid "Elk apparaat gebruikt zijn eigen taal."
 msgstr "Each device uses its own language."
@@ -1670,6 +1732,10 @@ msgstr "Each device uses its own language."
 #: src/routes/settings.tsx
 msgid "Elk lid kan dan een ZIP-bestand met de eigen post downloaden."
 msgstr "Each member can then download a ZIP file with their own mail."
+
+#: src/routes/archive.tsx
+msgid "Elke gecontroleerde brief en elk eigen document, om terug te vinden. Wat nog op jou wacht, staat in de Inbox."
+msgstr "Every checked letter and every own document, to find again. What still waits for you is in the Inbox."
 
 #: src/components/rule-sentence.ts
 msgid "en"
@@ -1710,10 +1776,6 @@ msgstr "No backup has succeeded yet."
 #: src/routes/my-post.tsx
 msgid "Er is nog geen post op jouw naam."
 msgstr "There is no post in your name yet."
-
-#: src/routes/post.tsx
-msgid "Er is nog geen post."
-msgstr "There is no mail yet."
 
 #: src/components/document-history.tsx
 msgid "Er is nog niets gebeurd."
@@ -1784,6 +1846,10 @@ msgstr "Will see more"
 msgid "Gaan minder zien"
 msgstr "Will see less"
 
+#: src/components/document-table.tsx
+msgid "Garantiebewijs"
+msgstr "Warranty"
+
 #: src/routes/people.tsx
 msgid "Gearchiveerd"
 msgstr "Archived"
@@ -1845,14 +1911,6 @@ msgstr "None"
 msgid "Geen AI"
 msgstr "No AI"
 
-#: src/routes/post.tsx
-msgid "Geen brieven met deze filters."
-msgstr "No letters with these filters."
-
-#: src/routes/post.tsx
-msgid "Geen brieven met deze status."
-msgstr "No letters with this status."
-
 #: src/routes/rule-editor.tsx
 msgid "Geen brieven passen."
 msgstr "No letters match."
@@ -1906,6 +1964,11 @@ msgstr "Valid"
 #: src/routes/pair-app.tsx
 msgid "Geldig tot"
 msgstr "Valid until"
+
+#. placeholder {0}: formatLetterDate(ends)
+#: src/components/document-table.tsx
+msgid "Geldig tot {0}"
+msgstr "Valid until {0}"
 
 #: src/components/invite-dialog.tsx
 msgid "Geldig tot {expires}."
@@ -2079,9 +2142,13 @@ msgstr "Main menu"
 msgid "Huidig wachtwoord"
 msgstr "Current password"
 
+#: src/components/document-table.tsx
+msgid "Identiteitsbewijs"
+msgstr "ID document"
+
 #: src/components/audit-table.tsx
+#: src/routes/archive.tsx
 #: src/routes/labels.tsx
-#: src/routes/post.tsx
 #: src/routes/search.tsx
 msgid "Iedereen"
 msgstr "Everyone"
@@ -2318,6 +2385,10 @@ msgstr "Yes, switch departments on"
 msgid "Ja, zet groepen aan"
 msgstr "Yes, switch groups on"
 
+#: src/routes/archive.tsx
+msgid "Jaar"
+msgstr "Year"
+
 #: src/components/document-table.tsx
 msgid "Jaaropgave"
 msgstr "Annual statement"
@@ -2428,10 +2499,6 @@ msgstr "Your name"
 msgid "Je post en facturen, op je eigen server."
 msgstr "Your mail and invoices, on your own server."
 
-#: src/routes/post.tsx
-msgid "Je post: {summary}"
-msgstr "Your post: {summary}"
-
 #: src/routes/pair-app.tsx
 msgid "Je server staat ingesteld op 'localhost'. Je telefoon kan die niet bereiken. Stel in het bestand .env de naam of het IP-adres van je server in (BRIEVIE_HOSTNAME)."
 msgstr "Your server is set to 'localhost'. Your phone cannot reach that. Set the name or IP address of your server in the .env file (BRIEVIE_HOSTNAME)."
@@ -2510,13 +2577,13 @@ msgstr "Inspection"
 msgid "Kies"
 msgstr "Choose"
 
+#: src/routes/archive.tsx
+msgid "Kies bij een filter een andere waarde, of zet hem op Alle."
+msgstr "Choose another value in a filter, or set it to All."
+
 #: src/routes/rule-editor.tsx
 msgid "Kies bij elke voorwaarde en actie een label of persoon."
 msgstr "Choose a label or person for each condition and action."
-
-#: src/routes/post.tsx
-msgid "Kies bij Persoon, Label of Status een andere waarde."
-msgstr "Choose another value for Person, Label or Status."
 
 #: src/routes/settings.tsx
 msgid "Kies een aantal dagen van 1 tot {most}."
@@ -2635,8 +2702,8 @@ msgid "Laatste gelukte back-up"
 msgstr "Last successful backup"
 
 #: src/components/audit-codes.ts
+#: src/routes/archive.tsx
 #: src/routes/labels.tsx
-#: src/routes/post.tsx
 #: src/routes/rule-editor.tsx
 #: src/routes/search.tsx
 msgid "Label"
@@ -2770,6 +2837,10 @@ msgstr "Log"
 msgid "Loonstrook"
 msgstr "Payslip"
 
+#: src/routes/archive.tsx
+msgid "Loopt af"
+msgstr "Expiring"
+
 #: src/routes/invitation.tsx
 msgid "Lukt dat niet? Typ deze code in de app."
 msgstr "Doesn't that work? Type this code in the app."
@@ -2801,6 +2872,10 @@ msgstr "Mark as read"
 #: src/routes/document.tsx
 msgid "Markeer als ongelezen"
 msgstr "Mark as unread"
+
+#: src/components/document-table.tsx
+msgid "Medisch"
+msgstr "Medical"
 
 #: src/components/audit-table.tsx
 #: src/routes/search.tsx
@@ -3035,14 +3110,13 @@ msgstr "Not shown"
 msgid "Niets gevonden"
 msgstr "Nothing found"
 
+#: src/routes/archive.tsx
+msgid "Niets gevonden met deze filters."
+msgstr "Nothing found with these filters."
+
 #: src/components/letter-status.tsx
-#: src/routes/post.tsx
 msgid "Nieuw"
 msgstr "New"
-
-#: src/routes/post.tsx
-msgid "Nieuw ({fresh})"
-msgstr "New ({fresh})"
 
 #: src/routes/invitation.tsx
 msgid "Nieuw account"
@@ -3106,6 +3180,10 @@ msgstr "{daysLeft} days left ({date})"
 #: src/routes/backup.tsx
 msgid "nog geen"
 msgstr "none yet"
+
+#: src/routes/archive.tsx
+msgid "Nog niets in je archief."
+msgstr "Nothing in your archive yet."
 
 #: src/routes/departments.tsx
 #: src/routes/people-detail.tsx
@@ -3328,11 +3406,11 @@ msgid "Openen"
 msgstr "Open"
 
 #: src/components/letter-status.tsx
-#: src/routes/post.tsx
+#: src/routes/archive.tsx
 msgid "Openstaand"
 msgstr "Open"
 
-#: src/routes/post.tsx
+#: src/routes/archive.tsx
 msgid "Openstaand ({open})"
 msgstr "Open ({open})"
 
@@ -3436,7 +3514,6 @@ msgstr "Persons"
 
 #: src/components/audit-codes.ts
 #: src/components/audit-table.tsx
-#: src/routes/post.tsx
 #: src/routes/rule-editor.tsx
 #: src/routes/search.tsx
 msgid "Persoon"
@@ -3478,10 +3555,6 @@ msgstr "Policy"
 #: src/routes/my-post.tsx
 msgid "Post op jouw naam staat hier zodra hij is gescand en verdeeld."
 msgstr "Post in your name shows up here once it has been scanned and sorted."
-
-#: src/routes/post.tsx
-msgid "Post van {personName}"
-msgstr "{personName}'s post"
 
 #: src/routes/visibility.tsx
 msgid "Post zonder naam"
@@ -3659,10 +3732,6 @@ msgstr "Scan"
 msgid "Scan deze code met de Brievie-app"
 msgstr "Scan this code with the Brievie app"
 
-#: src/routes/post.tsx
-msgid "Scan een brief met de Brievie-app op je telefoon. Daarna staat hij hier."
-msgstr "Scan a letter with the Brievie app on your phone. Then it shows up here."
-
 #: src/routes/inbox.tsx
 msgid "Scan een nieuwe brief met de Brievie-app. Eerdere brieven vind je bij"
 msgstr "Scan a new letter with the Brievie app. You find earlier letters in"
@@ -3709,6 +3778,7 @@ msgid "soort"
 msgstr "kind"
 
 #: src/components/document-table.tsx
+#: src/routes/archive.tsx
 #: src/routes/document.tsx
 #: src/routes/duplicate.tsx
 #: src/routes/inbox.tsx
@@ -3757,7 +3827,7 @@ msgstr "Add starter set"
 msgid "Status"
 msgstr "Status"
 
-#: src/routes/post.tsx
+#: src/routes/archive.tsx
 msgid "Status van de brief"
 msgstr "Status of the letter"
 
@@ -3957,6 +4027,10 @@ msgstr "Two-step verification switched off"
 msgid "Typ minstens twee tekens."
 msgstr "Type at least two characters."
 
+#: src/routes/archive.tsx
+msgid "Type"
+msgstr "Type"
+
 #: src/routes/visibility.tsx
 msgid "uit"
 msgstr "off"
@@ -4095,6 +4169,10 @@ msgstr "From"
 msgid "Van {sender}"
 msgstr "From {sender}"
 
+#: src/routes/archive.tsx
+msgid "Van wie"
+msgstr "Belongs to"
+
 #: src/task-time.ts
 msgid "Vandaag"
 msgstr "Today"
@@ -4139,6 +4217,11 @@ msgstr "Expires on {0}"
 #: src/components/person-actions.tsx
 msgid "Verlopen"
 msgstr "Expired"
+
+#. placeholder {0}: formatLetterDate(ends)
+#: src/components/document-table.tsx
+msgid "Verlopen op {0}"
+msgstr "Expired on {0}"
 
 #: src/routes/duplicate.tsx
 msgid "Verschilt"
@@ -4311,12 +4394,12 @@ msgid "Waarde"
 msgstr "Value"
 
 #: src/components/letter-status.tsx
-#: src/routes/post.tsx
+#: src/routes/archive.tsx
 #: src/task-time.ts
 msgid "Wacht op reactie"
 msgstr "Waiting for a reply"
 
-#: src/routes/post.tsx
+#: src/routes/archive.tsx
 msgid "Wacht op reactie ({waiting})"
 msgstr "Waiting for a reply ({waiting})"
 

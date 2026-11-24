@@ -39,7 +39,7 @@ describe("post on a phone", () => {
       ...loggedInHandlers(),
       ...documentHandlers(),
     );
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
 
     const link = await screen.findByRole("link", { name: "Belastingdienst" });
     expect(link).toHaveAttribute("href", expect.stringContaining("/post/"));
@@ -60,7 +60,7 @@ describe("status in Alle post", () => {
       ...loggedInHandlers(),
       ...documentHandlers(),
     );
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     const row = (await screen.findByRole("link", { name: "Belastingdienst" })).closest("tr");
     expect(within(row as HTMLElement).getByText("Naam kiezen")).toBeInTheDocument();
     expect(within(row as HTMLElement).queryByText("Klaar")).not.toBeInTheDocument();
@@ -76,7 +76,7 @@ describe("status in Alle post", () => {
       ...loggedInHandlers(),
       ...documentHandlers(),
     );
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     const row = (await screen.findByRole("link", { name: "Belastingdienst" })).closest("tr");
     expect(within(row as HTMLElement).getByText("Klaar")).toBeInTheDocument();
   });

@@ -137,7 +137,7 @@ function useReopen(workspaceId: string, documentId: string) {
 }
 
 /**
- * Moves the letter to the trash, then goes to "Alle post" with the undo bar. The letter's own
+ * Moves the letter to the trash, then goes to "Archief" with the undo bar. The letter's own
  * cache entry goes: it answers `document_in_trash` from now on.
  */
 function useTrash(workspaceId: string, documentId: string) {
@@ -147,7 +147,7 @@ function useTrash(workspaceId: string, documentId: string) {
     mutationFn: () => trashDocument(workspaceId, documentId),
     onSuccess: async () => {
       showUndo(workspaceId, documentId);
-      await navigate({ to: "/w/$workspaceId/post", params: { workspaceId } });
+      await navigate({ to: "/w/$workspaceId/archief", params: { workspaceId } });
       queryClient.removeQueries({ queryKey: ["workspaces", workspaceId, "documents", documentId] });
       await refreshAfterTrash(queryClient, workspaceId);
     },
@@ -493,9 +493,9 @@ function DocumentPage() {
       <PageHeader
         title={title}
         breadcrumb={{
-          to: "/w/$workspaceId/post",
+          to: "/w/$workspaceId/archief",
           params: { workspaceId: workspace.id },
-          label: t`Alle post`,
+          label: t`Archief`,
         }}
         commands={
           data ? (

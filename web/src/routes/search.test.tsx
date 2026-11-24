@@ -86,7 +86,7 @@ const notLoggedIn = () =>
 describe("search field", () => {
   it("is in the app bar with its name and placeholder", async () => {
     server.use(...loggedInHandlers(), ...documentHandlers());
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     const field = await screen.findByRole("searchbox", { name: "Zoeken in je post" });
     expect(field).toHaveAttribute("placeholder", "Zoek op afzender, onderwerp of tekst");
   });
@@ -94,7 +94,7 @@ describe("search field", () => {
   it("is focused by / from anywhere", async () => {
     server.use(...loggedInHandlers(), ...documentHandlers());
     const u = userEvent.setup();
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     const field = await screen.findByRole("searchbox", { name: "Zoeken in je post" });
     await u.keyboard("/");
     expect(field).toHaveFocus();
@@ -104,9 +104,9 @@ describe("search field", () => {
   it("does not take / while typing in another field", async () => {
     server.use(...loggedInHandlers(), ...documentHandlers());
     const u = userEvent.setup();
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     const field = await screen.findByRole("searchbox", { name: "Zoeken in je post" });
-    const select = await screen.findByLabelText("Persoon");
+    const select = await screen.findByLabelText("Van wie");
     await u.click(select);
     await u.keyboard("/");
     expect(field).not.toHaveFocus();
@@ -116,9 +116,9 @@ describe("search field", () => {
   it("clears on Escape and gives focus back to where it was", async () => {
     server.use(...loggedInHandlers(), ...documentHandlers());
     const u = userEvent.setup();
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     const field = await screen.findByRole("searchbox", { name: "Zoeken in je post" });
-    const select = await screen.findByLabelText("Persoon");
+    const select = await screen.findByLabelText("Van wie");
     select.focus();
     await u.keyboard("/");
     await u.type(field, "abc");
@@ -131,7 +131,7 @@ describe("search field", () => {
   it("goes to the results with the term in the POST body and not in the URL", async () => {
     const { bodies, handler } = searchHandler(() => answer());
     server.use(...loggedInHandlers(), ...documentHandlers(), handler);
-    const { router } = renderApp(`/w/${workspace.id}/post`);
+    const { router } = renderApp(`/w/${workspace.id}/archief`);
     await searchFor("belasting");
     await screen.findByRole("heading", { level: 1, name: "Zoeken" });
     await screen.findByRole("link", { name: "Belastingdienst" });
@@ -156,7 +156,7 @@ describe("forgetting the term", () => {
         return new HttpResponse(null, { status: 204 });
       }),
     );
-    const { router } = renderApp(`/w/${workspace.id}/post`);
+    const { router } = renderApp(`/w/${workspace.id}/archief`);
     const u = await searchFor("belasting");
     await screen.findByRole("link", { name: "Belastingdienst" });
     await u.click(screen.getByRole("button", { name: "Account" }));
@@ -192,7 +192,7 @@ describe("forgetting the term", () => {
         },
       ),
     );
-    const { router } = renderApp(`/w/${workspace.id}/post`);
+    const { router } = renderApp(`/w/${workspace.id}/archief`);
     await searchFor("belasting");
     await screen.findByRole("link", { name: "Belastingdienst" });
 
@@ -212,7 +212,7 @@ describe("search field on a phone", () => {
     phoneScreen();
     server.use(...loggedInHandlers(), ...documentHandlers());
     const u = userEvent.setup();
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     await u.click(await screen.findByRole("button", { name: "Zoeken" }));
     expect(screen.getByRole("searchbox", { name: "Zoeken in je post" })).toHaveFocus();
     await u.type(screen.getByRole("searchbox", { name: "Zoeken in je post" }), "abc");
@@ -264,7 +264,7 @@ describe("results page", () => {
       }),
     );
     server.use(...loggedInHandlers(), ...documentHandlers(), handler);
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     await searchFor("vet");
     const row = (await screen.findByRole("link", { name: "Belastingdienst" })).closest(
       "tr",
@@ -280,7 +280,7 @@ describe("results page", () => {
   it("marks the hit of a normal fragment", async () => {
     const { handler } = searchHandler(() => answer());
     server.use(...loggedInHandlers(), ...documentHandlers(), handler);
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     await searchFor("december");
     const mark = await screen.findByText("1 december");
     expect(mark.tagName).toBe("MARK");
@@ -297,7 +297,7 @@ describe("results page", () => {
         return HttpResponse.json(answer());
       }),
     );
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     await searchFor("belasting");
     const status = await screen.findByText("Bezig met zoeken…");
     expect(status).toHaveAttribute("aria-live", "polite");
@@ -311,7 +311,7 @@ describe("results page", () => {
       answer({ items: [hit(), hit({ id: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4445" })] }),
     );
     server.use(...loggedInHandlers(), ...documentHandlers(), handler);
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     await searchFor("belasting");
     expect(await screen.findByText("2 brieven gevonden")).toBeInTheDocument();
   });
@@ -319,7 +319,7 @@ describe("results page", () => {
   it("says when an answer is approximate", async () => {
     const { handler } = searchHandler(() => answer({ fuzzy: true }));
     server.use(...loggedInHandlers(), ...documentHandlers(), handler);
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     await searchFor("belastingdeinst");
     expect(await screen.findByText("Geen exacte treffer. Dit lijkt erop.")).toBeInTheDocument();
   });
@@ -327,7 +327,7 @@ describe("results page", () => {
   it("says a BSN was removed from the term", async () => {
     const { handler } = searchHandler(() => answer({ bsn_removed: true }));
     server.use(...loggedInHandlers(), ...documentHandlers(), handler);
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     await searchFor("belasting 111222333");
     expect(
       await screen.findByText(
@@ -339,16 +339,16 @@ describe("results page", () => {
   it("offers next steps when nothing is found", async () => {
     const { handler } = searchHandler(() => answer({ items: [] }));
     server.use(...loggedInHandlers(), ...documentHandlers(), handler);
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     await searchFor("zzzz");
     expect(await screen.findByRole("heading", { name: "Niets gevonden" })).toBeInTheDocument();
     expect(screen.getByText("Gebruik minder woorden.")).toBeInTheDocument();
     expect(
       screen.getByText("Probeer een andere spelling of het begin van het woord."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Bekijk alle post" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Bekijk het archief" })).toHaveAttribute(
       "href",
-      `/w/${workspace.id}/post`,
+      `/w/${workspace.id}/archief`,
     );
     expect(screen.queryByRole("button", { name: "Wis filters" })).not.toBeInTheDocument();
   });
@@ -356,7 +356,7 @@ describe("results page", () => {
   it("does not call the API for a term of one character", async () => {
     const { bodies, handler } = searchHandler(() => answer());
     server.use(...loggedInHandlers(), ...documentHandlers(), handler);
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     await searchFor("a");
     expect(await screen.findByText("Typ minstens twee tekens.")).toBeInTheDocument();
     expect(bodies).toHaveLength(0);
@@ -372,7 +372,7 @@ describe("results page", () => {
       ),
     );
     server.use(...loggedInHandlers(), ...documentHandlers(), handler);
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     await searchFor("belasting");
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Je zoekt te vaak. Wacht even en probeer opnieuw.",
@@ -384,7 +384,7 @@ describe("filters and paging", () => {
   it("sends the filters in the body and offers to clear them", async () => {
     const { bodies, handler } = searchHandler(() => answer({ items: [] }));
     server.use(...loggedInHandlers(), ...documentHandlers(), handler);
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     const u = await searchFor("belasting");
     await screen.findByRole("heading", { name: "Niets gevonden" });
     expect(screen.queryByRole("button", { name: "Wis filters" })).not.toBeInTheDocument();
@@ -420,7 +420,7 @@ describe("filters and paging", () => {
   it("waits until the filters stop changing and then searches once", async () => {
     const { bodies, handler } = searchHandler(() => answer({ items: [] }));
     server.use(...loggedInHandlers(), ...documentHandlers(), handler);
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     await searchFor("belasting");
     await screen.findByRole("heading", { name: "Niets gevonden" });
     expect(bodies).toHaveLength(1);
@@ -452,7 +452,7 @@ describe("filters and paging", () => {
         : answer({ items: [hit({ id: second, sender: "Gemeente" })], next_offset: null }),
     );
     server.use(...loggedInHandlers(), ...documentHandlers(), handler);
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     const u = await searchFor("brief");
     expect(await screen.findByText("1 brief geladen, er zijn er meer")).toBeInTheDocument();
     await u.click(screen.getByRole("button", { name: "Meer laden" }));

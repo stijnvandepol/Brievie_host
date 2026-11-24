@@ -692,7 +692,7 @@ describe("document made by the autopilot", () => {
     expect(trashed).toEqual([]);
     await user.click(within(dialog).getByRole("button", { name: "Naar de prullenbak" }));
     await waitFor(() => expect(trashed).toHaveLength(1));
-    expect(await screen.findByRole("heading", { level: 1, name: "Alle post" })).toBeVisible();
+    expect(await screen.findByRole("heading", { level: 1, name: "Archief" })).toBeVisible();
     const bar = await screen.findByRole("status");
     expect(bar).toHaveTextContent("De brief staat in de prullenbak.");
     expect(within(bar).getByRole("button", { name: "Ongedaan maken" })).toBeVisible();
@@ -834,7 +834,7 @@ describe("read and unread (spec S 5.3)", () => {
       ...documentHandlers({ ...documentDetail, unread: true }),
     );
     // A list shows the letter: nothing is marked.
-    const list = renderApp(`/w/${workspace.id}/post`);
+    const list = renderApp(`/w/${workspace.id}/archief`);
     await screen.findByRole("link", { name: "Belastingdienst" });
     expect(calls).toEqual([]);
 

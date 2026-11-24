@@ -247,7 +247,7 @@ function PersonDetailPage() {
                 <span className="letter-counts">{letterCountsText(letterCounts.data)}. </span>
               ) : null}
               <Link
-                to="/w/$workspaceId/post"
+                to="/w/$workspaceId/archief"
                 params={{ workspaceId: workspace.id }}
                 search={{ persoon: person.id }}
               >

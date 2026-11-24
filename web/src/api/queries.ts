@@ -56,6 +56,17 @@ export type DocumentFilters = {
   letter_status?: string;
   /** Only the letters with the marker "Te laat". */
   overdue?: boolean;
+  /** Archief: only reviewed documents, of both kinds. */
+  archived?: boolean;
+  /** "letter" or "document". */
+  kind?: string;
+  document_type?: string;
+  /** The document's own date's year, else its upload's. */
+  year?: number;
+  /** Exactly this sender, a value of the archive's facets. */
+  sender?: string;
+  /** Own documents ending within 90 days, or ended ("Loopt af"). */
+  expiring?: boolean;
 };
 
 export const documentsQuery = (
@@ -84,6 +95,12 @@ export const documentsQuery = (
             unread_only: filters.unread_only || undefined,
             letter_status: filters.letter_status || undefined,
             overdue: filters.overdue || undefined,
+            archived: filters.archived || undefined,
+            kind: filters.kind || undefined,
+            document_type: filters.document_type || undefined,
+            year: filters.year || undefined,
+            sender: filters.sender || undefined,
+            expiring: filters.expiring || undefined,
           },
         },
       });
@@ -293,6 +310,20 @@ export const letterStatusCountsQuery = (workspaceId: string, personId?: string) 
             query: { person_id: personId || undefined },
           },
         },
+      );
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
+/** What the archive's filters can choose, with counts over what the caller may read. */
+export const archiveFacetsQuery = (workspaceId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "documents", "archive-facets"],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/documents/archive-facets",
+        { params: { path: { workspace_id: workspaceId } } },
       );
       if (error !== undefined || !data) throw new ApiFailure(error);
       return data;
