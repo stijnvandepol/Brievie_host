@@ -985,8 +985,10 @@ the proxy (open the app away from home, or `https://brievie.example.nl/api/v1/he
 **Account, Van buiten bereikbaar** at home: under "Eigen reverse proxy" it names the local
 address that request came from. **Never put Docker's own gateway address there** (often
 `172.x.0.1`): with Docker's port forwarding every device in your network arrives from that
-address, and could then pick its own address for the sign-in limits (the api refuses a range
-wider than one device, see below).
+address, and could then pick its own address for the sign-in limits. The api warns about such a
+gateway address (`brievie.W005`) and refuses to start with `0.0.0.0/0`, `::/0`, an invalid
+entry, or a range wider than a /24 (IPv4) or /64 (IPv6) unless
+`BRIEVIE_TRUSTED_PROXIES_WIDE=true` (`brievie.E003`).
 
 A request for the public name is **always** treated as public (only the app works there while
 `BRIEVIE_PUBLIC_WEB` is off), whatever address it comes from: before `BRIEVIE_TRUSTED_PROXIES`
@@ -1065,6 +1067,7 @@ V VPN, T tunnel, P own proxy (empty = default or not used).
 | `BRIEVIE_TUNNEL_TOKEN_FILE` | a file on the host with that token (better: in no `docker inspect`) | empty | | | `/volume1/brievie/tunnel-token` | |
 | `COMPOSE_PROFILES` | only without `./brievie`: starts cloudflared | empty | | | `tunnel` | |
 | `BRIEVIE_TRUSTED_PROXIES` | your own reverse proxy's address(es), CIDR, space separated | empty (none) | | | | `192.168.1.5/32` |
+| `BRIEVIE_TRUSTED_PROXIES_WIDE` | allow a trusted range wider than a /24 or /64 (never everything) | `false` | | | | |
 | `BRIEVIE_PUBLIC_WEB` | web interface and web sign-in on the public address | `false` | | | `false` | `false` |
 | `BRIEVIE_HSTS_SECONDS` | HSTS for the home and VPN names; keep 0 with the private CA | `0` | | | | |
 | `BRIEVIE_MAX_BODY_BYTES` | largest request body | `2621440` | | | | |

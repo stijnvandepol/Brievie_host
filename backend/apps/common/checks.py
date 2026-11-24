@@ -4,6 +4,7 @@ They run with every management command, so the `api` container (which runs
 `prepare_setup_token` before gunicorn) refuses to start on a wrong configuration.
 """
 
+import ipaddress
 from collections.abc import Iterable
 from urllib.parse import urlsplit
 
@@ -116,6 +117,73 @@ def check_external_access(
                 id="brievie.W003",
             )
         )
+    return messages
+
+
+# The widest range one reverse proxy needs; wider only with BRIEVIE_TRUSTED_PROXIES_WIDE.
+NARROWEST_PREFIX = {4: 24, 6: 64}
+# Docker's default bridge networks: their gateway is what every forwarded port looks like.
+_DOCKER_NETWORKS = ipaddress.ip_network("172.16.0.0/12")
+
+
+def trusted_proxy_problem(entry: str, *, allow_wide: bool) -> str:
+    """Why `entry` of BRIEVIE_TRUSTED_PROXIES is refused: "invalid", "everything", "wide",
+    or "" when it may stand."""
+    try:
+        network = ipaddress.ip_network(entry, strict=False)
+    except ValueError:
+        return "invalid"
+    if network.prefixlen == 0:
+        return "everything"
+    if network.prefixlen < NARROWEST_PREFIX[network.version] and not allow_wide:
+        return "wide"
+    return ""
+
+
+@register()
+def check_trusted_proxies(
+    app_configs: Iterable[AppConfig] | None, **kwargs: object
+) -> list[CheckMessage]:
+    """BRIEVIE_TRUSTED_PROXIES names your proxy, not a network: a wide range lets every device
+    in it pick its own client address (security review of PR #53, point 4). An error stops
+    the api, and Caddy (which waits for a healthy api) with it: closed, not open."""
+    messages: list[CheckMessage] = []
+    allow_wide: bool = settings.BRIEVIE_TRUSTED_PROXIES_WIDE
+    for entry in settings.BRIEVIE_TRUSTED_PROXIES:
+        problem = trusted_proxy_problem(entry, allow_wide=allow_wide)
+        if problem:
+            messages.append(
+                Error(
+                    f"BRIEVIE_TRUSTED_PROXIES has {entry!r} ({problem}): name your reverse "
+                    "proxy's own address, at most a /24 (IPv4) or /64 (IPv6).",
+                    hint=_(
+                        "Zet in BRIEVIE_TRUSTED_PROXIES alleen het adres van je reverse proxy, "
+                        "zoals 192.168.1.5/32. Een groter bereik kan alleen met "
+                        "BRIEVIE_TRUSTED_PROXIES_WIDE=true, alles nooit."
+                    ),
+                    id="brievie.E003",
+                )
+            )
+            continue
+        network = ipaddress.ip_network(entry, strict=False)
+        gateway = network.network_address
+        if (
+            network.version == 4
+            and network.num_addresses == 1
+            and gateway in _DOCKER_NETWORKS
+            and int(gateway) % 256 == 1
+        ):
+            messages.append(
+                Warning(
+                    f"BRIEVIE_TRUSTED_PROXIES has {entry}, which looks like Docker's own gateway.",
+                    hint=_(
+                        "Via Docker's eigen gateway lijkt elk apparaat in je netwerk hetzelfde "
+                        "adres te hebben, en kan het zijn eigen adres opgeven. Zet het adres van "
+                        "je reverse proxy zelf."
+                    ),
+                    id="brievie.W005",
+                )
+            )
     return messages
 
 

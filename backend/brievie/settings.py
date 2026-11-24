@@ -284,6 +284,9 @@ BRIEVIE_PUBLIC_WEB: bool = env.bool("BRIEVIE_PUBLIC_WEB", default=False)
 # Your own reverse proxy's address(es), CIDRs separated by spaces: Caddy believes its
 # X-Forwarded-For and marks its requests as the public route. Empty: none.
 BRIEVIE_TRUSTED_PROXIES: list[str] = env.str("BRIEVIE_TRUSTED_PROXIES", default="").split()
+# A trusted range wider than a /24 (IPv4) or /64 (IPv6) only when this says so
+# (apps.common.checks.check_trusted_proxies); 0.0.0.0/0 and ::/0 never.
+BRIEVIE_TRUSTED_PROXIES_WIDE: bool = env.bool("BRIEVIE_TRUSTED_PROXIES_WIDE", default=False)
 # Whether a Cloudflare Tunnel token is set (as a variable or a file). The api never gets
 # the token itself: only the cloudflared container does.
 BRIEVIE_TUNNEL_TOKEN_SET: bool = bool(

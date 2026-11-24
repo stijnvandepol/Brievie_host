@@ -8,6 +8,7 @@ from apps.common.checks import (
     check_database_passwords,
     check_external_access,
     check_public_urls,
+    check_trusted_proxies,
 )
 
 
@@ -169,3 +170,55 @@ def test_w004_public_name_without_a_way(settings: Settings) -> None:
     settings.BRIEVIE_TRUSTED_PROXIES = []
     settings.BRIEVIE_TUNNEL_TOKEN_SET = True
     assert check_external_access(None) == []
+
+
+# --- BRIEVIE_TRUSTED_PROXIES (security review of PR #53, point 4) ------------------------
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        ["0.0.0.0/0"],
+        ["::/0"],
+        ["192.168.0.0/16"],
+        ["10.0.0.0/8"],
+        ["fd00::/48"],
+        ["private_ranges"],
+        ["192.168.1.300"],
+        ["proxy.local"],
+    ],
+)
+def test_a_wide_or_invalid_trusted_proxy_is_refused(settings: Settings, value: list[str]) -> None:
+    settings.BRIEVIE_TRUSTED_PROXIES = value
+    settings.BRIEVIE_TRUSTED_PROXIES_WIDE = False
+    found = check_trusted_proxies(None)
+    assert [m.id for m in found] == ["brievie.E003"]
+    assert isinstance(found[0], Error)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [["192.168.1.5/32"], ["192.168.1.5"], ["10.1.2.0/24", "192.168.1.5/32"], ["fd00::5/64"], []],
+)
+def test_a_narrow_trusted_proxy_passes(settings: Settings, value: list[str]) -> None:
+    settings.BRIEVIE_TRUSTED_PROXIES = value
+    settings.BRIEVIE_TRUSTED_PROXIES_WIDE = False
+    assert check_trusted_proxies(None) == []
+
+
+def test_a_wide_range_passes_only_when_forced(settings: Settings) -> None:
+    settings.BRIEVIE_TRUSTED_PROXIES = ["10.0.0.0/8"]
+    settings.BRIEVIE_TRUSTED_PROXIES_WIDE = True
+    assert check_trusted_proxies(None) == []
+    # Never everything, forced or not.
+    settings.BRIEVIE_TRUSTED_PROXIES = ["0.0.0.0/0"]
+    assert [m.id for m in check_trusted_proxies(None)] == ["brievie.E003"]
+    settings.BRIEVIE_TRUSTED_PROXIES = ["::/0"]
+    assert [m.id for m in check_trusted_proxies(None)] == ["brievie.E003"]
+
+
+@pytest.mark.parametrize("value", ["172.17.0.1", "172.18.0.1/32", "172.31.0.1"])
+def test_a_docker_gateway_is_a_warning(settings: Settings, value: str) -> None:
+    settings.BRIEVIE_TRUSTED_PROXIES = [value]
+    settings.BRIEVIE_TRUSTED_PROXIES_WIDE = False
+    assert [m.id for m in check_trusted_proxies(None)] == ["brievie.W005"]

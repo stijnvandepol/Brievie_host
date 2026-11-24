@@ -2907,3 +2907,9 @@ all six held.
   checks at start: `brievie.W004` (a public name without a tunnel or trusted proxy) and the same
   sentence from `./brievie start`; the proxy-address rules of point 4. SELFHOST says what the
   page can know and that its lines appear only after such a request came through.
+- **Point 4 (low), fixed: `BRIEVIE_TRUSTED_PROXIES` was not validated.** `brievie.E003` refuses
+  an entry that is no address or CIDR (also Caddy's `private_ranges`), `0.0.0.0/0` and `::/0`
+  always, and a range wider than a /24 (IPv4) or /64 (IPv6) unless
+  `BRIEVIE_TRUSTED_PROXIES_WIDE=true`. An error stops the api, and Caddy waits for a healthy
+  api: closed, not open. `brievie.W005` warns about a single address that looks like Docker's
+  gateway (`172.16.0.0/12`, ending in `.1`).

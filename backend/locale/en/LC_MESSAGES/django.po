@@ -1181,6 +1181,14 @@ msgid "Grote scans komen niet door de tunnel. Zet BRIEVIE_MAX_UPLOAD_BYTES op 10
 msgstr "Large scans do not get through the tunnel. Set BRIEVIE_MAX_UPLOAD_BYTES to 100000000 or less."
 
 #: apps/common/checks.py
+msgid "Zet in BRIEVIE_TRUSTED_PROXIES alleen het adres van je reverse proxy, zoals 192.168.1.5/32. Een groter bereik kan alleen met BRIEVIE_TRUSTED_PROXIES_WIDE=true, alles nooit."
+msgstr "Put only your reverse proxy's address in BRIEVIE_TRUSTED_PROXIES, such as 192.168.1.5/32. A larger range only with BRIEVIE_TRUSTED_PROXIES_WIDE=true, everything never."
+
+#: apps/common/checks.py
+msgid "Via Docker's eigen gateway lijkt elk apparaat in je netwerk hetzelfde adres te hebben, en kan het zijn eigen adres opgeven. Zet het adres van je reverse proxy zelf."
+msgstr "Through Docker's own gateway every device in your network seems to have the same address, and can state its own. Put your reverse proxy's own address."
+
+#: apps/common/checks.py
 msgid "Choose a new password, see 'Run the whole stack' in the README."
 msgstr "Choose a new password, see 'Run the whole stack' in the README."
 

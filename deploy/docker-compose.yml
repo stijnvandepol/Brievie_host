@@ -77,6 +77,8 @@ services:
       # Off: through the public address (tunnel, own reverse proxy) only the app works.
       BRIEVIE_PUBLIC_WEB: ${BRIEVIE_PUBLIC_WEB:-false}
       BRIEVIE_TRUSTED_PROXIES: ${BRIEVIE_TRUSTED_PROXIES:-}
+      # A trusted range wider than a /24 or /64 only when this says true.
+      BRIEVIE_TRUSTED_PROXIES_WIDE: ${BRIEVIE_TRUSTED_PROXIES_WIDE:-false}
       # Only whether a tunnel token is set, never the token (the settings page).
       BRIEVIE_TUNNEL_TOKEN_SET: ${BRIEVIE_TUNNEL_TOKEN:+true}
       BRIEVIE_TUNNEL_TOKEN_FILE_SET: ${BRIEVIE_TUNNEL_TOKEN_FILE:+true}
