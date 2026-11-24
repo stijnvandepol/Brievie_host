@@ -85,8 +85,16 @@ def sync(
     `silent` writes no line (the letter a merge is about to put in the trash).
     """
     done = Document.Status.DONE
-    old = stored_facts(document)
     with system_actor():
+        # The stored facts are read from the database, under the caller's lock, never from
+        # the instance: another instance of the same letter (a task completion fetches its
+        # own) may have synced since this one was loaded (security review of PR #50).
+        stored = (
+            Document.objects.filter(id=document.id)
+            .values_list("task_open_count", "task_wait_until", "task_overdue_from")
+            .first()
+        )
+        old = stored_facts(document) if stored is None else LetterFacts(*stored)
         new = facts_of(
             TaskFacts(open=status == Task.Status.OPEN, deadline=deadline, waiting_until=waiting)
             for status, deadline, waiting in Task.objects.filter(document=document).values_list(
@@ -99,9 +107,9 @@ def sync(
                 task_wait_until=new.wait_until,
                 task_overdue_from=new.overdue_from,
             )
-            document.task_open_count = new.open_count
-            document.task_wait_until = new.wait_until
-            document.task_overdue_from = new.overdue_from
+        document.task_open_count = new.open_count
+        document.task_wait_until = new.wait_until
+        document.task_overdue_from = new.overdue_from
         if silent or document.trashed_at is not None or document.status != done:
             return
         handled_before = (previous_status or document.status) == done and old.open_count == 0

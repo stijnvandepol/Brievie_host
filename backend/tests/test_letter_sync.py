@@ -134,6 +134,37 @@ def test_merge_moving_open_task_reopens_kept_letter() -> None:
     assert "letter_handled" not in kinds(other.id, h.workspace)
 
 
+def test_merge_that_completes_a_twin_and_moves_an_open_task_leaves_the_letter_open() -> None:
+    """The order of the review of PR #50: the twin's completion syncs its own instance of the
+    kept letter ("handled", one line), then the moved open task arrives; the final sync must
+    compare with the database, not with the instance the merge loaded before."""
+    h = household()
+    keep, (twin,) = letter_with_tasks(h.workspace, [T(type="pay", description="Betalen")])
+    other, _ = letter_with_tasks(
+        h.workspace,
+        [T(type="pay", status="done", description="Betaald"), T(description="Bel terug")],
+    )
+    do_merge(h.workspace, pair(keep, other), keep, user=h.anne)
+    assert stored(keep.id, h.workspace).open_count == 1
+    lines = kinds(keep.id, h.workspace)
+    assert lines.count("letter_handled") == 1
+    assert lines[-1] == "letter_reopened"
+    assert twin.id
+
+
+def test_a_stale_instance_does_not_hide_a_change_from_sync() -> None:
+    h = household()
+    document, (task,) = letter_with_tasks(h.workspace, [T()])
+    with workspace_context(h.workspace.id, actor=SYSTEM):
+        stale = Document.objects.get(id=document.id)
+        Task.objects.filter(id=task.id).update(status="done")
+        letter_sync.sync(Document.objects.get(id=document.id))
+        Task.objects.filter(id=task.id).update(status="open")
+        letter_sync.sync(stale)
+    assert stored(document.id, h.workspace).open_count == 1
+    assert kinds(document.id, h.workspace) == ["letter_handled", "letter_reopened"]
+
+
 def test_reopen_document_clears_ai_tasks_facts() -> None:
     h = household()
     document, (ai_task,) = letter_with_tasks(h.workspace, [T()])
