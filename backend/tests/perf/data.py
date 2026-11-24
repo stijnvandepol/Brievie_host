@@ -30,6 +30,8 @@ from uuid import UUID
 
 from django.db import connection, transaction
 
+from apps.tasks import letter_sync
+
 SEED: Final = 20261120
 
 # Members by index. The first five are in no department: the two admins, the flagged
@@ -500,7 +502,7 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
         c.execute(
             "INSERT INTO tasks_task (id, created_at, updated_at, workspace_id, document_id, type,"
             " description, deadline, deadline_source, deadline_quote, status, assigned_to_id,"
-            " completed_at, created_by_ai, created_by_id, amount, term_quote)"
+            " completed_at, created_by_ai, created_by_id, amount, term_quote, waiting_until)"
             " SELECT gen_random_uuid(), %s, %s, %s, d, (%s::text[])[1 + (n %% %s)::int],"
             " 'Taak ' || n, %s::date + days, 'in_document', '',"
             " CASE WHEN is_open THEN 'open' ELSE 'done' END, assignee,"
@@ -510,7 +512,11 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
             " CASE WHEN (%s::text[])[1 + (n %% %s)::int] = 'pay' AND n %% 10 < 3"
             "  THEN (n %% 100000) / 100.0 END,"
             " CASE WHEN days IS NULL AND n %% 2 = 0"
-            "  THEN 'binnen zes weken na dagtekening' ELSE '' END"
+            "  THEN 'binnen zes weken na dagtekening' ELSE '' END,"
+            # Letter status: 5 % of the open tasks wait for a reply, a third of those with a
+            # date that has passed (the waiting is over); again from the row number.
+            " CASE WHEN is_open AND n %% 20 = 7 THEN %s::date"
+            "  + (CASE WHEN n %% 3 = 0 THEN -(1 + n %% 30) ELSE 1 + n %% 60 END)::int END"
             " FROM unnest(%s::uuid[], %s::boolean[], %s::uuid[], %s::uuid[], %s::int[])"
             "   WITH ORDINALITY AS t(d, is_open, assignee, maker, days, n)",
             [
@@ -523,6 +529,7 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
                 now,
                 _TASK_TYPES,
                 len(_TASK_TYPES),
+                today,
                 [None if t.letter is None else letters[t.letter] for t in plan.tasks],
                 [t.open for t in plan.tasks],
                 [None if t.assigned_to is None else users[t.assigned_to] for t in plan.tasks],
@@ -530,6 +537,18 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
                 [t.deadline_days for t in plan.tasks],
             ],
         )
+        # 2 % of the open tasks of a member are snoozed by that member (a stable pick).
+        c.execute(
+            "INSERT INTO tasks_tasksnooze (id, created_at, updated_at, workspace_id, task_id,"
+            " user_id, until)"
+            " SELECT gen_random_uuid(), %s, %s, workspace_id, id, assigned_to_id, %s::date + 5"
+            " FROM tasks_task WHERE workspace_id = %s AND status = 'open'"
+            " AND assigned_to_id IS NOT NULL AND document_id IS NOT NULL"
+            " AND abs(hashtext(id::text)) %% 50 = 0",
+            [now, now, today, workspace_id],
+        )
+        # The cached task facts of every letter (what `letter_sync` keeps).
+        c.execute(letter_sync.RECOMPUTE, {"workspace": workspace_id})
         c.execute(
             "INSERT INTO documents_documentevent (id, created_at, updated_at, workspace_id,"
             " document_id, kind, origin, actor_id, person_id, person_name, label_id, label_name,"
@@ -589,6 +608,7 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
             "documents_documentreader",
             "documents_documentreadmark",
             "tasks_task",
+            "tasks_tasksnooze",
         ):
             c.execute(f'VACUUM (ANALYZE) "{table}"')
 

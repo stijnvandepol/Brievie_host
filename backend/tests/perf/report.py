@@ -42,6 +42,11 @@ LISTS: Final = (
     "list_my_post_unread",
     "list_all_unread",
     "lingering_letters",
+    # Letter status (spec S 9): the filters before the 200-row cap, and the counts.
+    "list_documents_open",
+    "list_documents_own_person_waiting",
+    "letter_status_counts",
+    "letter_status_counts_own_person",
 )
 # Measured and shown, not part of P1's verdict (search is not a list of S 4.9.5); their
 # results must still match without the member filter.

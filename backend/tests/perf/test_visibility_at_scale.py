@@ -75,6 +75,10 @@ FILTERED: Final = (
     "list_my_post_unread",
     "list_all_unread",
     "lingering_letters",
+    "list_documents_open",
+    "list_documents_own_person_waiting",
+    "letter_status_counts",
+    "letter_status_counts_own_person",
 )
 
 
@@ -164,6 +168,19 @@ def _list(name: str, workspace: Workspace, world: PerfWorld, actor: UUID) -> Cal
             documents.list_documents(member, person_id=world.own_person[actor])
         ),
         "inbox_counts": lambda: json.dumps(documents.inbox_counts(member), sort_keys=True),
+        "list_documents_open": lambda: ids(documents.list_documents(member, letter_status="open")),
+        "list_documents_own_person_waiting": lambda: ids(
+            documents.list_documents(
+                member, person_id=world.own_person[actor], letter_status="waiting"
+            )
+        ),
+        "letter_status_counts": lambda: json.dumps(
+            vars(documents.status_counts(member)), sort_keys=True
+        ),
+        "letter_status_counts_own_person": lambda: json.dumps(
+            vars(documents.status_counts(member, person_id=world.own_person[actor])),
+            sort_keys=True,
+        ),
         "list_persons": lambda: counted(people.list_persons(workspace)),
         "list_labels": lambda: counted(labels.list_labels(workspace)),
         "list_tasks_all": lambda: f"{len(tasks.list_tasks(workspace, status='all'))} rows",
