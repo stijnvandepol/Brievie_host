@@ -2,10 +2,11 @@
 
 from uuid import UUID
 
+from django.conf import settings
 from procrastinate import JobContext
 from procrastinate.contrib.django import app
 
-from apps.backup import services
+from apps.backup import schedule, services
 
 QUEUE = "backup"
 
@@ -31,3 +32,13 @@ async def retry_stalled_backup_jobs(context: JobContext, timestamp: int) -> None
     """Give jobs of a keeper that died back to the queue; the retry resumes the `running` run."""
     for job in await context.app.job_manager.get_stalled_jobs(queue=QUEUE):
         await context.app.job_manager.retry_job(job)
+
+
+# The hour is read when the keeper starts (BRIEVIE_BACKUP_HOUR, default 2 in the night).
+@app.periodic(cron=f"30 {settings.BRIEVIE_BACKUP_HOUR} * * *")
+# Every worker defers every periodic task; the queueing lock keeps at most one waiting.
+@app.task(name="nightly_backup", queue=QUEUE, queueing_lock="nightly_backup")
+def nightly_backup(timestamp: int) -> None:
+    """Ask for the night's back-up: only with a destination, and not when one finished in
+    the last 20 hours. The back-up itself is the same job `./brievie backup` queues."""
+    schedule.request_nightly()

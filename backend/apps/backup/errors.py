@@ -8,6 +8,7 @@ REASONS: dict[str, Promise] = {
     ),
     "update_backup_unavailable": _("De noodback-up voor het bijwerken kon niet worden klaargezet."),
     "not_configured": _("Er is nog geen back-up ingesteld."),
+    "backup_running": _("Er loopt al een back-up. Wacht tot die klaar is."),
     "destination_conflict": _(
         "Je kunt maar één bestemming instellen: een map of een adres. Haal er één weg."
     ),

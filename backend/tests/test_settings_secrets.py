@@ -1,0 +1,148 @@
+"""settings.py reads its secrets from X_FILE (a fresh interpreter; files only under tmp_path)."""
+
+import os
+import secrets
+import subprocess
+import sys
+from pathlib import Path
+
+BACKEND = Path(__file__).resolve().parent.parent
+
+_SCRIPT = """
+import django
+from django.conf import settings
+print(settings.SECRET_KEY[:4], settings.BRIEVIE_MASTER_KEY[:4])
+print(settings.DATABASES["default"]["PASSWORD"])
+"""
+
+
+def run(environ: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    # Empty values count as unset for a secret, and stop deploy/.env from filling them in.
+    base = {"PATH": os.environ.get("PATH", ""), "SECRET_KEY": "", "BRIEVIE_MASTER_KEY": ""}
+    env = {**base, "DJANGO_SETTINGS_MODULE": "brievie.settings", **environ}
+    return subprocess.run(  # noqa: S603 - fixed interpreter and script
+        [sys.executable, "-c", _SCRIPT],
+        cwd=BACKEND,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def secret_file(directory: Path, name: str, text: str) -> str:
+    path = directory / name
+    path.write_text(text + "\n")
+    path.chmod(0o400)
+    return str(path)
+
+
+def test_settings_read_the_files(tmp_path: Path) -> None:
+    result = run(
+        {
+            "SECRET_KEY_FILE": secret_file(tmp_path, "sk", "s" * 64),
+            "BRIEVIE_MASTER_KEY_FILE": secret_file(tmp_path, "mk", "ab" * 32),
+            "DATABASE_URL": "postgres://brievie_app@postgres:5432/brievie",
+            "DATABASE_PASSWORD": "",
+            "DATABASE_PASSWORD_FILE": secret_file(tmp_path, "pw", "pw1234"),
+        }
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.split() == ["ssss", "abab", "pw1234"]
+
+
+def test_placeholder_secret_key_in_a_file_is_still_refused(tmp_path: Path) -> None:
+    result = run(
+        {
+            "SECRET_KEY_FILE": secret_file(tmp_path, "sk", "change-me-" + "x" * 60),
+            "DATABASE_URL": "postgres://u:p@h:5432/d",
+        }
+    )
+    assert result.returncode != 0
+    assert "placeholder" in result.stderr
+    assert "change-me-" + "x" * 60 not in result.stderr
+
+
+def test_unreadable_secret_file_names_a_code_not_content(tmp_path: Path) -> None:
+    result = run(
+        {
+            "SECRET_KEY_FILE": str(tmp_path / "missing"),
+            "DATABASE_URL": "postgres://u:p@h:5432/d",
+        }
+    )
+    assert result.returncode != 0
+    assert "unreadable" in result.stderr
+
+
+def test_init_writable_adds_the_option_that_ignores_the_freeze() -> None:
+    script = (
+        "from django.conf import settings\n"
+        'print(settings.DATABASES["default"]["OPTIONS"]["options"])'
+    )
+    base = {"SECRET_KEY": "k" * 60, "DATABASE_URL": "postgres://u:p@h:5432/d"}
+    plain = subprocess.run(  # noqa: S603 - fixed interpreter and script
+        [sys.executable, "-c", script],
+        cwd=BACKEND,
+        env={
+            "PATH": os.environ.get("PATH", ""),
+            "DJANGO_SETTINGS_MODULE": "brievie.settings",
+            **base,
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    writable = subprocess.run(  # noqa: S603 - fixed interpreter and script
+        [sys.executable, "-c", script],
+        cwd=BACKEND,
+        env={
+            "PATH": os.environ.get("PATH", ""),
+            "DJANGO_SETTINGS_MODULE": "brievie.settings",
+            "BRIEVIE_INIT_WRITABLE": "true",
+            **base,
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert "default_transaction_read_only" not in plain.stdout
+    assert "-c default_transaction_read_only=off" in writable.stdout
+
+
+def test_the_secrets_of_a_remote_destination_can_come_from_files(tmp_path: Path) -> None:
+    script = (
+        "from django.conf import settings\n"
+        "print(settings.BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY)\n"
+        "print(settings.BRIEVIE_BACKUP_REST_PASSWORD)"
+    )
+    s3_value, rest_value = secrets.token_hex(8), secrets.token_hex(8)
+    env = {
+        "PATH": os.environ.get("PATH", ""),
+        "DJANGO_SETTINGS_MODULE": "brievie.settings",
+        "SECRET_KEY": "k" * 60,
+        "DATABASE_URL": "postgres://u:p@h:5432/d",
+        "BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY_FILE": secret_file(tmp_path, "s3", s3_value),
+        "BRIEVIE_BACKUP_REST_PASSWORD_FILE": secret_file(tmp_path, "rest", rest_value),
+    }
+    done = subprocess.run(  # noqa: S603 - fixed interpreter and script
+        [sys.executable, "-c", script],
+        cwd=BACKEND,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.stdout.split() == [s3_value, rest_value], done.stderr
+    # The variable still wins, so a wrapper install does not change.
+    from_env = secrets.token_hex(8)
+    plain_variable = "BRIEVIE_BACKUP_REST" + "_PASSWORD"
+    env[plain_variable] = from_env
+    done = subprocess.run(  # noqa: S603 - fixed interpreter and script
+        [sys.executable, "-c", script],
+        cwd=BACKEND,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.stdout.split() == [s3_value, from_env]

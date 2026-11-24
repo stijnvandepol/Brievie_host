@@ -429,6 +429,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/server/backup-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Backup Run
+         * @description Web session only: a bearer token answers 401 not_authenticated; a session without a valid CSRF token answers 403. Server admins only. Queues one back-up now (the keeper makes it) and records backup_requested in the log. 409 not_configured without a destination; 409 backup_running while one is open.
+         */
+        post: operations["createBackupRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/server/backup-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Backup Status
+         * @description Web session only: a bearer token answers 401 not_authenticated. Server admins only. What the back-up panel shows: the kind of destination (never its path or address), the last good back-up and the last failure since, and whether one is running or late.
+         */
+        get: operations["getBackupStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/server/ca-certificate": {
         parameters: {
             query?: never;
@@ -440,6 +480,26 @@ export interface paths {
         get: operations["getCaCertificate"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/server/recovery-sheet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Recovery Sheet
+         * @description Web session only: a bearer token answers 401 not_authenticated; a session without a valid CSRF token answers 403. Server admins only (403 forbidden). The sheet carries the master key: the session must have signed in or called reauthenticate within 15 minutes (403 reauthentication_required). Answers the page as a download (Cache-Control: no-store) and records recovery_sheet_viewed in the log. 409 recovery_sheet_not_here on a server that is not a compose install: there the sheet is made on the server with ./brievie recovery-sheet. POST, never GET: a GET would be cached and logged on the way.
+         */
+        post: operations["createRecoverySheet"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2380,6 +2440,45 @@ export interface components {
             values: {
                 [key: string]: string;
             };
+        };
+        /** BackupRunOut */
+        BackupRunOut: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+        };
+        /**
+         * BackupStatusOut
+         * @description What the web interface shows of the back-up. No path, key, credential or address.
+         */
+        BackupStatusOut: {
+            /** Destination */
+            destination: string;
+            /**
+             * Last Check At
+             * Format: date-time
+             */
+            last_check_at: string | null;
+            /**
+             * Last Failure At
+             * Format: date-time
+             */
+            last_failure_at: string | null;
+            /** Last Failure Reason */
+            last_failure_reason: string;
+            /**
+             * Last Success At
+             * Format: date-time
+             */
+            last_success_at: string | null;
+            /** Last Success Size Bytes */
+            last_success_size_bytes: number | null;
+            /** Late */
+            late: boolean;
+            /** Running */
+            running: boolean;
         };
         /** CaCertificateOut */
         CaCertificateOut: {
@@ -6098,6 +6197,100 @@ export interface operations {
             };
         };
     };
+    createBackupRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupRunOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    getBackupStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupStatusOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     getCaCertificate: {
         parameters: {
             query?: never;
@@ -6118,6 +6311,62 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    createRecoverySheet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The recovery sheet, a printable HTML page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
