@@ -26,9 +26,16 @@ def jpeg_size(data: bytes) -> tuple[int, int] | None:
 
     Walks the segments from the start of image to the first scan header.
     """
+    frame = jpeg_frame(data)
+    return None if frame is None else (frame[0], frame[1])
+
+
+def jpeg_frame(data: bytes) -> tuple[int, int, int] | None:
+    """(width, height, colour components) of a structurally whole JPEG, or None: what a
+    PDF needs to embed it as it is (`apps.documents.pdf`)."""
     if not data.startswith(_SOI):
         return None
-    size: tuple[int, int] | None = None
+    size: tuple[int, int, int] | None = None
     position = len(_SOI)
     while position < len(data):
         if data[position] != 0xFF:
@@ -52,13 +59,12 @@ def jpeg_size(data: bytes) -> tuple[int, int] | None:
                 return None
             height = int.from_bytes(data[position + 3 : position + 5], "big")
             width = int.from_bytes(data[position + 5 : position + 7], "big")
-            size = (width, height)
+            size = (width, height, data[position + 7])
         elif marker == _SOS:
-            return size if size is not None and _sane(size) else None
+            return size if size is not None and _sane(size[0], size[1]) else None
         position += length
     return None
 
 
-def _sane(size: tuple[int, int]) -> bool:
-    width, height = size
+def _sane(width: int, height: int) -> bool:
     return 0 < width <= MAX_SIDE and 0 < height <= MAX_SIDE and width * height <= MAX_PIXELS

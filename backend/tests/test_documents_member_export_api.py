@@ -283,6 +283,7 @@ def test_business_workspace_refuses_until_allowed(ws_b: Workspace) -> None:
         "expires_at": None,
         "document_count": 0,
         "size": 0,
+        "scope": "mine",
     }
     refused = post_json(client, f"/workspaces/{ws_b.id}/my-export")
     assert refused.status_code == 403
@@ -476,7 +477,7 @@ def test_export_is_logged(ws_a: Workspace) -> None:
     (created,) = workspace_rows(ws_a, AuditCode.EXPORT_CREATED)
     (downloaded,) = workspace_rows(ws_a, AuditCode.EXPORT_DOWNLOADED)
 
-    assert created.values == {"document_count": 2}
+    assert created.values == {"document_count": 2, "scope": "mine"}
     assert (created.actor_kind, created.actor_id) == ("user", user.id)
     assert created.actor_name == user.name
     assert (created.target_kind, created.target_id, created.target_name) == ("export", row.id, "")

@@ -1,7 +1,9 @@
 """The export building block of Beheer 5: chosen documents as a streamed ZIP.
 
-Part A uses it for a member's own export, part E adds the PDF per letter and the
-workspace export. Three rules:
+Part A uses it for a member's own export; the archive (spec S 9, version 2) adds a PDF per
+document (`documents/<year>/<date>_<name>_<id8>.pdf`, our own writer, `apps.documents.pdf`),
+own documents and their fields, the masked text and the history, and the admin's export of
+everything they may read. Version 2 keeps every key of version 1. Three rules:
 
 - Every read goes through `export_context`, the one place that decides which rows a
   reader may see (part B narrows it for private post). Nothing else in an export enters
@@ -15,7 +17,9 @@ workspace export. Three rules:
 
 import json
 import logging
+import re
 import time
+import unicodedata
 import zipfile
 from collections.abc import Sequence
 from contextlib import AbstractContextManager
@@ -30,14 +34,15 @@ from django.utils.translation import gettext as _
 
 from apps.common import crypto
 from apps.documents.intake import page_aad
-from apps.documents.models import LIVE, Document, DocumentPage
+from apps.documents.models import LIVE, Document, DocumentEvent, DocumentPage
+from apps.documents.pdf import pdf_can_hold, write_pdf
 from apps.documents.storage import default_storage
 from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.keys import workspace_key
 
 logger = logging.getLogger(__name__)
 
-EXPORT_VERSION = 1
+EXPORT_VERSION = 2
 DATA_FILE = "brievie-export.json"
 README_FILE = "LEESMIJ.txt"
 
@@ -72,6 +77,24 @@ class _DocumentRead:
     entry: dict[str, object]
     pages: list[_PageRow]
     key: bytes
+    # The PDF's path in the ZIP.
+    pdf: str
+
+
+# A file name part: ASCII letters, digits and dashes, at most this long.
+_NAME_MAX = 60
+_NOT_NAME = re.compile(r"[^a-z0-9]+")
+
+
+def pdf_name(document: Document) -> str:
+    """`documents/<year>/<date>_<name>_<id8>.pdf`: the document's own date (else its
+    upload's), its title or sender as ASCII, and the first 8 characters of its id, which
+    keep two names apart."""
+    day = document.letter_date or timezone.localtime(document.created_at).date()
+    source = document.title or document.sender or document.kind
+    ascii_name = unicodedata.normalize("NFKD", source).encode("ascii", "ignore").decode()
+    name = _NOT_NAME.sub("-", ascii_name.lower()).strip("-")[:_NAME_MAX].strip("-")
+    return f"documents/{day.year}/{day.isoformat()}_{name or 'document'}_{str(document.id)[:8]}.pdf"
 
 
 def write_export(
@@ -123,18 +146,36 @@ def _read_document(
             _PageRow(index=p.index, storage_path=p.storage_path)
             for p in DocumentPage.objects.filter(document=document).order_by("index")
         ]
+        people = sorted(
+            document.addressee_links.values_list(
+                "person__display_name", "person_id", "person__kind"
+            ),
+            key=lambda row: (row[0], str(row[1])),
+        )
+        pdf = pdf_name(document)
         entry: dict[str, object] = {
             "id": str(document.id),
+            "kind": document.kind,
+            "title": document.title,
             "status": document.status,
+            "source": document.source,
             "sender": document.sender,
             "document_type": document.document_type,
             "letter_date": _iso(document.letter_date),
+            # The same day under its archive name: a document's own date.
+            "document_date": _iso(document.letter_date),
+            "expires_on": _iso(document.expires_on),
+            "retain_until": _iso(document.retain_until),
             "summary": document.summary,
             "summary_by_ai": document.summary_by_ai,
+            # Stored BSN-masked; the page images are not.
+            "ocr_text": document.ocr_text,
             "created_at": document.created_at.isoformat(),
-            "persons": sorted(
-                document.addressee_links.values_list("person__display_name", flat=True)
-            ),
+            "persons": [name for name, _id, _kind in people],
+            "people": [
+                {"id": str(person_id), "name": name, "kind": kind}
+                for name, person_id, kind in people
+            ],
             "labels": sorted(document.label_links.values_list("label__name", flat=True)),
             "tasks": [
                 {
@@ -142,11 +183,22 @@ def _read_document(
                     "description": task.description,
                     "deadline": _iso(task.deadline),
                     "status": task.status,
+                    "completed_at": task.completed_at.isoformat() if task.completed_at else "",
                 }
                 for task in document.tasks.order_by("deadline", "created_at", "id")
             ],
+            # What happened and when; no names of others and no free text.
+            "history": [
+                {"kind": kind, "origin": origin, "date": created_at.isoformat()}
+                for kind, origin, created_at in DocumentEvent.objects.filter(document=document)
+                .order_by("created_at", "id")
+                .values_list("kind", "origin", "created_at")
+            ],
+            "pdf": pdf,
+            # The file as it came in, once browser uploads keep it (intake); none yet.
+            "original": None,
         }
-        return _DocumentRead(entry=entry, pages=pages, key=workspace_key(workspace_id))
+        return _DocumentRead(entry=entry, pages=pages, key=workspace_key(workspace_id), pdf=pdf)
 
 
 def _write_pages(
@@ -162,6 +214,7 @@ def _write_pages(
     read (a file missing for a document that still exists is an error).
     """
     names: list[str] = []
+    opened: list[bytes] = []
     for page in read.pages:
         try:
             data = _open_page(workspace_id, document_id, page.index, page.storage_path, read.key)
@@ -174,6 +227,19 @@ def _write_pages(
         # JPEG data does not compress; storing it saves the time.
         _add(archive, name, data, compress=False)
         names.append(name)
+        opened.append(data)
+    # The PDF of the same pages, written into the ZIP as it is made: nothing unsealed
+    # touches the disk. Its pages are the opened ones, held for this document only. A page
+    # a PDF cannot hold as it is (no whole JPEG of 1, 3 or 4 colours) leaves the document
+    # without a PDF; its pictures are there.
+    if not all(pdf_can_hold(data) for data in opened):
+        read.entry["pdf"] = None
+        return names
+    info = zipfile.ZipInfo(read.pdf, date_time=time.localtime()[:6])
+    info.compress_type = zipfile.ZIP_STORED
+    info.external_attr = 0o644 << 16
+    with archive.open(info, "w", force_zip64=True) as target:
+        write_pdf(opened, target)
     return names
 
 
@@ -212,11 +278,17 @@ def _readme(title: str, counts: ExportCounts) -> str:
             _("Aantal brieven: %(documents)d") % {"documents": counts.documents},
             _("Aantal pagina's: %(pages)d") % {"pages": counts.pages},
             "",
+            _("De map documents: elke brief en elk eigen document als PDF, per jaar."),
             _("De map pagina's: elke brief heeft een eigen map met een foto per pagina."),
             _(
                 "brievie-export.json: de gegevens van elke brief, zoals afzender, "
                 "samenvatting, labels, personen en taken."
             ),
+            _(
+                "Je opent brievie-export.json in een rekenblad (zoals Excel of LibreOffice) of "
+                "geeft het aan een ander programma, samen met de PDF's."
+            ),
+            _("Dit is geen back-up: terugzetten doe je met de back-up van Brievie."),
             "",
             _(
                 "Let op: in de tekst en de gegevens is het BSN weggehaald. Op de foto's van "

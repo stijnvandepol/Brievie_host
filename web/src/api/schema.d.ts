@@ -1649,7 +1649,7 @@ export interface paths {
         put?: never;
         /**
          * Create My Export
-         * @description Web session only: a bearer token answers 401 not_authenticated. Any member asks for an export of their own post: the letters on their name, as a ZIP of the page images and their data. A job builds it; poll `getMyExport`. The file can be downloaded for 24 hours, by the member who asked for it only. A newer request replaces an older export. 403 `export_not_allowed` when an admin switched exports off in this workspace, 409 `export_running` while the last one is being built, 429 after five requests in an hour. Written to the log (`export_created`).
+         * @description Web session only: a bearer token answers 401 not_authenticated. Any member asks for an export of their own post: the letters on their name, as a ZIP of the page images and their data. A job builds it; poll `getMyExport`. The file can be downloaded for 24 hours, by the member who asked for it only. A newer request replaces an older export. 403 `export_not_allowed` when an admin switched exports off in this workspace, 409 `export_running` while the last one is being built, 429 after five requests in an hour. Written to the log (`export_created`). Version 2 holds a PDF per document next to the page images, own documents, the masked text and the history. `scope=all` ("Alles exporteren", admins only: 403 `not_admin` otherwise) exports every document the admin may read, whatever `allow_member_export` says; private letters the admin may not read are not in it. One export per member, whatever its scope.
          */
         post: operations["createMyExport"];
         delete?: never;
@@ -4111,6 +4111,11 @@ export interface components {
              * Format: uuid
              */
             id?: string | null;
+            /**
+             * Scope
+             * @default mine
+             */
+            scope: string;
             /**
              * Size
              * @default 0
@@ -11396,7 +11401,9 @@ export interface operations {
     };
     createMyExport: {
         parameters: {
-            query?: never;
+            query?: {
+                scope?: string;
+            };
             header?: never;
             path: {
                 workspace_id: string;
@@ -11443,6 +11450,15 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

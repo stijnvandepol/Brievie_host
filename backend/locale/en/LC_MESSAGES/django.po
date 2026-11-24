@@ -1389,12 +1389,24 @@ msgid "Aantal pagina's: %(pages)d"
 msgstr "Number of pages: %(pages)d"
 
 #: apps/documents/export.py
+msgid "De map documents: elke brief en elk eigen document als PDF, per jaar."
+msgstr "The folder documents: every letter and every own document as a PDF, by year."
+
+#: apps/documents/export.py
 msgid "De map pagina's: elke brief heeft een eigen map met een foto per pagina."
 msgstr "The folder pages: each letter has its own folder with a photo per page."
 
 #: apps/documents/export.py
 msgid "brievie-export.json: de gegevens van elke brief, zoals afzender, samenvatting, labels, personen en taken."
 msgstr "brievie-export.json: the details of each letter, such as sender, summary, labels, persons and tasks."
+
+#: apps/documents/export.py
+msgid "Je opent brievie-export.json in een rekenblad (zoals Excel of LibreOffice) of geeft het aan een ander programma, samen met de PDF's."
+msgstr "Open brievie-export.json in a spreadsheet (such as Excel or LibreOffice) or give it to another program, together with the PDFs."
+
+#: apps/documents/export.py
+msgid "Dit is geen back-up: terugzetten doe je met de back-up van Brievie."
+msgstr "This is not a backup: to restore, use Brievie's backup."
 
 #: apps/documents/export.py
 msgid "Let op: in de tekst en de gegevens is het BSN weggehaald. Op de foto's van de pagina's is het BSN wel te lezen."
@@ -1462,12 +1474,25 @@ msgid "We kunnen deze export niet vinden."
 msgstr "We can't find this export."
 
 #: apps/documents/member_export.py
+msgid "Kies mijn archief of alles."
+msgstr "Choose my archive or everything."
+
+#: apps/documents/member_export.py
 msgid "In deze werkruimte staat exporteren uit. Vraag de beheerder."
 msgstr "Exporting is switched off in this workspace. Ask the admin."
 
 #: apps/documents/member_export.py
+msgid "Alleen een beheerder kan alles exporteren."
+msgstr "Only an admin can export everything."
+
+#: apps/documents/member_export.py
 msgid "Je export wordt nog gemaakt. Probeer het zo nog eens."
 msgstr "Your export is still being made. Try again in a moment."
+
+#: apps/documents/member_export.py
+#, python-format
+msgid "Brievie: alles wat %(name)s mag lezen"
+msgstr "Brievie: everything %(name)s may read"
 
 #: apps/documents/member_export.py
 #, python-format

@@ -174,7 +174,8 @@ ALLOWED_VALUES: dict[AuditCode, frozenset[str]] = {
     AuditCode.EMERGENCY_ACCESS_SWITCHED_ON: _NONE,
     AuditCode.EMERGENCY_ACCESS_SWITCHED_OFF: _NONE,
     AuditCode.EMERGENCY_ACCESS_USED: frozenset({"reason", "document_count"}),
-    AuditCode.EXPORT_CREATED: frozenset({"document_count"}),
+    # scope: mine (a member's own post) or all (an admin's everything they may read).
+    AuditCode.EXPORT_CREATED: frozenset({"document_count", "scope"}),
     AuditCode.EXPORT_DOWNLOADED: _NONE,
     # reason: user, duplicate.
     AuditCode.DOCUMENT_TRASHED: frozenset({"reason"}),

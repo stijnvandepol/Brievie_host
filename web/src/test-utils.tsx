@@ -481,12 +481,14 @@ export function ruleHandlers(
 export function exportState(
   status: "none" | "pending" | "ready" | "failed" = "none",
   allowed = true,
+  scope: "mine" | "all" = "mine",
 ): components["schemas"]["MyExportOut"] {
   return {
     allowed,
     status,
     document_count: 0,
     size: 0,
+    scope,
     ...(status === "ready"
       ? {
           id: "ee111111-1111-4111-8111-111111111111",

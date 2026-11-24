@@ -880,8 +880,16 @@ class MemberExport(WorkspaceModel):
         READY = "ready"
         FAILED = "failed"
 
+    class Scope(models.TextChoices):
+        # The member's own post (`member_document_ids`).
+        MINE = "mine"
+        # An admin's "Alles exporteren": everything they may read (archive spec S 9).
+        ALL = "all"
+
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    # Also a database default 'mine' (documents 0030) for raw inserts; no `db_default`.
+    scope = models.CharField(max_length=10, choices=Scope.choices, default=Scope.MINE)
     # `exports/<workspace id>/<export id>.sealed`, set when the export is asked for, so a
     # cleanup knows the file of a job that died.
     storage_path = models.CharField(max_length=300)

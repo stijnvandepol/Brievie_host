@@ -535,6 +535,8 @@ class MyExportOut(Schema):
     document_count: int = 0
     # Bytes of the sealed file.
     size: int = 0
+    # `mine` (the member's own post) or `all` (an admin's "Alles exporteren").
+    scope: str = "mine"
 
 
 class DocumentSearchIn(InputSchema):

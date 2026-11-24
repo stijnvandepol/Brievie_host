@@ -920,6 +920,7 @@ def _my_export_out(membership: Membership, export: MemberExport | None) -> MyExp
         expires_at=export.expires_at,
         document_count=export.document_count,
         size=export.size,
+        scope=export.scope,
     )
 
 
@@ -929,6 +930,7 @@ def _my_export_out(membership: Membership, export: MemberExport | None) -> MyExp
         202: MyExportOut,
         404: ErrorOut,
         409: ErrorOut,
+        422: ErrorOut,
         429: ErrorOut,
         **SESSION_WRITE_ERRORS,
     },
@@ -941,12 +943,18 @@ def _my_export_out(membership: Membership, export: MemberExport | None) -> MyExp
     " can be downloaded for 24 hours, by the member who asked for it only. A newer request"
     " replaces an older export. 403 `export_not_allowed` when an admin switched exports off"
     " in this workspace, 409 `export_running` while the last one is being built, 429 after"
-    " five requests in an hour. Written to the log (`export_created`).",
+    " five requests in an hour. Written to the log (`export_created`). Version 2 holds a PDF"
+    " per document next to the page images, own documents, the masked text and the history."
+    ' `scope=all` ("Alles exporteren", admins only: 403 `not_admin` otherwise) exports every'
+    " document the admin may read, whatever `allow_member_export` says; private letters the"
+    " admin may not read are not in it. One export per member, whatever its scope.",
 )
-def create_my_export(request: HttpRequest, workspace_id: UUID) -> Status[MyExportOut]:
+def create_my_export(
+    request: HttpRequest, workspace_id: UUID, scope: str = "mine"
+) -> Status[MyExportOut]:
     membership = workspace_member(request, workspace_id)
     export = member_export.create_my_export(
-        membership=membership, actor=actor_from_request(request)
+        membership=membership, actor=actor_from_request(request), scope=scope
     )
     return Status(202, _my_export_out(membership, export))
 

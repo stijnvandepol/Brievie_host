@@ -2905,3 +2905,23 @@ Rulings of the spec, kept as written:
   (`EmptyTrashOut.retained`), and the 30-day expiry leaves it in the trash until the day has
   passed. Any editor may clear the date (`updateDocumentDetails`, history
   `retention_changed`). The sentences name the date only.
+- **AR10 (plan Task 10).** The export is version 2: next to the page images (kept, so a reader
+  of version 1 finds every key it knew) a PDF per document,
+  `documents/<year>/<date>_<title-or-sender>_<id8>.pdf`, made by our own writer
+  (`apps.documents.pdf`, about 100 lines: each JPEG embedded as it is with `DCTDecode`, the
+  page as large as the scan at 144 dpi, no text layer, no new dependency). The pages are
+  opened once each, in memory, and written into the ZIP; nothing unsealed touches the disk.
+  A page a PDF cannot hold as it is leaves that document without a PDF (`pdf: null`). The JSON
+  adds `kind`, `title`, `document_date`, `expires_on`, `retain_until`, `source`, `ocr_text`
+  (the stored, BSN-masked text: a change from version 1, which left the text out, as the
+  archive spec asks), `people` (name, id, kind), a task's `completed_at`, `history` (kind,
+  origin, date; no names or free text), `pdf` and `original` (null until browser uploads
+  keep originals).
+- **AR13 (plan Task 10).** `createMyExport?scope=all` ("Alles exporteren") is an admin's (the
+  role re-read under the membership lock; 403 `not_admin`), web session only, and ignores
+  `allow_member_export`; `mine` obeys it as before. What `all` holds is read as the admin
+  (`admin_document_ids`, under `export_context` with the admin as reader), so the policies
+  leave out every private letter the admin may not read; a letter the admin reads only
+  through emergency access is left out too. The build and the download check the admin role
+  again (a demoted admin's export fails or is not found). One export row per member, whatever
+  its scope; `export_created` records `scope` with the count.
