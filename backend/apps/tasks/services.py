@@ -9,10 +9,8 @@ from django.db import transaction
 from django.db.models import (
     Case,
     Count,
-    Exists,
     F,
     IntegerField,
-    OuterRef,
     Q,
     QuerySet,
     Value,
@@ -302,11 +300,15 @@ def active_q(today: date) -> Q:
 
 
 def snoozed_by(user_id: UUID, today: date) -> Q:
-    """The member put the task off and the day is still ahead (their own row only: the
-    own-rows policy hides everyone else's)."""
-    return Q(
-        Exists(TaskSnooze.objects.filter(task=OuterRef("pk"), user_id=user_id, until__gt=today))
+    """The member put the task off and the day is still ahead (their own rows only: the
+    own-rows policy hides everyone else's). The ids are read once, a handful, so no query
+    probes the snooze table (and its nested task policy) once per task."""
+    ids = list(
+        TaskSnooze.objects.filter(user_id=user_id, until__gt=today).values_list(
+            "task_id", flat=True
+        )
     )
+    return Q(id__in=ids)
 
 
 def _parts() -> str:
