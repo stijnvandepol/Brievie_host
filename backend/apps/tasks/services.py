@@ -9,8 +9,10 @@ from django.db import transaction
 from django.db.models import (
     Case,
     Count,
+    Exists,
     F,
     IntegerField,
+    OuterRef,
     Q,
     QuerySet,
     Value,
@@ -230,6 +232,9 @@ class MyTaskCounts:
     within_week: int
     needs_date: int
     to_pick_up: int
+    # Open tasks that wait for a reply, and the member's snoozed ones (letter status S 6.3).
+    waiting: int = 0
+    snoozed: int = 0
 
 
 def task_today(now: datetime | None = None) -> date:
@@ -290,15 +295,38 @@ def _live(workspace: Workspace) -> QuerySet[Task]:
     )
 
 
+def active_q(today: date) -> Q:
+    """The task does not wait for a reply, or the day it waits until has arrived (letter
+    status spec S 4.1: a waiting day of today or past is active again)."""
+    return Q(waiting_until__isnull=True) | Q(waiting_until__lte=today)
+
+
+def snoozed_by(user_id: UUID, today: date) -> Q:
+    """The member put the task off and the day is still ahead (their own row only: the
+    own-rows policy hides everyone else's)."""
+    return Q(
+        Exists(TaskSnooze.objects.filter(task=OuterRef("pk"), user_id=user_id, until__gt=today))
+    )
+
+
 def _parts() -> str:
     return _("Kies mine, to_pick_up of all.")
 
 
-def my_tasks(membership: Membership, *, part: str = "mine", status: str = "open") -> MyTaskList:
+def my_tasks(
+    membership: Membership,
+    *,
+    part: str = "mine",
+    status: str = "open",
+    include_waiting: bool = False,
+) -> MyTaskList:
     """The member's tasks of one part: open by date (undated last, those that need a date
     first among them), or done in the last 30 days, newest first. Runs as the member: the
     task policy decides what is visible, the part only narrows. 422 for another part or
-    status; "to_pick_up" at home is empty (S 5.2)."""
+    status; "to_pick_up" at home is empty (S 5.2). Open tasks that wait for a reply (shared)
+    or that the member snoozed (their own) are not in the date groups; with
+    `include_waiting` they follow in the groups `waiting` and `snoozed` (letter status S
+    6.3), each capped inside the list maximum."""
     if part not in Part.__members__.values():
         raise ApiError(422, "validation_error", _parts())
     if status not in Task.Status.values:
@@ -311,8 +339,12 @@ def my_tasks(membership: Membership, *, part: str = "mine", status: str = "open"
     if condition is not None:
         tasks = tasks.filter(condition)
     tasks = tasks.select_related("document")
+    active = active_q(today)
+    mine_snoozed = snoozed_by(facts.user_id, today)
     if status == Task.Status.OPEN:
         cap = MY_LIST_MAX
+        everything = tasks
+        tasks = tasks.filter(active & ~mine_snoozed)
         ordered = tasks.order_by(
             F("deadline").asc(nulls_last=True),
             Case(When(term_quote="", then=Value(1)), default=Value(0), output_field=IntegerField()),
@@ -326,6 +358,24 @@ def my_tasks(membership: Membership, *, part: str = "mine", status: str = "open"
     rows = list(ordered[: cap + 1]) if reasons else []
     truncated = len(rows) > cap
     rows = _with_people(rows[:cap])
+    parked: dict[UUID, Group] = {}
+    if include_waiting and status == Task.Status.OPEN and reasons:
+        waiting_rows = list(
+            everything.filter(~active).order_by("waiting_until", "created_at", "id")[:cap]
+        )
+        until = dict(
+            TaskSnooze.objects.filter(user_id=facts.user_id, until__gt=today).values_list(
+                "task_id", "until"
+            )
+        )
+        snoozed_rows = sorted(
+            everything.filter(active & mine_snoozed).order_by("created_at", "id")[:cap],
+            key=lambda t: until.get(t.id, today),
+        )
+        parked = {t.id: Group.WAITING for t in waiting_rows} | {
+            t.id: Group.SNOOZED for t in snoozed_rows
+        }
+        rows = rows + _with_people(waiting_rows + snoozed_rows)
     names = _names({p for t in rows if t.document is not None for p in t.document.addressee_ids})
     items = []
     for task in rows:
@@ -337,7 +387,8 @@ def my_tasks(membership: Membership, *, part: str = "mine", status: str = "open"
             MyTask(
                 task=task,
                 reason=reason,
-                group=group_for(task.deadline, today) if open_task else None,
+                group=parked.get(task.id)
+                or (group_for(task.deadline, today) if open_task else None),
                 days_left=days_left(task.deadline, today) if open_task else None,
                 for_names=_for_names(task, names, facts.person_ids),
             )
@@ -361,7 +412,12 @@ def count_my_tasks(membership: Membership) -> MyTaskCounts:
     open tasks, under the task policy like the list."""
     facts = member_facts(membership)
     today = task_today()
-    mine = _part_filter(Part.MINE, facts) or Q()
+    whole = _part_filter(Part.MINE, facts) or Q()
+    active = active_q(today)
+    mine_snoozed = snoozed_by(facts.user_id, today)
+    # Waiting tasks and the member's snoozed ones are not "to do now": they leave every
+    # number but their own (waiting first: a waiting task that is also snoozed is waiting).
+    mine = whole & active & ~mine_snoozed
     numbers = {
         "mine": Count("id", filter=mine),
         "overdue": Count("id", filter=mine & Q(deadline__lt=today)),
@@ -369,12 +425,14 @@ def count_my_tasks(membership: Membership) -> MyTaskCounts:
             "id", filter=mine & Q(deadline__gte=today, deadline__lte=today + WEEK)
         ),
         "needs_date": Count("id", filter=mine & Q(deadline__isnull=True) & ~Q(term_quote="")),
+        "waiting": Count("id", filter=whole & ~active),
+        "snoozed": Count("id", filter=whole & active & mine_snoozed),
     }
-    rows = mine
+    rows = whole
     if PARTS[(facts.split, Part.TO_PICK_UP)]:
         pick_up = _part_filter(Part.TO_PICK_UP, facts) or Q()
-        numbers["to_pick_up"] = Count("id", filter=pick_up)
-        rows = mine | pick_up
+        numbers["to_pick_up"] = Count("id", filter=pick_up & active & ~mine_snoozed)
+        rows = whole | pick_up
     counts = (
         _live(membership.workspace)
         .filter(status=Task.Status.OPEN)
@@ -387,6 +445,8 @@ def count_my_tasks(membership: Membership) -> MyTaskCounts:
         within_week=int(counts["within_week"]),
         needs_date=int(counts["needs_date"]),
         to_pick_up=int(counts.get("to_pick_up", 0)),
+        waiting=int(counts["waiting"]),
+        snoozed=int(counts["snoozed"]),
     )
 
 

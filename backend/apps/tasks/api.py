@@ -77,14 +77,23 @@ def list_tasks(request: HttpRequest, workspace_id: UUID, status: str = "open") -
         "organisation's department and unnamed post; empty at home) or `all` (every task "
         "they see). `status` is `open` (default; by deadline, undated last, at most 500) "
         "or `done` (completed in the last 30 days, newest first, at most 200). 422 "
-        "`validation_error` for another part or status."
+        "`validation_error` for another part or status. Tasks that wait for a reply "
+        "(`waiting_until` after today) and the caller's own snoozed tasks are left out of "
+        "the open list; with `include_waiting=true` they follow with `group` `waiting` and "
+        "`snoozed` (default false: callers that do not know these groups never meet them)."
     ),
 )
 def list_my_tasks(
-    request: HttpRequest, workspace_id: UUID, part: str = "mine", status: str = "open"
+    request: HttpRequest,
+    workspace_id: UUID,
+    part: str = "mine",
+    status: str = "open",
+    include_waiting: bool = False,
 ) -> MyTasksOut:
     membership = workspace_member(request, workspace_id)
-    result = services.my_tasks(membership, part=part, status=status)
+    result = services.my_tasks(
+        membership, part=part, status=status, include_waiting=include_waiting
+    )
     flags = assignment.flags_for_tasks(membership, [item.task for item in result.items])
     own = snooze.snoozed_until(
         [item.task for item in result.items], membership.user_id, result.today
@@ -98,7 +107,11 @@ def list_my_tasks(
     "/workspaces/{workspace_id}/my-tasks/counts",
     response={200: MyTaskCountsOut, 404: ErrorOut, **AUTH_ERRORS},
     operation_id="countMyTasks",
-    description='The numbers of "Mijn taken" for the navigation: open tasks only.',
+    description=(
+        'The numbers of "Mijn taken" for the navigation: open tasks only, without those that '
+        "wait for a reply and the caller's own snoozed ones (counted in `waiting` and "
+        "`snoozed`)."
+    ),
 )
 def count_my_tasks(request: HttpRequest, workspace_id: UUID) -> MyTaskCountsOut:
     membership = workspace_member(request, workspace_id)

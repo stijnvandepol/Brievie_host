@@ -1587,7 +1587,7 @@ export interface paths {
         };
         /**
          * List My Tasks
-         * @description "Mijn taken": the caller's tasks, derived from the post they may read. `part` is `mine` (default: given to them, or on their post), `to_pick_up` (an organisation's department and unnamed post; empty at home) or `all` (every task they see). `status` is `open` (default; by deadline, undated last, at most 500) or `done` (completed in the last 30 days, newest first, at most 200). 422 `validation_error` for another part or status.
+         * @description "Mijn taken": the caller's tasks, derived from the post they may read. `part` is `mine` (default: given to them, or on their post), `to_pick_up` (an organisation's department and unnamed post; empty at home) or `all` (every task they see). `status` is `open` (default; by deadline, undated last, at most 500) or `done` (completed in the last 30 days, newest first, at most 200). 422 `validation_error` for another part or status. Tasks that wait for a reply (`waiting_until` after today) and the caller's own snoozed tasks are left out of the open list; with `include_waiting=true` they follow with `group` `waiting` and `snoozed` (default false: callers that do not know these groups never meet them).
          */
         get: operations["listMyTasks"];
         put?: never;
@@ -1607,7 +1607,7 @@ export interface paths {
         };
         /**
          * Count My Tasks
-         * @description The numbers of "Mijn taken" for the navigation: open tasks only.
+         * @description The numbers of "Mijn taken" for the navigation: open tasks only, without those that wait for a reply and the caller's own snoozed ones (counted in `waiting` and `snoozed`).
          */
         get: operations["countMyTasks"];
         put?: never;
@@ -3771,8 +3771,18 @@ export interface components {
             needs_date: number;
             /** Overdue */
             overdue: number;
+            /**
+             * Snoozed
+             * @default 0
+             */
+            snoozed: number;
             /** To Pick Up */
             to_pick_up: number;
+            /**
+             * Waiting
+             * @default 0
+             */
+            waiting: number;
             /** Within Week */
             within_week: number;
         };
@@ -10784,6 +10794,7 @@ export interface operations {
             query?: {
                 part?: string;
                 status?: string;
+                include_waiting?: boolean;
             };
             header?: never;
             path: {

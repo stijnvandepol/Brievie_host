@@ -92,6 +92,10 @@ class MyTaskCountsOut(Schema):
     needs_date: int
     # Open tasks in "Op te pakken"; always 0 at home.
     to_pick_up: int
+    # Tasks that wait for a reply, and the caller's own snoozed ones: left out of the numbers
+    # above (letter status spec S 6.3).
+    waiting: int = 0
+    snoozed: int = 0
 
 
 class TaskAssigneeOut(Schema):
@@ -219,4 +223,6 @@ def my_task_counts_out(counts: MyTaskCounts) -> MyTaskCountsOut:
         within_week=counts.within_week,
         needs_date=counts.needs_date,
         to_pick_up=counts.to_pick_up,
+        waiting=counts.waiting,
+        snoozed=counts.snoozed,
     )
