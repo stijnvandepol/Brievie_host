@@ -40,7 +40,12 @@ def _make_every_task_count(o: Office) -> None:
     """Every task overdue with a term, half of them done today: each would show
     everywhere a hidden one could leak (items, every count, "Afgerond")."""
     with as_actor(o.workspace, SYSTEM):
-        tasks = list(Task.objects.order_by("id"))
+        # In the order the letters were made (the id is random), so the same letters are
+        # done and overdue every run and every member keeps open tasks of letters they read.
+        rank = {o.letters[name].id: index for index, name in enumerate(o.letters)}
+        tasks = sorted(
+            Task.objects.filter(document__isnull=False), key=lambda t: rank[t.document_id]
+        )
         for index, task in enumerate(tasks):
             task.description = SECRET
             task.deadline = date(2000, 1, 1) if index % 2 else None
@@ -172,6 +177,7 @@ def test_no_description_in_logs(caplog: pytest.LogCaptureFixture, client: Client
     client.get(_url(o, "/counts"))
     items = client.get(_url(o), {"part": "all"}).json()["items"]
     open_items = [i for i in items if i["status"] == "open"]
+    assert open_items, "Femke keeps an open task (finance_letter, private_femke)"
     first = open_items[0]["id"]
     post_json(
         client, f"/workspaces/{o.workspace.id}/tasks/{first}/assign", {"user_id": str(o.finance.id)}
