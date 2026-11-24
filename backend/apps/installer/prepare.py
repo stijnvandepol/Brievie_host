@@ -96,6 +96,9 @@ class Deps:
     auto_init: Callable[[], str]
     migrate: Callable[[], None]
     backup: Callable[[str], BackupResult]
+    # restic's own check of the back-up just made (a subset of its data, read back); True
+    # when it passed. A run that says "succeeded" is not yet proof that it can be read.
+    verify_backup: Callable[[UUID | None], bool]
     earlier_backup: Callable[[str], UUID | None]
     record: Callable[[Version | None, Version, UUID | None], None]
     store_settings_copy: Callable[[], None]
@@ -251,6 +254,13 @@ def run(deps: Deps) -> int:
     return _apply(deps, state, decision.outcome)
 
 
+def _checked(deps: Deps, run_id: UUID | None) -> bool:
+    try:
+        return deps.verify_backup(run_id)
+    except Exception:  # noqa: BLE001 - a check that cannot run is a check that failed
+        return False
+
+
 def _apply(deps: Deps, state: State, outcome: str) -> int:
     label = f"pre-update-{deps.image}"
     migrating = freeze.is_migrating(deps.connect, deps.names)
@@ -289,6 +299,15 @@ def _apply(deps: Deps, state: State, outcome: str) -> int:
             if not result.ok:
                 freeze.thaw(deps.connect, deps.names)
                 deps.complain(_("De back-up vóór het bijwerken is mislukt. Er is niets veranderd."))
+                return 1
+            if not _checked(deps, result.run_id):
+                freeze.thaw(deps.connect, deps.names)
+                deps.complain(
+                    _(
+                        "De back-up vóór het bijwerken is gemaakt, maar de controle erop is "
+                        "mislukt. Er is niets veranderd."
+                    )
+                )
                 return 1
             backup_run = result.run_id
         freeze.mark_migrating(deps.connect, deps.names)

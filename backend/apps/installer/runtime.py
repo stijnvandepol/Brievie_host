@@ -157,6 +157,22 @@ def _auto_init() -> str:
     return _("De back-upmap is klaargezet voor de back-ups.")
 
 
+def _verify_backup(run_id: UUID | None) -> bool:
+    """restic's check of the repository the back-up went to (a subset of its data is read
+    back), as a run of its own next to the back-up's."""
+    made = BackupRun.objects.filter(id=run_id).first() if run_id else None
+    if made is None:
+        return False
+    check = BackupRun.objects.create(
+        kind=BackupRun.Kind.CHECK,
+        requested_by=backup_services.UPDATE_SAFETY,
+        destination_kind=made.destination_kind,
+    )
+    backup_services.perform_run(check.id)
+    check.refresh_from_db()
+    return check.status == BackupRun.Status.SUCCEEDED
+
+
 def _earlier_backup(label: str) -> UUID | None:
     run = (
         BackupRun.objects.filter(
@@ -213,6 +229,7 @@ def build_deps(
         auto_init=_auto_init,
         migrate=_migrate,
         backup=_backup,
+        verify_backup=_verify_backup,
         earlier_backup=_earlier_backup,
         record=_record,
         store_settings_copy=lambda: store_env_copy(settings_copy_text(environ)),

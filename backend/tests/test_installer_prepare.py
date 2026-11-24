@@ -36,6 +36,7 @@ class Fakes:
     frozen_during: dict[str, bool] = field(default_factory=dict)
     backup_ok: bool = True
     backup_raises: bool = False
+    verify_ok: bool = True
     migrate_error: MigrateError | None = None
     earlier: UUID | None = None
     recorded: list[tuple[Version | None, Version, UUID | None]] = field(default_factory=list)
@@ -69,6 +70,11 @@ class Fakes:
         if self.backup_raises:
             raise RuntimeError("the destination went away mid-run")
         return BackupResult(ok=self.backup_ok, run_id=RUN_ID if self.backup_ok else None)
+
+    def verify_backup(self, run_id: UUID | None) -> bool:
+        self.calls.append("verify")
+        self.frozen_during["verify"] = self.is_frozen()
+        return self.verify_ok
 
     def earlier_backup(self, label: str) -> UUID | None:
         self.calls.append(f"earlier:{label}")
@@ -108,6 +114,7 @@ def make_deps(
         auto_init=fakes.auto_init,
         migrate=fakes.migrate,
         backup=fakes.backup,
+        verify_backup=fakes.verify_backup,
         earlier_backup=fakes.earlier_backup,
         record=fakes.record,
         store_settings_copy=lambda: fakes.calls.append("copy"),
@@ -210,8 +217,20 @@ def test_an_update_freezes_backs_up_migrates_records_and_thaws(
     seed(connect, scratch, installed="0.4.0")
     fakes = Fakes()
     assert prepare.run(make_deps(connect, scratch, fakes)) == 0
-    assert fakes.calls == ["auto_init", "backup:pre-update-0.5.0", "migrate", "record", "copy"]
-    assert fakes.frozen_during == {"backup": True, "migrate": True, "record": True}
+    assert fakes.calls == [
+        "auto_init",
+        "backup:pre-update-0.5.0",
+        "verify",
+        "migrate",
+        "record",
+        "copy",
+    ]
+    assert fakes.frozen_during == {
+        "backup": True,
+        "verify": True,
+        "migrate": True,
+        "record": True,
+    }
     assert fakes.recorded == [(v("0.4.0"), IMAGE, RUN_ID)]
     assert not fakes.is_frozen()
 
@@ -554,3 +573,16 @@ def test_an_unknown_error_while_migrating_stays_read_only_with_the_way_back(
     assert prepare.run(make_deps(connect, scratch, fakes)) == 1
     assert "restore_install pre-update-0.5.0 --replace" in fakes.complained[0]
     assert fakes.is_frozen()
+
+
+def test_a_back_up_that_fails_its_check_stops_before_migrating(
+    connect: Connect, scratch: Names
+) -> None:
+    prepared(connect, scratch)
+    seed(connect, scratch, installed="0.4.0")
+    fakes = Fakes(verify_ok=False)
+    assert prepare.run(make_deps(connect, scratch, fakes)) == 1
+    assert "controle erop is mislukt" in fakes.complained[0]
+    assert fakes.complained[0].endswith("Er is niets veranderd.")
+    assert fakes.calls == ["auto_init", "backup:pre-update-0.5.0", "verify"]
+    assert not fakes.is_frozen()

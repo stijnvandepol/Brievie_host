@@ -1843,6 +1843,10 @@ msgid "De back-up vóór het bijwerken is mislukt. Er is niets veranderd."
 msgstr "The back-up before the update failed. Nothing has changed."
 
 #: apps/installer/prepare.py
+msgid "De back-up vóór het bijwerken is gemaakt, maar de controle erop is mislukt. Er is niets veranderd."
+msgstr "The back-up before the update was made, but the check of it failed. Nothing has changed."
+
+#: apps/installer/prepare.py
 msgid "Een eerdere start liet de database op alleen-lezen staan; dat wordt opgeheven."
 msgstr "An earlier start left the database read-only; that is being lifted."
 

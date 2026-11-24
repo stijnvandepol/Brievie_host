@@ -787,7 +787,10 @@ Account, Back-up.
 
 ### Updating
 
-Change the version (`BRIEVIE_VERSION`, or the default in the two image lines) and
+**Read this first: a refused or failed update takes Brievie down until you set the old version
+number back.** Your data stay as they were (a refusal changes nothing), but Compose has already
+stopped the old services to make the new ones, so nothing answers until the old number is back and
+you start again. Change the version (`BRIEVIE_VERSION`, or the default in the two image lines) and
 `up -d` / Deploy again. The first container to start, `init`, does what `./brievie update` does
 before it changes anything: it refuses a **step back** or data from a newer version, a jump
 past `min_upgrade_from` ("Werk eerst bij naar ..."), another PostgreSQL major, a compose
@@ -807,7 +810,8 @@ the update when the back-up `pre-update-<version>` exists and otherwise asks for
 When it may go on, `init` makes the database read-only for every session but its own (so
 that nothing else can write while it backs up and migrates), makes the back-up
 `pre-update-<version>` to your back-up folder or, without one, to the volume
-`update-backup`, migrates, records the version and lifts the freeze. A failure before any migration
+`update-backup`, has restic read a part of it back (a check; a back-up that cannot be read stops the
+update before anything changes), migrates, records the version and lifts the freeze. A failure before any migration
 lifts the freeze and changes nothing. A failure after one stays read-only and prints the way back:
 put the old version number in the file, then type, one by one (these are the commands
 `init` prints; a test keeps them equal):
