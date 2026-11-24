@@ -19,7 +19,7 @@ class SessionAuth(NinjaSessionAuth):
     """
 
     def _get_key(self, request: HttpRequest) -> str | None:
-        if not request.user.is_authenticated or not session_allowed(request):
+        if not request.user.is_authenticated:
             return None
         try:
             return super()._get_key(request)
@@ -35,6 +35,12 @@ class SessionAuth(NinjaSessionAuth):
                     "probeer het opnieuw."
                 ),
             ) from exc
+
+    def authenticate(self, request: HttpRequest, key: str | None) -> object | None:
+        # No web session counts on the public route while the web is off there (S 7.6).
+        if not session_allowed(request):
+            return None
+        return super().authenticate(request, key)
 
 
 session_auth = SessionAuth()

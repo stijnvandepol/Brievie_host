@@ -21,4 +21,7 @@ regexes = [
   '''^een-nieuw-lang-wachtwoord-2026$''',
   '''^nog-een-ander-wachtwoord-77$''',
   '''^b0d30d4a0224e576656286cc732bc500d8b93217860fd69ca42cb95cf245105f$''',
+  # A made-up tunnel token in an earlier commit of external access (base64 of a sentence);
+  # the test now makes its value at run time.
+  '''^eyJhIjoicGxhbnRlZC10dW5uZWwtdG9rZW4tdmFsdWUifQ$''',
 ]

@@ -38,7 +38,7 @@ def assert_refused(response: object) -> None:
         ("get", "/api/v1/setup", None),
         ("post", "/api/v1/auth/password-reset", {"email": "a@example.org"}),
         ("get", "/api/v1/invitations/abc", None),
-        ("get", "/api/v1/me", None),
+        ("get", "/api/v1/server/audit-events", None),
     ],
 )
 def test_public_route_refuses_login_setup_reset_and_invitation(
@@ -53,10 +53,17 @@ def test_public_route_refuses_login_setup_reset_and_invitation(
 
 
 def test_public_route_refuses_a_session_cookie_on_every_session_endpoint() -> None:
-    client = as_user(UserFactory.create())
+    client = as_user(UserFactory.create(is_server_admin=True))
     assert client.get("/api/v1/me", headers=PRIVATE).status_code == 200
-    assert_refused(client.get("/api/v1/me", headers=PUBLIC))
-    assert_refused(client.get("/api/v1/devices", headers=PUBLIC))
+    # An operation that takes the device token reaches its own auth, which refuses the
+    # session there: 401 as for nobody.
+    for path in ("/api/v1/me", "/api/v1/devices", "/api/v1/workspaces"):
+        response = client.get(path, headers=PUBLIC)
+        assert response.status_code == 401, path
+        assert response.json()["code"] == "not_authenticated"
+    # A session-only operation never gets that far.
+    assert_refused(client.get("/api/v1/server/audit-events", headers=PUBLIC))
+    assert_refused(client.get("/api/v1/server/external-access", headers=PUBLIC))
 
 
 def test_a_session_cookie_next_to_a_bearer_header_is_still_no_session() -> None:
@@ -292,7 +299,11 @@ def test_a_junk_bearer_header_opens_nothing(method: str, path: str) -> None:
 
 def test_forged_private_header_cannot_reach_the_gate_bypass() -> None:
     # Caddy overwrites X-Brievie-Route on every request (deploy/Caddyfile, to_api); a
-    # request that reached the api without Caddy's mark is public, never private.
-    response = Client().get("/api/v1/me")
-    assert_refused(response)
-    assert_refused(Client().get("/api/v1/me", headers={"X-Brievie-Route": "Private"}))
+    # request that reached the api without Caddy's mark, or with any other value than
+    # exactly "private", is public: the most restricted route.
+    client = as_user(UserFactory.create())
+    for headers in ({}, {"X-Brievie-Route": "Private"}, {"X-Brievie-Route": "private, public"}):
+        assert_refused(
+            client.post("/api/v1/auth/login", {}, content_type="application/json", headers=headers)
+        )
+        assert client.get("/api/v1/me", headers=headers).status_code == 401

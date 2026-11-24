@@ -58,7 +58,7 @@ def test_a_1c_pair_body_without_app_version_still_pairs(session_client: Client) 
     )
 
     assert r.status_code == 201
-    assert set(r.json()) == {"device_id", "token", "user"}
+    assert set(r.json()) == {"device_id", "token", "user", "public_urls"}
     device = Device.objects.get(id=r.json()["device_id"])
     assert device.app_version == ""
     assert device.app_version_at is None

@@ -1,3 +1,5 @@
+import secrets
+
 import pytest
 from django.core.checks import Error, Warning, run_checks
 from pytest_django import Settings
@@ -144,7 +146,8 @@ def test_w003_silent_without_tunnel(settings: Settings) -> None:
 def test_warnings_never_print_the_token(
     settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    secret = "eyJhIjoicGxhbnRlZC10dW5uZWwtdG9rZW4tdmFsdWUifQ"
+    # Made at run time: no token-like literal in the repository.
+    secret = secrets.token_urlsafe(32)
     monkeypatch.setenv("BRIEVIE_TUNNEL_TOKEN", secret)
     monkeypatch.setenv("TUNNEL_TOKEN", secret)
     _external(settings, tunnel=True, proxies=[], public_web=True)
