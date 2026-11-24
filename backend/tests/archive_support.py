@@ -63,3 +63,25 @@ def own_document(
 
 def membership_of(workspace: Workspace, user: User) -> Membership:
     return Membership.objects.select_related("workspace").get(workspace=workspace, user=user)
+
+
+def private_own_document(
+    workspace: Workspace,
+    *,
+    on: Sequence[Person] = (),
+    scanned_by: User | None = None,
+    title: str = "Medisch dossier",
+    document_type: str = "medical",
+) -> Document:
+    """An own document made private through the service, as the system: its readers are
+    the uploader and the accounts of its persons."""
+    from apps.audit.services import AuditActor
+    from apps.documents import visibility
+
+    document = own_document(
+        workspace, on=on, scanned_by=scanned_by, title=title, document_type=document_type
+    )
+    with as_actor(workspace, SYSTEM):
+        result = visibility.make_private(document, actor=AuditActor.system(), origin="user")
+        assert result == "made_private", result
+        return Document.objects.get(id=document.id)

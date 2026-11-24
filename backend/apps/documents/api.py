@@ -13,12 +13,23 @@ from apps.audit.services import actor_from_request
 from apps.common.errors import ApiError
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.common.throttling import CallerThrottle
-from apps.documents import handle, intake, member_export, reading, review, search, services, trash
+from apps.documents import (
+    handle,
+    intake,
+    member_export,
+    own,
+    reading,
+    review,
+    search,
+    services,
+    trash,
+)
 from apps.documents.models import DocumentEvent, Folder, MemberExport
 from apps.documents.schemas import (
     AddresseesIn,
     ConfirmIn,
     DocumentAccessOut,
+    DocumentDetailsIn,
     DocumentEventOut,
     DocumentOut,
     DocumentSearchIn,
@@ -491,6 +502,41 @@ def handle_document(
         document_id=document_id,
         task_ids=payload.task_ids,
         payments_confirmed=payload.payments_confirmed,
+    )
+    return services.document_out_for(document)
+
+
+@router.patch(
+    "/workspaces/{workspace_id}/documents/{document_id}/details",
+    response={
+        200: DocumentOut,
+        404: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    operation_id="updateDocumentDetails",
+    description=(
+        "Change an own document's title, type, date (`document_date`), end date "
+        "(`expires_on`, cleared with `clear_expires_on`) with its reminder lead "
+        '(`remind_days`: 7, 30, 60 or 90; 0 leaves it) and "Bewaren tot" (`retain_until`, '
+        "cleared with `clear_retain_until`); a letter takes only `retain_until`. Only what is "
+        "sent changes; an empty text or a missing date leaves the field. Members (a read-only "
+        "member gets 403; emergency access is read-only: 403 `emergency_read_only`). 404 "
+        "`document_not_found` for a document the caller does not see or that is in the trash; "
+        "422 `validation_error` for a type of the other kind, a field a letter has not, or a "
+        "date out of range. One history line per changed field (`details_changed`, "
+        "`retention_changed`)."
+    ),
+)
+def update_document_details(
+    request: HttpRequest, workspace_id: UUID, document_id: UUID, payload: DocumentDetailsIn
+) -> DocumentOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    document = own.update_details(
+        membership=membership,
+        user=current_user(request),
+        document_id=document_id,
+        data=payload,
     )
     return services.document_out_for(document)
 

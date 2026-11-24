@@ -1404,7 +1404,7 @@ msgstr "Note: the BSN has been removed from the text and the details. On the pho
 msgid "Dit bestand is niet versleuteld zodra je het hebt gedownload. Bewaar het op een veilige plek en verwijder het als je het niet meer nodig hebt."
 msgstr "This file is not encrypted once you have downloaded it. Keep it in a safe place and delete it when you no longer need it."
 
-#: apps/documents/handle.py apps/documents/review.py apps/documents/services.py apps/documents/trash.py
+#: apps/documents/handle.py apps/documents/own.py apps/documents/review.py apps/documents/services.py apps/documents/trash.py
 msgid "We kunnen dit document niet vinden."
 msgstr "We can't find this document."
 
@@ -1679,6 +1679,14 @@ msgstr "Choose the labels from the list."
 #: apps/documents/own.py apps/labels/services.py apps/people/services.py apps/tasks/assignment.py apps/tasks/services.py apps/workspaces/deps.py apps/workspaces/members.py apps/workspaces/visibility_settings.py
 msgid "Je mag dit niet doen in deze werkruimte."
 msgstr "You are not allowed to do this in this workspace."
+
+#: apps/documents/own.py
+msgid "Bij een brief kun je alleen Bewaren tot aanpassen."
+msgstr "For a letter you can only change Keep until."
+
+#: apps/documents/own.py
+msgid "Kies een nieuwe datum of haal de datum weg, niet allebei."
+msgstr "Choose a new date or remove the date, not both."
 
 #: apps/documents/reading.py
 msgid "Kies hoogstens 200 brieven."

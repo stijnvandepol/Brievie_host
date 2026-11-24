@@ -291,6 +291,24 @@ class ConfirmIn(InputSchema):
     visibility: str = ""
 
 
+class DocumentDetailsIn(InputSchema):
+    """`updateDocumentDetails` (archive spec S 10): only what is sent changes. An empty
+    text, a missing date, `remind_days` 0 and the false flags mean "unchanged"; a date is
+    cleared with its `clear_` flag. An own document takes every field; a letter only
+    `retain_until` and `clear_retain_until`."""
+
+    title: str = Field(default="", max_length=400)
+    document_type: str = ""
+    # The document's own date ("Datum"), stored as `letter_date`.
+    document_date: date | None = None
+    expires_on: date | None = None
+    clear_expires_on: bool = False
+    # 7, 30, 60 or 90; 0 leaves it.
+    remind_days: int = 0
+    retain_until: date | None = None
+    clear_retain_until: bool = False
+
+
 class AddresseesIn(InputSchema):
     # The document's addressees become exactly these persons.
     person_ids: list[UUID] = Field(max_length=10)

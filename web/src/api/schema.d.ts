@@ -907,6 +907,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/details": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Document Details
+         * @description Change an own document's title, type, date (`document_date`), end date (`expires_on`, cleared with `clear_expires_on`) with its reminder lead (`remind_days`: 7, 30, 60 or 90; 0 leaves it) and "Bewaren tot" (`retain_until`, cleared with `clear_retain_until`); a letter takes only `retain_until`. Only what is sent changes; an empty text or a missing date leaves the field. Members (a read-only member gets 403; emergency access is read-only: 403 `emergency_read_only`). 404 `document_not_found` for a document the caller does not see or that is in the trash; 422 `validation_error` for a type of the other kind, a field a letter has not, or a date out of range. One history line per changed field (`details_changed`, `retention_changed`).
+         */
+        patch: operations["updateDocumentDetails"];
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}/events": {
         parameters: {
             query?: never;
@@ -2682,6 +2702,55 @@ export interface components {
         DocumentAccessOut: {
             /** Viewers */
             viewers: components["schemas"]["DocumentViewerOut"][];
+        };
+        /**
+         * DocumentDetailsIn
+         * @description `updateDocumentDetails` (archive spec S 10): only what is sent changes. An empty
+         *     text, a missing date, `remind_days` 0 and the false flags mean "unchanged"; a date is
+         *     cleared with its `clear_` flag. An own document takes every field; a letter only
+         *     `retain_until` and `clear_retain_until`.
+         */
+        DocumentDetailsIn: {
+            /**
+             * Clear Expires On
+             * @default false
+             */
+            clear_expires_on: boolean;
+            /**
+             * Clear Retain Until
+             * @default false
+             */
+            clear_retain_until: boolean;
+            /**
+             * Document Date
+             * Format: date
+             */
+            document_date?: string | null;
+            /**
+             * Document Type
+             * @default
+             */
+            document_type: string;
+            /**
+             * Expires On
+             * Format: date
+             */
+            expires_on?: string | null;
+            /**
+             * Remind Days
+             * @default 0
+             */
+            remind_days: number;
+            /**
+             * Retain Until
+             * Format: date
+             */
+            retain_until?: string | null;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
         };
         /** DocumentEventOut */
         DocumentEventOut: {
@@ -8429,6 +8498,96 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    updateDocumentDetails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentDetailsIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

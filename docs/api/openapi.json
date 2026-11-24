@@ -732,6 +732,63 @@
         "title": "DocumentAccessOut",
         "type": "object"
       },
+      "DocumentDetailsIn": {
+        "description": "`updateDocumentDetails` (archive spec S 10): only what is sent changes. An empty\ntext, a missing date, `remind_days` 0 and the false flags mean \"unchanged\"; a date is\ncleared with its `clear_` flag. An own document takes every field; a letter only\n`retain_until` and `clear_retain_until`.",
+        "properties": {
+          "clear_expires_on": {
+            "default": false,
+            "title": "Clear Expires On",
+            "type": "boolean"
+          },
+          "clear_retain_until": {
+            "default": false,
+            "title": "Clear Retain Until",
+            "type": "boolean"
+          },
+          "document_date": {
+            "format": "date",
+            "title": "Document Date",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "document_type": {
+            "default": "",
+            "title": "Document Type",
+            "type": "string"
+          },
+          "expires_on": {
+            "format": "date",
+            "title": "Expires On",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "remind_days": {
+            "default": 0,
+            "title": "Remind Days",
+            "type": "integer"
+          },
+          "retain_until": {
+            "format": "date",
+            "title": "Retain Until",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "default": "",
+            "maxLength": 400,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "title": "DocumentDetailsIn",
+        "type": "object"
+      },
       "DocumentEventOut": {
         "properties": {
           "actor_id": {
@@ -9900,6 +9957,138 @@
           }
         ],
         "summary": "Confirm Document",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/details": {
+      "patch": {
+        "description": "Change an own document's title, type, date (`document_date`), end date (`expires_on`, cleared with `clear_expires_on`) with its reminder lead (`remind_days`: 7, 30, 60 or 90; 0 leaves it) and \"Bewaren tot\" (`retain_until`, cleared with `clear_retain_until`); a letter takes only `retain_until`. Only what is sent changes; an empty text or a missing date leaves the field. Members (a read-only member gets 403; emergency access is read-only: 403 `emergency_read_only`). 404 `document_not_found` for a document the caller does not see or that is in the trash; 422 `validation_error` for a type of the other kind, a field a letter has not, or a date out of range. One history line per changed field (`details_changed`, `retention_changed`).",
+        "operationId": "updateDocumentDetails",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentDetailsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Update Document Details",
         "tags": [
           "documents"
         ]
