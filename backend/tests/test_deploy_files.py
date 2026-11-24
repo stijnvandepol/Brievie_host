@@ -94,9 +94,13 @@ def test_error_responses_carry_the_security_headers() -> None:
     assert snippet
     for name in ("Strict-Transport-Security", "X-Content-Type-Options", "Content-Security-Policy"):
         assert name in snippet.group(1)
-    # Defined once, used for normal responses and in every handle_errors block.
+    # Defined once, used for normal responses and in every handle_errors block, all in
+    # the one snippet that both listeners import.
     assert len(re.findall(r"import security_headers", CADDYFILE)) == 3
     assert CADDYFILE.count("handle_errors") == 2
+    routes = CADDYFILE.split("(brievie_routes) {", 1)[1].split("\n}\n", 1)[0]
+    assert len(re.findall(r"import security_headers", routes)) == 3
+    assert routes.count("handle_errors") == 2
 
 
 def test_caddy_waits_for_a_healthy_api() -> None:
