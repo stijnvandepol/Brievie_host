@@ -95,7 +95,7 @@ export interface paths {
         put?: never;
         /**
          * Reauthenticate
-         * @description Web session only: a bearer token answers 401 not_authenticated. Type the password again before an action that needs a recent sign-in (creating a pairing code answers 403 reauthentication_required otherwise). 400 wrong_password; wrong passwords count for the same lockout as signing in (429).
+         * @description Web session only: a bearer token answers 401 not_authenticated. Type the password again before an action that needs a recent sign-in (creating a pairing code answers 403 reauthentication_required otherwise). 400 wrong_password; wrong passwords count for the same lockout as signing in (429). With two-step verification on, `code` from the app too: 400 second_factor_invalid, 429 second_factor_locked; the session has then passed the second step.
          */
         post: operations["reauthenticate"];
         delete?: never;
@@ -4112,6 +4112,11 @@ export interface components {
         };
         /** ReauthenticateIn */
         ReauthenticateIn: {
+            /**
+             * Code
+             * @default
+             */
+            code: string;
             /** Password */
             password: string;
         };

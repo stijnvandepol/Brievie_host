@@ -470,7 +470,7 @@ msgstr "Unknown browser"
 msgid "%(browser)s op %(system)s"
 msgstr "%(browser)s on %(system)s"
 
-#: apps/accounts/user_actions.py
+#: apps/accounts/user_actions.py apps/devices/services.py
 msgid "Log opnieuw in met je code om dit te doen."
 msgstr "Sign in again with your code to do this."
 

@@ -20,6 +20,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import connection, transaction
 from django.http import HttpRequest
+from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from apps.accounts import signin_limits
@@ -407,20 +408,24 @@ def check_own_password(request: HttpRequest, user: User, password: str, *, via: 
     signin_limits.clear(user.email)
 
 
-def reauthenticate(request: HttpRequest, *, password: str) -> None:
+def reauthenticate(request: HttpRequest, *, password: str, code: str = "") -> None:
     """Check the caller's password again and note it on this web session, for what needs
     a recent proof of who is at the browser (`sessions.recently_authenticated`).
 
-    Checked through `authenticate` like `change_password`, so wrong passwords count for
-    the same lockouts as signing in.
+    Counted like a sign-in (`check_own_password`). With two-step verification on, the code
+    from the app too (400 `second_factor_invalid`, counted for the account's lock); the
+    session has then passed the second step.
     """
+    # Imported here: the second-factor modules import this one.
+    from apps.accounts.second_factor import verify_code
+    from apps.accounts.second_factor_policy import has_factor
+
     user = current_user(request)
-    _refuse_when_locked(request, user.email)
-    with _checking_password_for("reauthenticate"):
-        checked = authenticate(request, username=user.email, password=password)
-    if not isinstance(checked, User) or checked.pk != user.pk:
-        raise ApiError(400, "wrong_password", _("Je wachtwoord klopt niet."))
-    mark_reauthenticated(request)
+    check_own_password(request, user, password, via="reauthenticate")
+    with_code = has_factor(user)
+    if with_code:
+        verify_code(user, code, now=timezone.now(), client_ip=valid_client_ip(request))
+    mark_reauthenticated(request, with_second_factor=with_code)
 
 
 def change_password(request: HttpRequest, *, current_password: str, new_password: str) -> None:

@@ -79,7 +79,7 @@ function PairAppPage() {
     gcTime: 0,
     mutationFn: async () => {
       const { error, response } = await api.POST("/api/v1/auth/reauthenticate", {
-        body: { password },
+        body: { password, code: "" },
       });
       if (!response.ok) throw new ApiFailure(error);
     },

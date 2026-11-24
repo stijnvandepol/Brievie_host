@@ -247,11 +247,13 @@ def change_password(request: HttpRequest, payload: PasswordChangeIn) -> Status[N
     description=WEB_SESSION_ONLY
     + " Type the password again before an action that needs a recent sign-in (creating a"
     " pairing code answers 403 reauthentication_required otherwise). 400 wrong_password;"
-    " wrong passwords count for the same lockout as signing in (429).",
+    " wrong passwords count for the same lockout as signing in (429). With two-step"
+    " verification on, `code` from the app too: 400 second_factor_invalid, 429"
+    " second_factor_locked; the session has then passed the second step.",
     operation_id="reauthenticate",
 )
 def reauthenticate(request: HttpRequest, payload: ReauthenticateIn) -> Status[None]:
-    services.reauthenticate(request, password=payload.password)
+    services.reauthenticate(request, password=payload.password, code=payload.code)
     return Status(204, None)
 
 

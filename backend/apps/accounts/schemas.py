@@ -107,6 +107,8 @@ class SessionOut(Schema):
 
 class ReauthenticateIn(InputSchema):
     password: str = Field(max_length=128)
+    # With two-step verification on: the six digits from the app as well.
+    code: str = Field(default="", max_length=20)
 
 
 class PasswordChangeIn(InputSchema):

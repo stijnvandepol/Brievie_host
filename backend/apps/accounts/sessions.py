@@ -220,12 +220,14 @@ def session_passed_second_factor(request: HttpRequest) -> bool:
     ).exists()
 
 
-def mark_reauthenticated(request: HttpRequest) -> None:
-    """Note that the password was just typed again in this session."""
+def mark_reauthenticated(request: HttpRequest, *, with_second_factor: bool) -> None:
+    """Note that the password was just typed again in this session; with
+    `with_second_factor`, a code too, so the session has now passed the second step."""
+    changes: dict[str, object] = {"reauthenticated_at": timezone.now()}
+    if with_second_factor:
+        changes["second_factor"] = True
     with transaction.atomic():
-        UserSession.objects.filter(session_key=request.session.session_key).update(
-            reauthenticated_at=timezone.now()
-        )
+        UserSession.objects.filter(session_key=request.session.session_key).update(**changes)
 
 
 def touch_session(row: UserSession, request: HttpRequest, *, now: datetime) -> None:
