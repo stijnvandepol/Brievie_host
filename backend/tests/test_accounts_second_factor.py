@@ -272,7 +272,8 @@ def test_lockout_doubles_and_caps(user: User) -> None:
     wrong_codes(user, 5, now=at(16))
     assert SecondFactor.objects.get(user=user).locked_until == at(16 + 30)
     assert lock_length(3) == FIRST_LOCK * 4
-    assert lock_length(7) == MAX_LOCK
+    assert lock_length(7) == timedelta(hours=16)
+    assert lock_length(8) == MAX_LOCK
     assert lock_length(40) == MAX_LOCK
 
     later = at(16 + 31)
