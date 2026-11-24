@@ -21,4 +21,6 @@ regexes = [
   '''^een-nieuw-lang-wachtwoord-2026$''',
   '''^nog-een-ander-wachtwoord-77$''',
   '''^b0d30d4a0224e576656286cc732bc500d8b93217860fd69ca42cb95cf245105f$''',
+  # Not a secret: Django's session key passed by name (`session_key=request.session.session_key`).
+  '''^request\.session\.session_key$''',
 ]
