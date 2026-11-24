@@ -1801,17 +1801,25 @@ msgid "Let op: met de naam %(name)s kan een iPhone deze server niet bereiken. Ze
 msgstr "Note: with the name %(name)s an iPhone cannot reach this server. Set BRIEVIE_HOSTNAME to the name or IP address of this server."
 
 #: apps/installer/prepare.py
+msgid "De database is niet bereikbaar. Er is niets veranderd."
+msgstr "The database cannot be reached. Nothing has changed."
+
+#: apps/installer/prepare.py
 msgid "De database kon niet worden ingericht. Er is niets veranderd."
 msgstr "The database could not be set up. Nothing has changed."
 
 #: apps/installer/prepare.py
 #, python-format
-msgid "Een eerdere start van dit bijwerken is afgebroken en er is geen back-up %(label)s. Herstel eerst een back-up. Er is niets veranderd."
-msgstr "An earlier start of this update was interrupted and there is no back-up %(label)s. Restore a back-up first. Nothing has changed."
+msgid "Een eerdere start van dit bijwerken is afgebroken tijdens het migreren en er is geen back-up %(label)s. Herstel eerst een back-up. Er is niets veranderd."
+msgstr "An earlier start of this update was interrupted while migrating and there is no back-up %(label)s. Restore a back-up first. Nothing has changed."
 
 #: apps/installer/prepare.py
 msgid "Het bijwerken wordt afgemaakt; de back-up van de eerdere start is er."
 msgstr "The update is being finished; the back-up of the earlier start exists."
+
+#: apps/installer/prepare.py
+msgid "Een eerdere start brak af tijdens de back-up; die wordt opnieuw gemaakt."
+msgstr "An earlier start broke off during the back-up; it is being made again."
 
 #: apps/installer/prepare.py
 #, python-format
@@ -1821,6 +1829,10 @@ msgstr "Brievie is being updated: first a back-up (%(label)s)."
 #: apps/installer/prepare.py
 msgid "De back-up vóór het bijwerken is mislukt. Er is niets veranderd."
 msgstr "The back-up before the update failed. Nothing has changed."
+
+#: apps/installer/prepare.py
+msgid "Een eerdere start liet de database op alleen-lezen staan; dat wordt opgeheven."
+msgstr "An earlier start left the database read-only; that is being lifted."
 
 #: apps/installer/prepare.py
 msgid "Het bijwerken is halverwege mislukt."

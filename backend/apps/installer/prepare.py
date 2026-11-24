@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Literal
 from uuid import UUID
 
+import psycopg
 from django.utils.translation import gettext as _
 
 from apps.installer import freeze
@@ -123,9 +124,15 @@ def unknown_migrations(
 
 
 def read_state(deps: Deps) -> State:
-    with deps.connect(deps.names.database) as conn:
-        row = conn.execute("SHOW server_version_num").fetchone()
+    with deps.connect("postgres") as server:
+        row = server.execute("SHOW server_version_num").fetchone()
         major = int(str(row[0])) // 10000 if row else 0
+        exists = server.execute(
+            "SELECT 1 FROM pg_database WHERE datname = %s", [deps.names.database]
+        ).fetchone()
+    if exists is None:
+        return State(major=major, has_data=False, installed=None, unknown_migrations=False)
+    with deps.connect(deps.names.database) as conn:
         have = conn.execute("SELECT to_regclass('public.django_migrations') IS NOT NULL").fetchone()
         applied: list[tuple[str, str]] = []
         if have and have[0]:
@@ -199,14 +206,16 @@ def run(deps: Deps) -> int:
             % {"name": deps.hostname}
         )
 
+    # The gate judges the database as it is, before the roles are touched: a refusal then
+    # really changes nothing (not even a password).
     try:
-        ensure_roles_and_database(deps.connect, deps.passwords, deps.names)
         state = read_state(deps)
-    except DatabaseSetupError:
-        deps.complain(_("De database kon niet worden ingericht. Er is niets veranderd."))
+    except (psycopg.Error, DatabaseSetupError):
+        deps.complain(_("De database is niet bereikbaar. Er is niets veranderd."))
         return 1
 
-    free, needed = deps.preflight()
+    # Space only matters for an update (it makes a back-up first); a new server has no data.
+    free, needed = deps.preflight() if state.installed is not None else (0, 0)
     decision = decide_start(
         image=deps.image,
         installed=state.installed,
@@ -220,6 +229,12 @@ def run(deps: Deps) -> int:
         free_bytes=free,
         needed_bytes=needed,
     )
+    if decision.outcome != "refused":
+        try:
+            ensure_roles_and_database(deps.connect, deps.passwords, deps.names)
+        except DatabaseSetupError:
+            deps.complain(_("De database kon niet worden ingericht. Er is niets veranderd."))
+            return 1
     if decision.outcome == "refused":
         deps.complain(
             refusal_message(
@@ -238,34 +253,50 @@ def run(deps: Deps) -> int:
 
 def _apply(deps: Deps, state: State, outcome: str) -> int:
     label = f"pre-update-{deps.image}"
-    frozen = freeze.is_frozen(deps.connect, deps.names)
+    migrating = freeze.is_migrating(deps.connect, deps.names)
     backup_run: UUID | None = None
     if outcome == "update":
-        if frozen:
-            # An earlier start froze the database and went on to migrate: finish that, but
+        if migrating:
+            # An earlier start made its back-up and went on to migrate: finish that, but
             # only when its back-up exists (a new one would back up a half-migrated schema).
             backup_run = deps.earlier_backup(label)
             if backup_run is None:
                 deps.complain(
                     _(
-                        "Een eerdere start van dit bijwerken is afgebroken en er is geen "
-                        "back-up %(label)s. Herstel eerst een back-up. Er is niets veranderd."
+                        "Een eerdere start van dit bijwerken is afgebroken tijdens het "
+                        "migreren en er is geen back-up %(label)s. Herstel eerst een back-up. "
+                        "Er is niets veranderd."
                     )
                     % {"label": label}
                 )
                 return 1
             deps.say(_("Het bijwerken wordt afgemaakt; de back-up van de eerdere start is er."))
         else:
+            # Frozen without the migrating mark: an earlier start stopped during its
+            # back-up, before any migration. Nothing changed; the back-up is made again.
+            if freeze.is_frozen(deps.connect, deps.names):
+                deps.say(
+                    _("Een eerdere start brak af tijdens de back-up; die wordt opnieuw gemaakt.")
+                )
             freeze.freeze(deps.connect, deps.names)
             deps.say(
                 _("Brievie wordt bijgewerkt: eerst een back-up (%(label)s).") % {"label": label}
             )
-            result = deps.backup(label)
+            try:
+                result = deps.backup(label)
+            except Exception:  # noqa: BLE001 - whatever stopped it, nothing was migrated yet
+                result = BackupResult(ok=False)
             if not result.ok:
                 freeze.thaw(deps.connect, deps.names)
                 deps.complain(_("De back-up vóór het bijwerken is mislukt. Er is niets veranderd."))
                 return 1
             backup_run = result.run_id
+        freeze.mark_migrating(deps.connect, deps.names)
+    elif migrating or freeze.is_frozen(deps.connect, deps.names):
+        # No update to make (same version or fresh), yet the freeze is on: lift it at the end.
+        deps.say(
+            _("Een eerdere start liet de database op alleen-lezen staan; dat wordt opgeheven.")
+        )
     try:
         deps.migrate()
     except MigrateError as failure:
@@ -274,6 +305,9 @@ def _apply(deps: Deps, state: State, outcome: str) -> int:
         else:
             freeze.thaw(deps.connect, deps.names)
             deps.complain(_("De database kon niet worden bijgewerkt. Er is niets veranderd."))
+        return 1
+    except Exception:  # noqa: BLE001 - unknown: the schema may have changed, so stay read-only
+        deps.complain(_("Het bijwerken is halverwege mislukt.") + " " + way_back(deps.image))
         return 1
     try:
         deps.record(state.installed, deps.image, backup_run)

@@ -14,6 +14,9 @@ from psycopg import sql
 from apps.installer.database import Connect, Names
 
 SETTING = "default_transaction_read_only"
+# Set once the back-up is done and the migrations start: a frozen database without it was
+# frozen by a start that never got to migrate, so its back-up can simply be made again.
+MIGRATING = "brievie.migrating"
 
 
 def freeze(connect: Connect, names: Names) -> None:
@@ -30,24 +33,41 @@ def freeze(connect: Connect, names: Names) -> None:
         )
 
 
-def thaw(connect: Connect, names: Names) -> None:
+def mark_migrating(connect: Connect, names: Names) -> None:
     with connect("postgres") as server:
         server.execute(
-            sql.SQL("ALTER DATABASE {} RESET default_transaction_read_only").format(
+            sql.SQL("ALTER DATABASE {} SET brievie.migrating = 'on'").format(
                 sql.Identifier(names.database)
             )
         )
 
 
-def is_frozen(connect: Connect, names: Names) -> bool:
+def thaw(connect: Connect, names: Names) -> None:
+    with connect("postgres") as server:
+        for setting in (SETTING, MIGRATING):
+            server.execute(
+                sql.SQL("ALTER DATABASE {} RESET {}").format(
+                    sql.Identifier(names.database), sql.SQL(setting)
+                )
+            )
+
+
+def _settings(connect: Connect, names: Names) -> list[str]:
     with connect("postgres") as server:
         rows = server.execute(
             "SELECT s.setconfig FROM pg_db_role_setting s JOIN pg_database d"
             " ON d.oid = s.setdatabase WHERE d.datname = %s AND s.setrole = 0",
             [names.database],
         ).fetchall()
-    return any(
-        str(entry).replace(" ", "").lower() == f"{SETTING}=on"
-        for (config,) in rows
-        for entry in (config or [])
+    return [str(entry).replace(" ", "").lower() for (config,) in rows for entry in (config or [])]
+
+
+def is_frozen(connect: Connect, names: Names) -> bool:
+    return f"{SETTING}=on" in _settings(connect, names)
+
+
+def is_migrating(connect: Connect, names: Names) -> bool:
+    """Whether a start went on to migrate after the back-up (the schema may have changed)."""
+    return f"{MIGRATING}='on'" in _settings(connect, names) or f"{MIGRATING}=on" in _settings(
+        connect, names
     )

@@ -794,6 +794,11 @@ ones (they show as "Created"), and they wait for `init`. Put the old version num
 start again, and the same server comes back (CI proves this with a refused jump and a refused
 step back). This is different from `./brievie update`, which checks before it stops anything.
 
+**An update that was interrupted** (a power cut, `docker compose stop`): if it stopped during
+the back-up, no migration ran, and the next start makes the back-up again (or, with the old
+version number back, lifts the freeze). If it stopped while migrating, the next start finishes
+the update when the back-up `pre-update-<version>` exists and otherwise asks for a restore.
+
 When it may go on, `init` makes the database read-only for every session but its own (so
 that nothing else can write while it backs up and migrates), makes the back-up
 `pre-update-<version>` to your back-up folder or, without one, to the volume
@@ -810,7 +815,7 @@ docker compose up -d
 
 (`update-backup` is the volume of the back-up before an update; use your own back-up folder
 there when the back-up went to it.) Only putting the old number back, without a restore,
-also lifts a freeze that an interrupted update left before any migration ran (see below).
+also lifts a freeze that an interrupted update left before any migration ran.
 When the file itself changes ("Compose-bestand gewijzigd" in the release notes), take the new
 file of the release.
 

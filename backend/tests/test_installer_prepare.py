@@ -35,6 +35,7 @@ class Fakes:
     complained: list[str] = field(default_factory=list)
     frozen_during: dict[str, bool] = field(default_factory=dict)
     backup_ok: bool = True
+    backup_raises: bool = False
     migrate_error: MigrateError | None = None
     earlier: UUID | None = None
     recorded: list[tuple[Version | None, Version, UUID | None]] = field(default_factory=list)
@@ -47,6 +48,7 @@ class Fakes:
         return freeze.is_frozen(self.connect, self.names)
 
     auto_init_note: str = ""
+    migrating_during: bool = False
 
     def auto_init(self) -> str:
         self.calls.append("auto_init")
@@ -55,12 +57,17 @@ class Fakes:
     def migrate(self) -> None:
         self.calls.append("migrate")
         self.frozen_during["migrate"] = self.is_frozen()
+        assert self.connect is not None
+        assert self.names is not None
+        self.migrating_during = freeze.is_migrating(self.connect, self.names)
         if self.migrate_error is not None:
             raise self.migrate_error
 
     def backup(self, label: str) -> BackupResult:
         self.calls.append(f"backup:{label}")
         self.frozen_during["backup"] = self.is_frozen()
+        if self.backup_raises:
+            raise RuntimeError("the destination went away mid-run")
         return BackupResult(ok=self.backup_ok, run_id=RUN_ID if self.backup_ok else None)
 
     def earlier_backup(self, label: str) -> UUID | None:
@@ -432,3 +439,118 @@ def test_the_back_up_folder_is_prepared_before_the_back_up_of_an_update(
     assert prepare.run(make_deps(connect, scratch, fakes)) == 0
     assert fakes.calls.index("auto_init") < fakes.calls.index("backup:pre-update-0.5.0")
     assert "De back-upmap is klaargezet voor de back-ups." in fakes.said
+
+
+def role_hash(connect: Connect, names: Names) -> str:
+    with connect("postgres") as server:
+        row = server.execute(
+            "SELECT rolpassword FROM pg_authid WHERE rolname = %s", [names.app]
+        ).fetchone()
+    assert row is not None
+    return str(row[0])
+
+
+def test_a_refusal_does_not_touch_the_roles(connect: Connect, scratch: Names) -> None:
+    """Review of PR #45, point 7: the gate runs before the passwords are set."""
+    prepared(connect, scratch)
+    seed(connect, scratch, installed="0.6.0")
+    before = role_hash(connect, scratch)
+    fakes = Fakes()
+    deps = make_deps(connect, scratch, fakes)
+    other = replace(deps, passwords=replace(PASSWORDS, app="another-app-password"))
+    assert prepare.run(other) == 1
+    assert role_hash(connect, scratch) == before
+
+
+def test_a_refusal_on_a_new_server_creates_nothing(connect: Connect, scratch: Names) -> None:
+    fakes = Fakes()
+    assert prepare.run(make_deps(connect, scratch, fakes, compose_revision=2)) == 1
+    assert "nieuwer dan versie" in fakes.complained[0]
+    assert not database_exists(connect, scratch)
+    with connect("postgres") as server:
+        row = server.execute(
+            "SELECT count(*) FROM pg_roles WHERE rolname = ANY(%s)",
+            [[scratch.owner, scratch.app, scratch.backup]],
+        ).fetchone()
+    assert row == (0,)
+
+
+def test_the_migrating_mark_is_set_before_the_first_migration(
+    connect: Connect, scratch: Names
+) -> None:
+    prepared(connect, scratch)
+    seed(connect, scratch, installed="0.4.0")
+    fakes = Fakes()
+    assert prepare.run(make_deps(connect, scratch, fakes)) == 0
+    assert fakes.migrating_during is True
+    assert not freeze.is_migrating(connect, scratch)
+
+
+def test_a_back_up_interrupted_before_any_migration_is_made_again(
+    connect: Connect, scratch: Names
+) -> None:
+    """Review point 3: frozen, no migrating mark, no finished back-up: nothing was changed."""
+    prepared(connect, scratch)
+    seed(connect, scratch, installed="0.4.0")
+    freeze.freeze(connect, scratch)
+    fakes = Fakes()
+    assert prepare.run(make_deps(connect, scratch, fakes)) == 0
+    assert "backup:pre-update-0.5.0" in fakes.calls
+    assert "earlier:pre-update-0.5.0" not in fakes.calls
+    assert any("opnieuw gemaakt" in line for line in fakes.said)
+    assert not fakes.is_frozen()
+
+
+def test_a_back_up_that_raises_thaws_and_says_nothing_changed(
+    connect: Connect, scratch: Names
+) -> None:
+    prepared(connect, scratch)
+    seed(connect, scratch, installed="0.4.0")
+    fakes = Fakes(backup_raises=True)
+    assert prepare.run(make_deps(connect, scratch, fakes)) == 1
+    assert fakes.complained == ["De back-up vóór het bijwerken is mislukt. Er is niets veranderd."]
+    assert "migrate" not in fakes.calls
+    assert not fakes.is_frozen()
+
+
+def test_the_old_number_back_lifts_a_freeze_left_before_any_migration(
+    connect: Connect, scratch: Names
+) -> None:
+    prepared(connect, scratch)
+    seed(connect, scratch, installed="0.5.0")
+    freeze.freeze(connect, scratch)
+    fakes = Fakes()
+    assert prepare.run(make_deps(connect, scratch, fakes)) == 0
+    assert any("alleen-lezen staan" in line for line in fakes.said)
+    assert not fakes.is_frozen()
+
+
+def test_a_start_that_died_while_migrating_without_a_back_up_asks_for_a_restore(
+    connect: Connect, scratch: Names
+) -> None:
+    prepared(connect, scratch)
+    seed(connect, scratch, installed="0.4.0")
+    freeze.freeze(connect, scratch)
+    freeze.mark_migrating(connect, scratch)
+    fakes = Fakes(earlier=None)
+    assert prepare.run(make_deps(connect, scratch, fakes)) == 1
+    assert "tijdens het migreren" in fakes.complained[0]
+    assert fakes.calls == ["auto_init", "earlier:pre-update-0.5.0"]
+    assert fakes.is_frozen()
+
+
+def test_an_unknown_error_while_migrating_stays_read_only_with_the_way_back(
+    connect: Connect, scratch: Names
+) -> None:
+    prepared(connect, scratch)
+    seed(connect, scratch, installed="0.4.0")
+
+    class Exploding(Fakes):
+        def migrate(self) -> None:
+            self.calls.append("migrate")
+            raise RuntimeError("unexpected")
+
+    fakes = Exploding()
+    assert prepare.run(make_deps(connect, scratch, fakes)) == 1
+    assert "restore_install pre-update-0.5.0 --replace" in fakes.complained[0]
+    assert fakes.is_frozen()
