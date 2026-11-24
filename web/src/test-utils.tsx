@@ -189,6 +189,12 @@ export const documentSummary = {
   letter_status: "",
   overdue: false,
   open_task_count: 0,
+  kind: "letter",
+  title: "",
+  expires_on: null,
+  remind_days: 30,
+  retain_until: null,
+  reminder_task_id: null,
 };
 
 export const documentDetail: components["schemas"]["DocumentOut"] = {

@@ -96,7 +96,12 @@ def create_folder(request: HttpRequest, workspace_id: UUID, payload: FolderIn) -
         "in page order. Repeating an upload with the same `client_id` and pages answers "
         "200 with the existing document. 429 `too_many_uploads` with Retry-After when the "
         "member or the workspace uploaded too much in a short time (by default 60 per "
-        "member per 10 minutes, 600 per workspace per hour)."
+        "member per 10 minutes, 600 per workspace per hour). With `kind` `document` in the "
+        "metadata it is an own document for the archive: `title` and `document_type` (an own "
+        "document's type) are required, `person_ids` and `label_ids` organise it at once, "
+        "`private` makes it private with the uploader as a reader; it skips the Inbox, gets "
+        "no tasks and ends `done` after processing. A letter with any of these fields is 422 "
+        "`validation_error`; a read-only member gets 403."
     ),
 )
 def create_document(
@@ -120,6 +125,7 @@ def create_document(
         user=user,
         metadata=parsed,
         pages=[file.read() for file in page],
+        actor=actor_from_request(request),
     )
     return Status(201 if created else 200, services.document_out(document))
 

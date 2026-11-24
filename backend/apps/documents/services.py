@@ -591,6 +591,11 @@ def _summary_out(
         waiting_until=document.task_wait_until
         if is_letter and status == LetterStatus.WAITING
         else None,
+        kind=document.kind,
+        title=document.title,
+        expires_on=document.expires_on,
+        remind_days=document.remind_days,
+        retain_until=document.retain_until,
     )
 
 

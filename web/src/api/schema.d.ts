@@ -764,7 +764,7 @@ export interface paths {
         put?: never;
         /**
          * Create Document
-         * @description Upload a scanned document as multipart/form-data: `metadata` is a JSON string (schema `UploadMetadataIn`), followed by one `page` file (image/jpeg) per page in page order. Repeating an upload with the same `client_id` and pages answers 200 with the existing document. 429 `too_many_uploads` with Retry-After when the member or the workspace uploaded too much in a short time (by default 60 per member per 10 minutes, 600 per workspace per hour).
+         * @description Upload a scanned document as multipart/form-data: `metadata` is a JSON string (schema `UploadMetadataIn`), followed by one `page` file (image/jpeg) per page in page order. Repeating an upload with the same `client_id` and pages answers 200 with the existing document. 429 `too_many_uploads` with Retry-After when the member or the workspace uploaded too much in a short time (by default 60 per member per 10 minutes, 600 per workspace per hour). With `kind` `document` in the metadata it is an own document for the archive: `title` and `document_type` (an own document's type) are required, `person_ids` and `label_ids` organise it at once, `private` makes it private with the uploader as a reader; it skips the Inbox, gets no tasks and ends `done` after processing. A letter with any of these fields is 422 `validation_error`; a read-only member gets 403.
          */
         post: operations["createDocument"];
         delete?: never;
@@ -2769,6 +2769,11 @@ export interface components {
             created_at: string;
             /** Document Type */
             document_type: string;
+            /**
+             * Expires On
+             * Format: date
+             */
+            expires_on?: string | null;
             /** Failure Code */
             failure_code: string;
             /**
@@ -2781,6 +2786,11 @@ export interface components {
              * @default
              */
             inbox_state: string;
+            /**
+             * Kind
+             * @default letter
+             */
+            kind: string;
             /** Label Ids */
             label_ids?: string[];
             /**
@@ -2838,6 +2848,21 @@ export interface components {
             proposed_sender: string;
             /** Reader Names */
             reader_names?: string[];
+            /**
+             * Remind Days
+             * @default 30
+             */
+            remind_days: number;
+            /**
+             * Reminder Task Id
+             * Format: uuid
+             */
+            reminder_task_id?: string | null;
+            /**
+             * Retain Until
+             * Format: date
+             */
+            retain_until?: string | null;
             /** Sender */
             sender: string;
             /** Shared User Ids */
@@ -2852,6 +2877,11 @@ export interface components {
             summary_by_ai: boolean;
             /** Tasks */
             tasks: components["schemas"]["TaskOut"][];
+            /**
+             * Title
+             * @default
+             */
+            title: string;
             /**
              * Unread
              * @default false
@@ -2896,6 +2926,11 @@ export interface components {
             /** Document Type */
             document_type: string;
             /**
+             * Expires On
+             * Format: date
+             */
+            expires_on?: string | null;
+            /**
              * Id
              * Format: uuid
              */
@@ -2905,6 +2940,11 @@ export interface components {
              * @default
              */
             inbox_state: string;
+            /**
+             * Kind
+             * @default letter
+             */
+            kind: string;
             /** Label Ids */
             label_ids?: string[];
             /**
@@ -2956,12 +2996,32 @@ export interface components {
             proposed_sender: string;
             /** Reader Names */
             reader_names?: string[];
+            /**
+             * Remind Days
+             * @default 30
+             */
+            remind_days: number;
+            /**
+             * Reminder Task Id
+             * Format: uuid
+             */
+            reminder_task_id?: string | null;
+            /**
+             * Retain Until
+             * Format: date
+             */
+            retain_until?: string | null;
             /** Sender */
             sender: string;
             /** Snippet */
             snippet?: components["schemas"]["SnippetPartOut"][];
             /** Status */
             status: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
             /**
              * Unread
              * @default false
@@ -3071,6 +3131,11 @@ export interface components {
             /** Document Type */
             document_type: string;
             /**
+             * Expires On
+             * Format: date
+             */
+            expires_on?: string | null;
+            /**
              * Id
              * Format: uuid
              */
@@ -3080,6 +3145,11 @@ export interface components {
              * @default
              */
             inbox_state: string;
+            /**
+             * Kind
+             * @default letter
+             */
+            kind: string;
             /** Label Ids */
             label_ids?: string[];
             /**
@@ -3131,10 +3201,30 @@ export interface components {
             proposed_sender: string;
             /** Reader Names */
             reader_names?: string[];
+            /**
+             * Remind Days
+             * @default 30
+             */
+            remind_days: number;
+            /**
+             * Reminder Task Id
+             * Format: uuid
+             */
+            reminder_task_id?: string | null;
+            /**
+             * Retain Until
+             * Format: date
+             */
+            retain_until?: string | null;
             /** Sender */
             sender: string;
             /** Status */
             status: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
             /**
              * Unread
              * @default false
@@ -3607,6 +3697,11 @@ export interface components {
             /** Document Type */
             document_type: string;
             /**
+             * Expires On
+             * Format: date
+             */
+            expires_on?: string | null;
+            /**
              * Id
              * Format: uuid
              */
@@ -3616,6 +3711,11 @@ export interface components {
              * @default
              */
             inbox_state: string;
+            /**
+             * Kind
+             * @default letter
+             */
+            kind: string;
             /** Label Ids */
             label_ids?: string[];
             /**
@@ -3667,10 +3767,30 @@ export interface components {
             proposed_sender: string;
             /** Reader Names */
             reader_names?: string[];
+            /**
+             * Remind Days
+             * @default 30
+             */
+            remind_days: number;
+            /**
+             * Reminder Task Id
+             * Format: uuid
+             */
+            reminder_task_id?: string | null;
+            /**
+             * Retain Until
+             * Format: date
+             */
+            retain_until?: string | null;
             /** Sender */
             sender: string;
             /** Status */
             status: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
             /**
              * Unread
              * @default false
@@ -4914,6 +5034,11 @@ export interface components {
             /** Document Type */
             document_type: string;
             /**
+             * Expires On
+             * Format: date
+             */
+            expires_on?: string | null;
+            /**
              * Id
              * Format: uuid
              */
@@ -4923,6 +5048,11 @@ export interface components {
              * @default
              */
             inbox_state: string;
+            /**
+             * Kind
+             * @default letter
+             */
+            kind: string;
             /** Label Ids */
             label_ids?: string[];
             /**
@@ -4979,10 +5109,30 @@ export interface components {
             purge_after: string;
             /** Reader Names */
             reader_names?: string[];
+            /**
+             * Remind Days
+             * @default 30
+             */
+            remind_days: number;
+            /**
+             * Reminder Task Id
+             * Format: uuid
+             */
+            reminder_task_id?: string | null;
+            /**
+             * Retain Until
+             * Format: date
+             */
+            retain_until?: string | null;
             /** Sender */
             sender: string;
             /** Status */
             status: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
             /**
              * Trashed At
              * Format: date-time
@@ -5019,8 +5169,61 @@ export interface components {
              * Format: uuid
              */
             client_id: string;
+            /**
+             * Document Date
+             * Format: date
+             * @default null
+             */
+            document_date: string | null;
+            /**
+             * Document Type
+             * @default
+             */
+            document_type: string;
+            /**
+             * Expires On
+             * Format: date
+             * @default null
+             */
+            expires_on: string | null;
+            /**
+             * Kind
+             * @default letter
+             */
+            kind: string;
+            /**
+             * Label Ids
+             * @default []
+             */
+            label_ids: string[];
             /** Pages */
             pages: components["schemas"]["PageMetaIn"][];
+            /**
+             * Person Ids
+             * @default []
+             */
+            person_ids: string[];
+            /**
+             * Private
+             * @default false
+             */
+            private: boolean;
+            /**
+             * Remind Days
+             * @default 30
+             */
+            remind_days: number;
+            /**
+             * Retain Until
+             * Format: date
+             * @default null
+             */
+            retain_until: string | null;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
         };
         /** UserOut */
         UserOut: {

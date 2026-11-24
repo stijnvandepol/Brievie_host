@@ -538,6 +538,14 @@ class DocumentEvent(WorkspaceModel):
         TASK_WAITING_ENDED = "task_waiting_ended"
         LETTER_HANDLED = "letter_handled"
         LETTER_REOPENED = "letter_reopened"
+        # Archive: an own document was added (origin `user`, the member); one of its details
+        # changed (`note` names the field, `on_date` a new date; never a title or text); its
+        # "Bewaren tot" changed (`on_date`, null when cleared); the system started the
+        # reminder of its end date (origin `system`, no actor; `on_date` the end date).
+        DOCUMENT_ADDED = "document_added"
+        DETAILS_CHANGED = "details_changed"
+        RETENTION_CHANGED = "retention_changed"
+        REMINDER_STARTED = "reminder_started"
 
     class Origin(models.TextChoices):
         USER = "user"

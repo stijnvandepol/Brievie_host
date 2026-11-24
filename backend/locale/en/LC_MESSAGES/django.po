@@ -1632,6 +1632,54 @@ msgstr "We can't find this event."
 msgid "Deze wijziging kun je niet meer terugdraaien."
 msgstr "This change can no longer be undone."
 
+#: apps/documents/own.py
+msgid "Deze gegevens horen bij een eigen document, niet bij een brief."
+msgstr "These details belong to an own document, not to a letter."
+
+#: apps/documents/own.py
+msgid "Kies een brief of een eigen document."
+msgstr "Choose a letter or an own document."
+
+#: apps/documents/own.py
+msgid "Een document heeft een titel nodig."
+msgstr "A document needs a title."
+
+#: apps/documents/own.py
+msgid "Een titel is hoogstens 200 tekens lang."
+msgstr "A title is at most 200 characters long."
+
+#: apps/documents/own.py
+msgid "Kies een soort document uit de lijst."
+msgstr "Choose a type of document from the list."
+
+#: apps/documents/own.py
+msgid "Kies 7, 30, 60 of 90 dagen vooraf."
+msgstr "Choose 7, 30, 60 or 90 days ahead."
+
+#: apps/documents/own.py
+msgid "De datum van een document ligt tussen 1 januari 1900 en vandaag."
+msgstr "A document's date lies between January 1, 1900 and today."
+
+#: apps/documents/own.py
+msgid "Deze datum ligt te ver weg."
+msgstr "This date is too far away."
+
+#: apps/documents/own.py
+msgid "Geldig tot ligt na de datum van het document."
+msgstr "Valid until comes after the document's date."
+
+#: apps/documents/own.py
+msgid "Kies voor wie het document is uit de lijst van mensen."
+msgstr "Choose who the document belongs to from the list of people."
+
+#: apps/documents/own.py
+msgid "Kies de labels uit de lijst."
+msgstr "Choose the labels from the list."
+
+#: apps/documents/own.py apps/labels/services.py apps/people/services.py apps/tasks/assignment.py apps/tasks/services.py apps/workspaces/deps.py apps/workspaces/members.py apps/workspaces/visibility_settings.py
+msgid "Je mag dit niet doen in deze werkruimte."
+msgstr "You are not allowed to do this in this workspace."
+
 #: apps/documents/reading.py
 msgid "Kies hoogstens 200 brieven."
 msgstr "Choose 200 letters at most."
@@ -2075,10 +2123,6 @@ msgstr "There is already a label with this name."
 #: apps/labels/services.py
 msgid "Kies een afdeling."
 msgstr "Choose a department."
-
-#: apps/labels/services.py apps/people/services.py apps/tasks/assignment.py apps/tasks/services.py apps/workspaces/deps.py apps/workspaces/members.py apps/workspaces/visibility_settings.py
-msgid "Je mag dit niet doen in deze werkruimte."
-msgstr "You are not allowed to do this in this workspace."
 
 #: apps/labels/services.py
 msgid "Deze werkruimte heeft het grootste aantal labels. Verwijder er eerst een."

@@ -884,6 +884,14 @@
             "title": "Document Type",
             "type": "string"
           },
+          "expires_on": {
+            "format": "date",
+            "title": "Expires On",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "failure_code": {
             "title": "Failure Code",
             "type": "string"
@@ -896,6 +904,11 @@
           "inbox_state": {
             "default": "",
             "title": "Inbox State",
+            "type": "string"
+          },
+          "kind": {
+            "default": "letter",
+            "title": "Kind",
             "type": "string"
           },
           "label_ids": {
@@ -989,6 +1002,27 @@
             "title": "Reader Names",
             "type": "array"
           },
+          "remind_days": {
+            "default": 30,
+            "title": "Remind Days",
+            "type": "integer"
+          },
+          "reminder_task_id": {
+            "format": "uuid",
+            "title": "Reminder Task Id",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "retain_until": {
+            "format": "date",
+            "title": "Retain Until",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "sender": {
             "title": "Sender",
             "type": "string"
@@ -1026,6 +1060,11 @@
             },
             "title": "Tasks",
             "type": "array"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
           },
           "unread": {
             "default": false,
@@ -1118,6 +1157,14 @@
             "title": "Document Type",
             "type": "string"
           },
+          "expires_on": {
+            "format": "date",
+            "title": "Expires On",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -1126,6 +1173,11 @@
           "inbox_state": {
             "default": "",
             "title": "Inbox State",
+            "type": "string"
+          },
+          "kind": {
+            "default": "letter",
+            "title": "Kind",
             "type": "string"
           },
           "label_ids": {
@@ -1198,6 +1250,27 @@
             "title": "Reader Names",
             "type": "array"
           },
+          "remind_days": {
+            "default": 30,
+            "title": "Remind Days",
+            "type": "integer"
+          },
+          "reminder_task_id": {
+            "format": "uuid",
+            "title": "Reminder Task Id",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "retain_until": {
+            "format": "date",
+            "title": "Retain Until",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "sender": {
             "title": "Sender",
             "type": "string"
@@ -1211,6 +1284,11 @@
           },
           "status": {
             "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
             "type": "string"
           },
           "unread": {
@@ -1402,6 +1480,14 @@
             "title": "Document Type",
             "type": "string"
           },
+          "expires_on": {
+            "format": "date",
+            "title": "Expires On",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -1410,6 +1496,11 @@
           "inbox_state": {
             "default": "",
             "title": "Inbox State",
+            "type": "string"
+          },
+          "kind": {
+            "default": "letter",
+            "title": "Kind",
             "type": "string"
           },
           "label_ids": {
@@ -1482,12 +1573,38 @@
             "title": "Reader Names",
             "type": "array"
           },
+          "remind_days": {
+            "default": 30,
+            "title": "Remind Days",
+            "type": "integer"
+          },
+          "reminder_task_id": {
+            "format": "uuid",
+            "title": "Reminder Task Id",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "retain_until": {
+            "format": "date",
+            "title": "Retain Until",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "sender": {
             "title": "Sender",
             "type": "string"
           },
           "status": {
             "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
             "type": "string"
           },
           "unread": {
@@ -2347,6 +2464,14 @@
             "title": "Document Type",
             "type": "string"
           },
+          "expires_on": {
+            "format": "date",
+            "title": "Expires On",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -2355,6 +2480,11 @@
           "inbox_state": {
             "default": "",
             "title": "Inbox State",
+            "type": "string"
+          },
+          "kind": {
+            "default": "letter",
+            "title": "Kind",
             "type": "string"
           },
           "label_ids": {
@@ -2427,12 +2557,38 @@
             "title": "Reader Names",
             "type": "array"
           },
+          "remind_days": {
+            "default": 30,
+            "title": "Remind Days",
+            "type": "integer"
+          },
+          "reminder_task_id": {
+            "format": "uuid",
+            "title": "Reminder Task Id",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "retain_until": {
+            "format": "date",
+            "title": "Retain Until",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "sender": {
             "title": "Sender",
             "type": "string"
           },
           "status": {
             "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
             "type": "string"
           },
           "unread": {
@@ -4706,6 +4862,14 @@
             "title": "Document Type",
             "type": "string"
           },
+          "expires_on": {
+            "format": "date",
+            "title": "Expires On",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -4714,6 +4878,11 @@
           "inbox_state": {
             "default": "",
             "title": "Inbox State",
+            "type": "string"
+          },
+          "kind": {
+            "default": "letter",
+            "title": "Kind",
             "type": "string"
           },
           "label_ids": {
@@ -4791,12 +4960,38 @@
             "title": "Reader Names",
             "type": "array"
           },
+          "remind_days": {
+            "default": 30,
+            "title": "Remind Days",
+            "type": "integer"
+          },
+          "reminder_task_id": {
+            "format": "uuid",
+            "title": "Reminder Task Id",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "retain_until": {
+            "format": "date",
+            "title": "Retain Until",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "sender": {
             "title": "Sender",
             "type": "string"
           },
           "status": {
             "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
             "type": "string"
           },
           "trashed_at": {
@@ -4851,12 +5046,85 @@
             "title": "Client Id",
             "type": "string"
           },
+          "document_date": {
+            "default": null,
+            "format": "date",
+            "title": "Document Date",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "document_type": {
+            "default": "",
+            "title": "Document Type",
+            "type": "string"
+          },
+          "expires_on": {
+            "default": null,
+            "format": "date",
+            "title": "Expires On",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "default": "letter",
+            "title": "Kind",
+            "type": "string"
+          },
+          "label_ids": {
+            "default": [],
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 30,
+            "title": "Label Ids",
+            "type": "array"
+          },
           "pages": {
             "items": {
               "$ref": "#/components/schemas/PageMetaIn"
             },
             "title": "Pages",
             "type": "array"
+          },
+          "person_ids": {
+            "default": [],
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Person Ids",
+            "type": "array"
+          },
+          "private": {
+            "default": false,
+            "title": "Private",
+            "type": "boolean"
+          },
+          "remind_days": {
+            "default": 30,
+            "title": "Remind Days",
+            "type": "integer"
+          },
+          "retain_until": {
+            "default": null,
+            "format": "date",
+            "title": "Retain Until",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "default": "",
+            "maxLength": 400,
+            "title": "Title",
+            "type": "string"
           }
         },
         "required": [
@@ -8703,7 +8971,7 @@
         ]
       },
       "post": {
-        "description": "Upload a scanned document as multipart/form-data: `metadata` is a JSON string (schema `UploadMetadataIn`), followed by one `page` file (image/jpeg) per page in page order. Repeating an upload with the same `client_id` and pages answers 200 with the existing document. 429 `too_many_uploads` with Retry-After when the member or the workspace uploaded too much in a short time (by default 60 per member per 10 minutes, 600 per workspace per hour).",
+        "description": "Upload a scanned document as multipart/form-data: `metadata` is a JSON string (schema `UploadMetadataIn`), followed by one `page` file (image/jpeg) per page in page order. Repeating an upload with the same `client_id` and pages answers 200 with the existing document. 429 `too_many_uploads` with Retry-After when the member or the workspace uploaded too much in a short time (by default 60 per member per 10 minutes, 600 per workspace per hour). With `kind` `document` in the metadata it is an own document for the archive: `title` and `document_type` (an own document's type) are required, `person_ids` and `label_ids` organise it at once, `private` makes it private with the uploader as a reader; it skips the Inbox, gets no tasks and ends `done` after processing. A letter with any of these fields is 422 `validation_error`; a read-only member gets 403.",
         "operationId": "createDocument",
         "parameters": [
           {

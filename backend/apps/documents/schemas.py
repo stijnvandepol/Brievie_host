@@ -36,6 +36,23 @@ class UploadMetadataIn(InputSchema):
     # Chosen by the client; repeating an upload with the same id is safe.
     client_id: UUID
     pages: list[PageMetaIn]
+    # Archive (spec S 6.2), all optional: an older app sends none and makes a letter.
+    # `document` is an own document: it skips the Inbox and gets no tasks; then `title` and
+    # `document_type` (one of the own documents' types) are required.
+    kind: str = "letter"
+    title: str = Field(default="", max_length=400)
+    document_type: str = ""
+    # The document's own date ("Datum"); stored as its `letter_date`.
+    document_date: date | None = None
+    person_ids: list[UUID] = Field(default=[], max_length=10)
+    label_ids: list[UUID] = Field(default=[], max_length=30)
+    # "Geldig tot" and how many days ahead its reminder starts (7, 30, 60 or 90).
+    expires_on: date | None = None
+    remind_days: int = 30
+    # "Bewaren tot": no permanent delete before this day.
+    retain_until: date | None = None
+    # "Alleen voor deze persoon": make it private at once (only narrows).
+    private: bool = False
 
 
 class DocumentSummaryOut(Schema):
@@ -91,6 +108,18 @@ class DocumentSummaryOut(Schema):
     open_task_count: int = 0
     # When `letter_status` is "waiting": the day the first waiting task is due back.
     waiting_until: date | None = None
+    # Archive (spec S 10): "letter" (post) or "document" (an own document; it has a
+    # `title`, no letter status and is never in the Inbox). A missing value means letter.
+    kind: str = "letter"
+    # An own document's name, shown where a letter shows its sender.
+    title: str = ""
+    # "Geldig tot" of an own document, and how many days ahead its reminder starts.
+    expires_on: date | None = None
+    remind_days: int = 30
+    # "Bewaren tot": a permanent delete is refused before this day (either kind).
+    retain_until: date | None = None
+    # The open reminder task of `expires_on`, when there is one.
+    reminder_task_id: UUID | None = None
 
 
 class TrashedDocumentOut(DocumentSummaryOut):

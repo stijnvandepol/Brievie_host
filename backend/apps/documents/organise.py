@@ -527,6 +527,49 @@ def record_task_moved(document: Document, *, actor: User, related_document: Docu
     )
 
 
+def record_document_added(document: Document, *, actor: User) -> None:
+    """The history line of an own document added to the archive by `actor`."""
+    _write_event(document, DocumentEvent.Kind.DOCUMENT_ADDED, actor, DocumentEvent.Origin.USER)
+
+
+def record_details_changed(
+    document: Document, *, actor: User, field: str, on_date: date | None = None
+) -> None:
+    """One detail of an own document changed: the field's name in `note`, a new date in
+    `on_date`; never its title or text (letter content stays out of the history's words)."""
+    DocumentEvent.objects.create(
+        workspace_id=document.workspace_id,
+        document=document,
+        kind=DocumentEvent.Kind.DETAILS_CHANGED,
+        origin=DocumentEvent.Origin.USER,
+        actor=actor,
+        note=field,
+        on_date=on_date,
+    )
+
+
+def record_retention_changed(document: Document, *, actor: User, until: date | None) -> None:
+    """ "Bewaren tot" set, moved or cleared (`on_date` null)."""
+    _write_event(
+        document,
+        DocumentEvent.Kind.RETENTION_CHANGED,
+        actor,
+        DocumentEvent.Origin.USER,
+        on_date=until,
+    )
+
+
+def record_reminder_started(document: Document, *, until: date) -> None:
+    """The system started the reminder of the document's end date: no actor (nobody did)."""
+    _write_event(
+        document,
+        DocumentEvent.Kind.REMINDER_STARTED,
+        None,
+        DocumentEvent.Origin.SYSTEM,
+        on_date=until,
+    )
+
+
 def record_restored(document: Document, *, actor: User) -> None:
     """The history line for putting the letter back from the trash."""
     _write_event(document, DocumentEvent.Kind.RESTORED, actor, DocumentEvent.Origin.USER)
