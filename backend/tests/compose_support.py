@@ -61,6 +61,22 @@ POSTGRES_PASSWORDS = frozenset(
 )
 
 
+# What must be equal in both definitions of the optional `cloudflared` service.
+TUNNEL_KEYS = (
+    "image",
+    "profiles",
+    "command",
+    "environment",
+    "volumes",
+    "read_only",
+    "cap_drop",
+    "security_opt",
+    "depends_on",
+    "ports",
+    "restart",
+)
+
+
 def _services(config: Config) -> dict[str, dict[str, object]]:
     raw = config.get("services", {})
     assert isinstance(raw, dict)
@@ -98,7 +114,8 @@ def drift(wrapper: Config, compose: Config) -> list[str]:
     Empty when they agree: the same services (the wrapper's `migrate` is `init`), every
     environment key of the wrapper in the compose-only service (the `_FILE` spelling
     counts), no key beyond the known extras, the same published ports, the same
-    `depends_on` (apart from `init-secrets`), the same api healthcheck and Caddy environment.
+    `depends_on` (apart from `init-secrets`), the same api healthcheck and Caddy environment,
+    and the same tunnel service.
     """
     problems: list[str] = []
     old, new = _services(wrapper), _services(compose)
@@ -126,4 +143,10 @@ def drift(wrapper: Config, compose: Config) -> list[str]:
         problems.append("api: the healthcheck differs")
     if "caddy" in new and old["caddy"].get("environment") != new["caddy"].get("environment"):
         problems.append("caddy: the environment differs")
+    # The optional tunnel is the same service in both files, apart from its log rotation
+    # and network (the wrapper has one network, the compose-only file two).
+    if "cloudflared" in old and "cloudflared" in new:
+        for key in TUNNEL_KEYS:
+            if old["cloudflared"].get(key) != new["cloudflared"].get(key):
+                problems.append(f"cloudflared: {key} differs")
     return problems

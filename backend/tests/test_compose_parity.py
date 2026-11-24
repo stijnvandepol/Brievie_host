@@ -119,6 +119,23 @@ def test_a_missing_service_is_drift() -> None:
     assert any("services differ" in p for p in drift(small_wrapper(), compose))
 
 
+def test_the_tunnel_service_must_be_the_same_in_both() -> None:
+    wrapper, compose = copy.deepcopy(small_wrapper()), copy.deepcopy(small_compose())
+    tunnel = {
+        "image": "cloudflare/cloudflared:1@sha256:" + "0" * 64,
+        "environment": {"TUNNEL_TOKEN": ""},
+        "read_only": True,
+    }
+    wrapper["services"]["cloudflared"] = copy.deepcopy(tunnel)  # type: ignore[index]
+    compose["services"]["cloudflared"] = {**copy.deepcopy(tunnel), "networks": ["edge"]}  # type: ignore[index]
+    assert drift(wrapper, compose) == []
+    compose["services"]["cloudflared"]["read_only"] = False  # type: ignore[index]
+    compose["services"]["cloudflared"]["environment"] = {"TUNNEL_TOKEN": "", "X": "1"}  # type: ignore[index]
+    found = drift(wrapper, compose)
+    assert "cloudflared: read_only differs" in found
+    assert "cloudflared: environment differs" in found
+
+
 def _config(path: str, extra: dict[str, str]) -> Config:
     env = {
         **os.environ,
@@ -139,6 +156,8 @@ def _config(path: str, extra: dict[str, str]) -> Config:
             path,
             "--profile",
             "admin",
+            "--profile",
+            "tunnel",
             "config",
             "--format",
             "json",

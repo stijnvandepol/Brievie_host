@@ -2744,3 +2744,49 @@ first; all nine held.
   `record` failing after a successful migration no longer thaws: the next start resumes and
   records. The accidental first `up` before an import is handled in SELFHOST (start over).
 
+
+## 2026-11-24: Van buiten bereikbaar (external access)
+
+Design: `docs/superpowers/specs/2026-11-21-externe-toegang-design.md`, plan
+`docs/superpowers/plans/2026-11-21-host-externe-toegang.md` (host tasks T1–T13; the iOS tasks
+I1–I3 are a separate branch of `Brievie_ios`). The owner follows the spec's recommendations
+B1–B4.
+
+- **Compose decides, the settings page shows.** Exposure is configured in `deploy/.env` (or the
+  variables of the compose-only file) and nowhere else. The web interface gets an admin-only page
+  "Van buiten bereikbaar" (session only, server admins only) that reads the configuration and
+  shows what works and what not; it has no switch and shows no token or secret, only that one is
+  set. This replaces SPEC 11's "gebruiker plakt zijn tunnel-token" and SPEC 13's wizard step
+  "toegang van buitenaf": the wizard links to the docs.
+- **Four ways, derived, no mode variable:** home network (always), VPN (recommended; docs only for
+  a VPN into the router, `BRIEVIE_VPN_HOSTNAME` for a VPN on the server), Cloudflare Tunnel
+  (`BRIEVIE_TUNNEL_TOKEN` or `BRIEVIE_TUNNEL_TOKEN_FILE`), own reverse proxy
+  (`BRIEVIE_TRUSTED_PROXIES`, in v1: B3). `BRIEVIE_PUBLIC_HOSTNAME` is the public name of either.
+- **New image `cloudflare/cloudflared`** (2026.10.7, pinned by digest, multi-architecture), only
+  under the compose profile `tunnel`, in both compose files. Why: the official, maintained
+  connector of Cloudflare Tunnel; there is no alternative for it (Tailscale and WireGuard need no
+  container in the stack). Read-only root, all capabilities dropped, `no-new-privileges`, its own
+  nonroot user, no published port. The token reaches only this container: as `TUNNEL_TOKEN` from
+  `BRIEVIE_TUNNEL_TOKEN`, or as `TUNNEL_TOKEN_FILE` (cloudflared 2025.4 or newer) from a host file
+  named by `BRIEVIE_TUNNEL_TOKEN_FILE`, bind-mounted read-only (the advised form on the compose-only
+  install: the value then shows in no `docker inspect` and no `compose config`). The api gets only
+  `BRIEVIE_TUNNEL_TOKEN_SET` / `BRIEVIE_TUNNEL_TOKEN_FILE_SET` (two variables: compose cannot
+  write an "or", and `truetrue` is no boolean).
+- **Tunnel hop over plain HTTP** to an internal Caddy listener `http://caddy:8080`, never
+  published (S 7.2). Caddy forces `X-Forwarded-Proto: https` and `Host` = the public name there
+  (after a 308 to https for a request Cloudflare got over http).
+- **Client address and route only from Caddy** (S 7.3): Caddy writes `X-Brievie-Route`,
+  `X-Brievie-Client-IP` and `X-Brievie-Peer-IP` itself on every request to the api (`header_up`
+  overwrites a client's value); Django reads them only with `BRIEVIE_BEHIND_CADDY` (compose sets
+  it on the api) and never reads `CF-Connecting-IP`. Caddy reads that only on `:8080`; on `:443` it
+  believes `X-Forwarded-For` only from `BRIEVIE_TRUSTED_PROXIES` (`trusted_proxies_strict`).
+- **HSTS is Caddy's alone, per route:** `BRIEVIE_HSTS_SECONDS` (0) on the private-CA names, one
+  year on the tunnel and from a trusted proxy.
+- **`BRIEVIE_PUBLIC_WEB` is off by default** (B1): through the public address only the app works
+  (device token and the unauthenticated pairing paths) until two-step sign-in exists. The 2FA work
+  (branch `feat/two-factor`) reads `X-Brievie-Route` through `apps.access.route` and the setting
+  `BRIEVIE_SECOND_FACTOR_AVAILABLE` (B2: a second step required on the public route).
+- **Docs address** (B4): `https://brievie.com/docs/installeren#van-buiten`.
+- **Privacy, said plainly:** with a tunnel Cloudflare can read everything that passes; a VPN is
+  encrypted end to end. In `.env.example`, `docs/PRIVACY.md`, `docs/SELFHOST.md` and on the page.
+

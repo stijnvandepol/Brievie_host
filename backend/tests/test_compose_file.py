@@ -15,7 +15,17 @@ from apps.updates.gate import COMPOSE_REVISION
 
 ROOT = Path(__file__).resolve().parents[2]
 TEXT = (ROOT / "deploy" / "compose" / "docker-compose.yml").read_text()
-SERVICES = ("init-secrets", "postgres", "init", "api", "worker", "keeper", "caddy", "admin")
+SERVICES = (
+    "init-secrets",
+    "postgres",
+    "init",
+    "api",
+    "worker",
+    "keeper",
+    "caddy",
+    "cloudflared",
+    "admin",
+)
 
 
 @pytest.fixture(autouse=True)
@@ -46,7 +56,9 @@ def test_all_services_are_there_and_nothing_else() -> None:
 
 
 def test_no_line_holds_a_secret() -> None:
-    for line in code_lines():
+    for raw in code_lines():
+        # An image pinned by digest is a checksum, not a secret.
+        line = re.sub(r"@sha256:[0-9a-f]{64}\b", "@sha256:<digest>", raw)
         assert not re.search(r"[0-9a-f]{40,}", line), line
         assert not re.search(r"[A-Za-z0-9+/]{60,}={0,2}(?![A-Za-z0-9+/])", line), line
         assert not re.search(r"postgres://[^@\s/]+:[^@\s]+@", line), line
@@ -61,6 +73,11 @@ def test_a_secret_variable_is_a_file_or_empty_by_default() -> None:
         if match is None:
             continue
         name, value = match.groups()
+        # cloudflared reads its token as TUNNEL_TOKEN; Brievie's name for it is
+        # BRIEVIE_TUNNEL_TOKEN (the one place a secret is renamed on its way in).
+        if name == "TUNNEL_TOKEN":
+            assert value == "${BRIEVIE_TUNNEL_TOKEN:-}", line
+            continue
         assert value == f"${{{name}:-}}", line
 
 
@@ -80,13 +97,14 @@ def test_both_brievie_images_share_one_version_default() -> None:
 
 
 def test_every_service_but_caddy_uses_the_backend_image_by_anchor() -> None:
-    assert TEXT.count("<<: *backend") == len(SERVICES) - 2  # postgres and caddy name their own
-    for name in ("postgres", "caddy"):
+    # postgres, caddy and cloudflared name their own
+    assert TEXT.count("<<: *backend") == len(SERVICES) - 3
+    for name in ("postgres", "caddy", "cloudflared"):
         assert "<<: *backend" not in service(name)
 
 
 @pytest.mark.parametrize(
-    "name", ["init-secrets", "postgres", "init", "api", "worker", "keeper", "admin"]
+    "name", ["init-secrets", "postgres", "init", "api", "worker", "keeper", "cloudflared", "admin"]
 )
 def test_only_caddy_publishes_a_port(name: str) -> None:
     assert "ports:" not in service(name)
@@ -159,7 +177,7 @@ def test_the_three_places_to_change_are_marked() -> None:
 
 
 def test_logs_rotate() -> None:
-    assert TEXT.count('max-size: "10m"') == 2  # the anchor and caddy
+    assert TEXT.count('max-size: "10m"') == 3  # the anchor, caddy and cloudflared
     assert "restart: always" not in TEXT
 
 
