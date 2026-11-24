@@ -47,6 +47,14 @@ LISTS: Final = (
     "list_documents_own_person_waiting",
     "letter_status_counts",
     "letter_status_counts_own_person",
+    # Archief (archive spec S 12): the list, two filter combinations, the facets, search
+    # by title and "Loopt af".
+    "list_archive",
+    "list_archive_kind_type",
+    "list_archive_person_year",
+    "archive_facets",
+    "search_with_title",
+    "list_archive_expiring",
 )
 # Measured and shown, not part of P1's verdict (search is not a list of S 4.9.5); their
 # results must still match without the member filter.

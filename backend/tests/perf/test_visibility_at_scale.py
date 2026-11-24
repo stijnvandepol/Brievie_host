@@ -25,6 +25,8 @@ import os
 import platform
 import time
 from collections.abc import Callable, Iterator, Sequence
+from dataclasses import asdict
+from datetime import date
 from pathlib import Path
 from typing import Final
 from uuid import UUID, uuid4
@@ -79,6 +81,12 @@ FILTERED: Final = (
     "list_documents_own_person_waiting",
     "letter_status_counts",
     "letter_status_counts_own_person",
+    "list_archive",
+    "list_archive_kind_type",
+    "list_archive_person_year",
+    "archive_facets",
+    "search_with_title",
+    "list_archive_expiring",
 )
 
 
@@ -211,8 +219,40 @@ def _list(name: str, workspace: Workspace, world: PerfWorld, actor: UUID) -> Cal
         ),
         "list_all_unread": lambda: ids(documents.list_documents(member, unread_only=True)),
         "lingering_letters": lambda: lingered(lingering.lingering_letters(member)),
+        "list_archive": lambda: ids(documents.list_documents(member, archive=ARCHIVED)),
+        "list_archive_kind_type": lambda: ids(
+            documents.list_documents(
+                member,
+                archive=documents.ArchiveFilters(
+                    archived=True, kind="document", document_type="contract"
+                ),
+            )
+        ),
+        "list_archive_person_year": lambda: ids(
+            documents.list_documents(
+                member,
+                person_id=world.own_person[actor],
+                archive=documents.ArchiveFilters(archived=True, year=_year_back(2)),
+            )
+        ),
+        "archive_facets": lambda: json.dumps(
+            asdict(documents.list_archive_facets(member)), sort_keys=True
+        ),
+        "search_with_title": lambda: ids(found("document 4243")),
+        "list_archive_expiring": lambda: ids(
+            documents.list_documents(
+                member, archive=documents.ArchiveFilters(archived=True, expiring=True)
+            )
+        ),
     }
     return calls[name]
+
+
+ARCHIVED: Final = documents.ArchiveFilters(archived=True)
+
+
+def _year_back(years: int) -> int:
+    return date.today().year - years
 
 
 def _explain(sql: str, *, analyze: bool) -> tuple[str, dict[str, object]]:

@@ -14,6 +14,10 @@ department, 5 % none; 2 % of the persons managed by a member ("Beheerd door"); 2
 with 100,000 links; 20,000 tasks; 300,000 events; a
 private letter has one `addressee` and one `share` reader row.
 
+Archive (archive plan Task 12): every fourth reviewed letter is an own document (with a
+title, an own document's type and no letter facts), a quarter of those (about 5 %)
+with an end date; 400 distinct senders; the letters spread over 8 years.
+
 Navigation (plan Task 10): each member linked to a letter's addressee (their person, a
 department they are in) has read it in 70 % of the cases, the sorter 20 % of all letters
 too; "Ongelezen" starts 90 days back for every member; 3 % of the confirmed letters with
@@ -78,7 +82,7 @@ class Shape:
     by_ai_percent: int = 5  # of done letters
     public_share_percent: int = 1  # non-private letters shared with one more member
     ocr_words: int = 45  # 45 hex words of 33 characters: about 1,500 characters a letter
-    years: int = 5
+    years: int = 8
     # Navigation: read marks of the members a letter is addressed to, and of the sorter.
     read_mark_percent: int = 70
     sorter_mark_percent: int = 20
@@ -335,8 +339,32 @@ def _ids(rng: random.Random, n: int) -> list[UUID]:
     return [UUID(int=rng.getrandbits(128), version=4) for _ in range(n)]
 
 
-_SENDERS: Final = [f"Afzender {n:03d}" for n in range(200)]
+_SENDERS: Final = [f"Afzender {n:03d}" for n in range(400)]
 _TYPES: Final = ["invoice", "assessment", "bill", "reminder", "policy", "information", "other"]
+_DOCUMENT_TYPES: Final = ["identity", "diploma", "warranty", "contract", "policy", "other"]
+
+
+class ArchiveRow(NamedTuple):
+    kind: str
+    document_type: str
+    title: str
+    expires_in_days: int | None  # from today; None: no end date
+
+
+def archive_row(i: int, status: str) -> ArchiveRow:
+    """The archive's fields of row `i`: every fourth reviewed row is an own document (about
+    20 % of all rows), every fourth of those has an end date (about 5 %), spread around
+    today."""
+    if status == "done" and i % 4 == 3:
+        return ArchiveRow(
+            kind="document",
+            document_type=_DOCUMENT_TYPES[i // 4 % len(_DOCUMENT_TYPES)],
+            title=f"Document {i}",
+            expires_in_days=(i % 400) - 100 if i % 16 == 15 else None,
+        )
+    return ArchiveRow("letter", _TYPES[i % len(_TYPES)], "", None)
+
+
 _TASK_TYPES: Final = ["pay", "respond", "object", "renew", "other"]
 
 
@@ -357,6 +385,12 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
     today = now.date()
 
     task_facts = letter_task_facts(plan, today)
+    archive = [archive_row(i, x.status) for i, x in enumerate(plan.letters)]
+    # An own document has no letter facts (archive AR7): its tasks are no waiting post.
+    task_facts = [
+        LetterFacts(0, None, None) if row.kind == "document" else facts
+        for row, facts in zip(archive, task_facts, strict=True)
+    ]
 
     def addressee_ids(plan: Plan, i: int) -> list[UUID]:
         letter = plan.letters[i]
@@ -448,13 +482,13 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
             " document_type, letter_date, summary, summary_by_ai, confirmed_by_id, confirmed_at,"
             " confirmed_by_ai, confirmed_organisation, visibility, addressee_ids,"
             " has_automatic_link, addressee_opened_at, task_open_count, task_wait_until,"
-            " task_overdue_from)"
+            " task_overdue_from, kind, title, expires_on, remind_days, retain_until)"
             " SELECT id, %s - make_interval(secs => age), %s - make_interval(secs => age), %s,"
             " gen_random_uuid(), scanner, 'scan', status,"
             " CASE WHEN status = 'failed' THEN 'ocr_failed' ELSE '' END, (1 + n %% 3)::int,"
             " (SELECT string_agg(md5(n::text || '-' || w::text), ' ')"
             "    FROM generate_series(1, %s) w),"
-            " sender, kind, (%s::date - (age / 86400 + 3)::int),"
+            " sender, doc_type, (%s::date - (age / 86400 + 3)::int),"
             " 'Samenvatting van brief ' || n, false,"
             " CASE WHEN status = 'done' THEN scanner END,"
             " CASE WHEN status = 'done' THEN %s - make_interval(secs => age) END,"
@@ -462,13 +496,13 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
             " addressees::uuid[], false,"
             " CASE WHEN status = 'done' AND addressees <> '{}' AND NOT unopened"
             "  THEN %s - make_interval(secs => age) END,"
-            " open_count, wait_until, overdue_from"
+            " open_count, wait_until, overdue_from, doc_kind, title, expires_on, 30, NULL"
             " FROM unnest(%s::uuid[], %s::uuid[], %s::text[], %s::int[], %s::boolean[],"
             "             %s::text[], %s::text[], %s::boolean[], %s::text[], %s::boolean[],"
-            "             %s::int[], %s::date[], %s::date[])"
-            "   WITH ORDINALITY AS t(id, scanner, status, age, is_private, sender, kind, by_ai,"
-            "                        addressees, unopened, open_count, wait_until, overdue_from,"
-            "                        n)",
+            "             %s::int[], %s::date[], %s::date[], %s::text[], %s::text[], %s::date[])"
+            "   WITH ORDINALITY AS t(id, scanner, status, age, is_private, sender, doc_type,"
+            "                        by_ai, addressees, unopened, open_count, wait_until,"
+            "                        overdue_from, doc_kind, title, expires_on, n)",
             [
                 now,
                 now,
@@ -483,7 +517,7 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
                 [x.age_seconds for x in plan.letters],
                 [x.private for x in plan.letters],
                 [_SENDERS[i % len(_SENDERS)] for i in range(shape.letters)],
-                [_TYPES[i % len(_TYPES)] for i in range(shape.letters)],
+                [row.document_type for row in archive],
                 [i in plan.by_ai for i in range(shape.letters)],
                 # Written with the letter, sorted as the sync will (ORDER BY id), so the
                 # table is not rewritten by an UPDATE of every row: a bulk rewrite leaves
@@ -498,6 +532,14 @@ def build(workspace_id: UUID, shape: Shape = DEFAULT, seed: int = SEED) -> PerfW
                 [f.open_count for f in task_facts],
                 [f.wait_until for f in task_facts],
                 [f.overdue_from for f in task_facts],
+                [row.kind for row in archive],
+                [row.title for row in archive],
+                [
+                    None
+                    if row.expires_in_days is None
+                    else today + timedelta(days=row.expires_in_days)
+                    for row in archive
+                ],
             ],
         )
         links = [(i, persons[p]) for i, x in enumerate(plan.letters) for p in x.persons]
