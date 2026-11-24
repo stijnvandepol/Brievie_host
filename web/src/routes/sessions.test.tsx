@@ -31,6 +31,24 @@ const other = {
 };
 
 describe("my sessions", () => {
+  it("says which sessions passed two-step verification", async () => {
+    server.use(
+      ...loggedInHandlers(),
+      http.get(`*${API}/me/sessions`, () =>
+        HttpResponse.json([{ ...here, second_factor: true }, other]),
+      ),
+    );
+    renderApp("/account/sessies");
+    const mine = (await screen.findByRole("rowheader", { name: /Firefox op macOS/ })).closest(
+      "tr",
+    ) as HTMLElement;
+    expect(within(mine).getByText("met tweestapsverificatie")).toBeInTheDocument();
+    const theirs = screen
+      .getByRole("rowheader", { name: /Safari op iPad/ })
+      .closest("tr") as HTMLElement;
+    expect(within(theirs).queryByText("met tweestapsverificatie")).not.toBeInTheDocument();
+  });
+
   it("lists where I am signed in and marks this browser", async () => {
     server.use(
       ...loggedInHandlers(),

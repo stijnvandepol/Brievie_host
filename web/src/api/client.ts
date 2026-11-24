@@ -37,13 +37,31 @@ const language: Middleware = {
   },
 };
 
+/** How far the server's clock is ahead of this browser's (milliseconds), from the `Date`
+ * header of the last API answer; null before the first. Codes from an authenticator app
+ * fail when the server's clock is off (spec S "Security and privacy"). */
+let clockOffset: number | null = null;
+
+export function serverClockOffset(): number | null {
+  return clockOffset;
+}
+
+const clock: Middleware = {
+  onResponse({ response }) {
+    const date = response.headers.get("Date");
+    const server = date ? Date.parse(date) : Number.NaN;
+    if (!Number.isNaN(server)) clockOffset = server - Date.now();
+    return response;
+  },
+};
+
 export const api = createClient<paths>({
   baseUrl: globalThis.location.origin,
   credentials: "include",
   // Looked up per call, so a test double installed after import is used.
   fetch: (request) => globalThis.fetch(request),
 });
-api.use(csrf, language);
+api.use(csrf, language, clock);
 
 function isErrorBody(value: unknown): value is ErrorBody {
   return (

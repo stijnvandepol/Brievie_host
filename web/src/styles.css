@@ -3512,6 +3512,35 @@ tr.unread th,
   color: var(--warning-fg);
 }
 
+/* Two-step verification: the set-up steps, the QR code and the recovery codes. */
+.second-factor-setup {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.second-factor-setup .steps {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.setup-qr svg {
+  background: #fff;
+}
+
+.code.secret {
+  overflow-wrap: anywhere;
+}
+
+.recovery-codes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  gap: 6px 16px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
 /* Letter status: the count line above a list of post. */
 .letter-counts {
   margin: 0 0 12px;

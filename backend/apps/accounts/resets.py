@@ -19,7 +19,8 @@ from apps.accounts.authority import account_authority
 from apps.accounts.models import AccountNotice, PasswordReset, User, UserSession, normalise_email
 from apps.accounts.notices import notify
 from apps.accounts.services import current_user
-from apps.accounts.sessions import end_sessions, start_session
+from apps.accounts.sessions import end_sessions
+from apps.accounts.signin import SignInResult, begin_sign_in
 from apps.audit.codes import ActorKind, AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, AuditValue, actor_from_request, record
 from apps.common.errors import ApiError
@@ -101,8 +102,9 @@ def _maker_may_still_act(reset: PasswordReset) -> bool:
     return True
 
 
-def complete_password_reset(request: HttpRequest, *, token: str, password: str) -> User:
-    """Set the new password with a reset link and sign this browser in.
+def complete_password_reset(request: HttpRequest, *, token: str, password: str) -> SignInResult:
+    """Set the new password with a reset link and sign this browser in, or leave the
+    second step: a reset never skips it, so whoever made the link cannot sign in with it.
 
     The account, then the link, is locked, so two attempts at once give one success. A
     password the rules refuse answers 422 and leaves the link usable. Every other
@@ -156,8 +158,8 @@ def complete_password_reset(request: HttpRequest, *, token: str, password: str) 
         record(AuditCode.PASSWORD_CHANGED, actor=actor, target=_user_target(user), values=values)
         lock_out_account(user, actor, current=request, reason="reset")
         notify(user, AccountNotice.Code.PASSWORD_RESET_COMPLETED, actor_name=reset.created_by_name)
-        start_session(request, user, via=UserSession.Via.RESET)
-    return user
+        result = begin_sign_in(request, user, via=UserSession.Via.RESET)
+    return result
 
 
 def lock_out_account(

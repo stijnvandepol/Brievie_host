@@ -4,9 +4,11 @@ from django.http import HttpRequest, HttpResponse
 from ninja import Router, Status
 from ninja.params import functions as ninja_params
 
+from apps.accounts.api import SECOND_STEP, step_out
 from apps.accounts.auth import session_auth
-from apps.accounts.schemas import AcceptedInvitationOut, UserOut
+from apps.accounts.schemas import AcceptedInvitationOut, SignInStepOut, UserOut
 from apps.accounts.services import current_user
+from apps.accounts.signin import StepNeeded
 from apps.audit.services import actor_from_request
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.common.throttling import CallerThrottle, ClientAddressThrottle
@@ -540,6 +542,7 @@ def get_invitation(request: HttpRequest, payload: InvitationTokenIn) -> Invitati
     "/invitations/accept",
     response={
         200: AcceptedInvitationOut,
+        202: SignInStepOut,
         401: ErrorOut,
         403: ErrorOut,
         409: ErrorOut,
@@ -554,15 +557,24 @@ def get_invitation(request: HttpRequest, payload: InvitationTokenIn) -> Invitati
     " `existing`: the account's email address and password, with the sign-in lockout (401"
     " invalid_credentials, 429 too_many_attempts); a deactivated account is reactivated."
     " 403 invitation_email_mismatch when the invitation is for another address; 409"
-    " already_member, invitation_person_taken; 422 for another account kind." + DEAD_LINK,
+    " already_member, invitation_person_taken; 422 for another account kind."
+    + DEAD_LINK
+    + SECOND_STEP
+    + " An account with two-step verification joins at once; only its sign-in waits.",
     operation_id="acceptInvitation",
 )
 def accept_invitation(
     request: HttpRequest, response: HttpResponse, payload: AcceptInvitationIn
-) -> AcceptedInvitationOut:
-    membership = invitations.accept_invitation(request, **payload.model_dump())
+) -> Status[AcceptedInvitationOut] | Status[SignInStepOut]:
+    accepted = invitations.accept_invitation(request, **payload.model_dump())
     response["Cache-Control"] = "no-store"
-    return AcceptedInvitationOut(
-        user=UserOut.model_validate(membership.user, from_attributes=True),
-        workspace=WorkspaceOut.from_membership(membership),
+    if isinstance(accepted.result, StepNeeded):
+        return step_out(accepted.result)
+    membership = accepted.membership
+    return Status(
+        200,
+        AcceptedInvitationOut(
+            user=UserOut.model_validate(membership.user, from_attributes=True),
+            workspace=WorkspaceOut.from_membership(membership),
+        ),
     )

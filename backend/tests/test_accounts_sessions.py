@@ -22,6 +22,7 @@ from pytest_django import Settings
 import brievie.settings
 from apps.accounts import jobs
 from apps.accounts.models import User, UserSession
+from apps.accounts.second_factor import passed_without_factor
 from apps.accounts.sessions import (
     MODEL_BACKEND,
     describe_user_agent,
@@ -114,7 +115,10 @@ def test_setup_records_a_session_made_by_setup(client: Client, settings: Setting
 
     row = current_row(client)
     assert row.created_via == "setup"
-    assert server_events("sign_in_succeeded")[0].values == {"via": "setup"}
+    assert server_events("sign_in_succeeded")[0].values == {
+        "via": "setup",
+        "second_factor": "none",
+    }
 
 
 # --- Enforcement -------------------------------------------------------------------------
@@ -293,7 +297,7 @@ def test_start_session_uses_the_model_backend(rf: RequestFactory) -> None:
     request.session = SessionStore()
     request.user = user
 
-    start_session(request, user, via="invitation")
+    start_session(request, user, via="invitation", second_factor=passed_without_factor(user))
 
     assert request.session[BACKEND_SESSION_KEY] == MODEL_BACKEND
     assert request.session[SESSION_KEY] == str(user.pk)
@@ -568,7 +572,7 @@ def test_successful_sign_in_is_logged_with_via(client: Client) -> None:
 
     (event,) = server_events("sign_in_succeeded")
     assert (event.actor_kind, event.actor_id) == ("user", user.id)
-    assert event.values == {"via": "password"}
+    assert event.values == {"via": "password", "second_factor": "none"}
 
 
 # --- Browser description -----------------------------------------------------------------
@@ -702,3 +706,120 @@ def test_impossible_session_settings_are_refused(
 ) -> None:
     with pytest.raises(ImproperlyConfigured):
         evaluate_settings(monkeypatch, **values)
+
+
+# --- Two-step verification in the hourly job (plan Task 11) ------------------------------
+
+
+def a_session(user: User, *, second_factor: bool = False) -> str:
+    store = SessionStore()
+    store[SESSION_KEY] = str(user.pk)
+    store.create()
+    key = store.session_key
+    assert key is not None
+    UserSession.objects.create(
+        user=user,
+        session_key=key,
+        method="password",
+        last_used_at=timezone.now(),
+        second_factor=second_factor,
+    )
+    return key
+
+
+def test_the_job_removes_unconfirmed_set_ups_older_than_an_hour() -> None:
+    from apps.accounts.models import SecondFactor
+    from apps.accounts.second_factor import begin_setup
+
+    old, recent = UserFactory.create(), UserFactory.create()
+    begin_setup(old, host="brievie.local")
+    begin_setup(recent, host="brievie.local")
+    SecondFactor.objects.filter(user=old).update(updated_at=timezone.now() - timedelta(minutes=61))
+
+    jobs.remove_stale_sessions(timestamp=0)
+
+    assert list(SecondFactor.objects.values_list("user_id", flat=True)) == [recent.id]
+
+
+def test_the_job_starts_the_grace_for_everyone_once(settings: Settings) -> None:
+    settings.BRIEVIE_REQUIRE_SECOND_FACTOR = "everyone"
+    first, second = UserFactory.create(), UserFactory.create()
+
+    jobs.remove_stale_sessions(timestamp=0)
+    since = {u.id: u.second_factor_required_since for u in User.objects.all()}
+    jobs.remove_stale_sessions(timestamp=0)
+
+    assert all(since[u.id] is not None for u in (first, second))
+    assert {u.id: u.second_factor_required_since for u in User.objects.all()} == since
+
+
+def test_the_job_keeps_the_grace_when_the_rule_goes(settings: Settings) -> None:
+    since = timezone.now() - timedelta(days=2)
+    user = UserFactory.create(second_factor_required_since=since)
+    settings.BRIEVIE_REQUIRE_SECOND_FACTOR = "none"
+
+    jobs.remove_stale_sessions(timestamp=0)
+
+    assert User.objects.get(pk=user.pk).second_factor_required_since == since
+
+
+def test_after_the_grace_sessions_without_the_second_step_end(settings: Settings) -> None:
+    settings.BRIEVIE_REQUIRE_SECOND_FACTOR = "everyone"
+    settings.BRIEVIE_SECOND_FACTOR_GRACE_DAYS = 7
+    late = UserFactory.create(second_factor_required_since=timezone.now() - timedelta(days=8))
+    plain = a_session(late)
+    with_code = a_session(late, second_factor=True)
+    in_time = UserFactory.create(second_factor_required_since=timezone.now() - timedelta(days=2))
+    still = a_session(in_time)
+
+    jobs.remove_stale_sessions(timestamp=0)
+
+    keys = set(UserSession.objects.values_list("session_key", flat=True))
+    assert keys == {with_code, still}
+    assert not Session.objects.filter(session_key=plain).exists()
+    (row,) = ServerAuditEvent.objects.filter(code="session_ended")
+    assert row.values == {"count": 1, "reason": "second_factor_required"}
+    assert row.actor_kind == "system"
+
+
+def test_sso_sessions_are_kept_after_the_grace(settings: Settings) -> None:
+    settings.BRIEVIE_REQUIRE_SECOND_FACTOR = "everyone"
+    user = UserFactory.create(second_factor_required_since=timezone.now() - timedelta(days=30))
+    key = a_session(user, second_factor=True)
+    UserSession.objects.filter(session_key=key).update(method="sso")
+
+    jobs.remove_stale_sessions(timestamp=0)
+
+    assert UserSession.objects.filter(session_key=key).exists()
+
+
+# --- Two-step verification: a session without the second step (review of PR #52) --------
+
+
+def test_a_session_without_the_second_step_is_signed_out_once_a_factor_is_on() -> None:
+    from tests.second_factor_support import give_factor
+
+    user = UserFactory.create()
+    client = Client()
+    assert login(client, user.email) == 200
+    give_factor(user)  # as if confirmed at the same moment, without ending this session
+
+    assert client.get("/api/v1/me").status_code == 401
+    assert not UserSession.objects.filter(user=user).exists()
+
+
+def test_start_session_locks_the_account_row_first(rf: RequestFactory) -> None:
+    user = User.objects.get(pk=UserFactory.create().pk)
+    request = rf.post("/api/v1/auth/login")
+    request.session = SessionStore()
+    request.user = user
+
+    with CaptureQueriesContext(connection) as queries:
+        start_session(request, user, via="password", second_factor=passed_without_factor(user))
+
+    sqls = [q["sql"] for q in queries.captured_queries]
+    lock = next(
+        i for i, q in enumerate(sqls) if 'FROM "accounts_user"' in q and "FOR NO KEY UPDATE" in q
+    )
+    factor = next(i for i, q in enumerate(sqls) if 'FROM "accounts_secondfactor"' in q)
+    assert lock < factor

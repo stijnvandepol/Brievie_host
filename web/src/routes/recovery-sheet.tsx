@@ -1,11 +1,13 @@
 import { t } from "@lingui/core/macro";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { createRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 import { Button, Form, Input, Label, Text, TextField } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
+import { meQuery } from "../api/queries";
 import { Icon } from "../components/icons";
 import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
+import { CodeField } from "../components/second-factor-setup";
 import { MessageBar } from "../components/ui";
 import { requireUser } from "../guards";
 import { saveFile } from "../save-file";
@@ -44,16 +46,20 @@ function RecoverySheetPage() {
   const needsPassword =
     download.error instanceof ApiFailure && download.error.code === "reauthentication_required";
   const [password, setPassword] = useState("");
+  // With two-step verification on, typing the password again asks the code as well.
+  const withCode = useQuery(meQuery).data?.has_second_factor === true;
+  const [code, setCode] = useState("");
   const confirm = useMutation({
     gcTime: 0,
     mutationFn: async () => {
       const { error, response } = await api.POST("/api/v1/auth/reauthenticate", {
-        body: { password },
+        body: { password, code: withCode ? code.replace(/\s/g, "") : "" },
       });
       if (!response.ok) throw new ApiFailure(error);
     },
     onSuccess: () => {
       setPassword("");
+      setCode("");
       download.mutate();
     },
   });
@@ -91,6 +97,9 @@ function RecoverySheetPage() {
             <Text slot="description">{t`Vul je wachtwoord in voordat je het herstelblad downloadt. Zo weten we dat jij het bent.`}</Text>
             <Input autoComplete="current-password" />
           </TextField>
+          {withCode ? (
+            <CodeField value={code} onChange={setCode} label={t`Code uit de app`} />
+          ) : null}
           <ErrorAlert error={confirm.error} />
           <div>
             <Button type="submit" className="button" isPending={confirm.isPending}>

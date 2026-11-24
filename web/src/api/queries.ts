@@ -460,6 +460,16 @@ export const mySessionsQuery = queryOptions({
   },
 });
 
+/** The caller's two-step verification ("Beveiliging"). */
+export const mySecondFactorQuery = queryOptions({
+  queryKey: ["me", "second-factor"],
+  queryFn: async () => {
+    const { data, error } = await api.GET("/api/v1/me/second-factor");
+    if (error !== undefined || !data) throw new ApiFailure(error);
+    return data;
+  },
+});
+
 /** The devices of another account, for an admin who may manage it. */
 export const userDevicesQuery = (userId: string) =>
   queryOptions({

@@ -1,8 +1,15 @@
 import pytest
 from django.core.checks import Error, Warning, run_checks
+from django.utils import timezone
 from pytest_django import Settings
 
-from apps.common.checks import check_database_passwords, check_public_urls
+from apps.accounts.models import SecondFactor
+from apps.common.checks import (
+    check_database_passwords,
+    check_public_urls,
+    check_second_factor_rule,
+)
+from tests.factories import UserFactory
 
 
 def test_public_url_with_an_allowed_host_passes(settings: Settings) -> None:
@@ -90,3 +97,37 @@ def test_any_password_containing_change_me_is_a_warning(
     settings.DATABASE_OWNER = None
 
     assert [m.id for m in check_database_passwords(None)] == ["brievie.W001"]
+
+
+def test_a_required_second_factor_without_an_admin_who_has_one_warns(settings: Settings) -> None:
+    settings.BRIEVIE_REQUIRE_SECOND_FACTOR = "server_admins"
+    UserFactory.create(is_server_admin=True)
+
+    (message,) = check_second_factor_rule(None)
+
+    assert isinstance(message, Warning)
+    assert message.id == "brievie.W004"
+    assert message.msg == "Nog geen serverbeheerder heeft tweestapsverificatie aan."
+
+
+def test_an_unconfirmed_factor_does_not_count(settings: Settings) -> None:
+    settings.BRIEVIE_REQUIRE_SECOND_FACTOR = "everyone"
+    admin = UserFactory.create(is_server_admin=True)
+    SecondFactor.objects.create(user=admin, secret_sealed=b"x")
+
+    assert [m.id for m in check_second_factor_rule(None)] == ["brievie.W004"]
+
+
+def test_an_admin_with_a_confirmed_factor_silences_it(settings: Settings) -> None:
+    settings.BRIEVIE_REQUIRE_SECOND_FACTOR = "everyone"
+    admin = UserFactory.create(is_server_admin=True)
+    SecondFactor.objects.create(user=admin, secret_sealed=b"x", confirmed_at=timezone.now())
+
+    assert check_second_factor_rule(None) == []
+
+
+def test_no_rule_no_warning(settings: Settings) -> None:
+    settings.BRIEVIE_REQUIRE_SECOND_FACTOR = "none"
+    UserFactory.create(is_server_admin=True)
+
+    assert check_second_factor_rule(None) == []
