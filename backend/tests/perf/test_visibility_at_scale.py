@@ -96,10 +96,23 @@ def _explain_dir() -> Path | None:
     return directory
 
 
+def _say(config: pytest.Config, text: str) -> None:
+    """A progress line on the terminal, past the capture: a run that is stopped (the job's
+    time limit) still shows how far it came."""
+    reporter = config.pluginmanager.getplugin("terminalreporter")
+    if reporter is not None:
+        reporter.write_line(text)
+
+
 @pytest.fixture(scope="module")
-def perf_world(django_db_setup: None, django_db_blocker: DjangoDbBlocker) -> PerfWorld:
+def perf_world(
+    request: pytest.FixtureRequest, django_db_setup: None, django_db_blocker: DjangoDbBlocker
+) -> PerfWorld:
+    started = time.perf_counter()
     with django_db_blocker.unblock():
-        return data.build(uuid4())
+        world = data.build(uuid4())
+    _say(request.config, f"perf world built in {time.perf_counter() - started:.0f} s")
+    return world
 
 
 @pytest.fixture(scope="module")
@@ -265,7 +278,12 @@ def _jit() -> str:
 @pytest.mark.parametrize("actor", ACTORS)
 @pytest.mark.parametrize("name", LISTS)
 def test_measure_list(
-    state: str, actor: str, name: str, perf_world: PerfWorld, perf_report: Report
+    request: pytest.FixtureRequest,
+    state: str,
+    actor: str,
+    name: str,
+    perf_world: PerfWorld,
+    perf_report: Report,
 ) -> None:
     user = getattr(perf_world, actor)
     assert isinstance(user, UUID)
@@ -286,6 +304,8 @@ def test_measure_list(
         return result
 
     result = record("policy", _measure(call, label))
+    median = perf_report.measurements[-1].median
+    _say(request.config, f"{label}: median {median * 1000:.0f} ms")
 
     with connection.cursor() as c:
         c.execute(
