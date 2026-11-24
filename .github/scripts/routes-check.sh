@@ -123,7 +123,7 @@ check_listeners() {
 		inside POST caddy:8080 /api/v1/auth/login '{"X-Forwarded-Proto": "https", "X-Brievie-Route": "private", "Authorization": "Bearer junk", "Content-Type": "application/json"}' 0 >"$work/t"
 		test "$(status_of "$work/t")" = 403
 	fi
-	body=$(curl --silent --insecure --header 'X-Brievie-Route: public' --header 'CF-Connecting-IP: 203.0.113.9' \
+	body=$(curl --silent --insecure --header 'X-Brievie-Route: public' \
 		https://localhost/api/v1/server/audit-events)
 	test "$(jq -r .code <<<"$body")" = not_authenticated
 	# The route is decided by name first (security review of PR #53): the public name from an
@@ -163,11 +163,12 @@ check_session() {
 	session=$(awk '$6 == "sessionid" { print $7 }' "$jar" | tail -n 1)
 	test -n "$session" || { echo "No session in the cookie jar." >&2; exit 1; }
 	echo "::add-mask::$session"
-	# :443 with every forged address header: Brievie sees the peer, private, https.
+	# :443 with forged address and route headers: Brievie sees the peer, private, https.
+	# (CF-Connecting-IP on :443 would make the request public: checked below.)
 	curl --silent --show-error --insecure --cookie "sessionid=$session" \
-		--header 'X-Forwarded-For: 198.51.100.1' --header 'CF-Connecting-IP: 198.51.100.2' \
+		--header 'X-Forwarded-For: 198.51.100.1' \
 		--header 'X-Brievie-Client-IP: 198.51.100.3' --header 'X-Brievie-Route: public' \
-		--header 'X-Brievie-Peer-IP: 198.51.100.4' \
+		--header 'X-Brievie-Peer-IP: 198.51.100.4' --header 'X-Brievie-Via: tunnel' \
 		https://localhost/api/v1/server/external-access >"$work/home.json"
 	python3 - "$work/home.json" <<'PY'
 import json, sys
@@ -184,6 +185,23 @@ assert "public_name_from_untrusted_source" in codes, codes
 assert "cloudflare_on_https_port" in codes, codes
 print("The page shows what the server saw:", codes)
 PY
+	# CF-Connecting-IP on :443: public (point 1 of the review), and still the peer counts.
+	code=$(curl --silent --insecure --cookie "sessionid=$session" --output "$work/cf.json" \
+		--write-out '%{http_code}' --header 'CF-Connecting-IP: 198.51.100.2' \
+		https://localhost/api/v1/server/external-access)
+	if [ "${PUBLIC_WEB:-false}" = true ]; then
+		test "$code" = 200
+		python3 - "$work/cf.json" <<'PY'
+import json, sys
+seen = json.load(open(sys.argv[1]))["seen_as"]
+assert seen["route"] == "public", seen
+assert seen["client_ip"] == seen["peer_ip"] != "198.51.100.2", seen
+print("Cloudflare's header on :443: public, and the peer still counts.")
+PY
+	else
+		test "$code" = 403
+		test "$(jq -r .code "$work/cf.json")" = public_web_off
+	fi
 	cookie_header=$(jq -cn --arg s "$session" '{"X-Forwarded-Proto": "https", "Cookie": ("sessionid=" + $s), "CF-Connecting-IP": "203.0.113.77", "X-Brievie-Client-IP": "198.51.100.3", "X-Brievie-Route": "private", "X-Forwarded-For": "198.51.100.1"}')
 	inside GET caddy:8080 /api/v1/server/external-access "$cookie_header" 0 >"$work/t"
 	if [ "${PUBLIC_WEB:-false}" = true ]; then
