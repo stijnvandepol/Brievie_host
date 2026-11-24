@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { components } from "../api/schema";
+import { addDays, amsterdamToday } from "../task-time";
 import {
   API,
   asRole,
@@ -273,5 +274,101 @@ describe("Mijn taken", () => {
       "href",
       `/w/${workspace.id}/inbox`,
     );
+  });
+});
+
+describe("Mijn taken: waiting and snoozed", () => {
+  it("puts them in collapsed groups below the date groups, out of the open list", async () => {
+    const items = [
+      task({ description: "Nu doen", group: "no_date" }),
+      task({
+        description: "Wacht nog",
+        group: "waiting",
+        waiting_until: "2099-12-03",
+        deadline: "2020-11-01",
+        days_left: -5,
+      }),
+      task({ description: "Later zelf", group: "snoozed", snoozed_until: "2099-12-01" }),
+    ];
+    server.use(...loggedInHandlers(), lists({ "mine/open": answer(items) }));
+    renderApp(path);
+    await screen.findByRole("checkbox", { name: "Klaar: Nu doen" });
+    const waiting = screen.getByRole("button", { name: /Wacht op reactie \(1\)/ });
+    const snoozed = screen.getByRole("button", { name: /Uitgesteld \(1\)/ });
+    expect(waiting).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Wacht nog")).not.toBeVisible();
+    const user = userEvent.setup();
+    await user.click(waiting);
+    expect(await screen.findByText("Wacht op reactie tot 3 dec")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Niet meer wachten: Wacht nog" })).toBeVisible();
+    expect(screen.getByText("termijn was 1 nov")).toBeVisible();
+    await user.click(snoozed);
+    expect(await screen.findByText("Uitgesteld tot 1 dec")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Niet meer uitstellen: Later zelf" })).toBeVisible();
+  });
+
+  it("asks for the waiting tasks with include_waiting", async () => {
+    const asked: URLSearchParams[] = [];
+    server.use(
+      ...loggedInHandlers(),
+      http.get(`${base}/my-tasks`, ({ request }) => {
+        asked.push(new URL(request.url).searchParams);
+        return HttpResponse.json(answer([]));
+      }),
+    );
+    renderApp(path);
+    await waitFor(() => expect(asked.some((q) => q.get("include_waiting") === "true")).toBe(true));
+  });
+
+  it("is still empty when only parked tasks are left", async () => {
+    server.use(
+      ...loggedInHandlers(),
+      lists({ "mine/open": answer([task({ group: "waiting", waiting_until: "2099-12-03" })]) }),
+    );
+    renderApp(path);
+    expect(await screen.findByText(/Je hebt geen open taken/)).toBeInTheDocument();
+  });
+
+  it("marks a task whose waiting day arrived, back in its date group", async () => {
+    const item = task({
+      description: "Terug",
+      group: "overdue",
+      days_left: -3,
+      deadline: "2026-11-18",
+      waiting_until: "2026-11-20",
+      wait_over: true,
+    });
+    server.use(...loggedInHandlers(), lists({ "mine/open": answer([item]) }));
+    renderApp(path);
+    expect(await screen.findByText("Wachten voorbij sinds 20 nov")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Te laat" })).toBeInTheDocument();
+  });
+
+  it("stops the snooze at the task's own date", async () => {
+    const term = addDays(amsterdamToday(), 30);
+    const item = task({ description: "Met termijn", deadline: term, days_left: 30 });
+    server.use(...loggedInHandlers(), lists({ "mine/open": answer([item]) }));
+    renderApp(path);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Uitstellen: Met termijn" }));
+    const dialog = await screen.findByRole("dialog", { name: "Uitstellen…" });
+    const field = within(dialog).getByLabelText("Tot wanneer stel je dit uit?");
+    expect(field).toHaveAttribute("max", term);
+    expect(
+      within(dialog).getByText(
+        "Alleen jij ziet dat je dit uitstelt. Op die dag staat de taak weer in je lijst. Uitstellen kan tot de datum van de taak.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("lets a viewer snooze but not wait", async () => {
+    server.use(
+      asRole("viewer"),
+      ...loggedInHandlers(),
+      lists({ "mine/open": answer([task({ description: "Mijn", can_edit: false })]) }),
+    );
+    renderApp(path);
+    expect(await screen.findByRole("button", { name: "Uitstellen: Mijn" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Wacht op reactie:/ })).not.toBeInTheDocument();
   });
 });
