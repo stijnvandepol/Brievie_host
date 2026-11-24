@@ -59,12 +59,31 @@ def note(kind: str, *, peer: str = "") -> None:
         logger.warning("Access: could not note a route (%s)", type(error).__name__)
 
 
+# Local networks: the private ranges, carrier-grade NAT (a Tailscale address), unique local
+# IPv6, link-local and loopback. Not Python's `is_private`, which also counts the
+# documentation ranges and other reserved blocks.
+_LOCAL_NETWORKS = tuple(
+    ipaddress.ip_network(network)
+    for network in (
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "100.64.0.0/10",
+        "169.254.0.0/16",
+        "127.0.0.0/8",
+        "fc00::/7",
+        "fe80::/10",
+        "::1/128",
+    )
+)
+
+
 def _is_local(address: str) -> bool:
     try:
         parsed = ipaddress.ip_address(address)
     except ValueError:
         return False
-    return parsed.is_private or parsed.is_link_local or parsed.is_loopback
+    return any(parsed in network for network in _LOCAL_NETWORKS)
 
 
 def last_peer(kind: str) -> str:

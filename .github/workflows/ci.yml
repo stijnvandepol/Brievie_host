@@ -560,6 +560,10 @@ jobs:
         if: failure()
         # No logs here: the api log holds the installation code.
         run: $COMPOSE --profile tunnel ps --all
+      - name: Requests that reached the api without Caddy, on failure
+        if: failure()
+        # Only these lines of the api log: addresses, never the installation code.
+        run: $COMPOSE logs --no-color api | grep -F 'reached the api without Caddy' | tail -n 5 || true
       - name: Stop
         if: always()
         run: $COMPOSE --profile tunnel down --volumes

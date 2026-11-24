@@ -426,15 +426,14 @@ def test_a_well_set_proxy_notes_nothing(settings: Settings) -> None:
 
 def test_pairing_and_addresses_stay_closed_with_the_public_web_on(settings: Settings) -> None:
     settings.BRIEVIE_PUBLIC_WEB = True
-    assert_refused(
-        Client().post(
-            "/api/v1/devices/pairing-challenges",
-            {},
-            content_type="application/json",
-            headers=PUBLIC,
-        )
+    challenge = Client().post(
+        "/api/v1/devices/pairing-challenges", {}, content_type="application/json", headers=PUBLIC
     )
+    assert challenge.status_code == 403
+    assert challenge.json()["code"] == "pair_at_home"
     user = UserFactory.create()
     _, token = paired(user)
-    assert_refused(Client().get("/api/v1/server/addresses", headers={**PUBLIC, **bearer(token)}))
+    addresses = Client().get("/api/v1/server/addresses", headers={**PUBLIC, **bearer(token)})
+    assert addresses.status_code == 403
+    assert addresses.json()["code"] == "pair_at_home"
     assert Client().get("/api/v1/health", headers=PUBLIC).status_code == 200

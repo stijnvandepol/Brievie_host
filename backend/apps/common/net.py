@@ -1,9 +1,13 @@
 import ipaddress
+import logging
 import socket
 import time
 
 from django.conf import settings
 from django.http import HttpRequest
+
+logger = logging.getLogger(__name__)
+_not_caddy_logged_at = -60.0
 
 # Caddy's addresses, resolved from its compose name per process: kept for `_CADDY_TTL`, and
 # looked up again (at most every `_CADDY_RETRY` seconds) when a peer is not among them, so a
@@ -46,7 +50,25 @@ def from_caddy(request: HttpRequest) -> bool:
     peer = str(request.META.get("REMOTE_ADDR", "")).strip()
     if not peer:
         return False
-    return peer in caddy_addresses() or peer in caddy_addresses(refresh=True)
+    if peer in caddy_addresses() or peer in caddy_addresses(refresh=True):
+        return True
+    _log_not_caddy(peer)
+    return False
+
+
+def _log_not_caddy(peer: str) -> None:
+    """At most once a minute per process: which peer reached the api without Caddy, and
+    Caddy's known addresses (addresses only), so a wrong network is found from the log."""
+    global _not_caddy_logged_at
+    now = time.monotonic()
+    if now - _not_caddy_logged_at < 60.0:
+        return
+    _not_caddy_logged_at = now
+    logger.warning(
+        "Access: a request reached the api without Caddy (peer %s; Caddy at %s)",
+        usable_ip(peer) or "?",
+        ", ".join(sorted(_caddy[1])) or "unknown",
+    )
 
 
 def client_ip(request: HttpRequest) -> str | None:
