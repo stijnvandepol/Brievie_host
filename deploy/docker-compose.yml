@@ -52,13 +52,18 @@ services:
       DATABASE_URL: postgres://brievie_app:${BRIEVIE_APP_PASSWORD}@postgres:5432/brievie
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in deploy/.env}
       DEBUG: ${DEBUG:-false}
-      # Both follow BRIEVIE_HOSTNAME; set them only to deviate (they must agree: the api
+      # The names; the api derives ALLOWED_HOSTS and BRIEVIE_PUBLIC_URLS from them
+      # (apps.access.addresses). Set those two only to deviate (they must agree: the api
       # refuses to start when a public URL's host is not in ALLOWED_HOSTS).
-      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-${BRIEVIE_HOSTNAME:?set BRIEVIE_HOSTNAME in deploy/.env}}
+      BRIEVIE_HOSTNAME: ${BRIEVIE_HOSTNAME:?set BRIEVIE_HOSTNAME in deploy/.env}
+      BRIEVIE_VPN_HOSTNAME: ${BRIEVIE_VPN_HOSTNAME:-}
+      BRIEVIE_PUBLIC_HOSTNAME: ${BRIEVIE_PUBLIC_HOSTNAME:-}
+      BRIEVIE_HTTPS_PORT: ${BRIEVIE_HTTPS_PORT:-443}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
       CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-}
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
       CSRF_COOKIE_SECURE: ${CSRF_COOKIE_SECURE:-true}
-      BRIEVIE_PUBLIC_URLS: ${BRIEVIE_PUBLIC_URLS:-https://${BRIEVIE_HOSTNAME}:${BRIEVIE_HTTPS_PORT:-443}}
+      BRIEVIE_PUBLIC_URLS: ${BRIEVIE_PUBLIC_URLS:-}
       BRIEVIE_HSTS_SECONDS: ${BRIEVIE_HSTS_SECONDS:-0}
       BRIEVIE_MAX_BODY_BYTES: ${BRIEVIE_MAX_BODY_BYTES:-2621440}
       BRIEVIE_MAX_UPLOAD_BYTES: ${BRIEVIE_MAX_UPLOAD_BYTES:-33554432}
@@ -73,12 +78,13 @@ services:
       # Whether workspaces may switch on the AI autopilot at all.
       BRIEVIE_AI_AUTOPILOT_ALLOWED: ${BRIEVIE_AI_AUTOPILOT_ALLOWED:-true}
     healthcheck:
-      # The Host header must be an allowed host, so the first ALLOWED_HOSTS entry is used.
+      # The Host header must be an allowed host: the first ALLOWED_HOSTS entry, else the
+      # home name (from which the api derives ALLOWED_HOSTS).
       test:
         - CMD
         - python
         - -c
-        - "import os, urllib.request as u; h = os.environ['ALLOWED_HOSTS'].split(',')[0].strip().lstrip('.'); u.urlopen(u.Request('http://127.0.0.1:8000/api/v1/health', headers={'Host': 'localhost' if h in ('', '*') else h}), timeout=3)"
+        - "import os, urllib.request as u; h = (os.environ.get('ALLOWED_HOSTS') or os.environ['BRIEVIE_HOSTNAME']).split(',')[0].strip().lstrip('.'); u.urlopen(u.Request('http://127.0.0.1:8000/api/v1/health', headers={'Host': 'localhost' if h in ('', '*') else h}), timeout=3)"
       interval: 5s
       timeout: 5s
       retries: 20

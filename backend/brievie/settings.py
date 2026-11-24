@@ -5,6 +5,7 @@ from pathlib import Path
 import environ
 from django.core.exceptions import ImproperlyConfigured
 
+from apps.access.addresses import derive as _derive_addresses
 from apps.common import secrets as _secrets
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -42,7 +43,27 @@ DEBUG: bool = env.bool("DEBUG", default=False)
 _secret_key_problem = _secrets.check_secret_key(SECRET_KEY, debug=DEBUG)
 if _secret_key_problem:
     raise ImproperlyConfigured(_secret_key_problem)
-ALLOWED_HOSTS: list[str] = env.list("ALLOWED_HOSTS", default=["localhost"])
+# The server's names (S 6, apps.access.addresses): the home name, the server's own VPN
+# name and the public name of a tunnel or an own reverse proxy. ALLOWED_HOSTS and
+# BRIEVIE_PUBLIC_URLS follow from them (below) unless deploy/.env sets them itself.
+BRIEVIE_HOSTNAME: str = env.str("BRIEVIE_HOSTNAME", default="")
+BRIEVIE_VPN_HOSTNAME: str = env.str("BRIEVIE_VPN_HOSTNAME", default="")
+BRIEVIE_PUBLIC_HOSTNAME: str = env.str("BRIEVIE_PUBLIC_HOSTNAME", default="")
+BRIEVIE_HTTPS_PORT: int = env.int("BRIEVIE_HTTPS_PORT", default=443)
+# Nothing is derived without a home name (a developer's test run): today's defaults.
+_addresses = (
+    _derive_addresses(
+        hostname=BRIEVIE_HOSTNAME,
+        vpn_hostname=BRIEVIE_VPN_HOSTNAME,
+        public_hostname=BRIEVIE_PUBLIC_HOSTNAME,
+        https_port=BRIEVIE_HTTPS_PORT,
+    )
+    if BRIEVIE_HOSTNAME
+    else None
+)
+ALLOWED_HOSTS: list[str] = [
+    host.strip() for host in env.list("ALLOWED_HOSTS", default=[]) if host.strip()
+] or (list(_addresses.allowed_hosts) if _addresses else ["localhost"])
 
 INSTALLED_APPS = [
     "django.contrib.auth",
@@ -69,6 +90,7 @@ INSTALLED_APPS = [
     "apps.updates",
     "apps.installer",
     "apps.audit",
+    "apps.access",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
@@ -268,6 +290,13 @@ SILENCED_SYSTEM_CHECKS = ["axes.W002"]  # AxesMiddleware: see above.
 # that code useless and a new one must be made.
 BRIEVIE_PUBLIC_URLS: list[str] = [
     url.strip() for url in env.list("BRIEVIE_PUBLIC_URLS", default=[]) if url.strip()
+] or (list(_addresses.public_urls) if _addresses else [])
+# The entries of BRIEVIE_PUBLIC_URLS served with a public certificate (the public name),
+# not the private CA: the app trusts them with the system's roots (S 9).
+BRIEVIE_PUBLIC_CERTIFICATE_URLS: list[str] = [
+    url
+    for url in (_addresses.public_certificate_urls if _addresses else ())
+    if url in BRIEVIE_PUBLIC_URLS
 ]
 if any(not url.startswith("https://") for url in BRIEVIE_PUBLIC_URLS):
     raise ImproperlyConfigured("Every BRIEVIE_PUBLIC_URLS entry must start with https://.")
@@ -346,7 +375,6 @@ if not 0 <= BRIEVIE_BACKUP_HOUR <= 23:
 BRIEVIE_BACKUP_AUTO_INIT: bool = env.bool("BRIEVIE_BACKUP_AUTO_INIT", default=False)
 BRIEVIE_BACKUP_CONFIG_DIR: str = env.str("BRIEVIE_BACKUP_CONFIG_DIR", default="/data/backup-config")
 BRIEVIE_AUTHORITY_COPY_DIR: str = env.str("BRIEVIE_AUTHORITY_COPY_DIR", default="/data/authority")
-BRIEVIE_HOSTNAME: str = env.str("BRIEVIE_HOSTNAME", default="")
 # True only where the standalone compose file (deploy/compose/docker-compose.yml) says so;
 # never set by the image or by `deploy/docker-compose.yml`. The web interface offers the
 # recovery sheet only there: the api of a `./brievie` install lacks what the sheet needs.

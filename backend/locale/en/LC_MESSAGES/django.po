@@ -1157,6 +1157,10 @@ msgid "Het certificaat van de server is niet hetzelfde als in de back-up."
 msgstr "The server's certificate is not the same as in the backup."
 
 #: apps/common/checks.py
+msgid "Zet in deploy/.env alleen de naam, zoals brievie.voorbeeld.nl, en gebruik elke naam maar één keer."
+msgstr "Put only the name in deploy/.env, such as brievie.example.nl, and use each name only once."
+
+#: apps/common/checks.py
 msgid "Choose a new password, see 'Run the whole stack' in the README."
 msgstr "Choose a new password, see 'Run the whole stack' in the README."
 

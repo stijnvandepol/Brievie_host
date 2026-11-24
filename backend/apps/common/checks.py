@@ -13,6 +13,8 @@ from django.core.checks import CheckMessage, Error, Warning, register
 from django.http.request import validate_host
 from django.utils.translation import gettext as _
 
+from apps.access.addresses import name_problems
+
 # Every secret in deploy/.env.example contains this: a server that still uses one is
 # open to anyone who has read this repository.
 PLACEHOLDER_MARKER = "change-me"
@@ -41,6 +43,28 @@ def check_public_urls(
                 )
             )
     return errors
+
+
+@register()
+def check_names(app_configs: Iterable[AppConfig] | None, **kwargs: object) -> list[CheckMessage]:
+    """The VPN and public names are bare host names and differ from each other and from
+    the home name (Caddy would refuse a site address twice; S 6)."""
+    return [
+        Error(
+            f"{variable} must be a bare host name (no https://, port or path) that differs "
+            "from BRIEVIE_HOSTNAME and the other name.",
+            hint=_(
+                "Zet in deploy/.env alleen de naam, zoals brievie.voorbeeld.nl, en gebruik "
+                "elke naam maar één keer."
+            ),
+            id="brievie.E002",
+        )
+        for variable in name_problems(
+            hostname=settings.BRIEVIE_HOSTNAME,
+            vpn_hostname=settings.BRIEVIE_VPN_HOSTNAME,
+            public_hostname=settings.BRIEVIE_PUBLIC_HOSTNAME,
+        )
+    ]
 
 
 @register()

@@ -24,14 +24,19 @@ def service(name: str) -> str:
     return match.group(1)
 
 
-def test_allowed_hosts_and_public_urls_follow_the_hostname() -> None:
+def test_api_gets_the_names_and_derives_the_addresses() -> None:
+    # The api derives ALLOWED_HOSTS and BRIEVIE_PUBLIC_URLS (apps.access.addresses); compose
+    # passes the names and leaves the two overrides empty unless deploy/.env sets them.
     api = service("api")
-    assert "ALLOWED_HOSTS: ${ALLOWED_HOSTS:-${BRIEVIE_HOSTNAME" in api
-    assert "BRIEVIE_PUBLIC_URLS: ${BRIEVIE_PUBLIC_URLS:-https://${BRIEVIE_HOSTNAME" in api.replace(
-        "\n", ""
-    )
+    assert "BRIEVIE_HOSTNAME: ${BRIEVIE_HOSTNAME:?" in api
+    assert "BRIEVIE_VPN_HOSTNAME: ${BRIEVIE_VPN_HOSTNAME:-}" in api
+    assert "BRIEVIE_PUBLIC_HOSTNAME: ${BRIEVIE_PUBLIC_HOSTNAME:-}" in api
     # The published HTTPS port is part of the address a phone has to call.
-    assert "${BRIEVIE_HTTPS_PORT:-443}" in api
+    assert "BRIEVIE_HTTPS_PORT: ${BRIEVIE_HTTPS_PORT:-443}" in api
+    assert "ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}\n" in api
+    assert "BRIEVIE_PUBLIC_URLS: ${BRIEVIE_PUBLIC_URLS:-}\n" in api
+    # The healthcheck's Host: an explicit ALLOWED_HOSTS, else the home name.
+    assert "(os.environ.get('ALLOWED_HOSTS') or os.environ['BRIEVIE_HOSTNAME'])" in api
 
 
 def test_env_example_needs_only_the_hostname() -> None:
