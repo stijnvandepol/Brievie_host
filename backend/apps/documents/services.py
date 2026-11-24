@@ -24,6 +24,7 @@ from apps.documents import (
 )
 from apps.documents.intake import page_aad
 from apps.documents.models import (
+    LETTERS_ONLY,
     LIVE,
     Document,
     DocumentAddressee,
@@ -112,7 +113,10 @@ _REVIEW_STATUSES = (Document.Status.NEEDS_REVIEW, Document.Status.FAILED)
 
 
 def inbox_state(document: Document) -> str:
-    """Where the document stands in the inbox; derived, not stored (design 11)."""
+    """Where the document stands in the inbox; derived, not stored (design 11). An own
+    document is never in the Inbox (archive spec S 8): always sorted."""
+    if document.kind == Document.Kind.DOCUMENT:
+        return InboxState.SORTED
     if document.status == Document.Status.PROCESSING:
         return InboxState.NEW
     if document.status in _REVIEW_STATUSES:
@@ -230,13 +234,14 @@ def _is_automatic() -> models.Q:
 
 
 def _in_state(state: str) -> models.Q:
+    """Letters only: an own document is never in the Inbox (archive spec S 8)."""
     if state == InboxState.NEW:
-        return models.Q(status=Document.Status.PROCESSING)
+        return LETTERS_ONLY & models.Q(status=Document.Status.PROCESSING)
     if state == InboxState.REVIEW:
-        return models.Q(status__in=_REVIEW_STATUSES)
+        return LETTERS_ONLY & models.Q(status__in=_REVIEW_STATUSES)
     # `addressee_ids` mirrors the links (one writer, checked nightly); this form uses the
-    # partial index `documents_document_unassigned`.
-    return models.Q(status=Document.Status.DONE, addressee_ids=[])
+    # partial index `documents_document_unassigned` (its condition names `kind` too).
+    return LETTERS_ONLY & models.Q(status=Document.Status.DONE, addressee_ids=[])
 
 
 LETTER_STATUSES = tuple(str(each) for each in LetterStatus)
@@ -250,13 +255,14 @@ _NOT_REVIEWED = (
 def letter_status_q(status: str, today: date) -> models.Q:
     """The letters in a status today (spec S 4.2), from the three cached task facts and the
     review; the partial index `documents_document_open_tasks` serves open, waiting and
-    late. 422 for a status that does not exist."""
+    late. 422 for a status that does not exist. Letters only: an own document has no
+    status (archive spec AR7)."""
     done = Document.Status.DONE
     if status == LetterStatus.NEW:
-        return models.Q(status__in=_NOT_REVIEWED)
+        return LETTERS_ONLY & models.Q(status__in=_NOT_REVIEWED)
     if status == LetterStatus.HANDLED:
-        return models.Q(status=done, task_open_count=0)
-    active = models.Q(status=done, task_open_count__gt=0)
+        return LETTERS_ONLY & models.Q(status=done, task_open_count=0)
+    active = LETTERS_ONLY & models.Q(status=done, task_open_count__gt=0)
     if status == LetterStatus.WAITING:
         return active & models.Q(task_wait_until__gt=today)
     if status == LetterStatus.OPEN:
@@ -267,8 +273,9 @@ def letter_status_q(status: str, today: date) -> models.Q:
 
 
 def overdue_q(today: date) -> models.Q:
-    """The marker "Te laat": reviewed, and an open task is active with a deadline behind."""
-    return models.Q(
+    """The marker "Te laat": a reviewed letter, and an open task is active with a deadline
+    behind. Never an own document (its reminder is late in "Mijn taken" only)."""
+    return LETTERS_ONLY & models.Q(
         status=Document.Status.DONE, task_open_count__gt=0, task_overdue_from__lte=today
     )
 
@@ -316,14 +323,15 @@ def my_post_filter(membership: Membership, *, include_departments: bool = False)
     """ "Mijn post" (navigation spec B2): letters on the member's own persons (their own and
     those they manage), with `include_departments` also on their departments ("Ook mijn
     afdeling"). Matches nothing for a member without any. The GIN index on
-    `addressee_ids`; only ever applied on top of `visible_documents`."""
+    `addressee_ids`; only ever applied on top of `visible_documents`. Letters only: Mijn
+    post is the personal Inbox of post; an own document is in Archief (spec S 8)."""
     facts = member_facts(membership)
     ids = set(facts.person_ids)
     if include_departments:
         ids |= facts.department_ids
     if not ids:
         return models.Q(pk__in=[])
-    return models.Q(addressee_ids__overlap=sorted(ids))
+    return LETTERS_ONLY & models.Q(addressee_ids__overlap=sorted(ids))
 
 
 def list_documents(
@@ -547,6 +555,8 @@ def _summary_out(
     status, late = status_of(
         document.status == Document.Status.DONE, letter_sync.stored_facts(document), _today()
     )
+    # An own document has no letter status, also with an open reminder (archive AR7).
+    is_letter = document.kind == Document.Kind.LETTER
     return DocumentSummaryOut(
         id=document.id,
         client_id=document.client_id,
@@ -575,10 +585,12 @@ def _summary_out(
         visibility=document.visibility,
         reader_names=reader_names or [],
         unread=unread,
-        letter_status=str(status),
-        overdue=late,
-        open_task_count=document.task_open_count,
-        waiting_until=document.task_wait_until if status == LetterStatus.WAITING else None,
+        letter_status=str(status) if is_letter else "",
+        overdue=late and is_letter,
+        open_task_count=document.task_open_count if is_letter else 0,
+        waiting_until=document.task_wait_until
+        if is_letter and status == LetterStatus.WAITING
+        else None,
     )
 
 

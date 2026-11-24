@@ -19,14 +19,16 @@ from django.db import connection
 from apps.accounts.models import User
 from apps.documents import organise
 from apps.documents.models import Document
-from apps.tasks.letter_state import LetterFacts, TaskFacts, facts_of
+from apps.tasks.letter_state import NO_TASKS, LetterFacts, TaskFacts, facts_of
 from apps.tasks.models import Task
 from apps.workspaces.context import SYSTEM, system_actor, workspace_context
 from apps.workspaces.models import Workspace
 
 # Per letter of the workspace: the open tasks counted, the earliest waiting date when every
 # open task waits, and the first day one is late (GREATEST skips a missing waiting date).
-# The same statement fills the columns in documents/0024.
+# The same statement fills the columns in documents/0024. An own document has no letter
+# facts (archive spec AR7): its tasks (the expiry reminder) are not joined, so it stays at
+# zero open tasks and no dates.
 RECOMPUTE: Final = """
 UPDATE documents_document d
 SET task_open_count = f.open_count,
@@ -49,7 +51,7 @@ FROM (
         WHERE t.workspace_id = %(workspace)s AND t.status = 'open'
           AND t.document_id IS NOT NULL
         GROUP BY t.document_id
-    ) a ON a.document_id = l.id
+    ) a ON a.document_id = l.id AND l.kind = 'letter'
     WHERE l.workspace_id = %(workspace)s
 ) f
 WHERE d.id = f.id AND d.workspace_id = %(workspace)s
@@ -95,11 +97,16 @@ def sync(
             .first()
         )
         old = stored_facts(document) if stored is None else LetterFacts(*stored)
-        new = facts_of(
-            TaskFacts(open=status == Task.Status.OPEN, deadline=deadline, waiting_until=waiting)
-            for status, deadline, waiting in Task.objects.filter(document=document).values_list(
-                "status", "deadline", "waiting_until"
+        # An own document has no letter facts, also with an open reminder (archive AR7).
+        new = (
+            facts_of(
+                TaskFacts(open=status == Task.Status.OPEN, deadline=deadline, waiting_until=waiting)
+                for status, deadline, waiting in Task.objects.filter(document=document).values_list(
+                    "status", "deadline", "waiting_until"
+                )
             )
+            if document.kind == Document.Kind.LETTER
+            else NO_TASKS
         )
         if new != old:
             Document.objects.filter(id=document.id).update(
@@ -110,7 +117,12 @@ def sync(
         document.task_open_count = new.open_count
         document.task_wait_until = new.wait_until
         document.task_overdue_from = new.overdue_from
-        if silent or document.trashed_at is not None or document.status != done:
+        if (
+            silent
+            or document.trashed_at is not None
+            or document.status != done
+            or document.kind != Document.Kind.LETTER
+        ):
             return
         handled_before = (previous_status or document.status) == done and old.open_count == 0
         handled_after = new.open_count == 0

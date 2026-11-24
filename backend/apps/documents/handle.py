@@ -49,6 +49,13 @@ def handle_document(
         if document is None:
             raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
         visibility.require_editable(document)
+        if document.kind != Document.Kind.LETTER:
+            # An own document is no post to handle; its reminder is ticked off as a task.
+            raise ApiError(
+                409,
+                "document_not_a_letter",
+                _("Een eigen document handel je niet af. Vink de taak af in Mijn taken."),
+            )
         if document.status != Document.Status.DONE:
             raise ApiError(409, "document_not_reviewed", _("Deze brief is nog niet nagekeken."))
         open_tasks = list(

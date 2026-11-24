@@ -19,7 +19,7 @@ from django.db.models import Q, QuerySet
 from django.utils import timezone
 
 from apps.documents import visibility
-from apps.documents.models import Document
+from apps.documents.models import LETTERS_ONLY, Document
 from apps.workspaces.models import Membership, Workspace
 
 ZONE: Final = ZoneInfo("Europe/Amsterdam")
@@ -69,10 +69,11 @@ class Lingering:
 
 
 def _inbox_arms(before: datetime) -> tuple[Q, Q]:
-    """To check, and without a name; each on its own partial index (as `waiting_letters`)."""
+    """To check, and without a name; each on its own partial index (as `waiting_letters`).
+    Letters only (the partial indexes name `kind` too): an own document never lingers."""
     return (
-        Q(status__in=_REVIEW, created_at__lt=before),
-        Q(status=Document.Status.DONE, addressee_ids=[], created_at__lt=before),
+        LETTERS_ONLY & Q(status__in=_REVIEW, created_at__lt=before),
+        LETTERS_ONLY & Q(status=Document.Status.DONE, addressee_ids=[], created_at__lt=before),
     )
 
 
@@ -84,7 +85,7 @@ def _not_opened_arms(before: datetime, now: datetime) -> tuple[Q, Q]:
     point 2): a letter leaves the list only when the day ends, so the list never tells
     a sorter the hour an addressee opened it, at most the day."""
     confirmed = Q(confirmed_at__lt=before) | Q(confirmed_at__isnull=True, created_at__lt=before)
-    addressed = Q(status=Document.Status.DONE) & ~Q(addressee_ids=[]) & confirmed
+    addressed = LETTERS_ONLY & Q(status=Document.Status.DONE) & ~Q(addressee_ids=[]) & confirmed
     return (
         addressed & Q(addressee_opened_at__isnull=True),
         addressed & Q(addressee_opened_at__gte=cutoff(1, now)),

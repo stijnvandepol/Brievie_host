@@ -1409,6 +1409,10 @@ msgid "We kunnen dit document niet vinden."
 msgstr "We can't find this document."
 
 #: apps/documents/handle.py
+msgid "Een eigen document handel je niet af. Vink de taak af in Mijn taken."
+msgstr "You do not handle an own document. Tick off the task in My tasks."
+
+#: apps/documents/handle.py
 msgid "Deze brief is nog niet nagekeken."
 msgstr "This letter has not been checked yet."
 
