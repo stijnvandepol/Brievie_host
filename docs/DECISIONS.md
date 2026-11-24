@@ -2844,3 +2844,15 @@ Rulings of the spec, kept as written:
 - **Database defaults.** `kind`, `title` and `remind_days` keep a Python default (no
   `db_default`: PB decision 5) and get a database default by `RunSQL` (documents 0025).
 
+- **AR7, AR8 (plan Task 2, with the letter-status part of Task 13).** Post that waits is letters
+  only: the Inbox states, unread, "Blijft liggen", Mijn post, the letter status and its counts
+  all add `kind = 'letter'`, and the three partial indexes of waiting post (`unassigned`,
+  `unopened`, `opened`) name it in their condition (documents 0026). An own document has no
+  letter status: `letter_sync` keeps its task facts at zero, also in the nightly recompute, so
+  its reminder never makes it "Openstaand"; "Brief afhandelen" on one answers 409
+  `document_not_a_letter`.
+- **AR9 (plan Task 3).** `title` joins the generated `search_vector` with weight A, next to the
+  sender. A generated column cannot be altered: documents 0027 drops the GIN index and the
+  column and adds both again. Release notes: "Deze update duurt wat langer om toe te passen:
+  de zoekindex van alle brieven wordt opnieuw opgebouwd." The typo fallback (trigram on
+  sender and summary) does not look at the title.

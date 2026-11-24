@@ -25,6 +25,7 @@ def own_document(
     retain_until: date | None = None,
     letter_date: date | None = None,
     sender: str = "",
+    ocr_text: str = "",
 ) -> Document:
     """An own document (`kind = document`) that is not private, with an addressee row per
     person and one page row, as the system; no task."""
@@ -44,6 +45,7 @@ def own_document(
             retain_until=retain_until,
             letter_date=letter_date,
             sender=sender,
+            ocr_text=ocr_text,
             addressee_ids=sorted(p.id for p in on),
         )
         for person in on:
