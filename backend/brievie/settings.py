@@ -330,11 +330,11 @@ BRIEVIE_BACKUP_MOUNT: str = env.str("BRIEVIE_BACKUP_MOUNT", default="/backup")
 BRIEVIE_BACKUP_DIR_HOST: str = env.str("BRIEVIE_BACKUP_DIR_HOST", default="")
 BRIEVIE_BACKUP_APPEND_ONLY: bool = env.bool("BRIEVIE_BACKUP_APPEND_ONLY", default=False)
 BRIEVIE_BACKUP_S3_ACCESS_KEY_ID: str = env.str("BRIEVIE_BACKUP_S3_ACCESS_KEY_ID", default="")
-BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY: str = env.str(
+BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY: str = _secret(
     "BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY", default=""
 )
 BRIEVIE_BACKUP_REST_USERNAME: str = env.str("BRIEVIE_BACKUP_REST_USERNAME", default="")
-BRIEVIE_BACKUP_REST_PASSWORD: str = env.str("BRIEVIE_BACKUP_REST_PASSWORD", default="")
+BRIEVIE_BACKUP_REST_PASSWORD: str = _secret("BRIEVIE_BACKUP_REST_PASSWORD", default="")
 # The hour (server time, 0-23) of the nightly back-up that the keeper makes once a
 # destination is set (apps.backup.schedule). At most one every 20 hours, also after a
 # back-up made by hand.

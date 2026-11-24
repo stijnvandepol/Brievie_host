@@ -767,9 +767,13 @@ The variables are in `deploy/compose/.env.example`: `BRIEVIE_HOSTNAME`, `BRIEVIE
 `BRIEVIE_HTTPS_PORT`, `BRIEVIE_VERSION`, `BRIEVIE_SETUP_TOKEN`, `BRIEVIE_BACKUP_DIR` or
 `BRIEVIE_BACKUP_REPOSITORY` (with the `_S3_` or `_REST_` credentials), `BRIEVIE_BACKUP_AUTO_INIT`,
 `BRIEVIE_BACKUP_HOUR`, `BRIEVIE_ADOPT_VERSION`, and the limits of `deploy/.env.example`.
-Variables that hold a secret of yours (`BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY`, a REST
-password) are plain variables of the stack: anyone who may use Portainer or `docker inspect`
-can read them, as with `deploy/.env` before.
+The two secrets of a remote destination, `BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY` and
+`BRIEVIE_BACKUP_REST_PASSWORD`, also come as files: put each in a folder on the host (mode 0400, owner
+uid 10001), set `BRIEVIE_BACKUP_SECRETS_DIR` to that folder and
+`BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY_FILE=/run/backup-secrets/<file name>` (or
+`BRIEVIE_BACKUP_REST_PASSWORD_FILE`). Then no secret is in `docker inspect`. The plain variables
+still work (and win), but anyone who may use Portainer or `docker inspect` can read them, as with
+`deploy/.env` before. The access key id and the REST user name are no secrets.
 
 ### Back-ups without a terminal
 

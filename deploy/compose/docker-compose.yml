@@ -30,9 +30,14 @@ x-backup: &backup
   BRIEVIE_BACKUP_DIR_SET: ${BRIEVIE_BACKUP_DIR:+true}
   BRIEVIE_BACKUP_APPEND_ONLY: ${BRIEVIE_BACKUP_APPEND_ONLY:-false}
   BRIEVIE_BACKUP_S3_ACCESS_KEY_ID: ${BRIEVIE_BACKUP_S3_ACCESS_KEY_ID:-}
+  # The two secrets of a remote destination: prefer the _FILE form (a file in the folder
+  # BRIEVIE_BACKUP_SECRETS_DIR, for example /run/backup-secrets/s3-secret, mode 0400, owner
+  # uid 10001). A plain variable also works but shows in `docker inspect` and in Portainer.
   BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY: ${BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY:-}
+  BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY_FILE: ${BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY_FILE:-}
   BRIEVIE_BACKUP_REST_USERNAME: ${BRIEVIE_BACKUP_REST_USERNAME:-}
   BRIEVIE_BACKUP_REST_PASSWORD: ${BRIEVIE_BACKUP_REST_PASSWORD:-}
+  BRIEVIE_BACKUP_REST_PASSWORD_FILE: ${BRIEVIE_BACKUP_REST_PASSWORD_FILE:-}
 
 services:
   # Makes the keys the first time and puts each service's own keys in its own volume.
@@ -116,6 +121,7 @@ services:
       # The back-up before an update goes to your back-up folder; without one, to the
       # volume update-backup.
       - ${BRIEVIE_BACKUP_DIR:-update-backup}:/backup
+      - ${BRIEVIE_BACKUP_SECRETS_DIR:-backup-secrets-unset}:/run/backup-secrets:ro
     networks: [db, edge]
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
@@ -228,6 +234,7 @@ services:
       # for example /volume1/brievie-backup on a Synology (owner uid 10001). Set
       # BRIEVIE_BACKUP_DIR to it, or BRIEVIE_BACKUP_REPOSITORY to a remote place.
       - ${BRIEVIE_BACKUP_DIR:-backup-unset}:/backup
+      - ${BRIEVIE_BACKUP_SECRETS_DIR:-backup-secrets-unset}:/run/backup-secrets:ro
     networks: [db, edge]
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
@@ -290,6 +297,7 @@ services:
       - caddy-authority:/data/authority
       - backup-config:/data/backup-config
       - ${BRIEVIE_BACKUP_DIR:-backup-unset}:/backup
+      - ${BRIEVIE_BACKUP_SECRETS_DIR:-backup-secrets-unset}:/run/backup-secrets:ro
     # Where a restore opens the back-up's settings: gone with this container.
     tmpfs:
       - /out:mode=0700
@@ -318,5 +326,7 @@ volumes:
   caddy-ca:
   caddy-authority:
   backup-unset:
+  # An empty folder for BRIEVIE_BACKUP_SECRETS_DIR (the files of a remote destination's secrets).
+  backup-secrets-unset:
   # The back-up before an update, on a server without a back-up folder.
   update-backup:

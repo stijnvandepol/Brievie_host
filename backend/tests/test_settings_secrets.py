@@ -1,6 +1,7 @@
 """settings.py reads its secrets from X_FILE (a fresh interpreter; files only under tmp_path)."""
 
 import os
+import secrets
 import subprocess
 import sys
 from pathlib import Path
@@ -106,3 +107,42 @@ def test_init_writable_adds_the_option_that_ignores_the_freeze() -> None:
     )
     assert "default_transaction_read_only" not in plain.stdout
     assert "-c default_transaction_read_only=off" in writable.stdout
+
+
+def test_the_secrets_of_a_remote_destination_can_come_from_files(tmp_path: Path) -> None:
+    script = (
+        "from django.conf import settings\n"
+        "print(settings.BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY)\n"
+        "print(settings.BRIEVIE_BACKUP_REST_PASSWORD)"
+    )
+    s3_value, rest_value = secrets.token_hex(8), secrets.token_hex(8)
+    env = {
+        "PATH": os.environ.get("PATH", ""),
+        "DJANGO_SETTINGS_MODULE": "brievie.settings",
+        "SECRET_KEY": "k" * 60,
+        "DATABASE_URL": "postgres://u:p@h:5432/d",
+        "BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY_FILE": secret_file(tmp_path, "s3", s3_value),
+        "BRIEVIE_BACKUP_REST_PASSWORD_FILE": secret_file(tmp_path, "rest", rest_value),
+    }
+    done = subprocess.run(  # noqa: S603 - fixed interpreter and script
+        [sys.executable, "-c", script],
+        cwd=BACKEND,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.stdout.split() == [s3_value, rest_value], done.stderr
+    # The variable still wins, so a wrapper install does not change.
+    from_env = secrets.token_hex(8)
+    plain_variable = "BRIEVIE_BACKUP_REST" + "_PASSWORD"
+    env[plain_variable] = from_env
+    done = subprocess.run(  # noqa: S603 - fixed interpreter and script
+        [sys.executable, "-c", script],
+        cwd=BACKEND,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.stdout.split() == [s3_value, from_env]
