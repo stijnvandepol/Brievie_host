@@ -27,6 +27,7 @@ MEMBER_FACING: Final = (
     "documents/search.py",
     "documents/trash.py",
     "documents/lingering.py",
+    "documents/handle.py",
 )
 
 # Functions there that name `Document.objects` directly: each locks one letter by id
@@ -42,6 +43,8 @@ SEAM_READS: Final = {
     ("documents/services.py", "list_documents"),
     ("documents/services.py", "inbox_counts"),
     ("documents/services.py", "waiting_letters"),
+    ("documents/services.py", "status_counts"),
+    ("documents/handle.py", "handle_document"),
     ("documents/services.py", "menu_counts"),
     ("documents/services.py", "get_document"),
     ("documents/search.py", "_filtered"),
@@ -66,6 +69,9 @@ RAW_SQL: Final = {
     "workspaces/visibility_sql.py",
     # The one writer of addressee_ids and the nightly check, as the system.
     "documents/visibility.py",
+    # The letter's cached task facts: the nightly recompute and the repair, as the system
+    # (counts and dates of its own tasks; no member reads through it).
+    "tasks/letter_sync.py",
     # Duplicate candidates, as the system; a pair is shown through `visible_pairs`.
     "documents/duplicates.py",
     # Grouped counts of the persons and labels lists, as the caller under the policies.
