@@ -1169,6 +1169,14 @@ msgid "Zet in deploy/.env alleen de naam, zoals brievie.voorbeeld.nl, en gebruik
 msgstr "Put only the name in deploy/.env, such as brievie.example.nl, and use each name only once."
 
 #: apps/common/checks.py
+msgid "Inloggen op de webinterface kan van buiten zonder tweede stap. Zet BRIEVIE_PUBLIC_WEB uit, of gebruik een VPN."
+msgstr "Signing in to the web interface is possible from outside without a second step. Switch BRIEVIE_PUBLIC_WEB off, or use a VPN."
+
+#: apps/common/checks.py
+msgid "Grote scans komen niet door de tunnel. Zet BRIEVIE_MAX_UPLOAD_BYTES op 100000000 of minder."
+msgstr "Large scans do not get through the tunnel. Set BRIEVIE_MAX_UPLOAD_BYTES to 100000000 or less."
+
+#: apps/common/checks.py
 msgid "Choose a new password, see 'Run the whole stack' in the README."
 msgstr "Choose a new password, see 'Run the whole stack' in the README."
 

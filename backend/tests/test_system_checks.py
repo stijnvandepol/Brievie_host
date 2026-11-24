@@ -2,7 +2,11 @@ import pytest
 from django.core.checks import Error, Warning, run_checks
 from pytest_django import Settings
 
-from apps.common.checks import check_database_passwords, check_public_urls
+from apps.common.checks import (
+    check_database_passwords,
+    check_external_access,
+    check_public_urls,
+)
 
 
 def test_public_url_with_an_allowed_host_passes(settings: Settings) -> None:
@@ -90,3 +94,63 @@ def test_any_password_containing_change_me_is_a_warning(
     settings.DATABASE_OWNER = None
 
     assert [m.id for m in check_database_passwords(None)] == ["brievie.W001"]
+
+
+# --- External access (S 7.5, 7.6) ----------------------------------------------------------
+
+
+def _external(settings: Settings, *, tunnel: bool, proxies: list[str], public_web: bool) -> None:
+    settings.BRIEVIE_TUNNEL_TOKEN_SET = tunnel
+    settings.BRIEVIE_TRUSTED_PROXIES = proxies
+    settings.BRIEVIE_PUBLIC_WEB = public_web
+    settings.BRIEVIE_SECOND_FACTOR_AVAILABLE = False
+    settings.BRIEVIE_MAX_UPLOAD_BYTES = 33554432
+
+
+@pytest.mark.parametrize(("tunnel", "proxies"), [(True, []), (False, ["192.168.1.5/32"])])
+def test_w002_public_web_without_second_factor(
+    settings: Settings, tunnel: bool, proxies: list[str]
+) -> None:
+    _external(settings, tunnel=tunnel, proxies=proxies, public_web=True)
+    found = check_external_access(None)
+    assert [m.id for m in found] == ["brievie.W002"]
+    assert isinstance(found[0], Warning)
+
+
+def test_w002_silent_when_public_web_off(settings: Settings) -> None:
+    _external(settings, tunnel=True, proxies=["192.168.1.5/32"], public_web=False)
+    assert check_external_access(None) == []
+
+
+def test_w002_silent_without_a_public_way(settings: Settings) -> None:
+    _external(settings, tunnel=False, proxies=[], public_web=True)
+    assert check_external_access(None) == []
+
+
+def test_w003_upload_limit_above_cloudflare_with_tunnel(settings: Settings) -> None:
+    _external(settings, tunnel=True, proxies=[], public_web=False)
+    settings.BRIEVIE_MAX_UPLOAD_BYTES = 100_000_001
+    assert [m.id for m in check_external_access(None)] == ["brievie.W003"]
+    settings.BRIEVIE_MAX_UPLOAD_BYTES = 100_000_000
+    assert check_external_access(None) == []
+
+
+def test_w003_silent_without_tunnel(settings: Settings) -> None:
+    _external(settings, tunnel=False, proxies=["192.168.1.5/32"], public_web=False)
+    settings.BRIEVIE_MAX_UPLOAD_BYTES = 200_000_000
+    assert check_external_access(None) == []
+
+
+def test_warnings_never_print_the_token(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    secret = "eyJhIjoicGxhbnRlZC10dW5uZWwtdG9rZW4tdmFsdWUifQ"
+    monkeypatch.setenv("BRIEVIE_TUNNEL_TOKEN", secret)
+    monkeypatch.setenv("TUNNEL_TOKEN", secret)
+    _external(settings, tunnel=True, proxies=[], public_web=True)
+    settings.BRIEVIE_MAX_UPLOAD_BYTES = 200_000_000
+    found = check_external_access(None)
+    assert {m.id for m in found} == {"brievie.W002", "brievie.W003"}
+    for message in found:
+        assert secret not in f"{message.msg} {message.hint}"
+    assert not hasattr(settings, "BRIEVIE_TUNNEL_TOKEN")

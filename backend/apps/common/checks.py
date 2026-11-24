@@ -67,6 +67,44 @@ def check_names(app_configs: Iterable[AppConfig] | None, **kwargs: object) -> li
     ]
 
 
+# Cloudflare's free plan accepts request bodies up to this size (S 7.5).
+CLOUDFLARE_MAX_BODY_BYTES = 100_000_000
+
+
+@register()
+def check_external_access(
+    app_configs: Iterable[AppConfig] | None, **kwargs: object
+) -> list[CheckMessage]:
+    """Warnings, never a refusal: the home network must keep working whatever is set."""
+    messages: list[CheckMessage] = []
+    tunnel: bool = settings.BRIEVIE_TUNNEL_TOKEN_SET
+    public_way = tunnel or bool(settings.BRIEVIE_TRUSTED_PROXIES)
+    if public_way and settings.BRIEVIE_PUBLIC_WEB and not settings.BRIEVIE_SECOND_FACTOR_AVAILABLE:
+        messages.append(
+            Warning(
+                "BRIEVIE_PUBLIC_WEB is on: the web sign-in is reachable from the internet "
+                "without a second step.",
+                hint=_(
+                    "Inloggen op de webinterface kan van buiten zonder tweede stap. Zet "
+                    "BRIEVIE_PUBLIC_WEB uit, of gebruik een VPN."
+                ),
+                id="brievie.W002",
+            )
+        )
+    if tunnel and settings.BRIEVIE_MAX_UPLOAD_BYTES > CLOUDFLARE_MAX_BODY_BYTES:
+        messages.append(
+            Warning(
+                "BRIEVIE_MAX_UPLOAD_BYTES is larger than Cloudflare accepts (100 MB).",
+                hint=_(
+                    "Grote scans komen niet door de tunnel. Zet BRIEVIE_MAX_UPLOAD_BYTES op "
+                    "100000000 of minder."
+                ),
+                id="brievie.W003",
+            )
+        )
+    return messages
+
+
 @register()
 def check_database_passwords(
     app_configs: Iterable[AppConfig] | None, **kwargs: object

@@ -278,6 +278,18 @@ BRIEVIE_BEHIND_CADDY: bool = env.bool("BRIEVIE_BEHIND_CADDY", default=False)
 # The web interface and its password sign-in on the public route (tunnel, own reverse
 # proxy). Off: there only the app works (device tokens and pairing; S 7.6).
 BRIEVIE_PUBLIC_WEB: bool = env.bool("BRIEVIE_PUBLIC_WEB", default=False)
+# Your own reverse proxy's address(es), CIDRs separated by spaces: Caddy believes its
+# X-Forwarded-For and marks its requests as the public route. Empty: none.
+BRIEVIE_TRUSTED_PROXIES: list[str] = env.str("BRIEVIE_TRUSTED_PROXIES", default="").split()
+# Whether a Cloudflare Tunnel token is set (as a variable or a file). The api never gets
+# the token itself: only the cloudflared container does.
+BRIEVIE_TUNNEL_TOKEN_SET: bool = bool(
+    env.str("BRIEVIE_TUNNEL_TOKEN_SET", default="").strip()
+    or env.str("BRIEVIE_TUNNEL_TOKEN_FILE_SET", default="").strip()
+)
+# Two-step sign-in: not built yet (branch feat/two-factor sets this when it lands). The
+# external-access warnings (brievie.W002, the settings page) read it.
+BRIEVIE_SECOND_FACTOR_AVAILABLE = False
 
 # Login lockout (django-axes): 5 failures for the same email + address lock that
 # pair for 15 minutes. apps.accounts.services.login checks the lock itself and
