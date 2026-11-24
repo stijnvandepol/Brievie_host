@@ -71,17 +71,3 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
                 }
             )
         )
-
-
-# TEMPORARY: per-file timing summary, to be removed before merge.
-_FILE_SECONDS: dict[str, float] = {}
-
-
-def pytest_runtest_logreport(report: pytest.TestReport) -> None:
-    name = report.nodeid.split("::")[0]
-    _FILE_SECONDS[name] = _FILE_SECONDS.get(name, 0.0) + report.duration
-
-
-def pytest_terminal_summary(terminalreporter: object) -> None:
-    for name, seconds in sorted(_FILE_SECONDS.items()):
-        print(f"FILETIME {name} {seconds:.2f}")
