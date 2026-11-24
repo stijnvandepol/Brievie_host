@@ -1907,6 +1907,11 @@
           "tunnel": {
             "$ref": "#/components/schemas/TunnelOut"
           },
+          "untrusted_public_name_peer": {
+            "default": "",
+            "title": "Untrusted Public Name Peer",
+            "type": "string"
+          },
           "vpn_hostname": {
             "default": "",
             "title": "Vpn Hostname",

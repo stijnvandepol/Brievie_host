@@ -74,4 +74,5 @@ def get_external_access(request: HttpRequest, response: HttpResponse) -> Externa
         ),
         checks=[CheckOut(code=c.code, level=c.level) for c in found.checks],
         docs_url=found.docs_url,
+        untrusted_public_name_peer=found.untrusted_public_name_peer,
     )

@@ -979,11 +979,21 @@ BRIEVIE_PUBLIC_HOSTNAME=brievie.example.nl
 BRIEVIE_TRUSTED_PROXIES=192.168.1.5/32
 ```
 
-`BRIEVIE_TRUSTED_PROXIES` is the address Brievie sees for your proxy: open the settings page
-through the proxy and copy the address under "Rechtstreeks verbonden met". **Never put
-Docker's own gateway address there** (often `172.x.0.1`): with Docker's port forwarding every
-device in your network arrives from that address, and could then pick its own address for
-the sign-in limits. The page warns when it sees that.
+`BRIEVIE_TRUSTED_PROXIES` is the address Brievie sees for your proxy. You find it without
+opening anything to the internet: set `BRIEVIE_PUBLIC_HOSTNAME` first, send one request through
+the proxy (open the app away from home, or `https://brievie.example.nl/api/v1/health`), then open
+**Account, Van buiten bereikbaar** at home: under "Eigen reverse proxy" it names the local
+address that request came from. **Never put Docker's own gateway address there** (often
+`172.x.0.1`): with Docker's port forwarding every device in your network arrives from that
+address, and could then pick its own address for the sign-in limits (the api refuses a range
+wider than one device, see below).
+
+A request for the public name is **always** treated as public (only the app works there while
+`BRIEVIE_PUBLIC_WEB` is off), whatever address it comes from: before `BRIEVIE_TRUSTED_PROXIES`
+names your proxy, or after its address changed, nothing opens; the visitors then only share
+the proxy's address for the sign-in limits, and the page says so. A request that carries
+Cloudflare's headers on the https port (a tunnel pointed at `https://caddy:443` instead of
+`http://caddy:8080`) is public too, and the page warns about it.
 
 ### How it works (for the curious)
 

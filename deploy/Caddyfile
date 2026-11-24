@@ -7,6 +7,7 @@
 #   X-Brievie-Route      private (home network, VPN) or public (tunnel, own reverse proxy)
 #   X-Brievie-Client-IP  the client's address after Caddy's own trusted-proxy rules
 #   X-Brievie-Peer-IP    the direct peer (the settings page shows it)
+#   X-Brievie-Via        which way exactly: home, public_name, proxy, cloudflare, tunnel
 # The api never reads CF-Connecting-IP; Caddy reads it only on the tunnel listener :8080,
 # which is published nowhere.
 {
@@ -62,6 +63,9 @@
 		header_up X-Brievie-Route {vars.brievie_route}
 		header_up X-Brievie-Client-IP {client_ip}
 		header_up X-Brievie-Peer-IP {remote_host}
+		# Which way exactly (home, public_name, proxy, cloudflare, tunnel): the settings
+		# page shows what it has seen.
+		header_up X-Brievie-Via {vars.brievie_via}
 		header_up Host {args[0]}
 	}
 }
@@ -115,17 +119,40 @@
 		protocols tls1.2 tls1.3
 	}
 
-	# Your own reverse proxy (by its address, never by a header) is the public route;
-	# every other peer the private one. Two matchers that exclude each other: Caddy sorts
-	# a vars with a matcher before one without, so neither may lack one.
+	# The route, fail-closed and by name first (security review of PR #53): a request for
+	# the public name is always public, whatever its source, and so is one that carries
+	# Cloudflare's headers (a tunnel pointed at this port by mistake). Only the rest is
+	# private. The source address decides whose client address is believed
+	# (trusted_proxies above) and the HSTS of a request from your own proxy. Every vars
+	# has a matcher; Caddy keeps their order for vars, so a later match wins.
 	@direct not remote_ip {$BRIEVIE_TRUSTED_PROXIES:127.0.0.1/32}
+	@public_name host {$BRIEVIE_TUNNEL_HOST:public-hostname-not-set.invalid}
 	@via_proxy remote_ip {$BRIEVIE_TRUSTED_PROXIES:127.0.0.1/32}
+	@cf_ray header Cf-Ray *
+	@cf_client header Cf-Connecting-Ip *
 	vars @direct {
 		brievie_route private
+		brievie_via home
 		brievie_hsts {$BRIEVIE_HSTS_SECONDS:0}
+	}
+	# The public name from a source that is not your proxy: public, the direct peer counts.
+	vars @public_name {
+		brievie_route public
+		brievie_via public_name
 	}
 	vars @via_proxy {
 		brievie_route public
+		brievie_via proxy
+		brievie_hsts 31536000
+	}
+	vars @cf_ray {
+		brievie_route public
+		brievie_via cloudflare
+		brievie_hsts 31536000
+	}
+	vars @cf_client {
+		brievie_route public
+		brievie_via cloudflare
 		brievie_hsts 31536000
 	}
 
@@ -139,6 +166,7 @@
 http://:8080 {
 	vars {
 		brievie_route public
+		brievie_via tunnel
 		brievie_hsts 31536000
 	}
 	# Cloudflare got the request over plain http: send the browser to https first.

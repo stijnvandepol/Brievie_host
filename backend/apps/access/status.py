@@ -11,12 +11,14 @@ import urllib.error
 import urllib.request
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Literal
 from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.http import HttpRequest
 
+from apps.access import observed
 from apps.access.route import is_public_route, peer_ip
 from apps.common.checks import CLOUDFLARE_MAX_BODY_BYTES
 from apps.common.net import client_ip
@@ -48,6 +50,8 @@ CHECK_LEVELS: dict[str, Level] = {
     "trusted_proxy_without_forwarding": "problem",
     "cloudflare_reads_along": "warning",
     "app_update_needed": "warning",
+    "public_name_from_untrusted_source": "problem",
+    "cloudflare_on_https_port": "problem",
 }
 CHECK_CODES: tuple[str, ...] = tuple(CHECK_LEVELS)
 
@@ -87,6 +91,9 @@ class ExternalAccess:
     seen_as: SeenAs
     checks: list[Check]
     docs_url: str
+    # The local address a request for the public name last came from without being a
+    # trusted proxy: your proxy's, to put in BRIEVIE_TRUSTED_PROXIES. Empty when none.
+    untrusted_public_name_peer: str = ""
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -171,9 +178,11 @@ def external_access_status(
     *,
     probe: Callable[[], Literal["yes", "no"]] | None = None,
     app_versions: Callable[[], list[str]] | None = None,
+    seen: Callable[[str], datetime | None] | None = None,
 ) -> ExternalAccess:
     probe = probe or probe_tunnel
     app_versions = app_versions or _active_app_versions
+    seen = seen or observed.last_seen
     hostname: str = settings.BRIEVIE_HOSTNAME
     public_hostname: str = settings.BRIEVIE_PUBLIC_HOSTNAME
     proxies: list[str] = list(settings.BRIEVIE_TRUSTED_PROXIES)
@@ -218,6 +227,13 @@ def external_access_status(
     # device in the network then looks like that address and may pick its own).
     if proxies and _in_networks(seen_as.peer_ip, proxies) and seen_as.client_ip == seen_as.peer_ip:
         codes.append("trusted_proxy_without_forwarding")
+    # Seen on the way in (apps.access.observed): the public name from a source that is not
+    # your proxy (it was served as public, app-only, the direct peer counted), and
+    # Cloudflare's headers on the https port (a tunnel pointed at :443).
+    if seen("public_name_untrusted") is not None:
+        codes.append("public_name_from_untrusted_source")
+    if seen("cloudflare_on_https_port") is not None:
+        codes.append("cloudflare_on_https_port")
     if token_set:
         codes.append("cloudflare_reads_along")
     if public_way and needs_app_update(app_versions()):
@@ -236,4 +252,9 @@ def external_access_status(
         seen_as=seen_as,
         checks=[Check(code=code, level=CHECK_LEVELS[code]) for code in codes],
         docs_url=EXTERNAL_ACCESS_DOCS_URL,
+        untrusted_public_name_peer=(
+            observed.last_peer("public_name_untrusted")
+            if "public_name_from_untrusted_source" in codes
+            else ""
+        ),
     )

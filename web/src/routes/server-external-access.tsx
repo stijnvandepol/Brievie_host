@@ -53,6 +53,10 @@ function checkText(code: string): string {
       return t`Met Cloudflare Tunnel maakt Cloudflare de versleuteling op zijn eigen servers open. Cloudflare kan alles lezen wat er langskomt, ook gescande brieven. Met een VPN kan niemand onderweg meelezen.`;
     case "app_update_needed":
       return t`Werk de Brievie-app bij op elke gekoppelde iPhone. Oudere versies werken niet via het publieke adres.`;
+    case "public_name_from_untrusted_source":
+      return t`Er kwamen verzoeken voor de publieke naam binnen van een adres dat niet in BRIEVIE_TRUSTED_PROXIES staat. Brievie behandelde ze als publiek (alleen de app) en telde het directe adres. Is dat je reverse proxy? Zet zijn adres dan in BRIEVIE_TRUSTED_PROXIES.`;
+    case "cloudflare_on_https_port":
+      return t`Er kwamen verzoeken van Cloudflare binnen op de https-poort. Stel in het Cloudflare-dashboard de service http://caddy:8080 in, niet https://caddy:443. Brievie behandelde ze als publiek.`;
     default:
       return code;
   }
@@ -161,6 +165,12 @@ function Page({ found }: { found: ExternalAccess }) {
         on={proxyOn}
         urls={proxyOn ? urls("public") : []}
       >
+        {found.untrusted_public_name_peer ? (
+          <MessageBar intent="warning">
+            {t`Verzoeken voor de publieke naam kwamen van dit adres, dat (nog) niet vertrouwd wordt:`}{" "}
+            <code>{found.untrusted_public_name_peer}</code>
+          </MessageBar>
+        ) : null}
         {proxyOn ? (
           <dl className="facts">
             <dt>{t`Vertrouwde adressen`}</dt>
@@ -186,7 +196,7 @@ function Page({ found }: { found: ExternalAccess }) {
             <code>{found.seen_as.peer_ip || t`onbekend`}</code>
           </dd>
         </dl>
-        <p className="muted">{t`Gebruik je een eigen reverse proxy? Open deze pagina dan via de proxy: het adres bij "Rechtstreeks verbonden met" is dan het adres voor BRIEVIE_TRUSTED_PROXIES. Nooit het adres van Docker zelf.`}</p>
+        <p className="muted">{t`Het adres van je eigen reverse proxy vind je zonder de webinterface open te zetten: stuur één verzoek via de proxy (bijvoorbeeld de app of /api/v1/health) en open deze pagina thuis. Bij Eigen reverse proxy staat dan het adres waar het vandaan kwam. Nooit het adres van Docker zelf.`}</p>
       </section>
       <p>
         <a href={found.docs_url} target="_blank" rel="noopener noreferrer">

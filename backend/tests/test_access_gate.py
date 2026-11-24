@@ -311,3 +311,63 @@ def test_forged_private_header_cannot_reach_the_gate_bypass() -> None:
             client.post("/api/v1/auth/login", {}, content_type="application/json", headers=headers)
         )
         assert client.get("/api/v1/me", headers=headers).status_code == 401
+
+
+# --- What the gate remembers for the settings page (security review of PR #53) ---------
+
+
+@pytest.fixture
+def fresh_notes() -> None:
+    from apps.access import observed
+
+    observed.forget_written()
+
+
+@pytest.mark.usefixtures("fresh_notes")
+def test_a_public_name_request_from_an_untrusted_source_is_noted_with_its_local_peer() -> None:
+    from apps.access import observed
+
+    headers = {
+        "X-Brievie-Route": "public",
+        "X-Brievie-Via": "public_name",
+        "X-Brievie-Peer-IP": "192.168.1.5",
+    }
+    assert_refused(
+        Client().post("/api/v1/auth/login", {}, content_type="application/json", headers=headers)
+    )
+    assert observed.last_seen("public_name_untrusted") is not None
+    assert observed.last_peer("public_name_untrusted") == "192.168.1.5"
+
+
+@pytest.mark.usefixtures("fresh_notes")
+def test_an_internet_peer_is_never_remembered() -> None:
+    from apps.access import observed
+
+    headers = {
+        "X-Brievie-Route": "public",
+        "X-Brievie-Via": "public_name",
+        "X-Brievie-Peer-IP": "203.0.113.9",
+    }
+    Client().get("/api/v1/health", headers=headers)
+    assert observed.last_seen("public_name_untrusted") is not None
+    assert observed.last_peer("public_name_untrusted") == ""
+
+
+@pytest.mark.usefixtures("fresh_notes")
+def test_cloudflare_on_the_https_port_is_noted_and_shown_to_the_admin(settings: Settings) -> None:
+    Client().get(
+        "/api/v1/health", headers={"X-Brievie-Route": "public", "X-Brievie-Via": "cloudflare"}
+    )
+    admin = as_user(UserFactory.create(is_server_admin=True))
+    body = admin.get("/api/v1/server/external-access", headers=PRIVATE).json()
+    assert {"code": "cloudflare_on_https_port", "level": "problem"} in body["checks"]
+
+
+@pytest.mark.usefixtures("fresh_notes")
+def test_an_unknown_via_value_notes_nothing() -> None:
+    from apps.access import observed
+
+    Client().get(
+        "/api/v1/health", headers={"X-Brievie-Route": "public", "X-Brievie-Via": "nonsense"}
+    )
+    assert observed.last_seen("cloudflare_on_https_port") is None

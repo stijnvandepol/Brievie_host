@@ -152,18 +152,33 @@ def test_trusted_proxies_only_from_the_variable_on_443_and_private_ranges_on_808
     assert not re.search(r"header_up\s+[+-]?X-Forwarded-For", CADDYFILE, re.IGNORECASE)
 
 
-def test_the_route_on_443_follows_the_peer_address_only() -> None:
+def test_the_route_on_443_is_decided_by_name_first_and_fails_closed() -> None:
+    # Security review of PR #53, point 1: the public name is public whatever its source,
+    # and Cloudflare's headers on :443 make a request public too.
     home = site_home()
     assert "@direct not remote_ip {$BRIEVIE_TRUSTED_PROXIES:127.0.0.1/32}" in home
+    assert "@public_name host {$BRIEVIE_TUNNEL_HOST:public-hostname-not-set.invalid}" in home
     assert "@via_proxy remote_ip {$BRIEVIE_TRUSTED_PROXIES:127.0.0.1/32}" in home
+    assert "@cf_ray header Cf-Ray *" in home
+    assert "@cf_client header Cf-Connecting-Ip *" in home
     direct = block("vars @direct {")
-    via = block("vars @via_proxy {")
     assert "brievie_route private" in direct
     assert "brievie_hsts {$BRIEVIE_HSTS_SECONDS:0}" in direct
-    assert "brievie_route public" in via
-    assert "brievie_hsts 31536000" in via
-    # Every vars on :443 has a matcher (Caddy sorts one without a matcher last).
+    for name in ("public_name", "via_proxy", "cf_ray", "cf_client"):
+        assert "brievie_route public" in block(f"vars @{name} {{"), name
+    # The public name from an untrusted source keeps the home HSTS (it is Caddy's own
+    # certificate there); a proxied or Cloudflare request gets a year.
+    assert "brievie_hsts" not in block("vars @public_name {")
+    for name in ("via_proxy", "cf_ray", "cf_client"):
+        assert "brievie_hsts 31536000" in block(f"vars @{name} {{"), name
+    # Every vars has a matcher, and private comes first: a later public match wins.
     assert not re.search(r"^\tvars \{", home, re.MULTILINE)
+    order = [
+        home.index(f"vars @{name} {{")
+        for name in ("direct", "public_name", "via_proxy", "cf_ray", "cf_client")
+    ]
+    assert order == sorted(order)
+    assert "header_up X-Brievie-Via {vars.brievie_via}" in block("(to_api) {")
 
 
 def test_hsts_comes_from_the_route_var() -> None:

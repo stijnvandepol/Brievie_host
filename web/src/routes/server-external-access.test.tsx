@@ -130,3 +130,20 @@ describe("the external access page", () => {
     expect(within(menu).getByRole("link", { name: "Van buiten bereikbaar" })).toBeInTheDocument();
   });
 });
+
+describe("what the server saw on the way in", () => {
+  it("names the local address that asked for the public name", async () => {
+    asServerAdmin({
+      ...tunnelOn,
+      tunnel: { token_set: false, connected: "not_set" },
+      trusted_proxies: [],
+      untrusted_public_name_peer: "192.168.1.5",
+      checks: [{ code: "public_name_from_untrusted_source", level: "problem" }],
+    });
+    renderApp("/server/van-buiten");
+    const proxy = await screen.findByRole("region", { name: /Eigen reverse proxy/ });
+    expect(within(proxy).getByText("192.168.1.5")).toBeInTheDocument();
+    const list = screen.getByRole("list", { name: "Controles" });
+    expect(list).toHaveTextContent("Er kwamen verzoeken voor de publieke naam binnen");
+  });
+});

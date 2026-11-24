@@ -1771,6 +1771,14 @@ msgstr "Nothing has happened yet."
 msgid "Er is nog niets opgeslagen."
 msgstr "Nothing has been saved yet."
 
+#: src/routes/server-external-access.tsx
+msgid "Er kwamen verzoeken van Cloudflare binnen op de https-poort. Stel in het Cloudflare-dashboard de service http://caddy:8080 in, niet https://caddy:443. Brievie behandelde ze als publiek."
+msgstr "Requests from Cloudflare arrived on the https port. In the Cloudflare dashboard set the service to http://caddy:8080, not https://caddy:443. Brievie treated them as public."
+
+#: src/routes/server-external-access.tsx
+msgid "Er kwamen verzoeken voor de publieke naam binnen van een adres dat niet in BRIEVIE_TRUSTED_PROXIES staat. Brievie behandelde ze als publiek (alleen de app) en telde het directe adres. Is dat je reverse proxy? Zet zijn adres dan in BRIEVIE_TRUSTED_PROXIES."
+msgstr "Requests for the public name arrived from an address that is not in BRIEVIE_TRUSTED_PROXIES. Brievie treated them as public (app only) and counted the direct address. Is that your reverse proxy? Then put its address in BRIEVIE_TRUSTED_PROXIES."
+
 #: src/routes/tasks.tsx
 msgid "Er ligt niets op te pakken."
 msgstr "There is nothing to pick up."
@@ -1855,10 +1863,6 @@ msgstr "Use this example: {title}"
 #: src/routes/login.tsx
 msgid "Gebruik het account van deze server."
 msgstr "Use the account of this server."
-
-#: src/routes/server-external-access.tsx
-msgid "Gebruik je een eigen reverse proxy? Open deze pagina dan via de proxy: het adres bij \"Rechtstreeks verbonden met\" is dan het adres voor BRIEVIE_TRUSTED_PROXIES. Nooit het adres van Docker zelf."
-msgstr "Do you use your own reverse proxy? Then open this page through the proxy: the address at \"Directly connected to\" is the address for BRIEVIE_TRUSTED_PROXIES. Never Docker's own address."
 
 #: src/routes/search.tsx
 msgid "Gebruik minder woorden."
@@ -2086,6 +2090,10 @@ msgstr "Create a reset link for {name}?"
 #: src/components/reset-link-dialog.tsx
 msgid "Herstellink voor {name}"
 msgstr "Reset link for {name}"
+
+#: src/routes/server-external-access.tsx
+msgid "Het adres van je eigen reverse proxy vind je zonder de webinterface open te zetten: stuur één verzoek via de proxy (bijvoorbeeld de app of /api/v1/health) en open deze pagina thuis. Bij Eigen reverse proxy staat dan het adres waar het vandaan kwam. Nooit het adres van Docker zelf."
+msgstr "You find your own reverse proxy's address without opening the web interface: send one request through the proxy (for example the app or /api/v1/health) and open this page at home. Under Own reverse proxy you then see the address it came from. Never Docker's own address."
 
 #: src/routes/recovery-sheet.tsx
 msgid "Het herstelblad is gedownload."
@@ -4353,6 +4361,10 @@ msgstr "Remove: {0}"
 #: src/routes/people-detail.tsx
 msgid "Verwijderen: {name}"
 msgstr "Remove: {name}"
+
+#: src/routes/server-external-access.tsx
+msgid "Verzoeken voor de publieke naam kwamen van dit adres, dat (nog) niet vertrouwd wordt:"
+msgstr "Requests for the public name came from this address, which is not trusted (yet):"
 
 #: src/routes/server-external-access.tsx
 msgid "Via het publieke adres werkt alleen de app. De webinterface gebruik je thuis of via VPN."

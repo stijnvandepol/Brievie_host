@@ -2861,3 +2861,25 @@ B1–B4.
   CVE-2026-85091 (`zlib1g` of its Debian base, unused by the Go binary). Accepted in a list of
   its own, `.trivyignore.cloudflared.yaml`, used only by the cloudflared scan, until
   2026-12-15: then the job fails and the pin moves to a 2026.11.x release that is old enough.
+
+### Security review of PR #53 (2026-11-25)
+
+An independent review of external access. Every point was checked against the code first;
+all six held.
+
+- **Point 1 (high), fixed: the route defaulted to private on :443.** Caddy now decides by
+  name first and fails closed: a request whose Host is the public name is always public,
+  whatever its source; so is one that carries `Cf-Ray` or `Cf-Connecting-Ip` (a tunnel
+  pointed at `https://caddy:443`). Only the rest is private. The source address decides only
+  whose client address is believed (`trusted_proxies`) and the HSTS of a proxied request.
+  Ruling: the public name from an untrusted source is **served as public** (app only while
+  `BRIEVIE_PUBLIC_WEB` is off) with the direct peer as client address, not refused: refusing
+  would break the app at the moment a proxy's address changes, and app-only already closes the
+  web sign-in. Its HSTS stays the home value (Caddy's own certificate answers there). Caddy
+  names the exact way in `X-Brievie-Via`; the gate remembers, per kind, when it last saw the
+  public name from an untrusted source (and that source when it is a local address, never an
+  internet one) and Cloudflare on the https port (`apps.access.observed`, the database cache,
+  seven days, at most one write per kind per process per ten minutes). The page shows both as
+  problems and names the local address, so the admin finds the proxy's address at home
+  without opening the web through the proxy. CI (`stack`, `compose-stack`) sends both cases
+  and requires the page to show them.

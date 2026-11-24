@@ -3378,6 +3378,11 @@ export interface components {
             trusted_proxies: string[];
             tunnel: components["schemas"]["TunnelOut"];
             /**
+             * Untrusted Public Name Peer
+             * @default
+             */
+            untrusted_public_name_peer: string;
+            /**
              * Vpn Hostname
              * @default
              */

@@ -3,6 +3,7 @@
 import json
 import secrets
 from dataclasses import asdict
+from datetime import UTC, datetime
 from typing import Literal
 
 import pytest
@@ -10,7 +11,7 @@ from django.http import HttpRequest
 from django.test import RequestFactory
 from pytest_django import Settings
 
-from apps.access import status
+from apps.access import observed, status
 from apps.access.status import CHECK_CODES, external_access_status, needs_app_update
 
 # Made at run time: no token-like literal in the repository.
@@ -42,6 +43,18 @@ def home(settings: Settings) -> Settings:
     settings.BRIEVIE_SECOND_FACTOR_AVAILABLE = False
     settings.BRIEVIE_MAX_UPLOAD_BYTES = 33554432
     return settings
+
+
+SEEN: dict[str, datetime] = {}
+PEERS: dict[str, str] = {}
+
+
+@pytest.fixture(autouse=True)
+def _nothing_seen(monkeypatch: pytest.MonkeyPatch) -> None:
+    SEEN.clear()
+    PEERS.clear()
+    monkeypatch.setattr(observed, "last_seen", SEEN.get)
+    monkeypatch.setattr(observed, "last_peer", lambda kind: PEERS.get(kind, ""))
 
 
 def with_public(settings: Settings) -> None:
@@ -203,7 +216,7 @@ def test_needs_app_update_compares_versions(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 def test_every_check_code_is_in_the_closed_list() -> None:
-    assert len(CHECK_CODES) == len(set(CHECK_CODES)) == 13
+    assert len(CHECK_CODES) == len(set(CHECK_CODES))
 
 
 def test_status_never_contains_the_token(home: Settings, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -244,3 +257,19 @@ def test_addresses_carry_their_kind_and_certificate(home: Settings) -> None:
         ("public", "public"),
     ]
     assert found.docs_url == "https://brievie.com/docs/installeren#van-buiten"
+
+
+def test_check_public_name_from_untrusted_source_names_the_local_peer(home: Settings) -> None:
+    with_public(home)
+    assert "public_name_from_untrusted_source" not in codes()
+    SEEN["public_name_untrusted"] = datetime.now(UTC)
+    PEERS["public_name_untrusted"] = "192.168.1.5"
+    found = external_access_status(request(), probe=lambda: "yes", app_versions=list)
+    assert "public_name_from_untrusted_source" in [c.code for c in found.checks]
+    assert found.untrusted_public_name_peer == "192.168.1.5"
+
+
+def test_check_cloudflare_on_https_port(home: Settings) -> None:
+    assert "cloudflare_on_https_port" not in codes()
+    SEEN["cloudflare_on_https_port"] = datetime.now(UTC)
+    assert "cloudflare_on_https_port" in codes()

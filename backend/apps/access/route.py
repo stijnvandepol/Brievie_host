@@ -26,3 +26,15 @@ def peer_ip(request: HttpRequest) -> str:
     if settings.BRIEVIE_BEHIND_CADDY:
         return str(request.META.get("HTTP_X_BRIEVIE_PEER_IP", "")).strip()
     return str(request.META.get("REMOTE_ADDR", "")).strip()
+
+
+# The ways Caddy names in X-Brievie-Via (deploy/Caddyfile).
+VIAS = ("home", "public_name", "proxy", "cloudflare", "tunnel")
+
+
+def via(request: HttpRequest) -> str:
+    """Which way exactly, as Caddy says; empty without Caddy or for an unknown value."""
+    if not settings.BRIEVIE_BEHIND_CADDY:
+        return ""
+    value = str(request.META.get("HTTP_X_BRIEVIE_VIA", "")).strip()
+    return value if value in VIAS else ""

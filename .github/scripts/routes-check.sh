@@ -121,6 +121,23 @@ check_listeners() {
 	body=$(curl --silent --insecure --header 'X-Brievie-Route: public' --header 'CF-Connecting-IP: 203.0.113.9' \
 		https://localhost/api/v1/server/audit-events)
 	test "$(jq -r .code <<<"$body")" = not_authenticated
+	# The route is decided by name first (security review of PR #53): the public name from an
+	# untrusted source, and Cloudflare's headers on :443, are public whatever the source.
+	pub=$(curl --silent --insecure --resolve "$PUBLIC_HOST:443:127.0.0.1" \
+		--header 'X-Brievie-Route: private' --header 'X-Forwarded-For: 198.51.100.1' \
+		"https://$PUBLIC_HOST/api/v1/server/audit-events")
+	cf=$(curl --silent --insecure --header 'Cf-Ray: 0123456789abcdef-AMS' \
+		https://localhost/api/v1/server/audit-events)
+	if [ "${PUBLIC_WEB:-false}" = true ]; then
+		test "$(jq -r .code <<<"$pub")" = not_authenticated
+		test "$(jq -r .code <<<"$cf")" = not_authenticated
+	else
+		test "$(jq -r .code <<<"$pub")" = public_web_off
+		test "$(jq -r .code <<<"$cf")" = public_web_off
+		code=$(curl --silent --insecure --output /dev/null --write-out '%{http_code}' \
+			--resolve "$PUBLIC_HOST:443:127.0.0.1" "https://$PUBLIC_HOST/")
+		test "$code" = 403
+	fi
 	# The app's own paths stay open on the tunnel.
 	inside GET caddy:8080 /api/v1/server/ca-certificate '{"X-Forwarded-Proto": "https"}' 0 >"$work/t"
 	test "$(status_of "$work/t")" = 200
@@ -151,6 +168,12 @@ assert seen["secure"] is True, seen
 assert seen["client_ip"] == seen["peer_ip"], seen
 assert not seen["client_ip"].startswith("198.51.100."), seen
 print("Home route: forged address headers change nothing:", seen["route"], "https")
+codes = [c["code"] for c in json.load(open(sys.argv[1]))["checks"]]
+# Seen by the listeners check before: the public name from an untrusted source, Cloudflare
+# on the https port.
+assert "public_name_from_untrusted_source" in codes, codes
+assert "cloudflare_on_https_port" in codes, codes
+print("The page shows what the server saw:", codes)
 PY
 	cookie_header=$(jq -cn --arg s "$session" '{"X-Forwarded-Proto": "https", "Cookie": ("sessionid=" + $s), "CF-Connecting-IP": "203.0.113.77", "X-Brievie-Client-IP": "198.51.100.3", "X-Brievie-Route": "private", "X-Forwarded-For": "198.51.100.1"}')
 	inside GET caddy:8080 /api/v1/server/external-access "$cookie_header" 0 >"$work/t"

@@ -48,3 +48,6 @@ class ExternalAccessOut(Schema):
     seen_as: SeenAsOut
     checks: list[CheckOut]
     docs_url: str
+    # A local address that asked for the public name without being a trusted proxy (likely
+    # your proxy, before BRIEVIE_TRUSTED_PROXIES names it). Empty when none was seen.
+    untrusted_public_name_peer: str = ""

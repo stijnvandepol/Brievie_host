@@ -28,7 +28,8 @@ from ninja import NinjaAPI
 from ninja.constants import NOT_SET
 from ninja.operation import Operation, PathView
 
-from apps.access.route import is_public_route
+from apps.access import observed
+from apps.access.route import is_public_route, peer_ip, via
 from apps.common.errors import error_response
 from apps.devices.auth import DeviceTokenAuth
 
@@ -132,6 +133,7 @@ class PublicRouteGate:
         self.get_response = get_response
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
+        observe(request)
         if session_allowed(request):
             return self.get_response(request)
         path = request.path_info
@@ -145,3 +147,14 @@ class PublicRouteGate:
             response = error_response(403, CODE, _sentence()) if is_api else _page()
         response["Cache-Control"] = "no-store"
         return response
+
+
+def observe(request: HttpRequest) -> None:
+    """Remember the ways in that the settings page should warn about (apps.access.observed)."""
+    way = via(request)
+    if way == "public_name":
+        observed.note("public_name_untrusted", peer=peer_ip(request))
+    elif way == "cloudflare":
+        observed.note("cloudflare_on_https_port")
+    elif way == "tunnel":
+        observed.note("tunnel")
