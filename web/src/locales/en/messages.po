@@ -40,8 +40,8 @@ msgstr "{0, plural, one {# already existed} other {# already existed}}"
 
 #. placeholder {0}: current.document_count ?? 0
 #: src/components/export-panel.tsx
-msgid "{0, plural, one {# brief} other {# brieven}}"
-msgstr "{0, plural, one {# letter} other {# letters}}"
+msgid "{0, plural, one {# document} other {# documenten}}"
+msgstr "{0, plural, one {# document} other {# documents}}"
 
 #. placeholder {0}: result.added
 #: src/routes/labels.tsx
@@ -749,6 +749,14 @@ msgstr "Only people who may read this letter are in the list."
 #: src/routes/inbox.tsx
 msgid "Alles"
 msgstr "All"
+
+#: src/components/export-panel.tsx
+msgid "Alles exporteren"
+msgstr "Export everything"
+
+#: src/components/export-panel.tsx
+msgid "Alles exporteren: alles wat jij mag lezen. Privébrieven die jij niet mag lezen, zitten er niet in. Het is geen back-up."
+msgstr "Export everything: all you may read. Private letters you may not read are not in it. It is not a backup."
 
 #: src/routes/my-post.tsx
 msgid "Alles gelezen"
@@ -1671,6 +1679,11 @@ msgstr "Doing it: {takenBy}"
 msgid "Download ({letters}, geldig tot {0})"
 msgstr "Download ({letters}, valid until {0})"
 
+#. placeholder {0}: dateTime.format(new Date(current.expires_at))
+#: src/components/export-panel.tsx
+msgid "Download alles ({letters}, geldig tot {0})"
+msgstr "Download everything ({letters}, valid until {0})"
+
 #: src/components/audit-table.tsx
 msgid "Download als CSV"
 msgstr "Download as CSV"
@@ -1859,9 +1872,13 @@ msgstr "Export created"
 msgid "Exporteer eerst je post: na het verlaten kun je niet meer downloaden."
 msgstr "Export your mail first: after leaving you can no longer download it."
 
+#: src/routes/people.tsx
+msgid "Exporteren"
+msgstr "Export"
+
 #: src/components/export-panel.tsx
-msgid "Exporteren staat uit voor deze werkruimte."
-msgstr "Exporting is switched off for this workspace."
+msgid "Exporteren staat uit voor de leden van deze werkruimte."
+msgstr "Export is switched off for the members of this workspace."
 
 #: src/components/export-panel.tsx
 msgid "Exporteren staat uit voor deze werkruimte. Vraag een beheerder om dit aan te zetten."
@@ -2917,8 +2934,8 @@ msgid "maak de brief privé"
 msgstr "make the letter private"
 
 #: src/routes/people.tsx
-msgid "Maak een ZIP-bestand met jouw post. Het staat 24 uur klaar om te downloaden."
-msgstr "Create a ZIP file with your mail. It is ready to download for 24 hours."
+msgid "Maak een ZIP-bestand met een PDF per brief of document en de gegevens erbij, om te bewaren of naar een ander programma te brengen. Het staat 24 uur klaar om te downloaden."
+msgstr "Make a ZIP file with a PDF of every letter or document and their details, to keep or to take to another program. It is ready to download for 24 hours."
 
 #: src/routes/rule-editor.tsx
 msgid "Maak eerst een label of voeg een persoon toe."
@@ -3000,15 +3017,14 @@ msgstr "With labels you put your mail in order, for example Tax or Healthcare. W
 msgid "Methode"
 msgstr "Method"
 
+#: src/components/export-panel.tsx
+msgid "Mijn archief exporteren"
+msgstr "Export my archive"
+
 #: src/components/page.tsx
 #: src/routes/my-post.tsx
-#: src/routes/people.tsx
 msgid "Mijn post"
 msgstr "My post"
-
-#: src/components/export-panel.tsx
-msgid "Mijn post exporteren"
-msgstr "Export my mail"
 
 #: src/components/page.tsx
 #: src/routes/tasks.tsx
@@ -3492,10 +3508,6 @@ msgstr "Saved"
 #: src/routes/ai.tsx
 msgid "Opgeslagen."
 msgstr "Saved."
-
-#: src/components/export-panel.tsx
-msgid "Opnieuw exporteren"
-msgstr "Export again"
 
 #: src/routes/document.tsx
 msgid "Opnieuw proberen"

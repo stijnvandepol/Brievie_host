@@ -319,9 +319,9 @@ describe("Mensen", () => {
     expect(within(await rowOf("Anna")).queryByRole("button", { name: /Account/ })).toBeNull();
   });
 
-  it("shows the export of my own post", async () => {
+  it("shows the export of my own archive", async () => {
     server.use(...loggedInHandlers(), ...peopleHandlers());
     renderApp(path);
-    expect(await screen.findByRole("heading", { name: "Mijn post" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Exporteren" })).toBeInTheDocument();
   });
 });

@@ -47,12 +47,12 @@ describe("my export", () => {
     vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
     const u = userEvent.setup();
     renderApp(path);
-    await u.click(await screen.findByRole("button", { name: "Mijn post exporteren" }));
+    await u.click(await screen.findByRole("button", { name: "Mijn archief exporteren" }));
     expect(await screen.findByText("Wordt gemaakt…")).toBeInTheDocument();
     expect(asked).toBe(1);
     expect(reads).toBe(1);
     await vi.advanceTimersByTimeAsync(3000);
-    const link = await screen.findByRole("link", { name: /Download \(3 brieven, geldig tot/ });
+    const link = await screen.findByRole("link", { name: /Download \(3 documenten, geldig tot/ });
     expect(link).toHaveAttribute("href", `/api/v1/workspaces/${workspace.id}/my-export/file`);
     expect(screen.queryByText("Wordt gemaakt…")).not.toBeInTheDocument();
   });
@@ -64,7 +64,9 @@ describe("my export", () => {
       ...memberHandlers(members, [], exportState("ready")),
     );
     renderApp(path);
-    expect(await screen.findByRole("link", { name: /Download \(3 brieven/ })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("link", { name: /Download \(3 documenten/ }),
+    ).toBeInTheDocument();
   });
 
   it("is hidden with a sentence when the workspace does not allow it", async () => {
@@ -79,7 +81,9 @@ describe("my export", () => {
         "Exporteren staat uit voor deze werkruimte. Vraag een beheerder om dit aan te zetten.",
       ),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Mijn post exporteren" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Mijn archief exporteren" }),
+    ).not.toBeInTheDocument();
   });
 
   it("points an admin to Instellingen when export is off", async () => {
@@ -87,7 +91,9 @@ describe("my export", () => {
     renderApp(path);
     const link = await screen.findByRole("link", { name: "Zet het aan bij Instellingen." });
     expect(link).toHaveAttribute("href", `/w/${workspace.id}/instellingen`);
-    expect(screen.getByText(/Exporteren staat uit voor deze werkruimte\./)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Exporteren staat uit voor de leden van deze werkruimte\./),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/Vraag een beheerder/)).not.toBeInTheDocument();
   });
 
@@ -101,7 +107,7 @@ describe("my export", () => {
     expect(
       await screen.findByText("De export is niet gelukt. Probeer het opnieuw."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Mijn post exporteren" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mijn archief exporteren" })).toBeInTheDocument();
   });
 
   it("shows the server's sentence when an export cannot start", async () => {
@@ -116,7 +122,7 @@ describe("my export", () => {
     );
     const u = userEvent.setup();
     renderApp(path);
-    await u.click(await screen.findByRole("button", { name: "Mijn post exporteren" }));
+    await u.click(await screen.findByRole("button", { name: "Mijn archief exporteren" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Je export wordt al gemaakt.");
   });
 
@@ -132,7 +138,7 @@ describe("my export", () => {
       ),
     ).toBeInTheDocument();
     expect(
-      within(dialog).getByRole("button", { name: "Mijn post exporteren" }),
+      within(dialog).getByRole("button", { name: "Mijn archief exporteren" }),
     ).toBeInTheDocument();
   });
 
@@ -144,7 +150,75 @@ describe("my export", () => {
     const dialog = await screen.findByRole("alertdialog", { name: "Werkruimte verlaten?" });
     expect(within(dialog).queryByText(/Exporteer eerst/)).not.toBeInTheDocument();
     expect(
-      within(dialog).queryByRole("button", { name: "Mijn post exporteren" }),
+      within(dialog).queryByRole("button", { name: "Mijn archief exporteren" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("a member never sees the admin's scope", async () => {
+    server.use(asRole("member"), ...loggedInHandlers(), ...memberHandlers());
+    renderApp(path);
+    expect(await screen.findByRole("button", { name: "Mijn archief exporteren" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Alles exporteren" })).not.toBeInTheDocument();
+  });
+
+  it("an admin exports everything they may read, with the explanation", async () => {
+    const scopes: (string | null)[] = [];
+    server.use(
+      http.post(`${base}/my-export`, ({ request }) => {
+        scopes.push(new URL(request.url).searchParams.get("scope"));
+        return HttpResponse.json(exportState("pending", true, "all"), { status: 202 });
+      }),
+      ...loggedInHandlers(),
+      ...memberHandlers(),
+    );
+    const u = userEvent.setup();
+    renderApp(path);
+    await u.click(await screen.findByRole("button", { name: "Alles exporteren" }));
+    expect(
+      screen.getByText(
+        "Alles exporteren: alles wat jij mag lezen. Privébrieven die jij niet mag lezen, zitten er niet in. Het is geen back-up.",
+      ),
+    ).toBeVisible();
+    await screen.findByText("Wordt gemaakt…");
+    expect(scopes).toEqual(["all"]);
+  });
+
+  it("a member starts the export of their own archive", async () => {
+    const scopes: (string | null)[] = [];
+    server.use(
+      asRole("member"),
+      http.post(`${base}/my-export`, ({ request }) => {
+        scopes.push(new URL(request.url).searchParams.get("scope"));
+        return HttpResponse.json(exportState("pending"), { status: 202 });
+      }),
+      ...loggedInHandlers(),
+      ...memberHandlers(),
+    );
+    const u = userEvent.setup();
+    renderApp(path);
+    await u.click(await screen.findByRole("button", { name: "Mijn archief exporteren" }));
+    await screen.findByText("Wordt gemaakt…");
+    expect(scopes).toEqual(["mine"]);
+  });
+
+  it("an admin can export everything while member exports are off", async () => {
+    server.use(...loggedInHandlers(), ...memberHandlers(twoAdmins, [], exportState("none", false)));
+    renderApp(path);
+    expect(await screen.findByRole("button", { name: "Alles exporteren" })).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Mijn archief exporteren" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("a finished export of everything offers one download and says it expires", async () => {
+    server.use(
+      ...loggedInHandlers(),
+      ...memberHandlers(members, [], exportState("ready", true, "all")),
+    );
+    renderApp(path);
+    const links = await screen.findAllByRole("link", {
+      name: /Download alles \(3 documenten, geldig tot/,
+    });
+    expect(links).toHaveLength(1);
   });
 });
