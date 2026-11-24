@@ -150,7 +150,11 @@ def test_reopen_document_clears_ai_tasks_facts() -> None:
 
 def test_only_letter_sync_writes_task_facts() -> None:
     allowed = {"tasks/letter_sync.py"}
-    pattern = re.compile(r"\btask_(open_count|wait_until|overdue_from)\s*=[^=]")
+    # An assignment to the attribute, or a keyword of `update(...)`; not a lookup in `Q(...)`.
+    pattern = re.compile(
+        r"\.task_(open_count|wait_until|overdue_from)\s*=[^=]"
+        r"|update\([^)]*\btask_(open_count|wait_until|overdue_from)="
+    )
     found = []
     for path in APP.rglob("*.py"):
         relative = path.relative_to(APP).as_posix()
@@ -176,7 +180,7 @@ def test_every_task_writer_syncs() -> None:
 
 def test_task_change_locks_letter_before_task() -> None:
     h = household()
-    _, (task,) = letter_with_tasks(h.workspace, [T(), T()])
+    _, (task, _other) = letter_with_tasks(h.workspace, [T(), T()])
     with (
         workspace_context(h.workspace.id, actor=h.anne.id),
         CaptureQueriesContext(connection) as queries,
