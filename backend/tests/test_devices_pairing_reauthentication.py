@@ -124,13 +124,29 @@ def test_a_session_that_passed_the_code_pairs_as_today(user: User) -> None:
 
 
 def test_a_session_without_the_code_cannot_pair(user: User) -> None:
+    from django.contrib.sessions.middleware import SessionMiddleware
+    from django.http import HttpResponse
+    from django.test import RequestFactory
+
+    from apps.common.errors import ApiError
+    from apps.devices.services import issue_pairing_code
+
     give_factor(user)
-    browser = Client()
-    browser.force_login(user)  # a session that did not pass the second step
+    # The middleware signs such a session out; the service refuses it on its own too.
+    request = RequestFactory().post("/api/v1/devices/pairing-codes")
+    SessionMiddleware(lambda r: HttpResponse()).process_request(request)
+    request.session.save()
+    request.user = user
+    key = request.session.session_key
+    assert key is not None
+    UserSession.objects.create(
+        user=user, session_key=key, method="password", last_used_at=timezone.now()
+    )
 
-    r = post_json(browser, "/devices/pairing-codes")
+    with pytest.raises(ApiError) as caught:
+        issue_pairing_code(request)
 
-    assert (r.status_code, r.json()["code"]) == (403, "second_factor_session_required")
+    assert (caught.value.status, caught.value.code) == (403, "second_factor_session_required")
     assert not PairingCode.objects.exists()
 
 
@@ -151,16 +167,17 @@ def test_reauthenticate_needs_the_code_when_it_is_on(user: User) -> None:
 
 def test_reauthenticate_with_the_code_lets_an_old_session_pair(user: User) -> None:
     factor = give_factor(user)
-    browser = Client()
-    browser.force_login(user)
+    browser = signed_in_with_code(user, factor)
     UserSession.objects.filter(user=user).update(created_at=timezone.now() - timedelta(minutes=16))
+    assert post_json(browser, "/devices/pairing-codes").status_code == 403
 
     r = post_json(
-        browser, "/auth/reauthenticate", {"password": TEST_PASSWORD, "code": factor.code()}
+        browser,
+        "/auth/reauthenticate",
+        {"password": TEST_PASSWORD, "code": factor.code(offset=1)},
     )
 
     assert r.status_code == 204
-    assert UserSession.objects.get(user=user).second_factor is True
     assert post_json(browser, "/devices/pairing-codes").status_code == 201
 
 

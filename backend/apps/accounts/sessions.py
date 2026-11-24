@@ -115,9 +115,12 @@ def start_session(
     that belonged to somebody else before is ended (Django flushed it; its record goes
     too).
     """
-    passed = _require_second_step(user, second_factor)
     old_key = request.session.session_key
     with transaction.atomic():
+        # The account's row first, as turning a factor on locks it: a sign-in decided at
+        # the same moment sees the factor, or is done before the other sessions end.
+        User.objects.select_for_update(no_key=True).filter(pk=user.pk).first()
+        passed = _require_second_step(user, second_factor)
         django_login(request, user, backend=MODEL_BACKEND)
         record_session(
             request,

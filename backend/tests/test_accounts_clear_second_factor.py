@@ -135,15 +135,34 @@ def test_a_wrong_admin_password_is_400_and_counted(h: Home) -> None:
 
 
 def test_an_admin_with_a_factor_needs_a_session_that_passed_it(h: Home) -> None:
+    from django.contrib.sessions.middleware import SessionMiddleware
+    from django.http import HttpResponse
+    from django.test import RequestFactory
+
+    from apps.accounts.user_actions import clear_user_second_factor
+    from apps.common.errors import ApiError
+
     give_factor(h.bob)
     anne_factor = give_factor(h.anne)
-    without = Client()
-    without.force_login(h.anne)  # a session that did not pass the second step
+    # A session without the second step (the middleware signs such a session out; the
+    # service refuses it on its own as well).
+    request = RequestFactory().post("/api/v1/users/x/second-factor/clear")
+    SessionMiddleware(lambda r: HttpResponse()).process_request(request)
+    request.session.save()
+    request.user = h.anne
+    key = request.session.session_key
+    assert key is not None
+    UserSession.objects.create(
+        user=h.anne, session_key=key, method="password", last_used_at=timezone.now()
+    )
 
-    status, body = clear(without, h.bob)
+    with pytest.raises(ApiError) as caught:
+        clear_user_second_factor(
+            request, target_id=h.bob.id, password=TEST_PASSWORD, revoke_devices=True
+        )
 
-    assert (status, body["code"]) == (403, "second_factor_session_required")
-    assert body["message"] == "Log opnieuw in met je code om dit te doen."
+    assert (caught.value.status, caught.value.code) == (403, "second_factor_session_required")
+    assert caught.value.message == "Log opnieuw in met je code om dit te doen."
     assert clear(signed_in_with_code(h.anne, anne_factor), h.bob)[0] == 200
 
 

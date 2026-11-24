@@ -791,3 +791,35 @@ def test_sso_sessions_are_kept_after_the_grace(settings: Settings) -> None:
     jobs.remove_stale_sessions(timestamp=0)
 
     assert UserSession.objects.filter(session_key=key).exists()
+
+
+# --- Two-step verification: a session without the second step (review of PR #52) --------
+
+
+def test_a_session_without_the_second_step_is_signed_out_once_a_factor_is_on() -> None:
+    from tests.second_factor_support import give_factor
+
+    user = UserFactory.create()
+    client = Client()
+    assert login(client, user.email) == 200
+    give_factor(user)  # as if confirmed at the same moment, without ending this session
+
+    assert client.get("/api/v1/me").status_code == 401
+    assert not UserSession.objects.filter(user=user).exists()
+
+
+def test_start_session_locks_the_account_row_first(rf: RequestFactory) -> None:
+    user = User.objects.get(pk=UserFactory.create().pk)
+    request = rf.post("/api/v1/auth/login")
+    request.session = SessionStore()
+    request.user = user
+
+    with CaptureQueriesContext(connection) as queries:
+        start_session(request, user, via="password", second_factor=passed_without_factor(user))
+
+    sqls = [q["sql"] for q in queries.captured_queries]
+    lock = next(
+        i for i, q in enumerate(sqls) if 'FROM "accounts_user"' in q and "FOR NO KEY UPDATE" in q
+    )
+    factor = next(i for i, q in enumerate(sqls) if 'FROM "accounts_secondfactor"' in q)
+    assert lock < factor
