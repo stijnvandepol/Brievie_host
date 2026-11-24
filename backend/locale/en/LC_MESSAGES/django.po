@@ -1173,6 +1173,10 @@ msgid "Inloggen op de webinterface kan van buiten zonder tweede stap. Zet BRIEVI
 msgstr "Signing in to the web interface is possible from outside without a second step. Switch BRIEVIE_PUBLIC_WEB off, or use a VPN."
 
 #: apps/common/checks.py
+msgid "Zet BRIEVIE_TRUSTED_PROXIES op het adres van je reverse proxy, of stel de tunnel in. Het adres van je proxy staat thuis op de pagina Van buiten bereikbaar."
+msgstr "Set BRIEVIE_TRUSTED_PROXIES to your reverse proxy's address, or set up the tunnel. Your proxy's address is on the External access page at home."
+
+#: apps/common/checks.py
 msgid "Grote scans komen niet door de tunnel. Zet BRIEVIE_MAX_UPLOAD_BYTES op 100000000 of minder."
 msgstr "Large scans do not get through the tunnel. Set BRIEVIE_MAX_UPLOAD_BYTES to 100000000 or less."
 

@@ -287,3 +287,19 @@ def test_check_cloudflare_on_https_port(home: Settings) -> None:
     assert "cloudflare_on_https_port" not in codes()
     SEEN["cloudflare_on_https_port"] = datetime.now(UTC)
     assert "cloudflare_on_https_port" in codes()
+
+
+def test_the_proxy_checks_come_from_what_was_seen_with_the_page_opened_at_home(
+    home: Settings,
+) -> None:
+    # Security review of PR #53, point 3: the page is opened at home, so these two checks
+    # read what the server saw on the public route.
+    with_public(home)
+    home.BRIEVIE_TRUSTED_PROXIES = ["192.168.1.5/32"]
+    assert "public_host_not_forwarded" not in codes()
+    assert "trusted_proxy_without_forwarding" not in codes()
+    SEEN["host_not_forwarded"] = datetime.now(UTC)
+    SEEN["proxy_without_forwarding"] = datetime.now(UTC)
+    found = codes()
+    assert "public_host_not_forwarded" in found
+    assert "trusted_proxy_without_forwarding" in found

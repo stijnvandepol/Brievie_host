@@ -995,6 +995,18 @@ the proxy's address for the sign-in limits, and the page says so. A request that
 Cloudflare's headers on the https port (a tunnel pointed at `https://caddy:443` instead of
 `http://caddy:8080`) is public too, and the page warns about it.
 
+### What the page can know
+
+You open the page at home (a web session never counts on the public address). It shows what is
+set, what your own request looks like, and what the server **saw on the public route in the
+last seven days**: a request for the public name from an address that is not a trusted proxy
+(with that address, when it is one of your local network), Cloudflare on the https port, a
+trusted proxy that named no client, a proxy that did not pass the original Host, and whether
+any request came through the tunnel. Only the kind and the time are kept, never a page or a
+person. Before any request came that way, those lines are simply absent. The same mistakes in
+the settings themselves are also reported when Brievie starts (`./brievie start` and the
+api's log: `brievie.W004` for a public name without a tunnel or trusted proxy).
+
 ### How it works (for the curious)
 
 Caddy is the only door. It writes three headers itself on every request to the api and
@@ -1010,8 +1022,8 @@ use the public address only while the web interface answers there.
 
 The iPhone app needs a version that trusts each address the way it is served (the private CA
 at home, the public certificate of the tunnel or proxy) and learns new addresses from the
-server without pairing again. Older apps keep working at home; the page says when a paired app
-is too old.
+server without pairing again. Older apps keep working at home; while a public way is on, the page asks to update every
+paired app until the first app version with this support is known.
 
 ### Problems
 
@@ -1021,7 +1033,8 @@ is too old.
   `BRIEVIE_PUBLIC_HOSTNAME` is not set.
 - **Signing in keeps returning to the sign-in page through your proxy:** the request is not
   seen as https or the Host is not passed on; check `BRIEVIE_TRUSTED_PROXIES` and the proxy's
-  Host header (the page shows both).
+  Host header. The page shows a proxy that names no client and a Host that is not the
+  public name once such a request came through (it keeps what it saw for seven days).
 - **413:** a scan above the upload limit; behind Cloudflare at most 100 MB.
 - **524 from Cloudflare:** an answer took longer than 100 seconds; try again.
 - **"de tunnel naar Cloudflare start niet":** check the token (`docker compose logs cloudflared`

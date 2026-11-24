@@ -381,3 +381,38 @@ def test_an_unknown_via_value_notes_nothing() -> None:
         "/api/v1/health", headers={"X-Brievie-Route": "public", "X-Brievie-Via": "nonsense"}
     )
     assert observed.last_seen("cloudflare_on_https_port") is None
+
+
+@pytest.mark.usefixtures("fresh_notes")
+def test_a_proxy_without_a_forwarded_client_and_a_wrong_host_are_noted(settings: Settings) -> None:
+    from apps.access import observed
+
+    settings.BRIEVIE_PUBLIC_HOSTNAME = "brievie.example.nl"
+    settings.ALLOWED_HOSTS = ["testserver", "brievie.example.nl", "192.168.1.20"]
+    headers = {
+        "X-Brievie-Route": "public",
+        "X-Brievie-Via": "proxy",
+        "X-Brievie-Peer-IP": "172.18.0.1",
+        "X-Brievie-Client-IP": "172.18.0.1",
+    }
+    Client().get("/api/v1/health", headers={**headers, "Host": "192.168.1.20"})
+    assert observed.last_seen("proxy_without_forwarding") is not None
+    assert observed.last_seen("host_not_forwarded") is not None
+
+
+@pytest.mark.usefixtures("fresh_notes")
+def test_a_well_set_proxy_notes_nothing(settings: Settings) -> None:
+    from apps.access import observed
+
+    settings.BRIEVIE_PUBLIC_HOSTNAME = "brievie.example.nl"
+    settings.ALLOWED_HOSTS = ["testserver", "brievie.example.nl"]
+    headers = {
+        "X-Brievie-Route": "public",
+        "X-Brievie-Via": "proxy",
+        "X-Brievie-Peer-IP": "192.168.1.5",
+        "X-Brievie-Client-IP": "203.0.113.9",
+        "Host": "brievie.example.nl",
+    }
+    Client().get("/api/v1/health", headers=headers)
+    assert observed.last_seen("proxy_without_forwarding") is None
+    assert observed.last_seen("host_not_forwarded") is None

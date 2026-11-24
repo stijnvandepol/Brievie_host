@@ -2900,3 +2900,10 @@ all six held.
   CI (`routes-check.sh isolation`) proves the tunnel network reaches `caddy:8080` and not
   `api:8000`, and that the worker, calling the api directly with forged headers, gets the
   closed route.
+- **Point 3 (medium), fixed: two checks could never fire.** The page is opened at home, so
+  `public_host_not_forwarded` and `trusted_proxy_without_forwarding` now also read what the
+  gate saw on the public route (`host_not_forwarded`, `proxy_without_forwarding` in
+  `apps.access.observed`), next to the admin's own request when it came that way. Config-time
+  checks at start: `brievie.W004` (a public name without a tunnel or trusted proxy) and the same
+  sentence from `./brievie start`; the proxy-address rules of point 4. SELFHOST says what the
+  page can know and that its lines appear only after such a request came through.

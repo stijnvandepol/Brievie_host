@@ -107,6 +107,7 @@ def _external(settings: Settings, *, tunnel: bool, proxies: list[str], public_we
     settings.BRIEVIE_PUBLIC_WEB = public_web
     settings.BRIEVIE_SECOND_FACTOR_AVAILABLE = False
     settings.BRIEVIE_MAX_UPLOAD_BYTES = 33554432
+    settings.BRIEVIE_PUBLIC_HOSTNAME = "brievie.example.nl" if tunnel or proxies else ""
 
 
 @pytest.mark.parametrize(("tunnel", "proxies"), [(True, []), (False, ["192.168.1.5/32"])])
@@ -157,3 +158,14 @@ def test_warnings_never_print_the_token(
     for message in found:
         assert secret not in f"{message.msg} {message.hint}"
     assert not hasattr(settings, "BRIEVIE_TUNNEL_TOKEN")
+
+
+def test_w004_public_name_without_a_way(settings: Settings) -> None:
+    _external(settings, tunnel=False, proxies=[], public_web=False)
+    settings.BRIEVIE_PUBLIC_HOSTNAME = "brievie.example.nl"
+    assert [m.id for m in check_external_access(None)] == ["brievie.W004"]
+    settings.BRIEVIE_TRUSTED_PROXIES = ["192.168.1.5/32"]
+    assert check_external_access(None) == []
+    settings.BRIEVIE_TRUSTED_PROXIES = []
+    settings.BRIEVIE_TUNNEL_TOKEN_SET = True
+    assert check_external_access(None) == []

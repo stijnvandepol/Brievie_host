@@ -216,3 +216,17 @@ def test_start_prints_the_red_sentence_with_public_web_before_second_factor(
         "Let op: inloggen op de webinterface kan van buiten zonder tweede stap "
         "(BRIEVIE_PUBLIC_WEB=true)." in result.stdout
     )
+
+
+def test_start_warns_about_a_public_name_without_a_way(installed: Install) -> None:
+    with_settings(installed, "BRIEVIE_PUBLIC_HOSTNAME=brievie.example.nl")
+    result = installed.run("start")
+    assert result.returncode == 0, result.stderr
+    assert "er is geen tunnel en geen BRIEVIE_TRUSTED_PROXIES" in result.stdout
+    with_settings(
+        installed,
+        "BRIEVIE_PUBLIC_HOSTNAME=brievie.example.nl",
+        "BRIEVIE_TRUSTED_PROXIES=192.168.1.5/32",
+    )
+    result = installed.run("start")
+    assert "er is geen tunnel" not in result.stdout

@@ -201,13 +201,23 @@ def external_access_status(
         codes.append("public_web_off")
     if not seen_as.secure:
         codes.append("request_not_secure")
+    # Both from what the server saw on the public route (apps.access.observed), since the page
+    # is opened at home and a web session never counts on the public route; and from the
+    # admin's own request when it did come that way (BRIEVIE_PUBLIC_WEB).
+    host_wrong = seen("host_not_forwarded") is not None
     if public and public_hostname:
         host = urlsplit(f"//{request.get_host()}").hostname or ""
-        if host.rstrip(".") != public_hostname.lower().rstrip("."):
-            codes.append("public_host_not_forwarded")
+        host_wrong = host_wrong or host.rstrip(".") != public_hostname.lower().rstrip(".")
+    if host_wrong:
+        codes.append("public_host_not_forwarded")
     # A trusted proxy that sent no X-Forwarded-For: most likely Docker's own gateway (every
     # device in the network then looks like that address and may pick its own).
-    if proxies and _in_networks(seen_as.peer_ip, proxies) and seen_as.client_ip == seen_as.peer_ip:
+    own_request = (
+        bool(proxies)
+        and _in_networks(seen_as.peer_ip, proxies)
+        and seen_as.client_ip == seen_as.peer_ip
+    )
+    if own_request or seen("proxy_without_forwarding") is not None:
         codes.append("trusted_proxy_without_forwarding")
     # Seen on the way in (apps.access.observed): the public name from a source that is not
     # your proxy (it was served as public, app-only, the direct peer counted), and

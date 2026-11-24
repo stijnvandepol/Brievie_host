@@ -17,6 +17,7 @@ Caddy only marks the route.
 """
 
 from collections.abc import Callable, Iterable
+from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse
@@ -31,6 +32,7 @@ from ninja.operation import Operation, PathView
 from apps.access import observed
 from apps.access.route import is_public_route, peer_ip, via
 from apps.common.errors import error_response
+from apps.common.net import client_ip
 from apps.devices.auth import DeviceTokenAuth
 
 APP_OPERATIONS: frozenset[str] = frozenset(
@@ -158,3 +160,16 @@ def observe(request: HttpRequest) -> None:
         observed.note("cloudflare_on_https_port")
     elif way == "tunnel":
         observed.note("tunnel")
+    if way == "proxy" and client_ip(request) == peer_ip(request):
+        # From a trusted proxy without a forwarded client: Docker's own gateway, likely.
+        observed.note("proxy_without_forwarding")
+    public_name = settings.BRIEVIE_PUBLIC_HOSTNAME.lower().rstrip(".")
+    if way in ("proxy", "cloudflare") and public_name:
+        # The proxy did not pass the original Host on (CSRF then fails for the web).
+        host = str(request.META.get("HTTP_HOST", "")).lower()
+        try:
+            named = urlsplit(f"//{host}").hostname
+        except ValueError:
+            named = None
+        if named != public_name:
+            observed.note("host_not_forwarded")

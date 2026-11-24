@@ -817,6 +817,9 @@ check_external_settings() {
 		{ [ -n "$vpn_name" ] && [ "$(plain_name "$public_name")" = "$(plain_name "$vpn_name")" ]; }; }; then
 		fail "BRIEVIE_PUBLIC_HOSTNAME is dezelfde naam als BRIEVIE_HOSTNAME of BRIEVIE_VPN_HOSTNAME. Gebruik elke naam maar één keer. Er is niets veranderd."
 	fi
+	if [ -n "$public_name" ] && ! tunnel_on && [ -z "$(env_value BRIEVIE_TRUSTED_PROXIES)" ]; then
+		echo "Let op: BRIEVIE_PUBLIC_HOSTNAME is ingesteld, maar er is geen tunnel en geen BRIEVIE_TRUSTED_PROXIES. Verzoeken voor die naam krijgen alleen de app, en alle bezoekers tellen als één adres. Het adres van je proxy staat thuis op de pagina Van buiten bereikbaar."
+	fi
 	if tunnel_on && [ -z "$public_name" ]; then
 		echo "Let op: er is een tunnel-token ingesteld, maar geen BRIEVIE_PUBLIC_HOSTNAME. Zet in deploy/.env de publieke naam van de tunnel (zoals brievie.voorbeeld.nl)."
 	fi

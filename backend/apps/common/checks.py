@@ -91,6 +91,20 @@ def check_external_access(
                 id="brievie.W002",
             )
         )
+    if settings.BRIEVIE_PUBLIC_HOSTNAME and not public_way:
+        messages.append(
+            Warning(
+                "BRIEVIE_PUBLIC_HOSTNAME is set, but neither a tunnel token nor "
+                "BRIEVIE_TRUSTED_PROXIES: requests for that name are served app-only, every "
+                "visitor counted by the address of whatever forwards them.",
+                hint=_(
+                    "Zet BRIEVIE_TRUSTED_PROXIES op het adres van je reverse proxy, of stel de "
+                    "tunnel in. Het adres van je proxy staat thuis op de pagina Van buiten "
+                    "bereikbaar."
+                ),
+                id="brievie.W004",
+            )
+        )
     if tunnel and settings.BRIEVIE_MAX_UPLOAD_BYTES > CLOUDFLARE_MAX_BODY_BYTES:
         messages.append(
             Warning(
