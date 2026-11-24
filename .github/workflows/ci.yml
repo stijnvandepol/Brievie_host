@@ -62,7 +62,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           version: "0.13.8"
       # The role passwords and the secret key are made per job and masked: no literal
@@ -147,7 +147,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           version: "0.13.8"
       # The role passwords and the secret key are made per job and masked: no literal
@@ -205,10 +205,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           version: "0.13.8"
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: backend-shard-*
           path: backend/shards
@@ -310,7 +310,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           version: "0.13.8"
       - name: Audit dependencies
@@ -364,7 +364,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           version: "0.13.8"
       - name: zizmor
@@ -393,8 +393,29 @@ jobs:
           # (test_pg_client_major_matches_the_server); the Trivy scan below covers
           # known vulnerabilities in what was installed.
           ignore: DL3008
+      - name: Lint the proxy Dockerfile
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+        with:
+          dockerfile: deploy/Dockerfile.proxy
+          failure-threshold: warning
       - name: Build the image
         run: docker build --file deploy/Dockerfile --tag brievie/backend:scan .
+      - name: Build the proxy image
+        run: docker build --file deploy/Dockerfile.proxy --tag brievie/proxy:scan .
+      - name: The proxy accepts its own Caddyfile
+        run: |
+          docker run --rm --network none \
+            -e BRIEVIE_HOSTNAME=brievie.test -e BRIEVIE_HSTS_SECONDS=0 \
+            -e BRIEVIE_MAX_BODY_BYTES=2621440 -e BRIEVIE_MAX_UPLOAD_BYTES=33554432 \
+            brievie/proxy:scan caddy validate --config /etc/caddy/Caddyfile
+      - name: The proxy carries the Caddyfile and script of the repository
+        run: |
+          id=$(docker create brievie/proxy:scan)
+          docker cp "$id:/etc/caddy/Caddyfile" "$RUNNER_TEMP/Caddyfile"
+          docker cp "$id:/etc/caddy/publish-root.sh" "$RUNNER_TEMP/publish-root.sh"
+          docker rm "$id"
+          cmp "$RUNNER_TEMP/Caddyfile" deploy/Caddyfile
+          cmp "$RUNNER_TEMP/publish-root.sh" deploy/caddy-publish-root.sh
       - name: Scan the image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -410,6 +431,16 @@ jobs:
           # and unless restic has a release that fixes them by then, this job fails on the
           # first scheduled run after that day (and on every push). That failure opens the
           # issue of `audit-failed`, which is the reminder to update restic or the entries.
+          trivyignores: .trivyignore.yaml
+      - name: Scan the proxy image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.2
+          image-ref: brievie/proxy:scan
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
           trivyignores: .trivyignore.yaml
 
   # The way a user installs it: fresh secrets, build the images, start everything.
@@ -446,6 +477,12 @@ jobs:
         run: test "$($COMPOSE ps --status running --services | grep -c '^keeper$')" = 1
       - name: The installation code is printed once
         run: test "$($COMPOSE logs api | grep -c 'Installatiecode')" = 1
+      - name: A ./brievie install has no web recovery sheet (409)
+        run: |
+          set -euo pipefail
+          code=$($COMPOSE logs api | sed -n 's/.*Installatiecode: //p' | head -n 1)
+          echo "::add-mask::$code"
+          SETUP_TOKEN=$code .github/scripts/recovery-sheet-check.sh 409
       - name: Container state on failure
         if: failure()
         # No logs here: the api log holds the installation code.
@@ -453,6 +490,556 @@ jobs:
       - name: Stop
         if: always()
         run: $COMPOSE down --volumes
+
+  # The install with only a compose file (deploy/compose/docker-compose.yml): no deploy/.env,
+  # no ./brievie. The images of a pull request are not on ghcr, so they are built to the
+  # tags of deploy/compose/ci.override.yml; the file itself is untouched. Fresh start, then
+  # what a security review asks: modes and owners of the vault, what each service sees, no
+  # secret in `compose config`, `docker inspect`, any log or any process list, PostgreSQL
+  # on an internal network, and a restart that keeps every secret.
+  compose-stack:
+    if: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    env:
+      COMPOSE: docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/ci.override.yml
+      BRIEVIE_HOSTNAME: localhost
+    steps:
+      - name: Only on a GitHub-hosted runner
+        run: test "$RUNNER_ENVIRONMENT" = github-hosted
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: The detector of the secrets check finds a planted secret
+        run: .github/scripts/compose-secrets-check.sh selftest
+      - name: Build the two images to the tags of the CI override
+        run: |
+          set -euo pipefail
+          docker build --file deploy/Dockerfile --tag brievie/backend:ci .
+          docker build --file deploy/Dockerfile.proxy --tag brievie/proxy:ci .
+      - name: Start from the compose file alone
+        run: |
+          set -euo pipefail
+          test ! -e deploy/.env
+          $COMPOSE up -d --wait --wait-timeout 600
+      - name: The API answers through Caddy and reports the version
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --insecure --retry 10 --retry-delay 3 --retry-all-errors \
+            https://localhost/api/v1/health |
+            python3 -c 'import json, sys, tomllib; got = json.load(sys.stdin)["server_version"]; want = tomllib.load(open("backend/pyproject.toml", "rb"))["project"]["version"]; print(got); assert got == want, (got, want)'
+      - name: The web interface is served, with the headers of the Caddyfile
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --insecure --dump-header "$RUNNER_TEMP/headers.txt" \
+            --output "$RUNNER_TEMP/index.html" https://localhost/
+          grep -qi '<!doctype html>' "$RUNNER_TEMP/index.html"
+          grep -qi '^content-security-policy: default-src .self.' "$RUNNER_TEMP/headers.txt"
+          grep -qi '^x-content-type-options: nosniff' "$RUNNER_TEMP/headers.txt"
+          grep -qi '^strict-transport-security:' "$RUNNER_TEMP/headers.txt"
+          if grep -qi '^server:' "$RUNNER_TEMP/headers.txt"; then
+            echo "The proxy answers with a Server header." >&2
+            exit 1
+          fi
+      - name: The worker and the keeper run, and the one-shot services ended well
+        run: |
+          set -euo pipefail
+          test "$($COMPOSE ps --status running --services | grep -c -x -E 'worker|keeper|api|caddy|postgres')" = 5
+          for service in init-secrets init; do
+            test "$(docker inspect "$($COMPOSE ps -aq "$service")" --format '{{.State.ExitCode}}')" = 0
+          done
+      - name: The installation code is printed once
+        run: test "$($COMPOSE logs api | grep -c 'Installatiecode')" = 1
+      - name: The vault, the role volumes, the networks and no secret anywhere
+        run: .github/scripts/compose-secrets-check.sh check
+      - name: A server admin gets the recovery sheet through the web, with the master key
+        run: |
+          set -euo pipefail
+          code=$($COMPOSE logs api | sed -n 's/.*Installatiecode: //p' | head -n 1)
+          echo "::add-mask::$code"
+          key=$(docker run --rm --user 0 --network none -v brievie_secrets:/v:ro brievie/backend:ci cat /v/master_key)
+          echo "::add-mask::$key"
+          groups=$(printf '%s' "$key" | fold -w 4 | paste -sd' ' -)
+          echo "::add-mask::$groups"
+          SETUP_TOKEN=$code MASTER_KEY_GROUPS=$groups .github/scripts/recovery-sheet-check.sh 200
+      - name: A restart makes no new secret and the server still answers
+        run: |
+          set -euo pipefail
+          .github/scripts/compose-secrets-check.sh snapshot > "$RUNNER_TEMP/before.txt"
+          $COMPOSE down
+          $COMPOSE up -d --wait --wait-timeout 600
+          .github/scripts/compose-secrets-check.sh snapshot > "$RUNNER_TEMP/after.txt"
+          diff "$RUNNER_TEMP/before.txt" "$RUNNER_TEMP/after.txt"
+          curl --fail --silent --show-error --insecure --retry 10 --retry-delay 3 --retry-all-errors \
+            https://localhost/api/v1/health
+      - name: Container state on failure
+        if: failure()
+        # No logs here: the api log holds the installation code.
+        run: $COMPOSE ps --all || true
+      - name: The log of the one-shot services on failure
+        if: failure()
+        # The one-shot services print sentences, never a secret (the secrets check proves it).
+        run: $COMPOSE logs --no-color init-secrets init || true
+      - name: Stop
+        if: always()
+        run: $COMPOSE down --volumes || true
+
+  # The oldest Docker Compose we promise to work with (S 4.13): the file uses anchors with
+  # merge keys, depends_on conditions, profiles, network_mode: none and nested defaults.
+  # This proves an old Compose, not a Synology or an Unraid.
+  compose-oldest:
+    if: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    env:
+      COMPOSE: docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/ci.override.yml
+      BRIEVIE_HOSTNAME: localhost
+      # Raise this (and DECISIONS.md) when a feature of the file needs a newer Compose.
+      OLDEST_COMPOSE: v2.20.2
+      OLDEST_COMPOSE_SHA256: b9385dabb7931636a3afc0aee94625ebff3bb29584493a87804afb6ebaf2d916
+    steps:
+      - name: Only on a GitHub-hosted runner
+        run: test "$RUNNER_ENVIRONMENT" = github-hosted
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install that Compose as the user plugin, checked by its checksum
+        run: |
+          set -euo pipefail
+          plugin="$HOME/.docker/cli-plugins/docker-compose"
+          mkdir -p "$(dirname "$plugin")"
+          curl --fail --silent --show-error --location --output "$plugin" \
+            "https://github.com/docker/compose/releases/download/${OLDEST_COMPOSE}/docker-compose-linux-x86_64"
+          echo "$OLDEST_COMPOSE_SHA256  $plugin" | sha256sum --check -
+          chmod 0755 "$plugin"
+          docker compose version | tee "$RUNNER_TEMP/version.txt"
+          grep -qx "Docker Compose version $OLDEST_COMPOSE" "$RUNNER_TEMP/version.txt"
+      - name: Build the two images to the tags of the CI override
+        run: |
+          set -euo pipefail
+          docker build --file deploy/Dockerfile --tag brievie/backend:ci .
+          docker build --file deploy/Dockerfile.proxy --tag brievie/proxy:ci .
+      - name: The file is valid and the old Compose has no warning about it
+        run: |
+          set -euo pipefail
+          $COMPOSE config --quiet 2> "$RUNNER_TEMP/warnings.txt"
+          cat "$RUNNER_TEMP/warnings.txt"
+          test ! -s "$RUNNER_TEMP/warnings.txt"
+      - name: Start and answer
+        run: |
+          set -euo pipefail
+          $COMPOSE up -d --wait --wait-timeout 600
+          curl --fail --silent --show-error --insecure --retry 10 --retry-delay 3 --retry-all-errors \
+            https://localhost/api/v1/health
+      - name: Container state on failure
+        if: failure()
+        run: $COMPOSE ps --all || true
+      - name: Stop
+        if: always()
+        run: $COMPOSE down --volumes || true
+
+  # Moving from a ./brievie install to the compose file on the same volumes (S 4.11): the
+  # keys come from deploy/.env into the vault through a file (never the environment),
+  # nothing is regenerated, the data opens, the paired device still signs in and the
+  # certificate authority is byte for byte the same.
+  adopt:
+    if: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: bash
+    env:
+      WRAPPER: docker compose -p brievie --project-directory deploy -f deploy/docker-compose.yml
+      COMPOSE: docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/ci.override.yml
+    steps:
+      # This job ends with `down --volumes` of the fixed project brievie: only on a fresh
+      # GitHub-hosted machine, never on a self-hosted runner that may run Brievie itself.
+      - name: Only on a GitHub-hosted runner
+        run: test "$RUNNER_ENVIRONMENT" = github-hosted
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Start a ./brievie install with data
+        run: |
+          set -euo pipefail
+          umask 077
+          sh deploy/init-env.sh
+          ./brievie start
+          curl --fail --silent --show-error --insecure --retry 10 --retry-delay 3 --retry-all-errors \
+            https://localhost/api/v1/server/ca-certificate | jq -j .pem > "$RUNNER_TEMP/old-root.pem"
+          grep -q 'BEGIN CERTIFICATE' "$RUNNER_TEMP/old-root.pem"
+          $WRAPPER exec -T api python manage.py shell -c "$(cat .github/scripts/restore-seed.py)" |
+            grep '^{"token"' > "$RUNNER_TEMP/seed.json"
+          echo "::add-mask::$(jq -r .token "$RUNNER_TEMP/seed.json")"
+          test "$(jq '.workspaces | length' "$RUNNER_TEMP/seed.json")" = 2
+          python3 -c 'import tomllib; print(tomllib.load(open("backend/pyproject.toml", "rb"))["project"]["version"])' \
+            > "$RUNNER_TEMP/version.txt"
+      - name: Stop the wrapper's containers (no volume is removed)
+        run: $WRAPPER down
+      - name: Build the two images to the tags of the CI override
+        run: |
+          set -euo pipefail
+          docker build --file deploy/Dockerfile --tag brievie/backend:ci .
+          docker build --file deploy/Dockerfile.proxy --tag brievie/proxy:ci .
+      - name: Without the keys the compose file refuses to make new ones next to the data
+        run: |
+          set -euo pipefail
+          rc=0
+          $COMPOSE run --rm init-secrets > "$RUNNER_TEMP/refused.log" 2>&1 || rc=$?
+          cat "$RUNNER_TEMP/refused.log"
+          test "$rc" != 0
+          grep -q 'sleutels ontbreken' "$RUNNER_TEMP/refused.log"
+      - name: Import the keys of deploy/.env into the vault, from a file
+        run: |
+          set -euo pipefail
+          $COMPOSE run --rm -v "$PWD/deploy/.env:/import/env:ro" init-secrets \
+            python -m apps.installer.init_secrets --import /import/env
+      - name: Start the compose file on the same volumes, settings from deploy/.env
+        run: |
+          set -euo pipefail
+          # --env-file feeds only the settings the file names (host name, ports, folder).
+          BRIEVIE_ADOPT_VERSION="$(cat "$RUNNER_TEMP/version.txt")" \
+            $COMPOSE --env-file deploy/.env up -d --wait --wait-timeout 600
+          test "$(docker inspect "$($COMPOSE ps -aq init)" --format '{{.State.ExitCode}}')" = 0
+      - name: The same server answers with the same authority, pages and device
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors \
+            --cacert "$RUNNER_TEMP/old-root.pem" https://localhost/api/v1/health
+          .github/scripts/restore-check.sh "$RUNNER_TEMP/seed.json" "$RUNNER_TEMP/old-root.pem"
+      - name: The keys were imported, not made, and nothing leaks
+        run: |
+          set -euo pipefail
+          # The master key of the vault is the one of deploy/.env.
+          want=$(grep '^BRIEVIE_MASTER_KEY=' deploy/.env | tail -n 1 | cut -d= -f2-)
+          echo "::add-mask::$want"
+          got=$(docker run --rm --user 0 --network none -v brievie_secrets:/v:ro brievie/backend:ci cat /v/master_key)
+          test "$got" = "$want"
+          test "$($COMPOSE logs api | grep -c 'Installatiecode')" = 0
+          .github/scripts/compose-secrets-check.sh check
+      - name: Container state on failure
+        if: failure()
+        run: $COMPOSE ps --all || true
+      - name: The log of the one-shot services on failure
+        if: failure()
+        run: $COMPOSE logs --no-color init-secrets init || true
+      - name: Stop
+        if: always()
+        run: |
+          $COMPOSE down --volumes || true
+          $WRAPPER down --volumes || true
+
+  # Updating by changing the version number in the compose file (S 4.6), with the same
+  # throwaway releases as the job `update`. Proves the two assumptions of the design:
+  # when `init` refuses, the running containers stay up, and the read-only freeze stops
+  # the old api from writing. Then the refusals (too large a jump, a step back), the update
+  # with its emergency back-up, a failing migration (frozen, way back printed) and the way
+  # back with restore_install.
+  compose-update:
+    if: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      COMPOSE: docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/ci.override.yml
+      BRIEVIE_HOSTNAME: localhost
+      GIT_AUTHOR_NAME: CI
+      GIT_AUTHOR_EMAIL: ci@example.invalid
+      GIT_COMMITTER_NAME: CI
+      GIT_COMMITTER_EMAIL: ci@example.invalid
+    steps:
+      - name: Only on a GitHub-hosted runner
+        run: test "$RUNNER_ENVIRONMENT" = github-hosted
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Make throwaway releases and build their images
+        id: releases
+        run: |
+          set -euo pipefail
+          git -C "$GITHUB_WORKSPACE" branch -f ci-update HEAD
+          git clone -q --no-hardlinks --branch ci-update "$GITHUB_WORKSPACE" "$RUNNER_TEMP/source"
+          python3 .github/scripts/update-releases.py "$RUNNER_TEMP/source" | tee -a "$GITHUB_OUTPUT"
+          for version in $(sed -n -E 's/^(installed|good|bad)=//p' "$GITHUB_OUTPUT"); do
+            git -C "$RUNNER_TEMP/source" worktree add -q "$RUNNER_TEMP/tree-$version" "v$version"
+            docker build --file "$RUNNER_TEMP/tree-$version/deploy/Dockerfile" \
+              --tag "brievie/backend:$version" "$RUNNER_TEMP/tree-$version"
+            docker build --file "$RUNNER_TEMP/tree-$version/deploy/Dockerfile.proxy" \
+              --tag "brievie/proxy:$version" "$RUNNER_TEMP/tree-$version"
+          done
+      - name: Start the oldest release from the compose file, seed it, keep its authority
+        env:
+          BRIEVIE_CI_TAG: ${{ steps.releases.outputs.installed }}
+        run: |
+          set -euo pipefail
+          umask 077
+          $COMPOSE up -d --wait --wait-timeout 600
+          curl --fail --silent --show-error --insecure --retry 10 --retry-delay 3 --retry-all-errors \
+            https://localhost/api/v1/server/ca-certificate | jq -j .pem > "$RUNNER_TEMP/old-root.pem"
+          $COMPOSE exec -T api python manage.py shell -c "$(cat .github/scripts/restore-seed.py)" |
+            grep '^{"token"' > "$RUNNER_TEMP/seed.json"
+          echo "::add-mask::$(jq -r .token "$RUNNER_TEMP/seed.json")"
+          test "$(jq '.workspaces | length' "$RUNNER_TEMP/seed.json")" = 2
+      - name: A jump that is too large is refused and changes nothing
+        env:
+          BRIEVIE_CI_TAG: ${{ steps.releases.outputs.bad }}
+          INSTALLED: ${{ steps.releases.outputs.installed }}
+        run: |
+          set -euo pipefail
+          rc=0
+          $COMPOSE up -d --wait --wait-timeout 300 > "$RUNNER_TEMP/jump.log" 2>&1 || rc=$?
+          test "$rc" != 0
+          $COMPOSE logs --no-color init | tee "$RUNNER_TEMP/jump-init.log"
+          grep -q 'niet in één keer' "$RUNNER_TEMP/jump-init.log"
+          grep -q 'Er is niets veranderd' "$RUNNER_TEMP/jump-init.log"
+          test "$(docker inspect "$($COMPOSE ps -aq init)" --format '{{.State.ExitCode}}')" = 1
+          # Compose has taken the old api, worker, keeper and caddy down before `init` ran
+          # (they are only created, not started): the refusal leaves the data and the
+          # database as they were, and putting the old number back brings the service back.
+          sql() { $COMPOSE exec -T postgres psql -U postgres -d brievie -tA -c "$1"; }
+          test "$(sql "select count(*) from pg_db_role_setting s join pg_database d on d.oid = s.setdatabase where d.datname = 'brievie'")" = 0
+          test "$(sql "select version from updates_installedversion")" = "$INSTALLED"
+      - name: With the old number back, the same server answers again
+        env:
+          BRIEVIE_CI_TAG: ${{ steps.releases.outputs.installed }}
+          INSTALLED: ${{ steps.releases.outputs.installed }}
+        run: |
+          set -euo pipefail
+          $COMPOSE up -d --wait --wait-timeout 600
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors \
+            --cacert "$RUNNER_TEMP/old-root.pem" https://localhost/api/v1/health |
+            jq -e --arg want "$INSTALLED" '.server_version == $want'
+      - name: The same pages, devices and authority after the refusal
+        run: .github/scripts/restore-check.sh "$RUNNER_TEMP/seed.json" "$RUNNER_TEMP/old-root.pem"
+      - name: Update to the next release by changing the version
+        env:
+          BRIEVIE_CI_TAG: ${{ steps.releases.outputs.good }}
+          INSTALLED: ${{ steps.releases.outputs.installed }}
+          GOOD: ${{ steps.releases.outputs.good }}
+        run: |
+          set -euo pipefail
+          $COMPOSE up -d --wait --wait-timeout 600
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors \
+            --cacert "$RUNNER_TEMP/old-root.pem" https://localhost/api/v1/health |
+            jq -e --arg want "$GOOD" '.server_version == $want'
+          $COMPOSE logs --no-color init | grep -q "Brievie $GOOD is klaar om te starten"
+          sql() { $COMPOSE exec -T postgres psql -U postgres -d brievie -tA -c "$1"; }
+          test "$(sql "select version from updates_installedversion")" = "$GOOD"
+          test "$(sql "select from_version || '>' || to_version from updates_serverupdate")" = "$INSTALLED>$GOOD"
+          test "$(sql "select status from backup_backuprun where label = 'pre-update-$GOOD'")" = succeeded
+          test "$(sql "select backup_run_id is not null from updates_serverupdate")" = t
+          # The freeze is lifted again.
+          test "$(sql "select count(*) from pg_db_role_setting s join pg_database d on d.oid = s.setdatabase where d.datname = 'brievie'")" = 0
+      - name: The updated server has the same pages, devices and authority
+        run: .github/scripts/restore-check.sh "$RUNNER_TEMP/seed.json" "$RUNNER_TEMP/old-root.pem"
+      - name: A step back is refused and the data stay
+        env:
+          BRIEVIE_CI_TAG: ${{ steps.releases.outputs.installed }}
+          GOOD: ${{ steps.releases.outputs.good }}
+        run: |
+          set -euo pipefail
+          rc=0
+          $COMPOSE up -d --wait --wait-timeout 300 > "$RUNNER_TEMP/back.log" 2>&1 || rc=$?
+          test "$rc" != 0
+          $COMPOSE logs --no-color init | tee "$RUNNER_TEMP/back-init.log"
+          grep -q 'oudere versie' "$RUNNER_TEMP/back-init.log"
+          test "$($COMPOSE exec -T postgres psql -U postgres -d brievie -tA -c 'select version from updates_installedversion')" = "$GOOD"
+      - name: With the newer number back, the server answers again
+        env:
+          BRIEVIE_CI_TAG: ${{ steps.releases.outputs.good }}
+          GOOD: ${{ steps.releases.outputs.good }}
+        run: |
+          set -euo pipefail
+          $COMPOSE up -d --wait --wait-timeout 600
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors \
+            --cacert "$RUNNER_TEMP/old-root.pem" https://localhost/api/v1/health |
+            jq -e --arg want "$GOOD" '.server_version == $want'
+      - name: Another PostgreSQL major is refused (a release that says so)
+        env:
+          BRIEVIE_CI_TAG: ${{ steps.releases.outputs.good }}
+        run: |
+          set -euo pipefail
+          # The image's release.json names the major it is built for; the running server is
+          # 18. The gate compares the two (unit-tested); here the running server's major is
+          # read as the gate reads it.
+          test "$($COMPOSE exec -T postgres psql -U postgres -d brievie -tA -c 'show server_version_num' | cut -c1-2)" = 18
+          jq -e '.postgres_major == 18' deploy/release.json
+      - name: Update to a release whose migration fails (frozen, the way back printed)
+        env:
+          BRIEVIE_CI_TAG: ${{ steps.releases.outputs.bad }}
+          BAD: ${{ steps.releases.outputs.bad }}
+          GOOD: ${{ steps.releases.outputs.good }}
+        run: |
+          set -euo pipefail
+          rc=0
+          $COMPOSE up -d --wait --wait-timeout 300 > "$RUNNER_TEMP/failed.log" 2>&1 || rc=$?
+          test "$rc" != 0
+          $COMPOSE logs --no-color init | tee "$RUNNER_TEMP/failed-init.log"
+          grep -q 'halverwege mislukt' "$RUNNER_TEMP/failed-init.log"
+          grep -q "pre-update-$BAD" "$RUNNER_TEMP/failed-init.log"
+          # The database stays read-only.
+          test "$($COMPOSE exec -T postgres psql -U postgres -d brievie -tA \
+            -c "select count(*) from pg_db_role_setting s join pg_database d on d.oid = s.setdatabase where d.datname = 'brievie'")" = 1
+      - name: The frozen database refuses a write of any other session
+        run: |
+          set -euo pipefail
+          rc=0
+          $COMPOSE exec -T postgres psql -U brievie_app -d brievie -v ON_ERROR_STOP=1 \
+            -c "insert into django_migrations (app, name, applied) values ('ci', 'frozen', now())" \
+            > "$RUNNER_TEMP/frozen.log" 2>&1 || rc=$?
+          cat "$RUNNER_TEMP/frozen.log"
+          test "$rc" != 0
+          grep -q 'read-only transaction' "$RUNNER_TEMP/frozen.log"
+      - name: Take the way back with restore_install, then start the old version
+        env:
+          BAD: ${{ steps.releases.outputs.bad }}
+          GOOD: ${{ steps.releases.outputs.good }}
+        run: |
+          set -euo pipefail
+          export BRIEVIE_CI_TAG=$GOOD
+          $COMPOSE stop api worker keeper caddy
+          # The emergency back-up of the update is in the volume update-backup.
+          BRIEVIE_BACKUP_DIR=update-backup $COMPOSE --profile admin run --rm admin \
+            python manage.py restore_install "pre-update-$BAD" --replace | tee "$RUNNER_TEMP/way-back.log"
+          grep -q 'Herstel gelukt' "$RUNNER_TEMP/way-back.log"
+          $COMPOSE up -d --wait --wait-timeout 600
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors \
+            --cacert "$RUNNER_TEMP/old-root.pem" https://localhost/api/v1/health |
+            jq -e --arg want "$GOOD" '.server_version == $want'
+      - name: The server after the way back has the same pages, devices and authority
+        run: .github/scripts/restore-check.sh "$RUNNER_TEMP/seed.json" "$RUNNER_TEMP/old-root.pem"
+      - name: Container state on failure
+        if: failure()
+        run: $COMPOSE ps --all || true
+      - name: The log of the one-shot services on failure
+        if: failure()
+        env:
+          BRIEVIE_CI_TAG: ${{ steps.releases.outputs.good }}
+        run: $COMPOSE logs --no-color init-secrets init || true
+      - name: Stop
+        if: always()
+        env:
+          BRIEVIE_CI_TAG: ${{ steps.releases.outputs.installed }}
+        run: $COMPOSE down --volumes || true
+
+  # A restore onto an empty machine and over a running one, from a compose-only install:
+  # the sheet's master key goes into the vault first (`--import`), then restore_install.
+  compose-restore:
+    if: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: bash
+    env:
+      COMPOSE: docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/ci.override.yml
+      BRIEVIE_HOSTNAME: localhost
+    steps:
+      - name: Only on a GitHub-hosted runner
+        run: test "$RUNNER_ENVIRONMENT" = github-hosted
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the two images to the tags of the CI override
+        run: |
+          set -euo pipefail
+          docker build --file deploy/Dockerfile --tag brievie/backend:ci .
+          docker build --file deploy/Dockerfile.proxy --tag brievie/proxy:ci .
+      - name: A back-up folder outside the stack, for the keeper (uid 10001)
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/backup"
+          sudo chown 10001:10001 "$RUNNER_TEMP/backup"
+          echo "BRIEVIE_BACKUP_DIR=$RUNNER_TEMP/backup" >> "$GITHUB_ENV"
+      - name: Start, seed, set up the back-up and make one
+        run: |
+          set -euo pipefail
+          umask 077
+          $COMPOSE up -d --wait --wait-timeout 600
+          curl --fail --silent --show-error --insecure --retry 10 --retry-delay 3 --retry-all-errors \
+            https://localhost/api/v1/server/ca-certificate | jq -j .pem > "$RUNNER_TEMP/old-root.pem"
+          $COMPOSE exec -T api python manage.py shell -c "$(cat .github/scripts/restore-seed.py)" |
+            grep '^{"token"' > "$RUNNER_TEMP/seed.json"
+          echo "::add-mask::$(jq -r .token "$RUNNER_TEMP/seed.json")"
+          # The runner's folder shares the disk with Docker's volumes: this proves the guard.
+          $COMPOSE --profile admin run --rm admin python manage.py backup_init --allow-same-disk
+          $COMPOSE --profile admin run --rm admin python manage.py backup
+          $COMPOSE --profile admin run --rm admin python manage.py backup_status
+      - name: Keep the master key, as a person keeps the recovery sheet
+        run: |
+          set -euo pipefail
+          umask 077
+          key=$(docker run --rm --user 0 --network none -v brievie_secrets:/v:ro brievie/backend:ci cat /v/master_key)
+          echo "::add-mask::$key"
+          printf 'BRIEVIE_MASTER_KEY=%s\n' "$key" > "$RUNNER_TEMP/sheet-key.env"
+      - name: Destroy the machine (only the back-up folder is left)
+        run: |
+          set -euo pipefail
+          $COMPOSE down --volumes
+          if docker volume ls -q | grep -q '^brievie_'; then
+            echo "A volume of the project is left after down --volumes." >&2
+            exit 1
+          fi
+          test -f "$RUNNER_TEMP/backup/brievie-backup.json"
+      - name: A new machine, the sheet's key into the vault first, then restore
+        run: |
+          set -euo pipefail
+          $COMPOSE run --rm -v "$RUNNER_TEMP/sheet-key.env:/import/env:ro" init-secrets \
+            python -m apps.installer.init_secrets --import /import/env
+          $COMPOSE up -d --wait --wait-timeout 300 postgres
+          $COMPOSE --profile admin run --rm admin python manage.py restore_install | tee "$RUNNER_TEMP/restore.log"
+          grep -q 'Herstel gelukt' "$RUNNER_TEMP/restore.log"
+          $COMPOSE up -d --wait --wait-timeout 600
+      - name: The restored server has the same pages, devices and authority
+        run: .github/scripts/restore-check.sh "$RUNNER_TEMP/seed.json" "$RUNNER_TEMP/old-root.pem"
+      - name: It backs up again without handwork
+        run: |
+          set -euo pipefail
+          $COMPOSE --profile admin run --rm admin python manage.py backup
+          $COMPOSE --profile admin run --rm admin python manage.py backup_status | tee "$RUNNER_TEMP/status.log"
+      - name: Restoring over running data needs --replace and the services stopped
+        run: |
+          set -euo pipefail
+          rc=0
+          $COMPOSE --profile admin run --rm admin python manage.py restore_install --replace \
+            > "$RUNNER_TEMP/running.log" 2>&1 || rc=$?
+          cat "$RUNNER_TEMP/running.log"
+          test "$rc" != 0
+          grep -q 'draait nog' "$RUNNER_TEMP/running.log"
+          $COMPOSE stop api worker keeper caddy
+          rc=0
+          $COMPOSE --profile admin run --rm admin python manage.py restore_install \
+            > "$RUNNER_TEMP/no-replace.log" 2>&1 || rc=$?
+          cat "$RUNNER_TEMP/no-replace.log"
+          test "$rc" != 0
+          grep -q -e '--replace' "$RUNNER_TEMP/no-replace.log"
+      - name: Restore over the data (--replace)
+        run: |
+          set -euo pipefail
+          $COMPOSE --profile admin run --rm admin python manage.py restore_install --replace |
+            tee "$RUNNER_TEMP/replace.log"
+          grep -q 'Herstel gelukt' "$RUNNER_TEMP/replace.log"
+          $COMPOSE up -d --wait --wait-timeout 600
+      - name: The replaced server has the same pages, devices and authority
+        run: .github/scripts/restore-check.sh "$RUNNER_TEMP/seed.json" "$RUNNER_TEMP/old-root.pem"
+      - name: Container state on failure
+        if: failure()
+        run: $COMPOSE ps --all || true
+      - name: The log of the one-shot services on failure
+        if: failure()
+        run: $COMPOSE logs --no-color init-secrets init || true
+      - name: Stop
+        if: always()
+        run: $COMPOSE down --volumes || true
 
   # OWASP ZAP against the running stack, started as in `stack`: a passive baseline scan
   # of the web interface and an active scan of every operation in the OpenAPI contract,

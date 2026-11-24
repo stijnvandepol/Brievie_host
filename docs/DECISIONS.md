@@ -2679,3 +2679,135 @@ All five points were checked against the code first; all five held.
 - **Point 5 (low), fixed: a payment tick outlived the task list.** In "Brief afhandelen" the
   tick resets whenever the set of open tasks changes, so a payment that appeared meanwhile
   is never confirmed unseen.
+## 2026-11-23: Installing with only a compose file
+
+Design: `docs/superpowers/specs/2026-11-23-installatie-met-compose-design.md`, plan
+`docs/superpowers/plans/2026-11-23-host-installatie-met-compose.md`. The owner follows every
+recommendation D1 to D7 of the spec.
+
+- **D1: an own proxy image, `brievie-proxy`.** Caddy with `deploy/Caddyfile` and
+  `caddy-publish-root.sh` baked in (`deploy/Dockerfile.proxy`), built, scanned and attested
+  like the backend image. Rejected: inline `configs: content:`, which needs Compose 2.23.1 or
+  newer, and what a Synology or Unraid ships is unknown. The base is `caddy:2.11.9` pinned by
+  digest (multi-architecture). Its binary carries `golang.org/x/net` 0.60.0
+  (CVE-2026-78661, fixed in 0.62.0, not yet in a Caddy release; the proxy never parses
+  HTML): accepted in `.trivyignore.yaml` until 2027-01-31, like restic's findings. No new
+  Python or npm dependency.
+- **D2: nightly back-up, a status panel and "Nu back-uppen" in this round.** A periodic job on
+  the `backup` queue (02:30, `BRIEVIE_BACKUP_HOUR`; only with a destination; at most one in
+  20 hours, a back-up by hand counts) and `getBackupStatus` / `createBackupRun` for server
+  admins. The panel shows no live "reachable" or marker state: the api container mounts no
+  destination (only the keeper does), so it shows the last runs (late after 36 hours).
+  `BRIEVIE_BACKUP_AUTO_INIT` prepares an empty folder once, never with the same-disk override.
+- **D3: the recovery sheet through the web.** `createRecoverySheet`: POST only, session only,
+  server admin, `reauthenticate` within 15 minutes (403 `reauthentication_required`, as
+  `createPairingCode`; the plan's 401 name was not used), `Cache-Control: no-store`, audited as
+  `recovery_sheet_viewed`, no value in a log. Only on a compose install (409 otherwise): the
+  api of a wrapper install has no back-up password or destination, so its sheet would be
+  incomplete. The api volume therefore also holds `backup_password` (derivable from the master
+  key unless the owner chose another).
+- **D4: four volumes for the secrets.** `secrets` (the vault, only `init-secrets`, `init`, `admin`)
+  and `secrets-postgres`, `secrets-api`, `secrets-keeper`, each with only what that service
+  needs: the keeper holds no master key, the api no superuser or owner password. One shared
+  volume would be weaker than the wrapper. Every secret `X` also reads `X_FILE` (the variable
+  wins, so wrapper installs do not change); files are 0400 and refused when a link, over 4 KiB or
+  (with `BRIEVIE_STRICT_SECRET_FILES`) open to others. `init-secrets` runs as
+  `python -m apps.installer.init_secrets` (not `manage.py`: settings need a secret key and a
+  database URL, and that container has no network and no secret), refuses to make a master key
+  when data exists and the vault is empty, and imports only from a file.
+- **D5: the database is read-only for everyone but `init` during an update.**
+  `ALTER DATABASE ... SET default_transaction_read_only = on` plus ending the sessions of the
+  app role; `init`'s own connections set it off (`BRIEVIE_INIT_WRITABLE`). A failure before
+  any migration lifts it; after one it stays and the way back is printed; a second start resumes
+  only when the back-up of the first exists. **Measured in CI (job `compose-update`), against the
+  design's assumption:** when `init` refuses, Compose has already removed the old api, worker,
+  keeper and caddy containers (they are "Created", waiting for `init`), so a refusal does not
+  leave the old version running; it leaves the data and the database untouched and the service
+  down until the old number is put back (then it returns, with the same pages and authority).
+  The freeze therefore matters for any other session (a console, a script, a container Compose
+  left running); the job proves that another session's write fails after a failed migration.
+- **D6: other platforms are labelled "Niet getest".** Synology Container Manager, Unraid,
+  Portainer, Dockge, Podman (not supported), Docker Desktop on Windows and a Raspberry Pi are
+  not tried. One of us tries each step on real hardware before a label changes.
+- **D7: this lands before "van buiten bereikbaar".** `compose-parity` (the wrapper's file and the
+  compose file have the same services, environment keys, ports, `depends_on` and Caddy
+  environment) makes whoever lands second add the tunnel profile to both.
+- **`BRIEVIE_COMPOSE_REVISION`** lives in the compose file and as `gate.COMPOSE_REVISION` in the
+  image, not in `deploy/release.json` (installed updaters refuse unknown keys there). The
+  Dockerfile's `ENV` is kept equal by a test but the container environment overrides it, so the
+  code constant is the truth. The compose file's default version must equal `pyproject.toml`
+  (`release-check.py`); until the first release that carries it, the file points at images
+  that do not exist yet.
+- **Oldest Compose: 2.20.2**, installed in CI by checksum (`compose-oldest`). It proves an old
+  Compose, not a Synology.
+- **Wrapper and compose file side by side**, same project name and volumes, never started
+  together; moving over is `init_secrets --import` of `deploy/.env` plus `BRIEVIE_ADOPT_VERSION`
+  (job `adopt`). Phase 2, not built: the wrapper using the compose file.
+- **`restore_install`** (not in the plan, which only named `admin restore`) is the compose
+  restore: it refuses while any service holds a database session, needs `--replace` over data,
+  and makes no safety back-up of what it replaces. A new machine puts the sheet's master key
+  in the vault first.
+- **Tests without PyYAML** (no new dependency): text rules for the file; `drift()` is unit-tested
+  with fixtures and run on `docker compose config` output only in CI. The plan's "land each job
+  with a deliberately broken fixture" is replaced by `compose-secrets-check.sh selftest`, which
+  plants a secret and requires the detector to find it.
+
+
+### Security review of PR #45 (2026-11-24)
+
+An independent review of the compose-only install. Every point was checked against the code
+first; all nine held.
+
+- **Point 1 (high), fixed: the web recovery sheet on a `./brievie` install.** The image set
+  `BRIEVIE_COMPOSE_REVISION`, from which `BRIEVIE_COMPOSE_INSTALL` was derived, so the 409
+  `recovery_sheet_not_here` never fired in production and a wrapper install could fetch its master
+  key through the web (the test set the setting by hand and hid it). Now the image sets no such
+  variable (the gate knows its revision from `gate.COMPOSE_REVISION`; `release-check.py`
+  compares the compose file with that constant), and only the standalone compose file sets
+  `BRIEVIE_COMPOSE_INSTALL=true`, in its shared settings anchor. `tests/test_compose_flag.py` reads
+  the Dockerfile, both compose files and the dev file and starts settings in a fresh process; the
+  CI job `stack` (the wrapper) asks for the sheet through the web and requires 409, and
+  `compose-stack` requires 200 with `no-store` and the grouped master key of the vault.
+- **Point 2 (medium), fixed: the printed way back did not exist.** The sentence is built from
+  `restore_install.restore_commands` (stop the four services, restore with
+  `BRIEVIE_BACKUP_DIR=update-backup`, start); a test compares it with `docs/SELFHOST.md`.
+- **Point 3 (medium), fixed: an interrupted back-up left the database frozen and the next start
+  asked for a restore.** A `brievie.migrating` setting on the database is set only after the
+  back-up and its check, right before the first migration. Frozen without it: nothing was
+  migrated, the back-up is made again (and with the old number back, the freeze is simply lifted).
+  Frozen with it: the update is finished only when the back-up exists. A back-up that raises
+  anything thaws; a migration that raises something unknown stays read-only with the way back.
+- **Point 4 (medium), fixed: `--import` with only the master key next to a database.** Refused
+  (`import_incomplete`) before anything is written when `pgdata` holds a database and the
+  superuser password is not given; documents alone need no password and stay allowed.
+- **Point 5 (low), fixed: an unreadable data folder looked like "no data".** `os.walk` now raises
+  (`data_unreadable`) and `init-secrets` makes no keys.
+- **Point 6 (low), fixed:** the recovery sheet is limited to 6 an hour per admin; both new POSTs
+  have a CSRF test; "Nu back-uppen" writes `backup_requested` to the server log.
+- **Point 7 (low), fixed:** `init` judges the database (and the gate decides) before it creates a
+  role or sets a password, and the space check only runs for an update; a refusal on a new server
+  creates nothing, on an existing one touches no role.
+- **Point 8 (low), fixed:** `init` gets its own volume `secrets-init` with every password and
+  never the master key (no migration or back-up step decrypts a document), and drops all
+  capabilities with `no-new-privileges`. Only `admin` still mounts the whole vault (a restore
+  verifies pages with the master key).
+- **Point 9 (low), fixed:** `BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY_FILE` and
+  `BRIEVIE_BACKUP_REST_PASSWORD_FILE`, read from a folder set by `BRIEVIE_BACKUP_SECRETS_DIR`
+  (mounted read-only into `init`, the keeper and `admin`); the plain variables still win.
+- **Also: the emergency back-up is checked.** After a run reports success, restic's own check (a
+  subset of the data read back) runs as a run of its own; a back-up that fails it stops the update
+  before anything migrates. SELFHOST says in bold that a refused or failed update takes Brievie
+  down until the old version number is set back (the data are intact).
+- **Rejected:** none. One deviation: the CI assertion of point 1 on the wrapper stack asks the
+  real endpoint (set the server up with the installation code, sign in, POST) rather than only
+  reading a setting.
+- **Re-review, fixed: a resume that fails at once.** Start 1 applies migrations and fails (frozen,
+  `brievie.migrating`); start 2 resumed, applied nothing this time and was read as "nothing
+  changed", which lifted the freeze and the mark, so start 3 made a new `pre-update-X` back-up of
+  a half-migrated database that the way back (newest with that label) would then pick. A resume
+  that fails now stays frozen with its mark and prints the way back; no start can make a second
+  back-up while the mark stands. Where a failure left no mark (before any migration), a second
+  back-up of the unchanged database is equal to the first, so nothing can shadow it.
+  `record` failing after a successful migration no longer thaws: the next start resumes and
+  records. The accidental first `up` before an import is handled in SELFHOST (start over).
+

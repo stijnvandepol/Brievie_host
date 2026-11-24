@@ -49,6 +49,12 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
   or log line holds it. It is sealed with its workspace and address in the AAD
   (`_key_aad`) and opens nowhere else.
 - No new dependency without a line in `docs/DECISIONS.md`.
+- A compose-only install (`deploy/compose/docker-compose.yml`, published images, no checkout)
+  keeps every secret as a file in a volume: a secret setting `X` also reads `X_FILE`
+  (`apps.common.secrets`; `X` wins). Each service's volume holds only its own files (the keeper
+  no master key, the api no superuser or owner password). `init` (`manage.py prepare_server`)
+  runs the version gate (`apps.updates.gate`) before anything changes. `deploy/docker-compose.yml`
+  and the compose file stay equal (`tests/test_compose_parity.py`).
 - Apps of phase 1c: `people` (persons, name matching), `labels`, `rules` (engine, executor,
   presets) and `tasks`; `documents.organise` and `documents.suggestions` order post.
 - Only `apps.documents.organise` adds or removes a document's labels and addressees (it

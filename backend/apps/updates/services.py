@@ -17,8 +17,8 @@ from django.db import connection, transaction
 from django.utils import timezone
 
 from apps.backup.destination import destination_kind
-from apps.updates.models import ServerUpdate
-from apps.updates.release import Version, space_needed
+from apps.updates.models import InstalledVersion, ServerUpdate
+from apps.updates.release import ReleaseError, Version, space_needed
 
 HEALTH_URL = "http://127.0.0.1:8000/api/v1/health"
 HEALTH_TRIES = 12
@@ -40,6 +40,32 @@ def record_update(
 
 def last_update() -> ServerUpdate | None:
     return ServerUpdate.objects.order_by("-finished_at").first()
+
+
+def installed_version() -> Version | None:
+    """The version the database belongs to: the recorded row, else the newest finished
+    update's target, else None (a fresh database, or one that was never recorded)."""
+    row = InstalledVersion.objects.first()
+    if row is not None:
+        return Version.parse(row.version)
+    update = last_update()
+    return Version.parse(update.to_version) if update is not None else None
+
+
+@transaction.atomic
+def set_installed_version(version: Version) -> None:
+    """Record `version` as the one the database belongs to. A lower version than the
+    recorded one is refused (`ReleaseError("downgrade")`): the gate refuses it first, so
+    this is the second lock. A restore needs no exception: the row is part of the back-up."""
+    row = InstalledVersion.objects.select_for_update().first()
+    if row is None:
+        InstalledVersion.objects.create(version=str(version))
+        return
+    if version < Version.parse(row.version):
+        raise ReleaseError("downgrade")
+    if str(version) != row.version:
+        row.version = str(version)
+        row.save(update_fields=["version", "updated_at"])
 
 
 @dataclass(frozen=True)

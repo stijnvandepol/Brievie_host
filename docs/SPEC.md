@@ -336,6 +336,8 @@ De veldnamen in dit schema blijven Nederlands: dat werkt beter op Nederlandse br
 
 Er is geen Redis en geen Node-container. De onderbouwing staat in sectie 18.
 
+**Installeren met alleen een compose-bestand (2026-11-23):** naast `./brievie` kan Brievie met één bestand (`deploy/compose/docker-compose.yml`, release-asset) worden geïnstalleerd en bijgewerkt in Portainer, Synology Container Manager, Dockge of met `docker compose up -d`, zonder checkout of script. De sleutels worden bij de eerste start gemaakt en staan als bestanden in volumes (per dienst alleen wat die nodig heeft); de eerste container, `init`, bewaakt versies en data (geen stap terug, geen te grote sprong, dezelfde PostgreSQL), maakt vóór een update de back-up en zet de database tijdens de update op alleen-lezen. Herstelblad, nachtelijke back-up en back-upstatus staan in de webinterface. Zie `docs/SELFHOST.md` sectie 24 en de besluiten van 2026-11-23 in `docs/DECISIONS.md`.
+
 **Installatiedoelen:** Synology Container Manager en gewone Linux + Docker in fase 1. Daarna Unraid, Proxmox LXC en Raspberry Pi 5 (zonder lokale AI). Unraid verwacht één container; daarvoor komt er in fase 4 een alles-in-één image naast de Compose-opzet. Alle images zijn multi-arch (amd64 en arm64).
 
 **Hardware-profielen in de wizard:**

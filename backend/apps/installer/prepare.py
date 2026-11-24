@@ -1,0 +1,347 @@
+"""`prepare_server`: what a compose install does at every start, before the api runs (S 4.5).
+
+`run` judges the database as the superuser, asks the pure gate (`apps.updates.gate`), and
+only then changes anything: freeze, emergency back-up, migrate, record. Everything it
+touches outside the database it reads comes in through `Deps`, so the tests drive every
+branch; `apps.installer.runtime` builds the real ones.
+"""
+
+import re
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
+from typing import Literal
+from uuid import UUID
+
+import psycopg
+from django.utils.translation import gettext as _
+
+from apps.installer import freeze
+from apps.installer.database import (
+    Connect,
+    Connection,
+    DatabaseSetupError,
+    Names,
+    Passwords,
+    ensure_roles_and_database,
+)
+from apps.installer.restore_install import restore_commands
+from apps.updates.gate import decide_start
+from apps.updates.release import Decision, Release, Version, refusal_message
+
+PLACEHOLDER_HOSTNAME = "verander-mij.local"
+_VALID = re.compile(r"[A-Za-z0-9][A-Za-z0-9.-]{0,252}")
+_LOOPBACK = re.compile(r"(localhost\.?|[A-Za-z0-9.-]*\.localhost\.?|127(\.[0-9]{1,3}){3})")
+
+
+@dataclass(frozen=True)
+class HostnameCheck:
+    verdict: Literal["ok", "placeholder", "loopback", "invalid"]
+
+    @property
+    def refused(self) -> bool:
+        return self.verdict in ("placeholder", "invalid")
+
+
+def check_hostname(name: str) -> HostnameCheck:
+    """The name or address the iPhone uses for this server.
+
+    The example name and anything but letters, digits, dots and dashes are refused (as
+    deploy/init-env.sh refuses them); a name that only reaches this computer is allowed
+    with a warning, as ./brievie start does.
+    """
+    if name.strip().lower() == PLACEHOLDER_HOSTNAME:
+        return HostnameCheck("placeholder")
+    if _VALID.fullmatch(name) is None:
+        return HostnameCheck("invalid")
+    if _LOOPBACK.fullmatch(name) is not None:
+        return HostnameCheck("loopback")
+    return HostnameCheck("ok")
+
+
+# --- the database steps (S 4.5, steps 2 to 6) -------------------------------------
+
+
+class MigrateError(Exception):
+    """A migration failed. `applied_any`: at least one migration of this start was applied
+    before it, so the schema is no longer the old version's."""
+
+    def __init__(self, *, applied_any: bool) -> None:
+        super().__init__("migrate failed")
+        self.applied_any = applied_any
+
+
+@dataclass(frozen=True)
+class BackupResult:
+    ok: bool
+    run_id: UUID | None = None
+
+
+@dataclass(frozen=True)
+class Deps:
+    """Everything `run` touches outside the database it judges; tests pass fakes."""
+
+    connect: Connect
+    names: Names
+    passwords: Passwords
+    image: Version
+    release: Release
+    compose_revision: int
+    image_compose_revision: int
+    adopt_version: Version | None
+    hostname: str
+    known_migrations: frozenset[tuple[str, str]]
+    own_apps: frozenset[str]
+    # Prepares an empty back-up folder when BRIEVIE_BACKUP_AUTO_INIT says so; the sentence
+    # to show, or "".
+    auto_init: Callable[[], str]
+    migrate: Callable[[], None]
+    backup: Callable[[str], BackupResult]
+    # restic's own check of the back-up just made (a subset of its data, read back); True
+    # when it passed. A run that says "succeeded" is not yet proof that it can be read.
+    verify_backup: Callable[[UUID | None], bool]
+    earlier_backup: Callable[[str], UUID | None]
+    record: Callable[[Version | None, Version, UUID | None], None]
+    store_settings_copy: Callable[[], None]
+    preflight: Callable[[], tuple[int, int]]
+    say: Callable[[str], None]
+    complain: Callable[[str], None]
+
+
+@dataclass(frozen=True)
+class State:
+    """What the database says about itself, read as the superuser before anything changes."""
+
+    major: int
+    has_data: bool
+    installed: Version | None
+    unknown_migrations: bool
+
+
+def unknown_migrations(
+    applied: Iterable[tuple[str, str]],
+    known: frozenset[tuple[str, str]],
+    own_apps: frozenset[str],
+) -> bool:
+    """Whether the database has applied a migration of Brievie's own that this image lacks."""
+    return any(app in own_apps and (app, name) not in known for app, name in applied)
+
+
+def read_state(deps: Deps) -> State:
+    with deps.connect("postgres") as server:
+        row = server.execute("SHOW server_version_num").fetchone()
+        major = int(str(row[0])) // 10000 if row else 0
+        exists = server.execute(
+            "SELECT 1 FROM pg_database WHERE datname = %s", [deps.names.database]
+        ).fetchone()
+    if exists is None:
+        return State(major=major, has_data=False, installed=None, unknown_migrations=False)
+    with deps.connect(deps.names.database) as conn:
+        have = conn.execute("SELECT to_regclass('public.django_migrations') IS NOT NULL").fetchone()
+        applied: list[tuple[str, str]] = []
+        if have and have[0]:
+            applied = [
+                (str(app), str(name))
+                for app, name in conn.execute("SELECT app, name FROM django_migrations").fetchall()
+            ]
+        installed = _installed_version(conn)
+    return State(
+        major=major,
+        has_data=bool(applied),
+        installed=installed,
+        unknown_migrations=unknown_migrations(applied, deps.known_migrations, deps.own_apps),
+    )
+
+
+def _installed_version(conn: Connection) -> Version | None:
+    """The recorded version, else the newest finished update's target (as the ORM does)."""
+    for table, column, order in (
+        ("updates_installedversion", "version", "updated_at"),
+        ("updates_serverupdate", "to_version", "finished_at"),
+    ):
+        present = conn.execute("SELECT to_regclass(%s) IS NOT NULL", [f"public.{table}"]).fetchone()
+        if not (present and present[0]):
+            continue
+        row = conn.execute(
+            f"SELECT {column} FROM {table} ORDER BY {order} DESC LIMIT 1"  # noqa: S608 - fixed names
+        ).fetchone()
+        if row:
+            return Version.parse(str(row[0]))
+    return None
+
+
+def way_back(image: Version) -> str:
+    """Printed after a migration failed halfway: the same commands as docs/SELFHOST.md."""
+    commands = "\n".join(f"  {line}" for line in restore_commands(f"pre-update-{image}"))
+    return _(
+        "De database blijft alleen-lezen. Zet de versie in het compose-bestand terug op de "
+        "vorige versie en typ dan, een voor een:\n%(commands)s\n"
+        "Staat je back-up in een eigen map (BRIEVIE_BACKUP_DIR)? Gebruik die map in plaats van "
+        "update-backup."
+    ) % {"commands": commands}
+
+
+def run(deps: Deps) -> int:
+    """The start of a compose install. 0: ready for the api; 1: refused or failed (the
+    sentence says what; a refusal before the freeze changes nothing)."""
+    hostname = check_hostname(deps.hostname)
+    if hostname.verdict == "placeholder":
+        deps.complain(
+            _(
+                "Zet BRIEVIE_HOSTNAME op de naam of het IP-adres waarmee je iPhone deze server "
+                "bereikt, bijvoorbeeld mijnnas.local. Er is niets veranderd."
+            )
+        )
+        return 1
+    if hostname.verdict == "invalid":
+        deps.complain(
+            _(
+                "BRIEVIE_HOSTNAME mag alleen letters, cijfers, punten en streepjes hebben. "
+                "Er is niets veranderd."
+            )
+        )
+        return 1
+    if hostname.verdict == "loopback":
+        deps.say(
+            _(
+                "Let op: met de naam %(name)s kan een iPhone deze server niet bereiken. Zet "
+                "BRIEVIE_HOSTNAME op de naam of het IP-adres van deze server."
+            )
+            % {"name": deps.hostname}
+        )
+
+    # The gate judges the database as it is, before the roles are touched: a refusal then
+    # really changes nothing (not even a password).
+    try:
+        state = read_state(deps)
+    except (psycopg.Error, DatabaseSetupError):
+        deps.complain(_("De database is niet bereikbaar. Er is niets veranderd."))
+        return 1
+
+    # Space only matters for an update (it makes a back-up first); a new server has no data.
+    free, needed = deps.preflight() if state.installed is not None else (0, 0)
+    decision = decide_start(
+        image=deps.image,
+        installed=state.installed,
+        release=deps.release,
+        database_major=state.major,
+        unknown_migrations=state.unknown_migrations,
+        compose_revision=deps.compose_revision,
+        image_compose_revision=deps.image_compose_revision,
+        adopt_version=deps.adopt_version,
+        has_data=state.has_data,
+        free_bytes=free,
+        needed_bytes=needed,
+    )
+    if decision.outcome != "refused":
+        try:
+            ensure_roles_and_database(deps.connect, deps.passwords, deps.names)
+        except DatabaseSetupError:
+            deps.complain(_("De database kon niet worden ingericht. Er is niets veranderd."))
+            return 1
+    if decision.outcome == "refused":
+        deps.complain(
+            refusal_message(
+                Decision("refused", decision.code, go_first=decision.go_first),
+                installed=state.installed or deps.image,
+                target=deps.image,
+                postgres_major=deps.release.postgres_major,
+            )
+        )
+        return 1
+    note = deps.auto_init()
+    if note:
+        deps.say(note)
+    return _apply(deps, state, decision.outcome)
+
+
+def _checked(deps: Deps, run_id: UUID | None) -> bool:
+    try:
+        return deps.verify_backup(run_id)
+    except Exception:  # noqa: BLE001 - a check that cannot run is a check that failed
+        return False
+
+
+def _apply(deps: Deps, state: State, outcome: str) -> int:
+    label = f"pre-update-{deps.image}"
+    migrating = freeze.is_migrating(deps.connect, deps.names)
+    backup_run: UUID | None = None
+    if outcome == "update":
+        if migrating:
+            # An earlier start made its back-up and went on to migrate: finish that, but
+            # only when its back-up exists (a new one would back up a half-migrated schema).
+            backup_run = deps.earlier_backup(label)
+            if backup_run is None:
+                deps.complain(
+                    _(
+                        "Een eerdere start van dit bijwerken is afgebroken tijdens het "
+                        "migreren en er is geen back-up %(label)s. Herstel eerst een back-up. "
+                        "Er is niets veranderd."
+                    )
+                    % {"label": label}
+                )
+                return 1
+            deps.say(_("Het bijwerken wordt afgemaakt; de back-up van de eerdere start is er."))
+        else:
+            # Frozen without the migrating mark: an earlier start stopped during its
+            # back-up, before any migration. Nothing changed; the back-up is made again.
+            if freeze.is_frozen(deps.connect, deps.names):
+                deps.say(
+                    _("Een eerdere start brak af tijdens de back-up; die wordt opnieuw gemaakt.")
+                )
+            freeze.freeze(deps.connect, deps.names)
+            deps.say(
+                _("Brievie wordt bijgewerkt: eerst een back-up (%(label)s).") % {"label": label}
+            )
+            try:
+                result = deps.backup(label)
+            except Exception:  # noqa: BLE001 - whatever stopped it, nothing was migrated yet
+                result = BackupResult(ok=False)
+            if not result.ok:
+                freeze.thaw(deps.connect, deps.names)
+                deps.complain(_("De back-up vóór het bijwerken is mislukt. Er is niets veranderd."))
+                return 1
+            if not _checked(deps, result.run_id):
+                freeze.thaw(deps.connect, deps.names)
+                deps.complain(
+                    _(
+                        "De back-up vóór het bijwerken is gemaakt, maar de controle erop is "
+                        "mislukt. Er is niets veranderd."
+                    )
+                )
+                return 1
+            backup_run = result.run_id
+        freeze.mark_migrating(deps.connect, deps.names)
+    elif migrating or freeze.is_frozen(deps.connect, deps.names):
+        # No update to make (same version or fresh), yet the freeze is on: lift it at the end.
+        deps.say(
+            _("Een eerdere start liet de database op alleen-lezen staan; dat wordt opgeheven.")
+        )
+    try:
+        deps.migrate()
+    except MigrateError as failure:
+        # `migrating`: an earlier start already changed the schema, so a resume that fails at
+        # once (nothing applied this time) is still a half-migrated database: it stays frozen
+        # with its mark, and the back-up of the first start stays the one to restore.
+        if failure.applied_any or migrating:
+            deps.complain(_("Het bijwerken is halverwege mislukt.") + " " + way_back(deps.image))
+        else:
+            freeze.thaw(deps.connect, deps.names)
+            deps.complain(_("De database kon niet worden bijgewerkt. Er is niets veranderd."))
+        return 1
+    except Exception:  # noqa: BLE001 - unknown: the schema may have changed, so stay read-only
+        deps.complain(_("Het bijwerken is halverwege mislukt.") + " " + way_back(deps.image))
+        return 1
+    try:
+        deps.record(state.installed, deps.image, backup_run)
+    except Exception:  # noqa: BLE001 - migrated but not recorded: stay read-only, resume next start
+        deps.complain(
+            _(
+                "De nieuwe versie kon niet worden vastgelegd. De database blijft alleen-lezen; "
+                "start opnieuw, dan wordt het bijwerken afgemaakt."
+            )
+        )
+        return 1
+    freeze.thaw(deps.connect, deps.names)
+    deps.store_settings_copy()
+    deps.say(_("Brievie %(version)s is klaar om te starten.") % {"version": deps.image})
+    return 0

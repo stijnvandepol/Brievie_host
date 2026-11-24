@@ -6,7 +6,8 @@ you installed Brievie. Sections 1 to 12 are about back-ups, 13 about pairing a p
 a link, 14 to 19 about people: inviting, roles, removing, sessions, the log and the
 export. Section 20 is about the AI autopilot, 21 about updating Brievie, 22 about Docker
 itself when it is slow, 23 about the trash and what "definitief verwijderen" means for
-back-ups.
+back-ups, 24 about installing with only a compose file (Portainer, Synology Container
+Manager, Dockge, `docker compose up -d`: no checkout, no `./brievie`).
 
 ## 1. In one minute
 
@@ -18,9 +19,12 @@ back-ups.
 3. `./brievie backup --init` prepares the disk once.
 4. `./brievie backup` makes a back-up. Done.
 
-Honest note: in this version a back-up is made when you run `./brievie backup`. The
-nightly schedule comes in a later version. Until then, run it yourself (for example
-every week) or from your NAS's task scheduler.
+Once a destination is set, the keeper also makes a back-up every night (at 02:30 server
+time; `BRIEVIE_BACKUP_HOUR` changes the hour, and at most one is made in 20 hours, also
+after one you made yourself). `./brievie backup` makes one at once. A server admin sees
+the state under Account, Back-up in the web interface, with a button "Nu back-uppen".
+With only a compose file (section 24) there is no `./brievie`; everything in this
+section is done there from the web interface or with `docker compose ... run --rm admin`.
 
 ## 2. What a back-up holds, and what it does not
 
@@ -626,10 +630,12 @@ If the recovery sheet is lost, the master key is also in `deploy/.env`
 
   After that, `./brievie update` works.
 - **Your own image** (`BRIEVIE_IMAGE` in `deploy/.env`): update by hand.
-- **Images from the registry.** Each release is also published as
-  `ghcr.io/stijnvandepol/brievie-backend:<version>` for amd64 and arm64, but an
-  installation still builds its image from the tag; switching to the published images
-  comes later.
+- **Images from the registry.** Each release is published as
+  `ghcr.io/stijnvandepol/brievie-backend:<version>` and `brievie-proxy:<version>` for
+  amd64 and arm64. A `./brievie` installation still builds its image from the tag; an
+  installation with only a compose file (section 24) uses the published images and
+  updates by changing the version number. Both can run on the same volumes, never at the
+  same time.
 
 ### On a NAS
 
@@ -697,3 +703,191 @@ hook in at one place (`apps.documents.retention.check_removal`).
 The purge waits while a back-up or restore runs and goes on at the next hour. A letter
 whose files cannot be removed (for example a permissions problem on the document volume)
 stays hidden and is tried again every hour; the worker's log names its id.
+
+## 24. Installing with only a compose file
+
+One document, no git checkout, no script, no terminal beyond what your Docker tool already
+gives you: paste the file into Portainer (Stacks, Web editor), Synology Container Manager
+(Project), Dockge or Unraid's Compose plugin, or save it as `docker-compose.yml` and type
+`docker compose up -d`. The file is `deploy/compose/docker-compose.yml`, attached to every
+release as `docker-compose.yml` (and as `docker-compose.pinned.yml`, with both images named
+by digest). It pulls two images from ghcr: `brievie-backend` and `brievie-proxy` (Caddy with
+Brievie's Caddyfile). There is no `docker run` variant: Brievie is several containers.
+
+Needs: Docker with Compose v2 (the file is tested on 2.20.2 and on the version of a
+GitHub runner), about 4 GB free, and a fixed name or IP address for the server. The images
+are `amd64` and `arm64`. One server per Docker host: the project is called `brievie`, as with
+`./brievie`; never start both at once on the same volumes.
+
+### What you change
+
+Only the lines marked `<--`: the **name or IP address** your iPhone uses for the server
+(`BRIEVIE_HOSTNAME`; the example name `verander-mij.local` is refused on purpose), the
+**ports** when 80 and 443 are taken (a Synology: `BRIEVIE_HTTP_PORT=8080`,
+`BRIEVIE_HTTPS_PORT=8443`; the https port becomes part of the address in the QR code) and the
+**version** (`BRIEVIE_VERSION`, to update). Put them in the file or, easier, as environment
+variables of the stack (Portainer) or in a `.env` next to the file (`deploy/compose/.env.example`
+lists them all).
+
+### First start
+
+1. Save or paste the file, set `BRIEVIE_HOSTNAME`, start it (Deploy / Build / `docker compose up -d`).
+2. Open `https://<your name>` (the certificate warning is expected, section 5 of the README).
+   The installation code is printed once in the log of `api`
+   (`docker compose logs api`); or set your own `BRIEVIE_SETUP_TOKEN` (16+ characters).
+3. Set up the account, then **Account, Herstelblad**: download the recovery sheet, print it,
+   keep it off the server (section 3). On the first start Brievie made the master key itself
+   and keeps it in a Docker volume; the sheet is the only other copy.
+4. Pair the iPhone (Apparaten), and set up a back-up (below).
+
+What happened at the first start: `init-secrets` (no network) made the keys in volumes: one
+vault (`secrets`) and a volume per service (`secrets-postgres`, `secrets-init`, `secrets-api`,
+`secrets-keeper`), each with only the files that service needs: `init` has every password but no
+master key (no migration or back-up step decrypts a document), the keeper has no master
+key, the api no superuser or owner password, and PostgreSQL is on a network without a
+way out. `init` then made the database roles, checked that this version may start on this
+data, and ran the migrations. No secret is in the compose file, in `docker compose config`,
+in `docker inspect`, in a log or in a process list (the CI job `compose-stack` checks it).
+
+### Ports, volumes, variables
+
+| Port | What |
+| --- | --- |
+| 80 | forwards to https |
+| 443 | the app, the web interface and the iPhone (PostgreSQL is never published) |
+
+Volumes: `pgdata` (database), `documents` (sealed pages), `secrets` and the four
+`secrets-*` (the keys; keep the master key on the recovery sheet too), `backup-config` (back-up
+settings and the installation id), `caddy-data` (the certificate authority the iPhone trusts:
+**never remove it**), `caddy-ca`, `caddy-authority`, `caddy-config`, `update-backup` (the
+back-up before an update when you have no back-up folder) and `backup-unset`.
+`docker compose down` keeps them; **`down -v` removes all of it**.
+
+The variables are in `deploy/compose/.env.example`: `BRIEVIE_HOSTNAME`, `BRIEVIE_HTTP_PORT`,
+`BRIEVIE_HTTPS_PORT`, `BRIEVIE_VERSION`, `BRIEVIE_SETUP_TOKEN`, `BRIEVIE_BACKUP_DIR` or
+`BRIEVIE_BACKUP_REPOSITORY` (with the `_S3_` or `_REST_` credentials), `BRIEVIE_BACKUP_AUTO_INIT`,
+`BRIEVIE_BACKUP_HOUR`, `BRIEVIE_ADOPT_VERSION`, and the limits of `deploy/.env.example`.
+The two secrets of a remote destination, `BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY` and
+`BRIEVIE_BACKUP_REST_PASSWORD`, also come as files: put each in a folder on the host (mode 0400, owner
+uid 10001), set `BRIEVIE_BACKUP_SECRETS_DIR` to that folder and
+`BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY_FILE=/run/backup-secrets/<file name>` (or
+`BRIEVIE_BACKUP_REST_PASSWORD_FILE`). Then no secret is in `docker inspect`. The plain variables
+still work (and win), but anyone who may use Portainer or `docker inspect` can read them, as with
+`deploy/.env` before. The access key id and the REST user name are no secrets.
+
+### Back-ups without a terminal
+
+Set `BRIEVIE_BACKUP_DIR` to a folder (owner uid 10001, on another disk than the data; on a
+Synology a shared folder) and `BRIEVIE_BACKUP_AUTO_INIT=true`: the next start prepares an
+empty folder once (never one that holds anything, never one on the same disk). Or set
+`BRIEVIE_BACKUP_REPOSITORY` for a remote place and run
+`docker compose --profile admin run --rm admin python manage.py backup_init` once. From then on the
+keeper backs up every night, and a server admin sees the state and asks for one under
+Account, Back-up.
+
+### Updating
+
+**Read this first: a refused or failed update takes Brievie down until you set the old version
+number back.** Your data stay as they were (a refusal changes nothing), but Compose has already
+stopped the old services to make the new ones, so nothing answers until the old number is back and
+you start again. Change the version (`BRIEVIE_VERSION`, or the default in the two image lines) and
+`up -d` / Deploy again. The first container to start, `init`, does what `./brievie update` does
+before it changes anything: it refuses a **step back** or data from a newer version, a jump
+past `min_upgrade_from` ("Werk eerst bij naar ..."), another PostgreSQL major, a compose
+file of another revision ("Dit compose-bestand is te oud") and too little free space. A
+refusal changes no data: `init` stops with exit 1 and `docker compose logs init` has the
+sentence (Portainer and Synology show `init` as "Exited (1)"). **The service is down until you
+fix it:** Compose has already taken the old api, worker, keeper and caddy down to make the new
+ones (they show as "Created"), and they wait for `init`. Put the old version number back and
+start again, and the same server comes back (CI proves this with a refused jump and a refused
+step back). This is different from `./brievie update`, which checks before it stops anything.
+
+**An update that was interrupted** (a power cut, `docker compose stop`): if it stopped during
+the back-up, no migration ran, and the next start makes the back-up again (or, with the old
+version number back, lifts the freeze). If it stopped while migrating, the next start finishes
+the update when the back-up `pre-update-<version>` exists and otherwise asks for a restore.
+
+When it may go on, `init` makes the database read-only for every session but its own (so
+that nothing else can write while it backs up and migrates), makes the back-up
+`pre-update-<version>` to your back-up folder or, without one, to the volume
+`update-backup`, has restic read a part of it back (a check; a back-up that cannot be read stops the
+update before anything changes), migrates, records the version and lifts the freeze. A failure before any migration
+lifts the freeze and changes nothing. A failure after one stays read-only and prints the way back:
+put the old version number in the file, then type, one by one (these are the commands
+`init` prints; a test keeps them equal):
+
+```
+docker compose stop api worker keeper caddy
+BRIEVIE_BACKUP_DIR=update-backup docker compose --profile admin run --rm admin python manage.py restore_install pre-update-<version> --replace
+docker compose up -d
+```
+
+(`update-backup` is the volume of the back-up before an update; use your own back-up folder
+there when the back-up went to it.) Only putting the old number back, without a restore,
+also lifts a freeze that an interrupted update left before any migration ran.
+When the file itself changes ("Compose-bestand gewijzigd" in the release notes), take the new
+file of the release.
+
+### Restoring
+
+Stop `api worker keeper caddy`, then
+`docker compose --profile admin run --rm admin python manage.py restore_install [<run id or pre-update-X.Y.Z>] [--replace]`.
+It refuses while any of those still holds a database session, and `--replace` is needed when
+there is data. The back-up is opened with the master key of the vault. **On a new machine
+put the key of your recovery sheet in the vault first**: write a file with the line
+`BRIEVIE_MASTER_KEY=<the 64 characters, without spaces>` and run, before the first `up`,
+`docker compose run --rm -v "$PWD/key.env:/import/env:ro" init-secrets python -m apps.installer.init_secrets --import /import/env`
+(then `docker compose up -d postgres`, the restore, `docker compose up -d`). **If you started the stack before importing the key** (the first `up` made new keys and an empty
+database; the import now stops with "niet gelijk aan de sleutel in de kluis"), start over. This is
+safe only while this machine holds nothing you want to keep: nobody has set up Brievie here and the
+back-up folder is not one of these volumes. Then, one by one:
+
+```
+docker compose down
+docker volume rm brievie_secrets brievie_secrets-postgres brievie_secrets-api brievie_secrets-keeper brievie_secrets-init brievie_pgdata brievie_documents brievie_backup-config
+```
+
+(the project is called `brievie`; check with `docker volume ls`). Your back-up folder, the compose file
+and the sheet's key are untouched. Now import the key as above, start only `postgres`, restore, and
+start everything. Never remove `brievie_caddy-data` once phones are paired. Where a database
+already exists in the volume `pgdata`, the key alone is refused: give the whole `deploy/.env` of
+the installation it came from (the database keeps its own superuser password). An unreadable data
+folder (a network disk with `root_squash`) also stops `init-secrets`: it never makes new keys
+without knowing there is no data. That is also the
+way back when the volume `secrets` is lost. `restore_install` makes no safety back-up of what it
+replaces: make a back-up first if the data is worth anything.
+
+### Moving from a `./brievie` install
+
+1. `./brievie update` to the version of the compose file (0.5.0 or later), `./brievie backup`,
+   `./brievie status`.
+2. Stop the stack without removing volumes (`docker compose -p brievie --project-directory deploy -f deploy/docker-compose.yml stop`).
+3. Save the compose file next to `deploy/.env` and import the keys from that file (never
+   from the environment):
+   `docker compose -f docker-compose.yml run --rm -v "$PWD/deploy/.env:/import/env:ro" init-secrets python -m apps.installer.init_secrets --import /import/env`
+4. `BRIEVIE_ADOPT_VERSION=<the version that runs now> docker compose --env-file deploy/.env -f docker-compose.yml up -d`
+   (`--env-file` feeds only the settings: name, ports, back-up folder).
+5. Check the recovery sheet, then move `deploy/.env` out of the checkout.
+
+Volumes, the certificate authority, paired phones and the back-up destination stay. Back to the
+wrapper is not supported; restoring a back-up onto a wrapper install is.
+
+### What still needs a terminal
+
+| What | Why | How |
+| --- | --- | --- |
+| Restoring (`restore_install`) | stops nothing itself, replaces data | `docker compose run` (Synology: Taakplanner as root; Portainer: console of an `admin` container) |
+| Cleaning loose files (`sweep --delete`) | deletes files, asks for a typed confirmation | the same |
+| A back-up destination with its own password (`--separate-password`) | writes a new sheet with two secrets | the same |
+| Installing Docker, the first `up`, a fixed IP or `.local` name | outside Brievie | your Docker tool and router |
+
+### Not verified yet
+
+Proven on GitHub's Linux runners (CI jobs `compose-stack`, `compose-oldest` on Compose 2.20.2,
+`adopt`, `compose-update`, `compose-restore`): a fresh start from the file alone, the modes
+and owners of the vault, the secrets leaking nowhere, a restart that keeps every secret, an
+update, a refused jump and step back that change no data and come back with the old number, a failing
+migration that leaves the database read-only, the way back, a restore onto an empty machine
+and over a running one, and moving from `./brievie`. **Not tried:** Synology Container
+Manager, Unraid, Portainer, Dockge, Podman (not supported), Docker Desktop on Windows and a
+Raspberry Pi. Treat every platform step above as untested until someone has run it.
