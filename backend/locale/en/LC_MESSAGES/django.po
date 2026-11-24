@@ -5,6 +5,10 @@ msgstr "Content-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit
 msgid "Er is altijd minstens één serverbeheerder nodig. Dit account kan daarom niet weg."
 msgstr "There must always be at least one server admin. That is why this account cannot be removed."
 
+#: apps/accounts/api.py
+msgid "Vul de code uit de app in, of een herstelcode."
+msgstr "Enter the code from the app, or a recovery code."
+
 #: apps/accounts/auth.py
 msgid "Je sessie is niet meer geldig voor deze pagina. Ververs de pagina en probeer het opnieuw."
 msgstr "Your session is no longer valid for this page. Refresh the page and try again."

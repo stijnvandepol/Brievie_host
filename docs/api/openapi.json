@@ -3752,6 +3752,11 @@
             "title": "Method",
             "type": "string"
           },
+          "second_factor": {
+            "default": false,
+            "title": "Second Factor",
+            "type": "boolean"
+          },
           "started_at": {
             "format": "date-time",
             "title": "Started At",
@@ -3857,6 +3862,25 @@
           "needs_setup"
         ],
         "title": "SetupStatusOut",
+        "type": "object"
+      },
+      "SignInCodeIn": {
+        "description": "Exactly one of the two: the six digits from the authenticator app, or a recovery\ncode (XXXXX-XXXXX; case, spaces and hyphens do not matter).",
+        "properties": {
+          "code": {
+            "default": "",
+            "maxLength": 20,
+            "title": "Code",
+            "type": "string"
+          },
+          "recovery_code": {
+            "default": "",
+            "maxLength": 30,
+            "title": "Recovery Code",
+            "type": "string"
+          }
+        },
+        "title": "SignInCodeIn",
         "type": "object"
       },
       "SignInStepOut": {
@@ -4575,6 +4599,11 @@
             "title": "Explanation Language",
             "type": "string"
           },
+          "has_second_factor": {
+            "default": false,
+            "title": "Has Second Factor",
+            "type": "boolean"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -5115,6 +5144,99 @@
           }
         },
         "summary": "Login",
+        "tags": [
+          "accounts"
+        ]
+      }
+    },
+    "/api/v1/auth/login/code": {
+      "post": {
+        "description": "The second step of a sign-in that answered 202 with step `code`: the six digits from the authenticator app (`code`) or a recovery code (`recovery_code`), exactly one (422 otherwise). 200 signs the browser in. 401 second_factor_invalid for a wrong, used or old code; 401 sign_in_expired without a pending sign-in (it lives five minutes, and five wrong codes end it: sign in with the password again); 429 second_factor_locked (Retry-After) after five wrong codes for the account, from anywhere, within 15 minutes: the lock doubles each time, up to a day.",
+        "operationId": "verifySignInCode",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignInCodeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Verify Sign In Code",
         "tags": [
           "accounts"
         ]

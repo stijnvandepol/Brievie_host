@@ -270,14 +270,15 @@ def verify_sign_in_code(
 
 
 def _count_pending_failure(request: HttpRequest, found: Pending, error: ApiError) -> None:
+    """Five wrong codes in one sign-in, or the account's lock, end the pending step: back
+    to the password, which axes counts."""
     if error.code == "sign_in_expired":
         drop_pending(request)
         return
-    if error.code != "second_factor_invalid":
+    if error.code not in ("second_factor_invalid", "second_factor_locked"):
         return
     failures = found.failures + 1
-    if failures >= PENDING_MAX_FAILURES:
-        # Back to the password, which axes counts.
+    if error.code == "second_factor_locked" or failures >= PENDING_MAX_FAILURES:
         drop_pending(request)
         return
     raw = request.session.get(PENDING_KEY)

@@ -1,9 +1,10 @@
 from uuid import UUID
 
 from django.http import HttpRequest, HttpResponse
+from django.utils.translation import gettext as _
 from ninja import Router, Status
 
-from apps.accounts import notices, resets, services, signin_limits, user_actions
+from apps.accounts import notices, resets, services, signin, signin_limits, user_actions
 from apps.accounts.auth import session_auth
 from apps.accounts.models import User
 from apps.accounts.notices import NoticeView
@@ -21,11 +22,13 @@ from apps.accounts.schemas import (
     SetupIn,
     SetupOut,
     SetupStatusOut,
+    SignInCodeIn,
     SignInStepOut,
     UserOut,
 )
 from apps.accounts.services import SessionView
 from apps.accounts.signin import SignInResult, StepNeeded
+from apps.common.errors import ApiError
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.common.throttling import CallerThrottle, ClientAddressThrottle
 from apps.devices import services as device_services
@@ -114,6 +117,35 @@ def login(
     # else's wrong passwords (signin_limits).
     signin_limits.remember_browser(request, response, payload.email)
     return Status(200, result.user)
+
+
+@router.post(
+    "/auth/login/code",
+    response={200: UserOut, 401: ErrorOut, 429: ErrorOut, **BODY_ERRORS},
+    auth=None,
+    throttle=ClientAddressThrottle("second_factor_code", "10/m"),
+    description=(
+        "The second step of a sign-in that answered 202 with step `code`: the six digits "
+        "from the authenticator app (`code`) or a recovery code (`recovery_code`), exactly "
+        "one (422 otherwise). 200 signs the browser in. 401 second_factor_invalid for a "
+        "wrong, used or old code; 401 sign_in_expired without a pending sign-in (it lives "
+        "five minutes, and five wrong codes end it: sign in with the password again); 429 "
+        "second_factor_locked (Retry-After) after five wrong codes for the account, from "
+        "anywhere, within 15 minutes: the lock doubles each time, up to a day."
+    ),
+    operation_id="verifySignInCode",
+)
+def verify_sign_in_code(
+    request: HttpRequest, response: HttpResponse, payload: SignInCodeIn
+) -> User:
+    if bool(payload.code.strip()) == bool(payload.recovery_code.strip()):
+        raise ApiError(422, "validation_error", _("Vul de code uit de app in, of een herstelcode."))
+    user = signin.verify_sign_in_code(
+        request, code=payload.code, recovery_code=payload.recovery_code
+    )
+    # The sign-in is complete: this browser is known for the account from now on.
+    signin_limits.remember_browser(request, response, user.email)
+    return user
 
 
 @router.post(

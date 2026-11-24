@@ -342,6 +342,7 @@ class SessionView:
     client_ip: str
     browser: str
     current: bool
+    second_factor: bool
 
 
 def list_my_sessions(request: HttpRequest) -> list[SessionView]:
@@ -358,6 +359,7 @@ def list_my_sessions(request: HttpRequest) -> list[SessionView]:
             client_ip=row.client_ip or "",
             browser=row.browser,
             current=row.session_key == key,
+            second_factor=row.second_factor,
         )
         for row in rows
     ]

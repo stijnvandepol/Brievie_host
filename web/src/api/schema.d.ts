@@ -24,6 +24,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/login/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify Sign In Code
+         * @description The second step of a sign-in that answered 202 with step `code`: the six digits from the authenticator app (`code`) or a recovery code (`recovery_code`), exactly one (422 otherwise). 200 signs the browser in. 401 second_factor_invalid for a wrong, used or old code; 401 sign_in_expired without a pending sign-in (it lives five minutes, and five wrong codes end it: sign in with the password again); 429 second_factor_locked (Retry-After) after five wrong codes for the account, from anywhere, within 15 minutes: the lock doubles each time, up to a day.
+         */
+        post: operations["verifySignInCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/logout": {
         parameters: {
             query?: never;
@@ -4167,6 +4187,11 @@ export interface components {
             /** Method */
             method: string;
             /**
+             * Second Factor
+             * @default false
+             */
+            second_factor: boolean;
+            /**
              * Started At
              * Format: date-time
              */
@@ -4204,6 +4229,23 @@ export interface components {
         SetupStatusOut: {
             /** Needs Setup */
             needs_setup: boolean;
+        };
+        /**
+         * SignInCodeIn
+         * @description Exactly one of the two: the six digits from the authenticator app, or a recovery
+         *     code (XXXXX-XXXXX; case, spaces and hyphens do not matter).
+         */
+        SignInCodeIn: {
+            /**
+             * Code
+             * @default
+             */
+            code: string;
+            /**
+             * Recovery Code
+             * @default
+             */
+            recovery_code: string;
         };
         /**
          * SignInStepOut
@@ -4669,6 +4711,11 @@ export interface components {
             /** Explanation Language */
             explanation_language: string;
             /**
+             * Has Second Factor
+             * @default false
+             */
+            has_second_factor: boolean;
+            /**
              * Id
              * Format: uuid
              */
@@ -4915,6 +4962,84 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SignInStepOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    verifySignInCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignInCodeIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserOut"];
                 };
             };
             /** @description Bad Request */

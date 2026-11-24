@@ -5,6 +5,7 @@ from uuid import UUID
 from ninja import Schema
 from pydantic import Field
 
+from apps.accounts.models import SecondFactor, User
 from apps.common.schemas import InputSchema
 from apps.workspaces.schemas import WorkspaceOut
 
@@ -18,6 +19,12 @@ class UserOut(Schema):
     language: str
     explanation_language: str
     is_server_admin: bool = False
+    # Whether the account has two-step verification on (a confirmed authenticator app).
+    has_second_factor: bool = False
+
+    @staticmethod
+    def resolve_has_second_factor(obj: User) -> bool:
+        return SecondFactor.objects.filter(user_id=obj.id, confirmed_at__isnull=False).exists()
 
 
 class LanguageIn(InputSchema):
@@ -73,6 +80,14 @@ class SignInStepOut(Schema):
     expires_in_seconds: int = 300
 
 
+class SignInCodeIn(InputSchema):
+    """Exactly one of the two: the six digits from the authenticator app, or a recovery
+    code (XXXXX-XXXXX; case, spaces and hyphens do not matter)."""
+
+    code: str = Field(default="", max_length=20)
+    recovery_code: str = Field(default="", max_length=30)
+
+
 class SessionOut(Schema):
     """A web session of the caller ("Waar je bent ingelogd")."""
 
@@ -85,6 +100,9 @@ class SessionOut(Schema):
     browser: str
     # The session this request came with.
     current: bool
+    # The sign-in passed the second step (a code, a recovery code) or came through the
+    # organisation's sign-in ("met tweestapsverificatie").
+    second_factor: bool = False
 
 
 class ReauthenticateIn(InputSchema):

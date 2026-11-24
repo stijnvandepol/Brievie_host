@@ -49,7 +49,9 @@ def test_list_my_sessions_marks_the_current_one() -> None:
         "client_ip",
         "browser",
         "current",
+        "second_factor",
     }
+    assert current["second_factor"] is False
 
 
 def test_ending_another_session_signs_that_browser_out() -> None:
