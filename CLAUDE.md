@@ -116,6 +116,19 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
   REVOKE, tested as that role); old rows go only through the purge functions.
 - `apps.accounts.sessions.start_session` is the only sign-in path (the only caller of
   Django's `login`); a web session without a `UserSession` row is signed out.
+- Only `apps.accounts.signin` calls `start_session`: `begin_sign_in` for every way in
+  (password, setup, invitation, reset, later SSO) and `complete_sign_in` after the second
+  step. `start_session` refuses a sign-in without a `SecondFactorPassed` (made only by
+  `apps.accounts.second_factor`) where the account has a factor or must have one by now. A
+  pending step lives in the anonymous session (no session before the code), bound to the
+  factor and the password; clearing, removing or replacing the factor ends it.
+- Second-factor secrets are sealed under a key derived from the master key, recovery codes
+  are HMACs under another; neither is ever logged, audited, put in a notice or answered
+  again (`Cache-Control: no-store` on the answers that show them). Code checks lock the
+  `SecondFactor` row, refuse a used step and count per account (doubling lock); every
+  password typed again goes through `services.check_own_password` (axes and
+  `signin_limits`). With a factor, `createPairingCode` needs a session that passed the code, an admin
+  clears another's factor only from such a session, and `reauthenticate` asks the code too.
 - Endpoints that administer people (members, invitations, roles, accounts, sessions or
   devices of others, workspace settings, the log, exports, linking a person to a member)
   use `auth=session_auth`: a device token gets 401. A response that carries a secret once

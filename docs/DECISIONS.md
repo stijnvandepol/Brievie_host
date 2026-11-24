@@ -2744,3 +2744,92 @@ first; all nine held.
   `record` failing after a successful migration no longer thaws: the next start resumes and
   records. The accidental first `up` before an import is handled in SELFHOST (start over).
 
+
+## 2026-11-24: Two-step sign-in (TOTP)
+
+Plan `docs/superpowers/plans/2026-11-21-host-tweestapsverificatie.md`, design
+`docs/superpowers/specs/2026-11-20-tweestapsverificatie-design.md`. Built: Tasks 1-12, 14
+(without the public-route parts) and 16. Not built: Task 13 (it needs `is_public_route`,
+`PublicRouteGate` and `BRIEVIE_SECOND_FACTOR_AVAILABLE` of the external-access plan) and
+Task 15 (the per-workspace obligation).
+
+### The owner's decisions
+
+- The web interface goes on the internet only after this lands, and after that a password
+  sign-in through the public address needs the second step (Task 13, with external access).
+  Until then `BRIEVIE_SECOND_FACTOR_AVAILABLE` does not exist; external access adds it as
+  false and Task 13 sets it true.
+- The per-workspace obligation comes in the later phase, as the plan has it.
+- No new dependency: the code (RFC 6238) is computed with the standard library
+  (`apps/accounts/totp.py`, tested against the RFC's vectors); no `pyotp`, no `django-otp`.
+
+### The design's rulings, as built
+
+- **Derived keys.** The secret is sealed under `HKDFExpand(master key,
+  "brievie/second-factor/v1")` with the account in the AAD; recovery codes are HMAC-SHA256
+  under `"brievie/recovery-codes/v1"`. Never change the labels.
+- **No session before the code.** A pending step in the anonymous Django session (key
+  cycled, five minutes for a code, fifteen for setting up, no secret in it); every normal
+  endpoint answers 401. `begin_sign_in` decides for the password, the setup, accepting an
+  invitation and completing a reset; `start_session` itself refuses a sign-in without the
+  proof of the second step, and only `apps.accounts.signin` calls it (a test greps).
+- **A reset link does not skip the code**, and neither does an invitation: an existing
+  account with a factor joins the workspace, then its sign-in waits for the code. — Ruling:
+  the join commits before the code (the invitation and the password were proof to join).
+  Cost if wrong: somebody with both joins a workspace without being able to sign in.
+- **The server-wide rule is an environment variable** (`BRIEVIE_REQUIRE_SECOND_FACTOR`:
+  none, server_admins, everyone; `BRIEVIE_SECOND_FACTOR_GRACE_DAYS` 0-30, default 7):
+  a rule that restrains admins is not theirs to switch off in a page. The hourly session
+  job starts the grace of every account it asks and, once it is over, ends the sessions
+  that did not pass the second step.
+- **Per-account lock with doubling.** Five wrong codes (or recovery codes) within 15
+  minutes lock the second step for 15 minutes, doubling up to a day; locked, even the right
+  code answers 429; the account gets a notice. Five wrong codes in one pending sign-in, or
+  the lock, end the pending step. Ten code attempts per minute per address.
+- **Pairing and typing the password again.** With a factor, `createPairingCode` needs a
+  session that passed the code (a device token is a factor of its own), and
+  `reauthenticate` takes the code as well; a session that typed both has then passed the
+  second step. Every password typed again (`reauthenticate`, removing or clearing a factor)
+  goes through `services.check_own_password`: axes and the per-account slow-down.
+- **Clearing** follows `account_authority` as the code has it (three conditions), decided
+  under the locks of a member change (the memberships of the account's workspaces, the
+  active server admins, the account's row; then the factor, the recovery codes, sessions,
+  devices: the lock order of `apps.workspaces.members`, extended). The admin's own password
+  is asked, and an admin with a factor acts only from a session that passed it. The
+  member's sessions end, the phones are unpaired unless the admin unticks it, the member
+  gets a notice. `manage.py clear_second_factor` does the same for a locked-out server
+  admin.
+
+### Rulings made while building
+
+- **Switching off ends what ran under it.** Removing one's own factor ends the other
+  sessions, as adding one does; a pending sign-in is bound to the factor's id and to the
+  account's session hash, so clearing, replacing or a password change ends half-finished
+  sign-ins. Cost: other browsers sign in again.
+- **Setting up from a web session needs a recent sign-in or password** (403
+  `reauthentication_required`, as pairing): a stolen old session must not enrol a factor
+  that then signs the owner out everywhere. Cost: one password prompt.
+- **A wrong code answers 401 at sign-in and 400 in a session** (a 401 there reads as
+  signed out in the web).
+- **The lock's sentence counts the real wait** (minutes, from two hours on hours): with
+  doubling, a fixed "15 minuten" would be false after the first lock.
+- **A new phone** ("Nieuwe telefoon", Task 16) makes ten new recovery codes: the old ones
+  may have been kept with the old phone. The old app works until the new one is confirmed;
+  a new phone not confirmed within the hour is forgotten.
+- **The admin's clear button** shows on every member's page and answers 404
+  `second_factor_not_set` when there is nothing to clear: the member list does not tell
+  whether an account has a factor, as it keeps other account facts of shared accounts out
+  (security review of PR #43, point 2).
+- **Interface words**: "tweestapsverificatie" is "two-step verification" in English (the
+  existing log labels already said so), never "2FA".
+- **Test values**: no password-like or otpauth literal in tests (GitGuardian scans every
+  commit of a PR); values are derived from `TEST_PASSWORD`. gitleaks' allowlist names
+  `request.session.session_key`, which its generic rule reads as a key.
+
+### Left for later, and what others must know
+
+- Task 13 (the public route) and Task 15 (per workspace) are not built; see above.
+- The web recovery sheet of PR #45 asks the code with the password when the admin has
+  two-step verification (it calls `reauthenticate`).
+- The iOS app needs no change: it never signs in with a password; pairing a new phone now
+  starts from a web sign-in with the code when the account has one.

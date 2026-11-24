@@ -465,6 +465,47 @@ The server log gets `workspace_created`.
   member (to revoke one) and can end all their sessions, not read them.
 - Changing your own password ends your other sessions and keeps your phone paired.
 
+### Two-step verification
+
+Everyone can switch it on under **Account → Beveiliging**: after the password Brievie asks
+a code from an authenticator app (Microsoft Authenticator, Google Authenticator, the
+Passwords app on an iPhone). Setting it up gives ten recovery codes, shown once: keep them
+on paper or in a password manager. Paired phones keep working; pairing a new phone then
+needs a sign-in with the code.
+
+- **Require it** for the server admins or for everyone in `deploy/.env` (with only a
+  compose file: in `.env` next to it), then run `./brievie start` again:
+
+  ```sh
+  BRIEVIE_REQUIRE_SECOND_FACTOR=server_admins   # none (default), server_admins, everyone
+  BRIEVIE_SECOND_FACTOR_GRACE_DAYS=7            # 0-30 days to switch it on
+  ```
+
+  From then on whoever must have it gets a notice with the last day; after that day,
+  signing in leads straight to setting it up, and sessions without the code end within an
+  hour. The server's start warns (`brievie.W004`) while no server admin has it on.
+- **The server's clock must be right**: codes are checked against it (half a minute either
+  side). Synology and most NAS boxes keep it right with NTP by default; check it on a
+  plain Linux server (`timedatectl`). A server admin sees a warning in the web interface
+  when the clocks differ more than 30 seconds.
+- **A lost phone.** With a recovery code: sign in with it, then **Beveiliging → Nieuwe
+  telefoon**. Without one: an admin clears it under **Mensen → the member → Apparaten en
+  sessies → Tweestapsverificatie wissen** (the same rule as a reset link: a server admin
+  for anyone, a workspace admin only for a member of that workspace alone who reads no
+  private post there). That ends the member's sessions, by default unpairs their phones,
+  and leaves a notice. A server admin who is locked out clears it on the server:
+
+  ```sh
+  docker compose --project-directory deploy -f deploy/docker-compose.yml exec api \
+    python manage.py clear_second_factor --email naam@voorbeeld.nl
+  ```
+
+  Add `--keep-devices` only when the lost phone had no paired app. The log records it
+  with "Brievie" as the actor.
+- **Not yet from outside.** Keep the web interface off the internet until the rule for
+  the public address is built (a password sign-in from outside will need the code); the
+  app-only tunnel does not wait for it.
+
 ## 19. The log and the member export
 
 **The log (Logboek).** Brievie records who did what: sign-ins and failures, password
