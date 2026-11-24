@@ -54,6 +54,7 @@ from apps.documents.models import (
 )
 from apps.documents.schemas import DuplicateDifferenceOut, DuplicateOut, TaskTwinOut
 from apps.documents.visibility import visible_documents
+from apps.tasks import letter_sync
 from apps.tasks import services as task_services
 from apps.tasks.models import Task
 from apps.workspaces.locks import lock_own_membership
@@ -211,6 +212,10 @@ def merge(
         if visibility.viewers([keep.id]) != before:
             raise visibility_differs()
         _merge_tasks(keep, other, user, complete_twin_tasks=complete_twin_tasks)
+        # Tasks moved between the two letters (both locked above): their facts follow. The
+        # other letter goes to the trash below and gets no status line.
+        letter_sync.sync(keep)
+        letter_sync.sync(other, silent=True)
         # Imported here: the trash reaches the job queues, whose pipeline jobs import this
         # module (detection), so a module-level import would be circular.
         from apps.documents import trash

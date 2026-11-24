@@ -48,6 +48,7 @@ from apps.documents.schemas import (
 )
 from apps.documents.storage import default_storage
 from apps.pipeline.jobs import defer_processing
+from apps.tasks import letter_sync
 from apps.tasks.facts import member_facts
 from apps.tasks.models import Task, amount_text
 from apps.workspaces.context import current_actor
@@ -682,6 +683,9 @@ def reopen_document(*, workspace: Workspace, user: User, document_id: UUID) -> D
         document.save()
         Task.objects.filter(document=document, created_by_ai=True, status=Task.Status.OPEN).delete()
         organise.record_reopened(document, actor=user)
+        # Back to review: the facts follow the tasks that stay; no status line (the
+        # letter is "Nieuw" again, the line above says why).
+        letter_sync.sync(document, previous_status=Document.Status.DONE)
     return document
 
 

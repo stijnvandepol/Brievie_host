@@ -23,8 +23,9 @@ from django.utils.translation import gettext as _
 from apps.accounts.models import User
 from apps.common.errors import ApiError
 from apps.documents import organise, visibility
-from apps.documents.models import DocumentEvent
+from apps.documents.models import LIVE, Document, DocumentEvent
 from apps.people.models import Person
+from apps.tasks import letter_sync
 from apps.tasks.facts import member_facts
 from apps.tasks.mine import (
     PARTS,
@@ -83,14 +84,28 @@ def complete_task(
     """
     with transaction.atomic():
         task = _get_for_update(workspace, task_id)
-        if task.status != Task.Status.DONE:
-            task.status = Task.Status.DONE
-            task.completed_at = timezone.now()
-            # "Afgevinkt door Anne"; a merge's completion keeps the person who merged.
-            task.completed_by = user
-            task.save(update_fields=["status", "completed_at", "completed_by", "updated_at"])
-            _record(task, DocumentEvent.Kind.TASK_COMPLETED, user, origin)
+        if complete_locked(task, user, origin):
+            _sync(task)
         return task
+
+
+def complete_locked(task: Task, user: User, origin: str = DocumentEvent.Origin.USER) -> bool:
+    """The completion itself, for a task the caller locked (letter first) and may edit;
+    whether anything changed. The caller syncs the letter's facts afterwards
+    (`complete_task` per task, "Brief afhandelen" once for all)."""
+    if task.status == Task.Status.DONE:
+        return False
+    task.status = Task.Status.DONE
+    task.completed_at = timezone.now()
+    # "Afgevinkt door Anne"; a merge's completion keeps the person who merged.
+    task.completed_by = user
+    # A done task waits for nothing (no line of its own: the completion says it).
+    task.waiting_until = None
+    task.save(
+        update_fields=["status", "completed_at", "completed_by", "waiting_until", "updated_at"]
+    )
+    _record(task, DocumentEvent.Kind.TASK_COMPLETED, user, origin)
+    return True
 
 
 def reopen_task(*, workspace: Workspace, user: User, task_id: UUID) -> Task:
@@ -103,6 +118,7 @@ def reopen_task(*, workspace: Workspace, user: User, task_id: UUID) -> Task:
             task.completed_by = None
             task.save(update_fields=["status", "completed_at", "completed_by", "updated_at"])
             _record(task, DocumentEvent.Kind.TASK_REOPENED, user)
+            _sync(task)
         return task
 
 
@@ -122,22 +138,43 @@ def set_deadline(*, workspace: Workspace, user: User, task_id: UUID, deadline: d
         task.deadline_quote = ""
         task.save(update_fields=["deadline", "deadline_source", "deadline_quote", "updated_at"])
         _record(task, DocumentEvent.Kind.TASK_DEADLINE_SET, user)
+        _sync(task)
         return task
 
 
 def _get_for_update(workspace: Workspace, task_id: UUID) -> Task:
+    """The task, locked for a change, as the member. Lock order (spec S 10): the letter's
+    row first (`FOR NO KEY UPDATE`, as the confirm and the merge take it), then the task;
+    a task without a letter is locked alone. 404 like an unknown id for a task or letter
+    the member does not see or that is in the trash; `require_editable` for the rest."""
+    row = Task.objects.filter(workspace=workspace, id=task_id).values_list("document_id").first()
+    if row is None:
+        raise task_not_found()
+    document_id = row[0]
+    if document_id is not None and not (
+        Document.objects.select_for_update(no_key=True)
+        .filter(LIVE, workspace=workspace, id=document_id)
+        .values_list("id", flat=True)
+        .first()
+    ):
+        raise task_not_found()
     task = (
         Task.objects.select_for_update(of=("self",))
         .select_related(*TASK_RELATED)
-        .filter(workspace=workspace, id=task_id)
-        .filter(Q(document__isnull=True) | Q(document__trashed_at__isnull=True))
+        .filter(workspace=workspace, id=task_id, document_id=document_id)
         .first()
     )
+    # Moved by a merge between the two reads: its old letter is in the trash now.
     if task is None:
         raise task_not_found()
     if task.document is not None:
         visibility.require_editable(task.document)
     return task
+
+
+def _sync(task: Task) -> None:
+    if task.document is not None:
+        letter_sync.sync(task.document)
 
 
 def _record(task: Task, kind: str, user: User, origin: str = DocumentEvent.Origin.USER) -> None:
