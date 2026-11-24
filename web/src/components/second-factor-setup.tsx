@@ -15,6 +15,7 @@ import {
   TextField,
 } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
+import { saveFile } from "../save-file";
 import { Icon } from "./icons";
 import { ErrorAlert } from "./page";
 
@@ -50,12 +51,7 @@ export function downloadRecoveryCodes(codes: string[]) {
     t`Elke code werkt één keer.`,
     "",
   ].join("\n");
-  const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "brievie-herstelcodes.txt";
-  link.click();
-  URL.revokeObjectURL(url);
+  saveFile(new Blob([text], { type: "text/plain;charset=utf-8" }), "brievie-herstelcodes.txt");
 }
 
 /**

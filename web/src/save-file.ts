@@ -1,3 +1,5 @@
+const REVOKE_AFTER_MS = 10_000;
+
 /** Hands `blob` to the browser as a download named `name` (no page change, no server). */
 export function saveFile(blob: Blob, name: string): void {
   const url = URL.createObjectURL(blob);
@@ -7,6 +9,7 @@ export function saveFile(blob: Blob, name: string): void {
   document.body.append(link);
   link.click();
   link.remove();
-  // After the click: the browser has started the download by then.
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  // Well after the click: Safari may still be reading the file a moment later, and a
+  // download that lost its file fails without a word.
+  setTimeout(() => URL.revokeObjectURL(url), REVOKE_AFTER_MS);
 }

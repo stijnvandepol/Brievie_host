@@ -195,7 +195,8 @@ describe("setting up two-step verification at sign-in", () => {
       saved = blob;
       return "blob:herstelcodes";
     });
-    Object.assign(URL, { createObjectURL: create, revokeObjectURL: vi.fn() });
+    const revoke = vi.fn();
+    Object.assign(URL, { createObjectURL: create, revokeObjectURL: revoke });
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     const u = userEvent.setup();
     await password(u, "setup");
@@ -205,6 +206,8 @@ describe("setting up two-step verification at sign-in", () => {
     await u.click(await screen.findByRole("button", { name: "Downloaden" }));
 
     expect(click).toHaveBeenCalled();
+    // Not revoked at once: Safari may still be reading the file.
+    expect(revoke).not.toHaveBeenCalled();
     expect(saved).toBeDefined();
     const text = await saved?.text();
     for (const code of codes) expect(text).toContain(code);
