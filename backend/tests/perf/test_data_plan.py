@@ -1,10 +1,21 @@
 """The measurement's world as planned: the shape of S 4.9.5, exactly. No database."""
 
 from collections import Counter
+from datetime import date
 
 import pytest
 
-from tests.perf.data import ADMINS, DEFAULT, PLAIN, SORTER, Plan, Shape, make_plan
+from tests.perf.data import (
+    ADMINS,
+    DEFAULT,
+    PLAIN,
+    SORTER,
+    Plan,
+    Shape,
+    letter_task_facts,
+    make_plan,
+    waiting_offset,
+)
 
 
 @pytest.fixture(scope="module")
@@ -82,6 +93,20 @@ def test_tasks(plan: Plan) -> None:
     assert all(t.created_by is not None for t in letterless)
     on_letters = [t.letter for t in plan.tasks if t.letter is not None]
     assert len(set(on_letters)) == len(on_letters)
+
+
+def test_letter_status_facts_of_the_plan(plan: Plan) -> None:
+    facts = letter_task_facts(plan, date(2026, 11, 24))
+    assert len(facts) == 100_000
+    open_on_letters = sum(t.open for t in plan.tasks if t.letter is not None)
+    assert sum(f.open_count for f in facts) == open_on_letters
+    waiting = [f for f in facts if f.wait_until is not None]
+    # 5 % of the open tasks wait; a third of those for a day that has passed.
+    assert 0.03 * open_on_letters < len(waiting) < 0.07 * open_on_letters
+    past = sum(f.wait_until < date(2026, 11, 24) for f in waiting if f.wait_until is not None)
+    assert 0.25 < past / len(waiting) < 0.42
+    assert waiting_offset(7, False) is None
+    assert waiting_offset(8, True) is None
 
 
 def test_every_private_letter_has_an_addressee_and_a_share_reader(plan: Plan) -> None:
