@@ -370,6 +370,48 @@ msgstr "This account is switched off. Switch it on again first."
 msgid "Deze herstellink werkt niet meer. Vraag een nieuwe."
 msgstr "This reset link no longer works. Ask for a new one."
 
+#: apps/accounts/second_factor.py
+msgid "Code klopt niet. Probeer het opnieuw."
+msgstr "That code is not right. Try again."
+
+#: apps/accounts/second_factor.py
+#, python-format
+msgid "Te vaak een verkeerde code. Probeer het over %(minutes)s minuten opnieuw."
+msgstr "Too many wrong codes. Try again in %(minutes)s minutes."
+
+#: apps/accounts/second_factor.py
+#, python-format
+msgid "Te vaak een verkeerde code. Probeer het over %(hours)s uur opnieuw."
+msgstr "Too many wrong codes. Try again in %(hours)s hours."
+
+#: apps/accounts/second_factor.py
+msgid "Je bent te lang bezig geweest. Log opnieuw in."
+msgstr "This took too long. Sign in again."
+
+#: apps/accounts/second_factor.py
+msgid "Tweestapsverificatie staat niet aan voor dit account."
+msgstr "Two-step verification is not on for this account."
+
+#: apps/accounts/second_factor.py
+msgid "Tweestapsverificatie staat al aan. Kies Nieuwe telefoon om te wisselen."
+msgstr "Two-step verification is already on. Choose New phone to switch."
+
+#: apps/accounts/second_factor.py
+msgid "De klok van je telefoon of van de server loopt niet gelijk. Zet op je telefoon de tijd op automatisch."
+msgstr "The clock of your phone or of the server is off. Set the time on your phone to automatic."
+
+#: apps/accounts/second_factor.py
+msgid "Begin opnieuw met het aanzetten van tweestapsverificatie."
+msgstr "Start switching on two-step verification again."
+
+#: apps/accounts/second_factor.py
+msgid "Tweestapsverificatie is verplicht. Je kunt het niet uitzetten, wel naar een nieuwe telefoon zetten."
+msgstr "Two-step verification is required. You cannot switch it off, but you can move it to a new phone."
+
+#: apps/accounts/second_factor.py
+msgid "Dit account heeft geen tweestapsverificatie."
+msgstr "This account does not have two-step verification."
+
 #: apps/accounts/services.py
 msgid "Vul je naam in."
 msgstr "Enter your name."

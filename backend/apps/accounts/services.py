@@ -369,6 +369,24 @@ def end_my_session(request: HttpRequest, *, session_id: UUID) -> None:
         row.delete()
 
 
+def check_own_password(request: HttpRequest, user: User, password: str, *, via: str) -> None:
+    """The caller's own password, typed again before something that needs it (removing or
+    clearing a second factor, typing the password again). Counted exactly like a sign-in:
+    axes per email and address (429 `too_many_attempts`), the slow-down per account
+    (`signin_limits`); a wrong one answers 400 `wrong_password`. `via` names the check in
+    the row of an axes lockout. Runs outside a transaction of its own: a failure must keep
+    what axes and the slow-down counted.
+    """
+    _refuse_when_locked(request, user.email)
+    signin_limits.refuse_when_slowed(request, user.email)
+    with _checking_password_for(via):
+        checked = authenticate(request, username=user.email, password=password)
+    if not isinstance(checked, User) or checked.pk != user.pk:
+        signin_limits.record_failure(user.email)
+        raise ApiError(400, "wrong_password", _("Je wachtwoord klopt niet."))
+    signin_limits.clear(user.email)
+
+
 def reauthenticate(request: HttpRequest, *, password: str) -> None:
     """Check the caller's password again and note it on this web session, for what needs
     a recent proof of who is at the browser (`sessions.recently_authenticated`).
