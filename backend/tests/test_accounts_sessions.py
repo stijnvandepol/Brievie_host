@@ -706,3 +706,87 @@ def test_impossible_session_settings_are_refused(
 ) -> None:
     with pytest.raises(ImproperlyConfigured):
         evaluate_settings(monkeypatch, **values)
+
+
+# --- Two-step verification in the hourly job (plan Task 11) ------------------------------
+
+
+def a_session(user: User, *, second_factor: bool = False) -> str:
+    store = SessionStore()
+    store[SESSION_KEY] = str(user.pk)
+    store.create()
+    key = store.session_key
+    assert key is not None
+    UserSession.objects.create(
+        user=user,
+        session_key=key,
+        method="password",
+        last_used_at=timezone.now(),
+        second_factor=second_factor,
+    )
+    return key
+
+
+def test_the_job_removes_unconfirmed_set_ups_older_than_an_hour() -> None:
+    from apps.accounts.models import SecondFactor
+    from apps.accounts.second_factor import begin_setup
+
+    old, recent = UserFactory.create(), UserFactory.create()
+    begin_setup(old, host="brievie.local")
+    begin_setup(recent, host="brievie.local")
+    SecondFactor.objects.filter(user=old).update(updated_at=timezone.now() - timedelta(minutes=61))
+
+    jobs.remove_stale_sessions(timestamp=0)
+
+    assert list(SecondFactor.objects.values_list("user_id", flat=True)) == [recent.id]
+
+
+def test_the_job_starts_the_grace_for_everyone_once(settings: Settings) -> None:
+    settings.BRIEVIE_REQUIRE_SECOND_FACTOR = "everyone"
+    first, second = UserFactory.create(), UserFactory.create()
+
+    jobs.remove_stale_sessions(timestamp=0)
+    since = {u.id: u.second_factor_required_since for u in User.objects.all()}
+    jobs.remove_stale_sessions(timestamp=0)
+
+    assert all(since[u.id] is not None for u in (first, second))
+    assert {u.id: u.second_factor_required_since for u in User.objects.all()} == since
+
+
+def test_the_job_forgets_the_grace_when_the_rule_goes(settings: Settings) -> None:
+    user = UserFactory.create(second_factor_required_since=timezone.now())
+    settings.BRIEVIE_REQUIRE_SECOND_FACTOR = "none"
+
+    jobs.remove_stale_sessions(timestamp=0)
+
+    assert User.objects.get(pk=user.pk).second_factor_required_since is None
+
+
+def test_after_the_grace_sessions_without_the_second_step_end(settings: Settings) -> None:
+    settings.BRIEVIE_REQUIRE_SECOND_FACTOR = "everyone"
+    settings.BRIEVIE_SECOND_FACTOR_GRACE_DAYS = 7
+    late = UserFactory.create(second_factor_required_since=timezone.now() - timedelta(days=8))
+    plain = a_session(late)
+    with_code = a_session(late, second_factor=True)
+    in_time = UserFactory.create(second_factor_required_since=timezone.now() - timedelta(days=2))
+    still = a_session(in_time)
+
+    jobs.remove_stale_sessions(timestamp=0)
+
+    keys = set(UserSession.objects.values_list("session_key", flat=True))
+    assert keys == {with_code, still}
+    assert not Session.objects.filter(session_key=plain).exists()
+    (row,) = ServerAuditEvent.objects.filter(code="session_ended")
+    assert row.values == {"count": 1, "reason": "second_factor_required"}
+    assert row.actor_kind == "system"
+
+
+def test_sso_sessions_are_kept_after_the_grace(settings: Settings) -> None:
+    settings.BRIEVIE_REQUIRE_SECOND_FACTOR = "everyone"
+    user = UserFactory.create(second_factor_required_since=timezone.now() - timedelta(days=30))
+    key = a_session(user, second_factor=True)
+    UserSession.objects.filter(session_key=key).update(method="sso")
+
+    jobs.remove_stale_sessions(timestamp=0)
+
+    assert UserSession.objects.filter(session_key=key).exists()

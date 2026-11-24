@@ -189,6 +189,17 @@ def end_sessions(
     return len(keys)
 
 
+def end_sessions_without_second_step(user: User) -> int:
+    """End `user`'s web sessions that did not pass the second step (a grace period ran
+    out); answer how many. Sessions through SSO count as having passed it."""
+    with transaction.atomic():
+        rows = UserSession.objects.select_for_update().filter(user=user, second_factor=False)
+        keys = list(rows.values_list("session_key", flat=True))
+        UserSession.objects.filter(session_key__in=keys).delete()
+        Session.objects.filter(session_key__in=keys).delete()
+    return len(keys)
+
+
 def end_current_session(request: HttpRequest) -> None:
     """End the caller's own session: its record, then Django's session by `flush()`."""
     with transaction.atomic():
