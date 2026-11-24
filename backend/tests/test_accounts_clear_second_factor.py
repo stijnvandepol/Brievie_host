@@ -202,8 +202,8 @@ def test_the_command_clears_and_logs_the_system() -> None:
     assert "beheer@example.nl" not in out.getvalue()
     (row,) = ServerAuditEvent.objects.filter(code="second_factor_cleared")
     assert (row.actor_kind, row.values) == ("system", {"via": "command", "devices_revoked": 1})
-    (notice,) = AccountNotice.objects.filter(user=user)
-    assert notice.code == "second_factor_cleared_by_command"
+    # Pairing left a notice too; clearing adds its own.
+    assert AccountNotice.objects.filter(user=user, code="second_factor_cleared_by_command").exists()
 
 
 def test_the_command_keeps_devices_when_asked() -> None:
