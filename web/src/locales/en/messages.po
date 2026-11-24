@@ -841,6 +841,15 @@ msgstr "Switch on the autopilot?"
 msgid "Automatisering"
 msgstr "Automation"
 
+#: src/components/page.tsx
+#: src/routes/backup.tsx
+msgid "Back-up"
+msgstr "Backup"
+
+#: src/components/audit-codes.ts
+msgid "Back-up gevraagd"
+msgstr "Backup requested"
+
 #: src/routes/setup-summary.tsx
 msgid "Back-up instellen: typ op de server"
 msgstr "Set up the backup: on the server, type"
@@ -912,6 +921,10 @@ msgstr "See all mail"
 msgid "Beschikking"
 msgstr "Decision"
 
+#: src/routes/backup.tsx
+msgid "Bestemming"
+msgstr "Destination"
+
 #: src/components/rule-sentence.ts
 msgid "bevat de tekst"
 msgstr "contains the text"
@@ -932,6 +945,7 @@ msgstr "Security"
 
 #: src/components/second-factor-setup.tsx
 #: src/routes/pair-app.tsx
+#: src/routes/recovery-sheet.tsx
 msgid "Bevestigen"
 msgstr "Confirm"
 
@@ -1151,6 +1165,7 @@ msgstr "Enter the code"
 
 #: src/components/second-factor-setup.tsx
 #: src/routes/pair-app.tsx
+#: src/routes/recovery-sheet.tsx
 #: src/routes/security.tsx
 msgid "Code uit de app"
 msgstr "Code from the app"
@@ -1320,10 +1335,22 @@ msgstr "The export did not succeed. Try again."
 msgid "de groep"
 msgstr "the group"
 
+#: src/routes/backup.tsx
+msgid "De instellingen voor de back-up spreken elkaar tegen: je kunt een map óf een adres instellen, niet allebei."
+msgstr "The backup settings contradict each other: you can set a folder or an address, not both."
+
+#: src/routes/backup.tsx
+msgid "De laatste gelukte back-up is meer dan anderhalve dag oud. Kijk hieronder wat er misging."
+msgstr "The last successful backup is more than a day and a half old. See below what went wrong."
+
 #: src/components/open-invitations.tsx
 #: src/components/person-actions.tsx
 msgid "De link werkt daarna niet meer. Wie hem al heeft, kan er niet meer mee binnenkomen."
 msgstr "After this the link no longer works. Anyone who already has it can no longer use it to get in."
+
+#: src/routes/backup.tsx
+msgid "De map moet op een andere schijf staan dan de gegevens en eigendom zijn van gebruiker 10001. Wil je een back-up op afstand? Zet dan BRIEVIE_BACKUP_REPOSITORY in plaats van de map."
+msgstr "The folder must be on another disk than the data and be owned by user 10001. Do you want a remote backup? Then set BRIEVIE_BACKUP_REPOSITORY instead of the folder."
 
 #: src/components/invite-dialog.tsx
 msgid "De oude link werkt niet meer."
@@ -1538,6 +1565,14 @@ msgstr "Download as CSV"
 msgid "Downloaden"
 msgstr "Download"
 
+#: src/routes/recovery-sheet.tsx
+msgid "Druk het af en bewaar het veilig. Het bestand bevat de sleutel: verwijder het daarna."
+msgstr "Print it and keep it safe. The file holds the key: delete it afterwards."
+
+#: src/routes/recovery-sheet.tsx
+msgid "Druk het blad af en bewaar het op een veilige plek, niet op deze server."
+msgstr "Print the sheet and keep it in a safe place, not on this server."
+
 #: src/routes/inbox.tsx
 msgid "Dubbel?"
 msgstr "Duplicate?"
@@ -1589,6 +1624,14 @@ msgstr "A paired phone keeps working when you switch on two-step verification. W
 #: src/components/rule-sentence.ts
 msgid "Een label"
 msgstr "A label"
+
+#: src/routes/backup.tsx
+msgid "Een map"
+msgstr "A folder"
+
+#: src/routes/backup.tsx
+msgid "Een plek op afstand"
+msgstr "A remote place"
 
 #: src/routes/automations.tsx
 msgid "Een regel zet labels of een naam op nieuwe post. De regels draaien van boven naar beneden."
@@ -1654,6 +1697,14 @@ msgstr "Something went wrong. Try again later."
 msgid "Er is niemand meer om toe te voegen. Iemand met de rol Alleen lezen kan geen post verdelen."
 msgstr "There is nobody left to add. Someone with the role Read only cannot sort post."
 
+#: src/routes/backup.tsx
+msgid "Er is nog geen back-up ingesteld. Zonder back-up zijn je documenten weg als de schijf van deze server kapotgaat."
+msgstr "No backup has been set up yet. Without a backup your documents are gone if the disk of this server breaks."
+
+#: src/routes/backup.tsx
+msgid "Er is nog geen enkele back-up gelukt."
+msgstr "No backup has succeeded yet."
+
 #: src/routes/my-post.tsx
 msgid "Er is nog geen post op jouw naam."
 msgstr "There is no post in your name yet."
@@ -1673,6 +1724,10 @@ msgstr "Nothing has been saved yet."
 #: src/routes/tasks.tsx
 msgid "Er ligt niets op te pakken."
 msgstr "There is nothing to pick up."
+
+#: src/routes/backup.tsx
+msgid "Er loopt een back-up. Dit scherm ververst zichzelf."
+msgstr "A backup is running. This screen refreshes itself."
 
 #: src/components/device-table.tsx
 msgid "Er zijn nog geen apparaten gekoppeld."
@@ -1916,6 +1971,10 @@ msgstr "Groups are off: this post now goes to whoever sorts post."
 msgid "Groepen staan uit."
 msgstr "Groups are off."
 
+#: src/routes/backup.tsx
+msgid "Grootte"
+msgstr "Size"
+
 #: src/routes/invitation.tsx
 msgid "Heb je al een account?"
 msgstr "Already have an account?"
@@ -1940,6 +1999,23 @@ msgstr "Reminder"
 #: src/components/suggestion-list.tsx
 msgid "Herkend in de brief"
 msgstr "Recognized in the letter"
+
+#: src/components/page.tsx
+#: src/routes/recovery-sheet.tsx
+msgid "Herstelblad"
+msgstr "Recovery sheet"
+
+#: src/components/audit-codes.ts
+msgid "Herstelblad bekeken"
+msgstr "Recovery sheet viewed"
+
+#: src/routes/recovery-sheet.tsx
+msgid "Herstelblad downloaden"
+msgstr "Download recovery sheet"
+
+#: src/routes/setup-summary.tsx
+msgid "Herstelblad downloaden en bewaren"
+msgstr "Download and keep the recovery sheet"
 
 #: src/components/sign-in-code.tsx
 msgid "Herstelcode"
@@ -1974,6 +2050,10 @@ msgstr "Create a reset link for {name}?"
 msgid "Herstellink voor {name}"
 msgstr "Reset link for {name}"
 
+#: src/routes/recovery-sheet.tsx
+msgid "Het herstelblad is gedownload."
+msgstr "The recovery sheet has been downloaded."
+
 #: src/routes/duplicate.tsx
 msgid "Het is dezelfde brief"
 msgstr "It is the same letter"
@@ -1997,6 +2077,10 @@ msgstr "They are two letters"
 #: src/components/visibility-preview-dialog.tsx
 msgid "Hiermee gaat niemand iets anders zien."
 msgstr "Nobody will see anything different."
+
+#: src/routes/backup.tsx
+msgid "Hoe het staat met de back-up van deze server. Elke nacht maakt Brievie vanzelf een back-up zodra er een bestemming is ingesteld."
+msgstr "How the backup of this server is doing. Every night Brievie makes a backup by itself once a destination is set."
 
 #: src/routes/rule-editor.tsx
 msgid "Hoeveel voorwaarden moeten kloppen"
@@ -2558,6 +2642,10 @@ msgstr "Breadcrumb"
 msgid "Laat de post beheren door"
 msgstr "Let the mail be managed by"
 
+#: src/routes/recovery-sheet.tsx
+msgid "Laat niemand de sleutel zien. Wie de sleutel en een back-up heeft, kan je documenten lezen."
+msgstr "Show the key to nobody. Whoever has the key and a backup can read your documents."
+
 #: src/routes/settings.tsx
 msgid "Laat zien welke post blijft liggen"
 msgstr "Show which mail is lying too long"
@@ -2579,6 +2667,18 @@ msgstr "Last signed in"
 #: src/components/person-actions.tsx
 msgid "Laatst ingelogd op {0}"
 msgstr "Last signed in on {0}"
+
+#: src/routes/backup.tsx
+msgid "Laatste back-up"
+msgstr "Last backup"
+
+#: src/routes/backup.tsx
+msgid "Laatste controle"
+msgstr "Last check"
+
+#: src/routes/backup.tsx
+msgid "Laatste gelukte back-up"
+msgstr "Last successful backup"
 
 #: src/components/audit-codes.ts
 #: src/routes/labels.tsx
@@ -3041,6 +3141,10 @@ msgstr "Do not name a label after a person or a sensitive subject."
 msgid "Nog {daysLeft} dagen ({date})"
 msgstr "{daysLeft} days left ({date})"
 
+#: src/routes/backup.tsx
+msgid "nog geen"
+msgstr "none yet"
+
 #: src/routes/departments.tsx
 #: src/routes/people-detail.tsx
 msgid "Noodtoegang"
@@ -3091,6 +3195,10 @@ msgstr "Never signed in"
 #: src/components/invite-dialog.tsx
 msgid "Notitie voor jezelf"
 msgstr "Note to yourself"
+
+#: src/routes/backup.tsx
+msgid "Nu back-uppen"
+msgstr "Back up now"
 
 #: src/routes/visibility.tsx
 msgid "Nu zien nog steeds alle mensen alle post; afdelingen helpen dan alleen bij het sorteren."
@@ -3190,6 +3298,10 @@ msgstr "Two-step verification is required on this server."
 #: src/components/sign-in-code.tsx
 msgid "Op deze server is tweestapsverificatie verplicht. Zet het nu aan; daarna ben je ingelogd."
 msgstr "Two-step verification is required on this server. Switch it on now; then you are signed in."
+
+#: src/routes/recovery-sheet.tsx
+msgid "Op het herstelblad staat de hoofdsleutel van deze server. Zonder die sleutel kun je je documenten niet terugzetten als de server kapotgaat."
+msgstr "The recovery sheet holds the master key of this server. Without that key you cannot restore your documents if the server breaks."
 
 #: src/components/document-table.tsx
 #: src/components/person-picker.tsx
@@ -4116,6 +4228,10 @@ msgstr "Due date"
 msgid "Verwerken mislukt"
 msgstr "Processing failed"
 
+#: src/routes/recovery-sheet.tsx
+msgid "Verwijder het bestand daarna van je computer."
+msgstr "Delete the file from your computer afterwards."
+
 #: src/routes/trash.tsx
 msgid "Verwijderd op {when}"
 msgstr "Deleted on {when}"
@@ -4240,6 +4356,10 @@ msgstr "Fill in"
 msgid "Vul je wachtwoord in voordat je een telefoon koppelt. Zo weten we dat jij het bent."
 msgstr "Enter your password before you pair a phone. That way we know it's you."
 
+#: src/routes/recovery-sheet.tsx
+msgid "Vul je wachtwoord in voordat je het herstelblad downloadt. Zo weten we dat jij het bent."
+msgstr "Enter your password before you download the recovery sheet. That way we know it is you."
+
 #: src/components/second-factor-setup.tsx
 msgid "Vul je wachtwoord in voordat je tweestapsverificatie aanzet. Zo weten we dat jij het bent."
 msgstr "Enter your password before you switch on two-step verification. That way we know it is you."
@@ -4270,6 +4390,7 @@ msgstr "Value"
 #: src/routes/invitation.tsx
 #: src/routes/login.tsx
 #: src/routes/pair-app.tsx
+#: src/routes/recovery-sheet.tsx
 #: src/routes/security.tsx
 #: src/routes/sessions.tsx
 #: src/routes/setup.tsx
@@ -4528,6 +4649,10 @@ msgstr "Check it yourself?"
 msgid "Zet Alleen ongelezen uit om al je post te zien."
 msgstr "Turn off Unread only to see all your mail."
 
+#: src/routes/backup.tsx
+msgid "Zet deze regels bij de instellingen van Brievie (in het compose-bestand, Portainer of Synology) en start Brievie opnieuw:"
+msgstr "Put these lines in the settings of Brievie (in the compose file, Portainer or Synology) and start Brievie again:"
+
 #: src/components/export-panel.tsx
 msgid "Zet het aan bij Instellingen."
 msgstr "Switch it on under Settings."
@@ -4553,6 +4678,10 @@ msgstr "Visibility changed"
 msgid "Zie je hier een browser die je niet kent? Log die uit en wijzig je wachtwoord."
 msgstr "Do you see a browser here you don't know? Sign it out and change your password."
 
+#: src/routes/recovery-sheet.tsx
+msgid "Zo ga je ermee om"
+msgstr "How to handle it"
+
 #: src/routes/setup-summary.tsx
 msgid "Zo is Brievie nu ingesteld"
 msgstr "This is how Brievie is set up now"
@@ -4573,6 +4702,10 @@ msgstr "This is how the name appears on letters, for example Finance Dept. Put e
 #: src/components/person-dialog.tsx
 msgid "Zo staat de naam op brieven, bijvoorbeeld J. de Vries. Zet elke variant op een eigen regel."
 msgstr "This is how the name appears on letters, for example J. de Vries. Put each variant on its own line."
+
+#: src/routes/backup.tsx
+msgid "Zo stel je een back-up in"
+msgstr "How to set up a backup"
 
 #: src/components/rule-templates.tsx
 msgid "Zo werkt een regel"

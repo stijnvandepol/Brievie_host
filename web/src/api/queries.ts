@@ -508,3 +508,15 @@ export async function searchDocuments(workspaceId: string, search: DocumentSearc
   if (error !== undefined || !data) throw new ApiFailure(error);
   return data;
 }
+
+/** What the back-up panel shows (server admins). Looks again every few seconds while a
+ * back-up runs. */
+export const backupStatusQuery = queryOptions({
+  queryKey: ["server", "backup-status"],
+  queryFn: async () => {
+    const { data, error } = await api.GET("/api/v1/server/backup-status");
+    if (error !== undefined || !data) throw new ApiFailure(error);
+    return data;
+  },
+  refetchInterval: (query) => (query.state.data?.running ? 5000 : false),
+});

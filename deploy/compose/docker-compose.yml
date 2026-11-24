@@ -1,0 +1,336 @@
+# Brievie, installed with only this file.
+# Paste it into Portainer, Synology Container Manager, Dockge or Unraid's Compose
+# plugin, or save it as docker-compose.yml and type:  docker compose up -d
+# Change only the lines marked  <--  (everything else works as it is).
+# No secret is in this file: Brievie makes its keys on the first start and keeps them
+# in Docker volumes. After the first start, print your recovery sheet in the app.
+name: brievie
+
+x-backend: &backend
+  # <-- The version. Change it only to update (Brievie then makes a back-up first).
+  image: ghcr.io/stijnvandepol/brievie-backend:${BRIEVIE_VERSION:-0.4.0}
+  restart: unless-stopped
+  logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+
+x-settings: &settings
+  # <-- The name or IP address your iPhone uses for this server, for example mynas.local
+  # or 192.168.1.20. The example name is refused on purpose.
+  BRIEVIE_HOSTNAME: ${BRIEVIE_HOSTNAME:-verander-mij.local}
+  # This is a compose-only install (not ./brievie): the web interface then offers the
+  # recovery sheet. Never set it in deploy/docker-compose.yml.
+  BRIEVIE_COMPOSE_INSTALL: "true"
+  # The structure of this file. The image refuses a file that is too old or too new.
+  BRIEVIE_COMPOSE_REVISION: "1"
+  # A secret file must be private (mode 0400) and not a link.
+  BRIEVIE_STRICT_SECRET_FILES: "true"
+
+x-backup: &backup
+  BRIEVIE_BACKUP_REPOSITORY: ${BRIEVIE_BACKUP_REPOSITORY:-}
+  # A folder destination is mounted at /backup; this says whether it is a real one.
+  BRIEVIE_BACKUP_DIR_SET: ${BRIEVIE_BACKUP_DIR:+true}
+  BRIEVIE_BACKUP_APPEND_ONLY: ${BRIEVIE_BACKUP_APPEND_ONLY:-false}
+  BRIEVIE_BACKUP_S3_ACCESS_KEY_ID: ${BRIEVIE_BACKUP_S3_ACCESS_KEY_ID:-}
+  # The two secrets of a remote destination: prefer the _FILE form (a file in the folder
+  # BRIEVIE_BACKUP_SECRETS_DIR, for example /run/backup-secrets/s3-secret, mode 0400, owner
+  # uid 10001). A plain variable also works but shows in `docker inspect` and in Portainer.
+  BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY: ${BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY:-}
+  BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY_FILE: ${BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY_FILE:-}
+  BRIEVIE_BACKUP_REST_USERNAME: ${BRIEVIE_BACKUP_REST_USERNAME:-}
+  BRIEVIE_BACKUP_REST_PASSWORD: ${BRIEVIE_BACKUP_REST_PASSWORD:-}
+  BRIEVIE_BACKUP_REST_PASSWORD_FILE: ${BRIEVIE_BACKUP_REST_PASSWORD_FILE:-}
+
+services:
+  # Makes the keys the first time and puts each service's own keys in its own volume.
+  # No network; stops after it is done. It refuses to make a new master key when there is
+  # already data but no keys (then put the volume "secrets" back).
+  init-secrets:
+    <<: *backend
+    restart: "no"
+    user: "0"
+    network_mode: none
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    security_opt: ["no-new-privileges:true"]
+    command: ["python", "-m", "apps.installer.init_secrets"]
+    volumes:
+      - secrets:/vault
+      - secrets-postgres:/out/postgres
+      - secrets-api:/out/api
+      - secrets-keeper:/out/keeper
+      - secrets-init:/out/init
+      - backup-config:/data/backup-config
+      - documents:/data/documents:ro
+      - pgdata:/var/lib/postgresql:ro
+
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    depends_on:
+      init-secrets: { condition: service_completed_successfully }
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/brievie/postgres_password
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - secrets-postgres:/run/brievie:ro
+    # Not published, and on a network without a way out: only Brievie's own services
+    # reach it.
+    networks: [db]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  # One-shot, at every start: the database roles, the check that this version may start on
+  # this data (it refuses a step back, a jump that is too large and another PostgreSQL),
+  # the back-up before an update, the migrations. When it refuses it stops with exit 1 and
+  # `docker compose logs init` says why; no data changed. Put the old version number back and
+  # start again to get the old service back.
+  init:
+    <<: *backend
+    restart: "no"
+    user: "10001"
+    depends_on:
+      postgres: { condition: service_healthy }
+    command: ["python", "manage.py", "prepare_server"]
+    environment:
+      <<: [*settings, *backup]
+      BRIEVIE_DB_ROLE: owner
+      BRIEVIE_INIT_WRITABLE: "true"
+      BRIEVIE_ADOPT_VERSION: ${BRIEVIE_ADOPT_VERSION:-}
+      SECRET_KEY_FILE: /run/brievie/secret_key
+      DATABASE_OWNER_URL: postgres://brievie_owner@postgres:5432/brievie
+      DATABASE_OWNER_PASSWORD_FILE: /run/brievie/owner_password
+      DATABASE_PASSWORD_FILE: /run/brievie/app_password
+      DATABASE_BACKUP_URL: postgres://brievie_backup@postgres:5432/brievie
+      DATABASE_BACKUP_PASSWORD_FILE: /run/brievie/backup_db_password
+      DATABASE_SUPERUSER_URL: postgres://postgres@postgres:5432/postgres
+      DATABASE_SUPERUSER_PASSWORD_FILE: /run/brievie/postgres_password
+      BRIEVIE_BACKUP_PASSWORD_FILE: /run/brievie/backup_password
+      # <-- true: Brievie prepares an empty back-up folder itself, once.
+      BRIEVIE_BACKUP_AUTO_INIT: ${BRIEVIE_BACKUP_AUTO_INIT:-false}
+      BRIEVIE_HTTP_PORT: ${BRIEVIE_HTTP_PORT:-80}
+      BRIEVIE_HTTPS_PORT: ${BRIEVIE_HTTPS_PORT:-443}
+      BRIEVIE_VERSION: ${BRIEVIE_VERSION:-0.4.0}
+    volumes:
+      # Every password but never the master key (no step of `init` decrypts a document).
+      - secrets-init:/run/brievie:ro
+      - documents:/data/documents:ro
+      - backup-config:/data/backup-config
+      - caddy-authority:/data/authority:ro
+      # The back-up before an update goes to your back-up folder; without one, to the
+      # volume update-backup.
+      - ${BRIEVIE_BACKUP_DIR:-update-backup}:/backup
+      - ${BRIEVIE_BACKUP_SECRETS_DIR:-backup-secrets-unset}:/run/backup-secrets:ro
+    networks: [db, edge]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+  api:
+    <<: *backend
+    depends_on:
+      init: { condition: service_completed_successfully }
+    environment:
+      <<: *settings
+      DATABASE_URL: postgres://brievie_app@postgres:5432/brievie
+      DATABASE_PASSWORD_FILE: /run/brievie/app_password
+      SECRET_KEY_FILE: /run/brievie/secret_key
+      BRIEVIE_MASTER_KEY_FILE: /run/brievie/master_key
+      DEBUG: ${DEBUG:-false}
+      # Both follow BRIEVIE_HOSTNAME; set them only to deviate (they must agree: the api
+      # refuses to start when a public URL's host is not in ALLOWED_HOSTS).
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-${BRIEVIE_HOSTNAME:-verander-mij.local}}
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
+      CSRF_COOKIE_SECURE: ${CSRF_COOKIE_SECURE:-true}
+      BRIEVIE_PUBLIC_URLS: ${BRIEVIE_PUBLIC_URLS:-https://${BRIEVIE_HOSTNAME:-verander-mij.local}:${BRIEVIE_HTTPS_PORT:-443}}
+      BRIEVIE_HSTS_SECONDS: ${BRIEVIE_HSTS_SECONDS:-0}
+      BRIEVIE_MAX_BODY_BYTES: ${BRIEVIE_MAX_BODY_BYTES:-2621440}
+      BRIEVIE_MAX_UPLOAD_BYTES: ${BRIEVIE_MAX_UPLOAD_BYTES:-33554432}
+      # <-- Optional: your own installation code (at least 16 characters). Empty: the
+      # code is printed once in the log of "api" (docker compose logs api).
+      BRIEVIE_SETUP_TOKEN: ${BRIEVIE_SETUP_TOKEN:-}
+      # Requests arrive through Caddy, which sets X-Forwarded-For.
+      BRIEVIE_PROXY_COUNT: "1"
+      BRIEVIE_SESSION_IDLE_DAYS: ${BRIEVIE_SESSION_IDLE_DAYS:-14}
+      BRIEVIE_SESSION_MAX_DAYS: ${BRIEVIE_SESSION_MAX_DAYS:-90}
+      BRIEVIE_AI_AUTOPILOT_ALLOWED: ${BRIEVIE_AI_AUTOPILOT_ALLOWED:-true}
+      BRIEVIE_REQUIRE_SECOND_FACTOR: ${BRIEVIE_REQUIRE_SECOND_FACTOR:-none}
+      BRIEVIE_SECOND_FACTOR_GRACE_DAYS: ${BRIEVIE_SECOND_FACTOR_GRACE_DAYS:-7}
+      # For the recovery sheet that a server admin downloads in the web interface: where
+      # the back-ups go (no credentials) and the back-up password (a file).
+      BRIEVIE_BACKUP_PASSWORD_FILE: /run/brievie/backup_password
+      BRIEVIE_BACKUP_DIR_SET: ${BRIEVIE_BACKUP_DIR:+true}
+      BRIEVIE_BACKUP_DIR_HOST: ${BRIEVIE_BACKUP_DIR:-}
+      BRIEVIE_BACKUP_REPOSITORY: ${BRIEVIE_BACKUP_REPOSITORY:-}
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import os, urllib.request as u; h = os.environ['ALLOWED_HOSTS'].split(',')[0].strip().lstrip('.'); u.urlopen(u.Request('http://127.0.0.1:8000/api/v1/health', headers={'Host': 'localhost' if h in ('', '*') else h}), timeout=3)"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    volumes:
+      - secrets-api:/run/brievie:ro
+      # Only the public root of Caddy's internal CA, never Caddy's data volume.
+      - caddy-ca:/caddy-data/caddy/pki/authorities/local:ro
+      - documents:/data/documents
+    networks: [db, edge]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+  worker:
+    <<: *backend
+    depends_on:
+      init: { condition: service_completed_successfully }
+    stop_grace_period: 1m
+    command:
+      - sh
+      - -c
+      - python manage.py check_master_key && exec python manage.py procrastinate worker --queues pipeline
+    environment:
+      <<: *settings
+      DATABASE_URL: postgres://brievie_app@postgres:5432/brievie
+      DATABASE_PASSWORD_FILE: /run/brievie/app_password
+      SECRET_KEY_FILE: /run/brievie/secret_key
+      BRIEVIE_MASTER_KEY_FILE: /run/brievie/master_key
+      BRIEVIE_AUDIT_RETENTION_DAYS: ${BRIEVIE_AUDIT_RETENTION_DAYS:-365}
+      BRIEVIE_SESSION_IDLE_DAYS: ${BRIEVIE_SESSION_IDLE_DAYS:-14}
+      BRIEVIE_SESSION_MAX_DAYS: ${BRIEVIE_SESSION_MAX_DAYS:-90}
+      BRIEVIE_AI_AUTOPILOT_ALLOWED: ${BRIEVIE_AI_AUTOPILOT_ALLOWED:-true}
+      BRIEVIE_REQUIRE_SECOND_FACTOR: ${BRIEVIE_REQUIRE_SECOND_FACTOR:-none}
+      BRIEVIE_SECOND_FACTOR_GRACE_DAYS: ${BRIEVIE_SECOND_FACTOR_GRACE_DAYS:-7}
+    volumes:
+      - secrets-api:/run/brievie:ro
+      - documents:/data/documents
+    networks: [db, edge]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+  # Back-ups. It holds no master key, no superuser and no owner password: a stolen keeper
+  # cannot decrypt documents or change the database.
+  keeper:
+    <<: *backend
+    depends_on:
+      init: { condition: service_completed_successfully }
+    stop_grace_period: 1m
+    command: ["python", "manage.py", "procrastinate", "worker", "--queues", "backup"]
+    environment:
+      <<: [*settings, *backup]
+      DATABASE_URL: postgres://brievie_app@postgres:5432/brievie
+      DATABASE_PASSWORD_FILE: /run/brievie/app_password
+      DATABASE_BACKUP_URL: postgres://brievie_backup@postgres:5432/brievie
+      DATABASE_BACKUP_PASSWORD_FILE: /run/brievie/backup_db_password
+      SECRET_KEY_FILE: /run/brievie/secret_key
+      BRIEVIE_BACKUP_PASSWORD_FILE: /run/brievie/backup_password
+      # The hour of the nightly back-up (0-23, server time); it runs once a destination
+      # is set.
+      BRIEVIE_BACKUP_HOUR: ${BRIEVIE_BACKUP_HOUR:-2}
+    volumes:
+      - secrets-keeper:/run/brievie:ro
+      - documents:/data/documents:ro
+      - caddy-authority:/data/authority:ro
+      - backup-config:/data/backup-config
+      # <-- Optional but strongly advised: a folder outside this Docker host's own disk,
+      # for example /volume1/brievie-backup on a Synology (owner uid 10001). Set
+      # BRIEVIE_BACKUP_DIR to it, or BRIEVIE_BACKUP_REPOSITORY to a remote place.
+      - ${BRIEVIE_BACKUP_DIR:-backup-unset}:/backup
+      - ${BRIEVIE_BACKUP_SECRETS_DIR:-backup-secrets-unset}:/run/backup-secrets:ro
+    networks: [db, edge]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+  caddy:
+    image: ghcr.io/stijnvandepol/brievie-proxy:${BRIEVIE_VERSION:-0.4.0}
+    restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+    depends_on:
+      api: { condition: service_healthy }
+    environment:
+      BRIEVIE_HOSTNAME: ${BRIEVIE_HOSTNAME:-verander-mij.local}
+      BRIEVIE_HSTS_SECONDS: ${BRIEVIE_HSTS_SECONDS:-0}
+      BRIEVIE_MAX_BODY_BYTES: ${BRIEVIE_MAX_BODY_BYTES:-2621440}
+      BRIEVIE_MAX_UPLOAD_BYTES: ${BRIEVIE_MAX_UPLOAD_BYTES:-33554432}
+    ports:
+      # <-- Synology and some other NAS systems use 80 and 443 themselves: use for example
+      # 8080 and 8443. The https port is part of the address in the QR code.
+      - "${BRIEVIE_HTTP_PORT:-80}:80"
+      - "${BRIEVIE_HTTPS_PORT:-443}:443"
+    volumes:
+      # The data of Caddy's own CA: the iPhone trusts it. Never remove this volume.
+      - caddy-data:/data
+      - caddy-ca:/ca
+      # A copy of the CA for the back-up (keeper and admin only; see caddy-publish-root.sh).
+      - caddy-authority:/authority
+      - caddy-config:/config
+    networks: [edge]
+
+  # One-off maintenance; never started by `up`:
+  #   docker compose --profile admin run --rm admin python manage.py <command>
+  # For example a restore (stop api, worker, keeper and caddy first):
+  #   docker compose --profile admin run --rm admin python manage.py restore_install --replace
+  # Root, because a restore writes every volume; the only container that holds both the
+  # master key and the superuser password.
+  admin:
+    <<: *backend
+    profiles: ["admin"]
+    restart: "no"
+    user: "0"
+    command: ["python", "manage.py", "help"]
+    environment:
+      <<: [*settings, *backup]
+      DATABASE_URL: postgres://brievie_app@postgres:5432/brievie
+      DATABASE_PASSWORD_FILE: /run/brievie/app_password
+      DATABASE_OWNER_PASSWORD_FILE: /run/brievie/owner_password
+      DATABASE_BACKUP_URL: postgres://brievie_backup@postgres:5432/brievie
+      DATABASE_BACKUP_PASSWORD_FILE: /run/brievie/backup_db_password
+      DATABASE_SUPERUSER_URL: postgres://postgres@postgres:5432/brievie
+      DATABASE_SUPERUSER_PASSWORD_FILE: /run/brievie/postgres_password
+      SECRET_KEY_FILE: /run/brievie/secret_key
+      BRIEVIE_MASTER_KEY_FILE: /run/brievie/master_key
+      BRIEVIE_BACKUP_PASSWORD_FILE: /run/brievie/backup_password
+      # The host path, for the recovery sheet.
+      BRIEVIE_BACKUP_DIR_HOST: ${BRIEVIE_BACKUP_DIR:-}
+    volumes:
+      - secrets:/run/brievie:ro
+      - documents:/data/documents
+      - caddy-data:/caddy-data
+      - caddy-authority:/data/authority
+      - backup-config:/data/backup-config
+      - ${BRIEVIE_BACKUP_DIR:-backup-unset}:/backup
+      - ${BRIEVIE_BACKUP_SECRETS_DIR:-backup-secrets-unset}:/run/backup-secrets:ro
+    # Where a restore opens the back-up's settings: gone with this container.
+    tmpfs:
+      - /out:mode=0700
+    networks: [db, edge]
+
+networks:
+  # PostgreSQL's network has no way out.
+  db:
+    internal: true
+  edge: {}
+
+volumes:
+  # The data. `docker compose down -v` removes all of it: never type -v.
+  pgdata:
+  documents:
+  # The keys. `secrets` holds all of them; the next three hold what each service needs.
+  # Keep your master key on the recovery sheet as well: without it the documents are lost.
+  secrets:
+  secrets-postgres:
+  secrets-api:
+  secrets-keeper:
+  secrets-init:
+  backup-config:
+  caddy-data:
+  caddy-config:
+  caddy-ca:
+  caddy-authority:
+  backup-unset:
+  # An empty folder for BRIEVIE_BACKUP_SECRETS_DIR (the files of a remote destination's secrets).
+  backup-secrets-unset:
+  # The back-up before an update, on a server without a back-up folder.
+  update-backup:

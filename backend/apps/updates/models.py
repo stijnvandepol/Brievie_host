@@ -17,3 +17,21 @@ class ServerUpdate(BaseModel):
 
     class Meta:
         ordering: ClassVar[list[str]] = ["-finished_at"]
+
+
+class InstalledVersion(BaseModel):
+    """The version this database belongs to: one row, written by `prepare_server` at every
+    start and by nothing else (`services.set_installed_version`). Server-level, not a
+    workspace table. It travels with every back-up, so a restore brings it back with the
+    data it describes."""
+
+    version = models.CharField(max_length=20)
+    # Always true; the unique constraint on it keeps the table to one row.
+    singleton = models.BooleanField(default=True, unique=True, editable=False)
+
+    class Meta:
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.CheckConstraint(
+                condition=models.Q(singleton=True), name="installedversion_singleton"
+            )
+        ]

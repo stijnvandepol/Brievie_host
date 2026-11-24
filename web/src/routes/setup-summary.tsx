@@ -1,7 +1,7 @@
 import { t } from "@lingui/core/macro";
 import { useQuery } from "@tanstack/react-query";
 import { createRoute, Link } from "@tanstack/react-router";
-import { visibilityQuery } from "../api/queries";
+import { meQuery, visibilityQuery } from "../api/queries";
 import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
 import { Loading } from "../components/ui";
 import { workspaceRoute } from "./workspace";
@@ -11,6 +11,17 @@ function BackupStep() {
   return (
     <li>
       {t`Back-up instellen: typ op de server`} <code>./brievie backup --init</code>
+    </li>
+  );
+}
+
+/** The recovery sheet: a server admin prints it from the web interface (no terminal). */
+function RecoverySheetStep() {
+  const { data: me } = useQuery(meQuery);
+  if (!me?.is_server_admin) return null;
+  return (
+    <li>
+      <Link to="/server/herstelblad">{t`Herstelblad downloaden en bewaren`}</Link>
     </li>
   );
 }
@@ -69,6 +80,7 @@ function SetupSummaryPage() {
                   </Link>
                 </li>
                 <BackupStep />
+                <RecoverySheetStep />
               </>
             ) : (
               <>
@@ -83,6 +95,7 @@ function SetupSummaryPage() {
                   </Link>
                 </li>
                 <BackupStep />
+                <RecoverySheetStep />
                 <li>
                   <Link to="/w/$workspaceId/instellingen/wie-ziet-wat" params={params}>
                     {t`Wie ziet wat wijzigen`}

@@ -356,5 +356,13 @@ for it; see the table above.
 
 ## The master key
 
-`BRIEVIE_MASTER_KEY` in `deploy/.env` unlocks every document. Without it the files
-cannot be read: keep a copy in a safe place, apart from the back-up of the data.
+The master key unlocks every document. Without it the files cannot be read: keep a copy in
+a safe place, apart from the back-up of the data. With `./brievie` it is `BRIEVIE_MASTER_KEY`
+in `deploy/.env`. With only a compose file it is made on the first start and kept as a file in
+the Docker volumes `secrets` and `secrets-api` (mode 0400, on the same disk as the data); it
+is no variable of any container, so not in `docker inspect`, `docker compose config`, a log or
+a process list, and the keeper (back-ups) has no copy. A theft of the disk or of a back-up
+exposes what `deploy/.env` exposed before: the disk holds the key next to the data, a back-up
+does not hold it. The recovery sheet (a server admin downloads it in the web interface after
+typing the password again, never cached, recorded in the log) is the other copy; the key goes
+over https to the browser of that admin, as the sheet file next to a checkout did before.

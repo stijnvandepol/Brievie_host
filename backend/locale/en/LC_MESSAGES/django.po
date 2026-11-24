@@ -421,7 +421,7 @@ msgstr "Two-step verification is required. You cannot switch it off, but you can
 msgid "Dit account heeft geen tweestapsverificatie."
 msgstr "This account does not have two-step verification."
 
-#: apps/accounts/second_factor_account.py apps/devices/services.py
+#: apps/accounts/second_factor_account.py apps/backup/api.py apps/devices/services.py
 msgid "Vul eerst je wachtwoord opnieuw in."
 msgstr "Enter your password again first."
 
@@ -487,7 +487,7 @@ msgstr "The start date is after the end date."
 msgid "Vraag tussen 1 en %(max)d gebeurtenissen tegelijk op."
 msgstr "Ask for between 1 and %(max)d events at a time."
 
-#: apps/audit/api.py
+#: apps/audit/api.py apps/backup/api.py
 msgid "Alleen een serverbeheerder mag dit doen."
 msgstr "Only a server admin may do this."
 
@@ -539,6 +539,14 @@ msgstr "Device unpaired"
 #: apps/audit/codes.py
 msgid "Apparaat verlopen"
 msgstr "Device expired"
+
+#: apps/audit/codes.py
+msgid "Herstelblad bekeken"
+msgstr "Recovery sheet viewed"
+
+#: apps/audit/codes.py
+msgid "Back-up gevraagd"
+msgstr "Backup requested"
 
 #: apps/audit/codes.py
 msgid "Instellingen voor inloggen via organisatie gewijzigd"
@@ -704,6 +712,10 @@ msgstr "Workspace"
 msgid "Export"
 msgstr "Export"
 
+#: apps/backup/api.py
+msgid "Op deze server maak je het herstelblad met ./brievie recovery-sheet."
+msgstr "On this server you make the recovery sheet with ./brievie recovery-sheet."
+
 #: apps/backup/errors.py
 msgid "De naam van een back-up van vóór het bijwerken ziet eruit als pre-update-0.3.0."
 msgstr "The name of a backup from before an update looks like pre-update-0.3.0."
@@ -715,6 +727,10 @@ msgstr "The emergency backup before the update could not be prepared."
 #: apps/backup/errors.py
 msgid "Er is nog geen back-up ingesteld."
 msgstr "No backup has been set up yet."
+
+#: apps/backup/errors.py
+msgid "Er loopt al een back-up. Wacht tot die klaar is."
+msgstr "A backup is already running. Wait until it has finished."
 
 #: apps/backup/errors.py
 msgid "Je kunt maar één bestemming instellen: een map of een adres. Haal er één weg."
@@ -1828,6 +1844,208 @@ msgstr "Give a reason of %(min)d to %(max)d characters."
 msgid "Met noodtoegang kun je deze brief alleen lezen."
 msgstr "With emergency access you can only read this letter."
 
+#: apps/installer/init_secrets.py
+msgid "Er zijn al gegevens, maar de sleutels ontbreken. Zet het volume 'secrets' terug, of zet de sleutels van je herstelblad terug met 'init_secrets --import'. Er is niets veranderd."
+msgstr "There is already data, but the keys are missing. Put the 'secrets' volume back, or restore the keys of your recovery sheet with 'init_secrets --import'. Nothing has changed."
+
+#: apps/installer/init_secrets.py
+msgid "Het installatienummer in de sleutelkluis hoort niet bij de gegevens van deze installatie. Er is niets veranderd."
+msgstr "The installation number in the key vault does not belong to the data of this installation. Nothing has changed."
+
+#: apps/installer/init_secrets.py
+msgid "Een bestand in de sleutelkluis is een link, heeft de verkeerde rechten of is onleesbaar. Er is niets veranderd."
+msgstr "A file in the key vault is a link, has the wrong permissions or cannot be read. Nothing has changed."
+
+#: apps/installer/init_secrets.py
+msgid "Een map voor de sleutels bestaat niet of is een link. Er is niets veranderd."
+msgstr "A folder for the keys does not exist or is a link. Nothing has changed."
+
+#: apps/installer/init_secrets.py
+msgid "Het bestand met de sleutels kan niet worden gelezen. Er is niets veranderd."
+msgstr "The file with the keys cannot be read. Nothing has changed."
+
+#: apps/installer/init_secrets.py
+msgid "Het bestand met de sleutels klopt niet: een sleutel mist of heeft een verkeerde vorm. Er is niets veranderd."
+msgstr "The file with the keys is not right: a key is missing or has the wrong form. Nothing has changed."
+
+#: apps/installer/init_secrets.py
+msgid "Een sleutel in het bestand is niet gelijk aan de sleutel in de kluis. Er is niets veranderd."
+msgstr "A key in the file is not equal to the key in the vault. Nothing has changed."
+
+#: apps/installer/init_secrets.py
+msgid "Er is al een database. Met alleen de hoofdsleutel kan dat niet: de database heeft ook zijn eigen wachtwoord nodig (POSTGRES_PASSWORD). Geef het hele bestand deploy/.env van de installatie waar deze gegevens vandaan komen. Er is niets veranderd."
+msgstr "There is already a database. That is not possible with only the master key: the database also needs its own password (POSTGRES_PASSWORD). Give the whole deploy/.env file of the installation these data come from. Nothing has changed."
+
+#: apps/installer/init_secrets.py
+msgid "De map met gegevens kan niet worden gelezen (controleer de rechten of de netwerkschijf). Zonder te weten of er gegevens zijn, maakt Brievie geen nieuwe sleutels. Er is niets veranderd."
+msgstr "The folder with data cannot be read (check the permissions or the network disk). Without knowing whether there is data, Brievie makes no new keys. Nothing has changed."
+
+#: apps/installer/init_secrets.py
+msgid "Het eigen back-upwachtwoord kan niet worden gelezen. Er is niets veranderd."
+msgstr "The own back-up password cannot be read. Nothing has changed."
+
+#: apps/installer/init_secrets.py
+msgid "Gebruik: init_secrets [--import <bestand>]"
+msgstr "Usage: init_secrets [--import <file>]"
+
+#: apps/installer/init_secrets.py
+#, python-format
+msgid "De sleutels staan klaar: %(made)d nieuw in de kluis, %(placed)d bestanden geplaatst."
+msgstr "The keys are ready: %(made)d new in the vault, %(placed)d files placed."
+
+#: apps/installer/management/commands/prepare_server.py
+msgid "prepare_server draait als schema-eigenaar (BRIEVIE_DB_ROLE=owner)."
+msgstr "prepare_server runs as the schema owner (BRIEVIE_DB_ROLE=owner)."
+
+#: apps/installer/prepare.py
+#, python-format
+msgid "De database blijft alleen-lezen. Zet de versie in het compose-bestand terug op de vorige versie en typ dan, een voor een:\n%(commands)s\nStaat je back-up in een eigen map (BRIEVIE_BACKUP_DIR)? Gebruik die map in plaats van update-backup."
+msgstr "The database stays read-only. Put the version in the compose file back to the previous version and then type, one by one:\n%(commands)s\nIs your backup in a folder of your own (BRIEVIE_BACKUP_DIR)? Use that folder instead of update-backup."
+
+#: apps/installer/prepare.py
+msgid "Zet BRIEVIE_HOSTNAME op de naam of het IP-adres waarmee je iPhone deze server bereikt, bijvoorbeeld mijnnas.local. Er is niets veranderd."
+msgstr "Set BRIEVIE_HOSTNAME to the name or IP address your iPhone uses to reach this server, for example mynas.local. Nothing has changed."
+
+#: apps/installer/prepare.py
+msgid "BRIEVIE_HOSTNAME mag alleen letters, cijfers, punten en streepjes hebben. Er is niets veranderd."
+msgstr "BRIEVIE_HOSTNAME may only contain letters, digits, dots and dashes. Nothing has changed."
+
+#: apps/installer/prepare.py
+#, python-format
+msgid "Let op: met de naam %(name)s kan een iPhone deze server niet bereiken. Zet BRIEVIE_HOSTNAME op de naam of het IP-adres van deze server."
+msgstr "Note: with the name %(name)s an iPhone cannot reach this server. Set BRIEVIE_HOSTNAME to the name or IP address of this server."
+
+#: apps/installer/prepare.py
+msgid "De database is niet bereikbaar. Er is niets veranderd."
+msgstr "The database cannot be reached. Nothing has changed."
+
+#: apps/installer/prepare.py
+msgid "De database kon niet worden ingericht. Er is niets veranderd."
+msgstr "The database could not be set up. Nothing has changed."
+
+#: apps/installer/prepare.py
+#, python-format
+msgid "Een eerdere start van dit bijwerken is afgebroken tijdens het migreren en er is geen back-up %(label)s. Herstel eerst een back-up. Er is niets veranderd."
+msgstr "An earlier start of this update was interrupted while migrating and there is no back-up %(label)s. Restore a back-up first. Nothing has changed."
+
+#: apps/installer/prepare.py
+msgid "Het bijwerken wordt afgemaakt; de back-up van de eerdere start is er."
+msgstr "The update is being finished; the back-up of the earlier start exists."
+
+#: apps/installer/prepare.py
+msgid "Een eerdere start brak af tijdens de back-up; die wordt opnieuw gemaakt."
+msgstr "An earlier start broke off during the back-up; it is being made again."
+
+#: apps/installer/prepare.py
+#, python-format
+msgid "Brievie wordt bijgewerkt: eerst een back-up (%(label)s)."
+msgstr "Brievie is being updated: first a back-up (%(label)s)."
+
+#: apps/installer/prepare.py
+msgid "De back-up vóór het bijwerken is mislukt. Er is niets veranderd."
+msgstr "The back-up before the update failed. Nothing has changed."
+
+#: apps/installer/prepare.py
+msgid "De back-up vóór het bijwerken is gemaakt, maar de controle erop is mislukt. Er is niets veranderd."
+msgstr "The back-up before the update was made, but the check of it failed. Nothing has changed."
+
+#: apps/installer/prepare.py
+msgid "Een eerdere start liet de database op alleen-lezen staan; dat wordt opgeheven."
+msgstr "An earlier start left the database read-only; that is being lifted."
+
+#: apps/installer/prepare.py
+msgid "Het bijwerken is halverwege mislukt."
+msgstr "The update failed halfway."
+
+#: apps/installer/prepare.py
+msgid "De database kon niet worden bijgewerkt. Er is niets veranderd."
+msgstr "The database could not be updated. Nothing has changed."
+
+#: apps/installer/prepare.py
+msgid "De nieuwe versie kon niet worden vastgelegd. De database blijft alleen-lezen; start opnieuw, dan wordt het bijwerken afgemaakt."
+msgstr "The new version could not be recorded. The database stays read-only; start again and the update will be finished."
+
+#: apps/installer/prepare.py
+#, python-format
+msgid "Brievie %(version)s is klaar om te starten."
+msgstr "Brievie %(version)s is ready to start."
+
+#: apps/installer/restore_install.py
+msgid "Brievie draait nog. Stop eerst de services die de database gebruiken: docker compose stop api worker keeper caddy. Er is niets veranderd."
+msgstr "Brievie is still running. First stop the services that use the database: docker compose stop api worker keeper caddy. Nothing has changed."
+
+#: apps/installer/restore_install.py
+msgid "Er staan al gegevens in deze installatie. Wil je ze vervangen door de back-up? Typ het commando opnieuw met --replace. Er is niets veranderd."
+msgstr "There is already data in this installation. Do you want to replace it with the backup? Type the command again with --replace. Nothing has changed."
+
+#: apps/installer/restore_install.py
+msgid "De back-up wordt geopend…"
+msgstr "The backup is being opened…"
+
+#: apps/installer/restore_install.py
+msgid "De database wordt vervangen…"
+msgstr "The database is being replaced…"
+
+#: apps/installer/restore_install.py
+msgid "De documenten worden teruggezet…"
+msgstr "The documents are being restored…"
+
+#: apps/installer/restore_install.py
+msgid "Het herstel wordt gecontroleerd…"
+msgstr "The restore is being checked…"
+
+#: apps/installer/restore_install.py
+msgid "Herstel gelukt. Start Brievie nu weer: docker compose up -d. Een telefoon die al gekoppeld was, blijft werken."
+msgstr "Restore succeeded. Start Brievie again now: docker compose up -d. A phone that was already paired keeps working."
+
+#: apps/installer/restore_runtime.py
+msgid "De database is niet bereikbaar. Start eerst: docker compose up -d postgres."
+msgstr "The database cannot be reached. First start it: docker compose up -d postgres."
+
+#: apps/installer/restore_runtime.py
+msgid "De oude database kon niet worden leeggemaakt. Er is niets teruggezet."
+msgstr "The old database could not be emptied. Nothing has been restored."
+
+#: apps/installer/restore_runtime.py
+#, python-format
+msgid "Het herstel is niet compleet: %(count)d probleem gevonden. Lees de logs."
+msgstr "The restore is not complete: %(count)d problem found. Read the logs."
+
+#: apps/installer/restore_runtime.py
+#, python-format
+msgid "Het herstel is gecontroleerd: %(workspaces)d werkruimtes, %(pages)d pagina's."
+msgstr "The restore has been checked: %(workspaces)d workspaces, %(pages)d pages."
+
+#: apps/installer/runtime.py
+msgid "Het bestand release.json ontbreekt in dit image."
+msgstr "The file release.json is missing in this image."
+
+#: apps/installer/runtime.py
+msgid "DATABASE_SUPERUSER_URL ontbreekt: dit is geen compose-start."
+msgstr "DATABASE_SUPERUSER_URL is missing: this is not a compose start."
+
+#: apps/installer/runtime.py
+#, python-format
+msgid "Een wachtwoordbestand kan niet worden gebruikt (%(code)s)."
+msgstr "A password file cannot be used (%(code)s)."
+
+#: apps/installer/runtime.py
+msgid "De wachtwoorden van de database ontbreken."
+msgstr "The database passwords are missing."
+
+#: apps/installer/runtime.py
+#, python-format
+msgid "De back-upmap is niet vanzelf klaargezet: %(reason)s"
+msgstr "The backup folder could not be prepared automatically: %(reason)s"
+
+#: apps/installer/runtime.py
+msgid "De back-upmap is klaargezet voor de back-ups."
+msgstr "The backup folder is ready for the backups."
+
+#: apps/installer/runtime.py
+msgid "De versiegegevens van dit image kloppen niet."
+msgstr "The version data of this image is not right."
+
 #: apps/labels/presets.py
 msgid "Belastingdienst"
 msgstr "Belastingdienst"
@@ -2544,6 +2762,38 @@ msgstr "Version {target} uses a different major version of PostgreSQL than this 
 #: apps/updates/release.py
 msgid "Van versie {installed} kun je niet in één keer naar {target}. Werk eerst bij naar {go_first}: ./brievie update {go_first}"
 msgstr "From version {installed} you cannot go to {target} in one step. First update to {go_first}: ./brievie update {go_first}"
+
+#: apps/updates/release.py
+msgid "Je zet een oudere versie op nieuwere gegevens: de database heeft stappen die versie {target} niet kent. Zet de nieuwere versie terug, of herstel de back-up van vóór het bijwerken (pre-update-<versie>)."
+msgstr "You are putting an older version on newer data: the database has steps that version {target} does not know. Put the newer version back, or restore the back-up from before the update (pre-update-<version>)."
+
+#: apps/updates/release.py
+msgid "Van versie {installed} kun je niet in één keer naar {target}. Zet eerst versie {go_first} in het compose-bestand en start; daarna versie {target}."
+msgstr "From version {installed} you cannot go to {target} in one step. First put version {go_first} in the compose file and start; then version {target}."
+
+#: apps/updates/release.py
+msgid "Versie {target} hoort bij PostgreSQL {postgres_major}, maar de database draait op een andere hoofdversie. Die overstap maakt het bijwerken niet. Lees \"Voor je bijwerkt\" in CHANGELOG.md."
+msgstr "Version {target} goes with PostgreSQL {postgres_major}, but the database runs on another major version. Updating does not make that step. Read \"Before you update\" in CHANGELOG.md."
+
+#: apps/updates/release.py
+msgid "Dit compose-bestand is te oud voor versie {target}. Haal het nieuwe bestand op (bij de release) en plak het in de plaats van dit bestand."
+msgstr "This compose file is too old for version {target}. Get the new file (with the release) and paste it in place of this file."
+
+#: apps/updates/release.py
+msgid "Dit compose-bestand is nieuwer dan versie {target} kent. Gebruik het compose-bestand van versie {target}, of zet de versie in het bestand op de nieuwere versie."
+msgstr "This compose file is newer than version {target} knows. Use the compose file of version {target}, or set the version in the file to the newer version."
+
+#: apps/updates/release.py
+msgid "Er is te weinig vrije ruimte om bij te werken met een back-up vooraf. Maak ruimte vrij en start opnieuw."
+msgstr "There is too little free space to update with a back-up beforehand. Free some space and start again."
+
+#: apps/updates/release.py
+msgid "Er zijn gegevens, maar niet vastgelegd welke versie erbij hoort. Zet BRIEVIE_ADOPT_VERSION={target} in de instellingen als dit de versie is die nu draait."
+msgstr "There is data, but it is not recorded which version it belongs to. Set BRIEVIE_ADOPT_VERSION={target} in the settings if that is the version that runs now."
+
+#: apps/updates/release.py
+msgid "BRIEVIE_ADOPT_VERSION is niet gelijk aan de versie van dit image ({target}). Neem de versie over die nu draait; bijwerken doe je daarna."
+msgstr "BRIEVIE_ADOPT_VERSION is not equal to the version of this image ({target}). Give the version that runs now; update afterwards."
 
 #: apps/updates/release.py
 msgid "Van versie {installed} is er geen weg naar {target} met ./brievie update. Lees \"Voor je bijwerkt\" in CHANGELOG.md."

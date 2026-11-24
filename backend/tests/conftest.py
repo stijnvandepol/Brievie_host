@@ -16,6 +16,7 @@ from apps.backup import safepaths
 from apps.workspaces.models import Workspace
 from apps.workspaces.services import create_workspace
 from tests.factories import UserFactory
+from tests.installer_support import connect, scratch  # noqa: F401 - fixtures of the installer tests
 
 _CONNECTION_KEYS = ("NAME", "USER", "PASSWORD", "HOST", "PORT")
 _TEST_SESSION_RECEIVER = "tests_record_session"

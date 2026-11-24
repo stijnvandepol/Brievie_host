@@ -17,7 +17,13 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / ".github" / "scripts" / "release-check.py"
 WORKFLOW = (ROOT / ".github" / "workflows" / "release.yml").read_text()
-FILES = ("backend/pyproject.toml", "deploy/release.json", "CHANGELOG.md")
+FILES = (
+    "backend/pyproject.toml",
+    "deploy/release.json",
+    "CHANGELOG.md",
+    "deploy/compose/docker-compose.yml",
+    "backend/apps/updates/gate.py",
+)
 
 
 @pytest.fixture(autouse=True)
@@ -127,32 +133,33 @@ def test_only_a_version_tag_or_a_run_by_hand_starts_it() -> None:
 
 def test_no_rights_by_default_and_each_job_names_its_own() -> None:
     assert "\npermissions: {}\n" in WORKFLOW
-    for name in ("check", "scan", "publish", "release"):
+    for name in ("check", "scan", "publish", "publish-proxy", "release"):
         block = job(name)
         assert "    permissions:\n" in block, name
         assert re.search(r"timeout-minutes: \d+", block), name
 
 
 def test_only_publish_may_write_packages_and_only_release_may_write_contents() -> None:
-    for name in ("check", "scan", "publish", "release"):
+    for name in ("check", "scan", "publish", "publish-proxy", "release"):
         block = job(name)
-        assert ("packages: write" in block) == (name == "publish"), name
-        assert ("id-token: write" in block) == (name == "publish"), name
+        assert ("packages: write" in block) == name.startswith("publish"), name
+        assert ("id-token: write" in block) == name.startswith("publish"), name
         assert ("contents: write" in block) == (name == "release"), name
 
 
 def test_publishing_happens_only_on_a_tag() -> None:
-    for name in ("publish", "release"):
+    for name in ("publish", "publish-proxy", "release"):
         assert "if: ${{ github.event_name == 'push' }}" in job(name), name
     assert "push: false" in job("scan")
     assert "push: true" not in job("scan")
     assert "needs: [check, scan]" in job("publish")
-    assert "needs: [check, publish]" in job("release")
+    assert "needs: [check, publish, publish-proxy]" in job("release")
+    assert "needs: [check, scan]" in job("publish-proxy")
 
 
 def test_no_checkout_keeps_credentials() -> None:
     checkouts = WORKFLOW.count("uses: actions/checkout@")
-    assert checkouts == 4
+    assert checkouts == 5
     assert WORKFLOW.count("persist-credentials: false") == checkouts
 
 
@@ -243,3 +250,113 @@ def test_what_the_check_accepts_an_updater_reads(release: Path) -> None:
     text = (release / "deploy/release.json").read_text()
     assert check(release).returncode == 0
     assert str(parse_release(text).version) == version()
+
+
+# --- the proxy image and the compose file --------------------------------------------
+
+
+def test_the_proxy_is_built_scanned_tagged_and_attested_like_the_backend() -> None:
+    proxy = job("publish-proxy")
+    assert "file: deploy/Dockerfile.proxy" in proxy
+    assert "linux/amd64,linux/arm64" in proxy
+    assert "push-by-digest=true" in proxy
+    assert proxy.count("image-ref: ${{ env.PROXY_IMAGE }}@${{ steps.build.outputs.digest }}") == 2
+    assert 'imagetools create --tag "$PROXY_IMAGE:$VERSION" "$PROXY_IMAGE@$DIGEST"' in proxy
+    assert proxy.index("imagetools create") < proxy.index("attest-build-provenance")
+    assert 'test "$tagged" = "$DIGEST"' in proxy
+    assert "subject-name: ${{ env.PROXY_IMAGE }}" in proxy
+    assert "file: deploy/Dockerfile.proxy" in job("scan")
+
+
+def test_the_release_attaches_the_compose_file_and_its_pinned_copy() -> None:
+    release = job("release")
+    assert "needs.publish.outputs.digest" in release
+    assert "needs.publish-proxy.outputs.digest" in release
+    assert "pin-compose.py" in release
+    assert '"$RUNNER_TEMP/docker-compose.yml" "$RUNNER_TEMP/docker-compose.pinned.yml"' in release
+    assert "outputs:\n      digest: ${{ steps.build.outputs.digest }}" in job("publish")
+    assert "outputs:\n      digest: ${{ steps.build.outputs.digest }}" in job("publish-proxy")
+
+
+def test_the_compose_file_of_the_repository_is_checked_with_the_release(release: Path) -> None:
+    assert check(release, "--tag", f"v{version()}").returncode == 0
+
+
+def test_a_compose_file_on_another_version_fails_the_check(release: Path) -> None:
+    path = release / "deploy/compose/docker-compose.yml"
+    path.write_text(path.read_text().replace(f":-{version()}}}", ":-9.9.9}"))
+    done = check(release)
+    assert done.returncode == 1
+    assert "docker-compose.yml" in done.stderr
+    assert "9.9.9" in done.stderr
+
+
+def test_two_images_on_different_versions_fail_the_check(release: Path) -> None:
+    path = release / "deploy/compose/docker-compose.yml"
+    text = path.read_text()
+    first = text.index(f"brievie-proxy:${{BRIEVIE_VERSION:-{version()}}}")
+    path.write_text(text[:first] + text[first:].replace(f":-{version()}}}", ":-9.9.9}", 1))
+    done = check(release)
+    assert done.returncode == 1
+    assert "share one version" in done.stderr
+
+
+def test_a_revision_that_differs_from_the_image_fails_the_check(release: Path) -> None:
+    path = release / "backend/apps/updates/gate.py"
+    path.write_text(re.sub(r"(?m)^(COMPOSE_REVISION = )\d+", r"\g<1>7", path.read_text()))
+    done = check(release)
+    assert done.returncode == 1
+    assert "BRIEVIE_COMPOSE_REVISION" in done.stderr
+
+
+def test_pin_compose_names_both_images_by_digest(tmp_path: Path) -> None:
+    script = ROOT / ".github" / "scripts" / "pin-compose.py"
+    out = tmp_path / "pinned.yml"
+    backend, proxy = "sha256:" + "a" * 64, "sha256:" + "b" * 64
+    done = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            "-I",
+            str(script),
+            str(ROOT / "deploy/compose/docker-compose.yml"),
+            str(out),
+            "--backend",
+            backend,
+            "--proxy",
+            proxy,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert done.returncode == 0, done.stderr
+    pinned = out.read_text()
+    assert f"brievie-backend@{backend}" in pinned
+    assert f"brievie-proxy@{proxy}" in pinned
+    assert "brievie-backend:" not in pinned
+    assert "brievie-proxy:" not in pinned
+    assert "image: postgres:18" in pinned
+
+
+def test_pin_compose_refuses_a_bad_digest(tmp_path: Path) -> None:
+    script = ROOT / ".github" / "scripts" / "pin-compose.py"
+    done = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            "-I",
+            str(script),
+            str(ROOT / "deploy/compose/docker-compose.yml"),
+            str(tmp_path / "out.yml"),
+            "--backend",
+            "sha256:short",
+            "--proxy",
+            "sha256:" + "b" * 64,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert done.returncode == 1
+    assert not (tmp_path / "out.yml").exists()

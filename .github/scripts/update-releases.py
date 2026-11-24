@@ -8,8 +8,9 @@ version X.Y.Z (backend/pyproject.toml), it tags vX.Y.Z, then commits and tags tw
 releases on top:
 
 - vX.Y.(Z+1): only the version moves (pyproject, uv.lock, release.json, CHANGELOG);
-- vX.Y.(Z+2): the same, plus a migration that fails, so its update fails after the
-  switch and the way back has to be taken.
+- vX.Y.(Z+2): the same, plus two migrations of the `updates` app: one that does nothing
+  (so a migration is applied) and one that fails, so its update fails after the switch and
+  the way back has to be taken.
 
 It prints `installed=`, `good=` and `bad=` lines for $GITHUB_OUTPUT. Nothing is pushed.
 """
@@ -21,21 +22,23 @@ import sys
 from pathlib import Path
 
 VERSION = re.compile(r'^version = "(\d+)\.(\d+)\.(\d+)"$', re.MULTILINE)
-FAILING_MIGRATION = '''"""A migration that fails on purpose (CI job `update` only)."""
+MIGRATION_TEMPLATE = '''"""%(doc)s"""
 
 from django.db import migrations
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
 from django.db.migrations.state import StateApps
 
 
-def fail(apps: StateApps, schema_editor: BaseDatabaseSchemaEditor) -> None:
-    raise RuntimeError("This release fails its migration on purpose.")
+def run(apps: StateApps, schema_editor: BaseDatabaseSchemaEditor) -> None:
+    %(body)s
 
 
 class Migration(migrations.Migration):
-    dependencies = [("updates", "0001_initial")]
-    operations = [migrations.RunPython(fail, migrations.RunPython.noop)]
+    dependencies = [("updates", "%(previous)s")]
+    operations = [migrations.RunPython(run, migrations.RunPython.noop)]
 '''
+OK_BODY = "return None"
+FAILING_BODY = 'raise RuntimeError("This release fails its migration on purpose.")'
 
 
 def git(source: Path, *args: str) -> str:
@@ -70,6 +73,27 @@ def set_version(source: Path, old: str, new: str, *, minimum: str) -> None:
     changelog.write_text(text[:first] + entry + text[first:])
 
 
+def add_migrations(source: Path) -> None:
+    """After the newest migration of the `updates` app: one that passes, one that fails."""
+    folder = source / "backend" / "apps" / "updates" / "migrations"
+    stems = sorted(path.stem for path in folder.glob("[0-9][0-9][0-9][0-9]_*.py"))
+    previous = stems[-1]
+    number = int(previous[:4])
+    for offset, (name, doc, body) in enumerate(
+        (
+            ("ci_ok", "A migration that does nothing (CI jobs `update` only).", OK_BODY),
+            ("ci_fails", "A migration that fails on purpose (CI jobs `update` only).", FAILING_BODY),
+        ),
+        start=1,
+    ):
+        stem = f"{number + offset:04d}_{name}"
+        (folder / f"{stem}.py").write_text(
+            MIGRATION_TEMPLATE % {"doc": doc, "body": body, "previous": previous}
+        )
+        git(source, "add", str(folder / f"{stem}.py"))
+        previous = stem
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 1:
         print(__doc__, file=sys.stderr)
@@ -95,9 +119,7 @@ def main(argv: list[str]) -> int:
     git(source, "commit", "-q", "-am", f"release {good} (CI)")
     git(source, "tag", f"v{good}")
     set_version(source, good, bad, minimum=good)
-    migration = source / "backend" / "apps" / "updates" / "migrations" / "0002_ci_fails.py"
-    migration.write_text(FAILING_MIGRATION)
-    git(source, "add", str(migration))
+    add_migrations(source)
     git(source, "commit", "-q", "-am", f"release {bad} (CI, fails)")
     git(source, "tag", f"v{bad}")
     print(f"installed={installed}\ngood={good}\nbad={bad}")

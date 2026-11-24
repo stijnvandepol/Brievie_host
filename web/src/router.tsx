@@ -3,6 +3,7 @@ import { createRouter, type RouterHistory } from "@tanstack/react-router";
 import { aiRoute } from "./routes/ai";
 import { auditLogRoute } from "./routes/audit-log";
 import { automationsRoute } from "./routes/automations";
+import { backupRoute } from "./routes/backup";
 import { departmentsRoute } from "./routes/departments";
 import { documentRoute } from "./routes/document";
 import { duplicateRoute } from "./routes/duplicate";
@@ -21,6 +22,7 @@ import { membersRedirectRoute, peopleRoute, personsRedirectRoute } from "./route
 import { personDetailRoute } from "./routes/people-detail";
 import { postRoute } from "./routes/post";
 import { postAccessRoute } from "./routes/post-access";
+import { recoverySheetRoute } from "./routes/recovery-sheet";
 import { rootRoute } from "./routes/root";
 import { newRuleRoute, ruleRoute } from "./routes/rule-editor";
 import { searchRoute } from "./routes/search";
@@ -46,6 +48,8 @@ const routeTree = rootRoute.addChildren([
   passwordResetRoute,
   sessionsRoute,
   serverAuditLogRoute,
+  recoverySheetRoute,
+  backupRoute,
   passwordRoute,
   securityRoute,
   languageRoute,

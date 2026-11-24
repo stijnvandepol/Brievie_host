@@ -1,0 +1,19 @@
+# For CI only: the images of a pull request are not on ghcr, so the jobs build them to
+# these local tags and put this file over deploy/compose/docker-compose.yml. It changes
+# nothing but the image names (BRIEVIE_CI_TAG picks the tag, so the update jobs can move
+# from one throwaway release to the next); the compose file itself is what a user installs.
+services:
+  init-secrets:
+    image: brievie/backend:${BRIEVIE_CI_TAG:-ci}
+  init:
+    image: brievie/backend:${BRIEVIE_CI_TAG:-ci}
+  api:
+    image: brievie/backend:${BRIEVIE_CI_TAG:-ci}
+  worker:
+    image: brievie/backend:${BRIEVIE_CI_TAG:-ci}
+  keeper:
+    image: brievie/backend:${BRIEVIE_CI_TAG:-ci}
+  admin:
+    image: brievie/backend:${BRIEVIE_CI_TAG:-ci}
+  caddy:
+    image: brievie/proxy:${BRIEVIE_CI_TAG:-ci}

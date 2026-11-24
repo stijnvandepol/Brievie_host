@@ -578,6 +578,23 @@ def run_update_fallback(*, label: str) -> BackupRun:
     return run
 
 
+def run_update_safety(*, label: str) -> BackupRun:
+    """An update's safety back-up to the configured destination, made now in this process
+    (the compose `init` container: no keeper runs yet, so no job is queued). Returns the
+    finished run; never raises but for a bad label. A destination must be configured:
+    without one the caller uses `run_update_fallback`."""
+    restic.check_label(label)
+    run = BackupRun.objects.create(
+        kind=BackupRun.Kind.BACKUP,
+        requested_by=UPDATE_SAFETY,
+        label=label,
+        destination_kind=_kind_or_blank(),
+    )
+    perform_run(run.id)
+    run.refresh_from_db()
+    return run
+
+
 def perform_run(run_id: UUID, *, clean_up: Sequence[UUID] = ()) -> None:
     """Make or check a back-up; the job's whole body. Never raises: no automatic retry.
 
