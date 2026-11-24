@@ -1698,6 +1698,16 @@ msgid "Geldig tot %(date)s: %(title)s"
 msgstr "Valid until %(date)s: %(title)s"
 
 #: apps/documents/retention.py
+#, python-format
+msgid "Bewaren tot %(date)s. Weet je het zeker?"
+msgstr "Keep until %(date)s. Are you sure?"
+
+#: apps/documents/retention.py
+#, python-format
+msgid "Dit document moet bewaard worden tot %(date)s. Haal de datum weg om het nu te wissen."
+msgstr "This document must be kept until %(date)s. Remove the date to delete it now."
+
+#: apps/documents/retention.py
 msgid "Deze brief moet nog bewaard worden. Je kunt hem nu niet wissen."
 msgstr "This letter still has to be kept. You can't erase it now."
 

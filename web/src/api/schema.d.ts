@@ -1210,7 +1210,7 @@ export interface paths {
         put?: never;
         /**
          * Trash Document
-         * @description Move the letter to the trash (role member or admin; a viewer gets 403). It is gone from every list, count, search and task list, and can be put back with `restoreDocument` until `purge_after` (30 days); then it is purged for good. Trashing a letter in the trash again answers the same. 404 `document_not_found` for a letter the caller does not see. Written to the log (`document_trashed`).
+         * @description Move the letter to the trash (role member or admin; a viewer gets 403). It is gone from every list, count, search and task list, and can be put back with `restoreDocument` until `purge_after` (30 days); then it is purged for good. Trashing a letter in the trash again answers the same. 404 `document_not_found` for a letter the caller does not see. Written to the log (`document_trashed`). A document with a "Bewaren tot" today or later is moved too, with `warning` (ask first, from `retain_until`); it cannot be purged before that day.
          */
         post: operations["trashDocument"];
         delete?: never;
@@ -2267,7 +2267,7 @@ export interface paths {
         put?: never;
         /**
          * Empty Trash
-         * @description Web session only: a bearer token answers 401 not_authenticated. Purge every letter in the caller's trash for good (role admin), up to `up_to`: the newest `trashed_at` the caller showed (all when absent). Letters the caller does not see stay. Answers how many letters are now being purged; a job removes them. Written to the log, one `document_purged` row per letter.
+         * @description Web session only: a bearer token answers 401 not_authenticated. Purge every letter in the caller's trash for good (role admin), up to `up_to`: the newest `trashed_at` the caller showed (all when absent). Letters the caller does not see stay. Answers how many letters are now being purged; a job removes them. Written to the log, one `document_purged` row per letter. A letter with a "Bewaren tot" today or later stays in the trash; `retained` counts them.
          */
         post: operations["emptyTrash"];
         delete?: never;
@@ -2288,7 +2288,7 @@ export interface paths {
         post?: never;
         /**
          * Purge Document
-         * @description Web session only: a bearer token answers 401 not_authenticated. Purge a letter from the trash now, for good (role admin). Only a letter in the caller's trash: a live letter, one whose purge started, or one the caller does not see answers 404 `document_not_found`. From this answer on it cannot be restored; a job removes its scanned pages and its rows. A back-up made earlier still holds it. Written to the log (`document_purged`).
+         * @description Web session only: a bearer token answers 401 not_authenticated. Purge a letter from the trash now, for good (role admin). Only a letter in the caller's trash: a live letter, one whose purge started, or one the caller does not see answers 404 `document_not_found`. From this answer on it cannot be restored; a job removes its scanned pages and its rows. A back-up made earlier still holds it. Written to the log (`document_purged`). 409 `document_retained` while its "Bewaren tot" is today or later (remove the date first).
          */
         delete: operations["purgeDocument"];
         options?: never;
@@ -3498,6 +3498,11 @@ export interface components {
         EmptyTrashOut: {
             /** Document Count */
             document_count: number;
+            /**
+             * Retained
+             * @default 0
+             */
+            retained: number;
         };
         /**
          * ErrorOut
@@ -5290,6 +5295,11 @@ export interface components {
              * Format: date
              */
             waiting_until?: string | null;
+            /**
+             * Warning
+             * @default
+             */
+            warning: string;
         };
         /**
          * UploadMetadataIn

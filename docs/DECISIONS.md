@@ -2898,3 +2898,10 @@ Rulings of the spec, kept as written:
   reminder; a cleared one ends it (`delete_tasks`). A review may not make an `expiry` task.
   Every change goes through `letter_sync`, which keeps an own document's letter facts at
   zero: the reminder counts in Mijn taken, never as an "Openstaand" letter.
+- **B4 (plan Task 9).** `retention.check_removal` reads `retain_until`: until the day has passed
+  (Europe/Amsterdam; on the day itself it is still kept) the trash is allowed with a warning
+  (`trashDocument` answers it in `warning`; the clients ask first from `retain_until`),
+  purge-now answers 409 `document_retained`, emptying the trash leaves it and counts it
+  (`EmptyTrashOut.retained`), and the 30-day expiry leaves it in the trash until the day has
+  passed. Any editor may clear the date (`updateDocumentDetails`, history
+  `retention_changed`). The sentences name the date only.

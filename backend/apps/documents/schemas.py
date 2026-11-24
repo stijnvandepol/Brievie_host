@@ -131,6 +131,10 @@ class TrashedDocumentOut(DocumentSummaryOut):
     trashed_by_name: str = ""
     # `trashed_at` plus the retention (30 days); purged within the hour after.
     purge_after: datetime
+    # `trashDocument` only: the sentence the move came with ("Bewaren tot ... Weet je het
+    # zeker?") when the document is retained; the clients ask it before (from
+    # `retain_until`). Empty otherwise.
+    warning: str = ""
 
 
 class TrashListOut(Schema):
@@ -155,6 +159,8 @@ class EmptyTrashIn(InputSchema):
 class EmptyTrashOut(Schema):
     # How many letters are now being purged.
     document_count: int
+    # How many stayed in the trash because of their "Bewaren tot".
+    retained: int = 0
 
 
 class PageOut(Schema):

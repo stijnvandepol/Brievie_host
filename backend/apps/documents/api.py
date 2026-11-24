@@ -808,7 +808,9 @@ def undo_document_event(
         " from every list, count, search and task list, and can be put back with"
         " `restoreDocument` until `purge_after` (30 days); then it is purged for good."
         " Trashing a letter in the trash again answers the same. 404 `document_not_found`"
-        " for a letter the caller does not see. Written to the log (`document_trashed`)."
+        " for a letter the caller does not see. Written to the log (`document_trashed`). A"
+        ' document with a "Bewaren tot" today or later is moved too, with `warning` (ask'
+        " first, from `retain_until`); it cannot be purged before that day."
     ),
 )
 def trash_document(
@@ -821,7 +823,7 @@ def trash_document(
         actor=actor_from_request(request),
         document_id=document_id,
     )
-    return trash.trashed_out(document)
+    return trash.trashed_out(document).model_copy(update={"warning": trash.trash_warning(document)})
 
 
 @router.post(
@@ -874,14 +876,15 @@ def list_trash(request: HttpRequest, workspace_id: UUID) -> TrashListOut:
     + " Purge every letter in the caller's trash for good (role admin), up to `up_to`: the"
     " newest `trashed_at` the caller showed (all when absent). Letters the caller does not"
     " see stay. Answers how many letters are now being purged; a job removes them. Written"
-    " to the log, one `document_purged` row per letter.",
+    ' to the log, one `document_purged` row per letter. A letter with a "Bewaren tot" today'
+    " or later stays in the trash; `retained` counts them.",
 )
 def empty_trash(request: HttpRequest, workspace_id: UUID, payload: EmptyTrashIn) -> EmptyTrashOut:
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
-    count = trash.empty_trash(
+    emptied = trash.empty_trash(
         membership=membership, actor=actor_from_request(request), up_to=payload.up_to
     )
-    return EmptyTrashOut(document_count=count)
+    return EmptyTrashOut(document_count=emptied.marked, retained=emptied.retained)
 
 
 @router.delete(
@@ -894,7 +897,8 @@ def empty_trash(request: HttpRequest, workspace_id: UUID, payload: EmptyTrashIn)
     " caller's trash: a live letter, one whose purge started, or one the caller does not"
     " see answers 404 `document_not_found`. From this answer on it cannot be restored; a"
     " job removes its scanned pages and its rows. A back-up made earlier still holds it."
-    " Written to the log (`document_purged`).",
+    ' Written to the log (`document_purged`). 409 `document_retained` while its "Bewaren'
+    ' tot" is today or later (remove the date first).',
 )
 def purge_document(request: HttpRequest, workspace_id: UUID, document_id: UUID) -> Status[None]:
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
