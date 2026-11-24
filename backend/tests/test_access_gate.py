@@ -179,6 +179,7 @@ OPEN_ON_PUBLIC_ROUTE = frozenset(
         "getMe",
         "getMenuCounts",
         "getMyPostAccess",
+        "getServerAddresses",
         "getVisibility",
         "listAiSuppliers",
         "listDevices",

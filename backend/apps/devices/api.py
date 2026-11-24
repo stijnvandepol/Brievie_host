@@ -3,6 +3,7 @@ from uuid import UUID
 from django.http import HttpRequest, HttpResponse
 from ninja import Router, Status
 
+from apps.access.services import server_addresses
 from apps.accounts.auth import session_auth
 from apps.accounts.schemas import UserOut
 from apps.accounts.services import current_user
@@ -66,7 +67,15 @@ def pair_device(request: HttpRequest, response: HttpResponse, payload: PairIn) -
     # The device token is shown once.
     response["Cache-Control"] = "no-store"
     user = UserOut.model_validate(device.user, from_attributes=True)
-    return Status(201, PairOut(device_id=device.id, token=token, user=user))
+    return Status(
+        201,
+        PairOut(
+            device_id=device.id,
+            token=token,
+            user=user,
+            public_urls=server_addresses().public_urls,
+        ),
+    )
 
 
 @router.post(
@@ -113,7 +122,15 @@ def pair_device_with_proof(
     )
     response["Cache-Control"] = "no-store"
     user = UserOut.model_validate(device.user, from_attributes=True)
-    return Status(201, PairOut(device_id=device.id, token=token, user=user))
+    return Status(
+        201,
+        PairOut(
+            device_id=device.id,
+            token=token,
+            user=user,
+            public_urls=server_addresses().public_urls,
+        ),
+    )
 
 
 @router.get(

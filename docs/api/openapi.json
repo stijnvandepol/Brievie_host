@@ -2865,6 +2865,13 @@
             "title": "Device Id",
             "type": "string"
           },
+          "public_urls": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Public Urls",
+            "type": "array"
+          },
           "token": {
             "title": "Token",
             "type": "string"
@@ -3798,6 +3805,30 @@
           "documents"
         ],
         "title": "RuleTestOut",
+        "type": "object"
+      },
+      "ServerAddressesOut": {
+        "properties": {
+          "public_urls": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Public Urls",
+            "type": "array"
+          },
+          "urls": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Urls",
+            "type": "array"
+          }
+        },
+        "required": [
+          "urls",
+          "public_urls"
+        ],
+        "title": "ServerAddressesOut",
         "type": "object"
       },
       "SessionOut": {
@@ -6459,6 +6490,47 @@
         "summary": "End My Session",
         "tags": [
           "accounts"
+        ]
+      }
+    },
+    "/api/v1/server/addresses": {
+      "get": {
+        "description": "The addresses of this server, home first, and those of them served with a public certificate (a tunnel or an own reverse proxy). A paired app refreshes its addresses from here over a verified connection only.",
+        "operationId": "getServerAddresses",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerAddressesOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Get Server Addresses",
+        "tags": [
+          "server"
         ]
       }
     },
