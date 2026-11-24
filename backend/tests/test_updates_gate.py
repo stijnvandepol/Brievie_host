@@ -137,4 +137,7 @@ def test_gate_is_pure() -> None:
 def test_dockerfile_carries_the_release_and_the_revision() -> None:
     text = (ROOT / "deploy/Dockerfile").read_text()
     assert "COPY deploy/release.json /app/release.json" in text
-    assert f"ENV BRIEVIE_COMPOSE_REVISION={gate.COMPOSE_REVISION}\n" in text
+    # No BRIEVIE_COMPOSE_* variable in the image: the image knows its revision from the code
+    # (gate.COMPOSE_REVISION), and only the standalone compose file says "compose install".
+    assert "BRIEVIE_COMPOSE" not in text
+    assert gate.COMPOSE_REVISION >= 1

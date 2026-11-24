@@ -347,11 +347,10 @@ BRIEVIE_BACKUP_AUTO_INIT: bool = env.bool("BRIEVIE_BACKUP_AUTO_INIT", default=Fa
 BRIEVIE_BACKUP_CONFIG_DIR: str = env.str("BRIEVIE_BACKUP_CONFIG_DIR", default="/data/backup-config")
 BRIEVIE_AUTHORITY_COPY_DIR: str = env.str("BRIEVIE_AUTHORITY_COPY_DIR", default="/data/authority")
 BRIEVIE_HOSTNAME: str = env.str("BRIEVIE_HOSTNAME", default="")
-# Set by the compose file of a compose-only install (its structure revision); empty on a
-# `./brievie` install. The web interface shows the recovery sheet only where the api holds
-# everything the sheet needs (the back-up destination and password come from the compose
-# file's environment).
-BRIEVIE_COMPOSE_INSTALL: bool = env.str("BRIEVIE_COMPOSE_REVISION", default="") != ""
+# True only where the standalone compose file (deploy/compose/docker-compose.yml) says so;
+# never set by the image or by `deploy/docker-compose.yml`. The web interface offers the
+# recovery sheet only there: the api of a `./brievie` install lacks what the sheet needs.
+BRIEVIE_COMPOSE_INSTALL: bool = env.bool("BRIEVIE_COMPOSE_INSTALL", default=False)
 
 # Audit rows older than this are removed every night (apps.audit.jobs). The database
 # refuses to remove rows younger than 90 days, so a lower value is a mistake.

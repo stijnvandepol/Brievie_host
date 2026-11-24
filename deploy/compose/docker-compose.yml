@@ -16,6 +16,9 @@ x-settings: &settings
   # <-- The name or IP address your iPhone uses for this server, for example mynas.local
   # or 192.168.1.20. The example name is refused on purpose.
   BRIEVIE_HOSTNAME: ${BRIEVIE_HOSTNAME:-verander-mij.local}
+  # This is a compose-only install (not ./brievie): the web interface then offers the
+  # recovery sheet. Never set it in deploy/docker-compose.yml.
+  BRIEVIE_COMPOSE_INSTALL: "true"
   # The structure of this file. The image refuses a file that is too old or too new.
   BRIEVIE_COMPOSE_REVISION: "1"
   # A secret file must be private (mode 0400) and not a link.

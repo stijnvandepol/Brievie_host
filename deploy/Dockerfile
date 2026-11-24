@@ -61,11 +61,11 @@ RUN . /etc/os-release \
 
 # backend/tests is left out by .dockerignore.
 COPY backend/ ./
-# The release data of this version (the tag's deploy/release.json, byte for byte) and the
-# structure revision of the compose file this image goes with. A compose install checks
-# both at start (apps.updates.gate); the wrapper ignores them.
+# The release data of this version (the tag's deploy/release.json, byte for byte). A compose
+# install checks it at start (apps.updates.gate); the wrapper ignores it. The image sets no
+# variable that marks a compose install: only the standalone compose file does, so a
+# ./brievie install never has the web recovery sheet (tests/test_compose_flag.py).
 COPY deploy/release.json /app/release.json
-ENV BRIEVIE_COMPOSE_REVISION=1
 # The built web app: WhiteNoise serves its files, apps.common.web its index.html.
 COPY --from=web /web/dist ./webdist
 # Build-time only: the real SECRET_KEY comes from the environment at run time.

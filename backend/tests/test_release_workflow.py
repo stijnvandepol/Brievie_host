@@ -22,7 +22,7 @@ FILES = (
     "deploy/release.json",
     "CHANGELOG.md",
     "deploy/compose/docker-compose.yml",
-    "deploy/Dockerfile",
+    "backend/apps/updates/gate.py",
 )
 
 
@@ -302,8 +302,8 @@ def test_two_images_on_different_versions_fail_the_check(release: Path) -> None:
 
 
 def test_a_revision_that_differs_from_the_image_fails_the_check(release: Path) -> None:
-    path = release / "deploy/Dockerfile"
-    path.write_text(re.sub(r"(ENV BRIEVIE_COMPOSE_REVISION=)\d+", r"\g<1>7", path.read_text()))
+    path = release / "backend/apps/updates/gate.py"
+    path.write_text(re.sub(r"(?m)^(COMPOSE_REVISION = )\d+", r"\g<1>7", path.read_text()))
     done = check(release)
     assert done.returncode == 1
     assert "BRIEVIE_COMPOSE_REVISION" in done.stderr

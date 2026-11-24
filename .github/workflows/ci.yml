@@ -477,6 +477,12 @@ jobs:
         run: test "$($COMPOSE ps --status running --services | grep -c '^keeper$')" = 1
       - name: The installation code is printed once
         run: test "$($COMPOSE logs api | grep -c 'Installatiecode')" = 1
+      - name: A ./brievie install has no web recovery sheet (409)
+        run: |
+          set -euo pipefail
+          code=$($COMPOSE logs api | sed -n 's/.*Installatiecode: //p' | head -n 1)
+          echo "::add-mask::$code"
+          SETUP_TOKEN=$code .github/scripts/recovery-sheet-check.sh 409
       - name: Container state on failure
         if: failure()
         # No logs here: the api log holds the installation code.
@@ -549,6 +555,16 @@ jobs:
         run: test "$($COMPOSE logs api | grep -c 'Installatiecode')" = 1
       - name: The vault, the role volumes, the networks and no secret anywhere
         run: .github/scripts/compose-secrets-check.sh check
+      - name: A server admin gets the recovery sheet through the web, with the master key
+        run: |
+          set -euo pipefail
+          code=$($COMPOSE logs api | sed -n 's/.*Installatiecode: //p' | head -n 1)
+          echo "::add-mask::$code"
+          key=$(docker run --rm --user 0 --network none -v brievie_secrets:/v:ro brievie/backend:ci cat /v/master_key)
+          echo "::add-mask::$key"
+          groups=$(printf '%s' "$key" | fold -w 4 | paste -sd' ' -)
+          echo "::add-mask::$groups"
+          SETUP_TOKEN=$code MASTER_KEY_GROUPS=$groups .github/scripts/recovery-sheet-check.sh 200
       - name: A restart makes no new secret and the server still answers
         run: |
           set -euo pipefail

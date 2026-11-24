@@ -5,7 +5,8 @@
 The version lives in backend/pyproject.toml; deploy/release.json, the newest released
 entry of CHANGELOG.md, the default version in deploy/compose/docker-compose.yml (both
 Brievie image lines) and (when given) the git tag must all say the same; the compose
-file's BRIEVIE_COMPOSE_REVISION must equal the one in deploy/Dockerfile. On success it
+file's BRIEVIE_COMPOSE_REVISION must equal COMPOSE_REVISION in
+backend/apps/updates/gate.py (what the image knows). On success it
 prints `version=X.Y.Z` (for $GITHUB_OUTPUT) and, with --notes, writes that version's
 CHANGELOG section to FILE as the release notes. Anything else: one line on stderr and
 exit 1. Standard library only; it reads files and writes nothing but FILE.
@@ -78,7 +79,7 @@ COMPOSE_FILE = Path("deploy") / "compose" / "docker-compose.yml"
 _VERSION_DEFAULT = re.compile(r"\$\{BRIEVIE_VERSION:-([^}]*)\}")
 _BRIEVIE_IMAGE = re.compile(r"^\s*image:\s*(ghcr\.io/\S+/brievie-(?:backend|proxy):\S+)", re.MULTILINE)
 _FILE_REVISION = re.compile(r"^\s*BRIEVIE_COMPOSE_REVISION:\s*\"?(\d+)\"?\s*$", re.MULTILINE)
-_IMAGE_REVISION = re.compile(r"^ENV BRIEVIE_COMPOSE_REVISION=(\d+)\s*$", re.MULTILINE)
+_IMAGE_REVISION = re.compile(r"^COMPOSE_REVISION = (\d+)\s*$", re.MULTILINE)
 
 
 def check_compose(root: Path, version: str) -> None:
@@ -86,9 +87,9 @@ def check_compose(root: Path, version: str) -> None:
     and its structure revision is the one the image knows (apps.updates.gate)."""
     try:
         text = (root / COMPOSE_FILE).read_text(encoding="utf-8")
-        dockerfile = (root / "deploy" / "Dockerfile").read_text(encoding="utf-8")
+        gate = (root / "backend" / "apps" / "updates" / "gate.py").read_text(encoding="utf-8")
     except OSError:
-        raise ReleaseCheckError(f"{COMPOSE_FILE} or deploy/Dockerfile cannot be read") from None
+        raise ReleaseCheckError(f"{COMPOSE_FILE} or backend/apps/updates/gate.py cannot be read") from None
     lines = _BRIEVIE_IMAGE.findall(text)
     if len(lines) != 2:
         raise ReleaseCheckError(f"{COMPOSE_FILE}: expected the two Brievie image lines")
@@ -100,13 +101,13 @@ def check_compose(root: Path, version: str) -> None:
             f"{COMPOSE_FILE} defaults to {sorted(defaults)[0]!r}, pyproject says {version!r}"
         )
     file_revision = _FILE_REVISION.findall(text)
-    image_revision = _IMAGE_REVISION.findall(dockerfile)
+    image_revision = _IMAGE_REVISION.findall(gate)
     if len(set(file_revision)) != 1 or len(image_revision) != 1:
-        raise ReleaseCheckError("BRIEVIE_COMPOSE_REVISION must be set once in the file and image")
+        raise ReleaseCheckError("BRIEVIE_COMPOSE_REVISION must be set once in the file and COMPOSE_REVISION once in gate.py")
     if file_revision[0] != image_revision[0]:
         raise ReleaseCheckError(
             f"BRIEVIE_COMPOSE_REVISION is {file_revision[0]} in the compose file "
-            f"but {image_revision[0]} in deploy/Dockerfile"
+            f"but {image_revision[0]} in apps/updates/gate.py"
         )
 
 

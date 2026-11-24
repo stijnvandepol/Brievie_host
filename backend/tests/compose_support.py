@@ -17,6 +17,7 @@ ONLY_COMPOSE = frozenset({"init-secrets"})
 EXTRA_ENVIRONMENT = frozenset(
     {
         "BRIEVIE_COMPOSE_REVISION",
+        "BRIEVIE_COMPOSE_INSTALL",
         "BRIEVIE_STRICT_SECRET_FILES",
         "BRIEVIE_HOSTNAME",
         "BRIEVIE_INIT_WRITABLE",
