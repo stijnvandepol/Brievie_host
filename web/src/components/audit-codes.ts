@@ -22,6 +22,7 @@ export const SERVER_CODES = [
   "server_admin_granted",
   "server_admin_revoked",
   "recovery_sheet_viewed",
+  "backup_requested",
   "sso_settings_changed",
   "workspace_created",
 ] as const;
@@ -102,6 +103,8 @@ function knownLabel(code: AuditCodeName): string {
       return t`Geen serverbeheerder meer`;
     case "recovery_sheet_viewed":
       return t`Herstelblad bekeken`;
+    case "backup_requested":
+      return t`Back-up gevraagd`;
     case "sso_settings_changed":
       return t`Instellingen voor inloggen via organisatie gewijzigd`;
     case "workspace_created":

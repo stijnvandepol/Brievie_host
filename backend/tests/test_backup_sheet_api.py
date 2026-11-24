@@ -121,3 +121,23 @@ def test_the_sheet_uses_the_api_container_environment(settings: Settings) -> Non
     body = post_json(sign_in(admin()), URL).content.decode()
     assert "/volume1/brievie-backup" in body
     assert "a-separate-backup-password" in body
+
+
+def test_the_sheet_is_rate_limited_per_admin() -> None:
+    client = sign_in(admin())
+    for _ in range(6):
+        assert post_json(client, URL).status_code == 200
+    r = post_json(client, URL)
+    assert (r.status_code, r.json()["code"]) == (429, "too_many_attempts")
+    assert b"5a5a" not in r.content
+
+
+def test_the_sheet_needs_a_csrf_token_from_a_browser_session() -> None:
+    user = admin()
+    client = Client(enforce_csrf_checks=True)
+    client.force_login(user)
+    r = client.post(f"/api/v1{URL}", content_type="application/json")
+    assert r.status_code == 403
+    assert r.json()["code"] == "csrf_failed"
+    assert b"5a5a" not in r.content
+    assert not ServerAuditEvent.objects.filter(code="recovery_sheet_viewed").exists()

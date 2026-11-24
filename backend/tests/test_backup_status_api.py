@@ -9,6 +9,7 @@ from django.utils import timezone
 from pytest_django import Settings
 
 from apps.accounts.models import User
+from apps.audit.models import ServerAuditEvent
 from apps.backup.models import BackupRun
 from tests.factories import TEST_PASSWORD, UserFactory
 from tests.helpers import post_json
@@ -98,3 +99,25 @@ def test_a_manual_back_up_without_a_destination_is_409() -> None:
 @pytest.mark.parametrize("path", ["/api/v1/server/backup-runs"])
 def test_a_get_of_the_run_endpoint_is_not_allowed(path: str) -> None:
     assert admin_client().get(path).status_code == 405
+
+
+def test_a_manual_back_up_needs_a_csrf_token(configured_folder: Path) -> None:
+    client = Client(enforce_csrf_checks=True)
+    client.force_login(UserFactory.create(is_server_admin=True))
+    r = client.post("/api/v1/server/backup-runs", content_type="application/json")
+    assert (r.status_code, r.json()["code"]) == (403, "csrf_failed")
+    assert not BackupRun.objects.exists()
+
+
+def test_a_manual_back_up_is_recorded_in_the_log(configured_folder: Path) -> None:
+    user = UserFactory.create(is_server_admin=True)
+    assert post_json(sign_in(user), RUNS).status_code == 202
+    rows = list(ServerAuditEvent.objects.filter(code="backup_requested"))
+    assert len(rows) == 1
+    assert rows[0].actor_id == user.id
+    assert rows[0].values == {}
+
+
+def test_a_refused_manual_back_up_is_not_recorded() -> None:
+    assert post_json(admin_client(), RUNS).status_code == 409
+    assert not ServerAuditEvent.objects.filter(code="backup_requested").exists()

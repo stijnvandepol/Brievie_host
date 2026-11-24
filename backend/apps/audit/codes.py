@@ -27,6 +27,8 @@ class AuditCode(models.TextChoices):
     SERVER_ADMIN_REVOKED = "server_admin_revoked", _("Geen serverbeheerder meer")
     # The recovery sheet (with the master key) was shown to a server admin; no values.
     RECOVERY_SHEET_VIEWED = "recovery_sheet_viewed", _("Herstelblad bekeken")
+    # "Nu back-uppen" in the web interface; no values (the run's id is in the back-up status).
+    BACKUP_REQUESTED = "backup_requested", _("Back-up gevraagd")
     SSO_SETTINGS_CHANGED = (
         "sso_settings_changed",
         _("Instellingen voor inloggen via organisatie gewijzigd"),
@@ -133,6 +135,7 @@ ALLOWED_VALUES: dict[AuditCode, frozenset[str]] = {
     AuditCode.SERVER_ADMIN_GRANTED: _NONE,
     AuditCode.SERVER_ADMIN_REVOKED: _NONE,
     AuditCode.RECOVERY_SHEET_VIEWED: _NONE,
+    AuditCode.BACKUP_REQUESTED: _NONE,
     AuditCode.SSO_SETTINGS_CHANGED: _NONE,
     # kind: home or business.
     AuditCode.WORKSPACE_CREATED: frozenset({"kind"}),

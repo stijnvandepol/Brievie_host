@@ -6720,7 +6720,7 @@
     },
     "/api/v1/server/backup-runs": {
       "post": {
-        "description": "Web session only: a bearer token answers 401 not_authenticated; a session without a valid CSRF token answers 403. Server admins only. Queues one back-up now (the keeper makes it). 409 not_configured without a destination; 409 backup_running while one is open.",
+        "description": "Web session only: a bearer token answers 401 not_authenticated; a session without a valid CSRF token answers 403. Server admins only. Queues one back-up now (the keeper makes it) and records backup_requested in the log. 409 not_configured without a destination; 409 backup_running while one is open.",
         "operationId": "createBackupRun",
         "parameters": [],
         "responses": {
@@ -6911,6 +6911,16 @@
               }
             },
             "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           }
         },
         "security": [

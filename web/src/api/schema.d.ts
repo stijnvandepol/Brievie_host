@@ -440,7 +440,7 @@ export interface paths {
         put?: never;
         /**
          * Create Backup Run
-         * @description Web session only: a bearer token answers 401 not_authenticated; a session without a valid CSRF token answers 403. Server admins only. Queues one back-up now (the keeper makes it). 409 not_configured without a destination; 409 backup_running while one is open.
+         * @description Web session only: a bearer token answers 401 not_authenticated; a session without a valid CSRF token answers 403. Server admins only. Queues one back-up now (the keeper makes it) and records backup_requested in the log. 409 not_configured without a destination; 409 backup_running while one is open.
          */
         post: operations["createBackupRun"];
         delete?: never;
@@ -6358,6 +6358,15 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

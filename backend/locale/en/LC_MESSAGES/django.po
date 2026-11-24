@@ -446,6 +446,10 @@ msgid "Herstelblad bekeken"
 msgstr "Recovery sheet viewed"
 
 #: apps/audit/codes.py
+msgid "Back-up gevraagd"
+msgstr "Backup requested"
+
+#: apps/audit/codes.py
 msgid "Instellingen voor inloggen via organisatie gewijzigd"
 msgstr "Settings for signing in through your organization changed"
 

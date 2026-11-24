@@ -834,6 +834,10 @@ msgstr "Automation"
 msgid "Back-up"
 msgstr "Backup"
 
+#: src/components/audit-codes.ts
+msgid "Back-up gevraagd"
+msgstr "Backup requested"
+
 #: src/routes/setup-summary.tsx
 msgid "Back-up instellen: typ op de server"
 msgstr "Set up the backup: on the server, type"

@@ -33,8 +33,10 @@ _HTML_RESPONSE = {
 
 @router.post(
     "/server/recovery-sheet",
-    response={403: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS},
+    response={403: ErrorOut, 409: ErrorOut, 429: ErrorOut, **SESSION_WRITE_ERRORS},
     auth=session_auth,
+    # The sheet carries the master key: a handful an hour is plenty for a person.
+    throttle=CallerThrottle("recovery_sheet", "6/h"),
     operation_id="createRecoverySheet",
     openapi_extra=_HTML_RESPONSE,
     description=(
@@ -116,8 +118,8 @@ def get_backup_status(request: HttpRequest) -> BackupStatusOut:
     description=(
         "Web session only: a bearer token answers 401 not_authenticated; a session without "
         "a valid CSRF token answers 403. Server admins only. Queues one back-up now (the "
-        "keeper makes it). 409 not_configured without a destination; 409 backup_running "
-        "while one is open."
+        "keeper makes it) and records backup_requested in the log. 409 not_configured without "
+        "a destination; 409 backup_running while one is open."
     ),
 )
 def create_backup_run(request: HttpRequest) -> Status[BackupRunOut]:
@@ -126,4 +128,5 @@ def create_backup_run(request: HttpRequest) -> Status[BackupRunOut]:
         run = schedule.request_manual()
     except BackupError as error:
         raise ApiError(409, error.code, str(REASONS[error.code])) from None
+    record(AuditCode.BACKUP_REQUESTED, actor=actor_from_request(request))
     return Status(202, BackupRunOut(run_id=run.id))
