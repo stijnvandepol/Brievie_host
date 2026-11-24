@@ -187,6 +187,14 @@ class AccountNotice(BaseModel):
         DEVICE_REVOKED = "device_revoked", _("Apparaat ingetrokken")
         DEVICE_PAIRED = "device_paired", _("Apparaat gekoppeld")
         SECOND_FACTOR_CLEARED = "second_factor_cleared", _("Tweestapsverificatie gewist")
+        SECOND_FACTOR_CLEARED_BY_COMMAND = (
+            "second_factor_cleared_by_command",
+            _("Tweestapsverificatie gewist op de server"),
+        )
+        # Somebody had the password but not the code, until the second step locked.
+        SECOND_FACTOR_LOCKED = "second_factor_locked", _("Inlogpoging zonder code")
+        SECOND_FACTOR_REQUIRED = "second_factor_required", _("Tweestapsverificatie verplicht")
+        SECOND_FACTOR_RECOVERY_USED = "second_factor_recovery_used", _("Herstelcode gebruikt")
         SERVER_ADMIN_GRANTED = "server_admin_granted", _("Serverbeheerder gemaakt")
         SERVER_ADMIN_REVOKED = "server_admin_revoked", _("Geen serverbeheerder meer")
         # Part B sends these four; nothing in part A does.

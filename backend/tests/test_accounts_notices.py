@@ -240,6 +240,10 @@ def test_every_workspace_code_is_one_the_services_send_with_a_workspace() -> Non
         "device_revoked",
         "device_paired",
         "second_factor_cleared",
+        "second_factor_cleared_by_command",
+        "second_factor_locked",
+        "second_factor_required",
+        "second_factor_recovery_used",
         "server_admin_granted",
         "server_admin_revoked",
     }
@@ -267,3 +271,50 @@ def test_notices_of_a_workspace_left_are_not_listed() -> None:
     Membership.objects.filter(user=user, workspace=left).delete()
     body = signed_in(user).get("/api/v1/me/notices").json()
     assert sorted(str(n["workspace_id"]) for n in body) == sorted([str(stays.id), "None"])
+
+
+@pytest.mark.parametrize(
+    ("code", "values", "text"),
+    [
+        (
+            "second_factor_locked",
+            {},
+            "Iemand heeft op 3 mei met jouw wachtwoord geprobeerd in te loggen, maar had de "
+            "code niet. Verander je wachtwoord als jij dat niet was.",
+        ),
+        (
+            "second_factor_required",
+            {"until": "10 mei"},
+            "Zet tweestapsverificatie aan vóór 10 mei. Daarna kun je pas inloggen als je het "
+            "hebt aangezet.",
+        ),
+        (
+            "second_factor_recovery_used",
+            {"count": "7"},
+            "Op 3 mei is met een herstelcode op je account ingelogd. Je hebt nog 7 herstelcodes.",
+        ),
+        ("second_factor_cleared", {}, "Anne heeft op 3 mei je tweestapsverificatie gewist."),
+        (
+            "second_factor_cleared_by_command",
+            {},
+            "Je tweestapsverificatie is op 3 mei gewist op de server.",
+        ),
+    ],
+)
+def test_two_step_sign_in_notices_read_like_the_design(
+    code: str, values: dict[str, str], text: str
+) -> None:
+    notice = notice_on(
+        UserFactory.create(), code, datetime(2026, 5, 3, 12, tzinfo=AMSTERDAM), **values
+    )
+
+    assert notice_message(notice) == text
+
+
+def test_no_two_step_sign_in_notice_takes_a_code_or_a_secret() -> None:
+    from apps.accounts.notices import MESSAGES, NOTICE_VALUE_KEYS
+
+    for code in [c for c in AccountNotice.Code.values if c.startswith("second_factor")]:
+        assert not NOTICE_VALUE_KEYS[code] & {"code", "secret", "recovery_code", "codes"}
+        assert "%(code)s" not in str(MESSAGES[code])
+        assert "%(secret)s" not in str(MESSAGES[code])

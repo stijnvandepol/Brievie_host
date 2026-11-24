@@ -111,6 +111,22 @@ msgstr "Device paired"
 msgid "Tweestapsverificatie gewist"
 msgstr "Two-step verification cleared"
 
+#: apps/accounts/models.py
+msgid "Tweestapsverificatie gewist op de server"
+msgstr "Two-step verification cleared on the server"
+
+#: apps/accounts/models.py
+msgid "Inlogpoging zonder code"
+msgstr "Sign-in attempt without the code"
+
+#: apps/accounts/models.py
+msgid "Tweestapsverificatie verplicht"
+msgstr "Two-step verification required"
+
+#: apps/accounts/models.py apps/audit/codes.py
+msgid "Herstelcode gebruikt"
+msgstr "Recovery code used"
+
 #: apps/accounts/models.py apps/audit/codes.py
 msgid "Serverbeheerder gemaakt"
 msgstr "Made server admin"
@@ -199,6 +215,26 @@ msgstr "You are no longer a server admin since %(date)s. This was arranged on th
 #, python-format
 msgid "%(name)s heeft op %(date)s je tweestapsverificatie gewist."
 msgstr "%(name)s cleared your two-step verification on %(date)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Je tweestapsverificatie is op %(date)s gewist op de server."
+msgstr "Your two-step verification was cleared on the server on %(date)s."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Iemand heeft op %(date)s met jouw wachtwoord geprobeerd in te loggen, maar had de code niet. Verander je wachtwoord als jij dat niet was."
+msgstr "On %(date)s someone tried to sign in with your password but did not have the code. Change your password if that was not you."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Zet tweestapsverificatie aan vóór %(until)s. Daarna kun je pas inloggen als je het hebt aangezet."
+msgstr "Switch on two-step verification before %(until)s. After that you can only sign in once you have switched it on."
+
+#: apps/accounts/notices.py
+#, python-format
+msgid "Op %(date)s is met een herstelcode op je account ingelogd. Je hebt nog %(count)s herstelcodes."
+msgstr "On %(date)s someone signed in to your account with a recovery code. You have %(count)s recovery codes left."
 
 #: apps/accounts/notices.py
 #, python-format
@@ -424,6 +460,10 @@ msgstr "Two-step verification switched off"
 #: apps/audit/codes.py
 msgid "Tweestapsverificatie gewist door beheerder"
 msgstr "Two-step verification cleared by an admin"
+
+#: apps/audit/codes.py
+msgid "Nieuwe herstelcodes"
+msgstr "New recovery codes"
 
 #: apps/audit/codes.py
 msgid "Wachtwoord gewijzigd"
@@ -1142,7 +1182,7 @@ msgstr "Choose a new password, see 'Run the whole stack' in the README."
 
 #: apps/common/checks.py
 msgid "Nog geen serverbeheerder heeft tweestapsverificatie aan."
-msgstr "No server admin has two-step sign-in on yet."
+msgstr "No server admin has two-step verification on yet."
 
 #: apps/common/checks.py
 msgid "Zet het aan onder Beveiliging, of houd een herstelcode bij de hand. Op de server wist `manage.py clear_second_factor` het voor wie de telefoon kwijt is."

@@ -17,6 +17,8 @@ class AuditCode(models.TextChoices):
     SECOND_FACTOR_ADDED = "second_factor_added", _("Tweestapsverificatie aangezet")
     SECOND_FACTOR_REMOVED = "second_factor_removed", _("Tweestapsverificatie uitgezet")
     SECOND_FACTOR_CLEARED = "second_factor_cleared", _("Tweestapsverificatie gewist door beheerder")
+    SECOND_FACTOR_RECOVERY_USED = "second_factor_recovery_used", _("Herstelcode gebruikt")
+    SECOND_FACTOR_RECOVERY_RENEWED = "second_factor_recovery_renewed", _("Nieuwe herstelcodes")
     PASSWORD_CHANGED = "password_changed", _("Wachtwoord gewijzigd")
     PASSWORD_RESET_CREATED = "password_reset_created", _("Herstellink gemaakt")
     SESSION_ENDED = "session_ended", _("Uitgelogd")
@@ -111,18 +113,30 @@ _NONE: frozenset[str] = frozenset()
 # The only value keys a row of each code may carry. Values are plain text, numbers or
 # flags (a role, a reason, a count), never content.
 ALLOWED_VALUES: dict[AuditCode, frozenset[str]] = {
-    AuditCode.SIGN_IN_SUCCEEDED: frozenset({"via"}),
-    AuditCode.SIGN_IN_FAILED: _NONE,
+    # via: password, setup, invitation, reset; second_factor: totp, recovery_code, none,
+    # sso (how the second step was passed).
+    AuditCode.SIGN_IN_SUCCEEDED: frozenset({"via", "second_factor"}),
+    # step: password, second_factor, recovery_code (a row without it is a password).
+    AuditCode.SIGN_IN_FAILED: frozenset({"step"}),
     # via: password (signing in), password_change (wrong current passwords), invitation
-    # (accepting with an existing account), reauthenticate (typing the password again).
+    # (accepting with an existing account), reauthenticate (typing the password again),
+    # second_factor (wrong codes), second_factor_remove and second_factor_clear (the
+    # password typed to remove or clear a second factor).
     AuditCode.SIGN_IN_LOCKED_OUT: frozenset({"via"}),
-    AuditCode.SECOND_FACTOR_ADDED: _NONE,
+    # replaced: the new factor replaces an older one (a new phone).
+    AuditCode.SECOND_FACTOR_ADDED: frozenset({"replaced"}),
     AuditCode.SECOND_FACTOR_REMOVED: _NONE,
-    AuditCode.SECOND_FACTOR_CLEARED: _NONE,
+    # via: admin, command; devices_revoked: how many paired devices were unpaired.
+    AuditCode.SECOND_FACTOR_CLEARED: frozenset({"via", "devices_revoked"}),
+    # left: the recovery codes still unused. Never a code itself.
+    AuditCode.SECOND_FACTOR_RECOVERY_USED: frozenset({"left"}),
+    AuditCode.SECOND_FACTOR_RECOVERY_RENEWED: _NONE,
     # via: self, reset, command; reset_by: the id of the reset link's maker (via reset).
     AuditCode.PASSWORD_CHANGED: frozenset({"via", "reset_by"}),
     AuditCode.PASSWORD_RESET_CREATED: _NONE,
-    # reason: self, admin, password_changed, reset, deactivated.
+    # reason: self, admin, password_changed, reset, deactivated, second_factor_required
+    # (the grace period ended), second_factor_cleared, second_factor_added (set up or a new
+    # phone: the other sessions end), second_factor_removed.
     AuditCode.SESSION_ENDED: frozenset({"count", "reason"}),
     # via: code, proof.
     AuditCode.DEVICE_PAIRED: frozenset({"via"}),

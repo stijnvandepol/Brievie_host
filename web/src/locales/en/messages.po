@@ -1880,6 +1880,10 @@ msgid "Herkend in de brief"
 msgstr "Recognized in the letter"
 
 #: src/components/audit-codes.ts
+msgid "Herstelcode gebruikt"
+msgstr "Recovery code used"
+
+#: src/components/audit-codes.ts
 msgid "Herstellink gemaakt"
 msgstr "Reset link created"
 
@@ -2868,6 +2872,10 @@ msgstr "Choose a new password"
 #: src/routes/pair-app.tsx
 msgid "Nieuwe code"
 msgstr "New code"
+
+#: src/components/audit-codes.ts
+msgid "Nieuwe herstelcodes"
+msgstr "New recovery codes"
 
 #: src/components/open-invitations.tsx
 msgid "Nieuwe link"
