@@ -56,13 +56,16 @@ function SettingsPage() {
       <Entry
         id="settings-account"
         title={t`Jouw account`}
-        text={t`Waar je bent ingelogd, je wachtwoord en de taal van Brievie.`}
+        text={t`Waar je bent ingelogd, je wachtwoord, tweestapsverificatie en de taal van Brievie.`}
       >
         <Link to="/account/sessies" className="button secondary">
           {t`Waar je bent ingelogd`}
         </Link>
         <Link to="/account/wachtwoord" className="button secondary">
           {t`Wachtwoord wijzigen`}
+        </Link>
+        <Link to="/account/beveiliging" className="button secondary">
+          {t`Beveiliging`}
         </Link>
         <Link to="/account/taal" className="button secondary">
           {t`Taal`}

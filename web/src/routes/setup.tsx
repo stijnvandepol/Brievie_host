@@ -8,6 +8,7 @@ import { meQuery } from "../api/queries";
 import type { components } from "../api/schema";
 import { Icon } from "../components/icons";
 import { ErrorAlert, Field, Split, usePageTitle } from "../components/page";
+import { SignInCode } from "../components/sign-in-code";
 import { requireVisitor } from "../guards";
 import { rootRoute } from "./root";
 
@@ -16,6 +17,7 @@ type SetupBody = components["schemas"]["SetupIn"];
 function SetupPage() {
   usePageTitle(t`Brievie instellen`);
   const [kind, setKind] = useState("");
+  const [step, setStep] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const setup = useMutation({
@@ -27,7 +29,7 @@ function SetupPage() {
     onSuccess: async (result) => {
       // A rule asks for two-step verification first: signing in continues there.
       if ("step" in result) {
-        await navigate({ to: "/login" });
+        setStep(result.step);
         return;
       }
       // Setting up logs you in.
@@ -54,6 +56,21 @@ function SetupPage() {
       // Departments are made on Afdelingen after the start, not as labels (S 4.2).
       extra_labels: [],
     });
+  }
+
+  if (step !== null) {
+    return (
+      <Split>
+        <SignInCode
+          step={step}
+          onSignedIn={async (user) => {
+            queryClient.setQueryData(meQuery.queryKey, user);
+            await navigate({ to: "/" });
+          }}
+          onRestart={() => void navigate({ to: "/login" })}
+        />
+      </Split>
+    );
   }
 
   return (

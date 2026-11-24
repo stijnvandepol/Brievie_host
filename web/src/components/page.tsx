@@ -452,6 +452,10 @@ function AccountMenu({
             <Icon name="edit" />
             {t`Wachtwoord wijzigen`}
           </Link>
+          <Link to="/account/beveiliging" className="menu-item">
+            <Icon name="shield" />
+            {t`Beveiliging`}
+          </Link>
           <Link to="/account/taal" className="menu-item">
             <Icon name="globe" />
             {t`Taal`}

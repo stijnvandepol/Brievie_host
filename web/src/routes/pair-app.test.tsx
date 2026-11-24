@@ -9,6 +9,7 @@ import {
   loggedInHandlers,
   renderApp,
   server,
+  user,
 } from "../test-utils";
 
 const qrValues: string[] = [];
@@ -39,6 +40,47 @@ function pairingCode(secondsValid: number, code = "ABCD-EFGH", payload = QR_PAYL
 }
 
 describe("pair the app", () => {
+  it("with two-step verification asks the code too, also for a session without it", async () => {
+    let asked = 0;
+    const sent: unknown[] = [];
+    server.use(
+      http.get(`*${API}/me`, () => HttpResponse.json({ ...user, has_second_factor: true })),
+      ...loggedInHandlers(),
+      http.post(`*${API}/devices/pairing-codes`, () => {
+        asked += 1;
+        if (asked === 1)
+          return HttpResponse.json(
+            errorBody(
+              "second_factor_session_required",
+              "Log opnieuw in met je code om dit te doen.",
+            ),
+            { status: 403 },
+          );
+        return HttpResponse.json(
+          {
+            code: "ABCD-EFGH",
+            expires_at: new Date(Date.now() + 600_000).toISOString(),
+            qr_payload: QR_PAYLOAD,
+          },
+          { status: 201 },
+        );
+      }),
+      http.post(`*${API}/auth/reauthenticate`, async ({ request }) => {
+        sent.push(await request.json());
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const u = userEvent.setup();
+    renderApp("/koppel-app");
+    await u.click(await screen.findByRole("button", { name: /koppelcode maken/i }));
+    await u.type(await screen.findByLabelText(/^wachtwoord/i), "geheim-wachtwoord");
+    await u.type(screen.getByRole("textbox", { name: "Code uit de app" }), "123 456");
+    await u.click(screen.getByRole("button", { name: "Bevestigen" }));
+
+    expect(await screen.findByText("ABCD-EFGH")).toBeInTheDocument();
+    expect(sent).toEqual([{ password: "geheim-wachtwoord", code: "123456" }]);
+  });
+
   it("asks for the password again when the session is older, then makes the code", async () => {
     let asked = 0;
     const sent: unknown[] = [];
@@ -75,7 +117,7 @@ describe("pair the app", () => {
     await u.click(screen.getByRole("button", { name: "Bevestigen" }));
 
     expect(await screen.findByText("ABCD-EFGH")).toBeInTheDocument();
-    expect(sent).toEqual([{ password: "geheim-wachtwoord" }]);
+    expect(sent).toEqual([{ password: "geheim-wachtwoord", code: "" }]);
     expect(screen.queryByLabelText(/^wachtwoord/i)).not.toBeInTheDocument();
   });
 

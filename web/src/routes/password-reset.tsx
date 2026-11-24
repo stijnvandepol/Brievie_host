@@ -5,8 +5,10 @@ import { type FormEvent, useState } from "react";
 import { Button, Form, Input, Label, Text, TextField } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import { meQuery, workspacesQuery } from "../api/queries";
+import type { components } from "../api/schema";
 import { useFragmentToken } from "../components/fragment-token";
 import { ErrorAlert, Split, usePageTitle } from "../components/page";
+import { SignInCode } from "../components/sign-in-code";
 import { MessageBar } from "../components/ui";
 import { rootRoute } from "./root";
 
@@ -18,8 +20,17 @@ function PasswordResetPage() {
   const [password, setPassword] = useState("");
   const [again, setAgain] = useState("");
   const [mismatch, setMismatch] = useState(false);
+  // The password is set; with two-step verification the sign-in waits for the code.
+  const [step, setStep] = useState<string | null>(null);
 
   useFragmentToken(setToken);
+
+  async function signedIn(user: components["schemas"]["UserOut"]) {
+    // Completing a reset signs in.
+    queryClient.setQueryData(meQuery.queryKey, user);
+    await queryClient.invalidateQueries({ queryKey: workspacesQuery.queryKey });
+    await navigate({ to: "/" });
+  }
 
   const reset = useMutation({
     gcTime: 0,
@@ -30,13 +41,14 @@ function PasswordResetPage() {
       if (error !== undefined || !data) throw new ApiFailure(error);
       return data;
     },
-    onSuccess: async (user) => {
-      // Two-step verification: signing in continues with its code.
-      if ("step" in user) return;
-      // Completing a reset signs in.
-      queryClient.setQueryData(meQuery.queryKey, user);
-      await queryClient.invalidateQueries({ queryKey: workspacesQuery.queryKey });
-      await navigate({ to: "/" });
+    onSuccess: async (result) => {
+      if ("step" in result) {
+        setPassword("");
+        setAgain("");
+        setStep(result.step);
+        return;
+      }
+      await signedIn(result);
     },
   });
 
@@ -48,6 +60,18 @@ function PasswordResetPage() {
     }
     setMismatch(false);
     reset.mutate();
+  }
+
+  if (step !== null) {
+    return (
+      <Split>
+        <SignInCode
+          step={step}
+          onSignedIn={signedIn}
+          onRestart={() => void navigate({ to: "/login" })}
+        />
+      </Split>
+    );
   }
 
   return (

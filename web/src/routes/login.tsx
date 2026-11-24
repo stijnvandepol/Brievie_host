@@ -1,29 +1,42 @@
 import { t } from "@lingui/core/macro";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createRoute, useNavigate } from "@tanstack/react-router";
-import type { FormEvent } from "react";
+import { type FormEvent, useState } from "react";
 import { Button, Form } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import { meQuery } from "../api/queries";
+import type { components } from "../api/schema";
 import { ErrorAlert, Field, Split, usePageTitle } from "../components/page";
+import { SignInCode } from "../components/sign-in-code";
 import { requireVisitor } from "../guards";
 import { rootRoute } from "./root";
+
+type User = components["schemas"]["UserOut"];
 
 function LoginPage() {
   usePageTitle(t`Inloggen`);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  // A second step follows the password: the code from the app, or setting it up.
+  const [step, setStep] = useState<string | null>(null);
+
+  async function signedIn(user: User) {
+    queryClient.setQueryData(meQuery.queryKey, user);
+    await navigate({ to: "/" });
+  }
+
   const login = useMutation({
     mutationFn: async (credentials: { email: string; password: string }) => {
       const { data, error } = await api.POST("/api/v1/auth/login", { body: credentials });
       if (error !== undefined || !data) throw new ApiFailure(error);
       return data;
     },
-    onSuccess: async (user) => {
-      // Two-step verification: signing in continues with its code.
-      if ("step" in user) return;
-      queryClient.setQueryData(meQuery.queryKey, user);
-      await navigate({ to: "/" });
+    onSuccess: async (result) => {
+      if ("step" in result) {
+        setStep(result.step);
+        return;
+      }
+      await signedIn(result);
     },
   });
 
@@ -31,6 +44,21 @@ function LoginPage() {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     login.mutate({ email: String(form.get("email")), password: String(form.get("password")) });
+  }
+
+  if (step !== null) {
+    return (
+      <Split>
+        <SignInCode
+          step={step}
+          onSignedIn={signedIn}
+          onRestart={() => {
+            login.reset();
+            setStep(null);
+          }}
+        />
+      </Split>
+    );
   }
 
   return (

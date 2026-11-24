@@ -1,6 +1,6 @@
 import { t } from "@lingui/core/macro";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createRoute, Link } from "@tanstack/react-router";
+import { createRoute, Link, useNavigate } from "@tanstack/react-router";
 import { QRCodeSVG } from "qrcode.react";
 import { type FormEvent, useRef, useState } from "react";
 import {
@@ -21,6 +21,7 @@ import { formatTimeLeft, useSecondsLeft } from "../components/countdown";
 import { useFragmentToken } from "../components/fragment-token";
 import { Icon } from "../components/icons";
 import { ErrorAlert, Split, usePageTitle } from "../components/page";
+import { SignInCode } from "../components/sign-in-code";
 import { Loading, MessageBar, useMediaQuery } from "../components/ui";
 import { rootRoute } from "./root";
 
@@ -116,10 +117,24 @@ function ContinueInApp({
 
 function AcceptForm({ token, info }: { token: string; info: Info }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [account, setAccount] = useState<Account>("new");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  // Joined; with two-step verification the sign-in waits for the code first.
+  const [step, setStep] = useState<string | null>(null);
+  const [joined, setJoined] = useState(false);
+
+  function signedIn(user: components["schemas"]["UserOut"]) {
+    // Accepting signs in: the rest of the app asks the server who this is.
+    queryClient.setQueryData(meQuery.queryKey, user);
+    void queryClient.invalidateQueries({ queryKey: workspacesQuery.queryKey });
+    setPassword("");
+    setStep(null);
+    setJoined(true);
+    pair.mutate();
+  }
 
   const pair = useMutation({
     gcTime: 0,
@@ -145,13 +160,13 @@ function AcceptForm({ token, info }: { token: string; info: Info }) {
       return data;
     },
     onSuccess: (data) => {
-      // The account has two-step verification: signing in continues with its code.
-      if ("step" in data) return;
-      // Accepting signs in: the rest of the app asks the server who this is.
-      queryClient.setQueryData(meQuery.queryKey, data.user);
-      void queryClient.invalidateQueries({ queryKey: workspacesQuery.queryKey });
-      setPassword("");
-      pair.mutate();
+      if ("step" in data) {
+        // The account joined; its sign-in continues with the code.
+        setPassword("");
+        setStep(data.step);
+        return;
+      }
+      signedIn(data.user);
     },
     onError: (failure) => {
       // The address has an account: the form moves to the other choice, nothing is lost.
@@ -160,10 +175,21 @@ function AcceptForm({ token, info }: { token: string; info: Info }) {
     },
   });
 
-  if (accept.data && "workspace" in accept.data) {
+  if (step !== null) {
+    return (
+      <SignInCode
+        step={step}
+        onSignedIn={signedIn}
+        // Joined already: what is left is signing in.
+        onRestart={() => void navigate({ to: "/login" })}
+      />
+    );
+  }
+
+  if (joined) {
     return (
       <ContinueInApp
-        workspaceName={accept.data.workspace.name}
+        workspaceName={info.workspace_name}
         pairing={pair.data}
         error={pair.error}
         isPending={pair.isPending}
