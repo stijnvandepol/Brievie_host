@@ -268,6 +268,10 @@ X_FRAME_OPTIONS = "DENY"
 # Number of reverse proxies in front of the app (Caddy in Compose: 1). Decides
 # which X-Forwarded-For entry is the client address (apps.common.net.client_ip).
 BRIEVIE_PROXY_COUNT: int = env.int("BRIEVIE_PROXY_COUNT", default=0)
+# Requests arrive through Brievie's own Caddy (compose sets it): the client address and
+# the route are then Caddy's X-Brievie-Client-IP and X-Brievie-Route, which Caddy writes
+# itself on every request (apps.common.net, apps.access.route; S 7.3).
+BRIEVIE_BEHIND_CADDY: bool = env.bool("BRIEVIE_BEHIND_CADDY", default=False)
 
 # Login lockout (django-axes): 5 failures for the same email + address lock that
 # pair for 15 minutes. apps.accounts.services.login checks the lock itself and

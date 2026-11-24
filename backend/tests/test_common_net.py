@@ -6,6 +6,16 @@ from pytest_django import Settings
 from apps.common.net import address_bucket, client_ip, valid_client_ip
 
 
+@pytest.fixture(autouse=True)
+def _database() -> None:
+    """Overrides the suite's database fixture: nothing here uses the database."""
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _test_role_is_subject_to_rls() -> None:
+    """Overrides the suite's session check: no database is used here."""
+
+
 def request_from(remote_addr: str, forwarded: str | None = None) -> HttpRequest:
     if forwarded is None:
         return RequestFactory().get("/", REMOTE_ADDR=remote_addr)
@@ -85,3 +95,74 @@ def test_behind_two_proxies_the_second_entry_from_the_right_counts(settings: Set
 def test_limits_count_an_ipv6_client_per_64(address: str | None, bucket: str) -> None:
     # Security review 2026-11-20: one host holds a whole /64 and could rotate per attempt.
     assert address_bucket(address) == bucket
+
+
+# --- Behind Caddy: the address Caddy wrote itself (S 7.3) ----------------------------------
+
+
+def caddy_request(
+    *, remote_addr: str = "172.18.0.5", forwarded: str | None = None, **headers: str
+) -> HttpRequest:
+    meta = {f"HTTP_{name.upper().replace('-', '_')}": value for name, value in headers.items()}
+    if forwarded is not None:
+        meta["HTTP_X_FORWARDED_FOR"] = forwarded
+    request = RequestFactory().get("/", REMOTE_ADDR=remote_addr)
+    request.META.update(meta)
+    return request
+
+
+@pytest.mark.parametrize("behind_caddy", [True, False])
+@pytest.mark.parametrize("proxy_count", [0, 1])
+@pytest.mark.parametrize("with_caddy_header", [True, False])
+def test_cf_connecting_ip_never_counts(
+    settings: Settings, behind_caddy: bool, proxy_count: int, with_caddy_header: bool
+) -> None:
+    # Only Caddy reads CF-Connecting-IP, and only on its unpublished tunnel listener.
+    settings.BRIEVIE_BEHIND_CADDY = behind_caddy
+    settings.BRIEVIE_PROXY_COUNT = proxy_count
+    headers = {"CF-Connecting-IP": "203.0.113.66"}
+    if with_caddy_header:
+        headers["X-Brievie-Client-IP"] = "198.51.100.9"
+    request = caddy_request(forwarded="192.0.2.44", **headers)
+    assert client_ip(request) != "203.0.113.66"
+
+
+def test_behind_caddy_the_caddy_header_counts(settings: Settings) -> None:
+    settings.BRIEVIE_BEHIND_CADDY = True
+    settings.BRIEVIE_PROXY_COUNT = 1
+    request = caddy_request(
+        forwarded="10.9.9.9, 192.0.2.44", **{"X-Brievie-Client-IP": "198.51.100.9"}
+    )
+    assert client_ip(request) == "198.51.100.9"
+    assert valid_client_ip(request) == "198.51.100.9"
+
+
+def test_not_behind_caddy_the_caddy_header_is_ignored(settings: Settings) -> None:
+    settings.BRIEVIE_BEHIND_CADDY = False
+    settings.BRIEVIE_PROXY_COUNT = 0
+    request = caddy_request(remote_addr="203.0.113.5", **{"X-Brievie-Client-IP": "198.51.100.9"})
+    assert client_ip(request) == "203.0.113.5"
+
+
+def test_behind_caddy_without_header_falls_back_to_forwarded_for(settings: Settings) -> None:
+    settings.BRIEVIE_BEHIND_CADDY = True
+    settings.BRIEVIE_PROXY_COUNT = 1
+    assert client_ip(caddy_request(forwarded="1.2.3.4, 192.0.2.44")) == "192.0.2.44"
+    # An empty header is no address either.
+    request = caddy_request(forwarded="192.0.2.44", **{"X-Brievie-Client-IP": " "})
+    assert client_ip(request) == "192.0.2.44"
+
+
+def test_axes_and_throttles_use_the_new_address(settings: Settings) -> None:
+    from django.utils.module_loading import import_string
+
+    from apps.common.throttling import ClientAddressThrottle
+
+    settings.BRIEVIE_BEHIND_CADDY = True
+    settings.BRIEVIE_PROXY_COUNT = 1
+    request = caddy_request(forwarded="192.0.2.44", **{"X-Brievie-Client-IP": "198.51.100.9"})
+    axes_ip = import_string(settings.AXES_CLIENT_IP_CALLABLE)
+    assert axes_ip(request) == "198.51.100.9"
+    key = ClientAddressThrottle("pairing", "10/10m").get_cache_key(request)
+    assert "198.51.100.9" in key
+    assert "192.0.2.44" not in key

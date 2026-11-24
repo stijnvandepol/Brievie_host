@@ -7,10 +7,18 @@ from django.http import HttpRequest
 def client_ip(request: HttpRequest) -> str | None:
     """The address of the client, as seen by the first trusted proxy.
 
-    With `BRIEVIE_PROXY_COUNT = 0` (default) this is `REMOTE_ADDR`. Behind Caddy
+    Behind Caddy (`BRIEVIE_BEHIND_CADDY`) it is Caddy's `X-Brievie-Client-IP`. Otherwise,
+    with `BRIEVIE_PROXY_COUNT = 0` (default) this is `REMOTE_ADDR`. Behind Caddy
     (count 1) it is the last `X-Forwarded-For` entry, the one Caddy added itself;
     entries before it come from the client and can be forged.
     """
+    # Behind Caddy (compose): the address Caddy wrote itself after its own trusted-proxy
+    # rules (X-Brievie-Client-IP, S 7.3); a client's value never gets here. Never
+    # CF-Connecting-IP: only Caddy reads that, on its unpublished tunnel listener.
+    if settings.BRIEVIE_BEHIND_CADDY:
+        caddy = str(request.META.get("HTTP_X_BRIEVIE_CLIENT_IP", "")).strip()
+        if caddy:
+            return caddy
     remote_addr = request.META.get("REMOTE_ADDR")
     proxies: int = settings.BRIEVIE_PROXY_COUNT
     if proxies <= 0:
