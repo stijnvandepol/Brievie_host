@@ -1,15 +1,27 @@
-"""Background job of the accounts app: removing web sessions nobody comes back to."""
+"""Background job of the accounts app: removing web sessions nobody comes back to, and
+keeping two-step verification's rules (unfinished set-ups, grace periods)."""
 
 import logging
+from datetime import datetime
 
+from django.conf import settings
 from django.contrib.sessions.models import Session
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from procrastinate.contrib.django import app
 
-from apps.accounts.models import UserSession
-from apps.accounts.sessions import session_policy
+from apps.accounts.models import User, UserSession
+from apps.accounts.second_factor import purge_unconfirmed
+from apps.accounts.second_factor_policy import (
+    has_factor,
+    in_grace,
+    note_required_since,
+    requirement_for,
+)
+from apps.accounts.sessions import end_sessions_without_second_step, session_policy
+from apps.audit.codes import AuditCode, TargetKind
+from apps.audit.services import AuditActor, AuditTarget, record
 from apps.pipeline.jobs import QUEUE
 
 logger = logging.getLogger(__name__)
@@ -40,3 +52,42 @@ def remove_stale_sessions(timestamp: int) -> None:
             deleted, _ = UserSession.objects.filter(session_key__in=keys).delete()
         past_limits += deleted
     logger.info("Removed %d stale web sessions", orphans + past_limits)
+    keep_second_factor_rules(now)
+
+
+def keep_second_factor_rules(now: datetime) -> None:
+    """Two-step verification (S 5), each step in its own short transaction: unfinished
+    set-ups older than an hour go; a rule set in `.env` starts the grace period of every
+    account it asks, without waiting for a sign-in (never cleared again); once a
+    grace period is over, the sessions that did not pass the second step end. No notice:
+    the next sign-in explains."""
+    purged = purge_unconfirmed(now=now)
+    # Nothing asks a factor: nothing to start or end (when the rule went is kept: a rule
+    # missing for a while gives no new grace period, security review of PR #52).
+    if settings.BRIEVIE_REQUIRE_SECOND_FACTOR == "none":
+        logger.info("Removed %d unfinished second-factor set-ups", purged)
+        return
+    accounts = User.objects.filter(is_active=True)
+    ended = 0
+    for user in accounts.order_by("id").iterator():
+        note_required_since(user, now=now)
+        if user.second_factor_required_since is None or has_factor(user):
+            continue
+        requirement = requirement_for(user, now=now)
+        if not requirement.required or in_grace(requirement, now=now):
+            continue
+        count = end_sessions_without_second_step(user)
+        if count:
+            with transaction.atomic():
+                record(
+                    AuditCode.SESSION_ENDED,
+                    actor=AuditActor.system(),
+                    target=AuditTarget(kind=TargetKind.USER, id=user.id, name=user.name),
+                    values={"count": count, "reason": "second_factor_required"},
+                )
+        ended += count
+    logger.info(
+        "Removed %d unfinished second-factor set-ups; ended %d sessions after a grace period",
+        purged,
+        ended,
+    )

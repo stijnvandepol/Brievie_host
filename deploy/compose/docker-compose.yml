@@ -97,6 +97,9 @@ services:
       <<: [*settings, *backup]
       BRIEVIE_DB_ROLE: owner
       BRIEVIE_INIT_WRITABLE: "true"
+      # Copied into the back-up's settings, so a restore keeps the rule.
+      BRIEVIE_REQUIRE_SECOND_FACTOR: ${BRIEVIE_REQUIRE_SECOND_FACTOR:-none}
+      BRIEVIE_SECOND_FACTOR_GRACE_DAYS: ${BRIEVIE_SECOND_FACTOR_GRACE_DAYS:-7}
       BRIEVIE_ADOPT_VERSION: ${BRIEVIE_ADOPT_VERSION:-}
       SECRET_KEY_FILE: /run/brievie/secret_key
       DATABASE_OWNER_URL: postgres://brievie_owner@postgres:5432/brievie
@@ -171,6 +174,8 @@ services:
       BRIEVIE_SESSION_IDLE_DAYS: ${BRIEVIE_SESSION_IDLE_DAYS:-14}
       BRIEVIE_SESSION_MAX_DAYS: ${BRIEVIE_SESSION_MAX_DAYS:-90}
       BRIEVIE_AI_AUTOPILOT_ALLOWED: ${BRIEVIE_AI_AUTOPILOT_ALLOWED:-true}
+      BRIEVIE_REQUIRE_SECOND_FACTOR: ${BRIEVIE_REQUIRE_SECOND_FACTOR:-none}
+      BRIEVIE_SECOND_FACTOR_GRACE_DAYS: ${BRIEVIE_SECOND_FACTOR_GRACE_DAYS:-7}
       # For the recovery sheet that a server admin downloads in the web interface: where
       # the back-ups go (no credentials) and the back-up password (a file).
       BRIEVIE_BACKUP_PASSWORD_FILE: /run/brievie/backup_password
@@ -215,6 +220,8 @@ services:
       BRIEVIE_SESSION_IDLE_DAYS: ${BRIEVIE_SESSION_IDLE_DAYS:-14}
       BRIEVIE_SESSION_MAX_DAYS: ${BRIEVIE_SESSION_MAX_DAYS:-90}
       BRIEVIE_AI_AUTOPILOT_ALLOWED: ${BRIEVIE_AI_AUTOPILOT_ALLOWED:-true}
+      BRIEVIE_REQUIRE_SECOND_FACTOR: ${BRIEVIE_REQUIRE_SECOND_FACTOR:-none}
+      BRIEVIE_SECOND_FACTOR_GRACE_DAYS: ${BRIEVIE_SECOND_FACTOR_GRACE_DAYS:-7}
     volumes:
       - secrets-api:/run/brievie:ro
       - documents:/data/documents

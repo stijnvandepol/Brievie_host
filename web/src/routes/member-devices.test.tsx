@@ -122,5 +122,57 @@ describe("a member's devices and sessions", () => {
     expect(
       screen.queryByRole("button", { name: "Alle sessies beëindigen" }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Tweestapsverificatie wissen" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("an admin clears a lost second factor, unpairing the devices by default", async () => {
+    let sent: unknown;
+    server.use(
+      http.post(`*${API}/users/${bram.user_id}/second-factor/clear`, async ({ request }) => {
+        sent = await request.json();
+        return HttpResponse.json({ devices_revoked: 1 });
+      }),
+      ...userHandlers(),
+    );
+    const u = userEvent.setup();
+    renderApp(path);
+    await u.click(await screen.findByRole("button", { name: "Tweestapsverificatie wissen" }));
+    const dialog = await screen.findByRole("alertdialog", {
+      name: "Tweestapsverificatie van Bram wissen?",
+    });
+    const unpair = within(dialog).getByRole("checkbox", {
+      name: "Ontkoppel ook de apparaten van Bram",
+    });
+    expect(unpair).toBeChecked();
+    await u.type(within(dialog).getByLabelText("Jouw wachtwoord"), "mijn wachtwoord");
+    await u.click(within(dialog).getByRole("button", { name: "Wissen" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "De tweestapsverificatie van Bram is gewist. 1 apparaten zijn ontkoppeld.",
+    );
+    expect(sent).toEqual({ password: "mijn wachtwoord", revoke_devices: true });
+  });
+
+  it("an admin may keep the member's devices", async () => {
+    let sent: unknown;
+    server.use(
+      http.post(`*${API}/users/${bram.user_id}/second-factor/clear`, async ({ request }) => {
+        sent = await request.json();
+        return HttpResponse.json({ devices_revoked: 0 });
+      }),
+      ...userHandlers(),
+    );
+    const u = userEvent.setup();
+    renderApp(path);
+    await u.click(await screen.findByRole("button", { name: "Tweestapsverificatie wissen" }));
+    const dialog = await screen.findByRole("alertdialog");
+    await u.click(within(dialog).getByRole("checkbox"));
+    await u.type(within(dialog).getByLabelText("Jouw wachtwoord"), "mijn wachtwoord");
+    await u.click(within(dialog).getByRole("button", { name: "Wissen" }));
+
+    await screen.findByRole("status");
+    expect(sent).toEqual({ password: "mijn wachtwoord", revoke_devices: false });
   });
 });

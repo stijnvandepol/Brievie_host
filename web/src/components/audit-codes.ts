@@ -13,6 +13,8 @@ export const SERVER_CODES = [
   "second_factor_added",
   "second_factor_removed",
   "second_factor_cleared",
+  "second_factor_recovery_used",
+  "second_factor_recovery_renewed",
   "password_changed",
   "password_reset_created",
   "session_ended",
@@ -85,6 +87,10 @@ function knownLabel(code: AuditCodeName): string {
       return t`Tweestapsverificatie uitgezet`;
     case "second_factor_cleared":
       return t`Tweestapsverificatie gewist door beheerder`;
+    case "second_factor_recovery_used":
+      return t`Herstelcode gebruikt`;
+    case "second_factor_recovery_renewed":
+      return t`Nieuwe herstelcodes`;
     case "password_changed":
       return t`Wachtwoord gewijzigd`;
     case "password_reset_created":

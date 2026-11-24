@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 from django.apps import AppConfig
 from django.conf import settings
 from django.core.checks import CheckMessage, Error, Warning, register
+from django.db import DatabaseError
 from django.http.request import validate_host
 from django.utils.translation import gettext as _
 
@@ -103,7 +104,7 @@ def check_external_access(
                     "tunnel in. Het adres van je proxy staat thuis op de pagina Van buiten "
                     "bereikbaar."
                 ),
-                id="brievie.W004",
+                id="brievie.W005",
             )
         )
     if tunnel and settings.BRIEVIE_MAX_UPLOAD_BYTES > CLOUDFLARE_MAX_BODY_BYTES:
@@ -181,7 +182,7 @@ def check_trusted_proxies(
                         "adres te hebben, en kan het zijn eigen adres opgeven. Zet het adres van "
                         "je reverse proxy zelf."
                     ),
-                    id="brievie.W005",
+                    id="brievie.W006",
                 )
             )
     return messages
@@ -209,4 +210,38 @@ def check_database_passwords(
         )
         for name, config in configs
         if PLACEHOLDER_MARKER in str(config.get("PASSWORD") or "")
+    ]
+
+
+@register()
+def check_second_factor_rule(
+    app_configs: Iterable[AppConfig] | None, **kwargs: object
+) -> list[CheckMessage]:
+    """Warn when a rule asks for two-step sign-in while no server admin has it yet: the
+    first sign-in after the grace period leads them straight to setting it up.
+
+    Reads the database only when a rule is set; a database that is not there yet (the
+    first `migrate`) gives no warning.
+    """
+    if settings.BRIEVIE_REQUIRE_SECOND_FACTOR == "none":
+        return []
+    from apps.accounts.models import SecondFactor  # models are not ready at import time
+
+    try:
+        has_one = SecondFactor.objects.filter(
+            user__is_server_admin=True, user__is_active=True, confirmed_at__isnull=False
+        ).exists()
+    except DatabaseError:
+        return []
+    if has_one:
+        return []
+    return [
+        Warning(
+            _("Nog geen serverbeheerder heeft tweestapsverificatie aan."),
+            hint=_(
+                "Zet het aan onder Beveiliging, of houd een herstelcode bij de hand. Op de "
+                "server wist `manage.py clear_second_factor` het voor wie de telefoon kwijt is."
+            ),
+            id="brievie.W004",
+        )
     ]

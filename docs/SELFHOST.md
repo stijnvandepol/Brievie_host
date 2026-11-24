@@ -465,6 +465,59 @@ The server log gets `workspace_created`.
   member (to revoke one) and can end all their sessions, not read them.
 - Changing your own password ends your other sessions and keeps your phone paired.
 
+### Two-step verification
+
+Everyone can switch it on under **Account → Beveiliging**: after the password Brievie asks
+a code from an authenticator app (Microsoft Authenticator, Google Authenticator, the
+Passwords app on an iPhone). Setting it up gives ten recovery codes, shown once: keep them
+on paper or in a password manager. Paired phones keep working; pairing a new phone then
+needs a sign-in with the code.
+
+- **Require it** for the server admins or for everyone in `deploy/.env` (with only a
+  compose file: in `.env` next to it), then run `./brievie start` again:
+
+  ```sh
+  BRIEVIE_REQUIRE_SECOND_FACTOR=server_admins   # none (default), server_admins, everyone
+  BRIEVIE_SECOND_FACTOR_GRACE_DAYS=7            # 0-30 days to switch it on
+  ```
+
+  From then on whoever must have it gets a notice with the last day; after that day,
+  signing in leads straight to setting it up, and sessions without the code end within an
+  hour. The server's start warns (`brievie.W004`) while no server admin has it on.
+- **The server's clock must be right**: codes are checked against it (half a minute either
+  side). Synology and most NAS boxes keep it right with NTP by default; check it on a
+  plain Linux server (`timedatectl`). A server admin sees a warning in the web interface
+  when the clocks differ more than 30 seconds.
+- **A lost phone.** With a recovery code: sign in with it, then **Beveiliging → Nieuwe
+  telefoon**. Without one: an admin clears it under **Mensen → the member → Apparaten en
+  sessies → Tweestapsverificatie wissen** (the same rule as a reset link: a server admin
+  for anyone, a workspace admin only for a member of that workspace alone who reads no
+  private post there). That ends the member's sessions, by default unpairs their phones,
+  and leaves a notice. A server admin who is locked out clears it on the server:
+
+  ```sh
+  docker compose --project-directory deploy -f deploy/docker-compose.yml exec api \
+    python manage.py clear_second_factor --email naam@voorbeeld.nl
+  ```
+
+  Add `--keep-devices` only when the lost phone had no paired app. The log records it
+  with "Brievie" as the actor.
+- **What it does not stop.** Someone who knows your password can keep your second step
+  locked by typing wrong codes (from 15 minutes up to a day at a time). You see a notice
+  after you sign in ("Iemand heeft ... met jouw wachtwoord geprobeerd in te loggen"):
+  change your password then; until the lock ends a recovery code does not help either,
+  so an admin can clear the factor for you. And after a grace period, signing in with
+  only the password leads to setting a factor up: whoever has the password could enrol
+  their own phone before you do. So keep the grace short, and tell people to switch it
+  on during it.
+- **A paired phone after the grace.** While the rule asks it and the account has no
+  factor after the grace period, the account's phones answer "Stel eerst
+  tweestapsverificatie in op de webinterface." (they are not unpaired: once it is set up
+  on the web they work again), and no new phone can be paired.
+- **Not yet from outside.** Keep the web interface off the internet until the rule for
+  the public address is built (a password sign-in from outside will need the code); the
+  app-only tunnel does not wait for it.
+
 ## 19. The log and the member export
 
 **The log (Logboek).** Brievie records who did what: sign-ins and failures, password
@@ -986,7 +1039,7 @@ the proxy (open the app away from home, or `https://brievie.example.nl/api/v1/he
 address that request came from. **Never put Docker's own gateway address there** (often
 `172.x.0.1`): with Docker's port forwarding every device in your network arrives from that
 address, and could then pick its own address for the sign-in limits. The api warns about such a
-gateway address (`brievie.W005`) and refuses to start with `0.0.0.0/0`, `::/0`, an invalid
+gateway address (`brievie.W006`) and refuses to start with `0.0.0.0/0`, `::/0`, an invalid
 entry, or a range wider than a /24 (IPv4) or /64 (IPv6) unless
 `BRIEVIE_TRUSTED_PROXIES_WIDE=true` (`brievie.E003`).
 
@@ -1007,7 +1060,7 @@ trusted proxy that named no client, a proxy that did not pass the original Host,
 any request came through the tunnel. Only the kind and the time are kept, never a page or a
 person. Before any request came that way, those lines are simply absent. The same mistakes in
 the settings themselves are also reported when Brievie starts (`./brievie start` and the
-api's log: `brievie.W004` for a public name without a tunnel or trusted proxy).
+api's log: `brievie.W005` for a public name without a tunnel or trusted proxy).
 
 ### How it works (for the curious)
 
@@ -1091,6 +1144,7 @@ V VPN, T tunnel, P own proxy (empty = default or not used).
 | `BRIEVIE_AUDIT_RETENTION_DAYS` | days the audit log keeps rows (at least 90) | `365` | | | | |
 | `BRIEVIE_SESSION_IDLE_DAYS` / `BRIEVIE_SESSION_MAX_DAYS` | web session limits | `14` / `90` | | | | |
 | `BRIEVIE_AI_AUTOPILOT_ALLOWED` | may workspaces switch on the autopilot | `true` | | | | |
+| `BRIEVIE_REQUIRE_SECOND_FACTOR` / `BRIEVIE_SECOND_FACTOR_GRACE_DAYS` | who must use two-step sign-in (`none`, `server_admins`, `everyone`), and the days (0-30) to switch it on | `none` / `7` | | | | |
 | `BRIEVIE_SETUP_TOKEN` | installation code for the first setup | empty (printed once) | | | | |
 | `ALLOWED_HOSTS`, `BRIEVIE_PUBLIC_URLS` | overrides; normally derived from the names above | derived | | | | |
 | `SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE` | only for local http development | `true` | | | | |

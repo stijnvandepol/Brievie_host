@@ -321,7 +321,7 @@ def test_reset_writes_notices_and_audit_rows(ws_a: Workspace) -> None:
     assert (ended.actor_id, ended.target_id) == (None, member.id)
     assert ended.values == {"count": 1, "reason": "reset"}
     signed = ServerAuditEvent.objects.filter(code="sign_in_succeeded", target_id=member.id)
-    assert {"via": "reset"} in [row.values for row in signed]
+    assert {"via": "reset", "second_factor": "none"} in [row.values for row in signed]
     with workspace_context(ws_a.id, actor=SYSTEM):
         (in_workspace,) = WorkspaceAuditEvent.objects.filter(code="password_reset_created")
     assert (in_workspace.actor_id, in_workspace.target_id) == (admin.id, member.id)

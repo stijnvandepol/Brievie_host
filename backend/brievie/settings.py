@@ -258,6 +258,20 @@ if BRIEVIE_SESSION_IDLE_DAYS > BRIEVIE_SESSION_MAX_DAYS:
     raise ImproperlyConfigured("BRIEVIE_SESSION_IDLE_DAYS may not exceed BRIEVIE_SESSION_MAX_DAYS.")
 SESSION_COOKIE_AGE = BRIEVIE_SESSION_IDLE_DAYS * 24 * 3600
 
+# Two-step sign-in (spec two-step sign-in, S 5): who must have a second factor on this
+# server (`none`, `server_admins`, `everyone`) and how many days they have to add one.
+# An environment variable, not a page: a rule that restrains admins is not theirs to
+# switch off. Part C moves it to the server settings page.
+SECOND_FACTOR_RULES = ("none", "server_admins", "everyone")
+BRIEVIE_REQUIRE_SECOND_FACTOR: str = env.str("BRIEVIE_REQUIRE_SECOND_FACTOR", default="none")
+if BRIEVIE_REQUIRE_SECOND_FACTOR not in SECOND_FACTOR_RULES:
+    raise ImproperlyConfigured(
+        "BRIEVIE_REQUIRE_SECOND_FACTOR must be none, server_admins or everyone."
+    )
+BRIEVIE_SECOND_FACTOR_GRACE_DAYS: int = env.int("BRIEVIE_SECOND_FACTOR_GRACE_DAYS", default=7)
+if not 0 <= BRIEVIE_SECOND_FACTOR_GRACE_DAYS <= 30:
+    raise ImproperlyConfigured("BRIEVIE_SECOND_FACTOR_GRACE_DAYS must be between 0 and 30.")
+
 # Server switch for the AI autopilot (a workspace's own switches only count while this is on).
 BRIEVIE_AI_AUTOPILOT_ALLOWED: bool = env.bool("BRIEVIE_AI_AUTOPILOT_ALLOWED", default=True)
 CSRF_TRUSTED_ORIGINS: list[str] = env.list("CSRF_TRUSTED_ORIGINS", default=[])
@@ -293,8 +307,10 @@ BRIEVIE_TUNNEL_TOKEN_SET: bool = bool(
     env.str("BRIEVIE_TUNNEL_TOKEN_SET", default="").strip()
     or env.str("BRIEVIE_TUNNEL_TOKEN_FILE_SET", default="").strip()
 )
-# Two-step sign-in: not built yet (branch feat/two-factor sets this when it lands). The
-# external-access warnings (brievie.W002, the settings page) read it.
+# True once the public route requires a second step for a password sign-in (B2). Two-step
+# sign-in exists (PR #52), but nothing asks for it on the public route yet, so a password
+# alone can still sign in there with BRIEVIE_PUBLIC_WEB on. The external-access warnings
+# (brievie.W002, the settings page) read it.
 BRIEVIE_SECOND_FACTOR_AVAILABLE = False
 
 # Login lockout (django-axes): 5 failures for the same email + address lock that

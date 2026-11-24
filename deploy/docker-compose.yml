@@ -35,6 +35,9 @@ services:
       BRIEVIE_DB_ROLE: owner
       DATABASE_OWNER_URL: postgres://brievie_owner:${BRIEVIE_OWNER_PASSWORD}@postgres:5432/brievie
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in deploy/.env}
+      # As the compose file's init, which copies them into the back-up's settings.
+      BRIEVIE_REQUIRE_SECOND_FACTOR: ${BRIEVIE_REQUIRE_SECOND_FACTOR:-none}
+      BRIEVIE_SECOND_FACTOR_GRACE_DAYS: ${BRIEVIE_SECOND_FACTOR_GRACE_DAYS:-7}
     # createcachetable: the database cache that holds throttle counts (idempotent).
     command: ["sh", "-c", "python manage.py migrate --noinput && python manage.py createcachetable"]
     restart: "no"
@@ -88,6 +91,9 @@ services:
       BRIEVIE_SESSION_MAX_DAYS: ${BRIEVIE_SESSION_MAX_DAYS:-90}
       # Whether workspaces may switch on the AI autopilot at all.
       BRIEVIE_AI_AUTOPILOT_ALLOWED: ${BRIEVIE_AI_AUTOPILOT_ALLOWED:-true}
+      # Who must use two-step sign-in, and the days they get to switch it on.
+      BRIEVIE_REQUIRE_SECOND_FACTOR: ${BRIEVIE_REQUIRE_SECOND_FACTOR:-none}
+      BRIEVIE_SECOND_FACTOR_GRACE_DAYS: ${BRIEVIE_SECOND_FACTOR_GRACE_DAYS:-7}
     healthcheck:
       # The Host header must be an allowed host: the first ALLOWED_HOSTS entry, else the
       # home name (from which the api derives ALLOWED_HOSTS).
@@ -130,6 +136,9 @@ services:
       BRIEVIE_SESSION_MAX_DAYS: ${BRIEVIE_SESSION_MAX_DAYS:-90}
       # Whether workspaces may switch on the AI autopilot at all.
       BRIEVIE_AI_AUTOPILOT_ALLOWED: ${BRIEVIE_AI_AUTOPILOT_ALLOWED:-true}
+      # Who must use two-step sign-in, and the days they get to switch it on.
+      BRIEVIE_REQUIRE_SECOND_FACTOR: ${BRIEVIE_REQUIRE_SECOND_FACTOR:-none}
+      BRIEVIE_SECOND_FACTOR_GRACE_DAYS: ${BRIEVIE_SECOND_FACTOR_GRACE_DAYS:-7}
     # A job cut off when an update stops the worker is picked up again by the retry of
     # stalled jobs (retry_stalled_jobs).
     stop_grace_period: 1m

@@ -20,10 +20,12 @@ from apps.access.services import server_addresses
 from apps.accounts.authority import account_authority
 from apps.accounts.models import AccountNotice, User, UserSession
 from apps.accounts.notices import notify
+from apps.accounts.second_factor_policy import has_factor, must_set_up_first
 from apps.accounts.services import current_user
-from apps.accounts.sessions import recently_authenticated
+from apps.accounts.sessions import recently_authenticated, session_passed_second_factor
 from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, actor_from_request, record
+from apps.common.alphabet import CODE_ALPHABET
 from apps.common.crypto import DecryptionError
 from apps.common.errors import ApiError
 from apps.devices import pki
@@ -39,7 +41,6 @@ from apps.devices.proof import (
 
 logger = logging.getLogger(__name__)
 
-CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 CODE_LENGTH = 8
 CODE_VALIDITY = timedelta(minutes=10)
 LAST_SEEN_INTERVAL = timedelta(minutes=1)
@@ -110,7 +111,8 @@ def issue_pairing_code(request: HttpRequest) -> IssuedPairingCode:
 
     Only a session that signed in or typed the password again within the last minutes
     (`recently_authenticated`): a browser left open must not become a phone that keeps
-    access after the owner changes the password.
+    access after the owner changes the password. With two-step verification on, only a
+    session that passed the code (at sign-in or when typing the password again).
     """
     user = current_user(request)
     if not recently_authenticated(request):
@@ -118,6 +120,21 @@ def issue_pairing_code(request: HttpRequest) -> IssuedPairingCode:
             403,
             "reauthentication_required",
             _("Vul eerst je wachtwoord opnieuw in."),
+        )
+    # A device token is a second factor of its own (two-step sign-in, S 8): getting one is
+    # not easier than signing in, so with two-step verification on, only a session that
+    # passed the code may make a pairing code.
+    if must_set_up_first(user, now=timezone.now()):
+        raise ApiError(
+            403,
+            "second_factor_required",
+            _("Stel eerst tweestapsverificatie in op de webinterface."),
+        )
+    if has_factor(user) and not session_passed_second_factor(request):
+        raise ApiError(
+            403,
+            "second_factor_session_required",
+            _("Log opnieuw in met je code om dit te doen."),
         )
     method = (
         UserSession.objects.filter(session_key=request.session.session_key)

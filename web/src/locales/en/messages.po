@@ -326,6 +326,10 @@ msgid "{who} vulde de datum van een taak in"
 msgstr "{who} filled in the date of a task"
 
 #: src/routes/member-devices.tsx
+msgid "{who} wordt overal uitgelogd en krijgt daar een melding van. Dit komt in het logboek."
+msgstr "{who} is signed out everywhere and gets a notice about it. This goes into the log."
+
+#: src/routes/member-devices.tsx
 msgid "{who} wordt overal uitgelogd en krijgt daar een melding van. Gekoppelde telefoons blijven werken."
 msgstr "{who} will be signed out everywhere and gets a notification about it. Paired phones keep working."
 
@@ -369,6 +373,7 @@ msgstr "7 days"
 msgid "aan"
 msgstr "on"
 
+#: src/routes/security.tsx
 #: src/routes/server-external-access.tsx
 msgid "Aan"
 msgstr "On"
@@ -416,6 +421,8 @@ msgid "Aantal brieven"
 msgstr "Number of letters"
 
 #: src/components/autopilot-panel.tsx
+#: src/components/second-factor-setup.tsx
+#: src/routes/security.tsx
 msgid "Aanzetten"
 msgstr "Switch on"
 
@@ -766,6 +773,7 @@ msgstr "Always on. Phones in your own network use this address."
 #: src/routes/automations.tsx
 #: src/routes/departments.tsx
 #: src/routes/labels.tsx
+#: src/routes/security.tsx
 #: src/routes/visibility.tsx
 msgid "Annuleren"
 msgstr "Cancel"
@@ -797,6 +805,7 @@ msgstr "Device expired"
 
 #: src/components/page.tsx
 #: src/routes/pair-app.tsx
+#: src/routes/security.tsx
 #: src/routes/settings.tsx
 msgid "Apparaten"
 msgstr "Devices"
@@ -982,6 +991,13 @@ msgstr "contains the word"
 msgid "bevat niet het woord"
 msgstr "does not contain the word"
 
+#: src/components/page.tsx
+#: src/routes/security.tsx
+#: src/routes/settings.tsx
+msgid "Beveiliging"
+msgstr "Security"
+
+#: src/components/second-factor-setup.tsx
 #: src/routes/pair-app.tsx
 #: src/routes/recovery-sheet.tsx
 msgid "Bevestigen"
@@ -990,6 +1006,10 @@ msgstr "Confirm"
 #: src/components/rule-sentence.ts
 msgid "Bewaakte map"
 msgstr "Watched folder"
+
+#: src/components/second-factor-setup.tsx
+msgid "Bewaar deze herstelcodes op papier of in je wachtwoordmanager. Elke code werkt één keer. Je ziet ze maar één keer."
+msgstr "Keep these recovery codes on paper or in your password manager. Each code works once. You see them only once."
 
 #: src/routes/search.tsx
 msgid "Bezig met zoeken…"
@@ -1216,9 +1236,29 @@ msgstr "Claude from Anthropic in the United States ({host})"
 msgid "Cloudflare Tunnel"
 msgstr "Cloudflare Tunnel"
 
+#: src/components/sign-in-code.tsx
 #: src/routes/pair-app.tsx
 msgid "Code"
 msgstr "Code"
+
+#: src/components/sign-in-code.tsx
+msgid "Code invullen"
+msgstr "Enter the code"
+
+#: src/components/second-factor-setup.tsx
+#: src/routes/pair-app.tsx
+#: src/routes/recovery-sheet.tsx
+#: src/routes/security.tsx
+msgid "Code uit de app"
+msgstr "Code from the app"
+
+#: src/routes/security.tsx
+msgid "Code uit de nieuwe app"
+msgstr "Code from the new app"
+
+#: src/routes/security.tsx
+msgid "Code uit de oude app"
+msgstr "Code from the old app"
 
 #: src/components/document-table.tsx
 msgid "Contract"
@@ -1247,6 +1287,10 @@ msgstr "Checks"
 #: src/routes/password-reset.tsx
 msgid "Daarna ben je ingelogd. Je moet je telefoon opnieuw koppelen."
 msgstr "After that you are signed in. You need to pair your phone again."
+
+#: src/routes/security.tsx
+msgid "Daarna is je wachtwoord weer genoeg om in te loggen. Je andere browsers worden uitgelogd."
+msgstr "After this your password is enough to sign in again. Your other browsers are signed out."
 
 #: src/components/share-dialog.tsx
 msgid "Daarna kun je deze brief zelf misschien niet meer openen."
@@ -1393,6 +1437,10 @@ msgstr "the group"
 msgid "De instellingen voor de back-up spreken elkaar tegen: je kunt een map óf een adres instellen, niet allebei."
 msgstr "The backup settings contradict each other: you can set a folder or an address, not both."
 
+#: src/components/page.tsx
+msgid "De klok van de server loopt niet gelijk. Inloggen met een code kan dan mislukken."
+msgstr "The server's clock is off. Signing in with a code may fail."
+
 #: src/routes/backup.tsx
 msgid "De laatste gelukte back-up is meer dan anderhalve dag oud. Kijk hieronder wat er misging."
 msgstr "The last successful backup is more than a day and a half old. See below what went wrong."
@@ -1466,6 +1514,10 @@ msgstr "The two new passwords are not the same."
 msgid "De twee wachtwoorden zijn niet hetzelfde."
 msgstr "The two passwords are not the same."
 
+#: src/routes/member-devices.tsx
+msgid "De tweestapsverificatie van {who} is gewist. {cleared} apparaten zijn ontkoppeld."
+msgstr "Two-step verification of {who} is cleared. {cleared} devices are unpaired."
+
 #: src/components/autopilot-panel.tsx
 msgid "De uitleg over automatisch verwerken is veranderd. Lees hem en geef opnieuw akkoord. Tot dan zet Brievie geen label van een regel zelf op."
 msgstr "The explanation of the autopilot has changed. Read it and agree again. Until then Brievie does not add a rule's label by itself."
@@ -1473,6 +1525,10 @@ msgstr "The explanation of the autopilot has changed. Read it and agree again. U
 #: src/components/invite-dialog.tsx
 msgid "De uitnodiging is klaar"
 msgstr "The invitation is ready"
+
+#: src/routes/member-devices.tsx
+msgid "De verloren telefoon kan nog bij de post."
+msgstr "The lost phone can still reach the mail."
 
 #: src/components/rule-templates.tsx
 msgid "De voorwaarden: bijvoorbeeld een woord in de brief, of van wie de brief komt."
@@ -1611,6 +1667,10 @@ msgstr "Download ({letters}, valid until {0})"
 msgid "Download als CSV"
 msgstr "Download as CSV"
 
+#: src/components/second-factor-setup.tsx
+msgid "Downloaden"
+msgstr "Download"
+
 #: src/routes/recovery-sheet.tsx
 msgid "Druk het af en bewaar het veilig. Het bestand bevat de sleutel: verwijder het daarna."
 msgstr "Print it and keep it safe. The file holds the key: delete it afterwards."
@@ -1663,6 +1723,10 @@ msgstr "An admin can then read post they otherwise do not see for one hour, with
 msgid "Een brief met het label Zorg wordt dan vanzelf privé. Brieven die er al zijn, blijven zoals ze zijn."
 msgstr "A letter with the label Healthcare then becomes private on its own. Letters that are already there stay as they are."
 
+#: src/routes/security.tsx
+msgid "Een gekoppelde telefoon blijft werken als je tweestapsverificatie aanzet. Wil je opnieuw beginnen? Ontkoppel hem bij Apparaten."
+msgstr "A paired phone keeps working when you switch on two-step verification. Want a fresh start? Unpair it under Devices."
+
 #: src/components/rule-sentence.ts
 msgid "Een label"
 msgstr "A label"
@@ -1710,6 +1774,10 @@ msgstr "Each device uses its own language."
 #: src/routes/settings.tsx
 msgid "Elk lid kan dan een ZIP-bestand met de eigen post downloaden."
 msgstr "Each member can then download a ZIP file with their own mail."
+
+#: src/components/second-factor-setup.tsx
+msgid "Elke code werkt één keer."
+msgstr "Each code works once."
 
 #: src/components/rule-sentence.ts
 msgid "en"
@@ -1950,6 +2018,10 @@ msgstr "Paired on"
 msgid "Gekoppelde apparaten"
 msgstr "Paired devices"
 
+#: src/routes/security.tsx
+msgid "Gekoppelde telefoons"
+msgstr "Paired phones"
+
 #: src/components/document-history.tsx
 msgid "Gekozen: geen dubbele brief, door {by}"
 msgstr "Marked as not a duplicate letter by {by}"
@@ -2074,6 +2146,24 @@ msgstr "Download recovery sheet"
 #: src/routes/setup-summary.tsx
 msgid "Herstelblad downloaden en bewaren"
 msgstr "Download and keep the recovery sheet"
+
+#: src/components/sign-in-code.tsx
+#: src/routes/security.tsx
+msgid "Herstelcode"
+msgstr "Recovery code"
+
+#: src/components/audit-codes.ts
+msgid "Herstelcode gebruikt"
+msgstr "Recovery code used"
+
+#: src/components/second-factor-setup.tsx
+msgid "Herstelcodes"
+msgstr "Recovery codes"
+
+#. placeholder {0}: window.location.host
+#: src/components/second-factor-setup.tsx
+msgid "Herstelcodes voor Brievie ({0})"
+msgstr "Recovery codes for Brievie ({0})"
 
 #: src/components/audit-codes.ts
 msgid "Herstellink gemaakt"
@@ -2220,6 +2310,10 @@ msgstr "I already have an account"
 msgid "Ik heb dit gelezen en ga akkoord, ook voor iedereen van wie post in deze werkruimte staat."
 msgstr "I have read this and I agree, also on behalf of everyone whose mail is in this workspace."
 
+#: src/components/second-factor-setup.tsx
+msgid "Ik heb ze bewaard"
+msgstr "I have saved them"
+
 #: src/routes/password-reset.tsx
 msgid "In deze link zit geen herstelcode. Open de link uit je bericht opnieuw."
 msgstr "This link has no reset code in it. Open the link from your message again."
@@ -2258,6 +2352,7 @@ msgstr "Signed in"
 msgid "ingesteld (het token zelf staat nooit op dit scherm)"
 msgstr "set (the token itself is never on this screen)"
 
+#: src/components/sign-in-code.tsx
 #: src/routes/login.tsx
 msgid "Inloggen"
 msgstr "Sign in"
@@ -2330,6 +2425,10 @@ msgstr "Revoke: {name}"
 #: src/components/rule-sentence.ts
 msgid "is"
 msgstr "is"
+
+#: src/routes/member-devices.tsx
+msgid "Is {who} de telefoon met de authenticator-app kwijt, en zijn de herstelcodes ook weg? Wis dan de tweestapsverificatie. {who} zet het daarna opnieuw aan."
+msgstr "Has {who} lost the phone with the authenticator app, and the recovery codes too? Then clear the two-step verification. {who} switches it on again afterwards."
 
 #: src/components/rule-sentence.ts
 msgid "is leeg"
@@ -2459,9 +2558,23 @@ msgstr "You have not ticked anything off in the last 30 days."
 msgid "Je hebt geen open taken. Nieuwe taken komen hier vanzelf zodra je post is nagekeken."
 msgstr "You have no open tasks. New tasks appear here by themselves once your mail has been checked."
 
+#. placeholder {0}: data.recovery_codes_left
+#: src/routes/security.tsx
+msgid "Je hebt nog {0} herstelcodes."
+msgstr "You have {0} recovery codes left."
+
+#. placeholder {0}: data.recovery_codes_left
+#: src/routes/security.tsx
+msgid "Je hebt nog {0} herstelcodes. Maak nieuwe aan."
+msgstr "You have {0} recovery codes left. Make new ones."
+
 #: src/routes/automations.tsx
 msgid "Je hebt nog geen regels."
 msgstr "You have no rules yet."
+
+#: src/components/second-factor-setup.tsx
+msgid "Je herstelcodes"
+msgstr "Your recovery codes"
 
 #: src/routes/workspaces.tsx
 msgid "Je hoort nog bij geen werkruimte."
@@ -2511,6 +2624,18 @@ msgstr "You create an account on this server."
 #: src/routes/setup.tsx
 msgid "Je naam"
 msgstr "Your name"
+
+#: src/routes/security.tsx
+msgid "Je nieuwe herstelcodes zijn klaar."
+msgstr "Your new recovery codes are ready."
+
+#: src/routes/security.tsx
+msgid "Je oude herstelcodes werken daarna niet meer."
+msgstr "Your old recovery codes stop working."
+
+#: src/routes/security.tsx
+msgid "Je oude telefoon blijft werken tot de nieuwe klaar is."
+msgstr "Your old phone keeps working until the new one is ready."
 
 #: src/components/page.tsx
 msgid "Je post en facturen, op je eigen server."
@@ -2585,6 +2710,10 @@ msgstr "Your connection did not arrive over https. Check that your reverse proxy
 #: src/routes/server-external-access.tsx
 msgid "Jouw verzoek kwam rechtstreeks van een adres uit BRIEVIE_TRUSTED_PROXIES. Staat daar het adres van Docker zelf? Dan kan elk apparaat in je netwerk een ander adres voorwenden. Zet daar alleen het adres van je reverse proxy."
 msgstr "Your request came directly from an address in BRIEVIE_TRUSTED_PROXIES. Is Docker's own address there? Then any device in your network can pretend to have another address. Put only your reverse proxy's address there."
+
+#: src/routes/member-devices.tsx
+msgid "Jouw wachtwoord"
+msgstr "Your password"
 
 #: src/components/role-dialog.tsx
 msgid "Kan leden uitnodigen en alles instellen."
@@ -2971,6 +3100,14 @@ msgid "Met labels zet je orde in je post, bijvoorbeeld Belasting of Zorg. Met de
 msgstr "With labels you put your mail in order, for example Tax or Healthcare. With the starter set you get the usual labels at once."
 
 #: src/routes/sessions.tsx
+msgid "met tweestapsverificatie"
+msgstr "with two-step verification"
+
+#: src/routes/security.tsx
+msgid "Met tweestapsverificatie vraagt Brievie na je wachtwoord een code van je telefoon. Zo kan niemand met alleen je wachtwoord bij je post."
+msgstr "With two-step verification, Brievie asks for a code from your phone after your password. Then nobody gets to your mail with your password alone."
+
+#: src/routes/sessions.tsx
 msgid "Methode"
 msgstr "Method"
 
@@ -3182,6 +3319,15 @@ msgstr "Choose a new password"
 msgid "Nieuwe code"
 msgstr "New code"
 
+#: src/components/audit-codes.ts
+#: src/routes/security.tsx
+msgid "Nieuwe herstelcodes"
+msgstr "New recovery codes"
+
+#: src/routes/security.tsx
+msgid "Nieuwe herstelcodes maken"
+msgstr "Make new recovery codes"
+
 #: src/components/open-invitations.tsx
 msgid "Nieuwe link"
 msgstr "New link"
@@ -3206,6 +3352,10 @@ msgstr "New person?"
 #: src/routes/rule-editor.tsx
 msgid "Nieuwe regel"
 msgstr "New rule"
+
+#: src/routes/security.tsx
+msgid "Nieuwe telefoon"
+msgstr "New phone"
 
 #: src/components/autopilot-panel.tsx
 msgid "Nieuwe uitleg lezen"
@@ -3349,6 +3499,10 @@ msgstr "Undo"
 msgid "Ongelezen"
 msgstr "Unread"
 
+#: src/routes/member-devices.tsx
+msgid "Ontkoppel ook de apparaten van {who}"
+msgstr "Also unpair the devices of {who}"
+
 #: src/components/document-table.tsx
 msgid "Ontvangen"
 msgstr "Received"
@@ -3372,6 +3526,14 @@ msgstr "The same on both letters: {sameFields}."
 #: src/routes/duplicate.tsx
 msgid "Op de andere scan is ''{task}'' al afgerond."
 msgstr "On the other scan, ''{task}'' is already completed."
+
+#: src/routes/security.tsx
+msgid "Op deze server is tweestapsverificatie verplicht."
+msgstr "Two-step verification is required on this server."
+
+#: src/components/sign-in-code.tsx
+msgid "Op deze server is tweestapsverificatie verplicht. Zet het nu aan; daarna ben je ingelogd."
+msgstr "Two-step verification is required on this server. Switch it on now; then you are signed in."
 
 #: src/components/waiting-dialog.tsx
 msgid "Op die dag komt de taak terug in Mijn taken. Iedereen die deze brief ziet, ziet dat je wacht."
@@ -3435,6 +3597,10 @@ msgstr "Open the app on your phone and scan the code. The phone must be on the s
 msgid "Open de Brievie-app"
 msgstr "Open the Brievie app"
 
+#: src/components/second-factor-setup.tsx
+msgid "Open een authenticator-app op je telefoon, zoals Microsoft Authenticator, Google Authenticator of de app Wachtwoorden op je iPhone."
+msgstr "Open an authenticator app on your phone, such as Microsoft Authenticator, Google Authenticator or the Passwords app on your iPhone."
+
 #: src/components/person-actions.tsx
 msgid "Open uitnodiging"
 msgstr "Open invitation"
@@ -3475,6 +3641,10 @@ msgstr "Saved."
 #: src/components/export-panel.tsx
 msgid "Opnieuw exporteren"
 msgstr "Export again"
+
+#: src/components/sign-in-code.tsx
+msgid "Opnieuw inloggen"
+msgstr "Sign in again"
 
 #: src/components/person-actions.tsx
 msgid "Opnieuw uitnodigen"
@@ -3517,6 +3687,10 @@ msgstr "Orange"
 msgid "Organisatie"
 msgstr "Organisation"
 
+#: src/routes/security.tsx
+msgid "Oude telefoon kwijt? Gebruik een herstelcode."
+msgstr "Lost your old phone? Use a recovery code."
+
 #: src/routes/language.tsx
 msgid "Overal, ook in de app."
 msgstr "Everywhere, including the app."
@@ -3524,6 +3698,10 @@ msgstr "Everywhere, including the app."
 #: src/components/document-table.tsx
 msgid "Overig"
 msgstr "Other"
+
+#: src/routes/security.tsx
+msgid "Overzetten"
+msgstr "Move it over"
 
 #: src/components/label-chip.tsx
 msgid "Paars"
@@ -3685,6 +3863,10 @@ msgstr "QR code with the invitation"
 msgid "QR-code om de app te koppelen"
 msgstr "QR code to pair the app"
 
+#: src/components/second-factor-setup.tsx
+msgid "QR-code voor je authenticator-app"
+msgstr "QR code for your authenticator app"
+
 #: src/routes/server-external-access.tsx
 msgid "Rechtstreeks verbonden met"
 msgstr "Directly connected to"
@@ -3799,6 +3981,10 @@ msgstr "Scan"
 msgid "Scan deze code met de Brievie-app"
 msgstr "Scan this code with the Brievie app"
 
+#: src/components/second-factor-setup.tsx
+msgid "Scan deze code."
+msgstr "Scan this code."
+
 #: src/routes/post.tsx
 msgid "Scan een brief met de Brievie-app op je telefoon. Daarna staat hij hier."
 msgstr "Scan a letter with the Brievie app on your phone. Then it shows up here."
@@ -3810,6 +3996,10 @@ msgstr "Scan a new letter with the Brievie app. You find earlier letters in"
 #: src/routes/pair-app.tsx
 msgid "Scan met de Brievie-app"
 msgstr "Scan with the Brievie app"
+
+#: src/components/second-factor-setup.tsx
+msgid "Scannen lukt niet? Typ deze sleutel in de app:"
+msgstr "Scanning does not work? Type this key into the app:"
 
 #. placeholder {0}: window.location.host
 #: src/components/page.tsx
@@ -3967,6 +4157,10 @@ msgstr "Overdue"
 msgid "Tekst van de brief"
 msgstr "Text of the letter"
 
+#: src/components/sign-in-code.tsx
+msgid "Telefoon kwijt? Gebruik een herstelcode."
+msgstr "Lost your phone? Use a recovery code."
+
 #: src/components/task-wait.tsx
 msgid "termijn was {term}"
 msgstr "deadline was {term}"
@@ -4033,6 +4227,11 @@ msgstr "Home network or VPN"
 msgid "Tijdstip"
 msgstr "Time"
 
+#: src/components/sign-in-code.tsx
+#: src/routes/security.tsx
+msgid "Toch een code uit de app gebruiken"
+msgstr "Use a code from the app after all"
+
 #: src/routes/tasks.tsx
 msgid "Toch niet klaar"
 msgstr "Not done after all"
@@ -4093,17 +4292,59 @@ msgstr "Until when are you waiting for a reply?"
 msgid "Tunnel-token"
 msgstr "Tunnel token"
 
+#: src/routes/member-devices.tsx
+#: src/routes/security.tsx
+msgid "Tweestapsverificatie"
+msgstr "Two-step verification"
+
 #: src/components/audit-codes.ts
 msgid "Tweestapsverificatie aangezet"
 msgstr "Two-step verification switched on"
+
+#: src/components/second-factor-setup.tsx
+#: src/components/sign-in-code.tsx
+msgid "Tweestapsverificatie aanzetten"
+msgstr "Switch on two-step verification"
 
 #: src/components/audit-codes.ts
 msgid "Tweestapsverificatie gewist door beheerder"
 msgstr "Two-step verification cleared by an admin"
 
+#: src/routes/security.tsx
+msgid "Tweestapsverificatie staat aan."
+msgstr "Two-step verification is on."
+
+#: src/routes/security.tsx
+msgid "Tweestapsverificatie staat nu op je nieuwe telefoon."
+msgstr "Two-step verification is now on your new phone."
+
+#: src/routes/security.tsx
+msgid "Tweestapsverificatie staat uit."
+msgstr "Two-step verification is off."
+
 #: src/components/audit-codes.ts
 msgid "Tweestapsverificatie uitgezet"
 msgstr "Two-step verification switched off"
+
+#: src/routes/member-devices.tsx
+msgid "Tweestapsverificatie van {who} wissen?"
+msgstr "Clear the two-step verification of {who}?"
+
+#: src/routes/member-devices.tsx
+msgid "Tweestapsverificatie wissen"
+msgstr "Clear two-step verification"
+
+#: src/components/second-factor-setup.tsx
+msgid "Typ de 6 cijfers die de app laat zien."
+msgstr "Type the 6 digits the app shows."
+
+#: src/components/sign-in-code.tsx
+msgid "Typ de code uit je authenticator-app."
+msgstr "Type the code from your authenticator app."
+
+#: src/components/sign-in-code.tsx
+msgid "Typ een van je herstelcodes. Elke code werkt één keer."
+msgstr "Type one of your recovery codes. Each code works once."
 
 #: src/routes/search.tsx
 msgid "Typ minstens twee tekens."
@@ -4114,6 +4355,7 @@ msgid "uit"
 msgstr "off"
 
 #: src/routes/automations.tsx
+#: src/routes/security.tsx
 #: src/routes/server-external-access.tsx
 msgid "Uit"
 msgstr "Off"
@@ -4242,6 +4484,14 @@ msgstr "Snooze: {description}"
 msgid "Uitstellen…"
 msgstr "Snooze…"
 
+#: src/routes/security.tsx
+msgid "Uitzetten"
+msgstr "Switch off"
+
+#: src/routes/security.tsx
+msgid "Uitzetten kan niet: tweestapsverificatie is verplicht."
+msgstr "You cannot switch it off: two-step verification is required."
+
 #: src/components/rule-sentence.ts
 msgid "Upload"
 msgstr "Upload"
@@ -4284,6 +4534,7 @@ msgstr "Sorts post changed"
 msgid "Verdeelt post: {0}"
 msgstr "Sorts post: {0}"
 
+#: src/routes/security.tsx
 #: src/routes/visibility.tsx
 msgid "Verder"
 msgstr "Next"
@@ -4478,6 +4729,10 @@ msgstr "Enter your password before you pair a phone. That way we know it's you."
 msgid "Vul je wachtwoord in voordat je het herstelblad downloadt. Zo weten we dat jij het bent."
 msgstr "Enter your password before you download the recovery sheet. That way we know it is you."
 
+#: src/components/second-factor-setup.tsx
+msgid "Vul je wachtwoord in voordat je tweestapsverificatie aanzet. Zo weten we dat jij het bent."
+msgstr "Enter your password before you switch on two-step verification. That way we know it is you."
+
 #: src/routes/setup.tsx
 msgid "Waar gebruik je Brievie voor?"
 msgstr "What do you use Brievie for?"
@@ -4489,8 +4744,8 @@ msgid "Waar je bent ingelogd"
 msgstr "Where you are signed in"
 
 #: src/routes/settings.tsx
-msgid "Waar je bent ingelogd, je wachtwoord en de taal van Brievie."
-msgstr "Where you are signed in, your password and Brievie's language."
+msgid "Waar je bent ingelogd, je wachtwoord, tweestapsverificatie en de taal van Brievie."
+msgstr "Where you are signed in, your password, two-step verification and the language of Brievie."
 
 #: src/routes/rule-editor.tsx
 msgid "Waar moet een brief aan voldoen? De tekst zoekt in de hele brief: ook een brief die het woord alleen noemt, past. De afzender en het soort post zijn preciezer; die zijn bekend als de AI de brief heeft gelezen, of zodra jij hem bevestigt."
@@ -4531,10 +4786,12 @@ msgstr "Waiting for a reply…"
 msgid "Wachten voorbij sinds {waitDay}"
 msgstr "Waiting ended on {waitDay}"
 
+#: src/components/second-factor-setup.tsx
 #: src/routes/invitation.tsx
 #: src/routes/login.tsx
 #: src/routes/pair-app.tsx
 #: src/routes/recovery-sheet.tsx
+#: src/routes/security.tsx
 #: src/routes/sessions.tsx
 #: src/routes/setup.tsx
 msgid "Wachtwoord"
@@ -4634,6 +4891,10 @@ msgstr "Workspace"
 #: src/routes/settings.tsx
 msgid "Werkruimte {0}"
 msgstr "Workspace {0}"
+
+#: src/routes/security.tsx
+msgid "Werkruimte {names} vraagt tweestapsverificatie."
+msgstr "Workspace {names} asks for two-step verification."
 
 #: src/components/audit-codes.ts
 msgid "Werkruimte gemaakt"
@@ -4772,6 +5033,10 @@ msgstr "Do you want to keep post apart within your organisation? Make department
 msgid "Wis filters"
 msgstr "Clear filters"
 
+#: src/routes/member-devices.tsx
+msgid "Wissen"
+msgstr "Clear"
+
 #: src/components/export-panel.tsx
 msgid "Wordt gemaakt…"
 msgstr "Being made…"
@@ -4792,6 +5057,10 @@ msgstr "Check it yourself?"
 msgid "Zet Alleen ongelezen uit om al je post te zien."
 msgstr "Turn off Unread only to see all your mail."
 
+#: src/routes/security.tsx
+msgid "Zet de nieuwe telefoon klaar"
+msgstr "Get the new phone ready"
+
 #: src/routes/backup.tsx
 msgid "Zet deze regels bij de instellingen van Brievie (in het compose-bestand, Portainer of Synology) en start Brievie opnieuw:"
 msgstr "Put these lines in the settings of Brievie (in the compose file, Portainer or Synology) and start Brievie again:"
@@ -4807,6 +5076,11 @@ msgstr "Address post to a department, such as Finance. Whoever is in that depart
 #: src/routes/visibility.tsx
 msgid "Zet post op naam van een groep, zoals Kinderen. Wie in die groep zit, ziet die post."
 msgstr "Address post to a group, such as Children. Whoever is in that group sees that post."
+
+#. placeholder {0}: day.format(new Date(data.grace_until))
+#: src/routes/security.tsx
+msgid "Zet tweestapsverificatie aan vóór {0}. Daarna kun je pas inloggen als je het hebt aangezet."
+msgstr "Switch on two-step verification before {0}. After that you can only sign in once you have switched it on."
 
 #: src/components/audit-codes.ts
 msgid "Zichtbaarheid gewijzigd"

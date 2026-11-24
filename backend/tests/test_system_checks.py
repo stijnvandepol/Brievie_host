@@ -2,14 +2,18 @@ import secrets
 
 import pytest
 from django.core.checks import Error, Warning, run_checks
+from django.utils import timezone
 from pytest_django import Settings
 
+from apps.accounts.models import SecondFactor
 from apps.common.checks import (
     check_database_passwords,
     check_external_access,
     check_public_urls,
+    check_second_factor_rule,
     check_trusted_proxies,
 )
+from tests.factories import UserFactory
 
 
 def test_public_url_with_an_allowed_host_passes(settings: Settings) -> None:
@@ -161,10 +165,10 @@ def test_warnings_never_print_the_token(
     assert not hasattr(settings, "BRIEVIE_TUNNEL_TOKEN")
 
 
-def test_w004_public_name_without_a_way(settings: Settings) -> None:
+def test_w005_public_name_without_a_way(settings: Settings) -> None:
     _external(settings, tunnel=False, proxies=[], public_web=False)
     settings.BRIEVIE_PUBLIC_HOSTNAME = "brievie.example.nl"
-    assert [m.id for m in check_external_access(None)] == ["brievie.W004"]
+    assert [m.id for m in check_external_access(None)] == ["brievie.W005"]
     settings.BRIEVIE_TRUSTED_PROXIES = ["192.168.1.5/32"]
     assert check_external_access(None) == []
     settings.BRIEVIE_TRUSTED_PROXIES = []
@@ -218,7 +222,41 @@ def test_a_wide_range_passes_only_when_forced(settings: Settings) -> None:
 
 
 @pytest.mark.parametrize("value", ["172.17.0.1", "172.18.0.1/32", "172.31.0.1"])
-def test_a_docker_gateway_is_a_warning(settings: Settings, value: str) -> None:
+def test_a_docker_gateway_is_a_warning_w006(settings: Settings, value: str) -> None:
     settings.BRIEVIE_TRUSTED_PROXIES = [value]
     settings.BRIEVIE_TRUSTED_PROXIES_WIDE = False
-    assert [m.id for m in check_trusted_proxies(None)] == ["brievie.W005"]
+    assert [m.id for m in check_trusted_proxies(None)] == ["brievie.W006"]
+
+
+def test_a_required_second_factor_without_an_admin_who_has_one_warns(settings: Settings) -> None:
+    settings.BRIEVIE_REQUIRE_SECOND_FACTOR = "server_admins"
+    UserFactory.create(is_server_admin=True)
+
+    (message,) = check_second_factor_rule(None)
+
+    assert isinstance(message, Warning)
+    assert message.id == "brievie.W004"
+    assert message.msg == "Nog geen serverbeheerder heeft tweestapsverificatie aan."
+
+
+def test_an_unconfirmed_factor_does_not_count(settings: Settings) -> None:
+    settings.BRIEVIE_REQUIRE_SECOND_FACTOR = "everyone"
+    admin = UserFactory.create(is_server_admin=True)
+    SecondFactor.objects.create(user=admin, secret_sealed=b"x")
+
+    assert [m.id for m in check_second_factor_rule(None)] == ["brievie.W004"]
+
+
+def test_an_admin_with_a_confirmed_factor_silences_it(settings: Settings) -> None:
+    settings.BRIEVIE_REQUIRE_SECOND_FACTOR = "everyone"
+    admin = UserFactory.create(is_server_admin=True)
+    SecondFactor.objects.create(user=admin, secret_sealed=b"x", confirmed_at=timezone.now())
+
+    assert check_second_factor_rule(None) == []
+
+
+def test_no_rule_no_warning(settings: Settings) -> None:
+    settings.BRIEVIE_REQUIRE_SECOND_FACTOR = "none"
+    UserFactory.create(is_server_admin=True)
+
+    assert check_second_factor_rule(None) == []

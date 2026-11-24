@@ -26,6 +26,7 @@ import { recoverySheetRoute } from "./routes/recovery-sheet";
 import { rootRoute } from "./routes/root";
 import { newRuleRoute, ruleRoute } from "./routes/rule-editor";
 import { searchRoute } from "./routes/search";
+import { securityRoute } from "./routes/security";
 import { serverAuditLogRoute } from "./routes/server-audit-log";
 import { serverExternalAccessRoute } from "./routes/server-external-access";
 import { sessionsRoute } from "./routes/sessions";
@@ -52,6 +53,7 @@ const routeTree = rootRoute.addChildren([
   recoverySheetRoute,
   backupRoute,
   passwordRoute,
+  securityRoute,
   languageRoute,
   workspaceRoute.addChildren([
     myPostRoute,

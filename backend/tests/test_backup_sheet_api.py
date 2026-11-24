@@ -141,3 +141,44 @@ def test_the_sheet_needs_a_csrf_token_from_a_browser_session() -> None:
     assert r.json()["code"] == "csrf_failed"
     assert b"5a5a" not in r.content
     assert not ServerAuditEvent.objects.filter(code="recovery_sheet_viewed").exists()
+
+
+# --- With two-step verification (security review of PR #52, point 6) ------------------
+
+
+def test_with_a_factor_a_session_that_passed_the_code_gets_the_sheet() -> None:
+    from tests.second_factor_support import give_factor, signed_in_with_code
+
+    user = admin()
+    factor = give_factor(user)
+
+    assert post_json(signed_in_with_code(user, factor), URL).status_code == 200
+
+
+def test_with_a_factor_a_session_without_the_code_is_refused() -> None:
+    from django.contrib.sessions.middleware import SessionMiddleware
+    from django.http import HttpResponse
+    from django.test import RequestFactory
+
+    from apps.backup.api import create_recovery_sheet
+    from apps.common.errors import ApiError
+    from tests.second_factor_support import give_factor
+
+    user = admin()
+    give_factor(user)
+    # The middleware signs such a session out; the endpoint refuses it on its own too.
+    request = RequestFactory().post("/api/v1" + URL)
+    SessionMiddleware(lambda r: HttpResponse()).process_request(request)
+    request.session.save()
+    request.user = user
+    key = request.session.session_key
+    assert key is not None
+    UserSession.objects.create(
+        user=user, session_key=key, method="password", last_used_at=timezone.now()
+    )
+
+    with pytest.raises(ApiError) as caught:
+        create_recovery_sheet(request)
+
+    assert (caught.value.status, caught.value.code) == (403, "second_factor_session_required")
+    assert not ServerAuditEvent.objects.filter(code="recovery_sheet_viewed").exists()

@@ -14,6 +14,10 @@ the translation. Add a line before introducing a new domain term.
 | accountstatus: niet actief, uitgenodigd, actief, uitgeschakeld | account state: inactive, invited, active, deactivated |
 | uitgeschakeld op; vorig account | deactivated_at; former_user |
 | beheerd door | managed_by |
+| tweestapsverificatie | second factor (`SecondFactor`), two-step sign-in |
+| herstelcode | recovery code (`RecoveryCode`) |
+| authenticator-app | authenticator app (TOTP) |
+| nieuwe telefoon | replacement (`beginSecondFactorReplacement`) |
 | nieuwe persoon (AI-voorstel) | new_person suggestion |
 | naamvariant | name_variant |
 | gearchiveerd | archived |
@@ -200,6 +204,11 @@ the request that creates the workspace and keep that name.
 | bevestigen | confirm | |
 | terugdraaien | undo | |
 | herstelblad | recovery sheet | |
+| tweestapsverificatie | two-step verification | Never "2FA" or "MFA" in the interface. Aanzetten / Uitzetten: switch on / switch off; wissen (by an admin): clear. |
+| herstelcode | recovery code | |
+| authenticator-app | authenticator app | |
+| Beveiliging | Security | The page of your own two-step verification. |
+| Nieuwe telefoon | New phone | Moving two-step verification to another phone. |
 | prullenbak | Trash | verwijderen: delete (to the trash); definitief verwijderen: delete permanently; terugzetten: restore; prullenbak legen: empty trash. |
 | dubbele brief | duplicate letter | Never "double" or "copy". Dubbel?: "Duplicate?"; Mogelijk dubbel: "Possible duplicate". |
 | samenvoegen, Het is dezelfde brief / Het zijn twee brieven | merge, "It is the same letter" / "They are two letters" | |

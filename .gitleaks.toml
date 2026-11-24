@@ -24,4 +24,7 @@ regexes = [
   # A made-up tunnel token in an earlier commit of external access (base64 of a sentence);
   # the test now makes its value at run time.
   '''^eyJhIjoicGxhbnRlZC10dW5uZWwtdG9rZW4tdmFsdWUifQ$''',
+  # Not a secret: in `filter(session_key=request.session.session_key, second_factor=True)`
+  # the generic rule takes the comma for an assignment and the next argument for a key.
+  '''^second_factor=True$''',
 ]

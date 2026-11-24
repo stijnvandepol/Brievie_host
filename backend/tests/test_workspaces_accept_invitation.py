@@ -265,7 +265,7 @@ def test_accept_with_a_new_account_signs_in_and_links_the_person(ws_a: Workspace
     assert (me.status_code, me.json()["email"]) == (200, "papa@example.nl")
     assert UserSession.objects.get(user=user).created_via == "invitation"
     (signed_in,) = ServerAuditEvent.objects.filter(code="sign_in_succeeded", actor_id=user.id)
-    assert signed_in.values == {"via": "invitation"}
+    assert signed_in.values == {"via": "invitation", "second_factor": "none"}
     (linked,) = workspace_rows(ws_a, "person_linked")
     assert (linked.target_kind, linked.target_id, linked.target_name) == ("person", papa.id, "Papa")
     (accepted,) = workspace_rows(ws_a, "invitation_accepted")

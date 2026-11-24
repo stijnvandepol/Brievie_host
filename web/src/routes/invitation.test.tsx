@@ -270,6 +270,42 @@ describe("accept an invitation", () => {
     expect(body).toMatchObject({ account: "existing", email: "anna@example.nl" });
   });
 
+  it("an account with two-step verification joins, then signs in with its code", async () => {
+    let pairingAsked = false;
+    server.use(
+      lookup(),
+      http.get(`*${API}/me`, () => HttpResponse.json(user)),
+      http.post(`*${API}/invitations/accept`, () =>
+        HttpResponse.json({ step: "code", expires_in_seconds: 300 }, { status: 202 }),
+      ),
+      http.post(`*${API}/auth/login/code`, () => HttpResponse.json(user)),
+      http.post(`*${API}/devices/pairing-codes`, () => {
+        pairingAsked = true;
+        return HttpResponse.json(
+          {
+            code: "ABCD-2345",
+            expires_at: new Date(Date.now() + 600_000).toISOString(),
+            qr_payload: '{"v":1,"urls":["https://brievie.example.nl"],"code":"ABCD-2345"}',
+            server_link: SERVER_LINK,
+          },
+          { status: 201 },
+        );
+      }),
+    );
+    const u = userEvent.setup();
+    renderApp(`/uitnodiging#${TOKEN}`);
+    await u.click(await screen.findByRole("radio", { name: /Ik heb al een account/ }));
+    await u.type(screen.getByRole("textbox", { name: "E-mailadres" }), "anna@example.nl");
+    await u.type(screen.getByLabelText("Wachtwoord"), "mijn wachtwoord");
+    await u.click(screen.getByRole("button", { name: "Inloggen en meedoen" }));
+
+    await u.type(await screen.findByRole("textbox", { name: "Code" }), "123456");
+    await u.click(screen.getByRole("button", { name: /^inloggen$/i }));
+
+    expect(await screen.findByRole("heading", { name: "Welkom bij Thuis" })).toBeInTheDocument();
+    expect(pairingAsked).toBe(true);
+  });
+
   it("a wrong password shows the server's sentence and keeps the form", async () => {
     server.use(
       lookup(),

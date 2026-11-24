@@ -200,6 +200,7 @@ def test_login_success_returns_the_user_and_a_session(client: Client) -> None:
         "language": "",
         "explanation_language": "nl",
         "is_server_admin": False,
+        "has_second_factor": False,
     }
     assert client.get("/api/v1/me").status_code == 200
 
