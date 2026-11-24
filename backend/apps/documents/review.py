@@ -85,6 +85,7 @@ def confirm_document(
             # the lookup as the system tells nobody else anything.
             if (
                 seen is not None
+                and seen.kind == Document.Kind.LETTER
                 and seen.status == Document.Status.DONE
                 and not seen.confirmed_by_ai
                 and seen.confirmed_by_id == user.id
@@ -95,7 +96,8 @@ def confirm_document(
         if document is None:
             raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
         visibility.require_editable(document)
-        if document.status not in _REVIEWABLE:
+        # An own document is never reviewed: its uploader named it (archive spec S 6.2).
+        if document.status not in _REVIEWABLE or document.kind != Document.Kind.LETTER:
             raise ApiError(
                 409,
                 "document_not_reviewable",

@@ -538,9 +538,10 @@ WHERE t.lexeme <> 'bsn' AND (t.lexeme ~ '^[0-9]{6,}$' OR t.lexeme ~ '^[[:alpha:]
 
 # The candidates: letters of the pool that hold a term (the search index, `search_vector`
 # GIN), the best `MAX_CANDIDATES` by `ts_rank_cd`, scored with `pg_trgm` in the same
-# statement. The query arrives built (a constant, not computed in the statement), so the
-# planner drives the scan through the index. A pair that has a row, in any state, is never
-# a candidate again.
+# statement. Only of the new letter's kind: a letter and an own document are never a pair
+# (archive spec AR5: a merge would trash one of two different things). The query arrives
+# built (a constant, not computed in the statement), so the planner drives the scan
+# through the index. A pair that has a row, in any state, is never a candidate again.
 _CANDIDATES_SQL: Final = """
 WITH candidates AS (
     SELECT d.id, ts_rank_cd(d.search_vector, %(query)s::tsquery) AS rank
@@ -549,6 +550,7 @@ WITH candidates AS (
       AND d.id <> %(id)s
       AND d.trashed_at IS NULL
       AND d.status <> 'processing'
+      AND d.kind = %(kind)s
       AND d.created_at >= %(since)s
       AND d.search_vector @@ %(query)s::tsquery
       AND NOT EXISTS (
@@ -593,9 +595,10 @@ def candidate_query(text: str) -> str | None:
 
 
 def candidates(
-    *, text: str, workspace_id: UUID, document_id: UUID, since: datetime
+    *, text: str, workspace_id: UUID, document_id: UUID, since: datetime, kind: str
 ) -> dict[UUID, Decimal]:
-    """The candidates of a letter with `text` in the pool, with their text similarity."""
+    """The candidates of a letter with `text` in the pool of its `kind`, with their text
+    similarity."""
     query = candidate_query(text)
     if query is None:
         return {}
@@ -608,6 +611,7 @@ def candidates(
                 "workspace": workspace_id,
                 "id": document_id,
                 "since": since,
+                "kind": kind,
                 "limit": MAX_CANDIDATES,
             },
         )
@@ -632,6 +636,7 @@ def detect(document: Document) -> int:
             workspace_id=document.workspace_id,
             document_id=document.id,
             since=document.created_at - WINDOW,
+            kind=document.kind,
         )
         if not scored:
             return 0

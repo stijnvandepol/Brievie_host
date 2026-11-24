@@ -736,7 +736,8 @@ def read_page(*, membership: Membership, document_id: UUID, index: int) -> tuple
 
 
 def retry_processing(*, workspace: Workspace, document_id: UUID) -> Document:
-    """Queue a failed document for processing again."""
+    """Queue a failed document for processing again: a letter in `failed`, or an own
+    document that ended `done` with a `failure_code` (archive spec S 6.2 point 5)."""
     with transaction.atomic():
         _lock_own_membership(workspace)
         document = (
@@ -748,7 +749,12 @@ def retry_processing(*, workspace: Workspace, document_id: UUID) -> Document:
             raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
         # Never sent to the AI again by someone with emergency access only.
         visibility.require_editable(document)
-        if document.status != Document.Status.FAILED:
+        own_failed = (
+            document.kind == Document.Kind.DOCUMENT
+            and document.status == Document.Status.DONE
+            and document.failure_code != ""
+        )
+        if document.status != Document.Status.FAILED and not own_failed:
             raise ApiError(
                 409,
                 "document_not_failed",

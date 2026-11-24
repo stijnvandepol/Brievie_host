@@ -190,9 +190,10 @@ def test_rule(*, workspace: Workspace, data: RuleIn) -> RuleTestOut:
     spec = definition.to_spec(rule)
     if spec is None:
         raise _invalid(_("Deze regel kunnen we niet lezen."))
-    documents = Document.objects.filter(LIVE, workspace=workspace).exclude(
-        status=Document.Status.PROCESSING
-    )
+    # Letters only: a rule never runs on an own document (archive spec S 6.2).
+    documents = Document.objects.filter(
+        LIVE, workspace=workspace, kind=Document.Kind.LETTER
+    ).exclude(status=Document.Status.PROCESSING)
     total = documents.count()
     checked = _within_text_budget(documents)
     facts = facts_for_many(checked)

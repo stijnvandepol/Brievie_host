@@ -2856,3 +2856,25 @@ Rulings of the spec, kept as written:
   column and adds both again. Release notes: "Deze update duurt wat langer om toe te passen:
   de zoekindex van alle brieven wordt opnieuw opgebouwd." The typo fallback (trigram on
   sender and summary) does not look at the title.
+- **Adding an own document (plan Task 4).** `createDocument`'s metadata takes `kind`, `title`,
+  `document_type`, `document_date`, `person_ids`, `label_ids`, `expires_on`, `remind_days`,
+  `retain_until` and `private`, all defaulted: an older app makes a letter. A letter with any
+  of them is 422 (a new client may not smuggle a title into a letter). `apps.documents.own` is
+  the one creator of `kind = document`: checks first (title, an own document's type, sane
+  dates, 7/30/60/90, active persons, existing labels), then the caller's membership is locked
+  and re-read (a member demoted to read-only meanwhile gets 403), persons and labels go
+  through `organise` with a `document_added` line, the addressee list and readers follow at
+  the scope's end, and `private` flips it last with the uploader as a reader. The title is
+  BSN-masked before it is stored. `kind` and `status` are never taken from the request.
+- **AR3, AR5 (plan Task 5).** An own document ends `done` at the end of processing, confirmed
+  by its uploader (`confirmed_by = scanned_by`, `confirmed_by_ai` false); a failure ends `done`
+  with `failure_code`, and `retryDocumentProcessing` accepts it. Duplicates are compared within
+  a kind. No rule runs on an own document (the triggers, a manual run and a rule's test leave
+  them out); `confirmDocument` on one is 409 `document_not_reviewable`.
+- **AR4, narrowed for this round (ruling of the builder).** The pipeline makes **no AI call** for
+  an own document: no proposals (title, type, dates, labels) and no summary. The spec lets the
+  AI propose them as suggestions applied by a tap; that needs its own prompt, its own
+  validation and the "Brievie stelt voor" block, and nothing would show the proposals yet.
+  Without it nothing of an own document's text leaves the server, whatever the AI settings.
+  `UploadMetadataIn` has no `summary_by_ai`. Cost: the member fills in what the AI could have
+  guessed. Left for a later slice.
