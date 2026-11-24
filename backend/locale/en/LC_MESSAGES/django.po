@@ -1,6 +1,14 @@
 msgid ""
 msgstr "Content-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\nLanguage: en\nPlural-Forms: nplurals=2; plural=(n != 1);\n"
 
+#: apps/access/middleware.py
+msgid "Op dit adres werkt alleen de Brievie-app. Gebruik de webinterface thuis of via VPN."
+msgstr "Only the Brievie app works at this address. Use the web interface at home or through a VPN."
+
+#: apps/access/middleware.py
+msgid "Alleen de app"
+msgstr "Only the app"
+
 #: apps/accounts/account_state.py
 msgid "Er is altijd minstens één serverbeheerder nodig. Dit account kan daarom niet weg."
 msgstr "There must always be at least one server admin. That is why this account cannot be removed."

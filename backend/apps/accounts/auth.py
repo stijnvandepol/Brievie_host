@@ -3,6 +3,7 @@ from django.utils.translation import gettext as _
 from ninja.errors import HttpError
 from ninja.security import SessionAuth as NinjaSessionAuth
 
+from apps.access.middleware import session_allowed
 from apps.common.errors import ApiError
 
 
@@ -18,7 +19,7 @@ class SessionAuth(NinjaSessionAuth):
     """
 
     def _get_key(self, request: HttpRequest) -> str | None:
-        if not request.user.is_authenticated:
+        if not request.user.is_authenticated or not session_allowed(request):
             return None
         try:
             return super()._get_key(request)

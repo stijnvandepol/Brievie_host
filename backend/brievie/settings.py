@@ -112,6 +112,9 @@ AUTH_PASSWORD_VALIDATORS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "apps.common.errors.ApiCacheControlMiddleware",
+    # The public route (tunnel, own reverse proxy) is app-only unless BRIEVIE_PUBLIC_WEB:
+    # before WhiteNoise and the session, so neither a page nor a session is reached.
+    "apps.access.middleware.PublicRouteGate",
     "apps.common.errors.ApiMethodNotAllowedMiddleware",
     "apps.common.errors.ApiContentLengthMiddleware",
     "apps.common.errors.ApiJsonBodyMiddleware",
@@ -272,6 +275,9 @@ BRIEVIE_PROXY_COUNT: int = env.int("BRIEVIE_PROXY_COUNT", default=0)
 # the route are then Caddy's X-Brievie-Client-IP and X-Brievie-Route, which Caddy writes
 # itself on every request (apps.common.net, apps.access.route; S 7.3).
 BRIEVIE_BEHIND_CADDY: bool = env.bool("BRIEVIE_BEHIND_CADDY", default=False)
+# The web interface and its password sign-in on the public route (tunnel, own reverse
+# proxy). Off: there only the app works (device tokens and pairing; S 7.6).
+BRIEVIE_PUBLIC_WEB: bool = env.bool("BRIEVIE_PUBLIC_WEB", default=False)
 
 # Login lockout (django-axes): 5 failures for the same email + address lock that
 # pair for 15 minutes. apps.accounts.services.login checks the lock itself and
