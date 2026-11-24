@@ -1170,6 +1170,14 @@ msgstr "Code invullen"
 msgid "Code uit de app"
 msgstr "Code uit de app"
 
+#: src/routes/security.tsx
+msgid "Code uit de nieuwe app"
+msgstr "Code uit de nieuwe app"
+
+#: src/routes/security.tsx
+msgid "Code uit de oude app"
+msgstr "Code uit de oude app"
+
 #: src/components/document-table.tsx
 msgid "Contract"
 msgstr "Contract"
@@ -1338,6 +1346,10 @@ msgstr "de groep"
 #: src/routes/backup.tsx
 msgid "De instellingen voor de back-up spreken elkaar tegen: je kunt een map óf een adres instellen, niet allebei."
 msgstr "De instellingen voor de back-up spreken elkaar tegen: je kunt een map óf een adres instellen, niet allebei."
+
+#: src/components/page.tsx
+msgid "De klok van de server loopt niet gelijk. Inloggen met een code kan dan mislukken."
+msgstr "De klok van de server loopt niet gelijk. Inloggen met een code kan dan mislukken."
 
 #: src/routes/backup.tsx
 msgid "De laatste gelukte back-up is meer dan anderhalve dag oud. Kijk hieronder wat er misging."
@@ -2018,6 +2030,7 @@ msgid "Herstelblad downloaden en bewaren"
 msgstr "Herstelblad downloaden en bewaren"
 
 #: src/components/sign-in-code.tsx
+#: src/routes/security.tsx
 msgid "Herstelcode"
 msgstr "Herstelcode"
 
@@ -2469,6 +2482,10 @@ msgstr "Je nieuwe herstelcodes zijn klaar."
 #: src/routes/security.tsx
 msgid "Je oude herstelcodes werken daarna niet meer."
 msgstr "Je oude herstelcodes werken daarna niet meer."
+
+#: src/routes/security.tsx
+msgid "Je oude telefoon blijft werken tot de nieuwe klaar is."
+msgstr "Je oude telefoon blijft werken tot de nieuwe klaar is."
 
 #: src/components/page.tsx
 msgid "Je post en facturen, op je eigen server."
@@ -3125,6 +3142,10 @@ msgstr "Nieuwe persoon?"
 msgid "Nieuwe regel"
 msgstr "Nieuwe regel"
 
+#: src/routes/security.tsx
+msgid "Nieuwe telefoon"
+msgstr "Nieuwe telefoon"
+
 #: src/components/autopilot-panel.tsx
 msgid "Nieuwe uitleg lezen"
 msgstr "Nieuwe uitleg lezen"
@@ -3436,6 +3457,10 @@ msgstr "Oranje"
 msgid "Organisatie"
 msgstr "Organisatie"
 
+#: src/routes/security.tsx
+msgid "Oude telefoon kwijt? Gebruik een herstelcode."
+msgstr "Oude telefoon kwijt? Gebruik een herstelcode."
+
 #: src/routes/language.tsx
 msgid "Overal, ook in de app."
 msgstr "Overal, ook in de app."
@@ -3443,6 +3468,10 @@ msgstr "Overal, ook in de app."
 #: src/components/document-table.tsx
 msgid "Overig"
 msgstr "Overig"
+
+#: src/routes/security.tsx
+msgid "Overzetten"
+msgstr "Overzetten"
 
 #: src/components/label-chip.tsx
 msgid "Paars"
@@ -3932,6 +3961,7 @@ msgid "Tijdstip"
 msgstr "Tijdstip"
 
 #: src/components/sign-in-code.tsx
+#: src/routes/security.tsx
 msgid "Toch een code uit de app gebruiken"
 msgstr "Toch een code uit de app gebruiken"
 
@@ -4004,6 +4034,10 @@ msgstr "Tweestapsverificatie gewist door beheerder"
 #: src/routes/security.tsx
 msgid "Tweestapsverificatie staat aan."
 msgstr "Tweestapsverificatie staat aan."
+
+#: src/routes/security.tsx
+msgid "Tweestapsverificatie staat nu op je nieuwe telefoon."
+msgstr "Tweestapsverificatie staat nu op je nieuwe telefoon."
 
 #: src/routes/security.tsx
 msgid "Tweestapsverificatie staat uit."
@@ -4190,6 +4224,7 @@ msgstr "Verdeelt post gewijzigd"
 msgid "Verdeelt post: {0}"
 msgstr "Verdeelt post: {0}"
 
+#: src/routes/security.tsx
 #: src/routes/visibility.tsx
 msgid "Verder"
 msgstr "Verder"
@@ -4648,6 +4683,10 @@ msgstr "Zelf controleren?"
 #: src/routes/my-post.tsx
 msgid "Zet Alleen ongelezen uit om al je post te zien."
 msgstr "Zet Alleen ongelezen uit om al je post te zien."
+
+#: src/routes/security.tsx
+msgid "Zet de nieuwe telefoon klaar"
+msgstr "Zet de nieuwe telefoon klaar"
 
 #: src/routes/backup.tsx
 msgid "Zet deze regels bij de instellingen van Brievie (in het compose-bestand, Portainer of Synology) en start Brievie opnieuw:"

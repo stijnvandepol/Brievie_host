@@ -421,6 +421,10 @@ msgstr "Two-step verification is required. You cannot switch it off, but you can
 msgid "Dit account heeft geen tweestapsverificatie."
 msgstr "This account does not have two-step verification."
 
+#: apps/accounts/second_factor.py
+msgid "Begin opnieuw met Nieuwe telefoon."
+msgstr "Start New phone again."
+
 #: apps/accounts/second_factor_account.py apps/backup/api.py apps/devices/services.py
 msgid "Vul eerst je wachtwoord opnieuw in."
 msgstr "Enter your password again first."

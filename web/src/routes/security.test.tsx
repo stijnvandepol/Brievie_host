@@ -10,6 +10,7 @@ import {
   loggedInHandlers,
   renderApp,
   server,
+  user,
 } from "../test-utils";
 
 vi.mock("qrcode.react", () => ({
@@ -158,5 +159,101 @@ describe("Beveiliging", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Je nieuwe herstelcodes zijn klaar.",
     );
+  });
+});
+
+describe("a new phone", () => {
+  it("asks a code of the old app, then the new app scans and confirms", async () => {
+    const sent: unknown[] = [];
+    server.use(
+      ...loggedInHandlers(),
+      status(on),
+      http.post(`*${API}/me/second-factor/replacement`, async ({ request }) => {
+        sent.push(await request.json());
+        return HttpResponse.json({ secret: "WXYZ WXYZ", otpauth_uri: "link-voor-de-app" });
+      }),
+      http.post(`*${API}/me/second-factor/replacement/confirm`, async ({ request }) => {
+        sent.push(await request.json());
+        return HttpResponse.json({ recovery_codes: codes });
+      }),
+    );
+    const u = userEvent.setup();
+    renderApp("/account/beveiliging");
+    await u.click(await screen.findByRole("button", { name: "Nieuwe telefoon" }));
+    expect(
+      screen.getByText("Je oude telefoon blijft werken tot de nieuwe klaar is."),
+    ).toBeVisible();
+    await u.type(screen.getByRole("textbox", { name: "Code uit de oude app" }), "111111");
+    await u.click(screen.getByRole("button", { name: "Verder" }));
+
+    expect(await screen.findByText("WXYZ WXYZ")).toBeInTheDocument();
+    await u.type(screen.getByRole("textbox", { name: "Code uit de nieuwe app" }), "222222");
+    await u.click(screen.getByRole("button", { name: "Overzetten" }));
+    const dialog = await screen.findByRole("dialog", { name: "Je herstelcodes" });
+    await u.click(within(dialog).getByRole("button", { name: "Ik heb ze bewaard" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Tweestapsverificatie staat nu op je nieuwe telefoon.",
+    );
+    expect(sent).toEqual([{ code: "111111", recovery_code: "" }, { code: "222222" }]);
+  });
+
+  it("takes a recovery code when the old phone is gone", async () => {
+    let sent: unknown;
+    server.use(
+      ...loggedInHandlers(),
+      status(on),
+      http.post(`*${API}/me/second-factor/replacement`, async ({ request }) => {
+        sent = await request.json();
+        return HttpResponse.json({ secret: "WXYZ WXYZ", otpauth_uri: "link-voor-de-app" });
+      }),
+    );
+    const u = userEvent.setup();
+    renderApp("/account/beveiliging");
+    await u.click(await screen.findByRole("button", { name: "Nieuwe telefoon" }));
+    await u.click(
+      screen.getByRole("button", { name: "Oude telefoon kwijt? Gebruik een herstelcode." }),
+    );
+    await u.type(screen.getByRole("textbox", { name: "Herstelcode" }), "QRSTU-VWXY2");
+    await u.click(screen.getByRole("button", { name: "Verder" }));
+
+    expect(await screen.findByText("WXYZ WXYZ")).toBeInTheDocument();
+    expect(sent).toEqual({ code: "", recovery_code: "QRSTU-VWXY2" });
+  });
+});
+
+describe("the server's clock", () => {
+  const CLOCK = "De klok van de server loopt niet gelijk. Inloggen met een code kan dan mislukken.";
+
+  function meWithClock(offsetSeconds: number, serverAdmin: boolean) {
+    return http.get(`*${API}/me`, () =>
+      HttpResponse.json(
+        { ...user, is_server_admin: serverAdmin },
+        { headers: { Date: new Date(Date.now() + offsetSeconds * 1000).toUTCString() } },
+      ),
+    );
+  }
+
+  it("warns a server admin when it is more than 30 seconds off", async () => {
+    server.use(meWithClock(120, true), ...loggedInHandlers(), status(off));
+    renderApp("/account/beveiliging");
+
+    expect(await screen.findByText(CLOCK)).toBeInTheDocument();
+  });
+
+  it("says nothing to a member", async () => {
+    server.use(meWithClock(120, false), ...loggedInHandlers(), status(off));
+    renderApp("/account/beveiliging");
+
+    await screen.findByText("Tweestapsverificatie staat uit.");
+    expect(screen.queryByText(CLOCK)).not.toBeInTheDocument();
+  });
+
+  it("says nothing within 30 seconds", async () => {
+    server.use(meWithClock(10, true), ...loggedInHandlers(), status(off));
+    renderApp("/account/beveiliging");
+
+    await screen.findByText("Tweestapsverificatie staat uit.");
+    expect(screen.queryByText(CLOCK)).not.toBeInTheDocument();
   });
 });

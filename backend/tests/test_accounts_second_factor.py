@@ -22,8 +22,10 @@ from apps.accounts.models import (
 from apps.accounts.second_factor import (
     FIRST_LOCK,
     MAX_LOCK,
+    begin_replacement,
     begin_setup,
     clear_factor,
+    confirm_replacement,
     confirm_setup,
     lock_length,
     open_secret,
@@ -573,3 +575,118 @@ def test_a_pass_cannot_be_made_outside_the_module(user: User) -> None:
     with pytest.raises(TypeError):
         SecondFactorPassed(user_id=user.id, method="totp", issuer=object())
     assert passed_without_factor(user).method == "none"
+
+
+# --- A new phone (plan Task 16) ---------------------------------------------------------
+
+
+def new_phone(user: User, factor: Factor, *, at_time: datetime = NOW) -> bytes:
+    setup = begin_replacement(
+        user,
+        host="brievie.local",
+        code=factor.code(at_time),
+        recovery_code="",
+        now=at_time,
+        client_ip=None,
+    )
+    return secret_of(setup.secret_text)
+
+
+def test_a_new_phone_needs_a_code_of_the_old_one(user: User) -> None:
+    give_factor(user, now=NOW)
+
+    error = api_error(
+        lambda: begin_replacement(
+            user, host="h", code="000000", recovery_code="", now=NOW, client_ip=None
+        )
+    )
+
+    assert (error.status, error.code) == (400, "second_factor_invalid")
+    assert SecondFactor.objects.get(user=user).pending_secret_sealed is None
+
+
+def test_a_recovery_code_may_start_a_new_phone(user: User) -> None:
+    factor = give_factor(user, now=NOW)
+
+    begin_replacement(
+        user,
+        host="h",
+        code="",
+        recovery_code=factor.recovery_codes[0],
+        now=NOW,
+        client_ip=None,
+    )
+
+    assert SecondFactor.objects.get(user=user).pending_since == NOW
+    assert RecoveryCode.objects.filter(user=user, used_at__isnull=True).count() == 9
+
+
+def test_the_old_phone_works_until_the_new_one_is_confirmed(user: User) -> None:
+    factor = give_factor(user, now=NOW)
+    new_secret = new_phone(user, factor)
+
+    later = NOW + timedelta(minutes=1)
+    verify_code(user, factor.code(later), now=later, client_ip=None)
+    new_code = totp.code_at(new_secret, totp.step_of(later))
+    error = api_error(lambda: verify_code(user, new_code, now=later, client_ip=None))
+    assert error.code == "second_factor_invalid"
+
+
+def test_confirming_the_new_phone_swaps_in_one_step(user: User) -> None:
+    factor = give_factor(user, now=NOW)
+    new_secret = new_phone(user, factor)
+    later = NOW + timedelta(minutes=2)
+
+    confirmed = confirm_replacement(
+        user, totp.code_at(new_secret, totp.step_of(later)), now=later, client_ip=None
+    )
+
+    row = SecondFactor.objects.get(user=user)
+    assert open_secret(user.id, row.secret_sealed) == new_secret
+    assert (row.pending_secret_sealed, row.pending_since) == (None, None)
+    assert len(confirmed.recovery_codes) == 10
+    assert set(confirmed.recovery_codes).isdisjoint(factor.recovery_codes)
+    (replaced,) = [r for r in server_rows("second_factor_added") if r.values]
+    assert replaced.values == {"replaced": True}
+    old = factor.code(later + timedelta(minutes=1))
+    error = api_error(
+        lambda: verify_code(user, old, now=later + timedelta(minutes=1), client_ip=None)
+    )
+    assert error.code == "second_factor_invalid"
+
+
+def test_confirming_without_a_new_phone_is_refused(user: User) -> None:
+    give_factor(user, now=NOW)
+
+    error = api_error(lambda: confirm_replacement(user, "123456", now=NOW, client_ip=None))
+
+    assert (error.status, error.code) == (409, "second_factor_setup_missing")
+
+
+def test_a_wrong_code_of_the_new_phone_keeps_the_old_one(user: User) -> None:
+    factor = give_factor(user, now=NOW)
+    new_phone(user, factor)
+
+    error = api_error(lambda: confirm_replacement(user, "000000", now=NOW, client_ip=None))
+
+    assert error.code == "second_factor_invalid"
+    row = SecondFactor.objects.get(user=user)
+    assert open_secret(user.id, row.secret_sealed) == factor.secret
+    assert row.pending_secret_sealed is not None
+
+
+def test_a_new_phone_left_for_an_hour_is_forgotten(user: User) -> None:
+    factor = give_factor(user, now=NOW)
+    new_secret = new_phone(user, factor)
+    later = NOW + timedelta(minutes=61)
+
+    purge_unconfirmed(now=later)
+
+    row = SecondFactor.objects.get(user=user)
+    assert (row.pending_secret_sealed, row.pending_since) == (None, None)
+    error = api_error(
+        lambda: confirm_replacement(
+            user, totp.code_at(new_secret, totp.step_of(later)), now=later, client_ip=None
+        )
+    )
+    assert error.code == "second_factor_setup_missing"

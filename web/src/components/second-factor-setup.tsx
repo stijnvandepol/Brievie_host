@@ -95,6 +95,32 @@ export function RecoveryCodesDialog({ codes, onSaved }: { codes: string[]; onSav
   );
 }
 
+/** The three steps of the set-up, the QR code and the key as text. */
+export function ScanSteps({ secret }: { secret: { secret: string; otpauth_uri: string } }) {
+  return (
+    <>
+      <ol className="steps">
+        <li>
+          {t`Open een authenticator-app op je telefoon, zoals Microsoft Authenticator, Google Authenticator of de app Wachtwoorden op je iPhone.`}
+        </li>
+        <li>{t`Scan deze code.`}</li>
+        <li>{t`Typ de 6 cijfers die de app laat zien.`}</li>
+      </ol>
+      <div className="setup-qr">
+        <QRCodeSVG
+          value={secret.otpauth_uri}
+          title={t`QR-code voor je authenticator-app`}
+          size={200}
+          marginSize={4}
+          level="M"
+        />
+      </div>
+      <p className="muted">{t`Scannen lukt niet? Typ deze sleutel in de app:`}</p>
+      <p className="num code secret">{secret.secret}</p>
+    </>
+  );
+}
+
 /**
  * Setting up two-step verification (spec S 9): the three steps, the QR code and the key as
  * text, the code from the app, then the recovery codes. `pending`: a sign-in that must set
@@ -202,24 +228,7 @@ export function SecondFactorSetup({
   return (
     <section className="second-factor-setup" aria-labelledby="second-factor-setup-title">
       <h2 id="second-factor-setup-title">{t`Tweestapsverificatie aanzetten`}</h2>
-      <ol className="steps">
-        <li>
-          {t`Open een authenticator-app op je telefoon, zoals Microsoft Authenticator, Google Authenticator of de app Wachtwoorden op je iPhone.`}
-        </li>
-        <li>{t`Scan deze code.`}</li>
-        <li>{t`Typ de 6 cijfers die de app laat zien.`}</li>
-      </ol>
-      <div className="setup-qr">
-        <QRCodeSVG
-          value={secret.otpauth_uri}
-          title={t`QR-code voor je authenticator-app`}
-          size={200}
-          marginSize={4}
-          level="M"
-        />
-      </div>
-      <p className="muted">{t`Scannen lukt niet? Typ deze sleutel in de app:`}</p>
-      <p className="num code secret">{secret.secret}</p>
+      <ScanSteps secret={secret} />
       <Form onSubmit={submitCode} className="form form-narrow">
         <CodeField value={code} onChange={setCode} label={t`Code uit de app`} />
         <ErrorAlert error={confirm.error} />

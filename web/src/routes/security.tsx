@@ -10,6 +10,7 @@ import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page"
 import {
   CodeField,
   RecoveryCodesDialog,
+  ScanSteps,
   SecondFactorSetup,
 } from "../components/second-factor-setup";
 import { Badge, Loading, MessageBar } from "../components/ui";
@@ -18,7 +19,7 @@ import { requireUser } from "../guards";
 import { rootRoute } from "./root";
 
 type Status = components["schemas"]["SecondFactorOut"];
-type Mode = "idle" | "setup" | "renew" | "remove";
+type Mode = "idle" | "setup" | "renew" | "remove" | "phone";
 
 const FEW_CODES = 2;
 const day = dateFormat({ day: "numeric", month: "long" });
@@ -64,6 +65,95 @@ function RenewCodes({ onDone }: { onDone: () => void }) {
       <div>
         <Button type="submit" className="button" isPending={renew.isPending}>
           {t`Nieuwe herstelcodes maken`}
+        </Button>
+      </div>
+    </Form>
+  );
+}
+
+/** "Nieuwe telefoon" (spec S 7): a code from the old app (or a recovery code), then the
+ * new app scans a new key; the old one works until the new one is confirmed. */
+function NewPhone({ onDone }: { onDone: () => void }) {
+  const [recovery, setRecovery] = useState(false);
+  const [proof, setProof] = useState("");
+  const [code, setCode] = useState("");
+  const begin = useMutation({
+    gcTime: 0,
+    mutationFn: async () => {
+      const value = recovery ? proof.trim() : proof.replace(/\s/g, "");
+      const { data, error } = await api.POST("/api/v1/me/second-factor/replacement", {
+        body: recovery ? { code: "", recovery_code: value } : { code: value, recovery_code: "" },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+  const confirm = useMutation({
+    gcTime: 0,
+    mutationFn: async () => {
+      const { data, error } = await api.POST("/api/v1/me/second-factor/replacement/confirm", {
+        body: { code: code.replace(/\s/g, "") },
+      });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data.recovery_codes;
+    },
+  });
+
+  function submitProof(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    begin.mutate();
+  }
+
+  function submitCode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    confirm.mutate();
+  }
+
+  if (confirm.data) return <RecoveryCodesDialog codes={confirm.data} onSaved={onDone} />;
+  if (begin.data) {
+    return (
+      <section className="second-factor-setup" aria-labelledby="new-phone-title">
+        <h3 id="new-phone-title">{t`Zet de nieuwe telefoon klaar`}</h3>
+        <ScanSteps secret={begin.data} />
+        <Form onSubmit={submitCode} className="form form-narrow">
+          <CodeField value={code} onChange={setCode} label={t`Code uit de nieuwe app`} />
+          <ErrorAlert error={confirm.error} />
+          <div>
+            <Button type="submit" className="button" isPending={confirm.isPending}>
+              {t`Overzetten`}
+            </Button>
+          </div>
+        </Form>
+      </section>
+    );
+  }
+  return (
+    <Form onSubmit={submitProof} className="form form-narrow" aria-label={t`Nieuwe telefoon`}>
+      <p>{t`Je oude telefoon blijft werken tot de nieuwe klaar is.`}</p>
+      {recovery ? (
+        <TextField className="field" value={proof} onChange={setProof} isRequired maxLength={30}>
+          <Label>{t`Herstelcode`}</Label>
+          <Input autoComplete="off" autoCapitalize="characters" spellCheck={false} />
+        </TextField>
+      ) : (
+        <CodeField value={proof} onChange={setProof} label={t`Code uit de oude app`} />
+      )}
+      <ErrorAlert error={begin.error} />
+      <div className="settings-links">
+        <Button type="submit" className="button" isPending={begin.isPending}>
+          {t`Verder`}
+        </Button>
+        <Button
+          className="button-text"
+          onPress={() => {
+            setRecovery(!recovery);
+            setProof("");
+            begin.reset();
+          }}
+        >
+          {recovery
+            ? t`Toch een code uit de app gebruiken`
+            : t`Oude telefoon kwijt? Gebruik een herstelcode.`}
         </Button>
       </div>
     </Form>
@@ -184,6 +274,11 @@ function SecurityPage() {
           {mode === "remove" ? (
             <RemoveFactor onDone={() => done(t`Tweestapsverificatie staat uit.`)} />
           ) : null}
+          {mode === "phone" ? (
+            <NewPhone
+              onDone={() => done(t`Tweestapsverificatie staat nu op je nieuwe telefoon.`)}
+            />
+          ) : null}
 
           {mode === "idle" ? (
             <div className="settings-links">
@@ -198,6 +293,17 @@ function SecurityPage() {
                   {t`Aanzetten`}
                 </Button>
               )}
+              {data.enabled ? (
+                <Button
+                  className="button secondary"
+                  onPress={() => {
+                    setMessage("");
+                    setMode("phone");
+                  }}
+                >
+                  {t`Nieuwe telefoon`}
+                </Button>
+              ) : null}
               {data.enabled ? (
                 <Button
                   className="button secondary"

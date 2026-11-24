@@ -19,7 +19,9 @@ from django.utils.translation import gettext as _
 from apps.accounts.models import User, UserSession
 from apps.accounts.second_factor import (
     SetupSecret,
+    begin_replacement,
     begin_setup,
+    confirm_replacement,
     confirm_setup,
     recovery_codes_left,
     remove_factor,
@@ -108,6 +110,33 @@ def confirm_my_setup(request: HttpRequest, *, code: str) -> list[str]:
     confirmed = confirm_setup(user, code, now=timezone.now(), client_ip=client_ip)
     if not _signed_in(request):
         complete_sign_in(request, confirmed.passed)
+    _keep_only_this_session(request, user, client_ip=client_ip)
+    return confirmed.recovery_codes
+
+
+def begin_my_replacement(request: HttpRequest, *, code: str, recovery_code: str) -> SetupSecret:
+    """A new phone: a code from the old app (or a recovery code) first."""
+    return begin_replacement(
+        acting_user(request),
+        host=_host(request),
+        code=code,
+        recovery_code=recovery_code,
+        now=timezone.now(),
+        client_ip=valid_client_ip(request),
+    )
+
+
+def confirm_my_replacement(request: HttpRequest, *, code: str) -> list[str]:
+    """Move to the new phone with a code from its app; answer the new recovery codes. The
+    other sessions end, as when it was switched on."""
+    user = acting_user(request)
+    client_ip = valid_client_ip(request)
+    confirmed = confirm_replacement(user, code, now=timezone.now(), client_ip=client_ip)
+    _keep_only_this_session(request, user, client_ip=client_ip)
+    return confirmed.recovery_codes
+
+
+def _keep_only_this_session(request: HttpRequest, user: User, *, client_ip: str | None) -> None:
     with transaction.atomic():
         UserSession.objects.filter(session_key=request.session.session_key).update(
             second_factor=True
@@ -120,7 +149,6 @@ def confirm_my_setup(request: HttpRequest, *, code: str) -> list[str]:
                 target=AuditTarget(kind=TargetKind.USER, id=user.id, name=user.name),
                 values={"count": ended, "reason": "second_factor_added"},
             )
-    return confirmed.recovery_codes
 
 
 def renew_my_recovery_codes(request: HttpRequest, *, code: str) -> list[str]:

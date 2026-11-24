@@ -1170,6 +1170,14 @@ msgstr "Enter the code"
 msgid "Code uit de app"
 msgstr "Code from the app"
 
+#: src/routes/security.tsx
+msgid "Code uit de nieuwe app"
+msgstr "Code from the new app"
+
+#: src/routes/security.tsx
+msgid "Code uit de oude app"
+msgstr "Code from the old app"
+
 #: src/components/document-table.tsx
 msgid "Contract"
 msgstr "Contract"
@@ -1338,6 +1346,10 @@ msgstr "the group"
 #: src/routes/backup.tsx
 msgid "De instellingen voor de back-up spreken elkaar tegen: je kunt een map óf een adres instellen, niet allebei."
 msgstr "The backup settings contradict each other: you can set a folder or an address, not both."
+
+#: src/components/page.tsx
+msgid "De klok van de server loopt niet gelijk. Inloggen met een code kan dan mislukken."
+msgstr "The server's clock is off. Signing in with a code may fail."
 
 #: src/routes/backup.tsx
 msgid "De laatste gelukte back-up is meer dan anderhalve dag oud. Kijk hieronder wat er misging."
@@ -2018,6 +2030,7 @@ msgid "Herstelblad downloaden en bewaren"
 msgstr "Download and keep the recovery sheet"
 
 #: src/components/sign-in-code.tsx
+#: src/routes/security.tsx
 msgid "Herstelcode"
 msgstr "Recovery code"
 
@@ -2469,6 +2482,10 @@ msgstr "Your new recovery codes are ready."
 #: src/routes/security.tsx
 msgid "Je oude herstelcodes werken daarna niet meer."
 msgstr "Your old recovery codes stop working."
+
+#: src/routes/security.tsx
+msgid "Je oude telefoon blijft werken tot de nieuwe klaar is."
+msgstr "Your old phone keeps working until the new one is ready."
 
 #: src/components/page.tsx
 msgid "Je post en facturen, op je eigen server."
@@ -3125,6 +3142,10 @@ msgstr "New person?"
 msgid "Nieuwe regel"
 msgstr "New rule"
 
+#: src/routes/security.tsx
+msgid "Nieuwe telefoon"
+msgstr "New phone"
+
 #: src/components/autopilot-panel.tsx
 msgid "Nieuwe uitleg lezen"
 msgstr "Read the new explanation"
@@ -3436,6 +3457,10 @@ msgstr "Orange"
 msgid "Organisatie"
 msgstr "Organisation"
 
+#: src/routes/security.tsx
+msgid "Oude telefoon kwijt? Gebruik een herstelcode."
+msgstr "Lost your old phone? Use a recovery code."
+
 #: src/routes/language.tsx
 msgid "Overal, ook in de app."
 msgstr "Everywhere, including the app."
@@ -3443,6 +3468,10 @@ msgstr "Everywhere, including the app."
 #: src/components/document-table.tsx
 msgid "Overig"
 msgstr "Other"
+
+#: src/routes/security.tsx
+msgid "Overzetten"
+msgstr "Move it over"
 
 #: src/components/label-chip.tsx
 msgid "Paars"
@@ -3932,6 +3961,7 @@ msgid "Tijdstip"
 msgstr "Time"
 
 #: src/components/sign-in-code.tsx
+#: src/routes/security.tsx
 msgid "Toch een code uit de app gebruiken"
 msgstr "Use a code from the app after all"
 
@@ -4004,6 +4034,10 @@ msgstr "Two-step verification cleared by an admin"
 #: src/routes/security.tsx
 msgid "Tweestapsverificatie staat aan."
 msgstr "Two-step verification is on."
+
+#: src/routes/security.tsx
+msgid "Tweestapsverificatie staat nu op je nieuwe telefoon."
+msgstr "Two-step verification is now on your new phone."
 
 #: src/routes/security.tsx
 msgid "Tweestapsverificatie staat uit."
@@ -4190,6 +4224,7 @@ msgstr "Sorts post changed"
 msgid "Verdeelt post: {0}"
 msgstr "Sorts post: {0}"
 
+#: src/routes/security.tsx
 #: src/routes/visibility.tsx
 msgid "Verder"
 msgstr "Next"
@@ -4648,6 +4683,10 @@ msgstr "Check it yourself?"
 #: src/routes/my-post.tsx
 msgid "Zet Alleen ongelezen uit om al je post te zien."
 msgstr "Turn off Unread only to see all your mail."
+
+#: src/routes/security.tsx
+msgid "Zet de nieuwe telefoon klaar"
+msgstr "Get the new phone ready"
 
 #: src/routes/backup.tsx
 msgid "Zet deze regels bij de instellingen van Brievie (in het compose-bestand, Portainer of Synology) en start Brievie opnieuw:"

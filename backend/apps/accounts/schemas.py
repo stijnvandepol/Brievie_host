@@ -193,3 +193,11 @@ class ClearSecondFactorIn(InputSchema):
 
 class ClearSecondFactorOut(Schema):
     devices_revoked: int = 0
+
+
+class ReplaceSecondFactorIn(InputSchema):
+    """Exactly one: a code from the old app, or a recovery code when the old phone is
+    gone."""
+
+    code: str = Field(default="", max_length=20)
+    recovery_code: str = Field(default="", max_length=30)

@@ -303,3 +303,46 @@ def test_removing_while_required_is_409(
     )
 
     assert (r.status_code, r.json()["code"]) == (409, "second_factor_required")
+
+
+# --- A new phone (plan Task 16) ---------------------------------------------------------
+
+
+def test_moving_to_a_new_phone(user: User, with_factor: tuple[Client, Factor]) -> None:
+    client, factor = with_factor
+    other = Client()
+    assert password_step(other, user) == 202
+    assert post_json(other, "/auth/login/code", {"code": factor.code(offset=1)}).status_code == 200
+
+    # The newest code is used up by the other sign-in: the old phone's proof is a recovery code.
+    begun = post_json(
+        client, "/me/second-factor/replacement", {"recovery_code": factor.recovery_codes[0]}
+    )
+
+    assert begun.status_code == 200, begun.json()
+    assert begun["Cache-Control"] == "no-store"
+    new_secret = secret_of(begun.json()["secret"])
+    code = totp.code_at(new_secret, totp.step_of(timezone.now()))
+    done = post_json(client, "/me/second-factor/replacement/confirm", {"code": code})
+    assert done.status_code == 200
+    assert done["Cache-Control"] == "no-store"
+    assert len(done.json()["recovery_codes"]) == 10
+    assert other.get("/api/v1/me").status_code == 401
+    assert client.get("/api/v1/me").status_code == 200
+
+
+def test_a_new_phone_asks_exactly_one_proof(with_factor: tuple[Client, Factor]) -> None:
+    client, _factor = with_factor
+
+    r = post_json(client, "/me/second-factor/replacement", {"code": "", "recovery_code": ""})
+
+    assert (r.status_code, r.json()["code"]) == (422, "validation_error")
+
+
+@pytest.mark.parametrize(
+    "path", ["/me/second-factor/replacement", "/me/second-factor/replacement/confirm"]
+)
+def test_a_new_phone_needs_a_web_session(user: User, path: str) -> None:
+    r = post_json(Client(), path, {"code": "123456"}, headers=bearer(user))
+
+    assert r.status_code == 401

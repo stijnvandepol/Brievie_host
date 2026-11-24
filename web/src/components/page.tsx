@@ -22,7 +22,7 @@ import {
   Text,
   TextField,
 } from "react-aria-components";
-import { ApiFailure, api, errorMessage } from "../api/client";
+import { ApiFailure, api, errorMessage, serverClockOffset } from "../api/client";
 import { menuCountsQuery, meQuery, visibilityQuery } from "../api/queries";
 import { resetSearch } from "../search-term";
 import { clearUndo } from "../undo-trash";
@@ -591,12 +591,28 @@ export function Shell({
           <div className="content-inner">
             <ErrorAlert error={logout.error} />
             <NoticeBar workspaceId={workspace?.id} all={allNotices} />
+            {me?.is_server_admin ? <ServerClockWarning /> : null}
             {workspace ? <UndoBar workspaceId={workspace.id} /> : null}
             {children}
           </div>
         </main>
       </div>
     </div>
+  );
+}
+
+// More than this apart, a code of an authenticator app may fail (the server accepts one
+// 30-second step either side).
+const CLOCK_TOLERANCE_MS = 30_000;
+
+/** For a server admin: the server's clock and this browser's differ more than 30 seconds. */
+function ServerClockWarning() {
+  const offset = serverClockOffset();
+  if (offset === null || Math.abs(offset) <= CLOCK_TOLERANCE_MS) return null;
+  return (
+    <MessageBar intent="warning" role="status">
+      {t`De klok van de server loopt niet gelijk. Inloggen met een code kan dan mislukken.`}
+    </MessageBar>
   );
 }
 

@@ -31,6 +31,7 @@ from apps.accounts.schemas import (
     ReauthenticateIn,
     RecoveryCodesOut,
     RemoveSecondFactorIn,
+    ReplaceSecondFactorIn,
     SecondFactorCodeIn,
     SecondFactorOut,
     SessionOut,
@@ -521,3 +522,61 @@ def clear_user_second_factor(
         revoke_devices=payload.revoke_devices,
     )
     return ClearSecondFactorOut(devices_revoked=revoked)
+
+
+@router.post(
+    "/me/second-factor/replacement",
+    response={
+        200: SetupSecretOut,
+        400: ErrorOut,
+        409: ErrorOut,
+        429: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    auth=session_auth,
+    throttle=CallerThrottle("second_factor", "10/10m"),
+    description=WEB_SESSION_ONLY
+    + " A new phone: a code from the old app (`code`) or a recovery code (`recovery_code`,"
+    " used up), exactly one; answers a new secret to scan. The old app keeps working until"
+    " the new one is confirmed. 400 second_factor_invalid; 409 second_factor_not_set; 429"
+    " second_factor_locked." + SHOWN_ONCE,
+    operation_id="beginSecondFactorReplacement",
+)
+def begin_second_factor_replacement(
+    request: HttpRequest, response: HttpResponse, payload: ReplaceSecondFactorIn
+) -> SetupSecretOut:
+    if bool(payload.code.strip()) == bool(payload.recovery_code.strip()):
+        raise ApiError(422, "validation_error", _("Vul de code uit de app in, of een herstelcode."))
+    setup = second_factor_account.begin_my_replacement(
+        request, code=payload.code, recovery_code=payload.recovery_code
+    )
+    response["Cache-Control"] = "no-store"
+    return SetupSecretOut(secret=setup.secret_text, otpauth_uri=setup.otpauth_uri)
+
+
+@router.post(
+    "/me/second-factor/replacement/confirm",
+    response={
+        200: RecoveryCodesOut,
+        400: ErrorOut,
+        409: ErrorOut,
+        429: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    auth=session_auth,
+    throttle=CallerThrottle("second_factor", "10/10m"),
+    description=WEB_SESSION_ONLY
+    + " Move two-step verification to the new phone with a code from its app: the old app"
+    " stops, ten new recovery codes replace the old ones, every other session ends. 400"
+    " second_factor_invalid; 409 second_factor_clock_drift; 409"
+    " second_factor_setup_missing without a new phone begun within the hour." + SHOWN_ONCE,
+    operation_id="confirmSecondFactorReplacement",
+)
+def confirm_second_factor_replacement(
+    request: HttpRequest, response: HttpResponse, payload: SecondFactorCodeIn
+) -> RecoveryCodesOut:
+    codes = second_factor_account.confirm_my_replacement(request, code=payload.code)
+    response["Cache-Control"] = "no-store"
+    return RecoveryCodesOut(recovery_codes=codes)

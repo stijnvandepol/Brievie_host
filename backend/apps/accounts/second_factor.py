@@ -600,12 +600,102 @@ def clear_factor(
 
 
 def purge_unconfirmed(*, now: datetime) -> int:
-    """Remove set-ups begun more than an hour ago and never confirmed."""
+    """Remove set-ups begun more than an hour ago and never confirmed, and forget a new
+    phone that was begun that long ago (the old one keeps working)."""
     with transaction.atomic():
         deleted, _counts = SecondFactor.objects.filter(
             confirmed_at__isnull=True, updated_at__lt=now - UNCONFIRMED_LIFETIME
         ).delete()
+        SecondFactor.objects.filter(pending_since__lt=now - UNCONFIRMED_LIFETIME).update(
+            pending_secret_sealed=None, pending_since=None
+        )
     return deleted
+
+
+# --- A new phone ----------------------------------------------------------------------
+
+
+def begin_replacement(
+    user: User,
+    *,
+    host: str,
+    code: str,
+    recovery_code: str,
+    now: datetime,
+    client_ip: str | None,
+) -> SetupSecret:
+    """A new phone ("Nieuwe telefoon", S 7): after a code from the old app (or a recovery
+    code, which is used up), a new secret to scan. The old one keeps working until the new
+    one is confirmed; a new phone begun earlier is replaced."""
+    if recovery_code:
+        verify_recovery_code(user, recovery_code, now=now, client_ip=client_ip)
+    else:
+        verify_code(user, code, now=now, client_ip=client_ip)
+    secret = totp.new_secret()
+    with transaction.atomic():
+        User.objects.select_for_update(no_key=True).filter(pk=user.pk).first()
+        factor = (
+            SecondFactor.objects.select_for_update()
+            .filter(user=user, confirmed_at__isnull=False)
+            .first()
+        )
+        if factor is None:
+            raise _not_set()
+        factor.pending_secret_sealed = seal_secret(user.id, secret)
+        factor.pending_since = now
+        factor.save(update_fields=["pending_secret_sealed", "pending_since", "updated_at"])
+    return SetupSecret(
+        secret_text=totp.grouped_secret(secret),
+        otpauth_uri=totp.otpauth_uri(secret, host=host, email=user.email),
+    )
+
+
+def confirm_replacement(
+    user: User, code: str, *, now: datetime, client_ip: str | None
+) -> ConfirmedSetup:
+    """Swap to the new phone with a code from its app, in one step: the old secret stops,
+    the counters start again, ten new recovery codes replace the old ones (they may have
+    been kept with the old phone). 409 `second_factor_setup_missing` without a new phone
+    begun within the hour; 400 `second_factor_invalid`; 409 `second_factor_clock_drift`."""
+    with transaction.atomic():
+        User.objects.select_for_update(no_key=True).filter(pk=user.pk).first()
+        factor = (
+            SecondFactor.objects.select_for_update()
+            .filter(user=user, confirmed_at__isnull=False)
+            .first()
+        )
+        if (
+            factor is None
+            or factor.pending_secret_sealed is None
+            or factor.pending_since is None
+            or now - factor.pending_since > UNCONFIRMED_LIFETIME
+        ):
+            raise ApiError(
+                409,
+                "second_factor_setup_missing",
+                _("Begin opnieuw met Nieuwe telefoon."),
+            )
+        secret = open_secret(user.id, factor.pending_secret_sealed)
+        step = totp.match(secret, code, now=now, last_used_step=0)
+        if step is None:
+            if totp.drift_steps(secret, code, now=now) is not None:
+                raise _drift_error()
+            raise _invalid(400)
+        factor.secret_sealed = factor.pending_secret_sealed
+        factor.pending_secret_sealed = None
+        factor.pending_since = None
+        factor.confirmed_at = now
+        factor.last_used_step = step
+        _reset_counters(factor)
+        factor.save()
+        codes = _store_new_recovery_codes(user)
+        record(
+            AuditCode.SECOND_FACTOR_ADDED,
+            actor=AuditActor.for_user(user, client_ip=client_ip),
+            target=_target(user),
+            values={"replaced": True},
+        )
+    return ConfirmedSetup(recovery_codes=codes, passed=_passed(user, "totp"))
 
 
 def grace_day(moment: datetime) -> str:
