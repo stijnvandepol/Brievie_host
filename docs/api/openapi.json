@@ -1793,6 +1793,27 @@
         "title": "FolderOut",
         "type": "object"
       },
+      "HandleDocumentIn": {
+        "description": "\"Brief afhandelen\": the ids of the open tasks the person was shown (all of them,\nwaiting ones included) and whether they confirmed that a payment among them was made\nor arranged. The server completes nothing when the ids differ from the letter's open\ntasks (409 `tasks_changed`) or a payment is not confirmed (409 `payment_not_confirmed`).",
+        "properties": {
+          "payments_confirmed": {
+            "default": false,
+            "title": "Payments Confirmed",
+            "type": "boolean"
+          },
+          "task_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 200,
+            "title": "Task Ids",
+            "type": "array"
+          }
+        },
+        "title": "HandleDocumentIn",
+        "type": "object"
+      },
       "HealthOut": {
         "properties": {
           "api_version": {
@@ -9446,6 +9467,148 @@
           }
         ],
         "summary": "Undo Document Event",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/handle": {
+      "post": {
+        "description": "\"Brief afhandelen\": ticks off every open task of a checked letter after the confirmation. `task_ids` must be exactly the letter's open tasks (waiting ones included): 409 `tasks_changed` otherwise, nothing is completed. With a payment among them `payments_confirmed` must be true (409 `payment_not_confirmed`). 409 `document_not_reviewed` for a letter not checked yet. An already handled letter with no ids changes nothing. Writes one `task_completed` line per task with the caller and one `letter_handled` line.",
+        "operationId": "handleDocument",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HandleDocumentIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Handle Document",
         "tags": [
           "documents"
         ]

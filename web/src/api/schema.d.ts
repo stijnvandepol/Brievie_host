@@ -884,6 +884,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/handle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Handle Document
+         * @description "Brief afhandelen": ticks off every open task of a checked letter after the confirmation. `task_ids` must be exactly the letter's open tasks (waiting ones included): 409 `tasks_changed` otherwise, nothing is completed. With a payment among them `payments_confirmed` must be true (409 `payment_not_confirmed`). 409 `document_not_reviewed` for a letter not checked yet. An already handled letter with no ids changes nothing. Writes one `task_completed` line per task with the caller and one `letter_handled` line.
+         */
+        post: operations["handleDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}/labels": {
         parameters: {
             query?: never;
@@ -3165,6 +3185,22 @@ export interface components {
             parent_id: string | null;
             /** Path */
             path: string;
+        };
+        /**
+         * HandleDocumentIn
+         * @description "Brief afhandelen": the ids of the open tasks the person was shown (all of them,
+         *     waiting ones included) and whether they confirmed that a payment among them was made
+         *     or arranged. The server completes nothing when the ids differ from the letter's open
+         *     tasks (409 `tasks_changed`) or a payment is not confirmed (409 `payment_not_confirmed`).
+         */
+        HandleDocumentIn: {
+            /**
+             * Payments Confirmed
+             * @default false
+             */
+            payments_confirmed: boolean;
+            /** Task Ids */
+            task_ids?: string[];
         };
         /** HealthOut */
         HealthOut: {
@@ -7973,6 +8009,105 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    handleDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HandleDocumentIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

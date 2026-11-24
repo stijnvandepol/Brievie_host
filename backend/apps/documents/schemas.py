@@ -311,6 +311,16 @@ class MarkReadOut(Schema):
     marked: int
 
 
+class HandleDocumentIn(InputSchema):
+    """\"Brief afhandelen\": the ids of the open tasks the person was shown (all of them,
+    waiting ones included) and whether they confirmed that a payment among them was made
+    or arranged. The server completes nothing when the ids differ from the letter's open
+    tasks (409 `tasks_changed`) or a payment is not confirmed (409 `payment_not_confirmed`)."""
+
+    task_ids: list[UUID] = Field(default_factory=list, max_length=200)
+    payments_confirmed: bool = False
+
+
 class LetterStatusCountsOut(Schema):
     """How many letters the caller sees in each status (and how many of them are late), of
     all post or of one person's. Only letters the caller may read are counted."""

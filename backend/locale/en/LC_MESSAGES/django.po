@@ -1388,6 +1388,22 @@ msgstr "Note: the BSN has been removed from the text and the details. On the pho
 msgid "Dit bestand is niet versleuteld zodra je het hebt gedownload. Bewaar het op een veilige plek en verwijder het als je het niet meer nodig hebt."
 msgstr "This file is not encrypted once you have downloaded it. Keep it in a safe place and delete it when you no longer need it."
 
+#: apps/documents/handle.py apps/documents/review.py apps/documents/services.py apps/documents/trash.py
+msgid "We kunnen dit document niet vinden."
+msgstr "We can't find this document."
+
+#: apps/documents/handle.py
+msgid "Deze brief is nog niet nagekeken."
+msgstr "This letter has not been checked yet."
+
+#: apps/documents/handle.py
+msgid "De taken van deze brief zijn net veranderd. Bekijk ze opnieuw."
+msgstr "The tasks of this letter just changed. Please look at them again."
+
+#: apps/documents/handle.py
+msgid "Vink aan dat de betaling is gedaan of geregeld."
+msgstr "Tick that the payment has been made or arranged."
+
 #: apps/documents/intake.py
 msgid "Er bestaat al een ander document met dit kenmerk."
 msgstr "Another document with this reference already exists."
@@ -1579,10 +1595,6 @@ msgstr "Choose 200 letters at most."
 #: apps/documents/retention.py
 msgid "Deze brief moet nog bewaard worden. Je kunt hem nu niet wissen."
 msgstr "This letter still has to be kept. You can't erase it now."
-
-#: apps/documents/review.py apps/documents/services.py apps/documents/trash.py
-msgid "We kunnen dit document niet vinden."
-msgstr "We can't find this document."
 
 #: apps/documents/review.py
 msgid "Dit document kun je nu niet bevestigen."
@@ -1818,7 +1830,7 @@ msgstr "There is already a label with this name."
 msgid "Kies een afdeling."
 msgstr "Choose a department."
 
-#: apps/labels/services.py apps/people/services.py apps/tasks/assignment.py apps/workspaces/deps.py apps/workspaces/members.py apps/workspaces/visibility_settings.py
+#: apps/labels/services.py apps/people/services.py apps/tasks/assignment.py apps/tasks/services.py apps/workspaces/deps.py apps/workspaces/members.py apps/workspaces/visibility_settings.py
 msgid "Je mag dit niet doen in deze werkruimte."
 msgstr "You are not allowed to do this in this workspace."
 

@@ -13,7 +13,7 @@ from apps.audit.services import actor_from_request
 from apps.common.errors import ApiError
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.common.throttling import CallerThrottle
-from apps.documents import intake, member_export, reading, review, search, services, trash
+from apps.documents import handle, intake, member_export, reading, review, search, services, trash
 from apps.documents.models import DocumentEvent, Folder, MemberExport
 from apps.documents.schemas import (
     AddresseesIn,
@@ -31,6 +31,7 @@ from apps.documents.schemas import (
     EmptyTrashOut,
     FolderIn,
     FolderOut,
+    HandleDocumentIn,
     InboxCountsOut,
     LabelsIn,
     LetterStatusCountsOut,
@@ -450,6 +451,40 @@ def reopen_document(request: HttpRequest, workspace_id: UUID, document_id: UUID)
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
     document = services.reopen_document(
         workspace=membership.workspace, user=current_user(request), document_id=document_id
+    )
+    return services.document_out_for(document)
+
+
+@router.post(
+    "/workspaces/{workspace_id}/documents/{document_id}/handle",
+    response={
+        200: DocumentOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    operation_id="handleDocument",
+    description=(
+        '"Brief afhandelen": ticks off every open task of a checked letter after the '
+        "confirmation. `task_ids` must be exactly the letter's open tasks (waiting ones "
+        "included): 409 `tasks_changed` otherwise, nothing is completed. With a payment "
+        "among them `payments_confirmed` must be true (409 `payment_not_confirmed`). 409 "
+        "`document_not_reviewed` for a letter not checked yet. An already handled letter "
+        "with no ids changes nothing. Writes one `task_completed` line per task with the "
+        "caller and one `letter_handled` line."
+    ),
+)
+def handle_document(
+    request: HttpRequest, workspace_id: UUID, document_id: UUID, payload: HandleDocumentIn
+) -> DocumentOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    document = handle.handle_document(
+        membership=membership,
+        user=current_user(request),
+        document_id=document_id,
+        task_ids=payload.task_ids,
+        payments_confirmed=payload.payments_confirmed,
     )
     return services.document_out_for(document)
 

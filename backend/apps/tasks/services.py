@@ -39,7 +39,9 @@ from apps.tasks.mine import (
     group_for,
     reason_for,
 )
-from apps.tasks.models import Task
+from apps.tasks.models import Task, TaskSnooze
+from apps.workspaces.context import system_actor
+from apps.workspaces.locks import lock_own_role
 from apps.workspaces.models import Membership, Workspace
 
 LIST_MAX = 500
@@ -101,6 +103,10 @@ def complete_locked(task: Task, user: User, origin: str = DocumentEvent.Origin.U
     task.completed_by = user
     # A done task waits for nothing (no line of its own: the completion says it).
     task.waiting_until = None
+    # Nobody's snooze of a done task is left (the own-rows policy does not reach other
+    # members' rows: the system deletes them).
+    with system_actor():
+        TaskSnooze.objects.filter(task_id=task.id).delete()
     task.save(
         update_fields=["status", "completed_at", "completed_by", "waiting_until", "updated_at"]
     )
@@ -170,6 +176,14 @@ def _get_for_update(workspace: Workspace, task_id: UUID) -> Task:
     if task.document is not None:
         visibility.require_editable(task.document)
     return task
+
+
+def lock_editor(workspace_id: UUID, user_id: UUID) -> None:
+    """The first lock of a task change that also sets or ends something shared: the
+    caller's own membership, its role read under the lock. A viewer (also one demoted
+    while the request ran) may not change what others see: 403 `forbidden`."""
+    if lock_own_role(workspace_id, user_id) == Membership.Role.VIEWER:
+        raise ApiError(403, "forbidden", _("Je mag dit niet doen in deze werkruimte."))
 
 
 def _sync(task: Task) -> None:
