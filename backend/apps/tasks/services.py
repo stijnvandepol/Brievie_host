@@ -85,9 +85,9 @@ def complete_task(
     letters completes the open twin of a task done on the other scan.
     """
     with transaction.atomic():
-        task = _get_for_update(workspace, task_id)
+        task = get_for_update(workspace, task_id)
         if complete_locked(task, user, origin):
-            _sync(task)
+            sync_letter(task)
         return task
 
 
@@ -117,14 +117,14 @@ def complete_locked(task: Task, user: User, origin: str = DocumentEvent.Origin.U
 def reopen_task(*, workspace: Workspace, user: User, task_id: UUID) -> Task:
     """Make the task open again; asking again changes nothing and writes no second event."""
     with transaction.atomic():
-        task = _get_for_update(workspace, task_id)
+        task = get_for_update(workspace, task_id)
         if task.status != Task.Status.OPEN:
             task.status = Task.Status.OPEN
             task.completed_at = None
             task.completed_by = None
             task.save(update_fields=["status", "completed_at", "completed_by", "updated_at"])
             _record(task, DocumentEvent.Kind.TASK_REOPENED, user)
-            _sync(task)
+            sync_letter(task)
         return task
 
 
@@ -133,7 +133,7 @@ def set_deadline(*, workspace: Workspace, user: User, task_id: UUID, deadline: d
     no quote; the term's words stay). The same date again writes nothing. 422 for a date
     before the letter's date; 404 like an unknown id for a task the caller does not see."""
     with transaction.atomic():
-        task = _get_for_update(workspace, task_id)
+        task = get_for_update(workspace, task_id)
         letter_date = task.document.letter_date if task.document is not None else None
         if deadline is not None and letter_date is not None and deadline < letter_date:
             raise ApiError(422, "validation_error", _("Die datum ligt voor de datum van de brief."))
@@ -144,11 +144,11 @@ def set_deadline(*, workspace: Workspace, user: User, task_id: UUID, deadline: d
         task.deadline_quote = ""
         task.save(update_fields=["deadline", "deadline_source", "deadline_quote", "updated_at"])
         _record(task, DocumentEvent.Kind.TASK_DEADLINE_SET, user)
-        _sync(task)
+        sync_letter(task)
         return task
 
 
-def _get_for_update(workspace: Workspace, task_id: UUID) -> Task:
+def get_for_update(workspace: Workspace, task_id: UUID) -> Task:
     """The task, locked for a change, as the member. Lock order (spec S 10): the letter's
     row first (`FOR NO KEY UPDATE`, as the confirm and the merge take it), then the task;
     a task without a letter is locked alone. 404 like an unknown id for a task or letter
@@ -186,7 +186,7 @@ def lock_editor(workspace_id: UUID, user_id: UUID) -> None:
         raise ApiError(403, "forbidden", _("Je mag dit niet doen in deze werkruimte."))
 
 
-def _sync(task: Task) -> None:
+def sync_letter(task: Task) -> None:
     if task.document is not None:
         letter_sync.sync(task.document)
 

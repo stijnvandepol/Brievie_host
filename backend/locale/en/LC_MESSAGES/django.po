@@ -2390,6 +2390,14 @@ msgstr "Choose mine, to_pick_up or all."
 msgid "De status moet open of done zijn."
 msgstr "The status must be open or done."
 
+#: apps/tasks/waiting.py
+msgid "Kies een datum na vandaag, binnen een jaar."
+msgstr "Choose a date after today, within a year."
+
+#: apps/tasks/waiting.py
+msgid "Deze taak is al afgerond."
+msgstr "This task is already done."
+
 #: apps/updates/management/commands/check_health.py
 msgid "De server antwoordt niet goed na het bijwerken."
 msgstr "The server does not answer properly after the update."

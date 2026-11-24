@@ -215,6 +215,15 @@ def test_emergency_reader_cannot_organise_share_publish_or_retry() -> None:
     tasks = f"/api/v1/workspaces/{h.workspace.id}/tasks/{task.id}"
     _read_only(client.post(f"{tasks}/complete", content_type=JSON))
     _read_only(client.post(f"{tasks}/assign", {"user_id": str(h.anne.id)}, content_type=JSON))
+    # Letter status: waiting for a reply, snoozing and handling are task writes too.
+    _read_only(client.post(f"{tasks}/waiting", {"until": "2099-01-01"}, content_type=JSON))
+    _read_only(
+        client.post(
+            f"{base}/{done.id}/handle",
+            {"task_ids": [str(task.id)], "payments_confirmed": True},
+            content_type=JSON,
+        )
+    )
     _read_only(client.post(f"{base}/{failed.id}/retry", content_type=JSON))
     with as_actor(h.workspace, SYSTEM):
         assert Document.objects.get(id=failed.id).status == "failed"

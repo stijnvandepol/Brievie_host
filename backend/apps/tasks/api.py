@@ -5,7 +5,7 @@ from ninja import Router
 
 from apps.accounts.services import current_user
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
-from apps.tasks import assignment, services
+from apps.tasks import assignment, services, waiting
 from apps.tasks.models import Task
 from apps.tasks.schemas import (
     AssignIn,
@@ -14,6 +14,7 @@ from apps.tasks.schemas import (
     MyTasksOut,
     TaskAssigneeOut,
     TaskItemOut,
+    WaitingIn,
     my_task_counts_out,
     my_tasks_out,
     task_item_out,
@@ -111,6 +112,38 @@ def reopen_task(request: HttpRequest, workspace_id: UUID, task_id: UUID) -> Task
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
     task = services.reopen_task(
         workspace=membership.workspace, user=current_user(request), task_id=task_id
+    )
+    return _one(membership, task)
+
+
+@router.post(
+    f"{_TASK}/waiting",
+    response={
+        200: TaskItemOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    operation_id="setTaskWaiting",
+    description=(
+        '"Wacht op reactie tot": the task waits for a reply until `until` (after today, '
+        "within a year; 422 `validation_error` otherwise), `until` null stops waiting. "
+        "Shared: everyone who sees the letter sees it, and when every open task waits the "
+        'letter is "waiting". May pass the task\'s own deadline. 409 `task_done` for a task '
+        "that is done. The same day again changes nothing. Writes a `task_waiting` or "
+        "`task_waiting_ended` line. Role member or higher; not through emergency access."
+    ),
+)
+def set_task_waiting(
+    request: HttpRequest, workspace_id: UUID, task_id: UUID, payload: WaitingIn
+) -> TaskItemOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    task = waiting.set_waiting(
+        workspace=membership.workspace,
+        user=current_user(request),
+        task_id=task_id,
+        until=payload.until,
     )
     return _one(membership, task)
 

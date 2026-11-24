@@ -4320,6 +4320,14 @@
             "title": "Sender",
             "type": "string"
           },
+          "snoozed_until": {
+            "format": "date",
+            "title": "Snoozed Until",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -4337,6 +4345,19 @@
             "format": "date-time",
             "title": "Updated At",
             "type": "string"
+          },
+          "wait_over": {
+            "default": false,
+            "title": "Wait Over",
+            "type": "boolean"
+          },
+          "waiting_until": {
+            "format": "date",
+            "title": "Waiting Until",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -5012,6 +5033,20 @@
           "preview_token"
         ],
         "title": "VisibilityPreviewOut",
+        "type": "object"
+      },
+      "WaitingIn": {
+        "properties": {
+          "until": {
+            "format": "date",
+            "title": "Until",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "WaitingIn",
         "type": "object"
       },
       "WorkspaceOut": {
@@ -16603,6 +16638,148 @@
           }
         ],
         "summary": "Reopen Task",
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/tasks/{task_id}/waiting": {
+      "post": {
+        "description": "\"Wacht op reactie tot\": the task waits for a reply until `until` (after today, within a year; 422 `validation_error` otherwise), `until` null stops waiting. Shared: everyone who sees the letter sees it, and when every open task waits the letter is \"waiting\". May pass the task's own deadline. 409 `task_done` for a task that is done. The same day again changes nothing. Writes a `task_waiting` or `task_waiting_ended` line. Role member or higher; not through emergency access.",
+        "operationId": "setTaskWaiting",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WaitingIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskItemOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Set Task Waiting",
         "tags": [
           "tasks"
         ]

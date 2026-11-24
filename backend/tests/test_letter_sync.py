@@ -170,7 +170,7 @@ def test_every_task_writer_syncs() -> None:
     }
     for relative, at_least in wanted.items():
         text = (APP / relative).read_text()
-        calls = len(re.findall(r"letter_sync\.sync\(|\b_sync\(", text))
+        calls = len(re.findall(r"letter_sync\.sync\(|\bsync_letter\(", text))
         assert calls >= at_least, relative
 
 
