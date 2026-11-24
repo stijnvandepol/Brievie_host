@@ -56,6 +56,29 @@
         "title": "AcceptedInvitationOut",
         "type": "object"
       },
+      "AddressOut": {
+        "properties": {
+          "certificate": {
+            "title": "Certificate",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "kind",
+          "certificate"
+        ],
+        "title": "AddressOut",
+        "type": "object"
+      },
       "AddresseesIn": {
         "properties": {
           "person_ids": {
@@ -517,6 +540,24 @@
           "pem"
         ],
         "title": "CaCertificateOut",
+        "type": "object"
+      },
+      "CheckOut": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "level": {
+            "title": "Level",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "level"
+        ],
+        "title": "CheckOut",
         "type": "object"
       },
       "ConfirmIn": {
@@ -1737,6 +1778,76 @@
           "message"
         ],
         "title": "ErrorOut",
+        "type": "object"
+      },
+      "ExternalAccessOut": {
+        "properties": {
+          "addresses": {
+            "items": {
+              "$ref": "#/components/schemas/AddressOut"
+            },
+            "title": "Addresses",
+            "type": "array"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/CheckOut"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "docs_url": {
+            "title": "Docs Url",
+            "type": "string"
+          },
+          "hostname": {
+            "title": "Hostname",
+            "type": "string"
+          },
+          "public_hostname": {
+            "default": "",
+            "title": "Public Hostname",
+            "type": "string"
+          },
+          "public_web": {
+            "title": "Public Web",
+            "type": "boolean"
+          },
+          "second_factor_available": {
+            "title": "Second Factor Available",
+            "type": "boolean"
+          },
+          "seen_as": {
+            "$ref": "#/components/schemas/SeenAsOut"
+          },
+          "trusted_proxies": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Trusted Proxies",
+            "type": "array"
+          },
+          "tunnel": {
+            "$ref": "#/components/schemas/TunnelOut"
+          },
+          "vpn_hostname": {
+            "default": "",
+            "title": "Vpn Hostname",
+            "type": "string"
+          }
+        },
+        "required": [
+          "hostname",
+          "addresses",
+          "public_web",
+          "tunnel",
+          "trusted_proxies",
+          "second_factor_available",
+          "seen_as",
+          "checks",
+          "docs_url"
+        ],
+        "title": "ExternalAccessOut",
         "type": "object"
       },
       "FolderIn": {
@@ -3807,6 +3918,34 @@
         "title": "RuleTestOut",
         "type": "object"
       },
+      "SeenAsOut": {
+        "properties": {
+          "client_ip": {
+            "title": "Client Ip",
+            "type": "string"
+          },
+          "peer_ip": {
+            "title": "Peer Ip",
+            "type": "string"
+          },
+          "route": {
+            "title": "Route",
+            "type": "string"
+          },
+          "secure": {
+            "title": "Secure",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "route",
+          "secure",
+          "client_ip",
+          "peer_ip"
+        ],
+        "title": "SeenAsOut",
+        "type": "object"
+      },
       "ServerAddressesOut": {
         "properties": {
           "public_urls": {
@@ -4630,6 +4769,24 @@
           "purge_after"
         ],
         "title": "TrashedDocumentOut",
+        "type": "object"
+      },
+      "TunnelOut": {
+        "properties": {
+          "connected": {
+            "title": "Connected",
+            "type": "string"
+          },
+          "token_set": {
+            "title": "Token Set",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "token_set",
+          "connected"
+        ],
+        "title": "TunnelOut",
         "type": "object"
       },
       "UploadMetadataIn": {
@@ -6933,6 +7090,54 @@
           }
         },
         "summary": "Get Ca Certificate",
+        "tags": [
+          "server"
+        ]
+      }
+    },
+    "/api/v1/server/external-access": {
+      "get": {
+        "description": "Server admins only, web session only (a device token answers 401). What is set for reaching this server from outside the home network, what works and what not, as check codes. Compose decides; nothing here changes a setting. Never a token or secret: only whether a tunnel token is set. Waits up to 2 seconds for the tunnel, outside a transaction. Cache-Control: no-store.",
+        "operationId": "getExternalAccess",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalAccessOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Get External Access",
         "tags": [
           "server"
         ]

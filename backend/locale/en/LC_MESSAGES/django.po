@@ -1,6 +1,10 @@
 msgid ""
 msgstr "Content-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\nLanguage: en\nPlural-Forms: nplurals=2; plural=(n != 1);\n"
 
+#: apps/access/api.py apps/audit/api.py apps/backup/api.py
+msgid "Alleen een serverbeheerder mag dit doen."
+msgstr "Only a server admin may do this."
+
 #: apps/access/middleware.py
 msgid "Op dit adres werkt alleen de Brievie-app. Gebruik de webinterface thuis of via VPN."
 msgstr "Only the Brievie app works at this address. Use the web interface at home or through a VPN."
@@ -399,10 +403,6 @@ msgstr "The start date is after the end date."
 #, python-format
 msgid "Vraag tussen 1 en %(max)d gebeurtenissen tegelijk op."
 msgstr "Ask for between 1 and %(max)d events at a time."
-
-#: apps/audit/api.py apps/backup/api.py
-msgid "Alleen een serverbeheerder mag dit doen."
-msgstr "Only a server admin may do this."
 
 #: apps/audit/api.py
 #, python-format

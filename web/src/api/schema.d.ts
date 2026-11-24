@@ -506,6 +506,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/server/external-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get External Access
+         * @description Server admins only, web session only (a device token answers 401). What is set for reaching this server from outside the home network, what works and what not, as check codes. Compose decides; nothing here changes a setting. Never a token or secret: only whether a tunnel token is set. Waits up to 2 seconds for the tunnel, outside a transaction. Cache-Control: no-store.
+         */
+        get: operations["getExternalAccess"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/server/recovery-sheet": {
         parameters: {
             query?: never;
@@ -2269,6 +2289,15 @@ export interface components {
             user: components["schemas"]["UserOut"];
             workspace: components["schemas"]["WorkspaceOut"];
         };
+        /** AddressOut */
+        AddressOut: {
+            /** Certificate */
+            certificate: string;
+            /** Kind */
+            kind: string;
+            /** Url */
+            url: string;
+        };
         /** AddresseesIn */
         AddresseesIn: {
             /** Person Ids */
@@ -2504,6 +2533,13 @@ export interface components {
         CaCertificateOut: {
             /** Pem */
             pem: string;
+        };
+        /** CheckOut */
+        CheckOut: {
+            /** Code */
+            code: string;
+            /** Level */
+            level: string;
         };
         /**
          * ConfirmIn
@@ -3172,6 +3208,35 @@ export interface components {
             code: string;
             /** Message */
             message: string;
+        };
+        /** ExternalAccessOut */
+        ExternalAccessOut: {
+            /** Addresses */
+            addresses: components["schemas"]["AddressOut"][];
+            /** Checks */
+            checks: components["schemas"]["CheckOut"][];
+            /** Docs Url */
+            docs_url: string;
+            /** Hostname */
+            hostname: string;
+            /**
+             * Public Hostname
+             * @default
+             */
+            public_hostname: string;
+            /** Public Web */
+            public_web: boolean;
+            /** Second Factor Available */
+            second_factor_available: boolean;
+            seen_as: components["schemas"]["SeenAsOut"];
+            /** Trusted Proxies */
+            trusted_proxies: string[];
+            tunnel: components["schemas"]["TunnelOut"];
+            /**
+             * Vpn Hostname
+             * @default
+             */
+            vpn_hostname: string;
         };
         /** FolderIn */
         FolderIn: {
@@ -4258,6 +4323,17 @@ export interface components {
             /** Total Count */
             total_count: number;
         };
+        /** SeenAsOut */
+        SeenAsOut: {
+            /** Client Ip */
+            client_ip: string;
+            /** Peer Ip */
+            peer_ip: string;
+            /** Route */
+            route: string;
+            /** Secure */
+            secure: boolean;
+        };
         /** ServerAddressesOut */
         ServerAddressesOut: {
             /** Public Urls */
@@ -4756,6 +4832,13 @@ export interface components {
              * @default workspace
              */
             visibility: string;
+        };
+        /** TunnelOut */
+        TunnelOut: {
+            /** Connected */
+            connected: string;
+            /** Token Set */
+            token_set: boolean;
         };
         /**
          * UploadMetadataIn
@@ -6369,6 +6452,44 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    getExternalAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalAccessOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
