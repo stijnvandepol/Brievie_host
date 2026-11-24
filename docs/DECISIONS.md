@@ -2900,3 +2900,47 @@ Task 15 (the per-workspace obligation).
   two-step verification (it calls `reauthenticate`).
 - The iOS app needs no change: it never signs in with a password; pairing a new phone now
   starts from a web sign-in with the code when the account has one.
+
+### Security review of PR #52 (2026-11-25)
+
+Every point was checked against the code first; all held.
+
+- **Point 1 (high), fixed: no window that starts the count again.** Wrong codes counted
+  only within 15 minutes of the first, so four guesses per quarter hour never locked
+  (about 380 a day, the user never told). Now `failed_count` grows until a right code (or
+  a day without a wrong one, `FORGET_AFTER`), every fifth locks for 15 minutes doubling to
+  a day (`last_failed_at` replaces `first_failed_at`). The first wrong code at sign-in
+  already tells the account (`second_factor_locked`, at most one open notice): it proves
+  somebody has the password. Wrong codes inside a session (renewing, removing) tell
+  nobody: the person at that session is signed in already.
+- **Point 2 (medium), fixed.** The settings copy of a compose back-up holds
+  `BRIEVIE_REQUIRE_SECOND_FACTOR` and `BRIEVIE_SECOND_FACTOR_GRACE_DAYS`; `init`, which
+  writes it, now gets both. — Ruling: `second_factor_required_since` is never cleared
+  again (it was cleared when no rule asked any more): a rule missing for a while (a
+  restore without it, a typo) gives nobody a new grace period. Cost if wrong: a rule
+  taken away and put back months later asks set-up at the next sign-in, without grace.
+  (Not ours, noted for #45: the copy reaches the back-up only through `init`, whose
+  environment lacks the other keys of the list, such as `BRIEVIE_SESSION_IDLE_DAYS`.)
+- **Point 3 (low), fixed.** `start_session` locks the account's row before it decides on
+  the second step, as confirming a factor does; the session middleware signs out a session
+  that did not pass the second step of an account that has a factor (one more query per
+  request of a session without it). The 403 `second_factor_session_required` of pairing,
+  clearing and the recovery sheet stays as a second wall; its tests call the services
+  directly, since the middleware stops such a session first.
+- **Point 4 (low), fixed.** The SSO pass counts only with the method `sso`, and the method
+  `sso` needs that pass.
+- **Point 5 (low), the orchestrator's ruling, built.** While a rule asks a factor, the
+  account has none and its grace is over, a device token answers 401
+  `second_factor_required` ("Stel eerst tweestapsverificatie in op de webinterface.") and
+  no pairing code is made (403). Blocked, not revoked: the phone works again once the
+  factor is on. The iOS app should show that sentence.
+- **Point 6 (low), fixed.** The recovery sheet (the master key) refuses, as pairing does,
+  a session without the second step of an admin who has a factor.
+- **Point 7 (low), fixed.** Wrong codes when switching it on count on the set-up; the
+  fifth ends it (409 `second_factor_setup_missing`: scan a new code). Wrong codes of a new
+  phone count for the account's lock.
+- **Point 8 (low), fixed.** The recovery-code file goes through `saveFile`, which now
+  releases the object URL ten seconds after the click (Safari).
+- **Accepted, and written in SELFHOST:** whoever knows the password can keep the second
+  step locked (the user sees the notice; an admin can clear), and after a grace period the
+  password alone leads to setting a factor up, so the grace should be short.

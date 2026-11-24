@@ -502,6 +502,18 @@ needs a sign-in with the code.
 
   Add `--keep-devices` only when the lost phone had no paired app. The log records it
   with "Brievie" as the actor.
+- **What it does not stop.** Someone who knows your password can keep your second step
+  locked by typing wrong codes (from 15 minutes up to a day at a time). You see a notice
+  after you sign in ("Iemand heeft ... met jouw wachtwoord geprobeerd in te loggen"):
+  change your password then; until the lock ends a recovery code does not help either,
+  so an admin can clear the factor for you. And after a grace period, signing in with
+  only the password leads to setting a factor up: whoever has the password could enrol
+  their own phone before you do. So keep the grace short, and tell people to switch it
+  on during it.
+- **A paired phone after the grace.** While the rule asks it and the account has no
+  factor after the grace period, the account's phones answer "Stel eerst
+  tweestapsverificatie in op de webinterface." (they are not unpaired: once it is set up
+  on the web they work again), and no new phone can be paired.
 - **Not yet from outside.** Keep the web interface off the internet until the rule for
   the public address is built (a password sign-in from outside will need the code); the
   app-only tunnel does not wait for it.
