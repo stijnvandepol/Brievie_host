@@ -130,9 +130,18 @@ def test_init_secrets_has_no_network() -> None:
     assert 'command: ["python", "-m", "apps.installer.init_secrets"]' in block
 
 
-def test_only_init_and_admin_read_the_whole_vault() -> None:
+def test_only_admin_reads_the_whole_vault() -> None:
     holders = [name for name in SERVICES if re.search(r"\bsecrets:/run/brievie", service(name))]
-    assert holders == ["init", "admin"]
+    assert holders == ["admin"]
+
+
+def test_init_has_its_own_volume_without_the_master_key_and_drops_every_capability() -> None:
+    block = service("init")
+    assert "secrets-init:/run/brievie:ro" in block
+    assert "MASTER_KEY" not in block
+    assert not re.search(r"\bsecrets:/", block)
+    assert "cap_drop: [ALL]" in block
+    assert 'security_opt: ["no-new-privileges:true"]' in block
 
 
 def test_the_revision_of_the_file_is_the_one_of_the_image() -> None:

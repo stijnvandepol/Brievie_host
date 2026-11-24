@@ -80,6 +80,8 @@ check_roles() {
 	test "$(in_volume secrets-postgres 'stat -c %u /v/postgres_password')" = 999
 	api=$(in_volume secrets-api 'ls /v' | tr '\n' ' ')
 	test "$api" = "app_password backup_password master_key secret_key "
+	init=$(in_volume secrets-init 'ls /v' | tr '\n' ' ')
+	test "$init" = "app_password backup_db_password backup_password owner_password postgres_password secret_key "
 	keeper=$(in_volume secrets-keeper 'ls /v' | tr '\n' ' ')
 	test "$keeper" = "app_password backup_db_password backup_password secret_key "
 	if grep -q master_key <<<"$keeper"; then
@@ -90,6 +92,10 @@ check_roles() {
 		test "$(in_volume secrets-api "stat -c '%a %u' /v/$file")" = "400 10001"
 	done
 	# What the containers see, not only what the volumes hold.
+	if docker run --rm --user 0 --network none -v "${project}_secrets-init:/v:ro" "$image" ls /v | grep -q master_key; then
+		echo "The volume of init holds the master key." >&2
+		exit 1
+	fi
 	if $COMPOSE exec -T keeper ls /run/brievie | grep -q master_key; then
 		echo "The keeper container sees the master key." >&2
 		exit 1

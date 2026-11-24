@@ -20,7 +20,7 @@ from apps.installer.init_secrets import (
 )
 
 OWNER = (os.getuid(), os.getgid())
-ROLES = ("postgres", "api", "keeper")
+ROLES = ("postgres", "init", "api", "keeper")
 
 
 def make_layout(root: Path) -> Layout:
@@ -118,6 +118,15 @@ def test_role_volumes_hold_only_what_the_role_needs(tmp_path: Path) -> None:
         "backup_password",
     }
     assert "master_key" not in names_in(layout.out["keeper"])
+    assert names_in(layout.out["init"]) == {
+        "secret_key",
+        "postgres_password",
+        "owner_password",
+        "app_password",
+        "backup_db_password",
+        "backup_password",
+    }
+    assert "master_key" not in names_in(layout.out["init"])
     for role in ("api", "keeper"):
         assert not names_in(layout.out[role]) & {"owner_password", "postgres_password"}
     assert stat.S_IMODE((layout.out["api"] / "master_key").stat().st_mode) == 0o400

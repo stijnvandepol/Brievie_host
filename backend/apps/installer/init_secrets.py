@@ -50,6 +50,16 @@ ROLE_FILES: dict[str, tuple[str, ...]] = {
     # there is one; a derived one it can compute from the master key anyway.
     "api": ("secret_key", "app_password", "master_key", "backup_password"),
     "keeper": ("secret_key", "app_password", "backup_db_password", "backup_password"),
+    # `init` (roles, gate, emergency back-up, migrations) needs every password but never the
+    # master key: no migration or back-up step decrypts a document.
+    "init": (
+        "secret_key",
+        "postgres_password",
+        "owner_password",
+        "app_password",
+        "backup_db_password",
+        "backup_password",
+    ),
 }
 INSTALLATION_ID_NAME = "installation-id"
 FILE_MODE = 0o400
@@ -465,12 +475,13 @@ CONTAINER_LAYOUT = Layout(
         "postgres": Path("/out/postgres"),
         "api": Path("/out/api"),
         "keeper": Path("/out/keeper"),
+        "init": Path("/out/init"),
     },
     backup_config=Path("/data/backup-config"),
     documents=Path("/data/documents"),
     pgdata=Path("/var/lib/postgresql"),
     owners={"vault": (10001, 10001), "postgres": (999, 999), "api": (10001, 10001),
-            "keeper": (10001, 10001)},
+            "keeper": (10001, 10001), "init": (10001, 10001)},
 )  # fmt: skip
 
 

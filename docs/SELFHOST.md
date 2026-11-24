@@ -741,8 +741,9 @@ lists them all).
 4. Pair the iPhone (Apparaten), and set up a back-up (below).
 
 What happened at the first start: `init-secrets` (no network) made the keys in volumes: one
-vault (`secrets`) and a volume per service (`secrets-postgres`, `secrets-api`,
-`secrets-keeper`), each with only the files that service needs: the keeper has no master
+vault (`secrets`) and a volume per service (`secrets-postgres`, `secrets-init`, `secrets-api`,
+`secrets-keeper`), each with only the files that service needs: `init` has every password but no
+master key (no migration or back-up step decrypts a document), the keeper has no master
 key, the api no superuser or owner password, and PostgreSQL is on a network without a
 way out. `init` then made the database roles, checked that this version may start on this
 data, and ran the migrations. No secret is in the compose file, in `docker compose config`,
@@ -755,7 +756,7 @@ in `docker inspect`, in a log or in a process list (the CI job `compose-stack` c
 | 80 | forwards to https |
 | 443 | the app, the web interface and the iPhone (PostgreSQL is never published) |
 
-Volumes: `pgdata` (database), `documents` (sealed pages), `secrets` and the three
+Volumes: `pgdata` (database), `documents` (sealed pages), `secrets` and the four
 `secrets-*` (the keys; keep the master key on the recovery sheet too), `backup-config` (back-up
 settings and the installation id), `caddy-data` (the certificate authority the iPhone trusts:
 **never remove it**), `caddy-ca`, `caddy-authority`, `caddy-config`, `update-backup` (the

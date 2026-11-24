@@ -52,6 +52,7 @@ services:
       - secrets-postgres:/out/postgres
       - secrets-api:/out/api
       - secrets-keeper:/out/keeper
+      - secrets-init:/out/init
       - backup-config:/data/backup-config
       - documents:/data/documents:ro
       - pgdata:/var/lib/postgresql:ro
@@ -107,7 +108,8 @@ services:
       BRIEVIE_HTTPS_PORT: ${BRIEVIE_HTTPS_PORT:-443}
       BRIEVIE_VERSION: ${BRIEVIE_VERSION:-0.4.0}
     volumes:
-      - secrets:/run/brievie:ro
+      # Every password but never the master key (no step of `init` decrypts a document).
+      - secrets-init:/run/brievie:ro
       - documents:/data/documents:ro
       - backup-config:/data/backup-config
       - caddy-authority:/data/authority:ro
@@ -115,6 +117,8 @@ services:
       # volume update-backup.
       - ${BRIEVIE_BACKUP_DIR:-update-backup}:/backup
     networks: [db, edge]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
 
   api:
     <<: *backend
@@ -307,6 +311,7 @@ volumes:
   secrets-postgres:
   secrets-api:
   secrets-keeper:
+  secrets-init:
   backup-config:
   caddy-data:
   caddy-config:
