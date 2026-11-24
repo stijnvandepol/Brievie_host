@@ -102,7 +102,7 @@ section 9).
   `cloudflare/cloudflared` pinned by version and digest, `restart: unless-stopped`,
   `read_only: true`, `cap_drop: [ALL]`, `no-new-privileges`, no published port,
   `depends_on: caddy: condition: service_started`.
-  Command: `tunnel --no-autoupdate --metrics 0.0.0.0:2000 run`.
+  Command: `tunnel --no-autoupdate --metrics 127.0.0.1:2000 run` (loopback only; security review of PR #53).
 - **Token:** one variable, `BRIEVIE_TUNNEL_TOKEN`, passed only to this service as `TUNNEL_TOKEN`
   (`${BRIEVIE_TUNNEL_TOKEN:-}`, never `:?`: compose interpolates services of inactive profiles
   too). The api gets only `BRIEVIE_TUNNEL_TOKEN_SET: ${BRIEVIE_TUNNEL_TOKEN:+true}` (the
@@ -119,8 +119,9 @@ section 9).
 - **Profile:** `./brievie start` turns the profile on when `BRIEVIE_TUNNEL_TOKEN` is set (section
   10). A hand `docker compose` user (Synology Container Manager) sets `COMPOSE_PROFILES=tunnel` in
   `deploy/.env`; the settings page says so when the token is set but the tunnel does not answer.
-- **Is it connected?** The api asks `http://cloudflared:2000/ready` (cloudflared's own readiness
-  endpoint, on the compose network, 2 s timeout). 200: connected; anything else: not.
+- **Is it connected?** (Changed by the security review of PR #53: the api shares no network
+  with cloudflared and makes no outgoing call.) The page says whether a request came through
+  the tunnel listener in the last seven days.
 
 ### 5.4 Own reverse proxy (Nginx Proxy Manager, Traefik, Synology): falls out of the same settings
 

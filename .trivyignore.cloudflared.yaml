@@ -11,5 +11,8 @@ vulnerabilities:
     statement: "cloudflared 2026.10.7 ships golang.org/x/net 0.61.0; fixed in 0.62.0 (x/net/html). The tunnel connector parses no HTML from visitors."
     expired_at: 2026-12-15
   - id: CVE-2026-85091
+    # An OS package has no file path in Trivy's report: scoped by its package URL instead.
+    purls:
+      - pkg:deb/debian/zlib1g
     statement: "zlib1g of the cloudflared base image (Debian 13); fixed in deb13u1. cloudflared is a Go binary and does not use zlib's gz functions. Only in the cloudflared scan."
     expired_at: 2026-12-15

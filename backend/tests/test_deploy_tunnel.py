@@ -99,7 +99,9 @@ def test_cloudflared_is_locked_down(name: str) -> None:
     assert 'security_opt: ["no-new-privileges:true"]' in block
     assert "ports:" not in block
     assert "user:" not in block  # the image's own nonroot user
-    assert 'command: ["tunnel", "--no-autoupdate", "--metrics", "0.0.0.0:2000", "run"]' in block
+    # Security review of PR #53, point 6: metrics on its own loopback only.
+    assert 'command: ["tunnel", "--no-autoupdate", "--metrics", "127.0.0.1:2000", "run"]' in block
+    assert "0.0.0.0" not in block  # noqa: S104 - the text must not bind every interface
     # The token is never a process argument.
     assert "--token" not in block
 
@@ -241,3 +243,12 @@ def test_cloudflared_shares_a_network_with_caddy_only(name: str) -> None:
     ]
     assert sorted(holders) == ["caddy", "cloudflared"]
     assert re.search(r"^networks:\n(?:  .*\n)*  tunnel: \{\}", text, re.M)
+
+
+def test_every_accepted_cloudflared_finding_is_scoped_and_expires() -> None:
+    text = (ROOT / ".trivyignore.cloudflared.yaml").read_text()
+    entries = text.split("  - id: ")[1:]
+    assert entries
+    for entry in entries:
+        assert "expired_at: " in entry, entry
+        assert "paths:" in entry or "purls:" in entry, entry

@@ -2923,3 +2923,9 @@ all six held.
   name, nothing else. The QR payload gains `public_urls`, additively and only when a public name
   exists (a home QR stays byte for byte the same; version stays 1). The spec says what changes for
   the iOS plan.
+- **Point 6 (low), fixed:** cloudflared's metrics listen on `127.0.0.1:2000` inside its own
+  container (nothing on the network reads them; the api no longer probes it, point 2), and the
+  second accepted Trivy finding is scoped by its package URL (`pkg:deb/debian/zlib1g`): an OS
+  package has no file path in Trivy's report. A test requires a scope and an expiry on every
+  entry.
+- **Rejected:** none.

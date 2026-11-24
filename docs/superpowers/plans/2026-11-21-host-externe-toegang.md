@@ -219,7 +219,7 @@ http://:8080 {
     depends_on:
       caddy:
         condition: service_started
-    command: ["tunnel", "--no-autoupdate", "--metrics", "0.0.0.0:2000", "run"]
+    command: ["tunnel", "--no-autoupdate", "--metrics", "127.0.0.1:2000", "run"]  # loopback only (review of PR #53)
     environment:
       TUNNEL_TOKEN: ${BRIEVIE_TUNNEL_TOKEN:-}
     read_only: true

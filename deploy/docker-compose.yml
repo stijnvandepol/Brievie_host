@@ -276,7 +276,8 @@ services:
     depends_on:
       caddy:
         condition: service_started
-    command: ["tunnel", "--no-autoupdate", "--metrics", "0.0.0.0:2000", "run"]
+    # Its metrics only on its own loopback: nothing on the network reads them.
+    command: ["tunnel", "--no-autoupdate", "--metrics", "127.0.0.1:2000", "run"]
     environment:
       # The token as a variable, or (better: it then shows nowhere but in the file) a file
       # on the host, owned by uid 65532 (cloudflared's user) with mode 0400.
