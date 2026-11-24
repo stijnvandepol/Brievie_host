@@ -1641,6 +1641,10 @@ msgid "Er is al een map met deze naam op deze plek."
 msgstr "There is already a folder with this name in this place."
 
 #: apps/documents/services.py
+msgid "Deze status kennen we niet."
+msgstr "We do not know this status."
+
+#: apps/documents/services.py
 msgid "Deze brief staat in de prullenbak."
 msgstr "This letter is in the trash."
 

@@ -50,6 +50,7 @@ from apps.documents.storage import default_storage
 from apps.pipeline.jobs import defer_processing
 from apps.tasks import letter_sync
 from apps.tasks.facts import member_facts
+from apps.tasks.letter_state import LetterStatus, status_of
 from apps.tasks.models import Task, amount_text
 from apps.workspaces.context import current_actor
 from apps.workspaces.keys import workspace_key
@@ -236,6 +237,74 @@ def _in_state(state: str) -> models.Q:
     return models.Q(status=Document.Status.DONE, addressee_ids=[])
 
 
+LETTER_STATUSES = tuple(str(each) for each in LetterStatus)
+_NOT_REVIEWED = (
+    Document.Status.PROCESSING,
+    Document.Status.NEEDS_REVIEW,
+    Document.Status.FAILED,
+)
+
+
+def letter_status_q(status: str, today: date) -> models.Q:
+    """The letters in a status today (spec S 4.2), from the three cached task facts and the
+    review; the partial index `documents_document_open_tasks` serves open, waiting and
+    late. 422 for a status that does not exist."""
+    done = Document.Status.DONE
+    if status == LetterStatus.NEW:
+        return models.Q(status__in=_NOT_REVIEWED)
+    if status == LetterStatus.HANDLED:
+        return models.Q(status=done, task_open_count=0)
+    active = models.Q(status=done, task_open_count__gt=0)
+    if status == LetterStatus.WAITING:
+        return active & models.Q(task_wait_until__gt=today)
+    if status == LetterStatus.OPEN:
+        return active & (
+            models.Q(task_wait_until__isnull=True) | models.Q(task_wait_until__lte=today)
+        )
+    raise ApiError(422, "validation_error", _("Deze status kennen we niet."))
+
+
+def overdue_q(today: date) -> models.Q:
+    """The marker "Te laat": reviewed, and an open task is active with a deadline behind."""
+    return models.Q(
+        status=Document.Status.DONE, task_open_count__gt=0, task_overdue_from__lte=today
+    )
+
+
+def _today() -> date:
+    # Imported here: `tasks.services` reads letters through this module.
+    from apps.tasks.services import task_today
+
+    return task_today()
+
+
+@dataclass(frozen=True)
+class LetterStatusCounts:
+    new: int
+    open: int
+    waiting: int
+    handled: int
+    overdue: int
+
+
+def status_counts(membership: Membership, *, person_id: UUID | None = None) -> LetterStatusCounts:
+    """The letters the member sees per status (and the late ones), in one pass over
+    `visible_documents`; with `person_id` only that person's post. An unknown or archived
+    person gives zeros, not a 404 (a person list is a directory)."""
+    today = _today()
+    documents = visibility.visible_documents(membership)
+    if person_id is not None:
+        documents = documents.filter(addressee_ids__contains=[person_id])
+    counts = documents.aggregate(
+        **{
+            name: models.Count("id", filter=letter_status_q(name, today))
+            for name in LETTER_STATUSES
+        },
+        overdue=models.Count("id", filter=overdue_q(today)),
+    )
+    return LetterStatusCounts(**{name: int(counts[name]) for name in (*LETTER_STATUSES, "overdue")})
+
+
 def my_post_filter(membership: Membership, *, include_departments: bool = False) -> models.Q:
     """ "Mijn post" (navigation spec B2): letters on the member's own persons (their own and
     those they manage), with `include_departments` also on their departments ("Ook mijn
@@ -260,16 +329,25 @@ def list_documents(
     addressed_to_me: bool = False,
     include_departments: bool = False,
     unread_only: bool = False,
+    letter_status: str = "",
+    overdue: bool = False,
 ) -> list[Document]:
     """The newest documents the member sees (at most 200; paging comes later), filtered.
 
     `automatic` keeps the documents the autopilot confirmed or organised;
     `addressed_to_me` the member's own post ("Mijn post", with `include_departments` also
-    their departments'); `unread_only` the letters they have not read (navigation S 5).
+    their departments'); `unread_only` the letters they have not read (navigation S 5);
+    `letter_status` (`new`, `open`, `waiting`, `handled`) and `overdue` the letter status.
     """
     if inbox_state and inbox_state not in INBOX_STATES:
         raise ApiError(422, "validation_error", _("Deze stand van de inbox kennen we niet."))
     documents = visibility.visible_documents(membership)
+    if letter_status or overdue:
+        today = _today()
+        if letter_status:
+            documents = documents.filter(letter_status_q(letter_status, today))
+        if overdue:
+            documents = documents.filter(overdue_q(today))
     if addressed_to_me:
         documents = documents.filter(
             my_post_filter(membership, include_departments=include_departments)
@@ -459,6 +537,9 @@ def _summary_out(
     unread: bool = False,
 ) -> DocumentSummaryOut:
     proposed = _headline_proposals(document)
+    status, late = status_of(
+        document.status == Document.Status.DONE, letter_sync.stored_facts(document), _today()
+    )
     return DocumentSummaryOut(
         id=document.id,
         client_id=document.client_id,
@@ -487,6 +568,10 @@ def _summary_out(
         visibility=document.visibility,
         reader_names=reader_names or [],
         unread=unread,
+        letter_status=str(status),
+        overdue=late,
+        open_task_count=document.task_open_count,
+        waiting_until=document.task_wait_until if status == LetterStatus.WAITING else None,
     )
 
 

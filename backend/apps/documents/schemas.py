@@ -80,6 +80,17 @@ class DocumentSummaryOut(Schema):
     # "Ongelezen": the caller has not read this letter yet (navigation spec S 5; their own
     # state, nobody else's). Filled in `listDocuments` and the letter; false elsewhere.
     unread: bool = False
+    # The letter's status (letter status spec S 4): "new" (not checked yet), "open", "waiting"
+    # (every open task waits for a reply) or "handled" (no open task). Derived from the
+    # review and the tasks, never set by a person; empty on an older server. Not the
+    # per-user `unread`.
+    letter_status: str = ""
+    # The marker "Te laat": an open task whose deadline passed and that is not waiting.
+    overdue: bool = False
+    # Open tasks of the letter.
+    open_task_count: int = 0
+    # When `letter_status` is "waiting": the day the first waiting task is due back.
+    waiting_until: date | None = None
 
 
 class TrashedDocumentOut(DocumentSummaryOut):
@@ -300,6 +311,17 @@ class MarkReadOut(Schema):
     marked: int
 
 
+class LetterStatusCountsOut(Schema):
+    """How many letters the caller sees in each status (and how many of them are late), of
+    all post or of one person's. Only letters the caller may read are counted."""
+
+    new: int = 0
+    open: int = 0
+    waiting: int = 0
+    handled: int = 0
+    overdue: int = 0
+
+
 class InboxCountsOut(Schema):
     new: int
     review: int
@@ -333,6 +355,8 @@ class DocumentEventOut(Schema):
     # A short text with the line: the reason of an emergency opening, or the name of whom
     # a grant gave sight (`access_granted`). Empty otherwise.
     note: str = ""
+    # The day a line names: until when a task waits for a reply (`task_waiting`).
+    on_date: date | None = None
 
     @staticmethod
     def resolve_actor_name(obj: DocumentEvent) -> str:

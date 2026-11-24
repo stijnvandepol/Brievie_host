@@ -698,7 +698,7 @@ export interface paths {
         };
         /**
          * List Documents
-         * @description The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`). `addressed_to_me=true` keeps "Mijn post": the letters on the caller's own persons (their own and those they manage), with `include_departments=true` also on their departments; empty for a member without a person. `unread_only=true` keeps the letters the caller has not read (`unread`).
+         * @description The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`). `addressed_to_me=true` keeps "Mijn post": the letters on the caller's own persons (their own and those they manage), with `include_departments=true` also on their departments; empty for a member without a person. `unread_only=true` keeps the letters the caller has not read (`unread`). `letter_status` (`new`, `open`, `waiting` or `handled`; 422 for another) and `overdue=true` keep the letters in that status, with the marker "Te laat"; `new` here is the letter not checked yet, not `unread`.
          */
         get: operations["listDocuments"];
         put?: never;
@@ -747,6 +747,26 @@ export interface paths {
          * @description Search the letters of the workspace by their text, sender, summary, label names and person names; every word must match, as a word beginning (Dutch stems too). Best first, then newest. The filters narrow the search; together they all apply. When nothing matches exactly, letters with similar words are answered with `fuzzy=true`. A BSN in `q` is removed before searching (`bsn_removed`). `next_offset` is null on the last page (offset at most 1000). Each hit has a fragment (`snippet`) with the matched words marked. The term is never logged. 422 `validation_error` for a term over 200 characters, an unknown `inbox_state` or `document_type`, or `date_from` after `date_to`; 429 after 30 searches a minute.
          */
         post: operations["searchDocuments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/status-counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Count Letter Statuses
+         * @description How many letters the caller sees per status (`new`, `open`, `waiting`, `handled`) and how many are late (`overdue`), of all post or, with `person_id`, of one person's. Only letters the caller may read are counted; an unknown or archived person gives zeros.
+         */
+        get: operations["countLetterStatuses"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2534,6 +2554,11 @@ export interface components {
              * @default
              */
             note: string;
+            /**
+             * On Date
+             * Format: date
+             */
+            on_date?: string | null;
             /** Origin */
             origin: string;
             /** Person Name */
@@ -2604,6 +2629,11 @@ export interface components {
              * Format: date
              */
             letter_date: string | null;
+            /**
+             * Letter Status
+             * @default
+             */
+            letter_status: string;
             /** New Person Suggestions */
             new_person_suggestions?: components["schemas"]["NewPersonSuggestionOut"][];
             /**
@@ -2616,6 +2646,16 @@ export interface components {
              * @default 0
              */
             open_suggestion_count: number;
+            /**
+             * Open Task Count
+             * @default 0
+             */
+            open_task_count: number;
+            /**
+             * Overdue
+             * @default false
+             */
+            overdue: boolean;
             /** Page Count */
             page_count: number;
             /** Pages */
@@ -2663,6 +2703,11 @@ export interface components {
              * @default workspace
              */
             visibility: string;
+            /**
+             * Waiting Until
+             * Format: date
+             */
+            waiting_until?: string | null;
         };
         /** DocumentSearchHitOut */
         DocumentSearchHitOut: {
@@ -2709,6 +2754,11 @@ export interface components {
              */
             letter_date: string | null;
             /**
+             * Letter Status
+             * @default
+             */
+            letter_status: string;
+            /**
              * Open Duplicate Count
              * @default 0
              */
@@ -2718,6 +2768,16 @@ export interface components {
              * @default 0
              */
             open_suggestion_count: number;
+            /**
+             * Open Task Count
+             * @default 0
+             */
+            open_task_count: number;
+            /**
+             * Overdue
+             * @default false
+             */
+            overdue: boolean;
             /** Page Count */
             page_count: number;
             /**
@@ -2753,6 +2813,11 @@ export interface components {
              * @default workspace
              */
             visibility: string;
+            /**
+             * Waiting Until
+             * Format: date
+             */
+            waiting_until?: string | null;
         };
         /**
          * DocumentSearchIn
@@ -2864,6 +2929,11 @@ export interface components {
              */
             letter_date: string | null;
             /**
+             * Letter Status
+             * @default
+             */
+            letter_status: string;
+            /**
              * Open Duplicate Count
              * @default 0
              */
@@ -2873,6 +2943,16 @@ export interface components {
              * @default 0
              */
             open_suggestion_count: number;
+            /**
+             * Open Task Count
+             * @default 0
+             */
+            open_task_count: number;
+            /**
+             * Overdue
+             * @default false
+             */
+            overdue: boolean;
             /** Page Count */
             page_count: number;
             /**
@@ -2906,6 +2986,11 @@ export interface components {
              * @default workspace
              */
             visibility: string;
+            /**
+             * Waiting Until
+             * Format: date
+             */
+            waiting_until?: string | null;
         };
         /** DocumentViewerOut */
         DocumentViewerOut: {
@@ -3282,6 +3367,38 @@ export interface components {
              */
             language: "" | "nl" | "en";
         };
+        /**
+         * LetterStatusCountsOut
+         * @description How many letters the caller sees in each status (and how many of them are late), of
+         *     all post or of one person's. Only letters the caller may read are counted.
+         */
+        LetterStatusCountsOut: {
+            /**
+             * Handled
+             * @default 0
+             */
+            handled: number;
+            /**
+             * New
+             * @default 0
+             */
+            new: number;
+            /**
+             * Open
+             * @default 0
+             */
+            open: number;
+            /**
+             * Overdue
+             * @default 0
+             */
+            overdue: number;
+            /**
+             * Waiting
+             * @default 0
+             */
+            waiting: number;
+        };
         /** LingeringLetterOut */
         LingeringLetterOut: {
             /** Addressee Ids */
@@ -3332,6 +3449,11 @@ export interface components {
              */
             letter_date: string | null;
             /**
+             * Letter Status
+             * @default
+             */
+            letter_status: string;
+            /**
              * Open Duplicate Count
              * @default 0
              */
@@ -3341,6 +3463,16 @@ export interface components {
              * @default 0
              */
             open_suggestion_count: number;
+            /**
+             * Open Task Count
+             * @default 0
+             */
+            open_task_count: number;
+            /**
+             * Overdue
+             * @default false
+             */
+            overdue: boolean;
             /** Page Count */
             page_count: number;
             /**
@@ -3374,6 +3506,11 @@ export interface components {
              * @default workspace
              */
             visibility: string;
+            /**
+             * Waiting Until
+             * Format: date
+             */
+            waiting_until?: string | null;
         };
         /** LingeringOut */
         LingeringOut: {
@@ -4571,6 +4708,11 @@ export interface components {
              */
             letter_date: string | null;
             /**
+             * Letter Status
+             * @default
+             */
+            letter_status: string;
+            /**
              * Open Duplicate Count
              * @default 0
              */
@@ -4580,6 +4722,16 @@ export interface components {
              * @default 0
              */
             open_suggestion_count: number;
+            /**
+             * Open Task Count
+             * @default 0
+             */
+            open_task_count: number;
+            /**
+             * Overdue
+             * @default false
+             */
+            overdue: boolean;
             /** Page Count */
             page_count: number;
             /**
@@ -4628,6 +4780,11 @@ export interface components {
              * @default workspace
              */
             visibility: string;
+            /**
+             * Waiting Until
+             * Format: date
+             */
+            waiting_until?: string | null;
         };
         /**
          * UploadMetadataIn
@@ -7036,6 +7193,8 @@ export interface operations {
                 addressed_to_me?: boolean;
                 include_departments?: boolean;
                 unread_only?: boolean;
+                letter_status?: string;
+                overdue?: boolean;
             };
             header?: never;
             path: {
@@ -7391,6 +7550,48 @@ export interface operations {
             };
             /** @description Too Many Requests */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    countLetterStatuses: {
+        parameters: {
+            query?: {
+                person_id?: string | null;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LetterStatusCountsOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
