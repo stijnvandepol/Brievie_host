@@ -299,3 +299,99 @@ describe("post", () => {
     expect(await screen.findByRole("checkbox", { name: "Automatisch door Brievie" })).toBeChecked();
   });
 });
+
+describe("post: letter status", () => {
+  const counts = { new: 2, open: 3, waiting: 2, handled: 14, overdue: 1 };
+
+  function statusHandlers(asked: URLSearchParams[] = []) {
+    return [
+      http.get(`*${API}/workspaces/${workspace.id}/documents/status-counts`, () =>
+        HttpResponse.json(counts),
+      ),
+      http.get(`*${API}/workspaces/${workspace.id}/documents`, ({ request }) => {
+        asked.push(new URL(request.url).searchParams);
+        return HttpResponse.json([
+          { ...documentSummary, letter_status: "waiting", waiting_until: "2026-12-03" },
+          {
+            ...documentSummary,
+            id: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b5555",
+            letter_status: "open",
+            overdue: true,
+            sender: "Gemeente",
+          },
+        ]);
+      }),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    ];
+  }
+
+  it("shows a status badge per row and Te laat in words", async () => {
+    server.use(...statusHandlers());
+    renderApp(`/w/${workspace.id}/post`);
+    const row = (await screen.findByRole("link", { name: "Gemeente" })).closest(
+      "tr",
+    ) as HTMLElement;
+    expect(within(row).getByText("Openstaand")).toBeInTheDocument();
+    expect(within(row).getByText("Te laat")).toBeInTheDocument();
+    const other = screen
+      .getByRole("link", { name: "Belastingdienst" })
+      .closest("tr") as HTMLElement;
+    expect(within(other).getByText("Wacht op reactie tot 3 dec")).toBeInTheDocument();
+    expect(within(other).queryByText("Klaar")).not.toBeInTheDocument();
+  });
+
+  it("says the numbers above zero in one line", async () => {
+    server.use(...statusHandlers());
+    renderApp(`/w/${workspace.id}/post`);
+    expect(
+      await screen.findByText("Je post: 2 nieuw, 3 openstaand, 1 te laat, 2 wachten op reactie"),
+    ).toBeInTheDocument();
+  });
+
+  it("filters on a status and keeps the choice in the URL", async () => {
+    const asked: URLSearchParams[] = [];
+    server.use(...statusHandlers(asked));
+    const user = userEvent.setup();
+    renderApp(`/w/${workspace.id}/post`);
+    await user.click(await screen.findByRole("radio", { name: "Openstaand (3)" }));
+    await waitFor(() => expect(asked.at(-1)?.get("letter_status")).toBe("open"));
+    expect(screen.getByRole("radio", { name: "Nieuw (2)" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Wacht op reactie (2)" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Afgehandeld (14)" })).toBeInTheDocument();
+  });
+
+  it("filters on late letters only", async () => {
+    const asked: URLSearchParams[] = [];
+    server.use(...statusHandlers(asked));
+    const user = userEvent.setup();
+    renderApp(`/w/${workspace.id}/post`);
+    await user.click(await screen.findByRole("checkbox", { name: "Alleen te laat (1)" }));
+    await waitFor(() => expect(asked.at(-1)?.get("overdue")).toBe("true"));
+  });
+
+  it("reads the status from the URL", async () => {
+    const asked: URLSearchParams[] = [];
+    server.use(...statusHandlers(asked));
+    renderApp(`/w/${workspace.id}/post?status=wacht&telaat=true`);
+    await waitFor(() => expect(asked.at(-1)?.get("letter_status")).toBe("waiting"));
+    expect(asked.at(-1)?.get("overdue")).toBe("true");
+  });
+
+  it("names the person in the heading and counts only their post", async () => {
+    const counted: URLSearchParams[] = [];
+    server.use(
+      http.get(`*${API}/workspaces/${workspace.id}/documents/status-counts`, ({ request }) => {
+        counted.push(new URL(request.url).searchParams);
+        return HttpResponse.json({ ...counts, new: 0, overdue: 0 });
+      }),
+      ...statusHandlers(),
+    );
+    renderApp(`/w/${workspace.id}/post?persoon=${papa.id}`);
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Post van Papa" }),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(counted.at(-1)?.get("person_id")).toBe(papa.id));
+    expect(await screen.findByText("3 openstaand, 2 wachten op reactie")).toBeInTheDocument();
+  });
+});

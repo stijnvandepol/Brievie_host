@@ -27,6 +27,7 @@ import {
   ownSight,
 } from "../components/hand-over";
 import { LabelChips } from "../components/label-chip";
+import { LetterStatusBadge } from "../components/letter-status";
 import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
 import { PersonPicker, useSetAddressees } from "../components/person-picker";
 import { PrivateLock } from "../components/private-lock";
@@ -122,6 +123,15 @@ function InboxRow({
             variant="row"
           />
           <SuggestionMark count={document.open_suggestion_count} />
+          {/* Only a checked letter that still needs a name: a late payment must not look like
+              any other. The rows that still need checking keep their action word alone. */}
+          {state === "unassigned" ? (
+            <LetterStatusBadge
+              status={document.letter_status}
+              overdue={document.overdue}
+              waitingUntil={document.waiting_until}
+            />
+          ) : null}
           {(document.open_duplicate_count ?? 0) > 0 ? (
             <Badge intent="warning">{t`Dubbel?`}</Badge>
           ) : null}

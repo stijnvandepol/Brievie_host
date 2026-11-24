@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button } from "react-aria-components";
 import { ApiFailure, api } from "../api/client";
 import {
+  letterStatusCountsQuery,
   meQuery,
   peopleQuery,
   personsQuery,
@@ -14,6 +15,7 @@ import {
 import { ConfirmAction } from "../components/confirm-dialog";
 import { EmergencyDialog } from "../components/emergency-dialog";
 import { Icon } from "../components/icons";
+import { letterCountsText } from "../components/letter-status";
 import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
 import {
   lastSignIn,
@@ -70,6 +72,7 @@ function PersonDetailPage() {
   const people = useQuery(peopleQuery(workspace.id));
   const persons = useQuery(personsQuery(workspace.id));
   const visibility = useQuery(visibilityQuery(workspace.id));
+  const letterCounts = useQuery(letterStatusCountsQuery(workspace.id, personId));
   const { data: me } = useQuery(meQuery);
   const isAdmin = workspace.role === "admin";
   const settings = useQuery({ ...workspaceSettingsQuery(workspace.id), enabled: isAdmin });
@@ -240,6 +243,9 @@ function PersonDetailPage() {
           <div>
             <dt>{t`Brieven`}</dt>
             <dd>
+              {letterCounts.data && letterCountsText(letterCounts.data) ? (
+                <span className="letter-counts">{letterCountsText(letterCounts.data)}. </span>
+              ) : null}
               <Link
                 to="/w/$workspaceId/post"
                 params={{ workspaceId: workspace.id }}

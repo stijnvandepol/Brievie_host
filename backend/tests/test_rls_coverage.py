@@ -5,7 +5,12 @@ from django.db import connection
 
 from apps.common.models import WorkspaceModel
 from apps.documents.models import Document
-from apps.workspaces.rls import READ_MARK_POLICY, READER_POLICY, VISIBILITY_POLICIES
+from apps.workspaces.rls import (
+    READ_MARK_POLICY,
+    READER_POLICY,
+    TASK_SNOOZE_POLICY,
+    VISIBILITY_POLICIES,
+)
 
 
 def workspace_tables() -> list[str]:
@@ -66,6 +71,7 @@ KNOWN_RESTRICTIVE = {
     VISIBILITY_POLICIES[2]: "d",
     READER_POLICY: "*",
     READ_MARK_POLICY: "*",
+    TASK_SNOOZE_POLICY: "*",
 }
 
 

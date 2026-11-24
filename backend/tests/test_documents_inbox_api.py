@@ -163,6 +163,8 @@ def test_exported_query_parameters_have_no_anyof() -> None:
         "addressed_to_me",
         "include_departments",
         "unread_only",
+        "letter_status",
+        "overdue",
     }
     assert not any(p["required"] for p in parameters.values())
     assert "anyOf" not in json.dumps(parameters)

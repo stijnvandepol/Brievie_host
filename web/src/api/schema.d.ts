@@ -798,7 +798,7 @@ export interface paths {
         };
         /**
          * List Documents
-         * @description The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`). `addressed_to_me=true` keeps "Mijn post": the letters on the caller's own persons (their own and those they manage), with `include_departments=true` also on their departments; empty for a member without a person. `unread_only=true` keeps the letters the caller has not read (`unread`).
+         * @description The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`). `addressed_to_me=true` keeps "Mijn post": the letters on the caller's own persons (their own and those they manage), with `include_departments=true` also on their departments; empty for a member without a person. `unread_only=true` keeps the letters the caller has not read (`unread`). `letter_status` (`new`, `open`, `waiting` or `handled`; 422 for another) and `overdue=true` keep the letters in that status, with the marker "Te laat"; `new` here is the letter not checked yet, not `unread`.
          */
         get: operations["listDocuments"];
         put?: never;
@@ -847,6 +847,26 @@ export interface paths {
          * @description Search the letters of the workspace by their text, sender, summary, label names and person names; every word must match, as a word beginning (Dutch stems too). Best first, then newest. The filters narrow the search; together they all apply. When nothing matches exactly, letters with similar words are answered with `fuzzy=true`. A BSN in `q` is removed before searching (`bsn_removed`). `next_offset` is null on the last page (offset at most 1000). Each hit has a fragment (`snippet`) with the matched words marked. The term is never logged. 422 `validation_error` for a term over 200 characters, an unknown `inbox_state` or `document_type`, or `date_from` after `date_to`; 429 after 30 searches a minute.
          */
         post: operations["searchDocuments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/status-counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Count Letter Statuses
+         * @description How many letters the caller sees per status (`new`, `open`, `waiting`, `handled`) and how many are late (`overdue`), of all post or, with `person_id`, of one person's. Only letters the caller may read are counted; an unknown or archived person gives zeros.
+         */
+        get: operations["countLetterStatuses"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -958,6 +978,26 @@ export interface paths {
          * @description Reverse a label or addressee a rule or the autopilot added (`can_undo`; origin `rule`, `ai` or `name_match`); it is not made again on this document. 409 `event_not_undoable` when the change is not one of those, was undone already or is gone anyway.
          */
         post: operations["undoDocumentEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/handle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Handle Document
+         * @description "Brief afhandelen": ticks off every open task of a checked letter after the confirmation. `task_ids` must be exactly the letter's open tasks (waiting ones included): 409 `tasks_changed` otherwise, nothing is completed. With a payment among them `payments_confirmed` must be true (409 `payment_not_confirmed`). 409 `document_not_reviewed` for a letter not checked yet. An already handled letter with no ids changes nothing. Writes one `task_completed` line per task with the caller and one `letter_handled` line.
+         */
+        post: operations["handleDocument"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1647,7 +1687,7 @@ export interface paths {
         };
         /**
          * List My Tasks
-         * @description "Mijn taken": the caller's tasks, derived from the post they may read. `part` is `mine` (default: given to them, or on their post), `to_pick_up` (an organisation's department and unnamed post; empty at home) or `all` (every task they see). `status` is `open` (default; by deadline, undated last, at most 500) or `done` (completed in the last 30 days, newest first, at most 200). 422 `validation_error` for another part or status.
+         * @description "Mijn taken": the caller's tasks, derived from the post they may read. `part` is `mine` (default: given to them, or on their post), `to_pick_up` (an organisation's department and unnamed post; empty at home) or `all` (every task they see). `status` is `open` (default; by deadline, undated last, at most 500) or `done` (completed in the last 30 days, newest first, at most 200). 422 `validation_error` for another part or status. Tasks that wait for a reply (`waiting_until` after today) and the caller's own snoozed tasks are left out of the open list; with `include_waiting=true` they follow with `group` `waiting` and `snoozed` (default false: callers that do not know these groups never meet them).
          */
         get: operations["listMyTasks"];
         put?: never;
@@ -1667,7 +1707,7 @@ export interface paths {
         };
         /**
          * Count My Tasks
-         * @description The numbers of "Mijn taken" for the navigation: open tasks only.
+         * @description The numbers of "Mijn taken" for the navigation: open tasks only, without those that wait for a reply and the caller's own snoozed ones (counted in `waiting` and `snoozed`).
          */
         get: operations["countMyTasks"];
         put?: never;
@@ -2150,6 +2190,46 @@ export interface paths {
          * @description Idempotent. Writes a `task_reopened` event on the task's document.
          */
         post: operations["reopenTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/tasks/{task_id}/snooze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Snooze Task
+         * @description "Uitgesteld tot": the task leaves the caller's own lists until `until` (after today, within a year, and not after the task's own date: 422 `validation_error` or `snooze_after_deadline`), `until` null ends it. Personal: nobody else sees it, the letter's status does not change, nothing is written to the history. Any role; not through emergency access. 409 `task_done` for a task that is done.
+         */
+        post: operations["snoozeTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/tasks/{task_id}/waiting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Task Waiting
+         * @description "Wacht op reactie tot": the task waits for a reply until `until` (after today, within a year; 422 `validation_error` otherwise), `until` null stops waiting. Shared: everyone who sees the letter sees it, and when every open task waits the letter is "waiting". May pass the task's own deadline. 409 `task_done` for a task that is done. The same day again changes nothing. Writes a `task_waiting` or `task_waiting_ended` line. Role member or higher; not through emergency access.
+         */
+        post: operations["setTaskWaiting"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2689,6 +2769,11 @@ export interface components {
              * @default
              */
             note: string;
+            /**
+             * On Date
+             * Format: date
+             */
+            on_date?: string | null;
             /** Origin */
             origin: string;
             /** Person Name */
@@ -2759,6 +2844,11 @@ export interface components {
              * Format: date
              */
             letter_date: string | null;
+            /**
+             * Letter Status
+             * @default
+             */
+            letter_status: string;
             /** New Person Suggestions */
             new_person_suggestions?: components["schemas"]["NewPersonSuggestionOut"][];
             /**
@@ -2771,6 +2861,16 @@ export interface components {
              * @default 0
              */
             open_suggestion_count: number;
+            /**
+             * Open Task Count
+             * @default 0
+             */
+            open_task_count: number;
+            /**
+             * Overdue
+             * @default false
+             */
+            overdue: boolean;
             /** Page Count */
             page_count: number;
             /** Pages */
@@ -2818,6 +2918,11 @@ export interface components {
              * @default workspace
              */
             visibility: string;
+            /**
+             * Waiting Until
+             * Format: date
+             */
+            waiting_until?: string | null;
         };
         /** DocumentSearchHitOut */
         DocumentSearchHitOut: {
@@ -2864,6 +2969,11 @@ export interface components {
              */
             letter_date: string | null;
             /**
+             * Letter Status
+             * @default
+             */
+            letter_status: string;
+            /**
              * Open Duplicate Count
              * @default 0
              */
@@ -2873,6 +2983,16 @@ export interface components {
              * @default 0
              */
             open_suggestion_count: number;
+            /**
+             * Open Task Count
+             * @default 0
+             */
+            open_task_count: number;
+            /**
+             * Overdue
+             * @default false
+             */
+            overdue: boolean;
             /** Page Count */
             page_count: number;
             /**
@@ -2908,6 +3028,11 @@ export interface components {
              * @default workspace
              */
             visibility: string;
+            /**
+             * Waiting Until
+             * Format: date
+             */
+            waiting_until?: string | null;
         };
         /**
          * DocumentSearchIn
@@ -3019,6 +3144,11 @@ export interface components {
              */
             letter_date: string | null;
             /**
+             * Letter Status
+             * @default
+             */
+            letter_status: string;
+            /**
              * Open Duplicate Count
              * @default 0
              */
@@ -3028,6 +3158,16 @@ export interface components {
              * @default 0
              */
             open_suggestion_count: number;
+            /**
+             * Open Task Count
+             * @default 0
+             */
+            open_task_count: number;
+            /**
+             * Overdue
+             * @default false
+             */
+            overdue: boolean;
             /** Page Count */
             page_count: number;
             /**
@@ -3061,6 +3201,11 @@ export interface components {
              * @default workspace
              */
             visibility: string;
+            /**
+             * Waiting Until
+             * Format: date
+             */
+            waiting_until?: string | null;
         };
         /** DocumentViewerOut */
         DocumentViewerOut: {
@@ -3265,6 +3410,22 @@ export interface components {
             /** Path */
             path: string;
         };
+        /**
+         * HandleDocumentIn
+         * @description "Brief afhandelen": the ids of the open tasks the person was shown (all of them,
+         *     waiting ones included) and whether they confirmed that a payment among them was made
+         *     or arranged. The server completes nothing when the ids differ from the letter's open
+         *     tasks (409 `tasks_changed`) or a payment is not confirmed (409 `payment_not_confirmed`).
+         */
+        HandleDocumentIn: {
+            /**
+             * Payments Confirmed
+             * @default false
+             */
+            payments_confirmed: boolean;
+            /** Task Ids */
+            task_ids?: string[];
+        };
         /** HealthOut */
         HealthOut: {
             /** Api Version */
@@ -3466,6 +3627,38 @@ export interface components {
              */
             language: "" | "nl" | "en";
         };
+        /**
+         * LetterStatusCountsOut
+         * @description How many letters the caller sees in each status (and how many of them are late), of
+         *     all post or of one person's. Only letters the caller may read are counted.
+         */
+        LetterStatusCountsOut: {
+            /**
+             * Handled
+             * @default 0
+             */
+            handled: number;
+            /**
+             * New
+             * @default 0
+             */
+            new: number;
+            /**
+             * Open
+             * @default 0
+             */
+            open: number;
+            /**
+             * Overdue
+             * @default 0
+             */
+            overdue: number;
+            /**
+             * Waiting
+             * @default 0
+             */
+            waiting: number;
+        };
         /** LingeringLetterOut */
         LingeringLetterOut: {
             /** Addressee Ids */
@@ -3516,6 +3709,11 @@ export interface components {
              */
             letter_date: string | null;
             /**
+             * Letter Status
+             * @default
+             */
+            letter_status: string;
+            /**
              * Open Duplicate Count
              * @default 0
              */
@@ -3525,6 +3723,16 @@ export interface components {
              * @default 0
              */
             open_suggestion_count: number;
+            /**
+             * Open Task Count
+             * @default 0
+             */
+            open_task_count: number;
+            /**
+             * Overdue
+             * @default false
+             */
+            overdue: boolean;
             /** Page Count */
             page_count: number;
             /**
@@ -3558,6 +3766,11 @@ export interface components {
              * @default workspace
              */
             visibility: string;
+            /**
+             * Waiting Until
+             * Format: date
+             */
+            waiting_until?: string | null;
         };
         /** LingeringOut */
         LingeringOut: {
@@ -3742,8 +3955,18 @@ export interface components {
             needs_date: number;
             /** Overdue */
             overdue: number;
+            /**
+             * Snoozed
+             * @default 0
+             */
+            snoozed: number;
             /** To Pick Up */
             to_pick_up: number;
+            /**
+             * Waiting
+             * @default 0
+             */
+            waiting: number;
             /** Within Week */
             within_week: number;
         };
@@ -4416,6 +4639,14 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** SnoozeIn */
+        SnoozeIn: {
+            /**
+             * Until
+             * Format: date
+             */
+            until?: string | null;
+        };
         /** SortsPostIn */
         SortsPostIn: {
             /**
@@ -4604,6 +4835,11 @@ export interface components {
             reason: string;
             /** Sender */
             sender: string;
+            /**
+             * Snoozed Until
+             * Format: date
+             */
+            snoozed_until?: string | null;
             /** Status */
             status: string;
             /**
@@ -4618,6 +4854,16 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /**
+             * Wait Over
+             * @default false
+             */
+            wait_over: boolean;
+            /**
+             * Waiting Until
+             * Format: date
+             */
+            waiting_until?: string | null;
         };
         /** TaskOut */
         TaskOut: {
@@ -4677,6 +4923,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Snoozed Until
+             * Format: date
+             */
+            snoozed_until?: string | null;
             /** Status */
             status: string;
             /**
@@ -4686,6 +4937,16 @@ export interface components {
             term_quote: string;
             /** Type */
             type: string;
+            /**
+             * Wait Over
+             * @default false
+             */
+            wait_over: boolean;
+            /**
+             * Waiting Until
+             * Format: date
+             */
+            waiting_until?: string | null;
         };
         /**
          * TaskTwinOut
@@ -4775,6 +5036,11 @@ export interface components {
              */
             letter_date: string | null;
             /**
+             * Letter Status
+             * @default
+             */
+            letter_status: string;
+            /**
              * Open Duplicate Count
              * @default 0
              */
@@ -4784,6 +5050,16 @@ export interface components {
              * @default 0
              */
             open_suggestion_count: number;
+            /**
+             * Open Task Count
+             * @default 0
+             */
+            open_task_count: number;
+            /**
+             * Overdue
+             * @default false
+             */
+            overdue: boolean;
             /** Page Count */
             page_count: number;
             /**
@@ -4832,6 +5108,11 @@ export interface components {
              * @default workspace
              */
             visibility: string;
+            /**
+             * Waiting Until
+             * Format: date
+             */
+            waiting_until?: string | null;
         };
         /** TunnelOut */
         TunnelOut: {
@@ -4988,6 +5269,14 @@ export interface components {
             preview_token: string;
             /** Sentences */
             sentences: string[];
+        };
+        /** WaitingIn */
+        WaitingIn: {
+            /**
+             * Until
+             * Format: date
+             */
+            until?: string | null;
         };
         /** WorkspaceOut */
         WorkspaceOut: {
@@ -7464,6 +7753,8 @@ export interface operations {
                 addressed_to_me?: boolean;
                 include_departments?: boolean;
                 unread_only?: boolean;
+                letter_status?: string;
+                overdue?: boolean;
             };
             header?: never;
             path: {
@@ -7819,6 +8110,48 @@ export interface operations {
             };
             /** @description Too Many Requests */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    countLetterStatuses: {
+        parameters: {
+            query?: {
+                person_id?: string | null;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LetterStatusCountsOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8200,6 +8533,105 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    handleDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HandleDocumentIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10790,6 +11222,7 @@ export interface operations {
             query?: {
                 part?: string;
                 status?: string;
+                include_waiting?: boolean;
             };
             header?: never;
             path: {
@@ -12922,6 +13355,204 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    snoozeTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SnoozeIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskItemOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    setTaskWaiting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaitingIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskItemOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -48,14 +48,19 @@ def test_events_newest_first_with_names(client: Client, ws_a: Workspace) -> None
     rows = r.json()
     assert [(row["kind"], row["person_name"]) for row in rows] == [
         ("addressee_removed", "Papa"),
+        # A review without tasks leaves the letter handled at once (letter status B1).
+        ("letter_handled", ""),
         ("confirmed", ""),
         ("addressee_added", "Papa"),
     ]
     assert set(rows[0]) == {
         "id", "created_at", "kind", "origin", "actor_id", "actor_name", "rule_name",
-        "label_name", "person_name", "can_undo", "undone", "related_document_id", "note",
+        "label_name", "person_name", "can_undo", "undone", "related_document_id", "note", "on_date",
     }  # fmt: skip
-    for row in rows:
+    handled = next(row for row in rows if row["kind"] == "letter_handled")
+    # Nobody handled it: no actor, origin system.
+    assert (handled["origin"], handled["actor_id"], handled["actor_name"]) == ("system", None, "")
+    for row in (r for r in rows if r["kind"] != "letter_handled"):
         assert row["origin"] == "user"
         assert row["actor_id"] == str(admin.id)
         assert row["actor_name"] == admin.name
@@ -63,6 +68,7 @@ def test_events_newest_first_with_names(client: Client, ws_a: Workspace) -> None
         assert row["label_name"] == ""
         assert row["can_undo"] is False
         assert row["undone"] is False
+    assert handled["can_undo"] is False
 
 
 def test_person_on_a_document_cannot_be_deleted(client: Client, ws_a: Workspace) -> None:

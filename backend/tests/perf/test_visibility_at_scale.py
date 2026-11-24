@@ -75,6 +75,10 @@ FILTERED: Final = (
     "list_my_post_unread",
     "list_all_unread",
     "lingering_letters",
+    "list_documents_open",
+    "list_documents_own_person_waiting",
+    "letter_status_counts",
+    "letter_status_counts_own_person",
 )
 
 
@@ -92,10 +96,23 @@ def _explain_dir() -> Path | None:
     return directory
 
 
+def _say(config: pytest.Config, text: str) -> None:
+    """A progress line on the terminal, past the capture: a run that is stopped (the job's
+    time limit) still shows how far it came."""
+    reporter = config.pluginmanager.getplugin("terminalreporter")
+    if reporter is not None:
+        reporter.write_line(text)
+
+
 @pytest.fixture(scope="module")
-def perf_world(django_db_setup: None, django_db_blocker: DjangoDbBlocker) -> PerfWorld:
+def perf_world(
+    request: pytest.FixtureRequest, django_db_setup: None, django_db_blocker: DjangoDbBlocker
+) -> PerfWorld:
+    started = time.perf_counter()
     with django_db_blocker.unblock():
-        return data.build(uuid4())
+        world = data.build(uuid4())
+    _say(request.config, f"perf world built in {time.perf_counter() - started:.0f} s")
+    return world
 
 
 @pytest.fixture(scope="module")
@@ -164,6 +181,19 @@ def _list(name: str, workspace: Workspace, world: PerfWorld, actor: UUID) -> Cal
             documents.list_documents(member, person_id=world.own_person[actor])
         ),
         "inbox_counts": lambda: json.dumps(documents.inbox_counts(member), sort_keys=True),
+        "list_documents_open": lambda: ids(documents.list_documents(member, letter_status="open")),
+        "list_documents_own_person_waiting": lambda: ids(
+            documents.list_documents(
+                member, person_id=world.own_person[actor], letter_status="waiting"
+            )
+        ),
+        "letter_status_counts": lambda: json.dumps(
+            vars(documents.status_counts(member)), sort_keys=True
+        ),
+        "letter_status_counts_own_person": lambda: json.dumps(
+            vars(documents.status_counts(member, person_id=world.own_person[actor])),
+            sort_keys=True,
+        ),
         "list_persons": lambda: counted(people.list_persons(workspace)),
         "list_labels": lambda: counted(labels.list_labels(workspace)),
         "list_tasks_all": lambda: f"{len(tasks.list_tasks(workspace, status='all'))} rows",
@@ -248,7 +278,12 @@ def _jit() -> str:
 @pytest.mark.parametrize("actor", ACTORS)
 @pytest.mark.parametrize("name", LISTS)
 def test_measure_list(
-    state: str, actor: str, name: str, perf_world: PerfWorld, perf_report: Report
+    request: pytest.FixtureRequest,
+    state: str,
+    actor: str,
+    name: str,
+    perf_world: PerfWorld,
+    perf_report: Report,
 ) -> None:
     user = getattr(perf_world, actor)
     assert isinstance(user, UUID)
@@ -269,6 +304,8 @@ def test_measure_list(
         return result
 
     result = record("policy", _measure(call, label))
+    median = perf_report.measurements[-1].median
+    _say(request.config, f"{label}: median {median * 1000:.0f} ms")
 
     with connection.cursor() as c:
         c.execute(

@@ -77,3 +77,41 @@ export const taskAssigneesQuery = (workspaceId: string, taskId: string) =>
       return data;
     },
   });
+
+/** "Wacht op reactie tot ...": the day the task waits until; `null` stops waiting. */
+export async function setTaskWaiting(workspaceId: string, taskId: string, until: string | null) {
+  const { data, error } = await api.POST(
+    "/api/v1/workspaces/{workspace_id}/tasks/{task_id}/waiting",
+    { params: { path: { workspace_id: workspaceId, task_id: taskId } }, body: { until } },
+  );
+  if (error !== undefined || !data) throw new ApiFailure(error);
+  return data;
+}
+
+/** "Uitstellen tot ...": the caller's own snooze; `null` ends it. */
+export async function snoozeTask(workspaceId: string, taskId: string, until: string | null) {
+  const { data, error } = await api.POST(
+    "/api/v1/workspaces/{workspace_id}/tasks/{task_id}/snooze",
+    { params: { path: { workspace_id: workspaceId, task_id: taskId } }, body: { until } },
+  );
+  if (error !== undefined || !data) throw new ApiFailure(error);
+  return data;
+}
+
+/** "Brief afhandelen": ticks off the shown open tasks; the server refuses when they differ. */
+export async function handleDocument(
+  workspaceId: string,
+  documentId: string,
+  taskIds: string[],
+  paymentsConfirmed: boolean,
+) {
+  const { data, error } = await api.POST(
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/handle",
+    {
+      params: { path: { workspace_id: workspaceId, document_id: documentId } },
+      body: { task_ids: taskIds, payments_confirmed: paymentsConfirmed },
+    },
+  );
+  if (error !== undefined || !data) throw new ApiFailure(error);
+  return data;
+}

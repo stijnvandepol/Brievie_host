@@ -121,6 +121,7 @@ function MyPostPage() {
           labels={labels.data ?? []}
           caption={t`Mijn post`}
           showUnread
+          letterStatus="all"
           empty={ongelezen ? t`Je hebt alles gelezen.` : t`Er is nog geen post op jouw naam.`}
           hint={
             ongelezen

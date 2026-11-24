@@ -7,7 +7,7 @@ from apps.common.schemas import InputSchema
 from apps.tasks.assignment import NO_FLAGS, TaskFlags
 from apps.tasks.mine import days_left, group_for
 from apps.tasks.models import Task, amount_text
-from apps.tasks.services import MyTask, MyTaskCounts, MyTaskList
+from apps.tasks.services import MyTask, MyTaskCounts, MyTaskList, task_today
 
 
 class TaskItemOut(Schema):
@@ -60,6 +60,13 @@ class TaskItemOut(Schema):
     can_take: bool = False
     can_hand_over: bool = False
     can_release: bool = False
+    # "Wacht op reactie tot" (letter status spec S 5): the day the other party has the next
+    # move until; shared, null when the task does not wait. Cleared when it is done.
+    waiting_until: date | None = None
+    # The waiting day is today or past and still set: "Wachten voorbij sinds ...".
+    wait_over: bool = False
+    # "Uitgesteld tot": the caller's own snooze, only while after today; nobody else's.
+    snoozed_until: date | None = None
 
 
 class MyTasksOut(Schema):
@@ -85,6 +92,10 @@ class MyTaskCountsOut(Schema):
     needs_date: int
     # Open tasks in "Op te pakken"; always 0 at home.
     to_pick_up: int
+    # Tasks that wait for a reply, and the caller's own snoozed ones: left out of the numbers
+    # above (letter status spec S 6.3).
+    waiting: int = 0
+    snoozed: int = 0
 
 
 class TaskAssigneeOut(Schema):
@@ -98,6 +109,17 @@ class AssignIn(InputSchema):
     user_id: UUID | None = None
 
 
+class WaitingIn(InputSchema):
+    # The day the task waits until (after today, within a year); null stops waiting.
+    until: date | None = None
+
+
+class SnoozeIn(InputSchema):
+    # The day the task comes back in the caller's list (after today, within a year, not
+    # after the task's own date); null ends the snooze.
+    until: date | None = None
+
+
 class DeadlineIn(InputSchema):
     # The date the letter names; null takes a filled-in date away again.
     deadline: date | None = None
@@ -108,7 +130,12 @@ def _name(user: object) -> str:
 
 
 def task_item_out(
-    obj: Task | MyTask, *, can_edit: bool, flags: TaskFlags, today: date | None = None
+    obj: Task | MyTask,
+    *,
+    can_edit: bool,
+    flags: TaskFlags,
+    today: date | None = None,
+    snoozed: date | None = None,
 ) -> TaskItemOut:
     """A task as the lists show it: from a bare task (`listTasks`, a tick) or from a
     "Mijn taken" row with its reason, group and names. `flags`: what the caller may do
@@ -116,6 +143,7 @@ def task_item_out(
     task = obj.task if isinstance(obj, MyTask) else obj
     document = task.document
     is_open = task.status == Task.Status.OPEN
+    current = today or task_today()
     if isinstance(obj, MyTask):
         group = obj.group.value if obj.group is not None else ""
         left = obj.days_left
@@ -155,13 +183,29 @@ def task_item_out(
         can_take=flags.can_take,
         can_hand_over=flags.can_hand_over,
         can_release=flags.can_release,
+        waiting_until=task.waiting_until,
+        wait_over=task.waiting_until is not None and task.waiting_until <= current,
+        snoozed_until=snoozed if snoozed is not None and snoozed > current else None,
     )
 
 
-def my_tasks_out(result: MyTaskList, *, can_edit: bool, flags: dict[UUID, TaskFlags]) -> MyTasksOut:
+def my_tasks_out(
+    result: MyTaskList,
+    *,
+    can_edit: bool,
+    flags: dict[UUID, TaskFlags],
+    snoozed: dict[UUID, date] | None = None,
+) -> MyTasksOut:
+    own = snoozed or {}
     return MyTasksOut(
         items=[
-            task_item_out(item, can_edit=can_edit, flags=flags.get(item.task.id, NO_FLAGS))
+            task_item_out(
+                item,
+                can_edit=can_edit,
+                flags=flags.get(item.task.id, NO_FLAGS),
+                today=result.today,
+                snoozed=own.get(item.task.id),
+            )
             for item in result.items
         ],
         today=result.today,
@@ -179,4 +223,6 @@ def my_task_counts_out(counts: MyTaskCounts) -> MyTaskCountsOut:
         within_week=counts.within_week,
         needs_date=counts.needs_date,
         to_pick_up=counts.to_pick_up,
+        waiting=counts.waiting,
+        snoozed=counts.snoozed,
     )

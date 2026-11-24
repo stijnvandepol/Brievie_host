@@ -5,15 +5,17 @@ from ninja import Router
 
 from apps.accounts.services import current_user
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
-from apps.tasks import assignment, services
+from apps.tasks import assignment, services, snooze, waiting
 from apps.tasks.models import Task
 from apps.tasks.schemas import (
     AssignIn,
     DeadlineIn,
     MyTaskCountsOut,
     MyTasksOut,
+    SnoozeIn,
     TaskAssigneeOut,
     TaskItemOut,
+    WaitingIn,
     my_task_counts_out,
     my_tasks_out,
     task_item_out,
@@ -27,7 +29,14 @@ router = Router(tags=["tasks"])
 def _one(membership: Membership, task: Task) -> TaskItemOut:
     """A task after a change, with the caller's flags."""
     flags = assignment.flags_for_tasks(membership, [task])[task.id]
-    return task_item_out(task, can_edit=True, flags=flags, today=services.task_today())
+    today = services.task_today()
+    return task_item_out(
+        task,
+        can_edit=True,
+        flags=flags,
+        today=today,
+        snoozed=snooze.snoozed_until([task], membership.user_id, today).get(task.id),
+    )
 
 
 _TASKS = "/workspaces/{workspace_id}/tasks"
@@ -49,8 +58,12 @@ def list_tasks(request: HttpRequest, workspace_id: UUID, status: str = "open") -
     today = services.task_today()
     can_edit = membership.has_role(Membership.Role.MEMBER)
     flags = assignment.flags_for_tasks(membership, tasks)
+    own = snooze.snoozed_until(tasks, membership.user_id, today)
     return [
-        task_item_out(task, can_edit=can_edit, flags=flags[task.id], today=today) for task in tasks
+        task_item_out(
+            task, can_edit=can_edit, flags=flags[task.id], today=today, snoozed=own.get(task.id)
+        )
+        for task in tasks
     ]
 
 
@@ -64,23 +77,41 @@ def list_tasks(request: HttpRequest, workspace_id: UUID, status: str = "open") -
         "organisation's department and unnamed post; empty at home) or `all` (every task "
         "they see). `status` is `open` (default; by deadline, undated last, at most 500) "
         "or `done` (completed in the last 30 days, newest first, at most 200). 422 "
-        "`validation_error` for another part or status."
+        "`validation_error` for another part or status. Tasks that wait for a reply "
+        "(`waiting_until` after today) and the caller's own snoozed tasks are left out of "
+        "the open list; with `include_waiting=true` they follow with `group` `waiting` and "
+        "`snoozed` (default false: callers that do not know these groups never meet them)."
     ),
 )
 def list_my_tasks(
-    request: HttpRequest, workspace_id: UUID, part: str = "mine", status: str = "open"
+    request: HttpRequest,
+    workspace_id: UUID,
+    part: str = "mine",
+    status: str = "open",
+    include_waiting: bool = False,
 ) -> MyTasksOut:
     membership = workspace_member(request, workspace_id)
-    result = services.my_tasks(membership, part=part, status=status)
+    result = services.my_tasks(
+        membership, part=part, status=status, include_waiting=include_waiting
+    )
     flags = assignment.flags_for_tasks(membership, [item.task for item in result.items])
-    return my_tasks_out(result, can_edit=membership.has_role(Membership.Role.MEMBER), flags=flags)
+    own = snooze.snoozed_until(
+        [item.task for item in result.items], membership.user_id, result.today
+    )
+    return my_tasks_out(
+        result, can_edit=membership.has_role(Membership.Role.MEMBER), flags=flags, snoozed=own
+    )
 
 
 @router.get(
     "/workspaces/{workspace_id}/my-tasks/counts",
     response={200: MyTaskCountsOut, 404: ErrorOut, **AUTH_ERRORS},
     operation_id="countMyTasks",
-    description='The numbers of "Mijn taken" for the navigation: open tasks only.',
+    description=(
+        'The numbers of "Mijn taken" for the navigation: open tasks only, without those that '
+        "wait for a reply and the caller's own snoozed ones (counted in `waiting` and "
+        "`snoozed`)."
+    ),
 )
 def count_my_tasks(request: HttpRequest, workspace_id: UUID) -> MyTaskCountsOut:
     membership = workspace_member(request, workspace_id)
@@ -112,6 +143,64 @@ def reopen_task(request: HttpRequest, workspace_id: UUID, task_id: UUID) -> Task
     task = services.reopen_task(
         workspace=membership.workspace, user=current_user(request), task_id=task_id
     )
+    return _one(membership, task)
+
+
+@router.post(
+    f"{_TASK}/waiting",
+    response={
+        200: TaskItemOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    operation_id="setTaskWaiting",
+    description=(
+        '"Wacht op reactie tot": the task waits for a reply until `until` (after today, '
+        "within a year; 422 `validation_error` otherwise), `until` null stops waiting. "
+        "Shared: everyone who sees the letter sees it, and when every open task waits the "
+        'letter is "waiting". May pass the task\'s own deadline. 409 `task_done` for a task '
+        "that is done. The same day again changes nothing. Writes a `task_waiting` or "
+        "`task_waiting_ended` line. Role member or higher; not through emergency access."
+    ),
+)
+def set_task_waiting(
+    request: HttpRequest, workspace_id: UUID, task_id: UUID, payload: WaitingIn
+) -> TaskItemOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    task = waiting.set_waiting(
+        workspace=membership.workspace,
+        user=current_user(request),
+        task_id=task_id,
+        until=payload.until,
+    )
+    return _one(membership, task)
+
+
+@router.post(
+    f"{_TASK}/snooze",
+    response={
+        200: TaskItemOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    operation_id="snoozeTask",
+    description=(
+        '"Uitgesteld tot": the task leaves the caller\'s own lists until `until` (after '
+        "today, within a year, and not after the task's own date: 422 `validation_error` or "
+        "`snooze_after_deadline`), `until` null ends it. Personal: nobody else sees it, "
+        "the letter's status does not change, nothing is written to the history. Any role; "
+        "not through emergency access. 409 `task_done` for a task that is done."
+    ),
+)
+def snooze_task(
+    request: HttpRequest, workspace_id: UUID, task_id: UUID, payload: SnoozeIn
+) -> TaskItemOut:
+    membership = workspace_member(request, workspace_id)
+    task = snooze.snooze(membership=membership, task_id=task_id, until=payload.until)
     return _one(membership, task)
 
 

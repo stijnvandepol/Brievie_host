@@ -160,4 +160,13 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
   Every writer that narrows sight of a letter calls
   `tasks.assignment.release_unseeing_assignees` (or `release_member`);
   `tests/test_task_release_callers.py` lists them.
+- Only `apps.tasks.letter_sync` writes `Document.task_open_count`, `task_wait_until`,
+  `task_overdue_from`; every task writer calls `sync` under the letter's row lock (lock order:
+  own membership, the letter, then the task; `tasks.services.get_for_update`). A letter's
+  status (`new`, `open`, `waiting`, `handled`) and the marker `overdue` are derived
+  (`apps.tasks.letter_state`, pure), never stored, and nothing happens when a date passes.
+  The status "Nieuw" (not checked yet) is not "ongelezen" (per person). Status and counts
+  start at `visible_documents`; `letter_handled`/`letter_reopened` lines have no actor
+  except "Brief afhandelen". "Wacht op reactie" is shared (`Task.waiting_until`); "uitgesteld"
+  (`TaskSnooze`) is personal, own rows only, in no history or audit log.
 - Tests first for logic. Conventional commits.
