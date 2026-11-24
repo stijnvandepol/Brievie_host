@@ -758,7 +758,7 @@ export interface paths {
         };
         /**
          * List Documents
-         * @description The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`). `addressed_to_me=true` keeps "Mijn post": the letters on the caller's own persons (their own and those they manage), with `include_departments=true` also on their departments; empty for a member without a person. `unread_only=true` keeps the letters the caller has not read (`unread`). `letter_status` (`new`, `open`, `waiting` or `handled`; 422 for another) and `overdue=true` keep the letters in that status, with the marker "Te laat"; `new` here is the letter not checked yet, not `unread`.
+         * @description The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`). `addressed_to_me=true` keeps "Mijn post": the letters on the caller's own persons (their own and those they manage), with `include_departments=true` also on their departments; empty for a member without a person. `unread_only=true` keeps the letters the caller has not read (`unread`). `letter_status` (`new`, `open`, `waiting` or `handled`; 422 for another) and `overdue=true` keep the letters in that status, with the marker "Te laat"; `new` here is the letter not checked yet, not `unread`. Archief (archive spec S 5): `archived=true` keeps the reviewed documents (`done`) of both kinds; `kind` (`letter` or `document`), `document_type`, `year` (the document's own date, else its upload's), `sender` (exactly, a value of `getArchiveFacets`) and `expiring=true` (own documents ending within 90 days or already ended) narrow it. 422 `validation_error` for an unknown kind, type or year.
          */
         get: operations["listDocuments"];
         put?: never;
@@ -767,6 +767,26 @@ export interface paths {
          * @description Upload a scanned document as multipart/form-data: `metadata` is a JSON string (schema `UploadMetadataIn`), followed by one `page` file (image/jpeg) per page in page order. Repeating an upload with the same `client_id` and pages answers 200 with the existing document. 429 `too_many_uploads` with Retry-After when the member or the workspace uploaded too much in a short time (by default 60 per member per 10 minutes, 600 per workspace per hour). With `kind` `document` in the metadata it is an own document for the archive: `title` and `document_type` (an own document's type) are required, `person_ids` and `label_ids` organise it at once, `private` makes it private with the uploader as a reader; it skips the Inbox, gets no tasks and ends `done` after processing. A letter with any of these fields is 422 `validation_error`; a read-only member gets 403.
          */
         post: operations["createDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/archive-facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Archive Facets
+         * @description The choices of Archief's filters with their counts, over the reviewed documents (`done`) the caller sees: `kinds`, `types`, `years` (newest first) and the 50 most frequent `senders`. Nothing the caller may not read is counted. Any role, session or device.
+         */
+        get: operations["getArchiveFacets"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -804,7 +824,7 @@ export interface paths {
         put?: never;
         /**
          * Search Documents
-         * @description Search the letters of the workspace by their text, sender, summary, label names and person names; every word must match, as a word beginning (Dutch stems too). Best first, then newest. The filters narrow the search; together they all apply. When nothing matches exactly, letters with similar words are answered with `fuzzy=true`. A BSN in `q` is removed before searching (`bsn_removed`). `next_offset` is null on the last page (offset at most 1000). Each hit has a fragment (`snippet`) with the matched words marked. The term is never logged. 422 `validation_error` for a term over 200 characters, an unknown `inbox_state` or `document_type`, or `date_from` after `date_to`; 429 after 30 searches a minute.
+         * @description Search the letters of the workspace by their text, sender, summary, label names and person names; every word must match, as a word beginning (Dutch stems too). Best first, then newest. The filters narrow the search; together they all apply. When nothing matches exactly, letters with similar words are answered with `fuzzy=true`. A BSN in `q` is removed before searching (`bsn_removed`). `next_offset` is null on the last page (offset at most 1000). Each hit has a fragment (`snippet`) with the matched words marked. The term is never logged. 422 `validation_error` for a term over 200 characters, an unknown `inbox_state` or `document_type`, or `date_from` after `date_to`; 429 after 30 searches a minute. Archief: `kind`, `year` and `archived` narrow as in `listDocuments`; an own document is found by its title too.
          */
         post: operations["searchDocuments"];
         delete?: never;
@@ -2484,6 +2504,23 @@ export interface components {
             /** Name */
             name: string;
         };
+        /**
+         * ArchiveFacetsOut
+         * @description The choices of the archive's filters (`getArchiveFacets`), counted over the reviewed
+         *     documents the caller sees: kinds (`letter`, `document`), types, years (the document's
+         *     own date, else its upload's; newest first) and the 50 most frequent senders. A value
+         *     with no document is left out.
+         */
+        ArchiveFacetsOut: {
+            /** Kinds */
+            kinds?: components["schemas"]["FacetOut"][];
+            /** Senders */
+            senders?: components["schemas"]["FacetOut"][];
+            /** Types */
+            types?: components["schemas"]["FacetOut"][];
+            /** Years */
+            years?: components["schemas"]["FacetOut"][];
+        };
         /** AssignIn */
         AssignIn: {
             /**
@@ -3113,6 +3150,11 @@ export interface components {
          */
         DocumentSearchIn: {
             /**
+             * Archived
+             * @default false
+             */
+            archived: boolean;
+            /**
              * Date From
              * Format: date
              */
@@ -3132,6 +3174,11 @@ export interface components {
              * @default
              */
             inbox_state: string;
+            /**
+             * Kind
+             * @default
+             */
+            kind: string;
             /**
              * Label Id
              * Format: uuid
@@ -3154,6 +3201,11 @@ export interface components {
             person_id?: string | null;
             /** Q */
             q: string;
+            /**
+             * Year
+             * @default 0
+             */
+            year: number;
         };
         /** DocumentSearchOut */
         DocumentSearchOut: {
@@ -3456,6 +3508,17 @@ export interface components {
             code: string;
             /** Message */
             message: string;
+        };
+        /**
+         * FacetOut
+         * @description One value a filter can choose and how many reviewed documents the caller sees with
+         *     it.
+         */
+        FacetOut: {
+            /** Count */
+            count: number;
+            /** Value */
+            value: string;
         };
         /** FolderIn */
         FolderIn: {
@@ -7848,6 +7911,12 @@ export interface operations {
                 unread_only?: boolean;
                 letter_status?: string;
                 overdue?: boolean;
+                kind?: string;
+                document_type?: string;
+                year?: number;
+                sender?: string;
+                archived?: boolean;
+                expiring?: boolean;
             };
             header?: never;
             path: {
@@ -8016,6 +8085,46 @@ export interface operations {
             };
             /** @description Too Many Requests */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    getArchiveFacets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchiveFacetsOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

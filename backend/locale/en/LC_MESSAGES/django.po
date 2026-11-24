@@ -1736,7 +1736,7 @@ msgstr "This date needs the sentence from the document where it appears."
 msgid "Deze stand van de inbox kennen we niet."
 msgstr "We don't know this inbox state."
 
-#: apps/documents/search.py
+#: apps/documents/search.py apps/documents/services.py
 msgid "Deze soort brief kennen we niet."
 msgstr "We don't know this kind of letter."
 
@@ -1755,6 +1755,14 @@ msgstr "There is already a folder with this name in this place."
 #: apps/documents/services.py
 msgid "Deze status kennen we niet."
 msgstr "We do not know this status."
+
+#: apps/documents/services.py
+msgid "Kies brieven of documenten."
+msgstr "Choose letters or documents."
+
+#: apps/documents/services.py
+msgid "Dit jaar kennen we niet."
+msgstr "We do not know this year."
 
 #: apps/documents/services.py
 msgid "Deze brief staat in de prullenbak."

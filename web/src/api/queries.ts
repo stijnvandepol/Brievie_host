@@ -506,6 +506,10 @@ export type DocumentSearch = {
   inbox_state?: string;
   date_from?: string;
   date_to?: string;
+  /** Archief: "letter" or "document"; the year; reviewed documents only. */
+  kind?: string;
+  year?: number;
+  archived?: boolean;
   offset?: number;
 };
 
@@ -524,6 +528,9 @@ export async function searchDocuments(workspaceId: string, search: DocumentSearc
       person_id: search.person_id || null,
       date_from: search.date_from || null,
       date_to: search.date_to || null,
+      kind: search.kind ?? "",
+      year: search.year ?? 0,
+      archived: search.archived ?? false,
       offset: search.offset ?? 0,
       limit: SEARCH_PAGE_SIZE,
     },

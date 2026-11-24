@@ -27,6 +27,7 @@ from apps.documents import (
 from apps.documents.models import DocumentEvent, Folder, MemberExport
 from apps.documents.schemas import (
     AddresseesIn,
+    ArchiveFacetsOut,
     ConfirmIn,
     DocumentAccessOut,
     DocumentDetailsIn,
@@ -40,6 +41,7 @@ from apps.documents.schemas import (
     DocumentVisibilityOut,
     EmptyTrashIn,
     EmptyTrashOut,
+    FacetOut,
     FolderIn,
     FolderOut,
     HandleDocumentIn,
@@ -155,7 +157,12 @@ def create_document(
         "departments; empty for a member without a person. `unread_only=true` keeps the "
         "letters the caller has not read (`unread`). `letter_status` (`new`, `open`, `waiting` or "
         "`handled`; 422 for another) and `overdue=true` keep the letters in that status, "
-        'with the marker "Te laat"; `new` here is the letter not checked yet, not `unread`.'
+        'with the marker "Te laat"; `new` here is the letter not checked yet, not `unread`. '
+        "Archief (archive spec S 5): `archived=true` keeps the reviewed documents (`done`) of "
+        "both kinds; `kind` (`letter` or `document`), `document_type`, `year` (the document's "
+        "own date, else its upload's), `sender` (exactly, a value of `getArchiveFacets`) and "
+        "`expiring=true` (own documents ending within 90 days or already ended) narrow it. "
+        "422 `validation_error` for an unknown kind, type or year."
     ),
 )
 def list_documents(
@@ -170,6 +177,12 @@ def list_documents(
     unread_only: bool = False,
     letter_status: str = "",
     overdue: bool = False,
+    kind: str = "",
+    document_type: str = "",
+    year: int = 0,
+    sender: str = "",
+    archived: bool = False,
+    expiring: bool = False,
 ) -> list[DocumentSummaryOut]:
     membership = workspace_member(request, workspace_id)
     documents = services.list_documents(
@@ -183,8 +196,38 @@ def list_documents(
         unread_only=unread_only,
         letter_status=letter_status,
         overdue=overdue,
+        archive=services.ArchiveFilters(
+            kind=kind,
+            document_type=document_type,
+            year=year,
+            sender=sender,
+            archived=archived,
+            expiring=expiring,
+        ),
     )
     return services.document_summaries_out(membership, documents)
+
+
+@router.get(
+    "/workspaces/{workspace_id}/documents/archive-facets",
+    response={200: ArchiveFacetsOut, 404: ErrorOut, **AUTH_ERRORS},
+    operation_id="getArchiveFacets",
+    description=(
+        "The choices of Archief's filters with their counts, over the reviewed documents "
+        "(`done`) the caller sees: `kinds`, `types`, `years` (newest first) and the 50 most "
+        "frequent `senders`. Nothing the caller may not read is counted. Any role, session "
+        "or device."
+    ),
+)
+def get_archive_facets(request: HttpRequest, workspace_id: UUID) -> ArchiveFacetsOut:
+    membership = workspace_member(request, workspace_id)
+    facets = services.list_archive_facets(membership)
+    return ArchiveFacetsOut(
+        kinds=[FacetOut(value=f.value, count=f.count) for f in facets.kinds],
+        types=[FacetOut(value=f.value, count=f.count) for f in facets.types],
+        years=[FacetOut(value=f.value, count=f.count) for f in facets.years],
+        senders=[FacetOut(value=f.value, count=f.count) for f in facets.senders],
+    )
 
 
 @router.get(
@@ -250,7 +293,9 @@ def mark_documents_read(
         "`next_offset` is null on the last page (offset at most 1000). Each hit has a "
         "fragment (`snippet`) with the matched words marked. The term is never logged. "
         "422 `validation_error` for a term over 200 characters, an unknown `inbox_state` "
-        "or `document_type`, or `date_from` after `date_to`; 429 after 30 searches a minute."
+        "or `document_type`, or `date_from` after `date_to`; 429 after 30 searches a minute. "
+        "Archief: `kind`, `year` and `archived` narrow as in `listDocuments`; an own "
+        "document is found by its title too."
     ),
 )
 def search_documents(
@@ -267,6 +312,9 @@ def search_documents(
             inbox_state=payload.inbox_state,
             date_from=payload.date_from,
             date_to=payload.date_to,
+            kind=payload.kind,
+            year=payload.year,
+            archived=payload.archived,
         ),
         limit=payload.limit,
         offset=payload.offset,

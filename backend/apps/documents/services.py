@@ -1,10 +1,11 @@
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from typing import TYPE_CHECKING
 from uuid import UUID
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, models, transaction
+from django.db.models.functions import Coalesce, ExtractYear
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from psycopg import errors as pg_errors
@@ -346,17 +347,21 @@ def list_documents(
     unread_only: bool = False,
     letter_status: str = "",
     overdue: bool = False,
+    archive: "ArchiveFilters | None" = None,
 ) -> list[Document]:
     """The newest documents the member sees (at most 200; paging comes later), filtered.
 
     `automatic` keeps the documents the autopilot confirmed or organised;
     `addressed_to_me` the member's own post ("Mijn post", with `include_departments` also
     their departments'); `unread_only` the letters they have not read (navigation S 5);
-    `letter_status` (`new`, `open`, `waiting`, `handled`) and `overdue` the letter status.
+    `letter_status` (`new`, `open`, `waiting`, `handled`) and `overdue` the letter status;
+    `archive` the archive's filters (`archive_q`). Every filter narrows.
     """
     if inbox_state and inbox_state not in INBOX_STATES:
         raise ApiError(422, "validation_error", _("Deze stand van de inbox kennen we niet."))
     documents = visibility.visible_documents(membership)
+    if archive is not None:
+        documents = documents.filter(archive_q(archive, _today()))
     if letter_status or overdue:
         today = _today()
         if letter_status:
@@ -383,6 +388,133 @@ def list_documents(
             "addressee_links", "label_links", SUGGESTIONS, HEADLINE_PROPOSALS
         ).order_by("-created_at", "-id")[:200]
     )
+
+
+@dataclass(frozen=True)
+class ArchiveFilters:
+    """The filters of "Archief" (archive spec S 5); each empty value filters nothing."""
+
+    # `letter` or `document`.
+    kind: str = ""
+    document_type: str = ""
+    # The document's own date's year, else its upload's.
+    year: int = 0
+    # Exactly this sender (chosen from the facets, never typed into a URL).
+    sender: str = ""
+    # Reviewed only (`status = done`): the archive.
+    archived: bool = False
+    # Own documents whose end date is within `EXPIRING_DAYS` or past ("Loopt af").
+    expiring: bool = False
+
+
+# "Loopt af": an end date within 90 days, or past.
+EXPIRING_DAYS = 90
+YEAR_FROM = 1900
+YEAR_TO = 2200
+
+
+def validate_archive(filters: ArchiveFilters) -> None:
+    """422 for a kind, type or year that does not exist."""
+    if filters.kind and filters.kind not in Document.Kind.values:
+        raise ApiError(422, "validation_error", _("Kies brieven of documenten."))
+    if filters.document_type and filters.document_type not in Document.Type.values:
+        raise ApiError(422, "validation_error", _("Deze soort brief kennen we niet."))
+    if filters.year and not YEAR_FROM <= filters.year <= YEAR_TO:
+        raise ApiError(422, "validation_error", _("Dit jaar kennen we niet."))
+
+
+def archive_q(filters: ArchiveFilters, today: date) -> models.Q:
+    """The archive's filters as one condition, only ever applied on top of
+    `visible_documents`: it narrows, it never widens. 422 for an unknown kind, type or
+    year (`validate_archive`)."""
+    validate_archive(filters)
+    condition = models.Q()
+    if filters.archived:
+        condition &= models.Q(status=Document.Status.DONE)
+    if filters.kind:
+        condition &= models.Q(kind=filters.kind)
+    if filters.document_type:
+        condition &= models.Q(document_type=filters.document_type)
+    if filters.sender:
+        condition &= models.Q(sender=filters.sender)
+    if filters.year:
+        start, end = date(filters.year, 1, 1), date(filters.year + 1, 1, 1)
+        condition &= models.Q(letter_date__gte=start, letter_date__lt=end) | models.Q(
+            letter_date__isnull=True, created_at__date__gte=start, created_at__date__lt=end
+        )
+    if filters.expiring:
+        condition &= models.Q(
+            kind=Document.Kind.DOCUMENT,
+            expires_on__lte=today + timedelta(days=EXPIRING_DAYS),
+        )
+    return condition
+
+
+@dataclass(frozen=True)
+class Facet:
+    value: str
+    count: int
+
+
+@dataclass(frozen=True)
+class ArchiveFacets:
+    kinds: list[Facet]
+    types: list[Facet]
+    years: list[Facet]
+    senders: list[Facet]
+
+
+# The senders facet names the most frequent; the rest are found through search.
+SENDERS_MAX = 50
+
+
+def list_archive_facets(membership: Membership) -> ArchiveFacets:
+    """What the archive's filters can choose, counted over the reviewed documents the
+    member sees (`visible_documents`, `status = done`): kinds and types in one pass with
+    filtered counts, years and the 50 most frequent senders grouped. A value nobody sees
+    is never counted; a zero count is left out."""
+    archived = visibility.visible_documents(membership).filter(status=Document.Status.DONE)
+    counts = archived.aggregate(
+        **{
+            f"kind_{kind}": models.Count("id", filter=models.Q(kind=kind))
+            for kind in Document.Kind.values
+        },
+        **{
+            f"type_{kind}": models.Count("id", filter=models.Q(document_type=kind))
+            for kind in Document.Type.values
+        },
+    )
+    kinds = [
+        Facet(kind, int(counts[f"kind_{kind}"]))
+        for kind in Document.Kind.values
+        if counts[f"kind_{kind}"]
+    ]
+    types = sorted(
+        (
+            Facet(kind, int(counts[f"type_{kind}"]))
+            for kind in Document.Type.values
+            if counts[f"type_{kind}"]
+        ),
+        key=lambda facet: (-facet.count, facet.value),
+    )
+    years = [
+        Facet(str(row["year"]), int(row["count"]))
+        for row in archived.annotate(
+            year=Coalesce(ExtractYear("letter_date"), ExtractYear("created_at"))
+        )
+        .values("year")
+        .annotate(count=models.Count("id"))
+        .order_by("-year")
+        if row["year"] is not None
+    ]
+    senders = [
+        Facet(str(row["sender"]), int(row["count"]))
+        for row in archived.exclude(sender="")
+        .values("sender")
+        .annotate(count=models.Count("id"))
+        .order_by("-count", "sender")[:SENDERS_MAX]
+    ]
+    return ArchiveFacets(kinds=kinds, types=types, years=years, senders=senders)
 
 
 def inbox_counts(membership: Membership) -> dict[str, int]:

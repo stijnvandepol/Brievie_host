@@ -324,6 +324,41 @@
         "title": "AiSupplierOut",
         "type": "object"
       },
+      "ArchiveFacetsOut": {
+        "description": "The choices of the archive's filters (`getArchiveFacets`), counted over the reviewed\ndocuments the caller sees: kinds (`letter`, `document`), types, years (the document's\nown date, else its upload's; newest first) and the 50 most frequent senders. A value\nwith no document is left out.",
+        "properties": {
+          "kinds": {
+            "items": {
+              "$ref": "#/components/schemas/FacetOut"
+            },
+            "title": "Kinds",
+            "type": "array"
+          },
+          "senders": {
+            "items": {
+              "$ref": "#/components/schemas/FacetOut"
+            },
+            "title": "Senders",
+            "type": "array"
+          },
+          "types": {
+            "items": {
+              "$ref": "#/components/schemas/FacetOut"
+            },
+            "title": "Types",
+            "type": "array"
+          },
+          "years": {
+            "items": {
+              "$ref": "#/components/schemas/FacetOut"
+            },
+            "title": "Years",
+            "type": "array"
+          }
+        },
+        "title": "ArchiveFacetsOut",
+        "type": "object"
+      },
       "AssignIn": {
         "properties": {
           "user_id": {
@@ -1383,6 +1418,11 @@
       "DocumentSearchIn": {
         "description": "A search in the letters of the workspace. POST, so the term is never in a URL.",
         "properties": {
+          "archived": {
+            "default": false,
+            "title": "Archived",
+            "type": "boolean"
+          },
           "date_from": {
             "format": "date",
             "title": "Date From",
@@ -1407,6 +1447,11 @@
           "inbox_state": {
             "default": "",
             "title": "Inbox State",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
             "type": "string"
           },
           "label_id": {
@@ -1443,6 +1488,13 @@
             "maxLength": 200,
             "title": "Q",
             "type": "string"
+          },
+          "year": {
+            "default": 0,
+            "maximum": 2200,
+            "minimum": 0,
+            "title": "Year",
+            "type": "integer"
           }
         },
         "required": [
@@ -1988,6 +2040,25 @@
           "message"
         ],
         "title": "ErrorOut",
+        "type": "object"
+      },
+      "FacetOut": {
+        "description": "One value a filter can choose and how many reviewed documents the caller sees with\nit.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "count"
+        ],
+        "title": "FacetOut",
         "type": "object"
       },
       "FolderIn": {
@@ -8858,7 +8929,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/documents": {
       "get": {
-        "description": "The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`). `addressed_to_me=true` keeps \"Mijn post\": the letters on the caller's own persons (their own and those they manage), with `include_departments=true` also on their departments; empty for a member without a person. `unread_only=true` keeps the letters the caller has not read (`unread`). `letter_status` (`new`, `open`, `waiting` or `handled`; 422 for another) and `overdue=true` keep the letters in that status, with the marker \"Te laat\"; `new` here is the letter not checked yet, not `unread`.",
+        "description": "The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`). `addressed_to_me=true` keeps \"Mijn post\": the letters on the caller's own persons (their own and those they manage), with `include_departments=true` also on their departments; empty for a member without a person. `unread_only=true` keeps the letters the caller has not read (`unread`). `letter_status` (`new`, `open`, `waiting` or `handled`; 422 for another) and `overdue=true` keep the letters in that status, with the marker \"Te laat\"; `new` here is the letter not checked yet, not `unread`. Archief (archive spec S 5): `archived=true` keeps the reviewed documents (`done`) of both kinds; `kind` (`letter` or `document`), `document_type`, `year` (the document's own date, else its upload's), `sender` (exactly, a value of `getArchiveFacets`) and `expiring=true` (own documents ending within 90 days or already ended) narrow it. 422 `validation_error` for an unknown kind, type or year.",
         "operationId": "listDocuments",
         "parameters": [
           {
@@ -8964,6 +9035,66 @@
             "schema": {
               "default": false,
               "title": "Overdue",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "document_type",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Document Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sender",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Sender",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "archived",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Archived",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expiring",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Expiring",
               "type": "boolean"
             }
           }
@@ -9207,6 +9338,68 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/documents/archive-facets": {
+      "get": {
+        "description": "The choices of Archief's filters with their counts, over the reviewed documents (`done`) the caller sees: `kinds`, `types`, `years` (newest first) and the 50 most frequent `senders`. Nothing the caller may not read is counted. Any role, session or device.",
+        "operationId": "getArchiveFacets",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchiveFacetsOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Get Archive Facets",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/documents/read": {
       "post": {
         "description": "\"Alles gelezen\": mark the given letters read for the caller (at most 200; 422 `validation_error` for more). Ids the caller does not see are skipped without a word. `marked`: how many were newly marked. The caller's own state only: nobody else sees it; no history line, no log.",
@@ -9331,7 +9524,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/documents/search": {
       "post": {
-        "description": "Search the letters of the workspace by their text, sender, summary, label names and person names; every word must match, as a word beginning (Dutch stems too). Best first, then newest. The filters narrow the search; together they all apply. When nothing matches exactly, letters with similar words are answered with `fuzzy=true`. A BSN in `q` is removed before searching (`bsn_removed`). `next_offset` is null on the last page (offset at most 1000). Each hit has a fragment (`snippet`) with the matched words marked. The term is never logged. 422 `validation_error` for a term over 200 characters, an unknown `inbox_state` or `document_type`, or `date_from` after `date_to`; 429 after 30 searches a minute.",
+        "description": "Search the letters of the workspace by their text, sender, summary, label names and person names; every word must match, as a word beginning (Dutch stems too). Best first, then newest. The filters narrow the search; together they all apply. When nothing matches exactly, letters with similar words are answered with `fuzzy=true`. A BSN in `q` is removed before searching (`bsn_removed`). `next_offset` is null on the last page (offset at most 1000). Each hit has a fragment (`snippet`) with the matched words marked. The term is never logged. 422 `validation_error` for a term over 200 characters, an unknown `inbox_state` or `document_type`, or `date_from` after `date_to`; 429 after 30 searches a minute. Archief: `kind`, `year` and `archived` narrow as in `listDocuments`; an own document is found by its title too.",
         "operationId": "searchDocuments",
         "parameters": [
           {

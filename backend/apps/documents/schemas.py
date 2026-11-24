@@ -383,6 +383,26 @@ class LetterStatusCountsOut(Schema):
     overdue: int = 0
 
 
+class FacetOut(Schema):
+    """One value a filter can choose and how many reviewed documents the caller sees with
+    it."""
+
+    value: str
+    count: int
+
+
+class ArchiveFacetsOut(Schema):
+    """The choices of the archive's filters (`getArchiveFacets`), counted over the reviewed
+    documents the caller sees: kinds (`letter`, `document`), types, years (the document's
+    own date, else its upload's; newest first) and the 50 most frequent senders. A value
+    with no document is left out."""
+
+    kinds: list[FacetOut] = Field(default_factory=list)
+    types: list[FacetOut] = Field(default_factory=list)
+    years: list[FacetOut] = Field(default_factory=list)
+    senders: list[FacetOut] = Field(default_factory=list)
+
+
 class InboxCountsOut(Schema):
     new: int
     review: int
@@ -525,6 +545,12 @@ class DocumentSearchIn(InputSchema):
     # On the letter date; a letter without one falls under its upload date.
     date_from: date | None = None
     date_to: date | None = None
+    # Archive (spec S 5): "letter" or "document"; empty for both.
+    kind: str = ""
+    # The document's own date's year, else its upload's; 0 for all.
+    year: int = Field(default=0, ge=0, le=2200)
+    # Reviewed documents only (the archive).
+    archived: bool = False
     limit: int = Field(default=30, ge=1, le=100)
     offset: int = Field(default=0, ge=0, le=1000)
 

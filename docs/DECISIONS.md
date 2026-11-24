@@ -2878,3 +2878,12 @@ Rulings of the spec, kept as written:
   Without it nothing of an own document's text leaves the server, whatever the AI settings.
   `UploadMetadataIn` has no `summary_by_ai`. Cost: the member fills in what the AI could have
   guessed. Left for a later slice.
+- **The archive list (plan Task 7, AR12, B2).** The archive is `listDocuments` with
+  `archived=true`: every reviewed (`done`) document of both kinds the member sees, also with
+  an open task; `kind`, `document_type`, `year` (the own date, else the upload's), `sender`
+  (exactly, a facet's value) and `expiring` (own documents ending within 90 days or past)
+  narrow it, on top of `visible_documents`. `searchDocuments` takes `kind`, `year` and
+  `archived`. `getArchiveFacets` counts kinds and types in one pass with filtered counts, and
+  groups years and the 50 most frequent senders, all over `visible_documents` with
+  `status = done`; a value nobody visible has is never counted. `services.list_archive_facets`
+  and `own._locked_for_edit` join the seam test's list.
