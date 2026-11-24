@@ -78,7 +78,15 @@ export const homeVisibility: components["schemas"]["VisibilityOut"] = {
   summary: [],
 };
 
-export const noTaskCounts = { mine: 0, overdue: 0, within_week: 0, needs_date: 0, to_pick_up: 0 };
+export const noTaskCounts = {
+  mine: 0,
+  overdue: 0,
+  within_week: 0,
+  needs_date: 0,
+  to_pick_up: 0,
+  waiting: 0,
+  snoozed: 0,
+};
 
 /**
  * Two workspaces: `/` shows the list instead of going straight to the inbox. With one
@@ -152,6 +160,9 @@ export const secondWorkspace = {
   role: "member",
 };
 
+/** What `countLetterStatuses` answers when nothing is counted. */
+export const noLetterCounts = { new: 0, open: 0, waiting: 0, handled: 0, overdue: 0 };
+
 export const documentSummary = {
   id: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4444",
   client_id: "3c2b1a09-8f7e-4d6c-9b5a-4e3d2c1b0999",
@@ -175,6 +186,9 @@ export const documentSummary = {
   visibility: "workspace",
   reader_names: [],
   unread: false,
+  letter_status: "",
+  overdue: false,
+  open_task_count: 0,
 };
 
 export const documentDetail: components["schemas"]["DocumentOut"] = {
@@ -208,6 +222,7 @@ export const documentDetail: components["schemas"]["DocumentOut"] = {
       can_take: true,
       can_hand_over: true,
       can_release: false,
+      wait_over: false,
     },
   ],
   suggestions: [],
@@ -308,6 +323,9 @@ export function documentHandlers(detail: components["schemas"]["DocumentOut"] = 
     ),
     http.get(`*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}`, () =>
       HttpResponse.json(detail),
+    ),
+    http.get(`*${API}/workspaces/${workspace.id}/documents/status-counts`, () =>
+      HttpResponse.json(noLetterCounts),
     ),
     http.get(`*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/events`, () =>
       HttpResponse.json([]),

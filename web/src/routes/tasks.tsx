@@ -4,6 +4,9 @@ import { createRoute, Link } from "@tanstack/react-router";
 import { type ReactNode, useEffect, useState } from "react";
 import {
   Button,
+  Disclosure,
+  DisclosurePanel,
+  Heading,
   Tab,
   TabList,
   TabPanel,
@@ -44,6 +47,33 @@ function GroupHeading({ title, count }: { title: string; count: number }) {
   );
 }
 
+/** A collapsed group below the date groups: waiting for a reply, or snoozed by me. Out of the
+ * count, but in sight (post has legal terms). */
+function ParkedGroup({
+  group,
+  count,
+  children,
+}: {
+  group: "waiting" | "snoozed";
+  count: number;
+  children: ReactNode;
+}) {
+  const title = groupTitle(group);
+  return (
+    <Disclosure className="disclosure task-group">
+      <Heading level={2} className="disclosure-heading">
+        <Button slot="trigger" className="disclosure-trigger">
+          <Icon name="chevronRight" className="disclosure-chevron" />
+          {title} ({count})
+        </Button>
+      </Heading>
+      <DisclosurePanel className="disclosure-panel">
+        <ul className="task-rows">{children}</ul>
+      </DisclosurePanel>
+    </Disclosure>
+  );
+}
+
 function WaitingLine({ workspaceId, count }: { workspaceId: string; count: number }) {
   if (count <= 0) return null;
   return (
@@ -72,7 +102,7 @@ function OpenTasks({
 }) {
   const queryClient = useQueryClient();
   const me = useQuery(meQuery).data;
-  const list = useQuery(myTasksQuery(workspaceId, scope, "open"));
+  const list = useQuery(myTasksQuery(workspaceId, scope, "open", true));
   const pickUp = useQuery({
     ...myTasksQuery(workspaceId, "to_pick_up", "open"),
     enabled: split && scope === "mine",
@@ -130,8 +160,13 @@ function OpenTasks({
               </Button>
             ) : null}
             {extra}
-            {canEdit && !isTicked && task.can_edit !== false ? (
-              <TaskActions workspaceId={workspaceId} task={task} showTake={false} />
+            {!isTicked ? (
+              <TaskActions
+                workspaceId={workspaceId}
+                task={task}
+                showTake={false}
+                canEdit={canEdit && task.can_edit !== false}
+              />
             ) : null}
           </>
         }
@@ -141,6 +176,8 @@ function OpenTasks({
 
   const data = list.data;
   const items = data?.items ?? [];
+  // The parked tasks (waiting, snoozed) do not make a list: "geen open taken" counts without them.
+  const active = items.filter((task) => task.group !== "waiting" && task.group !== "snoozed");
   const pickUpItems = pickUp.data?.items ?? [];
   return (
     <>
@@ -157,7 +194,7 @@ function OpenTasks({
         </MessageBar>
       ) : null}
       {list.isPending ? <Loading /> : null}
-      {data && items.length === 0 ? (
+      {data && active.length === 0 ? (
         <EmptyState icon="checklist">
           {t`Je hebt geen open taken. Nieuwe taken komen hier vanzelf zodra je post is nagekeken.`}
         </EmptyState>
@@ -171,6 +208,15 @@ function OpenTasks({
             <GroupHeading title={title} count={inGroup.length} />
             <ul className="task-rows">{inGroup.map((task) => row(task))}</ul>
           </section>
+        );
+      })}
+      {(["waiting", "snoozed"] as const).map((group) => {
+        const parked = items.filter((task) => task.group === group);
+        if (parked.length === 0) return null;
+        return (
+          <ParkedGroup key={group} group={group} count={parked.length}>
+            {parked.map((task) => row(task))}
+          </ParkedGroup>
         );
       })}
       {data?.truncated ? (

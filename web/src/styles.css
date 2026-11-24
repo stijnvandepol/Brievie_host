@@ -3541,6 +3541,12 @@ tr.unread th,
   list-style: none;
 }
 
+/* Letter status: the count line above a list of post. */
+.letter-counts {
+  margin: 0 0 12px;
+  color: var(--neutral-fg3);
+}
+
 /* Lines to copy into the settings (the back-up panel). */
 .code-block {
   margin: 0 0 var(--spacing-m, 1rem);

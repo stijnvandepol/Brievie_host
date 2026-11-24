@@ -52,6 +52,10 @@ export type DocumentFilters = {
   include_departments?: boolean;
   /** Only the letters the caller has not read. */
   unread_only?: boolean;
+  /** The letter's status: `new`, `open`, `waiting` or `handled` (not the per-person "unread"). */
+  letter_status?: string;
+  /** Only the letters with the marker "Te laat". */
+  overdue?: boolean;
 };
 
 export const documentsQuery = (
@@ -78,6 +82,8 @@ export const documentsQuery = (
             addressed_to_me: filters.addressed_to_me || undefined,
             include_departments: filters.include_departments || undefined,
             unread_only: filters.unread_only || undefined,
+            letter_status: filters.letter_status || undefined,
+            overdue: filters.overdue || undefined,
           },
         },
       });
@@ -254,13 +260,40 @@ export type TaskStatus = "open" | "done";
  * change of a letter (confirm, tick, trash, restore, a name, a merge) already refreshes
  * `["workspaces", id, "documents"]`, and the list is derived from the letters.
  */
-export const myTasksQuery = (workspaceId: string, part: TaskPart, status: TaskStatus) =>
+export const myTasksQuery = (
+  workspaceId: string,
+  part: TaskPart,
+  status: TaskStatus,
+  includeWaiting = false,
+) =>
   queryOptions({
-    queryKey: ["workspaces", workspaceId, "documents", "my-tasks", part, status],
+    queryKey: ["workspaces", workspaceId, "documents", "my-tasks", part, status, includeWaiting],
     queryFn: async () => {
       const { data, error } = await api.GET("/api/v1/workspaces/{workspace_id}/my-tasks", {
-        params: { path: { workspace_id: workspaceId }, query: { part, status } },
+        params: {
+          path: { workspace_id: workspaceId },
+          query: { part, status, include_waiting: includeWaiting || undefined },
+        },
       });
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
+/** How many letters the caller sees in each status, of all post or of one person's. */
+export const letterStatusCountsQuery = (workspaceId: string, personId?: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "documents", "status-counts", personId ?? "all"],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/documents/status-counts",
+        {
+          params: {
+            path: { workspace_id: workspaceId },
+            query: { person_id: personId || undefined },
+          },
+        },
+      );
       if (error !== undefined || !data) throw new ApiFailure(error);
       return data;
     },

@@ -23,8 +23,9 @@ from django.utils.translation import gettext as _
 from apps.accounts.models import User
 from apps.common.errors import ApiError
 from apps.documents import organise, visibility
-from apps.documents.models import DocumentEvent
+from apps.documents.models import LIVE, Document, DocumentEvent
 from apps.people.models import Person
+from apps.tasks import letter_sync
 from apps.tasks.facts import member_facts
 from apps.tasks.mine import (
     PARTS,
@@ -38,7 +39,9 @@ from apps.tasks.mine import (
     group_for,
     reason_for,
 )
-from apps.tasks.models import Task
+from apps.tasks.models import Task, TaskSnooze
+from apps.workspaces.context import system_actor
+from apps.workspaces.locks import lock_own_role
 from apps.workspaces.models import Membership, Workspace
 
 LIST_MAX = 500
@@ -82,27 +85,55 @@ def complete_task(
     letters completes the open twin of a task done on the other scan.
     """
     with transaction.atomic():
-        task = _get_for_update(workspace, task_id)
-        if task.status != Task.Status.DONE:
-            task.status = Task.Status.DONE
-            task.completed_at = timezone.now()
-            # "Afgevinkt door Anne"; a merge's completion keeps the person who merged.
-            task.completed_by = user
-            task.save(update_fields=["status", "completed_at", "completed_by", "updated_at"])
-            _record(task, DocumentEvent.Kind.TASK_COMPLETED, user, origin)
+        task = get_for_update(workspace, task_id)
+        if complete_locked(task, user, origin):
+            sync_letter(task)
         return task
+
+
+def complete_locked(task: Task, user: User, origin: str = DocumentEvent.Origin.USER) -> bool:
+    """The completion itself, for a task the caller locked (letter first) and may edit;
+    whether anything changed. The caller syncs the letter's facts afterwards
+    (`complete_task` per task, "Brief afhandelen" once for all)."""
+    if task.status == Task.Status.DONE:
+        return False
+    task.status = Task.Status.DONE
+    task.completed_at = timezone.now()
+    # "Afgevinkt door Anne"; a merge's completion keeps the person who merged.
+    task.completed_by = user
+    # A done task waits for nothing (no line of its own: the completion says it).
+    task.waiting_until = None
+    # Nobody's snooze of a done task is left (the own-rows policy does not reach other
+    # members' rows: the system deletes them).
+    with system_actor():
+        TaskSnooze.objects.filter(task_id=task.id).delete()
+    task.save(
+        update_fields=["status", "completed_at", "completed_by", "waiting_until", "updated_at"]
+    )
+    _record(task, DocumentEvent.Kind.TASK_COMPLETED, user, origin)
+    return True
+
+
+def delete_tasks(tasks: QuerySet[Task]) -> None:
+    """Delete tasks, and every member's snooze of them first (as the system: the own-rows
+    policy lets a member delete only their own rows; the database cascade is the backstop).
+    The one way application code deletes tasks as a member."""
+    with system_actor():
+        TaskSnooze.objects.filter(task__in=tasks.values("id")).delete()
+    tasks.delete()
 
 
 def reopen_task(*, workspace: Workspace, user: User, task_id: UUID) -> Task:
     """Make the task open again; asking again changes nothing and writes no second event."""
     with transaction.atomic():
-        task = _get_for_update(workspace, task_id)
+        task = get_for_update(workspace, task_id)
         if task.status != Task.Status.OPEN:
             task.status = Task.Status.OPEN
             task.completed_at = None
             task.completed_by = None
             task.save(update_fields=["status", "completed_at", "completed_by", "updated_at"])
             _record(task, DocumentEvent.Kind.TASK_REOPENED, user)
+            sync_letter(task)
         return task
 
 
@@ -111,7 +142,7 @@ def set_deadline(*, workspace: Workspace, user: User, task_id: UUID, deadline: d
     no quote; the term's words stay). The same date again writes nothing. 422 for a date
     before the letter's date; 404 like an unknown id for a task the caller does not see."""
     with transaction.atomic():
-        task = _get_for_update(workspace, task_id)
+        task = get_for_update(workspace, task_id)
         letter_date = task.document.letter_date if task.document is not None else None
         if deadline is not None and letter_date is not None and deadline < letter_date:
             raise ApiError(422, "validation_error", _("Die datum ligt voor de datum van de brief."))
@@ -122,22 +153,51 @@ def set_deadline(*, workspace: Workspace, user: User, task_id: UUID, deadline: d
         task.deadline_quote = ""
         task.save(update_fields=["deadline", "deadline_source", "deadline_quote", "updated_at"])
         _record(task, DocumentEvent.Kind.TASK_DEADLINE_SET, user)
+        sync_letter(task)
         return task
 
 
-def _get_for_update(workspace: Workspace, task_id: UUID) -> Task:
+def get_for_update(workspace: Workspace, task_id: UUID) -> Task:
+    """The task, locked for a change, as the member. Lock order (spec S 10): the letter's
+    row first (`FOR NO KEY UPDATE`, as the confirm and the merge take it), then the task;
+    a task without a letter is locked alone. 404 like an unknown id for a task or letter
+    the member does not see or that is in the trash; `require_editable` for the rest."""
+    row = Task.objects.filter(workspace=workspace, id=task_id).values_list("document_id").first()
+    if row is None:
+        raise task_not_found()
+    document_id = row[0]
+    if document_id is not None and not (
+        Document.objects.select_for_update(no_key=True)
+        .filter(LIVE, workspace=workspace, id=document_id)
+        .values_list("id", flat=True)
+        .first()
+    ):
+        raise task_not_found()
     task = (
         Task.objects.select_for_update(of=("self",))
         .select_related(*TASK_RELATED)
-        .filter(workspace=workspace, id=task_id)
-        .filter(Q(document__isnull=True) | Q(document__trashed_at__isnull=True))
+        .filter(workspace=workspace, id=task_id, document_id=document_id)
         .first()
     )
+    # Moved by a merge between the two reads: its old letter is in the trash now.
     if task is None:
         raise task_not_found()
     if task.document is not None:
         visibility.require_editable(task.document)
     return task
+
+
+def lock_editor(workspace_id: UUID, user_id: UUID) -> None:
+    """The first lock of a task change that also sets or ends something shared: the
+    caller's own membership, its role read under the lock. A viewer (also one demoted
+    while the request ran) may not change what others see: 403 `forbidden`."""
+    if lock_own_role(workspace_id, user_id) == Membership.Role.VIEWER:
+        raise ApiError(403, "forbidden", _("Je mag dit niet doen in deze werkruimte."))
+
+
+def sync_letter(task: Task) -> None:
+    if task.document is not None:
+        letter_sync.sync(task.document)
 
 
 def _record(task: Task, kind: str, user: User, origin: str = DocumentEvent.Origin.USER) -> None:
@@ -179,6 +239,9 @@ class MyTaskCounts:
     within_week: int
     needs_date: int
     to_pick_up: int
+    # Open tasks that wait for a reply, and the member's snoozed ones (letter status S 6.3).
+    waiting: int = 0
+    snoozed: int = 0
 
 
 def task_today(now: datetime | None = None) -> date:
@@ -239,15 +302,42 @@ def _live(workspace: Workspace) -> QuerySet[Task]:
     )
 
 
+def active_q(today: date) -> Q:
+    """The task does not wait for a reply, or the day it waits until has arrived (letter
+    status spec S 4.1: a waiting day of today or past is active again)."""
+    return Q(waiting_until__isnull=True) | Q(waiting_until__lte=today)
+
+
+def snoozed_by(user_id: UUID, today: date) -> Q:
+    """The member put the task off and the day is still ahead (their own rows only: the
+    own-rows policy hides everyone else's). The ids are read once, a handful, so no query
+    probes the snooze table (and its nested task policy) once per task."""
+    ids = list(
+        TaskSnooze.objects.filter(user_id=user_id, until__gt=today).values_list(
+            "task_id", flat=True
+        )
+    )
+    return Q(id__in=ids)
+
+
 def _parts() -> str:
     return _("Kies mine, to_pick_up of all.")
 
 
-def my_tasks(membership: Membership, *, part: str = "mine", status: str = "open") -> MyTaskList:
+def my_tasks(
+    membership: Membership,
+    *,
+    part: str = "mine",
+    status: str = "open",
+    include_waiting: bool = False,
+) -> MyTaskList:
     """The member's tasks of one part: open by date (undated last, those that need a date
     first among them), or done in the last 30 days, newest first. Runs as the member: the
     task policy decides what is visible, the part only narrows. 422 for another part or
-    status; "to_pick_up" at home is empty (S 5.2)."""
+    status; "to_pick_up" at home is empty (S 5.2). Open tasks that wait for a reply (shared)
+    or that the member snoozed (their own) are not in the date groups; with
+    `include_waiting` they follow in the groups `waiting` and `snoozed` (letter status S
+    6.3), each capped inside the list maximum."""
     if part not in Part.__members__.values():
         raise ApiError(422, "validation_error", _parts())
     if status not in Task.Status.values:
@@ -260,8 +350,12 @@ def my_tasks(membership: Membership, *, part: str = "mine", status: str = "open"
     if condition is not None:
         tasks = tasks.filter(condition)
     tasks = tasks.select_related("document")
+    active = active_q(today)
+    mine_snoozed = snoozed_by(facts.user_id, today)
     if status == Task.Status.OPEN:
         cap = MY_LIST_MAX
+        everything = tasks
+        tasks = tasks.filter(active & ~mine_snoozed)
         ordered = tasks.order_by(
             F("deadline").asc(nulls_last=True),
             Case(When(term_quote="", then=Value(1)), default=Value(0), output_field=IntegerField()),
@@ -275,6 +369,24 @@ def my_tasks(membership: Membership, *, part: str = "mine", status: str = "open"
     rows = list(ordered[: cap + 1]) if reasons else []
     truncated = len(rows) > cap
     rows = _with_people(rows[:cap])
+    parked: dict[UUID, Group] = {}
+    if include_waiting and status == Task.Status.OPEN and reasons:
+        waiting_rows = list(
+            everything.filter(~active).order_by("waiting_until", "created_at", "id")[:cap]
+        )
+        until = dict(
+            TaskSnooze.objects.filter(user_id=facts.user_id, until__gt=today).values_list(
+                "task_id", "until"
+            )
+        )
+        snoozed_rows = sorted(
+            everything.filter(active & mine_snoozed).order_by("created_at", "id")[:cap],
+            key=lambda t: until.get(t.id, today),
+        )
+        parked = {t.id: Group.WAITING for t in waiting_rows} | {
+            t.id: Group.SNOOZED for t in snoozed_rows
+        }
+        rows = rows + _with_people(waiting_rows + snoozed_rows)
     names = _names({p for t in rows if t.document is not None for p in t.document.addressee_ids})
     items = []
     for task in rows:
@@ -286,7 +398,8 @@ def my_tasks(membership: Membership, *, part: str = "mine", status: str = "open"
             MyTask(
                 task=task,
                 reason=reason,
-                group=group_for(task.deadline, today) if open_task else None,
+                group=parked.get(task.id)
+                or (group_for(task.deadline, today) if open_task else None),
                 days_left=days_left(task.deadline, today) if open_task else None,
                 for_names=_for_names(task, names, facts.person_ids),
             )
@@ -310,7 +423,12 @@ def count_my_tasks(membership: Membership) -> MyTaskCounts:
     open tasks, under the task policy like the list."""
     facts = member_facts(membership)
     today = task_today()
-    mine = _part_filter(Part.MINE, facts) or Q()
+    whole = _part_filter(Part.MINE, facts) or Q()
+    active = active_q(today)
+    mine_snoozed = snoozed_by(facts.user_id, today)
+    # Waiting tasks and the member's snoozed ones are not "to do now": they leave every
+    # number but their own (waiting first: a waiting task that is also snoozed is waiting).
+    mine = whole & active & ~mine_snoozed
     numbers = {
         "mine": Count("id", filter=mine),
         "overdue": Count("id", filter=mine & Q(deadline__lt=today)),
@@ -318,12 +436,14 @@ def count_my_tasks(membership: Membership) -> MyTaskCounts:
             "id", filter=mine & Q(deadline__gte=today, deadline__lte=today + WEEK)
         ),
         "needs_date": Count("id", filter=mine & Q(deadline__isnull=True) & ~Q(term_quote="")),
+        "waiting": Count("id", filter=whole & ~active),
+        "snoozed": Count("id", filter=whole & active & mine_snoozed),
     }
-    rows = mine
+    rows = whole
     if PARTS[(facts.split, Part.TO_PICK_UP)]:
         pick_up = _part_filter(Part.TO_PICK_UP, facts) or Q()
-        numbers["to_pick_up"] = Count("id", filter=pick_up)
-        rows = mine | pick_up
+        numbers["to_pick_up"] = Count("id", filter=pick_up & active & ~mine_snoozed)
+        rows = whole | pick_up
     counts = (
         _live(membership.workspace)
         .filter(status=Task.Status.OPEN)
@@ -336,6 +456,8 @@ def count_my_tasks(membership: Membership) -> MyTaskCounts:
         within_week=int(counts["within_week"]),
         needs_date=int(counts["needs_date"]),
         to_pick_up=int(counts.get("to_pick_up", 0)),
+        waiting=int(counts["waiting"]),
+        snoozed=int(counts["snoozed"]),
     )
 
 

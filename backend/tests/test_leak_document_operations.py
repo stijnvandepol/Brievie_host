@@ -79,6 +79,7 @@ DOCUMENT_OPERATION_CASES: Final[dict[str, Case]] = {
     "retryDocumentProcessing": lambda c, ids, d: _post(c, _url(ids, d, "/retry")),
     "confirmDocument": lambda c, ids, d: _post(c, _url(ids, d, "/confirm"), CONFIRM),
     "reopenDocument": lambda c, ids, d: _post(c, _url(ids, d, "/reopen")),
+    "handleDocument": lambda c, ids, d: _post(c, _url(ids, d, "/handle"), {"task_ids": []}),
     "setDocumentAddressees": lambda c, ids, d: _put(
         c, _url(ids, d, "/addressees"), {"person_ids": []}
     ),

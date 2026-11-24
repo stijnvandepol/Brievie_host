@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import type { components } from "../api/schema";
 import { amountText, forText, whenText } from "../task-time";
+import { TaskWaitInfo } from "./task-wait";
 import { Badge } from "./ui";
 
 export type TaskItem = components["schemas"]["TaskItemOut"];
@@ -77,6 +78,7 @@ export function TaskRow({
             {amount ? <span className="task-amount">{amount}</span> : null}
           </p>
         ) : null}
+        <TaskWaitInfo task={task} />
         {fromFor ? <p className="muted small">{fromFor}</p> : null}
         {why ? <p className="muted small">{why}</p> : null}
         {task.needs_deadline ? (

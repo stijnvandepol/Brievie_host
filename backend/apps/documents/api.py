@@ -13,7 +13,7 @@ from apps.audit.services import actor_from_request
 from apps.common.errors import ApiError
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.common.throttling import CallerThrottle
-from apps.documents import intake, member_export, reading, review, search, services, trash
+from apps.documents import handle, intake, member_export, reading, review, search, services, trash
 from apps.documents.models import DocumentEvent, Folder, MemberExport
 from apps.documents.schemas import (
     AddresseesIn,
@@ -31,8 +31,10 @@ from apps.documents.schemas import (
     EmptyTrashOut,
     FolderIn,
     FolderOut,
+    HandleDocumentIn,
     InboxCountsOut,
     LabelsIn,
+    LetterStatusCountsOut,
     LingeringOut,
     MarkReadIn,
     MarkReadOut,
@@ -134,7 +136,9 @@ def create_document(
         '`addressed_to_me=true` keeps "Mijn post": the letters on the caller\'s own persons '
         "(their own and those they manage), with `include_departments=true` also on their "
         "departments; empty for a member without a person. `unread_only=true` keeps the "
-        "letters the caller has not read (`unread`)."
+        "letters the caller has not read (`unread`). `letter_status` (`new`, `open`, `waiting` or "
+        "`handled`; 422 for another) and `overdue=true` keep the letters in that status, "
+        'with the marker "Te laat"; `new` here is the letter not checked yet, not `unread`.'
     ),
 )
 def list_documents(
@@ -147,6 +151,8 @@ def list_documents(
     addressed_to_me: bool = False,
     include_departments: bool = False,
     unread_only: bool = False,
+    letter_status: str = "",
+    overdue: bool = False,
 ) -> list[DocumentSummaryOut]:
     membership = workspace_member(request, workspace_id)
     documents = services.list_documents(
@@ -158,8 +164,35 @@ def list_documents(
         addressed_to_me=addressed_to_me,
         include_departments=include_departments,
         unread_only=unread_only,
+        letter_status=letter_status,
+        overdue=overdue,
     )
     return services.document_summaries_out(membership, documents)
+
+
+@router.get(
+    "/workspaces/{workspace_id}/documents/status-counts",
+    response={200: LetterStatusCountsOut, 404: ErrorOut, **AUTH_ERRORS},
+    operation_id="countLetterStatuses",
+    description=(
+        "How many letters the caller sees per status (`new`, `open`, `waiting`, `handled`) "
+        "and how many are late (`overdue`), of all post or, with `person_id`, of one "
+        "person's. Only letters the caller may read are counted; an unknown or archived "
+        "person gives zeros."
+    ),
+)
+def count_letter_statuses(
+    request: HttpRequest, workspace_id: UUID, person_id: UUID | None = None
+) -> LetterStatusCountsOut:
+    membership = workspace_member(request, workspace_id)
+    counts = services.status_counts(membership, person_id=person_id)
+    return LetterStatusCountsOut(
+        new=counts.new,
+        open=counts.open,
+        waiting=counts.waiting,
+        handled=counts.handled,
+        overdue=counts.overdue,
+    )
 
 
 @router.post(
@@ -418,6 +451,40 @@ def reopen_document(request: HttpRequest, workspace_id: UUID, document_id: UUID)
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
     document = services.reopen_document(
         workspace=membership.workspace, user=current_user(request), document_id=document_id
+    )
+    return services.document_out_for(document)
+
+
+@router.post(
+    "/workspaces/{workspace_id}/documents/{document_id}/handle",
+    response={
+        200: DocumentOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    operation_id="handleDocument",
+    description=(
+        '"Brief afhandelen": ticks off every open task of a checked letter after the '
+        "confirmation. `task_ids` must be exactly the letter's open tasks (waiting ones "
+        "included): 409 `tasks_changed` otherwise, nothing is completed. With a payment "
+        "among them `payments_confirmed` must be true (409 `payment_not_confirmed`). 409 "
+        "`document_not_reviewed` for a letter not checked yet. An already handled letter "
+        "with no ids changes nothing. Writes one `task_completed` line per task with the "
+        "caller and one `letter_handled` line."
+    ),
+)
+def handle_document(
+    request: HttpRequest, workspace_id: UUID, document_id: UUID, payload: HandleDocumentIn
+) -> DocumentOut:
+    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    document = handle.handle_document(
+        membership=membership,
+        user=current_user(request),
+        document_id=document_id,
+        task_ids=payload.task_ids,
+        payments_confirmed=payload.payments_confirmed,
     )
     return services.document_out_for(document)
 

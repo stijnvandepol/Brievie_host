@@ -76,6 +76,10 @@ class Task(WorkspaceModel):
     assigned_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
+    # "Wacht op reactie tot": the other party has the next move until this day. Shared:
+    # everyone who sees the letter sees it. Cleared when the task is completed. Written
+    # only by `apps.tasks.waiting` and the completion.
+    waiting_until = models.DateField(null=True, blank=True)
 
     class Meta:
         ordering: ClassVar[list[str]] = ["deadline", "created_at", "id"]
@@ -95,6 +99,29 @@ class Task(WorkspaceModel):
 
     def __str__(self) -> str:
         return f"{self.type}: {self.description}"
+
+
+class TaskSnooze(WorkspaceModel):
+    """ "Uitgesteld tot": one member put a task off in their own list until a day. Personal:
+    a row is visible and writable only to its own user, and only while that user sees the
+    task (forced RLS); it changes nothing anybody else sees and is in no history."""
+
+    same_workspace_fields = ("task",)
+
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="snoozes")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    until = models.DateField()
+
+    class Meta:
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(fields=["task", "user"], name="tasks_tasksnooze_unique"),
+        ]
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(fields=["user", "task"], name="tasks_tasksnooze_user"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.task_id} {self.until}"
 
 
 def amount_text(amount: Decimal | None) -> str:

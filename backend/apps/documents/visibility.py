@@ -727,11 +727,15 @@ def forget_member(workspace_id: UUID, user_id: UUID) -> None:
     """A member leaves: their reader rows, shares, department memberships and read marks
     ("Ongelezen", navigation S 6.3) in this workspace go, as the system. Nothing else
     changes: the readers of every letter are then the old ones without this user."""
+    from apps.tasks.models import TaskSnooze  # imported here: tasks reads letters through here
+
     with transaction.atomic(), system_actor():
         DocumentReadMark.objects.filter(workspace_id=workspace_id, user_id=user_id).delete()
         DocumentReader.objects.filter(workspace_id=workspace_id, user_id=user_id).delete()
         DocumentShare.objects.filter(workspace_id=workspace_id, user_id=user_id).delete()
         DepartmentMember.objects.filter(workspace_id=workspace_id, user_id=user_id).delete()
+        # Their snoozes ("uitgesteld tot") are theirs alone and go with them.
+        TaskSnooze.objects.filter(workspace_id=workspace_id, user_id=user_id).delete()
 
 
 def record_grant(person: Person, *, grantee: User, actor_user_id: UUID | None) -> int:

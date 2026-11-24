@@ -7,6 +7,7 @@ import { amountText } from "../task-time";
 import { formatLetterDate } from "./document-table";
 import { ErrorAlert } from "./page";
 import { TaskActions } from "./task-actions";
+import { TaskWaitInfo } from "./task-wait";
 
 type Task = components["schemas"]["TaskOut"];
 
@@ -82,14 +83,16 @@ export function TaskList({
               {task.created_by_ai ? (
                 <span className="muted small">{t`Automatisch door AI`}</span>
               ) : null}
-              {canEdit && !done ? (
+              {done ? null : <TaskWaitInfo task={task} />}
+              {done ? null : (
                 <span className="task-actions">
                   <TaskActions
                     workspaceId={workspaceId}
                     task={{ ...task, document_id: documentId }}
+                    canEdit={canEdit}
                   />
                 </span>
-              ) : null}
+              )}
             </li>
           );
         })}

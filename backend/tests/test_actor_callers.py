@@ -43,6 +43,14 @@ ALLOWED_SYSTEM_CALLERS = {
     "apps/documents/reading.py",
     # Fills `addressee_opened_at` of every confirmed letter (documents/0022).
     "apps/documents/migrations/0022_read_marks.py",
+    # Letter status: completing a task deletes every member's snooze row of it (the own-rows
+    # policy would let the caller delete only their own).
+    "apps/tasks/services.py",
+    # Letter status: the one writer of a letter's task facts reads all its tasks and
+    # writes them after the caller was authorised (a confirm may hand the letter away),
+    # and the nightly repair; the migration fills them for every letter.
+    "apps/tasks/letter_sync.py",
+    "apps/documents/migrations/0024_letter_status.py",
     # Fills the derived automatic flag of every letter (documents/0014).
     "apps/documents/migrations/0014_document_has_automatic_link.py",
 }
