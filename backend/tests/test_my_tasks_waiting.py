@@ -25,8 +25,8 @@ def _fixed_today(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(services, "task_today", fixed)
 
 
-def _task(h: Household, spec: T) -> Task:
-    _, (task,) = letter_with_tasks(h.workspace, [spec], on=[h.persons["Anne"]])
+def _task(h: Household, spec: T, *, on: tuple[str, ...] = ("Anne",)) -> Task:
+    _, (task,) = letter_with_tasks(h.workspace, [spec], on=[h.persons[name] for name in on])
     return task
 
 
@@ -56,7 +56,7 @@ def test_waiting_over_task_back_in_its_group() -> None:
 
 def test_snoozed_task_out_for_me_only() -> None:
     h = household()
-    task = _task(h, T())
+    task = _task(h, T(), on=("Anne", "Bas"))
     _snooze(h, task, h.anne)
     assert ids(mine(h.workspace, h.anne)) == set()
     assert ids(mine(h.workspace, h.bas)) == {task.id}
