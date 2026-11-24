@@ -21,6 +21,7 @@ regexes = [
   '''^een-nieuw-lang-wachtwoord-2026$''',
   '''^nog-een-ander-wachtwoord-77$''',
   '''^b0d30d4a0224e576656286cc732bc500d8b93217860fd69ca42cb95cf245105f$''',
-  # Not a secret: Django's session key passed by name (`session_key=request.session.session_key`).
-  '''^request\.session\.session_key$''',
+  # Not a secret: in `filter(session_key=request.session.session_key, second_factor=True)`
+  # the generic rule takes the comma for an assignment and the next argument for a key.
+  '''^second_factor=True$''',
 ]
