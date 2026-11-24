@@ -517,19 +517,6 @@ jobs:
           # Caddy signs with its own CA, which this runner does not trust.
           curl --fail --silent --show-error --insecure --retry 10 --retry-delay 3 --retry-all-errors \
             https://localhost/api/v1/health
-      - name: DIAGNOSE route (temporary)
-        run: |
-          $COMPOSE exec -T caddy caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile | python3 -c '
-          import json,sys
-          c=json.load(sys.stdin)
-          for n,s in c["apps"]["http"]["servers"].items():
-              print(n, s.get("listen"))
-              for r in s.get("routes",[]):
-                  print(json.dumps(r)[:3000])
-          '
-          $COMPOSE exec -T api python -c "import socket; print(socket.getaddrinfo('caddy', None, proto=socket.IPPROTO_TCP))"
-          docker inspect "$($COMPOSE ps -q caddy)" --format '{{json .NetworkSettings.Networks}}'
-          $COMPOSE exec -T caddy env | grep BRIEVIE_ | grep -v TOKEN || true
       - name: The health endpoint reports the version of backend/pyproject.toml
         run: |
           curl --fail --silent --show-error --insecure https://localhost/api/v1/health |

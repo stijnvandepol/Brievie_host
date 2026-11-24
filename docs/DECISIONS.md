@@ -2929,3 +2929,8 @@ all six held.
   package has no file path in Trivy's report. A test requires a scope and an expiry on every
   entry.
 - **Rejected:** none.
+- **Point 2, follow-up (found in CI):** the api starts before Caddy, so its first lookup of
+  `caddy` found nothing and was kept for 30 seconds, during which Caddy's own requests counted
+  as public. An empty answer is no longer kept, and a peer that is not among the known addresses
+  triggers a new lookup (at most every 2 seconds per process), which also covers a recreated
+  Caddy with a new address.

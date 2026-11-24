@@ -5,24 +5,34 @@ import time
 from django.conf import settings
 from django.http import HttpRequest
 
-# Caddy's addresses, resolved from its compose name and kept for a short while per process.
+# Caddy's addresses, resolved from its compose name per process: kept for `_CADDY_TTL`, and
+# looked up again (at most every `_CADDY_RETRY` seconds) when a peer is not among them, so a
+# lookup made before Caddy existed, or a recreated Caddy with a new address, is not believed
+# stale for long. An empty answer is never kept.
 _CADDY_TTL = 30.0
+_CADDY_RETRY = 2.0
 _caddy: tuple[float, frozenset[str]] = (-_CADDY_TTL, frozenset())
+_caddy_lookup_at = -_CADDY_RETRY
 
 
-def caddy_addresses() -> frozenset[str]:
+def caddy_addresses(*, refresh: bool = False) -> frozenset[str]:
     """The addresses of `BRIEVIE_CADDY_HOST` (compose: `caddy`); empty when it does not
     resolve. Only a request whose socket peer is one of these is Caddy's."""
-    global _caddy
+    global _caddy, _caddy_lookup_at
     now = time.monotonic()
-    if now - _caddy[0] < _CADDY_TTL:
+    fresh = now - _caddy[0] < _CADDY_TTL and bool(_caddy[1])
+    if fresh and not refresh:
         return _caddy[1]
+    if now - _caddy_lookup_at < _CADDY_RETRY:
+        return _caddy[1] if fresh else frozenset()
+    _caddy_lookup_at = now
     try:
         infos = socket.getaddrinfo(settings.BRIEVIE_CADDY_HOST, None, proto=socket.IPPROTO_TCP)
         found = frozenset(str(info[4][0]) for info in infos)
     except OSError:
         found = frozenset()
-    _caddy = (now, found)
+    if found:
+        _caddy = (now, found)
     return found
 
 
@@ -34,7 +44,9 @@ def from_caddy(request: HttpRequest) -> bool:
     if not settings.BRIEVIE_BEHIND_CADDY:
         return False
     peer = str(request.META.get("REMOTE_ADDR", "")).strip()
-    return bool(peer) and peer in caddy_addresses()
+    if not peer:
+        return False
+    return peer in caddy_addresses() or peer in caddy_addresses(refresh=True)
 
 
 def client_ip(request: HttpRequest) -> str | None:

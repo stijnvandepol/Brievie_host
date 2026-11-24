@@ -25,7 +25,7 @@ def _caddy_at(monkeypatch: pytest.MonkeyPatch) -> None:
     """Caddy is the peer of these requests (apps.common.net.from_caddy)."""
     from apps.common import net
 
-    monkeypatch.setattr(net, "caddy_addresses", lambda: frozenset(CADDY_PEERS))
+    monkeypatch.setattr(net, "caddy_addresses", lambda **_kwargs: frozenset(CADDY_PEERS))
 
 
 @pytest.fixture(autouse=True)
