@@ -891,3 +891,190 @@ migration that leaves the database read-only, the way back, a restore onto an em
 and over a running one, and moving from `./brievie`. **Not tried:** Synology Container
 Manager, Unraid, Portainer, Dockge, Podman (not supported), Docker Desktop on Windows and a
 Raspberry Pi. Treat every platform step above as untested until someone has run it.
+
+## 25. Van buiten bereikbaar (reaching Brievie away from home)
+
+At home the phone reaches Brievie at `BRIEVIE_HOSTNAME` and trusts Caddy's own certificate
+authority. Away from home there are three more ways. Each is a few lines in `deploy/.env` (or
+the variables of the compose-only install); nothing else changes, and the home address keeps
+working. A server admin sees what is set, and what does not work, under **Account, Van
+buiten bereikbaar** in the web interface. That page only shows: compose decides. It never
+shows a token.
+
+| Way | Privacy | Ease | What is public | Cost |
+| --- | --- | --- | --- | --- |
+| **VPN** (Tailscale, WireGuard): **recommended** | encrypted from the phone to this server; nobody in between can read it | a VPN app on every phone | nothing | free for a household |
+| **Cloudflare Tunnel** | **Cloudflare ends the encryption on its own servers: everything that passes (scanned pages, texts, the device token) can be read there**, and Cloudflare's terms apply | easiest: no port on the router | one name, through Cloudflare | free |
+| **Own reverse proxy** (Nginx Proxy Manager, Traefik, Synology) | as safe as your proxy and its certificate; a proxy at a hosting party can read along | you already run one | port 443 of your proxy | your proxy |
+| **Home network only** | nothing leaves the house | nothing to do | nothing | free |
+
+Through the public address (tunnel, own proxy) **only the app works** by default: the web
+interface and its password sign-in stay closed there (403 "Op dit adres werkt alleen de
+Brievie-app") until two-step sign-in exists. `BRIEVIE_PUBLIC_WEB=true` opens them; Brievie
+then warns at every start and the page shows it red. Use the web interface at home or
+through the VPN.
+
+### VPN
+
+- **VPN into your home network** (WireGuard on the router, a Tailscale subnet router): set
+  nothing. `BRIEVIE_HOSTNAME` must be a fixed IP address (or a name your VPN's DNS knows),
+  never a `.local` name: those do not resolve over a VPN (the page warns about it).
+- **VPN on the server itself** (the Tailscale package on the NAS): set the server's VPN name.
+  Caddy serves it with the same certificate authority, so the paired app needs nothing new.
+
+```
+BRIEVIE_HOSTNAME=192.168.1.20
+BRIEVIE_VPN_HOSTNAME=nas.tail1234.ts.net
+```
+
+Prefer the MagicDNS name over the `100.x.y.z` address: an iPhone checks the name in the
+certificate.
+
+### Cloudflare Tunnel
+
+1. In the Cloudflare dashboard (Zero Trust, Networks, Tunnels): create a tunnel of type
+   *cloudflared*, copy its token.
+2. Add a public hostname to it (for example `brievie.example.nl`) with service
+   **`http://caddy:8080`**. That is Caddy's tunnel listener inside the stack; it is published
+   nowhere.
+3. Set:
+
+```
+BRIEVIE_HOSTNAME=192.168.1.20
+BRIEVIE_PUBLIC_HOSTNAME=brievie.example.nl
+BRIEVIE_TUNNEL_TOKEN=<plak hier het token uit het Cloudflare-dashboard>
+# Only when you start without ./brievie (for example Synology Container Manager):
+COMPOSE_PROFILES=tunnel
+# Only when you know what it means (see above):
+# BRIEVIE_PUBLIC_WEB=true
+```
+
+4. `./brievie start`. It starts the stack, then the `cloudflared` container on its own; a
+   tunnel that does not start is a warning, never a failed start. With `./brievie`, leave
+   `COMPOSE_PROFILES` out of `deploy/.env` (the wrapper refuses it): it starts the tunnel itself.
+
+The token reaches only the `cloudflared` container, never the api, a log or a process
+argument. Better still, put it in a file on the server (mode 0400, owner uid 65532,
+cloudflared's own user) and set `BRIEVIE_TUNNEL_TOKEN_FILE=/path/to/that/file` instead of
+`BRIEVIE_TUNNEL_TOKEN`: then it is in no `docker inspect` and no `docker compose config`
+either. Leave these Cloudflare features **off** for the hostname: Rocket Loader, Email
+Obfuscation, automatic Web Analytics (they rewrite pages and break the strict CSP), Bot Fight
+Mode and "I'm Under Attack" (their challenges break the app). Cloudflare's free plan accepts
+uploads up to 100 MB (Brievie's default is 32 MB) and cuts an answer after 100 seconds (no
+Brievie request waits that long). **Cloudflare Access** in front of the whole hostname blocks
+the app (an app cannot do Access's browser login); an Access application that leaves
+`/api/v1/` out also leaves the web sign-in out, so it is no replacement for two-step sign-in.
+
+### Own reverse proxy
+
+Your proxy ends TLS with its own public certificate and forwards to
+`https://<server>:<BRIEVIE_HTTPS_PORT>` (Caddy's normal port; it may skip verifying Caddy's
+certificate, or trust the CA from `GET /api/v1/server/ca-certificate`). It must pass on the
+original `Host` (Nginx Proxy Manager, Traefik and Synology do; plain nginx needs
+`proxy_set_header Host $host;`) and allow uploads of at least 32 MB. Websockets are not needed.
+
+```
+BRIEVIE_HOSTNAME=192.168.1.20
+BRIEVIE_PUBLIC_HOSTNAME=brievie.example.nl
+BRIEVIE_TRUSTED_PROXIES=192.168.1.5/32
+```
+
+`BRIEVIE_TRUSTED_PROXIES` is the address Brievie sees for your proxy: open the settings page
+through the proxy and copy the address under "Rechtstreeks verbonden met". **Never put
+Docker's own gateway address there** (often `172.x.0.1`): with Docker's port forwarding every
+device in your network arrives from that address, and could then pick its own address for
+the sign-in limits. The page warns when it sees that.
+
+### How it works (for the curious)
+
+Caddy is the only door. It writes three headers itself on every request to the api and
+overwrites what a client sent: `X-Brievie-Route` (`private` for the home and VPN names,
+`public` for the tunnel and your trusted proxy), `X-Brievie-Client-IP` (the client's address
+after Caddy's own trust rules: `CF-Connecting-IP` only on the tunnel listener,
+`X-Forwarded-For` only from `BRIEVIE_TRUSTED_PROXIES`) and `X-Brievie-Peer-IP`. The api reads
+the address and the route only from those, so the sign-in limits count every visitor by their
+own address in every way, and a forged header changes nothing. HSTS is Caddy's: 0 by default
+on the home and VPN names (`BRIEVIE_HSTS_SECONDS`), one year on the public routes. The api
+derives `ALLOWED_HOSTS` and `BRIEVIE_PUBLIC_URLS` from the names; invitation and reset links
+use the public address only while the web interface answers there.
+
+The iPhone app needs a version that trusts each address the way it is served (the private CA
+at home, the public certificate of the tunnel or proxy) and learns new addresses from the
+server without pairing again. Older apps keep working at home; the page says when a paired app
+is too old.
+
+### Problems
+
+- **400 Bad Request:** the name you used is not one of the three names. Check
+  `BRIEVIE_PUBLIC_HOSTNAME`, and leave `ALLOWED_HOSTS` and `BRIEVIE_PUBLIC_URLS` out.
+- **The app says "niet geverifieerd" away from home:** the app is too old, or
+  `BRIEVIE_PUBLIC_HOSTNAME` is not set.
+- **Signing in keeps returning to the sign-in page through your proxy:** the request is not
+  seen as https or the Host is not passed on; check `BRIEVIE_TRUSTED_PROXIES` and the proxy's
+  Host header (the page shows both).
+- **413:** a scan above the upload limit; behind Cloudflare at most 100 MB.
+- **524 from Cloudflare:** an answer took longer than 100 seconds; try again.
+- **"de tunnel naar Cloudflare start niet":** check the token (`docker compose logs cloudflared`
+  says why, without the token).
+
+### Every variable of `deploy/.env.example` and `deploy/compose/.env.example`
+
+"Made" = filled in by `init-env.sh`, `./brievie` or `init-secrets`. Examples per way: H home,
+V VPN, T tunnel, P own proxy (empty = default or not used).
+
+| Variable | Meaning | Default | H | V | T | P |
+| --- | --- | --- | --- | --- | --- | --- |
+| `POSTGRES_PASSWORD` | PostgreSQL superuser; only creates the roles | made | | | | |
+| `BRIEVIE_OWNER_PASSWORD` | schema owner (migrations) | made | | | | |
+| `BRIEVIE_APP_PASSWORD` | application role | made | | | | |
+| `POSTGRES_PORT` | host port for PostgreSQL, development only | `5432` | | | | |
+| `BRIEVIE_PUBLISH_POSTGRES` | publish PostgreSQL on 127.0.0.1 (development) | off | | | | |
+| `DATABASE_URL`, `DATABASE_OWNER_URL` | host-side URLs for `make test` / `make migrate` | made | | | | |
+| `SECRET_KEY` | Django secret, at least 50 characters | made | | | | |
+| `DEBUG` | never true on a server | `false` | | | | |
+| `CSRF_TRUSTED_ORIGINS` | extra https origins; normally not needed | empty | | | | |
+| `BRIEVIE_HTTP_PORT` | host port for http (redirect only) | `80` | | | | |
+| `BRIEVIE_HTTPS_PORT` | host port for https; part of the home address | `443` | | | | |
+| `BRIEVIE_HOSTNAME` | the name or IP the phone uses at home | `localhost` (`./brievie`), `verander-mij.local` (compose) | `192.168.1.20` | `192.168.1.20` | `192.168.1.20` | `192.168.1.20` |
+| `BRIEVIE_VPN_HOSTNAME` | the server's own VPN name (VPN on the server) | empty | | `nas.tail1234.ts.net` | | |
+| `BRIEVIE_PUBLIC_HOSTNAME` | the public name of the tunnel or proxy | empty | | | `brievie.example.nl` | `brievie.example.nl` |
+| `BRIEVIE_TUNNEL_TOKEN` | Cloudflare tunnel token (secret; only cloudflared gets it) | empty | | | `eyJh…` | |
+| `BRIEVIE_TUNNEL_TOKEN_FILE` | a file on the host with that token (better: in no `docker inspect`) | empty | | | `/volume1/brievie/tunnel-token` | |
+| `COMPOSE_PROFILES` | only without `./brievie`: starts cloudflared | empty | | | `tunnel` | |
+| `BRIEVIE_TRUSTED_PROXIES` | your own reverse proxy's address(es), CIDR, space separated | empty (none) | | | | `192.168.1.5/32` |
+| `BRIEVIE_PUBLIC_WEB` | web interface and web sign-in on the public address | `false` | | | `false` | `false` |
+| `BRIEVIE_HSTS_SECONDS` | HSTS for the home and VPN names; keep 0 with the private CA | `0` | | | | |
+| `BRIEVIE_MAX_BODY_BYTES` | largest request body | `2621440` | | | | |
+| `BRIEVIE_MAX_UPLOAD_BYTES` | largest scan upload; at most 100 MB behind Cloudflare | `33554432` | | | | |
+| `BRIEVIE_MASTER_KEY` | encrypts documents; keep a copy | made | | | | |
+| `BRIEVIE_BACKUP_DB_PASSWORD`, `DATABASE_BACKUP_URL` | read-only back-up role | made | | | | |
+| `BRIEVIE_BACKUP_PASSWORD` | back-up encryption (derived by default) | derived | | | | |
+| `BRIEVIE_BACKUP_DIR` / `BRIEVIE_BACKUP_REPOSITORY` | where back-ups go | empty | | | | |
+| `BRIEVIE_BACKUP_S3_ACCESS_KEY_ID`, `BRIEVIE_BACKUP_S3_SECRET_ACCESS_KEY`, `BRIEVIE_BACKUP_REST_USERNAME`, `BRIEVIE_BACKUP_REST_PASSWORD` | credentials of a remote back-up | empty | | | | |
+| `BRIEVIE_BACKUP_APPEND_ONLY` | the destination accepts only new data | `false` | | | | |
+| `BRIEVIE_BACKUP_AUTO_INIT` | compose: prepare an empty back-up folder once | `false` | | | | |
+| `BRIEVIE_BACKUP_HOUR` | hour of the nightly back-up | `2` | | | | |
+| `BRIEVIE_ADOPT_VERSION` | compose: moving from `./brievie`, the version that runs | empty | | | | |
+| `BRIEVIE_VERSION` | the version (compose: change it to update; `./brievie` writes it) | the release | | | | |
+| `BRIEVIE_AUDIT_RETENTION_DAYS` | days the audit log keeps rows (at least 90) | `365` | | | | |
+| `BRIEVIE_SESSION_IDLE_DAYS` / `BRIEVIE_SESSION_MAX_DAYS` | web session limits | `14` / `90` | | | | |
+| `BRIEVIE_AI_AUTOPILOT_ALLOWED` | may workspaces switch on the autopilot | `true` | | | | |
+| `BRIEVIE_SETUP_TOKEN` | installation code for the first setup | empty (printed once) | | | | |
+| `ALLOWED_HOSTS`, `BRIEVIE_PUBLIC_URLS` | overrides; normally derived from the names above | derived | | | | |
+| `SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE` | only for local http development | `true` | | | | |
+
+Leave alone: `BRIEVIE_INSTALLATION_ID` (written by `./brievie`), `COMPOSE_PROJECT_NAME` and
+`BRIEVIE_IMAGE`. Internal values of the compose files (`BRIEVIE_TUNNEL_TOKEN_SET`,
+`BRIEVIE_TUNNEL_TOKEN_FILE_SET`, `BRIEVIE_TUNNEL_HOST`, `BRIEVIE_BEHIND_CADDY`,
+`BRIEVIE_CADDY_CONFIG`) are no settings.
+
+### Not verified yet
+
+Proven in CI on GitHub's Linux runners: the Caddyfile adapts with and without the extra names,
+the tunnel listener answers with the public name and HSTS of one year and redirects plain
+http, a forged route header changes nothing on either listener, the VPN name is served by the
+private CA, a request without SNI gets a certificate, the `tunnel` profile is valid with and
+without a token, and cloudflared reads its token from a file (it refuses a made-up token and
+says so) without the token appearing in any other container, `compose config` of the
+compose-only file, a log or a process list. **Not tried: a real Cloudflare tunnel, a real
+reverse proxy and a real VPN.** The website page follows this section.

@@ -150,3 +150,23 @@ def test_env_example_documents_every_new_variable() -> None:
 
 def test_the_new_image_has_a_decision() -> None:
     assert "cloudflare/cloudflared" in DECISIONS
+
+
+def test_selfhost_documents_every_env_variable() -> None:
+    selfhost = (ROOT / "docs" / "SELFHOST.md").read_text()
+    section = selfhost.split("## 25. Van buiten bereikbaar", 1)[1]
+    table = section.split("### Every variable of", 1)[1]
+    names: set[str] = set()
+    for path in (ROOT / "deploy" / ".env.example", ROOT / "deploy" / "compose" / ".env.example"):
+        names |= set(re.findall(r"^#? ?([A-Z][A-Z0-9_]+)=", path.read_text(), re.M))
+    missing = sorted(name for name in names if f"`{name}`" not in table)
+    assert missing == []
+
+
+def test_the_docs_say_plainly_what_cloudflare_can_read() -> None:
+    privacy = " ".join((ROOT / "docs" / "PRIVACY.md").read_text().split())
+    selfhost = " ".join((ROOT / "docs" / "SELFHOST.md").read_text().split())
+    for text in (privacy, selfhost):
+        assert "Cloudflare ends the encryption on its own servers" in text
+    assert "nobody in between can read it" in privacy
+    assert "https://brievie.com/docs/installeren#van-buiten" in ENV_EXAMPLE

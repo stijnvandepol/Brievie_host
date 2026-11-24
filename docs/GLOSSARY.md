@@ -233,3 +233,8 @@ the request that creates the workspace and keep that name.
 | Uitgesteld tot 1 dec | Snoozed until 1 Dec | Personal; only you see it. |
 | Brief afhandelen | Mark letter as handled | Button; the dialog lists the tasks it ticks off. |
 | Wachten voorbij sinds 3 dec | Waiting ended on 3 Dec | Marker on a task whose waiting date arrived. |
+| Van buiten bereikbaar | External access | The settings page and the docs section; "away from home" in running text. |
+| publiek adres | public address | The tunnel's or own proxy's name (`BRIEVIE_PUBLIC_HOSTNAME`). |
+| eigen reverse proxy | own reverse proxy | |
+| tunnel (Cloudflare Tunnel) | tunnel (Cloudflare Tunnel) | |
+| Thuisnetwerk | Home network | |
