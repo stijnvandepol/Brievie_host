@@ -170,3 +170,56 @@ def test_the_docs_say_plainly_what_cloudflare_can_read() -> None:
         assert "Cloudflare ends the encryption on its own servers" in text
     assert "nobody in between can read it" in privacy
     assert "https://brievie.com/docs/installeren#van-buiten" in ENV_EXAMPLE
+
+
+CI_TEXT = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+ROUTES = (ROOT / ".github" / "scripts" / "routes-check.sh").read_text()
+
+
+def ci_job(name: str) -> str:
+    match = re.search(
+        rf"^  {re.escape(name)}:\n(.*?)(?=^  [\w-]+:\n|^  # |\Z)", CI_TEXT, re.M | re.S
+    )
+    assert match, name
+    return match.group(0)
+
+
+def test_ci_checks_the_tunnel_listener() -> None:
+    for name in ("stack", "compose-stack"):
+        block = ci_job(name)
+        for mode in ("caddy", "listeners", "session"):
+            assert f"routes-check.sh {mode}" in block, (name, mode)
+        assert "routes-check.sh token" in block, name
+        assert "--profile tunnel down --volumes" in block, name
+    assert "TOKEN_AS_FILE=yes" in ci_job("compose-stack")
+    assert 'BRIEVIE_PUBLIC_WEB: "true"' in ci_job("compose-stack")
+    stack = ci_job("stack")
+    assert "--profile tunnel config --quiet" in stack
+    assert "no-token.env" in stack
+    # No literal token in the workflow: made at run time and masked.
+    assert "openssl rand -base64 48" in stack
+    assert "::add-mask::$token" in stack
+
+
+def test_ci_scans_the_pinned_cloudflared_and_validates_the_caddyfile_twice() -> None:
+    image = ci_job("image")
+    pinned = re.search(r"cloudflare/cloudflared\S+", FILES["wrapper"]).group(0)  # type: ignore[union-attr]
+    assert f"image-ref: {pinned}" in image
+    assert image.count("caddy validate --config /etc/caddy/Caddyfile") == 3
+
+
+def test_the_routes_script_checks_what_the_review_asks() -> None:
+    for needle in (
+        'headers == ["CF-Connecting-IP"]',
+        '"X-Brievie-Route", "X-Brievie-Client-IP", "X-Brievie-Peer-IP", "Host"',
+        "max-age=31536000",
+        "max-age=0",
+        "= 308",
+        "= 413",
+        "public_web_off",
+        "Bearer junk",
+        "--resolve",
+        'seen["client_ip"] == seen["peer_ip"]',
+        '"203.0.113.77"',
+    ):
+        assert needle in ROUTES, needle
