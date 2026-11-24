@@ -837,7 +837,19 @@ there is data. The back-up is opened with the master key of the vault. **On a ne
 put the key of your recovery sheet in the vault first**: write a file with the line
 `BRIEVIE_MASTER_KEY=<the 64 characters, without spaces>` and run, before the first `up`,
 `docker compose run --rm -v "$PWD/key.env:/import/env:ro" init-secrets python -m apps.installer.init_secrets --import /import/env`
-(then `docker compose up -d postgres`, the restore, `docker compose up -d`). Where a database
+(then `docker compose up -d postgres`, the restore, `docker compose up -d`). **If you started the stack before importing the key** (the first `up` made new keys and an empty
+database; the import now stops with "niet gelijk aan de sleutel in de kluis"), start over. This is
+safe only while this machine holds nothing you want to keep: nobody has set up Brievie here and the
+back-up folder is not one of these volumes. Then, one by one:
+
+```
+docker compose down
+docker volume rm brievie_secrets brievie_secrets-postgres brievie_secrets-api brievie_secrets-keeper brievie_secrets-init brievie_pgdata brievie_documents brievie_backup-config
+```
+
+(the project is called `brievie`; check with `docker volume ls`). Your back-up folder, the compose file
+and the sheet's key are untouched. Now import the key as above, start only `postgres`, restore, and
+start everything. Never remove `brievie_caddy-data` once phones are paired. Where a database
 already exists in the volume `pgdata`, the key alone is refused: give the whole `deploy/.env` of
 the installation it came from (the database keeps its own superuser password). An unreadable data
 folder (a network disk with `root_squash`) also stops `init-secrets`: it never makes new keys

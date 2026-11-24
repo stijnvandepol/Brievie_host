@@ -319,7 +319,10 @@ def _apply(deps: Deps, state: State, outcome: str) -> int:
     try:
         deps.migrate()
     except MigrateError as failure:
-        if failure.applied_any:
+        # `migrating`: an earlier start already changed the schema, so a resume that fails at
+        # once (nothing applied this time) is still a half-migrated database: it stays frozen
+        # with its mark, and the back-up of the first start stays the one to restore.
+        if failure.applied_any or migrating:
             deps.complain(_("Het bijwerken is halverwege mislukt.") + " " + way_back(deps.image))
         else:
             freeze.thaw(deps.connect, deps.names)
@@ -330,8 +333,15 @@ def _apply(deps: Deps, state: State, outcome: str) -> int:
         return 1
     try:
         deps.record(state.installed, deps.image, backup_run)
-    finally:
-        freeze.thaw(deps.connect, deps.names)
+    except Exception:  # noqa: BLE001 - migrated but not recorded: stay read-only, resume next start
+        deps.complain(
+            _(
+                "De nieuwe versie kon niet worden vastgelegd. De database blijft alleen-lezen; "
+                "start opnieuw, dan wordt het bijwerken afgemaakt."
+            )
+        )
+        return 1
+    freeze.thaw(deps.connect, deps.names)
     deps.store_settings_copy()
     deps.say(_("Brievie %(version)s is klaar om te starten.") % {"version": deps.image})
     return 0

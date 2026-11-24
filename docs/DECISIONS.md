@@ -2734,3 +2734,13 @@ first; all nine held.
 - **Rejected:** none. One deviation: the CI assertion of point 1 on the wrapper stack asks the
   real endpoint (set the server up with the installation code, sign in, POST) rather than only
   reading a setting.
+- **Re-review, fixed: a resume that fails at once.** Start 1 applies migrations and fails (frozen,
+  `brievie.migrating`); start 2 resumed, applied nothing this time and was read as "nothing
+  changed", which lifted the freeze and the mark, so start 3 made a new `pre-update-X` back-up of
+  a half-migrated database that the way back (newest with that label) would then pick. A resume
+  that fails now stays frozen with its mark and prints the way back; no start can make a second
+  back-up while the mark stands. Where a failure left no mark (before any migration), a second
+  back-up of the unchanged database is equal to the first, so nothing can shadow it.
+  `record` failing after a successful migration no longer thaws: the next start resumes and
+  records. The accidental first `up` before an import is handled in SELFHOST (start over).
+

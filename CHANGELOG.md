@@ -17,6 +17,15 @@ Installeren met alleen een compose-bestand.
 - De server maakt elke nacht vanzelf een back-up zodra er een bestemming is ingesteld (ook bij
   `./brievie`), en een serverbeheerder ziet de stand onder Account, Back-up.
 - Bij het bijwerken komt de tabel `updates_installedversion` erbij (de versie waar de database bij hoort).
+- Een geweigerde of mislukte update zet Brievie uit tot je het oude versienummer terugzet: Compose
+  heeft de oude diensten dan al gestopt. De gegevens blijven heel.
+- `restore_install` maakt geen veiligheidsback-up van wat het vervangt: maak eerst zelf een back-up.
+- Zet op een nieuwe machine de hoofdsleutel van je herstelblad in de kluis (`init_secrets --import`)
+  vóór de eerste `up`; docs/SELFHOST.md sectie 24 zegt wat te doen als je al hebt gestart.
+- Het herstelblad in de webinterface bestaat alleen bij een installatie met alleen een
+  compose-bestand; bij `./brievie` maak je het met `./brievie recovery-sheet`.
+- De geheimen van een back-upbestemming op afstand (S3-sleutel, REST-wachtwoord) zet je bij
+  voorkeur als bestand (`..._FILE`, met `BRIEVIE_BACKUP_SECRETS_DIR`), niet als variabele.
 
 ### Toegevoegd
 

@@ -38,6 +38,7 @@ class Fakes:
     backup_ok: bool = True
     backup_raises: bool = False
     verify_ok: bool = True
+    record_raises: bool = False
     migrate_error: MigrateError | None = None
     earlier: UUID | None = None
     recorded: list[tuple[Version | None, Version, UUID | None]] = field(default_factory=list)
@@ -84,6 +85,8 @@ class Fakes:
     def record(self, installed: Version | None, image: Version, run_id: UUID | None) -> None:
         self.calls.append("record")
         self.frozen_during["record"] = self.is_frozen()
+        if self.record_raises:
+            raise RuntimeError("the record could not be written")
         self.recorded.append((installed, image, run_id))
 
 
@@ -587,3 +590,63 @@ def test_a_back_up_that_fails_its_check_stops_before_migrating(
     assert fakes.complained[0].endswith("Er is niets veranderd.")
     assert fakes.calls == ["auto_init", "backup:pre-update-0.5.0", "verify"]
     assert not fakes.is_frozen()
+
+
+def test_three_starts_never_make_a_second_back_up_over_a_half_migrated_database(
+    connect: Connect, scratch: Names
+) -> None:
+    """Re-review of PR #45: a resume that fails at once must keep the freeze and the mark."""
+    prepared(connect, scratch)
+    seed(connect, scratch, installed="0.4.0")
+    first = Fakes(migrate_error=MigrateError(applied_any=True))
+    assert prepare.run(make_deps(connect, scratch, first)) == 1
+    assert "backup:pre-update-0.5.0" in first.calls
+    assert first.is_frozen()
+    assert freeze.is_migrating(connect, scratch)
+
+    # Start 2 resumes and fails on the same migration straight away: nothing applied this time.
+    second = Fakes(earlier=RUN_ID, migrate_error=MigrateError(applied_any=False))
+    assert prepare.run(make_deps(connect, scratch, second)) == 1
+    assert "restore_install pre-update-0.5.0 --replace" in second.complained[0]
+    assert "Er is niets veranderd" not in second.complained[0]
+    assert second.is_frozen()
+    assert freeze.is_migrating(connect, scratch)
+
+    # Start 3 resumes again; it must not make a back-up of the half-migrated database.
+    third = Fakes(earlier=RUN_ID)
+    assert prepare.run(make_deps(connect, scratch, third)) == 0
+    for fakes in (second, third):
+        assert not any(call.startswith("backup:") for call in fakes.calls)
+    assert third.recorded == [(v("0.4.0"), IMAGE, RUN_ID)]
+    assert not third.is_frozen()
+
+
+def test_a_resume_that_fails_at_once_without_the_first_back_up_still_refuses(
+    connect: Connect, scratch: Names
+) -> None:
+    prepared(connect, scratch)
+    seed(connect, scratch, installed="0.4.0")
+    prepare.run(make_deps(connect, scratch, Fakes(migrate_error=MigrateError(applied_any=True))))
+    fakes = Fakes(earlier=None, migrate_error=MigrateError(applied_any=False))
+    assert prepare.run(make_deps(connect, scratch, fakes)) == 1
+    assert not any(call.startswith("backup:") for call in fakes.calls)
+    assert fakes.is_frozen()
+
+
+def test_a_record_that_fails_leaves_the_database_read_only_and_the_next_start_finishes(
+    connect: Connect, scratch: Names
+) -> None:
+    prepared(connect, scratch)
+    seed(connect, scratch, installed="0.4.0")
+    failing = Fakes(record_raises=True)
+    assert prepare.run(make_deps(connect, scratch, failing)) == 1
+    assert "kon niet worden vastgelegd" in failing.complained[0]
+    assert failing.is_frozen()
+    assert freeze.is_migrating(connect, scratch)
+    assert "copy" not in failing.calls
+
+    again = Fakes(earlier=RUN_ID)
+    assert prepare.run(make_deps(connect, scratch, again)) == 0
+    assert not any(call.startswith("backup:") for call in again.calls)
+    assert again.recorded == [(v("0.4.0"), IMAGE, RUN_ID)]
+    assert not again.is_frozen()
