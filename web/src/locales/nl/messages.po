@@ -353,6 +353,10 @@ msgstr "7 dagen"
 msgid "aan"
 msgstr "aan"
 
+#: src/routes/server-external-access.tsx
+msgid "Aan"
+msgstr "Aan"
+
 #: src/components/task-list.tsx
 msgid "Aan {assignee} gegeven"
 msgstr "Aan {assignee} gegeven"
@@ -686,6 +690,10 @@ msgstr "Alles"
 msgid "Alles gelezen"
 msgstr "Alles gelezen"
 
+#: src/routes/server-external-access.tsx
+msgid "Alles wat is ingesteld, werkt zoals bedoeld."
+msgstr "Alles wat is ingesteld, werkt zoals bedoeld."
+
 #: src/components/rule-sentence.ts
 #: src/components/rule-templates.tsx
 #: src/routes/rule-editor.tsx
@@ -695,6 +703,10 @@ msgstr "Als"
 #: src/components/document-history.tsx
 msgid "Als dubbele brief naar de prullenbak verplaatst door {by}"
 msgstr "Als dubbele brief naar de prullenbak verplaatst door {by}"
+
+#: src/routes/server-external-access.tsx
+msgid "Altijd aan. Telefoons in je eigen netwerk gebruiken dit adres."
+msgstr "Altijd aan. Telefoons in je eigen netwerk gebruiken dit adres."
 
 #: src/components/assign-dialog.tsx
 #: src/components/confirm-dialog.tsx
@@ -1111,6 +1123,22 @@ msgstr "Brievie zet brieven zelf onder personen en labels."
 msgid "Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is. Een label dat een regel voorstelt, zet Brievie er ook op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is van hetzelfde label. Staat het woord alleen verderop in de brief en is de AI niet zeker? Dan blijft het een voorstel. Een regel die op 'Automatisch toepassen' staat, doet dat altijd."
 msgstr "Brievie zet een brief zelf bij de juiste persoon en het juiste label als de AI of de naam duidelijk is. Een label dat een regel voorstelt, zet Brievie er ook op als de regel het woord in de afzender of bovenaan de brief vond, of als de AI zeker is van hetzelfde label. Staat het woord alleen verderop in de brief en is de AI niet zeker? Dan blijft het een voorstel. Een regel die op 'Automatisch toepassen' staat, doet dat altijd."
 
+#: src/routes/server-external-access.tsx
+msgid "BRIEVIE_HOSTNAME eindigt op .local. Zo'n naam werkt niet via een VPN. Gebruik voor een VPN een vast IP-adres, of zet BRIEVIE_VPN_HOSTNAME."
+msgstr "BRIEVIE_HOSTNAME eindigt op .local. Zo'n naam werkt niet via een VPN. Gebruik voor een VPN een vast IP-adres, of zet BRIEVIE_VPN_HOSTNAME."
+
+#: src/routes/server-external-access.tsx
+msgid "BRIEVIE_HOSTNAME is localhost of 127.0.0.1. Een iPhone kan deze server zo niet bereiken. Zet het IP-adres of de naam van de server in je thuisnetwerk."
+msgstr "BRIEVIE_HOSTNAME is localhost of 127.0.0.1. Een iPhone kan deze server zo niet bereiken. Zet het IP-adres of de naam van de server in je thuisnetwerk."
+
+#: src/routes/server-external-access.tsx
+msgid "BRIEVIE_MAX_UPLOAD_BYTES is groter dan Cloudflare doorlaat (100 MB). Grote scans komen dan niet door de tunnel."
+msgstr "BRIEVIE_MAX_UPLOAD_BYTES is groter dan Cloudflare doorlaat (100 MB). Grote scans komen dan niet door de tunnel."
+
+#: src/routes/server-external-access.tsx
+msgid "BRIEVIE_PUBLIC_URLS is met de hand gezet en bevat het publieke adres niet. Haal BRIEVIE_PUBLIC_URLS en ALLOWED_HOSTS weg, dan volgen ze vanzelf uit de namen."
+msgstr "BRIEVIE_PUBLIC_URLS is met de hand gezet en bevat het publieke adres niet. Haal BRIEVIE_PUBLIC_URLS en ALLOWED_HOSTS weg, dan volgen ze vanzelf uit de namen."
+
 #: src/components/page.tsx
 msgid "Brievie, naar Mijn post"
 msgstr "Brievie, naar Mijn post"
@@ -1130,6 +1158,10 @@ msgstr "Certificaat"
 #: src/components/ai-status-line.tsx
 msgid "Claude van Anthropic in de Verenigde Staten ({host})"
 msgstr "Claude van Anthropic in de Verenigde Staten ({host})"
+
+#: src/routes/server-external-access.tsx
+msgid "Cloudflare Tunnel"
+msgstr "Cloudflare Tunnel"
 
 #: src/routes/pair-app.tsx
 msgid "Code"
@@ -1154,6 +1186,10 @@ msgstr "Controleren"
 #: src/routes/inbox.tsx
 msgid "Controleren: {0}"
 msgstr "Controleren: {0}"
+
+#: src/routes/server-external-access.tsx
+msgid "Controles"
+msgstr "Controles"
 
 #: src/routes/password-reset.tsx
 msgid "Daarna ben je ingelogd. Je moet je telefoon opnieuw koppelen."
@@ -1602,6 +1638,10 @@ msgstr "Eigen adres"
 msgid "Eigen CA, vingerafdruk zit in de code"
 msgstr "Eigen CA, vingerafdruk zit in de code"
 
+#: src/routes/server-external-access.tsx
+msgid "Eigen reverse proxy"
+msgstr "Eigen reverse proxy"
+
 #: src/routes/language.tsx
 msgid "Elk apparaat gebruikt zijn eigen taal."
 msgstr "Elk apparaat gebruikt zijn eigen taal."
@@ -1625,6 +1665,14 @@ msgstr "Er ging iets mis"
 #: src/routes/ai.tsx
 msgid "Er is al een sleutel opgeslagen. Laat dit leeg om die te houden."
 msgstr "Er is al een sleutel opgeslagen. Laat dit leeg om die te houden."
+
+#: src/routes/server-external-access.tsx
+msgid "Er is een tunnel of eigen reverse proxy ingesteld, maar geen BRIEVIE_PUBLIC_HOSTNAME. Zet de publieke naam, zoals brievie.voorbeeld.nl."
+msgstr "Er is een tunnel of eigen reverse proxy ingesteld, maar geen BRIEVIE_PUBLIC_HOSTNAME. Zet de publieke naam, zoals brievie.voorbeeld.nl."
+
+#: src/routes/server-external-access.tsx
+msgid "Er is een tunnel-token ingesteld, maar de tunnel antwoordt niet. Start Brievie opnieuw met ./brievie start. Start je zonder ./brievie? Zet dan COMPOSE_PROFILES=tunnel."
+msgstr "Er is een tunnel-token ingesteld, maar de tunnel antwoordt niet. Start Brievie opnieuw met ./brievie start. Start je zonder ./brievie? Zet dan COMPOSE_PROFILES=tunnel."
 
 #: src/components/emergency-dialog.tsx
 msgid "Er is geen post van {name} die je nog niet kon zien."
@@ -1746,6 +1794,10 @@ msgstr "Gebruik dit voorbeeld: {title}"
 #: src/routes/login.tsx
 msgid "Gebruik het account van deze server."
 msgstr "Gebruik het account van deze server."
+
+#: src/routes/server-external-access.tsx
+msgid "Gebruik je een eigen reverse proxy? Open deze pagina dan via de proxy: het adres bij \"Rechtstreeks verbonden met\" is dan het adres voor BRIEVIE_TRUSTED_PROXIES. Nooit het adres van Docker zelf."
+msgstr "Gebruik je een eigen reverse proxy? Open deze pagina dan via de proxy: het adres bij \"Rechtstreeks verbonden met\" is dan het adres voor BRIEVIE_TRUSTED_PROXIES. Nooit het adres van Docker zelf."
 
 #: src/routes/search.tsx
 msgid "Gebruik minder woorden."
@@ -1978,6 +2030,10 @@ msgstr "Het herstelblad is gedownload."
 msgid "Het is dezelfde brief"
 msgstr "Het is dezelfde brief"
 
+#: src/routes/server-external-access.tsx
+msgid "Het makkelijkst, maar Cloudflare kan alles lezen wat er langskomt."
+msgstr "Het makkelijkst, maar Cloudflare kan alles lezen wat er langskomt."
+
 #: src/components/rule-sentence.ts
 msgid "Het soort post"
 msgstr "Het soort post"
@@ -2001,6 +2057,10 @@ msgstr "Hiermee gaat niemand iets anders zien."
 #: src/routes/backup.tsx
 msgid "Hoe het staat met de back-up van deze server. Elke nacht maakt Brievie vanzelf een back-up zodra er een bestemming is ingesteld."
 msgstr "Hoe het staat met de back-up van deze server. Elke nacht maakt Brievie vanzelf een back-up zodra er een bestemming is ingesteld."
+
+#: src/routes/server-external-access.tsx
+msgid "Hoe telefoons en browsers deze server buiten je thuisnetwerk bereiken. Je stelt dit in met deploy/.env of de instellingen van je compose-bestand; deze pagina laat zien wat er nu is ingesteld."
+msgstr "Hoe telefoons en browsers deze server buiten je thuisnetwerk bereiken. Je stelt dit in met deploy/.env of de instellingen van je compose-bestand; deze pagina laat zien wat er nu is ingesteld."
 
 #: src/routes/rule-editor.tsx
 msgid "Hoeveel voorwaarden moeten kloppen"
@@ -2095,6 +2155,10 @@ msgstr "In deze link zit geen herstelcode. Open de link uit je bericht opnieuw."
 msgid "In deze link zit geen uitnodiging. Open de link uit je bericht opnieuw."
 msgstr "In deze link zit geen uitnodiging. Open de link uit je bericht opnieuw."
 
+#: src/routes/server-external-access.tsx
+msgid "In orde"
+msgstr "In orde"
+
 #: src/components/page.tsx
 #: src/routes/duplicate.tsx
 #: src/routes/inbox.tsx
@@ -2117,6 +2181,10 @@ msgstr "Informatie"
 msgid "Ingelogd"
 msgstr "Ingelogd"
 
+#: src/routes/server-external-access.tsx
+msgid "ingesteld (het token zelf staat nooit op dit scherm)"
+msgstr "ingesteld (het token zelf staat nooit op dit scherm)"
+
 #: src/routes/login.tsx
 msgid "Inloggen"
 msgstr "Inloggen"
@@ -2128,6 +2196,14 @@ msgstr "Inloggen en meedoen"
 #: src/components/audit-codes.ts
 msgid "Inloggen mislukt"
 msgstr "Inloggen mislukt"
+
+#: src/routes/server-external-access.tsx
+msgid "Inloggen op de webinterface kan van buiten zonder tweede stap."
+msgstr "Inloggen op de webinterface kan van buiten zonder tweede stap."
+
+#: src/routes/server-external-access.tsx
+msgid "Inloggen op de webinterface kan van buiten zonder tweede stap. Zet BRIEVIE_PUBLIC_WEB uit, of gebruik een VPN."
+msgstr "Inloggen op de webinterface kan van buiten zonder tweede stap. Zet BRIEVIE_PUBLIC_WEB uit, of gebruik een VPN."
 
 #: src/components/audit-codes.ts
 msgid "Inloggen tijdelijk geblokkeerd"
@@ -2193,6 +2269,10 @@ msgstr "is niet"
 #: src/components/rule-sentence.ts
 msgid "is precies"
 msgstr "is precies"
+
+#: src/routes/server-external-access.tsx
+msgid "Ja"
+msgstr "Ja"
 
 #. placeholder {0}: askAcknowledgement?.name ?? ""
 #: src/components/person-actions.tsx
@@ -2363,6 +2443,10 @@ msgstr "Je naam"
 msgid "Je post en facturen, op je eigen server."
 msgstr "Je post en facturen, op je eigen server."
 
+#: src/routes/server-external-access.tsx
+msgid "Je reverse proxy stuurt de oorspronkelijke naam niet door. Zet in de proxy dat hij de Host-header doorgeeft; anders lukt inloggen niet."
+msgstr "Je reverse proxy stuurt de oorspronkelijke naam niet door. Zet in de proxy dat hij de Host-header doorgeeft; anders lukt inloggen niet."
+
 #: src/routes/pair-app.tsx
 msgid "Je server staat ingesteld op 'localhost'. Je telefoon kan die niet bereiken. Stel in het bestand .env de naam of het IP-adres van je server in (BRIEVIE_HOSTNAME)."
 msgstr "Je server staat ingesteld op 'localhost'. Je telefoon kan die niet bereiken. Stel in het bestand .env de naam of het IP-adres van je server in (BRIEVIE_HOSTNAME)."
@@ -2412,6 +2496,18 @@ msgstr "jou"
 #: src/routes/setup.tsx
 msgid "Jouw account"
 msgstr "Jouw account"
+
+#: src/routes/server-external-access.tsx
+msgid "Jouw adres"
+msgstr "Jouw adres"
+
+#: src/routes/server-external-access.tsx
+msgid "Jouw verbinding kwam niet via https binnen. Controleer of je reverse proxy https gebruikt en of BRIEVIE_TRUSTED_PROXIES klopt."
+msgstr "Jouw verbinding kwam niet via https binnen. Controleer of je reverse proxy https gebruikt en of BRIEVIE_TRUSTED_PROXIES klopt."
+
+#: src/routes/server-external-access.tsx
+msgid "Jouw verzoek kwam rechtstreeks van een adres uit BRIEVIE_TRUSTED_PROXIES. Staat daar het adres van Docker zelf? Dan kan elk apparaat in je netwerk een ander adres voorwenden. Zet daar alleen het adres van je reverse proxy."
+msgstr "Jouw verzoek kwam rechtstreeks van een adres uit BRIEVIE_TRUSTED_PROXIES. Staat daar het adres van Docker zelf? Dan kan elk apparaat in je netwerk een ander adres voorwenden. Zet daar alleen het adres van je reverse proxy."
 
 #: src/components/role-dialog.tsx
 msgid "Kan leden uitnodigen en alles instellen."
@@ -2651,6 +2747,10 @@ msgstr "Leeg laten kiest {0}."
 msgid "Leidinggevende van afdeling gewijzigd"
 msgstr "Leidinggevende van afdeling gewijzigd"
 
+#: src/routes/server-external-access.tsx
+msgid "Let op"
+msgstr "Let op"
+
 #: src/routes/duplicate.tsx
 msgid "Let op: {fields} verschilt. Een herinnering of een tweede termijn lijkt vaak op de eerste brief, maar het is een andere brief."
 msgstr "Let op: {fields} verschilt. Een herinnering of een tweede termijn lijkt vaak op de eerste brief, maar het is een andere brief."
@@ -2773,9 +2873,17 @@ msgstr "Mensen uitnodigen"
 msgid "Menu"
 msgstr "Menu"
 
+#: src/routes/server-external-access.tsx
+msgid "Met Cloudflare Tunnel maakt Cloudflare de versleuteling op zijn eigen servers open. Cloudflare kan alles lezen wat er langskomt, ook gescande brieven. Met een VPN kan niemand onderweg meelezen."
+msgstr "Met Cloudflare Tunnel maakt Cloudflare de versleuteling op zijn eigen servers open. Cloudflare kan alles lezen wat er langskomt, ook gescande brieven. Met een VPN kan niemand onderweg meelezen."
+
 #: src/components/reset-link-dialog.tsx
 msgid "Met de link kiest {name} een nieuw wachtwoord. Daarna moet {name} opnieuw inloggen en de telefoon opnieuw koppelen. Een eerdere herstellink van {name} werkt daarna niet meer."
 msgstr "Met de link kiest {name} een nieuw wachtwoord. Daarna moet {name} opnieuw inloggen en de telefoon opnieuw koppelen. Een eerdere herstellink van {name} werkt daarna niet meer."
+
+#: src/routes/server-external-access.tsx
+msgid "Met een VPN (Tailscale, WireGuard) is de verbinding versleuteld van je telefoon tot deze server. Niemand onderweg kan meelezen. Een VPN naar je router werkt zonder instelling hier; draait de VPN op deze server, zet dan BRIEVIE_VPN_HOSTNAME."
+msgstr "Met een VPN (Tailscale, WireGuard) is de verbinding versleuteld van je telefoon tot deze server. Niemand onderweg kan meelezen. Een VPN naar je router werkt zonder instelling hier; draait de VPN op deze server, zet dan BRIEVIE_VPN_HOSTNAME."
 
 #: src/routes/labels.tsx
 msgid "Met labels zet je orde in je post, bijvoorbeeld Belasting of Zorg."
@@ -2899,6 +3007,10 @@ msgstr "Naar Inbox"
 #: src/routes/labels.tsx
 msgid "Namen"
 msgstr "Namen"
+
+#: src/routes/server-external-access.tsx
+msgid "Nee"
+msgstr "Nee"
 
 #: src/components/suggestion-list.tsx
 msgid "Negeren"
@@ -3107,6 +3219,10 @@ msgstr "Omlaag"
 #: src/routes/automations.tsx
 msgid "Omlaag: {name}"
 msgstr "Omlaag: {name}"
+
+#: src/routes/server-external-access.tsx
+msgid "onbekend"
+msgstr "onbekend"
 
 #: src/components/device-table.tsx
 msgid "Onbekend"
@@ -3418,6 +3534,10 @@ msgstr "Probeer een andere spelling of het begin van het woord."
 msgid "Probeer opnieuw"
 msgstr "Probeer opnieuw"
 
+#: src/routes/server-external-access.tsx
+msgid "Probleem"
+msgstr "Probleem"
+
 #: src/components/page.tsx
 #: src/routes/trash.tsx
 msgid "Prullenbak"
@@ -3431,6 +3551,10 @@ msgstr "Prullenbak legen"
 msgid "Prullenbak legen?"
 msgstr "Prullenbak legen?"
 
+#: src/routes/server-external-access.tsx
+msgid "Publiek adres"
+msgstr "Publiek adres"
+
 #: src/components/invite-dialog.tsx
 msgid "QR-code met de uitnodiging"
 msgstr "QR-code met de uitnodiging"
@@ -3439,6 +3563,10 @@ msgstr "QR-code met de uitnodiging"
 #: src/routes/pair-app.tsx
 msgid "QR-code om de app te koppelen"
 msgstr "QR-code om de app te koppelen"
+
+#: src/routes/server-external-access.tsx
+msgid "Rechtstreeks verbonden met"
+msgstr "Rechtstreeks verbonden met"
 
 #: src/components/emergency-dialog.tsx
 msgid "Reden"
@@ -3517,6 +3645,10 @@ msgstr "Rol wijzigen: {name}"
 #: src/components/label-chip.tsx
 msgid "Rood"
 msgstr "Rood"
+
+#: src/routes/server-external-access.tsx
+msgid "Route"
+msgstr "Route"
 
 #: src/components/document-history.tsx
 msgid "Samengevoegd met een dubbele brief door {by}"
@@ -3759,6 +3891,14 @@ msgstr "Thuis"
 msgid "Thuis en organisatie"
 msgstr "Thuis en organisatie"
 
+#: src/routes/server-external-access.tsx
+msgid "Thuisnetwerk"
+msgstr "Thuisnetwerk"
+
+#: src/routes/server-external-access.tsx
+msgid "Thuisnetwerk of VPN"
+msgstr "Thuisnetwerk of VPN"
+
 #: src/components/audit-table.tsx
 msgid "Tijdstip"
 msgstr "Tijdstip"
@@ -3811,6 +3951,10 @@ msgstr "Toewijzen"
 msgid "Tot"
 msgstr "Tot"
 
+#: src/routes/server-external-access.tsx
+msgid "Tunnel-token"
+msgstr "Tunnel-token"
+
 #: src/components/audit-codes.ts
 msgid "Tweestapsverificatie aangezet"
 msgstr "Tweestapsverificatie aangezet"
@@ -3832,6 +3976,7 @@ msgid "uit"
 msgstr "uit"
 
 #: src/routes/automations.tsx
+#: src/routes/server-external-access.tsx
 msgid "Uit"
 msgstr "Uit"
 
@@ -3842,6 +3987,10 @@ msgstr "Uit de brief: ‘{quote}’"
 #: src/routes/rule-editor.tsx
 msgid "Uit: de regel doet niets, maar blijft bewaard."
 msgstr "Uit: de regel doet niets, maar blijft bewaard."
+
+#: src/routes/server-external-access.tsx
+msgid "Uit. Zet BRIEVIE_TRUSTED_PROXIES op het adres van je reverse proxy om hem te gebruiken."
+msgstr "Uit. Zet BRIEVIE_TRUSTED_PROXIES op het adres van je reverse proxy om hem te gebruiken."
 
 #. placeholder {0}: formatLetterDate(task.deadline)
 #: src/components/task-list.tsx
@@ -3873,6 +4022,10 @@ msgstr "Uitgeschakeld op"
 #: src/routes/rule-editor.tsx
 msgid "Uitkomst van de test"
 msgstr "Uitkomst van de test"
+
+#: src/routes/server-external-access.tsx
+msgid "Uitleg en voorbeelden op de website"
+msgstr "Uitleg en voorbeelden op de website"
 
 #: src/components/page.tsx
 #: src/routes/sessions.tsx
@@ -3948,6 +4101,11 @@ msgstr "Van"
 msgid "Van {sender}"
 msgstr "Van {sender}"
 
+#: src/components/page.tsx
+#: src/routes/server-external-access.tsx
+msgid "Van buiten bereikbaar"
+msgstr "Van buiten bereikbaar"
+
 #: src/task-time.ts
 msgid "Vandaag"
 msgstr "Vandaag"
@@ -3955,6 +4113,10 @@ msgstr "Vandaag"
 #: src/routes/rule-editor.tsx
 msgid "Veld"
 msgstr "Veld"
+
+#: src/routes/server-external-access.tsx
+msgid "Verbonden met Cloudflare"
+msgstr "Verbonden met Cloudflare"
 
 #: src/routes/people-detail.tsx
 #: src/routes/people.tsx
@@ -4001,6 +4163,10 @@ msgstr "Verschilt"
 msgid "Verschilt misschien (slecht leesbaar)"
 msgstr "Verschilt misschien (slecht leesbaar)"
 
+#: src/routes/server-external-access.tsx
+msgid "Vertrouwde adressen"
+msgstr "Vertrouwde adressen"
+
 #: src/routes/document.tsx
 msgid "Vervaldatum"
 msgstr "Vervaldatum"
@@ -4040,6 +4206,14 @@ msgstr "Verwijderen: {0}"
 #: src/routes/people-detail.tsx
 msgid "Verwijderen: {name}"
 msgstr "Verwijderen: {name}"
+
+#: src/routes/server-external-access.tsx
+msgid "Via het publieke adres werkt alleen de app. De webinterface gebruik je thuis of via VPN."
+msgstr "Via het publieke adres werkt alleen de app. De webinterface gebruik je thuis of via VPN."
+
+#: src/routes/server-external-access.tsx
+msgid "Via https"
+msgstr "Via https"
 
 #: src/routes/rule-editor.tsx
 msgid "Voeg eerst een persoon toe."
@@ -4108,6 +4282,10 @@ msgstr "Voorwaarde toevoegen"
 #: src/routes/rule-editor.tsx
 msgid "Voorwaarden"
 msgstr "Voorwaarden"
+
+#: src/routes/server-external-access.tsx
+msgid "VPN (aanbevolen)"
+msgstr "VPN (aanbevolen)"
 
 #: src/routes/workspaces.tsx
 msgid "Vraag een beheerder om een uitnodiging."
@@ -4210,6 +4388,10 @@ msgstr "Wat nu?"
 msgid "Wat te doen"
 msgstr "Wat te doen"
 
+#: src/routes/server-external-access.tsx
+msgid "Wat werkt en wat niet"
+msgstr "Wat werkt en wat niet"
+
 #: src/api/client.ts
 msgid "We kunnen de server niet bereiken. Controleer je verbinding en probeer het opnieuw."
 msgstr "We kunnen de server niet bereiken. Controleer je verbinding en probeer het opnieuw."
@@ -4249,6 +4431,10 @@ msgstr "Welkom bij {workspaceName}"
 #: src/routes/setup.tsx
 msgid "Welkom bij Brievie"
 msgstr "Welkom bij Brievie"
+
+#: src/routes/server-external-access.tsx
+msgid "Werk de Brievie-app bij op elke gekoppelde iPhone. Oudere versies werken niet via het publieke adres."
+msgstr "Werk de Brievie-app bij op elke gekoppelde iPhone. Oudere versies werken niet via het publieke adres."
 
 #: src/components/audit-codes.ts
 msgid "Werkruimte"
@@ -4476,6 +4662,10 @@ msgstr "Zo werkt een regel"
 #: src/components/visibility-preview-dialog.tsx
 msgid "Zo wordt het"
 msgstr "Zo wordt het"
+
+#: src/routes/server-external-access.tsx
+msgid "Zo ziet Brievie jouw verbinding"
+msgstr "Zo ziet Brievie jouw verbinding"
 
 #: src/routes/language.tsx
 msgid "Zoals je browser of telefoon"

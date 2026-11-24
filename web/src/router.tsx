@@ -27,6 +27,7 @@ import { rootRoute } from "./routes/root";
 import { newRuleRoute, ruleRoute } from "./routes/rule-editor";
 import { searchRoute } from "./routes/search";
 import { serverAuditLogRoute } from "./routes/server-audit-log";
+import { serverExternalAccessRoute } from "./routes/server-external-access";
 import { sessionsRoute } from "./routes/sessions";
 import { settingsRoute } from "./routes/settings";
 import { setupRoute } from "./routes/setup";
@@ -47,6 +48,7 @@ const routeTree = rootRoute.addChildren([
   passwordResetRoute,
   sessionsRoute,
   serverAuditLogRoute,
+  serverExternalAccessRoute,
   recoverySheetRoute,
   backupRoute,
   passwordRoute,

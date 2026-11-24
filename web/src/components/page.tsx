@@ -470,6 +470,10 @@ function AccountMenu({
                 <Icon name="shield" />
                 {t`Herstelblad`}
               </Link>
+              <Link to="/server/van-buiten" className="menu-item">
+                <Icon name="globe" />
+                {t`Van buiten bereikbaar`}
+              </Link>
             </>
           ) : null}
           <Button className="menu-item" onPress={onLogout}>
