@@ -2856,4 +2856,8 @@ B1–B4.
 - **Docs address** (B4): `https://brievie.com/docs/installeren#van-buiten`.
 - **Privacy, said plainly:** with a tunnel Cloudflare can read everything that passes; a VPN is
   encrypted end to end. In `.env.example`, `docs/PRIVACY.md`, `docs/SELFHOST.md` and on the page.
-
+- **Trivy on cloudflared:** the pinned 2026.10.7 (the newest release at least two weeks old on
+  2026-11-24) carries CVE-2026-78661 (`golang.org/x/net/html`, unused by the connector) and
+  CVE-2026-85091 (`zlib1g` of its Debian base, unused by the Go binary). Accepted in a list of
+  its own, `.trivyignore.cloudflared.yaml`, used only by the cloudflared scan, until
+  2026-12-15: then the job fails and the pin moves to a 2026.11.x release that is old enough.

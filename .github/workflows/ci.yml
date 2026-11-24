@@ -469,6 +469,8 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
+          # Its own short-lived list: nothing accepted here applies to Brievie's images.
+          trivyignores: .trivyignore.cloudflared.yaml
 
   # The way a user installs it: fresh secrets, build the images, start everything.
   stack:

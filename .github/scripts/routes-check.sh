@@ -72,9 +72,11 @@ def walk(node):
 walk(config)
 assert proxies, "no reverse_proxy"
 for proxy in proxies:
-    up = proxy["headers"]["request"]["set"]
+    # Caddy stores header names in their canonical spelling (X-Brievie-Client-Ip).
+    up = {name.lower(): value for name, value in proxy["headers"]["request"]["set"].items()}
     for header in ("X-Brievie-Route", "X-Brievie-Client-IP", "X-Brievie-Peer-IP", "Host"):
-        assert header in up, (header, up)
+        assert header.lower() in up, (header, up)
+    assert up["x-brievie-client-ip"] == ["{http.vars.client_ip}"], up
 print(f"Caddy: {len(proxies)} proxies set the edge headers; only :8080 reads CF-Connecting-IP.")
 PY
 }
