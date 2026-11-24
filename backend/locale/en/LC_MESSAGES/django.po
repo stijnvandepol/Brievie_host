@@ -1859,6 +1859,10 @@ msgid "De database kon niet worden bijgewerkt. Er is niets veranderd."
 msgstr "The database could not be updated. Nothing has changed."
 
 #: apps/installer/prepare.py
+msgid "De nieuwe versie kon niet worden vastgelegd. De database blijft alleen-lezen; start opnieuw, dan wordt het bijwerken afgemaakt."
+msgstr "The new version could not be recorded. The database stays read-only; start again and the update will be finished."
+
+#: apps/installer/prepare.py
 #, python-format
 msgid "Brievie %(version)s is klaar om te starten."
 msgstr "Brievie %(version)s is ready to start."
