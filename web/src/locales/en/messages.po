@@ -544,6 +544,10 @@ msgstr "Ticked off on {when}"
 msgid "Afgevinkt: {description}"
 msgstr "Ticked off: {description}"
 
+#: src/components/handle-dialog.tsx
+msgid "Afhandelen"
+msgstr "Mark as handled"
+
 #: src/routes/duplicate.tsx
 msgid "afzender"
 msgstr "sender"
@@ -668,6 +672,10 @@ msgstr "Only this address can use the invitation."
 msgid "Alleen een beheerder kan regels wijzigen."
 msgstr "Only an admin can change rules."
 
+#: src/components/snooze-dialog.tsx
+msgid "Alleen jij ziet dat je dit uitstelt. Op die dag staat de taak weer in je lijst. Uitstellen kan tot de datum van de taak."
+msgstr "Only you see that you snoozed this. On that day the task is back in your list. You can snooze until the task's date."
+
 #: src/components/share-dialog.tsx
 msgid "Alleen jij, wie de brief scande, de mensen op wier naam hij staat, de mensen van een afdeling op wier naam hij staat, en wie je hier aanvinkt, kunnen hem dan lezen."
 msgstr "Only you, whoever scanned the letter, the people it is addressed to, the people of a department it is addressed to, and whoever you tick here can read it then."
@@ -734,11 +742,14 @@ msgstr "Moved to the trash as a duplicate letter by {by}"
 #: src/components/confirm-dialog.tsx
 #: src/components/deadline-dialog.tsx
 #: src/components/emergency-dialog.tsx
+#: src/components/handle-dialog.tsx
 #: src/components/invite-dialog.tsx
 #: src/components/person-dialog.tsx
 #: src/components/role-dialog.tsx
 #: src/components/share-dialog.tsx
+#: src/components/snooze-dialog.tsx
 #: src/components/visibility-preview-dialog.tsx
+#: src/components/waiting-dialog.tsx
 #: src/routes/ai.tsx
 #: src/routes/automations.tsx
 #: src/routes/departments.tsx
@@ -1019,6 +1030,14 @@ msgstr "Letter {position}"
 msgid "Brief aan iemand anders geven?"
 msgstr "Give the letter to someone else?"
 
+#: src/routes/document.tsx
+msgid "Brief afhandelen"
+msgstr "Mark letter as handled"
+
+#: src/components/handle-dialog.tsx
+msgid "Brief afhandelen?"
+msgstr "Mark this letter as handled?"
+
 #: src/components/task-row.tsx
 #: src/routes/tasks.tsx
 msgid "Brief bekijken"
@@ -1248,6 +1267,10 @@ msgstr "The sender"
 msgid "De beheerder van de server heeft automatisch verwerken uitgezet. Hier kun je het niet aanzetten."
 msgstr "The server admin has switched off the autopilot. You can't switch it on here."
 
+#: src/components/handle-dialog.tsx
+msgid "De betaling is gedaan of geregeld"
+msgstr "The payment has been made or arranged"
+
 #: src/routes/duplicate.tsx
 msgid "De brief die je houdt, krijgt de labels en personen van allebei. De andere brief gaat naar de prullenbak. Daar kun je hem 30 dagen terugzetten."
 msgstr "The letter you keep gets the labels and persons of both. The other letter goes to the trash. You can restore it from there for 30 days."
@@ -1466,6 +1489,10 @@ msgstr "This page does not exist."
 #: src/routes/rule-editor.tsx
 msgid "Deze regel bestaat niet (meer)."
 msgstr "This rule does not exist (any more)."
+
+#: src/components/handle-dialog.tsx
+msgid "Deze taken worden afgevinkt:"
+msgstr "These tasks will be ticked off:"
 
 #: src/routes/duplicate.tsx
 msgid "Deze twee brieven lijken op elkaar. Is het dezelfde brief, twee keer gescand? Kijk wat hetzelfde is en wat verschilt."
@@ -2885,6 +2912,22 @@ msgstr "No longer private"
 msgid "Niet meer privé maken?"
 msgstr "Make it no longer private?"
 
+#: src/components/task-actions.tsx
+msgid "Niet meer uitstellen"
+msgstr "Unsnooze"
+
+#: src/components/task-actions.tsx
+msgid "Niet meer uitstellen: {description}"
+msgstr "Unsnooze: {description}"
+
+#: src/components/task-actions.tsx
+msgid "Niet meer wachten"
+msgstr "Stop waiting"
+
+#: src/components/task-actions.tsx
+msgid "Niet meer wachten: {description}"
+msgstr "Stop waiting: {description}"
+
 #: src/components/person-actions.tsx
 msgid "Niet te zien"
 msgstr "Not shown"
@@ -3099,6 +3142,10 @@ msgstr "The same on both letters: {sameFields}."
 msgid "Op de andere scan is ''{task}'' al afgerond."
 msgstr "On the other scan, ''{task}'' is already completed."
 
+#: src/components/waiting-dialog.tsx
+msgid "Op die dag komt de taak terug in Mijn taken. Iedereen die deze brief ziet, ziet dat je wacht."
+msgstr "On that day the task comes back in My tasks. Everyone who sees this letter sees that you are waiting."
+
 #: src/components/document-table.tsx
 #: src/components/person-picker.tsx
 #: src/components/rule-sentence.ts
@@ -3214,6 +3261,8 @@ msgstr "Send again: {name}"
 #: src/components/person-dialog.tsx
 #: src/components/role-dialog.tsx
 #: src/components/share-dialog.tsx
+#: src/components/snooze-dialog.tsx
+#: src/components/waiting-dialog.tsx
 #: src/routes/ai.tsx
 #: src/routes/departments.tsx
 #: src/routes/document.tsx
@@ -3667,6 +3716,10 @@ msgstr "Overdue"
 msgid "Tekst van de brief"
 msgstr "Text of the letter"
 
+#: src/components/task-wait.tsx
+msgid "termijn was {term}"
+msgstr "deadline was {term}"
+
 #: src/routes/rule-editor.tsx
 msgid "Terug naar de regels"
 msgstr "Back to the rules"
@@ -3769,6 +3822,14 @@ msgstr "Assign"
 msgid "Tot"
 msgstr "Until"
 
+#: src/components/snooze-dialog.tsx
+msgid "Tot wanneer stel je dit uit?"
+msgstr "Until when do you want to snooze this?"
+
+#: src/components/waiting-dialog.tsx
+msgid "Tot wanneer wacht je op een reactie?"
+msgstr "Until when are you waiting for a reply?"
+
 #: src/components/audit-codes.ts
 msgid "Tweestapsverificatie aangezet"
 msgstr "Two-step verification switched on"
@@ -3827,6 +3888,14 @@ msgstr "Switched off"
 #: src/routes/people-detail.tsx
 msgid "Uitgeschakeld op"
 msgstr "Switched off on"
+
+#: src/task-time.ts
+msgid "Uitgesteld"
+msgstr "Snoozed"
+
+#: src/components/task-wait.tsx
+msgid "Uitgesteld tot {snoozeDay}"
+msgstr "Snoozed until {snoozeDay}"
 
 #: src/routes/rule-editor.tsx
 msgid "Uitkomst van de test"
@@ -3891,6 +3960,15 @@ msgstr "Switch off"
 #: src/components/person-actions.tsx
 msgid "Uitschakelen: {name}"
 msgstr "Switch off: {name}"
+
+#: src/components/task-actions.tsx
+msgid "Uitstellen: {description}"
+msgstr "Snooze: {description}"
+
+#: src/components/snooze-dialog.tsx
+#: src/components/task-actions.tsx
+msgid "Uitstellen…"
+msgstr "Snooze…"
 
 #: src/components/rule-sentence.ts
 msgid "Upload"
@@ -4115,6 +4193,7 @@ msgstr "Value"
 
 #: src/components/letter-status.tsx
 #: src/routes/post.tsx
+#: src/task-time.ts
 msgid "Wacht op reactie"
 msgstr "Waiting for a reply"
 
@@ -4125,6 +4204,23 @@ msgstr "Waiting for a reply ({waiting})"
 #: src/components/letter-status.tsx
 msgid "Wacht op reactie tot {until}"
 msgstr "Waiting for a reply until {until}"
+
+#: src/components/task-wait.tsx
+msgid "Wacht op reactie tot {waitDay}"
+msgstr "Waiting for a reply until {waitDay}"
+
+#: src/components/task-actions.tsx
+msgid "Wacht op reactie: {description}"
+msgstr "Waiting for a reply: {description}"
+
+#: src/components/task-actions.tsx
+#: src/components/waiting-dialog.tsx
+msgid "Wacht op reactie…"
+msgstr "Waiting for a reply…"
+
+#: src/components/task-wait.tsx
+msgid "Wachten voorbij sinds {waitDay}"
+msgstr "Waiting ended on {waitDay}"
 
 #: src/routes/invitation.tsx
 #: src/routes/login.tsx

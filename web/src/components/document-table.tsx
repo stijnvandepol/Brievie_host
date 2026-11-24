@@ -211,7 +211,7 @@ function UnreadMark() {
  * the old word "Klaar" then goes (it said less), and the action words ("Controleren",
  * "Toewijzen") stay. Without it, or for an older server, the row is as before.
  */
-function RowStatus({
+export function RowStatus({
   document,
   departments,
   letterStatus,

@@ -26,9 +26,21 @@ export function whenText(daysLeft: number | null | undefined, deadline: string |
   return plural(late, { one: `# dag te laat (${date})`, other: `# dagen te laat (${date})` });
 }
 
-export type TaskGroup = "overdue" | "within_week" | "later" | "no_date";
+export type TaskGroup = "overdue" | "within_week" | "later" | "no_date" | "waiting" | "snoozed";
 
 export const GROUPS: readonly TaskGroup[] = ["overdue", "within_week", "later", "no_date"];
+
+/** Today in the Netherlands as `2026-11-24`, the day the server counts from. */
+export function amsterdamToday(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Amsterdam" }).format(now);
+}
+
+/** `day` plus `days` days, as `YYYY-MM-DD` (noon, so no time zone moves the day). */
+export function addDays(day: string, days: number): string {
+  const moved = new Date(`${day}T12:00:00Z`);
+  moved.setUTCDate(moved.getUTCDate() + days);
+  return moved.toISOString().slice(0, 10);
+}
 
 export function groupTitle(group: TaskGroup): string {
   switch (group) {
@@ -40,6 +52,10 @@ export function groupTitle(group: TaskGroup): string {
       return t`Later`;
     case "no_date":
       return t`Zonder datum`;
+    case "waiting":
+      return t`Wacht op reactie`;
+    case "snoozed":
+      return t`Uitgesteld`;
   }
 }
 
