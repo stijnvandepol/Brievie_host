@@ -13,7 +13,7 @@ msgstr "Enter the code from the app, or a recovery code."
 msgid "Je sessie is niet meer geldig voor deze pagina. Ververs de pagina en probeer het opnieuw."
 msgstr "Your session is no longer valid for this page. Refresh the page and try again."
 
-#: apps/accounts/authority.py
+#: apps/accounts/authority.py apps/accounts/user_actions.py
 msgid "We kunnen dit account niet vinden."
 msgstr "We can't find this account."
 
@@ -29,9 +29,14 @@ msgstr "Only the server admin can do this, because this account also exists outs
 msgid "Dit kan alleen de serverbeheerder."
 msgstr "Only the server administrator can do this."
 
-#: apps/accounts/management/commands/reset_password.py apps/accounts/management/commands/set_server_admin.py
+#: apps/accounts/management/commands/clear_second_factor.py apps/accounts/management/commands/reset_password.py apps/accounts/management/commands/set_server_admin.py
 msgid "Er is geen account met dit e-mailadres."
 msgstr "There is no account with this email address."
+
+#: apps/accounts/management/commands/clear_second_factor.py
+#, python-format
+msgid "De tweestapsverificatie is gewist. Alle sessies van dit account zijn beëindigd; %(count)s apparaten zijn ontkoppeld."
+msgstr "Two-step verification is cleared. Every session of this account has ended; %(count)s devices are unpaired."
 
 #: apps/accounts/management/commands/reset_password.py
 msgid "Nieuw wachtwoord: "
@@ -464,6 +469,10 @@ msgstr "Unknown browser"
 #, python-format
 msgid "%(browser)s op %(system)s"
 msgstr "%(browser)s on %(system)s"
+
+#: apps/accounts/user_actions.py
+msgid "Log opnieuw in met je code om dit te doen."
+msgstr "Sign in again with your code to do this."
 
 #: apps/audit/api.py
 msgid "Deze gebeurtenis kennen we niet."

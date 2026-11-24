@@ -441,6 +441,36 @@
         "title": "CaCertificateOut",
         "type": "object"
       },
+      "ClearSecondFactorIn": {
+        "properties": {
+          "password": {
+            "maxLength": 128,
+            "title": "Password",
+            "type": "string"
+          },
+          "revoke_devices": {
+            "default": true,
+            "title": "Revoke Devices",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "title": "ClearSecondFactorIn",
+        "type": "object"
+      },
+      "ClearSecondFactorOut": {
+        "properties": {
+          "devices_revoked": {
+            "default": 0,
+            "title": "Devices Revoked",
+            "type": "integer"
+          }
+        },
+        "title": "ClearSecondFactorOut",
+        "type": "object"
+      },
       "ConfirmIn": {
         "description": "What the user confirmed in the review. Nothing becomes a task without it.",
         "properties": {
@@ -7772,6 +7802,135 @@
           }
         ],
         "summary": "Create Password Reset",
+        "tags": [
+          "accounts"
+        ]
+      }
+    },
+    "/api/v1/users/{user_id}/second-factor/clear": {
+      "post": {
+        "description": "Web session only: a bearer token answers 401 not_authenticated. Clear the two-step verification of somebody who lost their phone: every session of the account ends, its paired devices are unpaired unless revoke_devices is false, the member gets a notice. The caller's own password (400 wrong_password, counted like a sign-in); 403 second_factor_session_required when the caller has two-step verification but signed in without it; 404 second_factor_not_set when the account has none. A server admin may do this for anyone else; a workspace admin only for a member whose only workspace is theirs and who is no server admin (403 server_admin_only). 403 own_account for the caller's own account; 404 user_not_found for an unknown account or one outside the caller's workspaces.",
+        "operationId": "clearUserSecondFactor",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClearSecondFactorIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearSecondFactorOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Clear User Second Factor",
         "tags": [
           "accounts"
         ]

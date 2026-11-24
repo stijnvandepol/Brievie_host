@@ -212,6 +212,14 @@ def recently_authenticated(request: HttpRequest, *, now: datetime | None = None)
     return (now or timezone.now()) - proved <= REAUTHENTICATION_WINDOW
 
 
+def session_passed_second_factor(request: HttpRequest) -> bool:
+    """Whether this web session passed the second step at sign-in (or came through SSO).
+    False without a session record (a device token)."""
+    return UserSession.objects.filter(
+        session_key=request.session.session_key, second_factor=True
+    ).exists()
+
+
 def mark_reauthenticated(request: HttpRequest) -> None:
     """Note that the password was just typed again in this session."""
     with transaction.atomic():

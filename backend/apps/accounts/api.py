@@ -19,6 +19,8 @@ from apps.accounts.notices import NoticeView
 from apps.accounts.pending_auth import pending_setup_auth
 from apps.accounts.resets import IssuedReset
 from apps.accounts.schemas import (
+    ClearSecondFactorIn,
+    ClearSecondFactorOut,
     LanguageIn,
     LoginIn,
     NoticeOut,
@@ -484,3 +486,36 @@ def renew_recovery_codes(
 def remove_my_second_factor(request: HttpRequest, payload: RemoveSecondFactorIn) -> Status[None]:
     second_factor_account.remove_my_factor(request, password=payload.password, code=payload.code)
     return Status(204, None)
+
+
+@router.post(
+    "/users/{user_id}/second-factor/clear",
+    response={
+        200: ClearSecondFactorOut,
+        400: ErrorOut,
+        404: ErrorOut,
+        429: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    auth=session_auth,
+    throttle=CallerThrottle("second_factor_clear", "10/10m", per_path=False),
+    description=WEB_SESSION_ONLY
+    + " Clear the two-step verification of somebody who lost their phone: every session of"
+    " the account ends, its paired devices are unpaired unless revoke_devices is false, the"
+    " member gets a notice. The caller's own password (400 wrong_password, counted like a"
+    " sign-in); 403 second_factor_session_required when the caller has two-step"
+    " verification but signed in without it; 404 second_factor_not_set when the account"
+    " has none." + ADMIN_ACTION,
+    operation_id="clearUserSecondFactor",
+)
+def clear_user_second_factor(
+    request: HttpRequest, user_id: UUID, payload: ClearSecondFactorIn
+) -> ClearSecondFactorOut:
+    revoked = user_actions.clear_user_second_factor(
+        request,
+        target_id=user_id,
+        password=payload.password,
+        revoke_devices=payload.revoke_devices,
+    )
+    return ClearSecondFactorOut(devices_revoked=revoked)

@@ -180,3 +180,14 @@ class RecoveryCodesOut(Schema):
 class RemoveSecondFactorIn(InputSchema):
     password: str = Field(max_length=128)
     code: str = Field(max_length=20)
+
+
+class ClearSecondFactorIn(InputSchema):
+    # The admin's own password.
+    password: str = Field(max_length=128)
+    # Also unpair the member's devices: a lost phone usually carries a paired app.
+    revoke_devices: bool = True
+
+
+class ClearSecondFactorOut(Schema):
+    devices_revoked: int = 0
