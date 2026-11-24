@@ -226,3 +226,16 @@ def test_a_member_who_leaves_loses_their_snoozes() -> None:
     visibility.forget_member(h.workspace.id, h.piet.id)
     with as_actor(h.workspace, SYSTEM):
         assert list(TaskSnooze.objects.values_list("user_id", flat=True)) == [h.anne.id]
+
+
+def test_snoozing_takes_no_row_lock(client: Client) -> None:
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    h = household()
+    _, (task,) = letter_with_tasks(h.workspace, [T()], on=[h.persons["Anne"]])
+    client.force_login(h.piet)
+    with CaptureQueriesContext(connection) as queries:
+        assert _snooze(client, h, task, TODAY + timedelta(days=3)).status_code == 200
+        assert _snooze(client, h, task, None).status_code == 200
+    assert not [q["sql"] for q in queries if " FOR " in q["sql"]]

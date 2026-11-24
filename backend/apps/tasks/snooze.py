@@ -12,9 +12,11 @@ from datetime import date
 from uuid import UUID
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils.translation import gettext as _
 
 from apps.common.errors import ApiError
+from apps.documents import visibility
 from apps.tasks import services
 from apps.tasks.models import Task, TaskSnooze
 from apps.tasks.waiting import bad_date, date_ok, task_done
@@ -26,7 +28,7 @@ def snooze(*, membership: Membership, task_id: UUID, until: date | None) -> Task
     is found as the member (404 `task_not_found` like an unknown id); the same day again
     changes nothing. No history line, no audit row, no change of the letter's facts."""
     with transaction.atomic():
-        task = services.get_for_update(membership.workspace, task_id)
+        task = _visible(membership, task_id)
         if task.status != Task.Status.OPEN:
             raise task_done()
         if until is None:
@@ -47,6 +49,23 @@ def snooze(*, membership: Membership, task_id: UUID, until: date | None) -> Task
             defaults={"until": until},
         )
         return task
+
+
+def _visible(membership: Membership, task_id: UUID) -> Task:
+    """The task as the member sees it, not of a letter in the trash, without a row lock: a
+    snooze changes nothing shared, so a plain read is enough (and a viewer's snooze never
+    queues behind a writer). 404 like an unknown id; no snoozing through emergency access."""
+    task = (
+        Task.objects.filter(workspace_id=membership.workspace_id, id=task_id)
+        .filter(Q(document__isnull=True) | Q(document__trashed_at__isnull=True))
+        .select_related(*services.TASK_RELATED)
+        .first()
+    )
+    if task is None:
+        raise services.task_not_found()
+    if task.document is not None:
+        visibility.require_editable(task.document)
+    return task
 
 
 def snoozed_until(tasks: Sequence[Task], user_id: UUID, today: date) -> dict[UUID, date]:
