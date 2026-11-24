@@ -7,9 +7,17 @@ Lees bij elke versie eerst **Voor je bijwerkt**, als die er staat.
 
 ## [Onuitgebracht]
 
-Installeren met alleen een compose-bestand.
+Installeren met alleen een compose-bestand. Het Archief: elke gecontroleerde brief en je eigen
+documenten op één plek.
 
 ### Voor je bijwerkt
+
+- Deze update duurt wat langer om toe te passen: de zoekindex van alle brieven wordt opnieuw
+  opgebouwd (bij duizenden brieven een paar minuten).
+- "Alle post" heet nu "Archief" (`/w/<id>/archief`); de oude link werkt nog. Het Archief toont
+  alleen gecontroleerde brieven: brieven die nog gecontroleerd moeten worden, staan in de Inbox.
+- De export heeft versie 2: er zit een PDF per brief of document in, en de herkende tekst (met
+  het BSN weggehaald) staat nu ook in het gegevensbestand.
 
 - Een bestaande installatie met `./brievie` verandert niet. Het compose-bestand is een tweede
   manier om te installeren (docs/SELFHOST.md, sectie 24); beide gebruiken dezelfde volumes,
@@ -28,6 +36,17 @@ Installeren met alleen een compose-bestand.
   voorkeur als bestand (`..._FILE`, met `BRIEVIE_BACKUP_SECRETS_DIR`), niet als variabele.
 
 ### Toegevoegd
+
+- Archief: zoeken en filteren op soort (brief of eigen document), type, van wie, afzender,
+  jaar, label, status en "Loopt af".
+- Eigen documenten (contract, diploma, paspoortkopie, garantiebewijs, polis …): via de app
+  toe te voegen, met titel, type, datum, persoon, labels, "Geldig tot" en "Bewaren tot". Ze
+  slaan de Inbox over, krijgen geen taken, regels of autopilot, en tellen nooit als ongelezen
+  of "Blijft liggen". De AI doet nog niets met een eigen document.
+- "Geldig tot" wordt een taak in Mijn taken, zoveel dagen vooraf als je kiest (7, 30, 60 of 90).
+- "Bewaren tot": naar de prullenbak mag (met een vraag), definitief wissen pas na die datum.
+- "Alles exporteren" voor een beheerder: alles wat die mag lezen, zonder privébrieven van
+  anderen.
 
 - Het compose-bestand (`deploy/compose/docker-compose.yml`, bij elke release als
   `docker-compose.yml` en als `docker-compose.pinned.yml` met de images op digest) en het
