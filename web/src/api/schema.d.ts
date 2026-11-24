@@ -641,7 +641,7 @@ export interface paths {
         put?: never;
         /**
          * Create Recovery Sheet
-         * @description Web session only: a bearer token answers 401 not_authenticated; a session without a valid CSRF token answers 403. Server admins only (403 forbidden). The sheet carries the master key: the session must have signed in or called reauthenticate within 15 minutes (403 reauthentication_required). Answers the page as a download (Cache-Control: no-store) and records recovery_sheet_viewed in the log. 409 recovery_sheet_not_here on a server that is not a compose install: there the sheet is made on the server with ./brievie recovery-sheet. POST, never GET: a GET would be cached and logged on the way.
+         * @description Web session only: a bearer token answers 401 not_authenticated; a session without a valid CSRF token answers 403. Server admins only (403 forbidden). The sheet carries the master key: the session must have signed in or called reauthenticate within 15 minutes (403 reauthentication_required), and with two-step verification on it must have passed the code (403 second_factor_session_required). Answers the page as a download (Cache-Control: no-store) and records recovery_sheet_viewed in the log. 409 recovery_sheet_not_here on a server that is not a compose install: there the sheet is made on the server with ./brievie recovery-sheet. POST, never GET: a GET would be cached and logged on the way.
          */
         post: operations["createRecoverySheet"];
         delete?: never;
