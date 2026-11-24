@@ -51,6 +51,9 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel):
     is_active = models.BooleanField(default=True)
     # Runs the server itself (members, backups, audit log), apart from any workspace role.
     is_server_admin = models.BooleanField(default=False)
+    # Since when a rule asks this account for a second factor (two-step sign-in, S 5):
+    # the grace period counts from here. Null while no rule asks it.
+    second_factor_required_since = models.DateTimeField(null=True, blank=True)
 
     objects: ClassVar[UserManager] = UserManager()
 
@@ -120,9 +123,53 @@ class UserSession(BaseModel):
     # When the password was last typed again in this session (`reauthenticate`); with
     # `created_at` it says how recently the person at this browser proved who they are.
     reauthenticated_at = models.DateTimeField(null=True, blank=True)
+    # True when this sign-in passed the second step (a code or a recovery code) or came
+    # through the organisation's sign-in (SSO), which does its own.
+    second_factor = models.BooleanField(default=False)
 
     def __str__(self) -> str:
         return f"Session of {self.user_id}"
+
+
+class SecondFactor(BaseModel):
+    """An account's authenticator app (two-step sign-in, S 2). A server table, like
+    `UserSession`: accounts are not workspace content.
+
+    The secret is sealed under a key derived from the master key, bound to the account
+    (`apps.common.crypto.second_factor_aad`). Unconfirmed (`confirmed_at` null) while the
+    set-up runs; only a confirmed factor asks for a code at sign-in.
+    """
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="second_factor")
+    secret_sealed = models.BinaryField()
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    # The last step whose code was used: a code is accepted only for a later step.
+    last_used_step = models.BigIntegerField(default=0)
+    # Wrong codes since `first_failed_at` (per account, whatever the address).
+    failed_count = models.IntegerField(default=0)
+    first_failed_at = models.DateTimeField(null=True, blank=True)
+    locked_until = models.DateTimeField(null=True, blank=True)
+    # How often the account was locked in a row: the lock doubles each time.
+    lockouts = models.IntegerField(default=0)
+    # A new phone being set up ("Nieuwe telefoon"): the old secret works until the new
+    # one is confirmed.
+    pending_secret_sealed = models.BinaryField(null=True, blank=True)
+    pending_since = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self) -> str:
+        return f"Second factor of {self.user_id}"
+
+
+class RecoveryCode(BaseModel):
+    """One recovery code of an account, as a keyed hash (two-step sign-in, S 2); usable
+    once."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="recovery_codes")
+    code_hash = models.CharField(max_length=64, unique=True)
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self) -> str:
+        return f"Recovery code of {self.user_id}"
 
 
 class AccountNotice(BaseModel):

@@ -72,6 +72,9 @@ services:
       BRIEVIE_SESSION_MAX_DAYS: ${BRIEVIE_SESSION_MAX_DAYS:-90}
       # Whether workspaces may switch on the AI autopilot at all.
       BRIEVIE_AI_AUTOPILOT_ALLOWED: ${BRIEVIE_AI_AUTOPILOT_ALLOWED:-true}
+      # Who must use two-step sign-in, and the days they get to switch it on.
+      BRIEVIE_REQUIRE_SECOND_FACTOR: ${BRIEVIE_REQUIRE_SECOND_FACTOR:-none}
+      BRIEVIE_SECOND_FACTOR_GRACE_DAYS: ${BRIEVIE_SECOND_FACTOR_GRACE_DAYS:-7}
     healthcheck:
       # The Host header must be an allowed host, so the first ALLOWED_HOSTS entry is used.
       test:
@@ -113,6 +116,9 @@ services:
       BRIEVIE_SESSION_MAX_DAYS: ${BRIEVIE_SESSION_MAX_DAYS:-90}
       # Whether workspaces may switch on the AI autopilot at all.
       BRIEVIE_AI_AUTOPILOT_ALLOWED: ${BRIEVIE_AI_AUTOPILOT_ALLOWED:-true}
+      # Who must use two-step sign-in, and the days they get to switch it on.
+      BRIEVIE_REQUIRE_SECOND_FACTOR: ${BRIEVIE_REQUIRE_SECOND_FACTOR:-none}
+      BRIEVIE_SECOND_FACTOR_GRACE_DAYS: ${BRIEVIE_SECOND_FACTOR_GRACE_DAYS:-7}
     # A job cut off when an update stops the worker is picked up again by the retry of
     # stalled jobs (retry_stalled_jobs).
     stop_grace_period: 1m

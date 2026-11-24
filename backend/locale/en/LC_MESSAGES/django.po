@@ -1140,6 +1140,14 @@ msgstr "The server's certificate is not the same as in the backup."
 msgid "Choose a new password, see 'Run the whole stack' in the README."
 msgstr "Choose a new password, see 'Run the whole stack' in the README."
 
+#: apps/common/checks.py
+msgid "Nog geen serverbeheerder heeft tweestapsverificatie aan."
+msgstr "No server admin has two-step sign-in on yet."
+
+#: apps/common/checks.py
+msgid "Zet het aan onder Beveiliging, of houd een herstelcode bij de hand. Op de server wist `manage.py clear_second_factor` het voor wie de telefoon kwijt is."
+msgstr "Switch it on under Security, or keep a recovery code at hand. On the server, `manage.py clear_second_factor` clears it for whoever lost their phone."
+
 #: apps/common/errors.py
 msgid "Dit verzoek klopt niet."
 msgstr "This request is not correct."
