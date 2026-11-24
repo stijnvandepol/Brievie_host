@@ -44,7 +44,8 @@ def _make_every_task_count(o: Office) -> None:
         # done and overdue every run and every member keeps open tasks of letters they read.
         rank = {o.letters[name].id: index for index, name in enumerate(o.letters)}
         tasks = sorted(
-            Task.objects.filter(document__isnull=False), key=lambda t: rank[t.document_id]
+            Task.objects.filter(document__isnull=False),
+            key=lambda t: rank[t.document_id] if t.document_id else -1,
         )
         for index, task in enumerate(tasks):
             task.description = SECRET
