@@ -4,6 +4,8 @@ import json
 import re
 from pathlib import Path
 
+import pytest
+
 CADDYFILE = (Path(__file__).resolve().parents[2] / "deploy" / "Caddyfile").read_text()
 
 
@@ -226,3 +228,26 @@ def test_only_caddy_publishes_the_api() -> None:
     for service in ("api", "worker", "keeper", "admin", "migrate"):
         assert "ports:" not in service_block(service), service
     assert "ports:" in service_block("caddy")
+
+
+@pytest.mark.parametrize(
+    "header",
+    ["X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto", "X-Real-IP", "Forwarded", "Via"],
+)
+def test_a_proxys_header_from_an_untrusted_source_is_public(header: str) -> None:
+    # Re-review of PR #53, point 1: a proxy that is not trusted yet and rewrites Host to the
+    # home name would otherwise get the private route.
+    home = site_home()
+    match = re.search(
+        r"@proxied_(\w+) \{\n\t\tnot remote_ip "
+        r"\{\$BRIEVIE_TRUSTED_PROXIES:127\.0\.0\.1/32\}\n\t\theader "
+        + re.escape(header)
+        + r" \*\n\t\}",
+        home,
+    )
+    assert match, header
+    variables = block(f"vars @proxied_{match.group(1)} {{")
+    assert "brievie_route public" in variables
+    assert "brievie_via unknown_proxy" in variables
+    # After the private default, so it wins over it.
+    assert home.index("vars @direct {") < home.index(f"vars @proxied_{match.group(1)} {{")

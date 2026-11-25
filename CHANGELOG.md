@@ -18,6 +18,16 @@ reverse proxy).
 - Met Cloudflare Tunnel kan Cloudflare alles lezen wat er langskomt; met een VPN niet. Een VPN is
   daarom het advies.
 - `./brievie start` weigert een regel `COMPOSE_PROFILES` in `deploy/.env`: het start de tunnel zelf.
+- Van buiten bereikbaar is niet getest met een echte tunnel, een echte reverse proxy of een echte
+  VPN; alleen in CI met een nagebootste tunnel.
+- Eigen reverse proxy: zet `BRIEVIE_TRUSTED_PROXIES` vóór de proxy van internet bereikbaar is, en
+  laat de proxy de oorspronkelijke Host doorgeven (`proxy_set_header Host $host;` bij nginx,
+  `ProxyPreserveHost On` bij Apache). Anders kan inloggen op de webinterface van buiten openstaan.
+- Koppel de app alleen thuis of via VPN; via het publieke adres kan koppelen niet.
+- Met Cloudflare Tunnel kan Cloudflare alles lezen wat er langskomt, ook gescande brieven.
+- `BRIEVIE_PUBLIC_WEB=true` vraagt nog niet om de tweede stap van tweestapsverificatie bij
+  inloggen van buiten.
+- Docker Swarm en Podman-pods worden niet ondersteund.
 - Een bestaande installatie met `./brievie` verandert niet. Het compose-bestand is een tweede
   manier om te installeren (docs/SELFHOST.md, sectie 24); beide gebruiken dezelfde volumes,
   start nooit allebei tegelijk. Verhuizen van de een naar de ander staat in dezelfde sectie.

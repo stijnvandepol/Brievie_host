@@ -2940,6 +2940,30 @@ all six held.
   triggers a new lookup at once (first with a pause of 2 seconds, which CI showed still let
   Caddy's first request through as public), which also covers a recreated Caddy with a new
   address. Only the stack's own containers reach the api, so the extra lookups are few.
+- **Re-review of PR #53, fixed:** (1) a proxy that is not trusted yet and rewrites Host to the
+  home name got the private route. A request on :443 that carries `X-Forwarded-For`,
+  `X-Forwarded-Host`, `X-Forwarded-Proto`, `X-Real-IP`, `Forwarded` or `Via` from an untrusted
+  source is now public and remembered as `unknown_proxy` (with its local address) for the page.
+  A proxy that sends none of these and rewrites Host stays invisible, so SELFHOST states two
+  security requirements: `BRIEVIE_TRUSTED_PROXIES` is set before the proxy is on the internet,
+  and the proxy passes the original Host; finding the proxy's address is done from the home
+  network only. (2) `createPairingCode` joins `CLOSED_ON_PUBLIC_ROUTE`: the QR (`urls`,
+  `ca_sha256`) does not pass the party that ends TLS either. (3) The page says to use the named
+  address only if it is your own proxy. (4) `brievie.W006` finds the gateways of the api's own
+  networks from `/proc/net/route` (any range, also custom networks such as `192.168.x.0/24`),
+  besides the default `172.16.0.0/12` guess.
+- **The hook for two-step sign-in's Task 13 (EA B2)** is in place and needs nothing new:
+  `apps.access.route.is_public_route(request)` (public for the tunnel, a trusted proxy, the
+  public name from any source, Cloudflare's headers on :443, and any request that did not come
+  from Caddy's own address; never trust a header for it), `settings.BRIEVIE_PUBLIC_WEB`, and
+  `settings.BRIEVIE_SECOND_FACTOR_AVAILABLE` (Task 13 sets it to `True`; `brievie.W002` and the
+  page's `public_web_without_second_factor` read it). `begin_sign_in` calls `is_public_route`
+  for a password sign-in. Its tests set `BRIEVIE_BEHIND_CADDY=True`, send `X-Brievie-Route`,
+  and since point 2 must also make the peer Caddy's: monkeypatch
+  `apps.common.net.caddy_addresses` to return the test client's `REMOTE_ADDR` (`127.0.0.1`),
+  as `tests/test_access_gate.py` does. With `BRIEVIE_PUBLIC_WEB=false` the gate already refuses
+  every sign-in operation on the public route.
+
 ## 2026-11-24: Two-step sign-in (TOTP)
 
 Plan `docs/superpowers/plans/2026-11-21-host-tweestapsverificatie.md`, design
@@ -3072,14 +3096,3 @@ Every point was checked against the code first; all held.
 - **Accepted, and written in SELFHOST:** whoever knows the password can keep the second
   step locked (the user sees the notice; an admin can clear), and after a grace period the
   password alone leads to setting a factor up, so the grace should be short.
-- **The hook for two-step sign-in's Task 13 (EA B2)** is in place and needs nothing new:
-  `apps.access.route.is_public_route(request)` (public for the tunnel, a trusted proxy, the
-  public name from any source, Cloudflare's headers on :443, and any request that did not come
-  from Caddy's own address; never trust a header for it), `settings.BRIEVIE_PUBLIC_WEB`, and
-  `settings.BRIEVIE_SECOND_FACTOR_AVAILABLE` (Task 13 sets it to `True`; `brievie.W002` and the
-  page's `public_web_without_second_factor` read it). `begin_sign_in` calls `is_public_route`
-  for a password sign-in. Its tests set `BRIEVIE_BEHIND_CADDY=True`, send `X-Brievie-Route`,
-  and since point 2 must also make the peer Caddy's: monkeypatch
-  `apps.common.net.caddy_addresses` to return the test client's `REMOTE_ADDR` (`127.0.0.1`),
-  as `tests/test_access_gate.py` does. With `BRIEVIE_PUBLIC_WEB=false` the gate already refuses
-  every sign-in operation on the public route.

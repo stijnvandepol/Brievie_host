@@ -126,6 +126,34 @@
 	# (trusted_proxies above) and the HSTS of a request from your own proxy. Every vars
 	# has a matcher; Caddy keeps their order for vars, so a later match wins.
 	@direct not remote_ip {$BRIEVIE_TRUSTED_PROXIES:127.0.0.1/32}
+	# A proxy that is not (yet) trusted: it leaves one of these headers on what it forwards.
+	# Public, the direct peer counts, and the page names it (security re-review of PR #53).
+	# A proxy that sends none of them and rewrites Host is invisible here: hence the rule in
+	# SELFHOST to trust it before it is on the internet and to pass the original Host.
+	@proxied_xff {
+		not remote_ip {$BRIEVIE_TRUSTED_PROXIES:127.0.0.1/32}
+		header X-Forwarded-For *
+	}
+	@proxied_xfh {
+		not remote_ip {$BRIEVIE_TRUSTED_PROXIES:127.0.0.1/32}
+		header X-Forwarded-Host *
+	}
+	@proxied_xfp {
+		not remote_ip {$BRIEVIE_TRUSTED_PROXIES:127.0.0.1/32}
+		header X-Forwarded-Proto *
+	}
+	@proxied_xri {
+		not remote_ip {$BRIEVIE_TRUSTED_PROXIES:127.0.0.1/32}
+		header X-Real-IP *
+	}
+	@proxied_fwd {
+		not remote_ip {$BRIEVIE_TRUSTED_PROXIES:127.0.0.1/32}
+		header Forwarded *
+	}
+	@proxied_via {
+		not remote_ip {$BRIEVIE_TRUSTED_PROXIES:127.0.0.1/32}
+		header Via *
+	}
 	@public_name host {$BRIEVIE_TUNNEL_HOST:public-hostname-not-set.invalid}
 	@via_proxy remote_ip {$BRIEVIE_TRUSTED_PROXIES:127.0.0.1/32}
 	@cf_ray header Cf-Ray *
@@ -134,6 +162,30 @@
 		brievie_route private
 		brievie_via home
 		brievie_hsts {$BRIEVIE_HSTS_SECONDS:0}
+	}
+	vars @proxied_xff {
+		brievie_route public
+		brievie_via unknown_proxy
+	}
+	vars @proxied_xfh {
+		brievie_route public
+		brievie_via unknown_proxy
+	}
+	vars @proxied_xfp {
+		brievie_route public
+		brievie_via unknown_proxy
+	}
+	vars @proxied_xri {
+		brievie_route public
+		brievie_via unknown_proxy
+	}
+	vars @proxied_fwd {
+		brievie_route public
+		brievie_via unknown_proxy
+	}
+	vars @proxied_via {
+		brievie_route public
+		brievie_via unknown_proxy
 	}
 	# The public name from a source that is not your proxy: public, the direct peer counts.
 	vars @public_name {

@@ -303,3 +303,12 @@ def test_the_proxy_checks_come_from_what_was_seen_with_the_page_opened_at_home(
     found = codes()
     assert "public_host_not_forwarded" in found
     assert "trusted_proxy_without_forwarding" in found
+
+
+def test_check_unknown_proxy_names_its_local_peer(home: Settings) -> None:
+    assert "unknown_proxy" not in codes()
+    SEEN["unknown_proxy"] = datetime.now(UTC)
+    PEERS["unknown_proxy"] = "192.168.1.5"
+    found = external_access_status(request(), app_versions=list)
+    assert "unknown_proxy" in [c.code for c in found.checks]
+    assert found.untrusted_public_name_peer == "192.168.1.5"

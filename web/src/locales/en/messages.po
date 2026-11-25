@@ -1840,6 +1840,10 @@ msgid "Er is nog niets opgeslagen."
 msgstr "Nothing has been saved yet."
 
 #: src/routes/server-external-access.tsx
+msgid "Er kwamen verzoeken binnen die door een proxy zijn doorgestuurd, van een adres dat niet in BRIEVIE_TRUSTED_PROXIES staat. Brievie behandelde ze als publiek (alleen de app). Is dat je eigen reverse proxy? Zet zijn adres dan in BRIEVIE_TRUSTED_PROXIES."
+msgstr "Requests forwarded by a proxy arrived from an address that is not in BRIEVIE_TRUSTED_PROXIES. Brievie treated them as public (app only). Is that your own reverse proxy? Then put its address in BRIEVIE_TRUSTED_PROXIES."
+
+#: src/routes/server-external-access.tsx
 msgid "Er kwamen verzoeken van Cloudflare binnen op de https-poort. Stel in het Cloudflare-dashboard de service http://caddy:8080 in, niet https://caddy:443. Brievie behandelde ze als publiek."
 msgstr "Requests from Cloudflare arrived on the https port. In the Cloudflare dashboard set the service to http://caddy:8080, not https://caddy:443. Brievie treated them as public."
 
@@ -4614,8 +4618,8 @@ msgid "Verzoek via de tunnel gezien (laatste 7 dagen)"
 msgstr "Request through the tunnel seen (last 7 days)"
 
 #: src/routes/server-external-access.tsx
-msgid "Verzoeken voor de publieke naam kwamen van dit adres, dat (nog) niet vertrouwd wordt:"
-msgstr "Requests for the public name came from this address, which is not trusted (yet):"
+msgid "Verzoeken via een proxy of voor de publieke naam kwamen van dit adres, dat (nog) niet vertrouwd wordt:"
+msgstr "Requests through a proxy or for the public name came from this address, which is not trusted (yet):"
 
 #: src/routes/server-external-access.tsx
 msgid "Via het publieke adres werkt alleen de app. De webinterface gebruik je thuis of via VPN."
@@ -5068,6 +5072,10 @@ msgstr "Put these lines in the settings of Brievie (in the compose file, Portain
 #: src/components/export-panel.tsx
 msgid "Zet het aan bij Instellingen."
 msgstr "Switch it on under Settings."
+
+#: src/routes/server-external-access.tsx
+msgid "Zet het alleen in BRIEVIE_TRUSTED_PROXIES als dit je eigen proxy is: elk apparaat in je netwerk kan zo'n verzoek sturen."
+msgstr "Put it in BRIEVIE_TRUSTED_PROXIES only if this is your own proxy: any device in your network can send such a request."
 
 #: src/routes/visibility.tsx
 msgid "Zet post op naam van een afdeling, zoals Finance. Wie in die afdeling zit, ziet die post."

@@ -33,7 +33,7 @@ def peer_ip(request: HttpRequest) -> str:
 
 
 # The ways Caddy names in X-Brievie-Via (deploy/Caddyfile).
-VIAS = ("home", "public_name", "proxy", "cloudflare", "tunnel")
+VIAS = ("home", "public_name", "proxy", "cloudflare", "tunnel", "unknown_proxy")
 
 
 def via(request: HttpRequest) -> str:

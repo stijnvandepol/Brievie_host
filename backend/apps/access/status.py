@@ -50,6 +50,7 @@ CHECK_LEVELS: dict[str, Level] = {
     "app_update_needed": "warning",
     "public_name_from_untrusted_source": "problem",
     "cloudflare_on_https_port": "problem",
+    "unknown_proxy": "problem",
 }
 CHECK_CODES: tuple[str, ...] = tuple(CHECK_LEVELS)
 
@@ -89,8 +90,8 @@ class ExternalAccess:
     seen_as: SeenAs
     checks: list[Check]
     docs_url: str
-    # The local address a request for the public name last came from without being a
-    # trusted proxy: your proxy's, to put in BRIEVIE_TRUSTED_PROXIES. Empty when none.
+    # The local address that last sent a proxy's headers or asked for the public name
+    # without being a trusted proxy: likely your proxy's. Empty when none.
     untrusted_public_name_peer: str = ""
 
 
@@ -226,6 +227,10 @@ def external_access_status(
         codes.append("public_name_from_untrusted_source")
     if seen("cloudflare_on_https_port") is not None:
         codes.append("cloudflare_on_https_port")
+    # A proxy's headers from a source that is not trusted: served as public, but a proxy that
+    # rewrites Host and sends none of them would not be seen (SELFHOST: trust it first).
+    if seen("unknown_proxy") is not None:
+        codes.append("unknown_proxy")
     if token_set:
         codes.append("cloudflare_reads_along")
     if public_way and needs_app_update(app_versions()):
@@ -245,8 +250,11 @@ def external_access_status(
         checks=[Check(code=code, level=CHECK_LEVELS[code]) for code in codes],
         docs_url=EXTERNAL_ACCESS_DOCS_URL,
         untrusted_public_name_peer=(
-            observed.last_peer("public_name_untrusted")
-            if "public_name_from_untrusted_source" in codes
-            else ""
+            (observed.last_peer("unknown_proxy") if "unknown_proxy" in codes else "")
+            or (
+                observed.last_peer("public_name_untrusted")
+                if "public_name_from_untrusted_source" in codes
+                else ""
+            )
         ),
     )

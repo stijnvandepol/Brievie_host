@@ -437,3 +437,31 @@ def test_pairing_and_addresses_stay_closed_with_the_public_web_on(settings: Sett
     assert addresses.status_code == 403
     assert addresses.json()["code"] == "pair_at_home"
     assert Client().get("/api/v1/health", headers=PUBLIC).status_code == 200
+
+
+@pytest.mark.usefixtures("fresh_notes")
+def test_a_proxy_that_is_not_trusted_yet_is_noted_with_its_local_peer() -> None:
+    from apps.access import observed
+
+    headers = {
+        "X-Brievie-Route": "public",
+        "X-Brievie-Via": "unknown_proxy",
+        "X-Brievie-Peer-IP": "192.168.1.5",
+    }
+    assert_refused(Client().get("/api/v1/server/audit-events", headers=headers))
+    assert observed.last_seen("unknown_proxy") is not None
+    assert observed.last_peer("unknown_proxy") == "192.168.1.5"
+
+
+def test_making_a_pairing_code_stays_closed_on_the_public_route_with_the_public_web_on(
+    settings: Settings,
+) -> None:
+    # Re-review of PR #53, point 2: the QR (urls, ca_sha256) must not pass the party that
+    # ends TLS either.
+    settings.BRIEVIE_PUBLIC_WEB = True
+    client = as_user(UserFactory.create())
+    response = client.post(
+        "/api/v1/devices/pairing-codes", {}, content_type="application/json", headers=PUBLIC
+    )
+    assert response.status_code == 403
+    assert response.json()["code"] == "pair_at_home"

@@ -1,4 +1,5 @@
 import secrets
+from pathlib import Path
 
 import pytest
 from django.core.checks import Error, Warning, run_checks
@@ -14,6 +15,14 @@ from apps.common.checks import (
     check_trusted_proxies,
 )
 from tests.factories import UserFactory
+
+
+@pytest.fixture(autouse=True)
+def _no_route_table(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """The runner's own routes stay out of the trusted-proxy checks; a test gives its own."""
+    from apps.common import checks
+
+    monkeypatch.setattr(checks, "ROUTE_TABLE", tmp_path / "no-route-table")
 
 
 def test_public_url_with_an_allowed_host_passes(settings: Settings) -> None:
@@ -260,3 +269,38 @@ def test_no_rule_no_warning(settings: Settings) -> None:
     UserFactory.create(is_server_admin=True)
 
     assert check_second_factor_rule(None) == []
+
+
+ROUTES = """Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT
+eth0\t00000000\t0100A8C0\t0003\t0\t0\t0\t00000000\t0\t0\t0
+eth0\t0000A8C0\t00000000\t0001\t0\t0\t0\t00FFFFFF\t0\t0\t0
+eth1\t0000140A\t00000000\t0001\t0\t0\t0\t0000FFFF\t0\t0\t0
+"""
+
+
+def test_docker_gateways_come_from_the_containers_own_routes(tmp_path: Path) -> None:
+    from apps.common.checks import docker_gateways
+
+    table = tmp_path / "route"
+    table.write_text(ROUTES)
+    found = {str(address) for address in docker_gateways(table)}
+    # The default gateway (192.168.0.1) and the first address of each network: 192.168.0.1
+    # and 10.20.0.1 (a custom network outside 172.16.0.0/12).
+    assert found == {"192.168.0.1", "10.20.0.1"}
+    assert docker_gateways(tmp_path / "missing") == set()
+
+
+@pytest.mark.parametrize("value", ["192.168.0.1", "10.20.0.1/32"])
+def test_a_gateway_of_a_custom_network_is_a_warning_too(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, value: str
+) -> None:
+    from apps.common import checks
+
+    table = tmp_path / "route"
+    table.write_text(ROUTES)
+    monkeypatch.setattr(checks, "ROUTE_TABLE", table)
+    settings.BRIEVIE_TRUSTED_PROXIES = [value]
+    settings.BRIEVIE_TRUSTED_PROXIES_WIDE = False
+    assert [m.id for m in check_trusted_proxies(None)] == ["brievie.W006"]
+    settings.BRIEVIE_TRUSTED_PROXIES = ["192.168.0.5/32"]
+    assert check_trusted_proxies(None) == []

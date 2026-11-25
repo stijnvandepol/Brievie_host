@@ -6,6 +6,7 @@ They run with every management command, so the `api` container (which runs
 
 import ipaddress
 from collections.abc import Iterable
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from django.apps import AppConfig
@@ -125,6 +126,39 @@ def check_external_access(
 NARROWEST_PREFIX = {4: 24, 6: 64}
 # Docker's default bridge networks: their gateway is what every forwarded port looks like.
 _DOCKER_NETWORKS = ipaddress.ip_network("172.16.0.0/12")
+ROUTE_TABLE = Path("/proc/net/route")
+
+
+def _hex_address(value: str) -> ipaddress.IPv4Address:
+    # /proc/net/route writes addresses as little-endian hexadecimal.
+    return ipaddress.IPv4Address(int.from_bytes(bytes.fromhex(value), "little"))
+
+
+def docker_gateways(table: Path = ROUTE_TABLE) -> set[ipaddress.IPv4Address]:
+    """The gateways of this container's own networks, whatever their range: the default
+    gateway, and the first address of every network it is on (Docker's gateway). Empty
+    outside Linux or when the table cannot be read."""
+    try:
+        lines = table.read_text().splitlines()[1:]
+    except OSError:
+        return set()
+    found: set[ipaddress.IPv4Address] = set()
+    for line in lines:
+        fields = line.split()
+        if len(fields) < 8:
+            continue
+        try:
+            destination, gateway, mask = (
+                _hex_address(f) for f in (fields[1], fields[2], fields[7])
+            )
+        except ValueError:
+            continue
+        if int(gateway):
+            found.add(gateway)
+        elif int(destination):
+            network = ipaddress.IPv4Network(f"{destination}/{mask}", strict=False)
+            found.add(network.network_address + 1)
+    return found
 
 
 def trusted_proxy_problem(entry: str, *, allow_wide: bool) -> str:
@@ -150,6 +184,7 @@ def check_trusted_proxies(
     the api, and Caddy (which waits for a healthy api) with it: closed, not open."""
     messages: list[CheckMessage] = []
     allow_wide: bool = settings.BRIEVIE_TRUSTED_PROXIES_WIDE
+    gateways = docker_gateways(ROUTE_TABLE) if settings.BRIEVIE_TRUSTED_PROXIES else set()
     for entry in settings.BRIEVIE_TRUSTED_PROXIES:
         problem = trusted_proxy_problem(entry, allow_wide=allow_wide)
         if problem:
@@ -167,13 +202,17 @@ def check_trusted_proxies(
             )
             continue
         network = ipaddress.ip_network(entry, strict=False)
-        gateway = network.network_address
-        if (
+        first = network.network_address
+        default_range_gateway = (
             network.version == 4
             and network.num_addresses == 1
-            and gateway in _DOCKER_NETWORKS
-            and int(gateway) % 256 == 1
-        ):
+            and first in _DOCKER_NETWORKS
+            and int(first) % 256 == 1
+        )
+        # The gateway of one of this container's own networks, in any range (a custom
+        # network such as 192.168.x.0/24 or 10.x.0.0/16 too).
+        own_gateway = any(gateway in network for gateway in gateways)
+        if default_range_gateway or own_gateway:
             messages.append(
                 Warning(
                     f"BRIEVIE_TRUSTED_PROXIES has {entry}, which looks like Docker's own gateway.",

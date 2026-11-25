@@ -57,6 +57,8 @@ function checkText(code: string): string {
       return t`Er kwamen verzoeken voor de publieke naam binnen van een adres dat niet in BRIEVIE_TRUSTED_PROXIES staat. Brievie behandelde ze als publiek (alleen de app) en telde het directe adres. Is dat je reverse proxy? Zet zijn adres dan in BRIEVIE_TRUSTED_PROXIES.`;
     case "cloudflare_on_https_port":
       return t`Er kwamen verzoeken van Cloudflare binnen op de https-poort. Stel in het Cloudflare-dashboard de service http://caddy:8080 in, niet https://caddy:443. Brievie behandelde ze als publiek.`;
+    case "unknown_proxy":
+      return t`Er kwamen verzoeken binnen die door een proxy zijn doorgestuurd, van een adres dat niet in BRIEVIE_TRUSTED_PROXIES staat. Brievie behandelde ze als publiek (alleen de app). Is dat je eigen reverse proxy? Zet zijn adres dan in BRIEVIE_TRUSTED_PROXIES.`;
     default:
       return code;
   }
@@ -167,8 +169,9 @@ function Page({ found }: { found: ExternalAccess }) {
       >
         {found.untrusted_public_name_peer ? (
           <MessageBar intent="warning">
-            {t`Verzoeken voor de publieke naam kwamen van dit adres, dat (nog) niet vertrouwd wordt:`}{" "}
-            <code>{found.untrusted_public_name_peer}</code>
+            {t`Verzoeken via een proxy of voor de publieke naam kwamen van dit adres, dat (nog) niet vertrouwd wordt:`}{" "}
+            <code>{found.untrusted_public_name_peer}</code>{" "}
+            {t`Zet het alleen in BRIEVIE_TRUSTED_PROXIES als dit je eigen proxy is: elk apparaat in je netwerk kan zo'n verzoek sturen.`}
           </MessageBar>
         ) : null}
         {proxyOn ? (

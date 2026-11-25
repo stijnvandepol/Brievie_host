@@ -42,7 +42,13 @@ APP_OPERATIONS: frozenset[str] = frozenset({"getHealth", "getCaCertificate"})
 # addresses only over a connection pinned to the server's own CA, never through the party
 # that ends TLS for the public name (it could hand the app addresses of its choosing).
 CLOSED_ON_PUBLIC_ROUTE: frozenset[str] = frozenset(
-    {"getServerAddresses", "createPairingChallenge", "pairDevice", "pairDeviceWithProof"}
+    {
+        "getServerAddresses",
+        "createPairingCode",
+        "createPairingChallenge",
+        "pairDevice",
+        "pairDeviceWithProof",
+    }
 )
 CODE = "public_web_off"
 PAIR_AT_HOME = "pair_at_home"
@@ -171,6 +177,8 @@ def observe(request: HttpRequest) -> None:
     way = via(request)
     if way == "public_name":
         observed.note("public_name_untrusted", peer=peer_ip(request))
+    elif way == "unknown_proxy":
+        observed.note("unknown_proxy", peer=peer_ip(request))
     elif way == "cloudflare":
         observed.note("cloudflare_on_https_port")
     elif way == "tunnel":

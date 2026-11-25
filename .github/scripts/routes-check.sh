@@ -143,6 +143,19 @@ check_listeners() {
 			--resolve "$PUBLIC_HOST:443:127.0.0.1" "https://$PUBLIC_HOST/")
 		test "$code" = 403
 	fi
+	# A proxy that is not trusted yet (re-review of PR #53): each of its headers on :443 from an
+	# untrusted source makes the request public, whatever its Host. Pairing tells public from
+	# private in both modes (public: 403 pair_at_home).
+	for header in 'X-Forwarded-For: 198.51.100.1' 'X-Forwarded-Host: localhost' \
+		'X-Forwarded-Proto: https' 'X-Real-IP: 198.51.100.1' 'Forwarded: for=198.51.100.1' \
+		'Via: 1.1 proxy'; do
+		answer=$(curl --silent --insecure --request POST --header 'Content-Type: application/json' \
+			--header "$header" https://localhost/api/v1/devices/pairing-challenges)
+		test "$(jq -r .code <<<"$answer")" = pair_at_home || {
+			echo "Not public with: ${header%%:*}" >&2
+			exit 1
+		}
+	done
 	# Pairing and the server's addresses never go through the party that ends TLS.
 	inside POST caddy:8080 /api/v1/devices/pairing-challenges '{"X-Forwarded-Proto": "https", "Content-Type": "application/json"}' 0 >"$work/t"
 	test "$(status_of "$work/t")" = 403
@@ -165,8 +178,8 @@ check_session() {
 	echo "::add-mask::$session"
 	# :443 with forged address and route headers: Brievie sees the peer, private, https.
 	# (CF-Connecting-IP on :443 would make the request public: checked below.)
+	# (A proxy's header such as X-Forwarded-For makes it public: checked below and in listeners.)
 	curl --silent --show-error --insecure --cookie "sessionid=$session" \
-		--header 'X-Forwarded-For: 198.51.100.1' \
 		--header 'X-Brievie-Client-IP: 198.51.100.3' --header 'X-Brievie-Route: public' \
 		--header 'X-Brievie-Peer-IP: 198.51.100.4' --header 'X-Brievie-Via: tunnel' \
 		https://localhost/api/v1/server/external-access >"$work/home.json"
@@ -183,11 +196,13 @@ codes = [c["code"] for c in json.load(open(sys.argv[1]))["checks"]]
 # on the https port.
 assert "public_name_from_untrusted_source" in codes, codes
 assert "cloudflare_on_https_port" in codes, codes
+assert "unknown_proxy" in codes, codes
 print("The page shows what the server saw:", codes)
 PY
 	# CF-Connecting-IP on :443: public (point 1 of the review), and still the peer counts.
 	code=$(curl --silent --insecure --cookie "sessionid=$session" --output "$work/cf.json" \
 		--write-out '%{http_code}' --header 'CF-Connecting-IP: 198.51.100.2' \
+		--header 'X-Forwarded-For: 198.51.100.1' \
 		https://localhost/api/v1/server/external-access)
 	if [ "${PUBLIC_WEB:-false}" = true ]; then
 		test "$code" = 200
@@ -195,8 +210,9 @@ PY
 import json, sys
 seen = json.load(open(sys.argv[1]))["seen_as"]
 assert seen["route"] == "public", seen
-assert seen["client_ip"] == seen["peer_ip"] != "198.51.100.2", seen
-print("Cloudflare's header on :443: public, and the peer still counts.")
+assert seen["client_ip"] == seen["peer_ip"], seen
+assert not seen["client_ip"].startswith("198.51.100."), seen
+print("Cloudflare's and a proxy's headers on :443: public, and the peer still counts.")
 PY
 	else
 		test "$code" = 403

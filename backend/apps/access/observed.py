@@ -25,6 +25,9 @@ WRITE_EVERY = 600.0  # seconds
 KINDS = (
     # A request for the public name from a source that is not a trusted proxy.
     "public_name_untrusted",
+    # A request with a proxy's headers (X-Forwarded-For and the like) from a source that is
+    # not a trusted proxy: a proxy that is not trusted yet.
+    "unknown_proxy",
     # Cloudflare's headers on the https port: a tunnel pointed at :443, or proxied DNS.
     "cloudflare_on_https_port",
     # A request through the tunnel listener.

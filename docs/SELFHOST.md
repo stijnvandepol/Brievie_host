@@ -1022,9 +1022,22 @@ the app (an app cannot do Access's browser login); an Access application that le
 
 Your proxy ends TLS with its own public certificate and forwards to
 `https://<server>:<BRIEVIE_HTTPS_PORT>` (Caddy's normal port; it may skip verifying Caddy's
-certificate, or trust the CA from `GET /api/v1/server/ca-certificate`). It must pass on the
-original `Host` (Nginx Proxy Manager, Traefik and Synology do; plain nginx needs
-`proxy_set_header Host $host;`) and allow uploads of at least 32 MB. Websockets are not needed.
+certificate, or trust the CA from `GET /api/v1/server/ca-certificate`). It allows uploads of at
+least 32 MB; websockets are not needed.
+
+**Two security requirements, before the proxy is reachable from the internet:**
+
+1. **`BRIEVIE_TRUSTED_PROXIES` is set to the proxy's address first.** Until Brievie trusts the
+   proxy, it cannot tell the proxy's requests from those of a device in your home. Brievie treats
+   a request as public (only the app) when it asks for the public name or carries a proxy's
+   headers (`X-Forwarded-For`, `X-Forwarded-Host`, `X-Forwarded-Proto`, `X-Real-IP`,
+   `Forwarded`, `Via`) from an address it does not trust, but a proxy that sends none of them and
+   rewrites the Host to the home name looks exactly like a home device: the web sign-in would
+   then be open to the internet.
+2. **The proxy passes the original Host** (`brievie.example.nl`), never the upstream's name or
+   address. Nginx Proxy Manager, Traefik and Synology do this by default; plain nginx and
+   Apache's `proxy_pass` do not: add `proxy_set_header Host $host;` (nginx) or
+   `ProxyPreserveHost On` (Apache).
 
 ```
 BRIEVIE_HOSTNAME=192.168.1.20
@@ -1032,30 +1045,41 @@ BRIEVIE_PUBLIC_HOSTNAME=brievie.example.nl
 BRIEVIE_TRUSTED_PROXIES=192.168.1.5/32
 ```
 
-`BRIEVIE_TRUSTED_PROXIES` is the address Brievie sees for your proxy. You find it without
-opening anything to the internet: set `BRIEVIE_PUBLIC_HOSTNAME` first, send one request through
-the proxy (open the app away from home, or `https://brievie.example.nl/api/v1/health`), then open
-**Account, Van buiten bereikbaar** at home: under "Eigen reverse proxy" it names the local
-address that request came from. **Never put Docker's own gateway address there** (often
-`172.x.0.1`): with Docker's port forwarding every device in your network arrives from that
-address, and could then pick its own address for the sign-in limits. The api warns about such a
-gateway address (`brievie.W006`) and refuses to start with `0.0.0.0/0`, `::/0`, an invalid
-entry, or a range wider than a /24 (IPv4) or /64 (IPv6) unless
+**Finding the proxy's address, from the home network only** (the proxy not yet forwarded to from
+the internet, no port open on the router):
+
+1. The address is normally the proxy machine's own address in your network (a NAS at
+   `192.168.1.5`: `192.168.1.5/32`), or, for a proxy container on the same Docker host, that
+   container's address on the network it shares with Caddy.
+2. To check it: set `BRIEVIE_PUBLIC_HOSTNAME`, start Brievie, and from a computer at home send
+   one request through the proxy (`curl -k https://<proxy>/api/v1/health` with the public name,
+   for example `curl --resolve brievie.example.nl:443:192.168.1.5 https://brievie.example.nl/api/v1/health`).
+   Then open **Account, Van buiten bereikbaar** at home: under "Eigen reverse proxy" it names
+   the local address that request came from. Use it only when it is your proxy's: any device in
+   your network can send such a request.
+3. Set `BRIEVIE_TRUSTED_PROXIES`, start Brievie again, and only then let the proxy be reached
+   from the internet.
+
+**Never put Docker's own gateway address there** (often `172.x.0.1`, or the `.1` of a custom
+network): with Docker's port forwarding every device in your network arrives from that address,
+and could then pick its own address for the sign-in limits. The api warns about the gateway of
+any of its own networks (`brievie.W006`) and refuses to start with `0.0.0.0/0`, `::/0`, an
+invalid entry, or a range wider than a /24 (IPv4) or /64 (IPv6) unless
 `BRIEVIE_TRUSTED_PROXIES_WIDE=true` (`brievie.E003`).
 
 A request for the public name is **always** treated as public (only the app works there while
-`BRIEVIE_PUBLIC_WEB` is off), whatever address it comes from: before `BRIEVIE_TRUSTED_PROXIES`
-names your proxy, or after its address changed, nothing opens; the visitors then only share
-the proxy's address for the sign-in limits, and the page says so. A request that carries
-Cloudflare's headers on the https port (a tunnel pointed at `https://caddy:443` instead of
-`http://caddy:8080`) is public too, and the page warns about it.
+`BRIEVIE_PUBLIC_WEB` is off), whatever address it comes from; so is a request with a proxy's
+headers from an untrusted address. After the proxy's address changed, nothing opens; the
+visitors then only share the proxy's address for the sign-in limits, and the page says so. A
+request that carries Cloudflare's headers on the https port (a tunnel pointed at
+`https://caddy:443` instead of `http://caddy:8080`) is public too, and the page warns about it.
 
 ### What the page can know
 
 You open the page at home (a web session never counts on the public address). It shows what is
 set, what your own request looks like, and what the server **saw on the public route in the
-last seven days**: a request for the public name from an address that is not a trusted proxy
-(with that address, when it is one of your local network), Cloudflare on the https port, a
+last seven days**: a request for the public name, or with a proxy's headers, from an address
+that is not a trusted proxy (with that address, when it is one of your local network), Cloudflare on the https port, a
 trusted proxy that named no client, a proxy that did not pass the original Host, and whether
 any request came through the tunnel. Only the kind and the time are kept, never a page or a
 person. Before any request came that way, those lines are simply absent. The same mistakes in

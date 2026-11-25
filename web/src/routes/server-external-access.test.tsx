@@ -143,6 +143,7 @@ describe("what the server saw on the way in", () => {
     renderApp("/server/van-buiten");
     const proxy = await screen.findByRole("region", { name: /Eigen reverse proxy/ });
     expect(within(proxy).getByText("192.168.1.5")).toBeInTheDocument();
+    expect(proxy).toHaveTextContent("alleen in BRIEVIE_TRUSTED_PROXIES als dit je eigen proxy is");
     const list = screen.getByRole("list", { name: "Controles" });
     expect(list).toHaveTextContent("Er kwamen verzoeken voor de publieke naam binnen");
   });
