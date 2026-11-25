@@ -44,7 +44,7 @@ function checkText(code: string): string {
     case "public_web_second_factor_required":
       return t`Inloggen op de webinterface via het publieke adres vraagt altijd om tweestapsverificatie. Wie dat niet aan heeft, logt alleen thuis of via VPN in.`;
     case "public_web_admin_without_second_factor":
-      return t`Niet elke serverbeheerder heeft tweestapsverificatie aan. Zonder kan hij van buiten niet inloggen op de webinterface. Zet het thuis aan onder Account, Beveiliging.`;
+      return t`Niet elke serverbeheerder heeft tweestapsverificatie aan. Wie het niet aan heeft, kan van buiten niet inloggen op de webinterface. Zet het thuis aan onder Account, Beveiliging.`;
     case "public_web_off":
       return t`Via het publieke adres werkt alleen de app. De webinterface gebruik je thuis of via VPN.`;
     case "request_not_secure":

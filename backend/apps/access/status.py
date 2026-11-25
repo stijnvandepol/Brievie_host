@@ -226,8 +226,9 @@ def external_access_status(
     if not seen_as.secure:
         codes.append("request_not_secure")
     # Both from what the server saw on the public route (apps.access.observed), since the page
-    # is opened at home and a web session never counts on the public route; and from the
-    # admin's own request when it did come that way (BRIEVIE_PUBLIC_WEB).
+    # is mostly opened at home (on the public route a web session counts only with the web on
+    # there and after the second step); and from the admin's own request when it did come
+    # that way (BRIEVIE_PUBLIC_WEB).
     host_wrong = seen("host_not_forwarded") is not None
     if public and public_hostname:
         host = urlsplit(f"//{request.get_host()}").hostname or ""
