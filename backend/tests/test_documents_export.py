@@ -172,7 +172,8 @@ def test_write_export_opens_a_short_context_per_document(
 
     # One transaction per document, and none open while a page file is read.
     assert len(commits) == 3
-    assert open_during_page_reads == [False] * 6
+    # Every page twice (the picture, then the PDF): one at a time, never all at once.
+    assert open_during_page_reads == [False] * 12
     assert not connection.in_atomic_block
 
 

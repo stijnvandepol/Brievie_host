@@ -554,6 +554,9 @@ class MyExportOut(Schema):
     size: int = 0
     # `mine` (the member's own post) or `all` (an admin's "Alles exporteren").
     scope: str = "mine"
+    # Why a `failed` export failed, when known: `too_large` (over the server's limit) or
+    # `not_enough_space` (the disk has no room); empty otherwise.
+    failure_code: str = ""
 
 
 class DocumentSearchIn(InputSchema):

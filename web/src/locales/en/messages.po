@@ -1556,6 +1556,10 @@ msgstr "the source is {source}"
 msgid "De export is niet gelukt. Probeer het opnieuw."
 msgstr "The export did not succeed. Try again."
 
+#: src/components/export-panel.tsx
+msgid "De export werd groter dan deze server toestaat. Vraag de serverbeheerder."
+msgstr "The export grew larger than this server allows. Ask your server admin."
+
 #: src/routes/labels.tsx
 msgid "de groep"
 msgstr "the group"
@@ -2023,6 +2027,10 @@ msgstr "There is nothing to pick up."
 #: src/routes/backup.tsx
 msgid "Er loopt een back-up. Dit scherm ververst zichzelf."
 msgstr "A backup is running. This screen refreshes itself."
+
+#: src/components/export-panel.tsx
+msgid "Er was niet genoeg ruimte op de server voor deze export. Vraag de serverbeheerder."
+msgstr "There was not enough room on the server for this export. Ask your server admin."
 
 #: src/components/device-table.tsx
 msgid "Er zijn nog geen apparaten gekoppeld."

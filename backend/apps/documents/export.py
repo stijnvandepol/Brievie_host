@@ -21,7 +21,7 @@ import re
 import time
 import unicodedata
 import zipfile
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import date
@@ -29,6 +29,8 @@ from io import RawIOBase
 from typing import BinaryIO
 from uuid import UUID
 
+from django.db.models import Sum
+from django.db.models.functions import Length
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
@@ -214,7 +216,7 @@ def _write_pages(
     read (a file missing for a document that still exists is an error).
     """
     names: list[str] = []
-    opened: list[bytes] = []
+    holdable = True
     for page in read.pages:
         try:
             data = _open_page(workspace_id, document_id, page.index, page.storage_path, read.key)
@@ -227,19 +229,24 @@ def _write_pages(
         # JPEG data does not compress; storing it saves the time.
         _add(archive, name, data, compress=False)
         names.append(name)
-        opened.append(data)
-    # The PDF of the same pages, written into the ZIP as it is made: nothing unsealed
-    # touches the disk. Its pages are the opened ones, held for this document only. A page
-    # a PDF cannot hold as it is (no whole JPEG of 1, 3 or 4 colours) leaves the document
-    # without a PDF; its pictures are there.
-    if not all(pdf_can_hold(data) for data in opened):
+        holdable = holdable and pdf_can_hold(data)
+    # A page a PDF cannot hold as it is (no whole JPEG of 1, 3 or 4 colours) leaves the
+    # document without a PDF; its pictures are there.
+    if not holdable:
         read.entry["pdf"] = None
         return names
+
+    def pages_again() -> Iterator[bytes]:
+        # Opened once more, one at a time: only one page of a document is in memory
+        # (security review of PR #54, point 2), and nothing unsealed touches the disk.
+        for page in read.pages:
+            yield _open_page(workspace_id, document_id, page.index, page.storage_path, read.key)
+
     info = zipfile.ZipInfo(read.pdf, date_time=time.localtime()[:6])
     info.compress_type = zipfile.ZIP_STORED
     info.external_attr = 0o644 << 16
     with archive.open(info, "w", force_zip64=True) as target:
-        write_pdf(opened, target)
+        write_pdf(pages_again(), target)
     return names
 
 
@@ -300,4 +307,31 @@ def _readme(title: str, counts: ExportCounts) -> str:
             ),
             "",
         ]
+    )
+
+
+# The ZIP holds every page twice (the picture and inside the PDF), plus the data file.
+_PER_DOCUMENT = 8192
+_DATA_FILE = 1024 * 1024
+
+
+def estimate_bytes(workspace_id: UUID, reader_id: UUID | None, document_ids: Sequence[UUID]) -> int:
+    """About how large the export of these documents becomes, read as the reader: twice
+    their pages, their text and a little per document (security review of PR #54, point 2).
+    Over rather than under: it decides whether there is room."""
+    ids = list(dict.fromkeys(document_ids))
+    if not ids:
+        return _DATA_FILE
+    with export_context(workspace_id, reader_id=reader_id):
+        pages = DocumentPage.objects.filter(document_id__in=ids).aggregate(total=Sum("size"))
+        text = (
+            Document.objects.filter(id__in=ids)
+            .filter(LIVE)
+            .aggregate(total=Sum(Length("ocr_text")))
+        )
+    return (
+        2 * int(pages["total"] or 0)
+        + int(text["total"] or 0)
+        + _PER_DOCUMENT * len(ids)
+        + _DATA_FILE
     )

@@ -19,7 +19,8 @@ from functools import partial
 from typing import BinaryIO
 from uuid import UUID, uuid4
 
-from django.db import IntegrityError, models, transaction
+from django.conf import settings
+from django.db import IntegrityError, connection, models, transaction
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
@@ -27,10 +28,11 @@ from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
 from apps.common.sealed_stream import SealedWriter, iter_opened
-from apps.documents.export import export_context, write_export
+from apps.documents.export import estimate_bytes, export_context, write_export
 from apps.documents.export_files import (
     UnsafePathError,
     export_file_path,
+    free_bytes,
     list_export_files,
     open_export_for_read,
     open_export_for_write,
@@ -159,7 +161,10 @@ def create_my_export(*, membership: Membership, actor: AuditActor, scope: str) -
 
     422 for another scope; `mine`: 403 `export_not_allowed` when the workspace switched
     exports off; `all`: 403 `not_admin` unless the caller is an admin (re-read under the
-    lock of their membership). 409 `export_running` while an earlier one is being built;
+    lock of their membership), and 409 `export_running_elsewhere` while another admin's
+    `all` export of the workspace is being built (one at a time per workspace). 409
+    `export_too_large` when it would exceed `BRIEVIE_EXPORT_MAX_BYTES`. 409
+    `export_running` while an earlier one is being built;
     an older finished (or failed) one is replaced, its file removed after the commit. One
     export per member, whatever its scope. Needs the workspace's RLS context (see
     workspaces.deps). The `export_created` row (count and scope) is in the same transaction.
@@ -175,7 +180,34 @@ def create_my_export(*, membership: Membership, actor: AuditActor, scope: str) -
         role = lock_own_role(workspace.id, membership.user_id)
         if scope == MemberExport.Scope.ALL and role != Membership.Role.ADMIN:
             raise _not_admin()
-        count = len(_document_ids(workspace.id, membership.user_id, scope))
+        if scope == MemberExport.Scope.ALL:
+            # One "Alles exporteren" at a time per workspace: every one holds about the whole
+            # workspace twice (security review of PR #54, point 2).
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                    [f"export-all-{workspace.id}"],
+                )
+            if (
+                MemberExport.objects.filter(
+                    workspace=workspace,
+                    scope=MemberExport.Scope.ALL,
+                    status=MemberExport.Status.PENDING,
+                )
+                .exclude(user_id=membership.user_id)
+                .exists()
+            ):
+                raise ApiError(
+                    409,
+                    "export_running_elsewhere",
+                    _("Er wordt al een export van alles gemaakt. Probeer het later nog eens."),
+                )
+        document_ids = _document_ids(workspace.id, membership.user_id, scope)
+        count = len(document_ids)
+        if estimate_bytes(workspace.id, membership.user_id, document_ids) > (
+            settings.BRIEVIE_EXPORT_MAX_BYTES
+        ):
+            raise ApiError(409, "export_too_large", _too_large_message())
         mine = MemberExport.objects.select_for_update().filter(
             workspace=workspace, user_id=membership.user_id
         )
@@ -206,6 +238,15 @@ def create_my_export(*, membership: Membership, actor: AuditActor, scope: str) -
         )
         build_member_export.defer(workspace_id=str(workspace.id), export_id=str(export.id))
     return export
+
+
+def _too_large_message() -> str:
+    return _("Deze export wordt groter dan deze server toestaat. Vraag de serverbeheerder.")
+
+
+def has_room(estimate: int) -> bool:
+    """Whether the export directory's disk holds `estimate` bytes with the reserve to spare."""
+    return free_bytes() >= estimate + settings.BRIEVIE_EXPORT_FREE_RESERVE_BYTES
 
 
 def _not_allowed() -> ApiError:
@@ -334,6 +375,19 @@ def build_export(workspace_id: UUID, export_id: UUID) -> None:
         # A file from a job that died halfway.
         remove_export_file(path)
         document_ids = _document_ids(workspace_id, user_id, scope)
+        # Measured before a byte is written (security review of PR #54, point 2): too large
+        # for the server's limit, or for the room on its disk, is a failed export with a
+        # reason the member sees, not a full disk.
+        estimate = estimate_bytes(workspace_id, user_id, document_ids)
+        refusal = (
+            "too_large"
+            if estimate > settings.BRIEVIE_EXPORT_MAX_BYTES
+            else ("" if has_room(estimate) else "not_enough_space")
+        )
+        if refusal:
+            logger.warning("Export %s refused: %s", export_id, refusal)
+            _finish(workspace_id, export_id, MemberExport.Status.FAILED, failure_code=refusal)
+            return
         title = (
             _("Brievie: alles wat %(name)s mag lezen") % {"name": member_name}
             if scope == MemberExport.Scope.ALL
@@ -366,7 +420,7 @@ def build_export(workspace_id: UUID, export_id: UUID) -> None:
         _remove_files([storage_path])
 
 
-def _finish(workspace_id: UUID, export_id: UUID, status: str, **fields: int) -> bool:
+def _finish(workspace_id: UUID, export_id: UUID, status: str, **fields: int | str) -> bool:
     """Move a still pending export to `status`; False when it is gone or not pending."""
     now = timezone.now()
     expires_at = now + VALIDITY if status == MemberExport.Status.READY else None

@@ -3254,3 +3254,17 @@ Every point was checked against the code first.
   sender in the page's state, never in the URL; an old `?afzender=` is ignored. The other URL
   filters name no content: a kind, a type of the closed list, a year, a status, ids of a person
   and a label. A title is never a filter; search stays `POST searchDocuments`.
+- **Point 2 (medium), held, fixed: no size limit on an export.** Every page is in the ZIP twice
+  (the picture and in the PDF) and nothing measured it first. Now the export's size is estimated
+  before a byte is written (twice the pages, the text, a little per document): over
+  `BRIEVIE_EXPORT_MAX_BYTES` (default 10 GiB) it is refused when asked (409 `export_too_large`)
+  and failed when built (`failure_code` `too_large`); without room for it plus
+  `BRIEVIE_EXPORT_FREE_RESERVE_BYTES` (default 1 GiB) on the export disk it fails with
+  `not_enough_space` (`MyExportOut.failure_code`, said in words on Mensen). Free space is read
+  through `export_files.free_bytes` (looks only). A document's pages are opened one at a time
+  for the pictures and again one at a time for the PDF; no list of a document's pages is held.
+  One "Alles exporteren" runs at a time per workspace (a transaction advisory lock, then 409
+  `export_running_elsewhere`); a member's own archive is not held up by it. Ruling: both limits
+  are Django settings with these defaults, not yet passed by the compose files (as
+  `BRIEVIE_MAX_PAGES`); the pictures stay next to the PDF (a reader of version 1 needs them),
+  so the size stays about twice the pages and is now known in advance.

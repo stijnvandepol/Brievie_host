@@ -367,6 +367,13 @@ DATA_UPLOAD_MAX_MEMORY_SIZE: int = BRIEVIE_MAX_BODY_BYTES
 # limit; Caddy enforces the same one on that route.
 BRIEVIE_MAX_UPLOAD_BYTES: int = env.int("BRIEVIE_MAX_UPLOAD_BYTES", default=33554432)
 BRIEVIE_MAX_PAGES: int = env.int("BRIEVIE_MAX_PAGES", default=30)
+# An export (a member's archive, an admin's "Alles exporteren") holds every page twice; one
+# larger than this is refused, and so is one the disk has no room for with this much to
+# spare (security review of PR #54, point 2).
+BRIEVIE_EXPORT_MAX_BYTES: int = env.int("BRIEVIE_EXPORT_MAX_BYTES", default=10 * 1024**3)
+BRIEVIE_EXPORT_FREE_RESERVE_BYTES: int = env.int(
+    "BRIEVIE_EXPORT_FREE_RESERVE_BYTES", default=1024**3
+)
 # Uploads per member of a workspace and per workspace (apps.documents.upload_limits):
 # a household scans a pile at once, a mail room more; one member must not fill the
 # worker's queue for every workspace. Ninja's rate format: count/period (s, m, h, d).

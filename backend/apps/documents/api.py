@@ -956,6 +956,7 @@ def _my_export_out(membership: Membership, export: MemberExport | None) -> MyExp
         document_count=export.document_count,
         size=export.size,
         scope=export.scope,
+        failure_code=export.failure_code,
     )
 
 

@@ -3256,6 +3256,11 @@
               "null"
             ]
           },
+          "failure_code": {
+            "default": "",
+            "title": "Failure Code",
+            "type": "string"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",

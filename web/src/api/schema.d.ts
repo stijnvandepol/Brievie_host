@@ -4459,6 +4459,11 @@ export interface components {
              */
             expires_at?: string | null;
             /**
+             * Failure Code
+             * @default
+             */
+            failure_code: string;
+            /**
              * Id
              * Format: uuid
              */

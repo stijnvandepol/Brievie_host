@@ -890,6 +890,9 @@ class MemberExport(WorkspaceModel):
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
     # Also a database default 'mine' (documents 0030) for raw inserts; no `db_default`.
     scope = models.CharField(max_length=10, choices=Scope.choices, default=Scope.MINE)
+    # Why a failed export failed, when Brievie knows: `too_large`, `not_enough_space`.
+    # Also a database default '' (documents 0031).
+    failure_code = models.CharField(max_length=30, blank=True, default="")
     # `exports/<workspace id>/<export id>.sealed`, set when the export is asked for, so a
     # cleanup knows the file of a job that died.
     storage_path = models.CharField(max_length=300)

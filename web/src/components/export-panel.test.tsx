@@ -221,4 +221,21 @@ describe("my export", () => {
     });
     expect(links).toHaveLength(1);
   });
+
+  it("says why an export failed when the server knows", async () => {
+    server.use(
+      asRole("member"),
+      ...loggedInHandlers(),
+      ...memberHandlers(members, [], {
+        ...exportState("failed"),
+        failure_code: "not_enough_space",
+      }),
+    );
+    renderApp(path);
+    expect(
+      await screen.findByText(
+        "Er was niet genoeg ruimte op de server voor deze export. Vraag de serverbeheerder.",
+      ),
+    ).toBeVisible();
+  });
 });

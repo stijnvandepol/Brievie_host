@@ -1629,6 +1629,14 @@ msgid "Kies mijn archief of alles."
 msgstr "Choose my archive or everything."
 
 #: apps/documents/member_export.py
+msgid "Er wordt al een export van alles gemaakt. Probeer het later nog eens."
+msgstr "An export of everything is being made already. Try again later."
+
+#: apps/documents/member_export.py
+msgid "Deze export wordt groter dan deze server toestaat. Vraag de serverbeheerder."
+msgstr "This export would be larger than this server allows. Ask your server admin."
+
+#: apps/documents/member_export.py
 msgid "In deze werkruimte staat exporteren uit. Vraag de beheerder."
 msgstr "Exporting is switched off in this workspace. Ask the admin."
 

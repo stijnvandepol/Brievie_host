@@ -551,6 +551,7 @@ export function exportState(
     document_count: 0,
     size: 0,
     scope,
+    failure_code: "",
     ...(status === "ready"
       ? {
           id: "ee111111-1111-4111-8111-111111111111",

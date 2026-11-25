@@ -85,7 +85,13 @@ export function ExportPanel({
         </a>
       ) : null}
       {current.status === "failed" ? (
-        <p>{t`De export is niet gelukt. Probeer het opnieuw.`}</p>
+        <p>
+          {current.failure_code === "too_large"
+            ? t`De export werd groter dan deze server toestaat. Vraag de serverbeheerder.`
+            : current.failure_code === "not_enough_space"
+              ? t`Er was niet genoeg ruimte op de server voor deze export. Vraag de serverbeheerder.`
+              : t`De export is niet gelukt. Probeer het opnieuw.`}
+        </p>
       ) : null}
       <ErrorAlert error={start.error} />
       {current.status === "pending" ? null : (
