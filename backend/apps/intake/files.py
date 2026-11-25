@@ -18,7 +18,10 @@ from apps.intake.sandbox import IsolationError
 ORIGINAL_NAME_MAX = 200
 PAGE_COUNT_TIMEOUT = 5.0
 _PNG = b"\x89PNG\r\n\x1a\n"
-_CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+# Control characters, and the marks that turn the direction of text around: "rekening<RLO>
+# fdp.exe" would show as "rekeningexe.pdf" (security review of PR #58).
+_CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f\u061c\u200e\u200f\u2028-\u202e\u2066-\u2069]")
+_EXTENSIONS = {"pdf": "pdf", "jpeg": "jpg", "png": "png"}
 
 
 class FileKind(StrEnum):
@@ -96,6 +99,14 @@ def pdf_page_count(data: bytes, *, timeout: float = PAGE_COUNT_TIMEOUT) -> int:
         raise FileRefusedError(
             code if code in {"file_encrypted", "file_unreadable"} else "file_unreadable"
         ) from None
+
+
+def download_name(name: str, kind: "FileKind") -> str:
+    """The name a download gets: the stored name with the extension of the content's kind
+    (a PDF sent as "brief.exe" downloads as "brief.pdf"), cleaned again."""
+    clean = _CONTROL.sub("", name).strip()
+    stem = clean.rsplit(".", 1)[0] if "." in clean else clean
+    return f"{stem.strip() or 'origineel'}.{_EXTENSIONS[kind.value]}"
 
 
 def safe_original_name(name: str) -> str:

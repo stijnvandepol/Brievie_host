@@ -301,8 +301,8 @@ jobs:
 
   # The intake gate (docs/superpowers/plans/2026-11-20-host-inname-zonder-iphone.md, Task 0):
   # Debian's Tesseract, as the image installs it, reads synthetic Dutch letters (a clean and a
-  # scanned variant); the job fails below the plan's threshold. Pillow is pinned here as a CI
-  # tool only; the product pins it in backend/uv.lock.
+  # scanned variant); the job fails below the plan's threshold. Pillow is pinned by hash in
+  # tools/ocr-gate/requirements.txt as a CI tool only; the product pins it in backend/uv.lock.
   ocr-gate:
     if: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
     runs-on: ubuntu-latest
@@ -317,7 +317,7 @@ jobs:
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-nld fonts-dejavu-core
           tesseract --version
-          pip install --no-cache-dir Pillow==13.0.0
+          pip install --no-cache-dir --require-hashes --only-binary=:all: -r tools/ocr-gate/requirements.txt
       - name: Unit tests
         run: python -m unittest tools/ocr-gate/test_measure.py
       - name: Measure

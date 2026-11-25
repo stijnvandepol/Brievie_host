@@ -12,7 +12,8 @@ RUN pnpm build
 
 # Build stage: uv and the resolved virtualenv. Only /opt/venv is copied on, so the
 # running image has neither the uv binary nor its caches.
-FROM python:3.13-slim AS builder
+# Pinned by index digest (amd64 and arm64); Dependabot's docker updates raise it.
+FROM python:3.13-slim@sha256:7249d5587b78209a006dc4a3b5340678f84ea729239193aa559962cd8c1fce50 AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:0.13.8 /uv /usr/local/bin/uv
 
@@ -24,7 +25,7 @@ WORKDIR /app
 COPY backend/pyproject.toml backend/uv.lock backend/.python-version ./
 RUN uv sync --frozen --no-dev --no-install-project
 
-FROM python:3.13-slim
+FROM python:3.13-slim@sha256:7249d5587b78209a006dc4a3b5340678f84ea729239193aa559962cd8c1fce50
 
 # BRIEVIE_IN_CONTAINER: the destructive commands (restore, sweep --delete, back-up
 # init) refuse to run anywhere else (safepaths.require_container).

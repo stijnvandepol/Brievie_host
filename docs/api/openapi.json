@@ -11239,7 +11239,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/documents/files": {
       "post": {
-        "description": "Web session only: a bearer token answers 401 not_authenticated. Add a PDF, JPEG or PNG as one document (multipart/form-data): `metadata` is a JSON string (schema `FileMetadataIn`: `client_id` and, for an own document, the archive fields of `UploadMetadataIn`), `file` the file. The kind is read from the content. The server keeps the original sealed and makes the pages in the background; the document answers `processing` with no pages yet. The same `client_id` and file again answers 200 with the existing document, another file 409 `document_conflict`. 422 `file_type_not_supported`, `file_unreadable`, `too_many_pages`, `file_encrypted`, `image_too_large`; 413 `file_too_large`; 429 `too_many_uploads` (lower limits of its own, and those shared with `createDocument`). A read-only member gets 403.",
+        "description": "Web session only: a bearer token answers 401 not_authenticated. Add a PDF, JPEG or PNG as one document (multipart/form-data): `metadata` is a JSON string (schema `FileMetadataIn`: `client_id` and, for an own document, the archive fields of `UploadMetadataIn`), `file` the file. The kind is read from the content. The server keeps the original sealed and makes the pages in the background; the document answers `processing` with no pages yet. The same `client_id` and file again answers 200 with the existing document, another file 409 `document_conflict`. 422 `file_type_not_supported`, `file_unreadable`, `too_many_pages`, `file_encrypted`, `image_too_large`; 413 `file_too_large`; 429 `too_many_uploads` (lower limits of its own, and those shared with `createDocument`); 507 `storage_full` when the server's disk is nearly full. A read-only member gets 403.",
         "operationId": "uploadDocumentFile",
         "parameters": [
           {
@@ -11399,6 +11399,16 @@
               }
             },
             "description": "Too Many Requests"
+          },
+          "507": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Insufficient Storage"
           }
         },
         "security": [
@@ -12975,7 +12985,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}/original": {
       "get": {
-        "description": "Web session only: a bearer token answers 401 not_authenticated. The file a browser uploaded, as it came (PDF, JPEG or PNG), for a member who sees the document. 404 `original_not_found` for an app scan.",
+        "description": "Web session only: a bearer token answers 401 not_authenticated. The file a browser uploaded, as it came (PDF, JPEG or PNG), for a member who sees the document, named with the extension of its kind. 404 `original_not_found` for an app scan, `original_unreadable` when the stored file is gone or damaged.",
         "operationId": "downloadDocumentOriginal",
         "parameters": [
           {

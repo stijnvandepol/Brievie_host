@@ -64,6 +64,7 @@ def refusal(error: FileRefusedError) -> ApiError:
         409: ErrorOut,
         411: ErrorOut,
         429: ErrorOut,
+        507: ErrorOut,
         **SESSION_WRITE_ERRORS,
         **BODY_ERRORS,
     },
@@ -78,7 +79,8 @@ def refusal(error: FileRefusedError) -> ApiError:
     " again answers 200 with the existing document, another file 409 `document_conflict`."
     " 422 `file_type_not_supported`, `file_unreadable`, `too_many_pages`, `file_encrypted`,"
     " `image_too_large`; 413 `file_too_large`; 429 `too_many_uploads` (lower limits of its"
-    " own, and those shared with `createDocument`). A read-only member gets 403.",
+    " own, and those shared with `createDocument`); 507 `storage_full` when the server's"
+    " disk is nearly full. A read-only member gets 403.",
 )
 def upload_document_file(
     request: HttpRequest,
@@ -119,7 +121,8 @@ def upload_document_file(
     operation_id="downloadDocumentOriginal",
     description=WEB_SESSION_ONLY
     + " The file a browser uploaded, as it came (PDF, JPEG or PNG), for a member who sees"
-    " the document. 404 `original_not_found` for an app scan.",
+    " the document, named with the extension of its kind. 404 `original_not_found` for an"
+    " app scan, `original_unreadable` when the stored file is gone or damaged.",
     openapi_extra={
         "responses": {
             200: {

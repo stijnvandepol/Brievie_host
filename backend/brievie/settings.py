@@ -374,6 +374,11 @@ BRIEVIE_OCR_TIMEOUT_SECONDS: int = env.int("BRIEVIE_OCR_TIMEOUT_SECONDS", defaul
 # All the worker may spend on one uploaded file, rendering and OCR together (security review
 # of PR #58): a file built to be slow fails `file_too_slow` instead of holding the worker.
 BRIEVIE_FILE_PROCESSING_SECONDS: int = env.int("BRIEVIE_FILE_PROCESSING_SECONDS", default=600)
+# Free space an uploaded file must leave on the storage disk (for its pages and everything
+# else); below it the upload answers 507 `storage_full` (security review of PR #58).
+BRIEVIE_UPLOAD_FREE_RESERVE_BYTES: int = env.int(
+    "BRIEVIE_UPLOAD_FREE_RESERVE_BYTES", default=1024**3
+)
 # An export (a member's archive, an admin's "Alles exporteren") holds every page twice; one
 # larger than this is refused, and so is one the disk has no room for with this much to
 # spare (security review of PR #54, point 2).

@@ -8,6 +8,7 @@ from apps.intake.files import (
     FileKind,
     FileRefusedError,
     check_file,
+    download_name,
     safe_original_name,
     sniff,
 )
@@ -87,3 +88,30 @@ def test_original_name_base_only() -> None:
     assert "[BSN]" in safe_original_name("brief 111222333.pdf")
     assert "111222333" not in safe_original_name("brief 111222333.pdf")
     assert len(safe_original_name("a" * 300 + ".pdf")) == 200
+
+
+@pytest.mark.parametrize(
+    "mark", ["\u202e", "\u202a", "\u2066", "\u2069", "\u200e", "\u200f", "\u061c", "\u2028"]
+)
+def test_original_name_drops_direction_marks(mark: str) -> None:
+    # Security review of PR #58: "rekening<RLO>fdp.exe" shows as "rekeningexe.pdf".
+    assert safe_original_name(f"rekening{mark}fdp.exe") == "rekeningfdp.exe"
+
+
+@pytest.mark.parametrize(
+    ("name", "kind", "expected"),
+    [
+        ("aanslag 2026.pdf", FileKind.PDF, "aanslag 2026.pdf"),
+        ("brief.exe", FileKind.PDF, "brief.pdf"),
+        ("foto.pdf", FileKind.JPEG, "foto.jpg"),
+        ("scan", FileKind.PNG, "scan.png"),
+        ("factuur.2026.html", FileKind.PDF, "factuur.2026.pdf"),
+        ("", FileKind.PDF, "origineel.pdf"),
+        (".pdf", FileKind.PDF, "origineel.pdf"),
+        ("rekening\u202efdp.exe", FileKind.PDF, "rekeningfdp.pdf"),
+    ],
+)
+def test_the_download_name_takes_its_extension_from_the_content(
+    name: str, kind: FileKind, expected: str
+) -> None:
+    assert download_name(name, kind) == expected

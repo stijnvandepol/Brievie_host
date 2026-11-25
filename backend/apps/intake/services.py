@@ -2,6 +2,9 @@
 (intake spec S 1). The request checks the file and stores the original sealed; the worker
 makes the pages (`apps.intake.prepare`)."""
 
+import hashlib
+import shutil
+from pathlib import Path
 from uuid import UUID
 
 from django.conf import settings
@@ -18,7 +21,7 @@ from apps.documents import services as document_services
 from apps.documents.models import Document
 from apps.documents.schemas import FileMetadataIn
 from apps.documents.storage import DocumentStorage, default_storage
-from apps.intake.files import check_file, safe_original_name
+from apps.intake.files import FileKind, check_file, download_name, safe_original_name
 from apps.pipeline.jobs import defer_processing
 from apps.workspaces.context import system_actor
 from apps.workspaces.keys import workspace_key
@@ -55,6 +58,12 @@ def create_document_from_file(
     existing = intake._find_existing(workspace, metadata.client_id)
     if existing is not None:
         return _same_file(existing, checked.sha256), False
+    if free_bytes() < checked.size + settings.BRIEVIE_UPLOAD_FREE_RESERVE_BYTES:
+        raise ApiError(
+            507,
+            "storage_full",
+            _("Er is te weinig ruimte op de server om dit bestand te bewaren. Vraag de beheerder."),
+        )
 
     storage = storage or default_storage()
     written: list[str] = []
@@ -116,29 +125,49 @@ def create_document_from_file(
     return document, True
 
 
+def free_bytes() -> int:
+    """Free bytes on the disk of the storage root (of its nearest existing parent on a
+    fresh install). Looks only."""
+    target = Path(settings.BRIEVIE_STORAGE_ROOT)
+    while not target.exists() and target.parent != target:
+        target = target.parent
+    return shutil.disk_usage(target).free
+
+
 def _same_file(existing: Document, sha256: str) -> Document:
     return intake.existing_or_conflict(existing, same=existing.original_sha256 == sha256)
 
 
 _CONTENT_TYPES = {
-    Document.OriginalKind.PDF: ("application/pdf", "pdf"),
-    Document.OriginalKind.JPEG: ("image/jpeg", "jpg"),
-    Document.OriginalKind.PNG: ("image/png", "png"),
+    Document.OriginalKind.PDF: "application/pdf",
+    Document.OriginalKind.JPEG: "image/jpeg",
+    Document.OriginalKind.PNG: "image/png",
 }
 
 
 def read_original(*, membership: Membership, document_id: UUID) -> tuple[bytes, str, str]:
     """The opened original of a document the member sees (through the visibility seam),
-    its content type and a file name; 404 `original_not_found` without one."""
+    its content type and a file name with the extension of its kind; 404
+    `original_not_found` without one, `original_unreadable` when the file is gone or
+    damaged."""
     document = document_services.get_document(membership=membership, document_id=document_id)
     kind = Document.OriginalKind(document.original_kind)
     if kind == Document.OriginalKind.NONE:
         raise ApiError(404, "original_not_found", _("Deze brief heeft geen origineel bestand."))
     workspace_id = membership.workspace_id
-    data = crypto.open_sealed(
-        workspace_key(workspace_id),
-        default_storage().read(intake.original_path(workspace_id, document.id)),
-        aad=intake.original_aad(workspace_id, document.id),
-    )
-    content_type, extension = _CONTENT_TYPES[kind]
-    return data, content_type, document.original_name or f"origineel.{extension}"
+    try:
+        data = crypto.open_sealed(
+            workspace_key(workspace_id),
+            default_storage().read(intake.original_path(workspace_id, document.id)),
+            aad=intake.original_aad(workspace_id, document.id),
+        )
+    except (OSError, crypto.DecryptionError):
+        data = None
+    if data is None or hashlib.sha256(data).hexdigest() != document.original_sha256:
+        # Gone from the disk or damaged: a clear answer, not a server error.
+        raise ApiError(
+            404,
+            "original_unreadable",
+            _("Het originele bestand van deze brief is niet te lezen."),
+        )
+    return data, _CONTENT_TYPES[kind], download_name(document.original_name, FileKind(kind.value))

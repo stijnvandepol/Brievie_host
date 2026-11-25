@@ -5,16 +5,19 @@ import json
 import uuid
 from pathlib import Path
 
+import pytest
 from django.conf import settings as django_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client
 from pytest_django import Settings
 
 from apps.documents.models import Document
+from apps.intake import services as intake_services
 from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Membership, Workspace
 from tests.documents_support import admin_of, bearer_for, jpeg, upload, upload_file
 from tests.factories import UserFactory
+from tests.helpers import post_json
 from tests.intake_fixtures import make_encrypted_pdf, make_pdf
 
 
@@ -203,6 +206,70 @@ def test_download_returns_the_exact_file(ws_a: Workspace) -> None:
     assert r["Cache-Control"] == "private, no-store"
     assert r["Content-Disposition"].startswith("attachment;")
     assert "aanslag" in r["Content-Disposition"]
+
+
+def test_the_download_name_follows_the_content_not_the_sender(ws_a: Workspace) -> None:
+    # Security review of PR #58: a PDF sent as "brief.exe" downloads as "brief.pdf".
+    client = _client(admin_of(ws_a))
+    created = upload_file(client, ws_a.id, make_pdf(["Een brief"]), name="brief.exe").json()
+
+    r = client.get(f"/api/v1/workspaces/{ws_a.id}/documents/{created['id']}/original")
+
+    assert r.status_code == 200
+    assert 'filename="brief.pdf"' in r["Content-Disposition"]
+
+
+def _original_file(ws: Workspace, document_id: str) -> Path:
+    return Path(django_settings.BRIEVIE_STORAGE_ROOT) / str(ws.id) / document_id / "original"
+
+
+@pytest.mark.parametrize("damage", ["missing", "changed"])
+def test_a_missing_or_damaged_original_answers_cleanly(ws_a: Workspace, damage: str) -> None:
+    client = _client(admin_of(ws_a))
+    created = upload_file(client, ws_a.id, make_pdf(["Een brief"])).json()
+    stored = _original_file(ws_a, created["id"])
+    if damage == "missing":
+        stored.unlink()
+    else:
+        stored.write_bytes(stored.read_bytes()[:-1] + b"x")
+
+    r = client.get(f"/api/v1/workspaces/{ws_a.id}/documents/{created['id']}/original")
+
+    assert r.status_code == 404
+    assert r.json() == {
+        "code": "original_unreadable",
+        "message": "Het originele bestand van deze brief is niet te lezen.",
+    }
+
+
+def test_an_upload_is_refused_when_the_disk_is_almost_full(
+    ws_a: Workspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(intake_services, "free_bytes", lambda: 10 * 1024 * 1024)
+
+    r = upload_file(_client(admin_of(ws_a)), ws_a.id, make_pdf(["Een brief"]))
+
+    assert r.status_code == 507
+    assert r.json()["code"] == "storage_full"
+    assert _count(ws_a) == 0
+    assert _files() == []
+
+
+def test_a_trashed_letter_keeps_its_original_until_the_purge(ws_a: Workspace) -> None:
+    client = _client(admin_of(ws_a))
+    data = make_pdf(["Een brief"])
+    created = upload_file(client, ws_a.id, data).json()
+    path = f"/workspaces/{ws_a.id}/documents/{created['id']}"
+    url = f"/api/v1{path}"
+
+    assert post_json(client, f"{path}/trash").status_code == 200
+    assert _original_file(ws_a, created["id"]).is_file()
+    hidden = client.get(f"{url}/original")
+    assert (hidden.status_code, hidden.json()["code"]) == (404, "document_not_found")
+
+    assert post_json(client, f"{path}/restore").status_code == 200
+    restored = client.get(f"{url}/original")
+    assert (restored.status_code, restored.content) == (200, data)
 
 
 def test_download_is_for_who_sees_the_letter(ws_a: Workspace, ws_b: Workspace) -> None:

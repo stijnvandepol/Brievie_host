@@ -2309,8 +2309,16 @@ msgid "Deze afbeelding is te groot. Maak een kleinere foto of scan."
 msgstr "This image is too large. Take a smaller photo or scan."
 
 #: apps/intake/services.py
+msgid "Er is te weinig ruimte op de server om dit bestand te bewaren. Vraag de beheerder."
+msgstr "There is too little space on the server to keep this file. Ask the admin."
+
+#: apps/intake/services.py
 msgid "Deze brief heeft geen origineel bestand."
 msgstr "This letter has no original file."
+
+#: apps/intake/services.py
+msgid "Het originele bestand van deze brief is niet te lezen."
+msgstr "The original file of this letter cannot be read."
 
 #: apps/labels/presets.py
 msgid "Belastingdienst"
