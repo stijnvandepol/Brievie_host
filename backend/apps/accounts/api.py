@@ -61,6 +61,12 @@ SECOND_STEP = (
     " 202 when a second step follows (SignInStepOut): the browser is not signed in yet;"
     " `code` asks verifySignInCode, `setup` asks to set up two-step verification first."
 )
+# A password sign-in on the public route (tunnel, own reverse proxy) needs two-step
+# verification (apps.accounts.signin).
+FROM_OUTSIDE = (
+    " On the public route (tunnel, own reverse proxy) an account without two-step"
+    " verification cannot sign in: 403 second_factor_needed_outside, nothing changes."
+)
 
 
 def step_out(result: StepNeeded) -> Status[SignInStepOut]:
@@ -97,7 +103,9 @@ def get_setup_status(request: HttpRequest) -> SetupStatusOut:
     },
     auth=None,
     throttle=ClientAddressThrottle("setup", "10/10m"),
-    description="Create the first account and workspace, and sign in." + SECOND_STEP,
+    description="Create the first account and workspace, and sign in. 403"
+    " second_factor_needed_outside on the public route (tunnel, own reverse proxy): set up at"
+    " home or through a VPN." + SECOND_STEP,
     operation_id="setupServer",
 )
 def setup_server(
@@ -121,7 +129,10 @@ def setup_server(
         "429 too_many_attempts with Retry-After: five wrong passwords for this email from "
         "this address, thirty from this address, or, from a browser that never signed in "
         "to this account, more than ten for the account from anywhere (then a wait that "
-        "doubles from 15 seconds to at most 15 minutes)." + SECOND_STEP
+        "doubles from 15 seconds to at most 15 minutes). On the public route (tunnel, own "
+        "reverse proxy) an account without two-step verification cannot sign in: the right "
+        "password answers 401 invalid_credentials and counts, exactly as a wrong one (the "
+        "sentence says both)." + SECOND_STEP
     ),
     operation_id="login",
 )
@@ -250,7 +261,9 @@ def change_password(request: HttpRequest, payload: PasswordChangeIn) -> Status[N
     " pairing code answers 403 reauthentication_required otherwise). 400 wrong_password;"
     " wrong passwords count for the same lockout as signing in (429). With two-step"
     " verification on, `code` from the app too: 400 second_factor_invalid, 429"
-    " second_factor_locked; the session has then passed the second step.",
+    " second_factor_locked; the session has then passed the second step. On the public"
+    " route an account without two-step verification gets 403 second_factor_needed_outside"
+    " before the password is checked.",
     operation_id="reauthenticate",
 )
 def reauthenticate(request: HttpRequest, payload: ReauthenticateIn) -> Status[None]:
@@ -315,14 +328,17 @@ def create_password_reset(
 
 @router.post(
     "/auth/password-reset",
-    response={200: UserOut, 202: SignInStepOut, 429: ErrorOut, **BODY_ERRORS},
+    response={200: UserOut, 202: SignInStepOut, 403: ErrorOut, 429: ErrorOut, **BODY_ERRORS},
     auth=None,
     throttle=ClientAddressThrottle("password_reset", "10/10m"),
     description="Set a new password with the token from a reset link's fragment and sign"
     " in; every other session of the account ends. 400 reset_link_invalid for an unknown,"
     " used, expired or revoked link, or when its maker may no longer act on the account;"
     " 422 when the password rules refuse it (the link stays usable). Every paired device"
-    " and every other open reset link of the account is revoked." + SECOND_STEP,
+    " and every other open reset link of the account is revoked."
+    + FROM_OUTSIDE
+    + " The link stays usable at home."
+    + SECOND_STEP,
     operation_id="completePasswordReset",
 )
 def complete_password_reset(

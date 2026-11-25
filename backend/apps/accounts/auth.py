@@ -37,7 +37,8 @@ class SessionAuth(NinjaSessionAuth):
             ) from exc
 
     def authenticate(self, request: HttpRequest, key: str | None) -> object | None:
-        # No web session counts on the public route while the web is off there (S 7.6).
+        # On the public route a web session counts only while the web is on there (S 7.6)
+        # and only when it passed the second step (two-step plan Task 13).
         if not session_allowed(request):
             return None
         return super().authenticate(request, key)

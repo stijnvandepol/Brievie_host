@@ -20,8 +20,9 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 from psycopg import errors as pg_errors
 
+from apps.access.route import is_public_route
 from apps.accounts.models import User, UserSession, normalise_email
-from apps.accounts.services import build_user, verify_password
+from apps.accounts.services import build_user, second_factor_needed_outside, verify_password
 from apps.accounts.signin import SignInResult, begin_sign_in
 from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, record
@@ -626,7 +627,12 @@ def accept_invitation(
         raise ApiError(
             422, "validation_error", _("Kies een nieuw account of een bestaand account.")
         )
+    if account == NEW_ACCOUNT and is_public_route(request):
+        # A new account has no second factor: from outside it cannot sign in, so it is not
+        # made there either. Nothing is written; the link works at home or through a VPN.
+        raise second_factor_needed_outside()
     if account == EXISTING_ACCOUNT:
+        # On the public route an account without a factor answers as a wrong password.
         user = verify_password(request, email=email, password=password)
     else:
         if _account_exists(email):
