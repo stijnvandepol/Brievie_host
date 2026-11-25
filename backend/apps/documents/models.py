@@ -238,6 +238,15 @@ class Document(WorkspaceModel):
                 condition=models.Q(status="done", task_open_count__gt=0),
                 name="documents_document_open_tasks",
             ),
+            # The letter policy's own columns, and the trash: a pass over every visible
+            # letter (the counts of persons and labels) and the policy check of a task's
+            # letter read this narrow index alone (index-only), not the wide rows with
+            # their text (DECISIONS 2026-11-25, list headroom).
+            models.Index(
+                fields=["workspace", "id"],
+                include=["visibility", "addressee_ids", "scanned_by", "status", "trashed_at"],
+                name="documents_document_policy",
+            ),
             GinIndex(fields=["search_vector"], name="documents_document_search"),
             # For the typo fallback of search (pg_trgm word similarity).
             GinIndex(

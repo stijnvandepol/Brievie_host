@@ -3,6 +3,7 @@ length of the list it stands for, and nothing hidden is counted."""
 
 from datetime import timedelta
 
+from django.db.models import Q
 from django.test import Client
 from django.utils import timezone
 
@@ -61,6 +62,29 @@ def test_menu_counts_equal_the_lists() -> None:
         assert isinstance(counts, dict)
         for name, value in numbers.items():
             assert counts[name] == value, (user.name, name)
+
+
+def test_menu_counts_split_new_and_lingering_inbox_letters() -> None:
+    """The Inbox number counts every letter to check or name, "Blijft liggen" only the
+    ones that arrived before its cutoff: one count per state carries both."""
+    o = office()
+    _old(o)
+    # Arrived today: waiting in the Inbox, not lingering yet.
+    letter(o.workspace, status="needs_review")
+    letter(o.workspace, status="failed")
+    letter(o.workspace)
+    for user in (o.admin, o.sorter):
+        numbers = _numbers(o.workspace, user)
+        counts = numbers.pop("counts")
+        assert isinstance(counts, dict)
+        assert counts["shows_lingering"] is True
+        for name in ("inbox", "lingering"):
+            assert counts[name] == numbers[name], (user.name, name)
+    with as_actor(o.workspace, SYSTEM):
+        old_waiting = Document.objects.filter(
+            workspace=o.workspace, created_at__lt=timezone.now() - timedelta(days=5)
+        ).filter(Q(status__in=["needs_review", "failed"]) | Q(status="done", addressee_ids=[]))
+        assert old_waiting.exists()
 
 
 def test_menu_counts_hide_nothing_and_count_nothing_hidden() -> None:

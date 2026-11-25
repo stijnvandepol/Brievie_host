@@ -13,10 +13,11 @@ default) so the report shows both. The services add the member filter themselves
 
 Per state x actor x list: one first run (reported as "first": a new plan for that query,
 but shared buffers already hold the data of earlier lists; nothing here empties the
-server's or the machine's caches) and five timed runs (median, and p95 by nearest rank,
-which over five runs is the slowest). Every query of one more run is explained with
-ANALYZE and BUFFERS: the text goes to the artifact directory, the node with the most
-time of its own is named in the report. `test_verdict` runs last and writes the report.
+server's or the machine's caches; it also warms them for this list) and nine timed runs
+(median, and p95 by nearest rank, which over nine runs is the slowest); "jit on" three.
+Every query of one more run is explained with ANALYZE and BUFFERS: the text goes to the
+artifact directory, the node with the most time of its own is named in the report.
+`test_verdict` runs last and writes the report.
 """
 
 import hashlib
@@ -46,6 +47,7 @@ from tests.perf import data
 from tests.perf.data import PerfWorld
 from tests.perf.report import (
     ACTORS,
+    COMPARE_RUNS,
     LISTS,
     RUNS,
     STATES,
@@ -233,20 +235,20 @@ def _explain(sql: str, *, analyze: bool) -> tuple[str, dict[str, object]]:
 
 
 def _measure(
-    call: Callable[[], str], label: str, *, explain: bool = True
+    call: Callable[[], str], label: str, *, explain: bool = True, runs: int = RUNS
 ) -> tuple[float, list[float], str, str, str]:
     """first run, timed runs, result, dominant node of the slowest query, explain file."""
     start = time.perf_counter()
     result = call()
     first = time.perf_counter() - start
-    runs = []
-    for _ in range(RUNS):
+    timed = []
+    for _ in range(runs):
         start = time.perf_counter()
         again = call()
-        runs.append(time.perf_counter() - start)
+        timed.append(time.perf_counter() - start)
         assert again == result
     if not explain:
-        return first, runs, result, "", ""
+        return first, timed, result, "", ""
     with CaptureQueriesContext(connection) as captured:
         call()
     sections = []
@@ -264,7 +266,7 @@ def _measure(
         path = directory / f"{label}.txt"
         path.write_text("\n".join(sections))
         explain_file = path.name
-    return first, runs, result, slowest[1], explain_file
+    return first, timed, result, slowest[1], explain_file
 
 
 def _jit() -> str:
@@ -328,7 +330,7 @@ def test_measure_list(
     # PostgreSQL's default, for the comparison only.
     with connection.cursor() as c:
         c.execute("SET LOCAL jit = on")
-    record("jit on", _measure(call, f"{label}-jit-on", explain=False))
+    record("jit on", _measure(call, f"{label}-jit-on", explain=False, runs=COMPARE_RUNS))
     with connection.cursor() as c:
         c.execute("SET LOCAL jit = off")
     assert not perf_report.mismatches

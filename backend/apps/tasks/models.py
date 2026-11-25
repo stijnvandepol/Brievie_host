@@ -95,6 +95,12 @@ class Task(WorkspaceModel):
                 condition=models.Q(status="open"),
                 name="tasks_task_open",
             ),
+            # The task list in its own order (`list_tasks`): read in order, the policy runs
+            # only until the page is full, not for every task before a sort.
+            models.Index(
+                fields=["workspace", "deadline", "created_at", "id"],
+                name="tasks_task_list_order",
+            ),
         ]
 
     def __str__(self) -> str:

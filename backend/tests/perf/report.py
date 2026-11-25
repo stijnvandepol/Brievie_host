@@ -12,7 +12,12 @@ from typing import Final
 
 THRESHOLD: Final = 0.250  # seconds, median per list (S 4.9.5, P1)
 PREVIEW_THRESHOLD: Final = 2.0  # seconds, the preview's letter count (P1)
-RUNS: Final = 5
+# Timed runs per list after its first run: the median of nine, so one slow run of a
+# shared runner (another job's burst, a checkpoint) moves it less than the median of
+# five did (DECISIONS 2026-11-25). The threshold is unchanged.
+RUNS: Final = 9
+# The "jit on" comparison is shown, never gated: fewer runs keep the job's time.
+COMPARE_RUNS: Final = 3
 
 STATES: Final = {
     "E": {"everyone_sees_all": True, "departments_enabled": False, "admins_read_all": True},
@@ -153,8 +158,8 @@ def render(report: Report) -> tuple[str, list[str]]:
         ' "jit on" is the same service with PostgreSQL\'s default, for comparison. A list'
         " passes on the service as it ships (with the member filter where it applies;"
         " the same result without it required). "
-        f"{RUNS} timed runs after one first run; p95 by nearest rank (over {RUNS} runs: the"
-        ' slowest). "first" is the first run of that query in the measurement: a new plan,'
+        f"{RUNS} timed runs after one first run ({COMPARE_RUNS} for jit on); p95 by nearest"
+        ' rank. "first" is the first run of that query in the measurement: a new plan,'
         " but the server's and the machine's caches are not emptied.",
         "",
         *(f"- {key}: {value}" for key, value in report.server.items()),

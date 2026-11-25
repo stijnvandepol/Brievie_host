@@ -58,18 +58,26 @@ def list_tasks(workspace: Workspace, *, status: str = "open") -> list[Task]:
     """Tasks by deadline (undated last), then by creation; needs the workspace's RLS context.
 
     The task policy follows the letter; a task of a letter in the trash is left out here.
+
+    The page's ids first, in the order of `tasks_task_list_order`, so the policy runs only
+    until the page is full; then the letters of those rows only (measured, DECISIONS
+    2026-11-25: joined into the ordered query, every visible task's letter row was read
+    before the sort).
     """
     if status not in _STATUSES:
         raise ApiError(422, "validation_error", _("De status moet open, done of all zijn."))
-    tasks = (
-        Task.objects.filter(workspace=workspace)
-        .filter(Q(document__isnull=True) | Q(document__trashed_at__isnull=True))
-        .select_related("document")
+    tasks = Task.objects.filter(workspace=workspace).filter(
+        Q(document__isnull=True) | Q(document__trashed_at__isnull=True)
     )
     if status != "all":
         tasks = tasks.filter(status=status)
-    rows = list(tasks.order_by(F("deadline").asc(nulls_last=True), "created_at", "id")[:LIST_MAX])
-    return _with_people(rows)
+    ids = list(
+        tasks.order_by(F("deadline").asc(nulls_last=True), "created_at", "id").values_list(
+            "id", flat=True
+        )[:LIST_MAX]
+    )
+    by_id = Task.objects.select_related("document").in_bulk(ids)
+    return _with_people([by_id[task_id] for task_id in ids if task_id in by_id])
 
 
 def complete_task(
