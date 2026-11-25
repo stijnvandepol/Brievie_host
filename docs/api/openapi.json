@@ -5719,9 +5719,12 @@
             "type": "array"
           },
           "private": {
-            "default": false,
+            "default": null,
             "title": "Private",
-            "type": "boolean"
+            "type": [
+              "boolean",
+              "null"
+            ]
           },
           "remind_days": {
             "default": 30,

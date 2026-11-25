@@ -3293,3 +3293,8 @@ Every point was checked against the code first.
   uploader's own task (`mine.reason_for`, `TaskFacts.reminder_of`, and the same arm in the
   query); another sorter still has it to pick up when it is somebody else's. A reminder of a
   document on a person stays that person's.
+- **Point 8 (low), held, fixed:** "Alleen voor deze persoon" was on for the sensitive types in the
+  client only. `UploadMetadataIn.private` is now `bool | None` (default absent): absent, an
+  identity document, medical, a payslip and a tax return start private on the server too
+  (Besluit B3); an explicit `false` is honoured. The field is new in this PR, so its type change
+  breaks no client.

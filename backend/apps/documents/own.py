@@ -26,7 +26,13 @@ from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
 from apps.documents import organise, reminders, visibility
-from apps.documents.models import DOCUMENT_TYPES, REMIND_DAYS, Document, DocumentEvent
+from apps.documents.models import (
+    DOCUMENT_TYPES,
+    REMIND_DAYS,
+    SENSITIVE_TYPES,
+    Document,
+    DocumentEvent,
+)
 from apps.documents.schemas import DocumentDetailsIn, UploadMetadataIn
 from apps.labels.models import Label
 from apps.people.models import Person
@@ -109,7 +115,11 @@ def validate_fields(metadata: UploadMetadataIn, *, today: date) -> OwnDocumentDa
         expires_on=metadata.expires_on,
         remind_days=metadata.remind_days,
         retain_until=metadata.retain_until,
-        private=metadata.private,
+        # Besluit B3 on the server too (security review of PR #54, point 8): an app that
+        # sends nothing gets the sensitive types private; it can always say false.
+        private=metadata.private
+        if metadata.private is not None
+        else metadata.document_type in SENSITIVE_TYPES,
     )
 
 

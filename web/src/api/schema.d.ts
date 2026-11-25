@@ -5861,9 +5861,9 @@ export interface components {
             person_ids: string[];
             /**
              * Private
-             * @default false
+             * @default null
              */
-            private: boolean;
+            private: boolean | null;
             /**
              * Remind Days
              * @default 30

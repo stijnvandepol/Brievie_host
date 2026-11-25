@@ -51,8 +51,10 @@ class UploadMetadataIn(InputSchema):
     remind_days: int = 30
     # "Bewaren tot": no permanent delete before this day.
     retain_until: date | None = None
-    # "Alleen voor deze persoon": make it private at once (only narrows).
-    private: bool = False
+    # "Alleen voor deze persoon": make it private at once (only narrows). Absent: on for an
+    # identity document, medical, a payslip and a tax return (Besluit B3), off otherwise; an
+    # explicit false is honoured.
+    private: bool | None = None
 
 
 class DocumentSummaryOut(Schema):

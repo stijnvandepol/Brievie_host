@@ -24,8 +24,9 @@ def _document_metadata(page: bytes, **fields: object) -> dict[str, object]:
     return {
         **metadata_for([page]),
         "kind": "document",
-        "title": "Paspoort",
-        "document_type": "identity",
+        "title": "Diploma",
+        # Not a sensitive type: these tests are not about Besluit B3 (see the one that is).
+        "document_type": "diploma",
         **fields,
     }
 
@@ -104,8 +105,8 @@ def test_document_gets_persons_labels_and_history_through_organise(client: Clien
     body = response.json()
     assert (body["kind"], body["title"], body["document_type"]) == (
         "document",
-        "Paspoort",
-        "identity",
+        "Diploma",
+        "diploma",
     )
     assert (body["letter_date"], body["expires_on"], body["remind_days"]) == (
         "2026-01-10",
@@ -261,3 +262,30 @@ def test_uploader_does_not_see_their_own_document_as_unread(client: Client) -> N
     with as_actor(h.workspace, h.anne.id):
         rows = services.list_documents(member)
         assert reading.unread_ids(member, rows) == set()
+
+
+def test_a_sensitive_type_without_private_is_made_private(client: Client) -> None:
+    """Security review of PR #54, point 8: an app that sends no `private` gets an identity
+    document private (Besluit B3); an explicit false keeps it as the workspace says."""
+    o = office()
+    client.force_login(o.plain)
+    page = jpeg()
+    on_piet = [str(o.persons["Piet"].id)]
+    response = upload(
+        client,
+        o.workspace.id,
+        [page],
+        metadata=_document_metadata(page, document_type="identity", person_ids=on_piet),
+    )
+    assert response.status_code == 201
+    assert response.json()["visibility"] == "restricted"
+    other = jpeg("ander")
+    response = upload(
+        client,
+        o.workspace.id,
+        [other],
+        metadata=_document_metadata(
+            other, document_type="identity", person_ids=on_piet, private=False
+        ),
+    )
+    assert response.json()["visibility"] == "workspace"

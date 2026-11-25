@@ -106,3 +106,25 @@ def test_repeated_ids_count_once() -> None:
     data = own.validate_fields(_document(person_ids=[str(person), str(person)]), today=TODAY)
     assert data is not None
     assert data.person_ids == (person,)
+
+
+@pytest.mark.parametrize(
+    ("fields", "private"),
+    [
+        ({"document_type": "identity"}, True),
+        ({"document_type": "medical"}, True),
+        ({"document_type": "payslip"}, True),
+        ({"document_type": "tax_return"}, True),
+        ({"document_type": "identity", "private": False}, False),
+        ({"document_type": "diploma"}, False),
+        ({"document_type": "diploma", "private": True}, True),
+    ],
+)
+def test_a_sensitive_type_is_private_unless_the_client_says_no(
+    fields: dict[str, object], private: bool
+) -> None:
+    """Security review of PR #54, point 8 (Besluit B3 on the server too): when `private` is
+    absent, a sensitive type starts private; an explicit false is honoured."""
+    data = own.validate_fields(_meta(kind="document", title="Kopie", **fields), today=TODAY)
+    assert data is not None
+    assert data.private is private
