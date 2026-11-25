@@ -204,6 +204,19 @@ def test_with_the_second_step_required_outside_the_page_says_so(home: Settings) 
     assert "public_web_admin_without_second_factor" not in codes(admin_without_factor=True)
 
 
+def test_without_caddy_the_page_does_not_claim_the_second_step_outside(home: Settings) -> None:
+    # Without Caddy no request is on the public route, so nothing asks the second step there.
+    with_public(home)
+    home.BRIEVIE_TUNNEL_TOKEN_SET = True
+    home.BRIEVIE_PUBLIC_WEB = True
+    home.BRIEVIE_SECOND_FACTOR_AVAILABLE = True
+    home.BRIEVIE_BEHIND_CADDY = False
+
+    found = codes()
+    assert "public_web_second_factor_required" not in found
+    assert "public_web_without_second_factor" in found
+
+
 def test_check_request_not_secure() -> None:
     assert "request_not_secure" in codes(request(secure=False))
     assert "request_not_secure" not in codes(request(secure=True))

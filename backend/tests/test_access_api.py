@@ -60,7 +60,9 @@ def test_probe_runs_outside_a_transaction() -> None:
     assert resolve(PATH).func._non_atomic_requests == {"default"}  # type: ignore[attr-defined]
 
 
-def test_the_page_names_a_server_admin_without_a_second_factor(settings: Settings) -> None:
+def test_the_page_names_a_server_admin_without_a_second_factor(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
     settings.BRIEVIE_HOSTNAME = "192.168.1.20"
     settings.BRIEVIE_PUBLIC_HOSTNAME = "brievie.example.nl"
     settings.BRIEVIE_PUBLIC_URLS = ["https://192.168.1.20:443", "https://brievie.example.nl"]
@@ -68,9 +70,15 @@ def test_the_page_names_a_server_admin_without_a_second_factor(settings: Setting
     settings.BRIEVIE_PUBLIC_WEB = True
     admin = UserFactory.create(is_server_admin=True)
     client = signed_in_with_code(admin, give_factor(admin))
+    # Behind Caddy, opened at home: only then does the public route ask the second step.
+    from apps.common import net
+
+    monkeypatch.setattr(net, "caddy_addresses", lambda **_kwargs: frozenset({"127.0.0.1"}))
+    settings.BRIEVIE_BEHIND_CADDY = True
 
     def codes() -> list[str]:
-        return [check["code"] for check in client.get(PATH).json()["checks"]]
+        response = client.get(PATH, headers={"X-Brievie-Route": "private"})
+        return [check["code"] for check in response.json()["checks"]]
 
     assert "public_web_second_factor_required" in codes()
     assert "public_web_without_second_factor" not in codes()

@@ -214,6 +214,10 @@ def external_access_status(
         codes.append("tunnel_not_seen")
     if token_set and settings.BRIEVIE_MAX_UPLOAD_BYTES > CLOUDFLARE_MAX_BODY_BYTES:
         codes.append("upload_limit_above_cloudflare")
+    # Without Caddy no request counts as public (apps.access.route), so the second step is
+    # not asked outside either: say so rather than claim it always is (security review of
+    # PR #56, point 6).
+    second_factor = second_factor and bool(settings.BRIEVIE_BEHIND_CADDY)
     if public_way and public_web and not second_factor:
         codes.append("public_web_without_second_factor")
     if public_way and public_web and second_factor:
