@@ -8,6 +8,7 @@ from django.db import DatabaseError, transaction
 from django.http import HttpRequest, HttpResponseBase
 from django.utils import timezone
 
+from apps.access.middleware import session_allowed
 from apps.accounts.language import activate_account_language
 from apps.accounts.models import SecondFactor, User, UserSession
 from apps.accounts.sessions import is_past_its_limits, touch_session
@@ -49,7 +50,9 @@ class UserSessionMiddleware:
                 UserSession.objects.filter(pk=row.pk).delete()
             self.sign_out(request)
             return
-        if now - row.last_used_at >= LAST_USED_INTERVAL:
+        # A session that does not count here (the public route without the second step,
+        # apps.access.middleware.session_allowed) is not refreshed by its use there.
+        if now - row.last_used_at >= LAST_USED_INTERVAL and session_allowed(request):
             try:
                 touch_session(row, request, now=now)
             except DatabaseError:

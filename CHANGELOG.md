@@ -25,8 +25,10 @@ reverse proxy).
   `ProxyPreserveHost On` bij Apache). Anders kan inloggen op de webinterface van buiten openstaan.
 - Koppel de app alleen thuis of via VPN; via het publieke adres kan koppelen niet.
 - Met Cloudflare Tunnel kan Cloudflare alles lezen wat er langskomt, ook gescande brieven.
-- `BRIEVIE_PUBLIC_WEB=true` vraagt nog niet om de tweede stap van tweestapsverificatie bij
-  inloggen van buiten.
+- Met `BRIEVIE_PUBLIC_WEB=true` kan van buiten alleen inloggen wie tweestapsverificatie aan heeft.
+  Wie het niet aan heeft, logt thuis of via VPN in en zet het daar aan (Account, Beveiliging).
+  Ook installeren, een uitnodiging voor een nieuw account en een herstellink voor een account
+  zonder tweestapsverificatie werken dan alleen thuis of via VPN.
 - Docker Swarm en Podman-pods worden niet ondersteund.
 - Een bestaande installatie met `./brievie` verandert niet. Het compose-bestand is een tweede
   manier om te installeren (docs/SELFHOST.md, sectie 24); beide gebruiken dezelfde volumes,
@@ -51,6 +53,10 @@ reverse proxy).
   en een eigen reverse proxy (`BRIEVIE_TRUSTED_PROXIES`), met de publieke naam in
   `BRIEVIE_PUBLIC_HOSTNAME`. De pagina "Van buiten bereikbaar" voor serverbeheerders, en
   `getServerAddresses` plus `public_urls` bij het koppelen voor de app.
+- Inloggen op de webinterface via het publieke adres vraagt altijd om tweestapsverificatie.
+  Zonder tweestapsverificatie krijg je daar hetzelfde antwoord als bij een verkeerd wachtwoord;
+  een sessie die thuis zonder code begon, telt van buiten niet. De pagina "Van buiten bereikbaar"
+  zegt het, en waarschuwt als een serverbeheerder het nog niet aan heeft.
 
 - Het compose-bestand (`deploy/compose/docker-compose.yml`, bij elke release als
   `docker-compose.yml` en als `docker-compose.pinned.yml` met de images op digest) en het

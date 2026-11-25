@@ -514,9 +514,15 @@ needs a sign-in with the code.
   factor after the grace period, the account's phones answer "Stel eerst
   tweestapsverificatie in op de webinterface." (they are not unpaired: once it is set up
   on the web they work again), and no new phone can be paired.
-- **Not yet from outside.** Keep the web interface off the internet until the rule for
-  the public address is built (a password sign-in from outside will need the code); the
-  app-only tunnel does not wait for it.
+- **From outside it is required.** With `BRIEVIE_PUBLIC_WEB=true` (section 25), signing in
+  to the web interface through the public address always needs the code. An account
+  without two-step verification cannot sign in there: it gets the same answer as a wrong
+  password ("... of tweestapsverificatie staat nog niet aan ..."), counted the same, so the
+  answer never tells whether the password was right. Switch it on at home or through the
+  VPN first. The same holds for setting up the server, accepting an invitation and a reset
+  link: for an account without two-step verification they work only at home or through the
+  VPN (the link stays usable), and a web session that began at home without the code does
+  not count outside. Home and VPN are unchanged.
 
 ## 19. The log and the member export
 
@@ -963,9 +969,10 @@ shows a token.
 
 Through the public address (tunnel, own proxy) **only the app works** by default: the web
 interface and its password sign-in stay closed there (403 "Op dit adres werkt alleen de
-Brievie-app") until two-step sign-in exists. `BRIEVIE_PUBLIC_WEB=true` opens them; Brievie
-then warns at every start and the page shows it red. Use the web interface at home or
-through the VPN.
+Brievie-app"). `BRIEVIE_PUBLIC_WEB=true` opens them, and then a password sign-in there
+always needs two-step verification (section "Two-step verification"): whoever has not
+switched it on signs in at home or through the VPN only. The page says so, and warns
+while a server admin has not switched it on. The VPN stays the better way.
 
 ### VPN
 
@@ -1151,7 +1158,7 @@ V VPN, T tunnel, P own proxy (empty = default or not used).
 | `COMPOSE_PROFILES` | only without `./brievie`: starts cloudflared | empty | | | `tunnel` | |
 | `BRIEVIE_TRUSTED_PROXIES` | your own reverse proxy's address(es), CIDR, space separated | empty (none) | | | | `192.168.1.5/32` |
 | `BRIEVIE_TRUSTED_PROXIES_WIDE` | allow a trusted range wider than a /24 or /64 (never everything) | `false` | | | | |
-| `BRIEVIE_PUBLIC_WEB` | web interface and web sign-in on the public address | `false` | | | `false` | `false` |
+| `BRIEVIE_PUBLIC_WEB` | web interface and web sign-in on the public address (sign-in there needs two-step verification) | `false` | | | `false` | `false` |
 | `BRIEVIE_HSTS_SECONDS` | HSTS for the home and VPN names; keep 0 with the private CA | `0` | | | | |
 | `BRIEVIE_MAX_BODY_BYTES` | largest request body | `2621440` | | | | |
 | `BRIEVIE_MAX_UPLOAD_BYTES` | largest scan upload; at most 100 MB behind Cloudflare | `33554432` | | | | |

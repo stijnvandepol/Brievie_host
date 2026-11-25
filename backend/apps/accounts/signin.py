@@ -13,6 +13,9 @@ account's session hash (a password changed since ends it). It lives `PENDING_LIF
 (five minutes, also for setting up a factor: install the app first, or sign in again);
 clearing, removing or replacing the factor ends it too.
 
+On the public route (tunnel, own reverse proxy) a password sign-in needs a confirmed
+factor: without one there is no session and no pending step (two-step plan Task 13).
+
 Only this module calls `sessions.start_session`, which itself refuses a sign-in without
 the second step where one is needed.
 """
@@ -29,6 +32,7 @@ from django.http import HttpRequest
 from django.utils import timezone
 from django.utils.crypto import constant_time_compare
 
+from apps.access.route import is_public_route
 from apps.accounts.models import AccountNotice, SecondFactor, User, UserSession
 from apps.accounts.notices import notify
 from apps.accounts.second_factor import (
@@ -41,6 +45,7 @@ from apps.accounts.second_factor import (
     verify_recovery_code,
 )
 from apps.accounts.second_factor_policy import in_grace, note_required_since, requirement_for
+from apps.accounts.services import second_factor_needed_outside
 from apps.accounts.sessions import start_session
 from apps.common.errors import ApiError
 from apps.common.net import valid_client_ip
@@ -105,8 +110,14 @@ def begin_sign_in(
         # The identity provider does the second step (S 8).
         start_session(request, user, method=method, via=via, second_factor=passed_by_sso(user))
         return SignedIn(user)
-    note_required_since(user, now=moment)
     factor_id = _confirmed_factor_id(user)
+    if factor_id is None and is_public_route(request):
+        # The wall every way in passes (two-step plan Task 13): from outside, no session and
+        # no pending `setup` without a factor (a password alone must not enrol one from the
+        # internet). The callers refuse earlier, `login` and `verify_password` without
+        # telling whether the password was right.
+        raise second_factor_needed_outside()
+    note_required_since(user, now=moment)
     if factor_id is not None:
         return _leave_pending(
             request, user, via=via, method=method, step="code", factor_id=factor_id, now=moment

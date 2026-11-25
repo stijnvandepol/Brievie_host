@@ -518,6 +518,23 @@ def test_remove_ends_the_other_sessions(user: User) -> None:
     assert ended.values == {"count": 1, "reason": "second_factor_removed"}
 
 
+def test_remove_leaves_the_own_session_without_the_second_step(user: User) -> None:
+    # The step it passed was with the factor that is now gone: on the public route the
+    # session no longer counts.
+    factor = give_factor(user, now=NOW)
+    request = browser(user)
+    key = request.session.session_key
+    assert key is not None
+    own = UserSession.objects.create(
+        user=user, session_key=key, method="password", last_used_at=NOW, second_factor=True
+    )
+
+    remove_factor(request, user, password=TEST_PASSWORD, code=factor.code(NOW), now=NOW)
+
+    own.refresh_from_db()
+    assert own.second_factor is False
+
+
 # --- Clearing -------------------------------------------------------------------------
 
 

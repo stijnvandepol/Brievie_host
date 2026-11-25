@@ -259,14 +259,17 @@
 - Modify: `backend/apps/accounts/signin.py`, `backend/brievie/settings.py` (`BRIEVIE_SECOND_FACTOR_AVAILABLE = True`), `backend/apps/common/checks.py` and its tests (`test_w002_*`), `backend/apps/access/status.py` tests (`public_web_without_second_factor` no longer fires), `docs/SELFHOST.md`
 - Test: `backend/tests/test_accounts_signin_public_route.py`
 
+Built 2026-11-25; the password path answers as a wrong password instead of 403 (owner's
+no-enumeration rule, docs/DECISIONS.md "The public route needs the second step").
+
 **Interfaces — Produces:**
 - In `begin_sign_in`, before anything else for `method == password`: when `is_public_route(request)` and the user has no confirmed factor → 403 `second_factor_needed_outside` ("Zet eerst thuis tweestapsverificatie aan. Daarna kun je ook van buiten inloggen."), no session and no pending state (a pending `setup` over the public route would let a password alone enrol a factor from the internet). The password was right, so the attempt is not a failure for axes; it is audited as `sign_in_failed` with `step=second_factor`.
 - `BRIEVIE_SECOND_FACTOR_AVAILABLE = True`: `brievie.W002` stops warning for `BRIEVIE_PUBLIC_WEB=true`; the check `public_web_without_second_factor` becomes, instead, a warning `public_web_admin_without_second_factor` while a server admin has no factor (add to the closed check list of EA S 9, additive).
 - With `BRIEVIE_PUBLIC_WEB=false` nothing changes (the gate already refuses sign-in on the public route).
 
-- [ ] Tests first: `test_public_route_needs_a_second_factor` (route header public, `BRIEVIE_BEHIND_CADDY=True`, `BRIEVIE_PUBLIC_WEB=True`: no factor → 403, no `UserSession`, no pending key; with a factor → 202 `code`); the private route is unchanged; a reset link or invitation accepted on the public route by a user without a factor → 403 too; the rewritten `test_w002_*`; the status check list.
-- [ ] Run (CI) → FAIL; implement; run; lint, typecheck.
-- [ ] Commit `feat(accounts): a password sign-in from outside needs the second step`.
+- [x] Tests first: `test_public_route_needs_a_second_factor` (route header public, `BRIEVIE_BEHIND_CADDY=True`, `BRIEVIE_PUBLIC_WEB=True`: no factor → 403, no `UserSession`, no pending key; with a factor → 202 `code`); the private route is unchanged; a reset link or invitation accepted on the public route by a user without a factor → 403 too; the rewritten `test_w002_*`; the status check list.
+- [x] Run (CI) → FAIL; implement; run; lint, typecheck.
+- [x] Commit `feat(accounts): a password sign-in from outside needs the second step`.
 
 ### Task 14: Documents of record (end of M1)
 

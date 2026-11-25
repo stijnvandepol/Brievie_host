@@ -16,7 +16,7 @@ const tunnelOn = {
   public_web: false,
   tunnel: { token_set: true, connected: "yes" },
   trusted_proxies: [],
-  second_factor_available: false,
+  second_factor_available: true,
   seen_as: { route: "private", secure: true, client_ip: "192.168.1.30", peer_ip: "172.18.0.1" },
   checks: [
     { code: "public_web_off", level: "ok" },
@@ -100,6 +100,7 @@ describe("the external access page", () => {
     asServerAdmin({
       ...tunnelOn,
       public_web: true,
+      second_factor_available: false,
       checks: [{ code: "public_web_without_second_factor", level: "problem" }],
     });
     renderApp("/server/van-buiten");
@@ -108,6 +109,25 @@ describe("the external access page", () => {
       "Inloggen op de webinterface kan van buiten zonder tweede stap.",
     );
     expect(screen.getByText("Probleem")).toBeInTheDocument();
+  });
+
+  it("says the second step is required outside, without a red line", async () => {
+    asServerAdmin({
+      ...tunnelOn,
+      public_web: true,
+      checks: [
+        { code: "public_web_second_factor_required", level: "ok" },
+        { code: "public_web_admin_without_second_factor", level: "warning" },
+      ],
+    });
+    renderApp("/server/van-buiten");
+    const list = await screen.findByRole("list", { name: "Controles" });
+    const items = within(list).getAllByRole("listitem");
+    expect(items[0]).toHaveTextContent("In orde");
+    expect(items[0]).toHaveTextContent("vraagt altijd om tweestapsverificatie");
+    expect(items[1]).toHaveTextContent("Let op");
+    expect(items[1]).toHaveTextContent("Niet elke serverbeheerder heeft tweestapsverificatie aan.");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("is hidden from members who are not server admins", async () => {
