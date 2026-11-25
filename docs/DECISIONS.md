@@ -3578,3 +3578,10 @@ The re-review of PR #58 (intake web upload) left six points; each is fixed with 
    **Follow-up, still open:** the parser in its own uid or a container without network.
    The child can still read every file the worker's user can read (a key file, the
    storage) and reach the network; only the inheritance and `/proc` are closed.
+4. **The orphan sweep refuses per kind.** The refusal "files on disk and none of them known"
+   held for pages and originals together, so a database that knew pages but no originals
+   (a wrong or older database) listed every original as an orphan. It now holds for pages
+   and for originals apart. Consequence, accepted: an original left behind while the
+   database knows no original at all (the only file upload failed after writing it) makes
+   the sweep refuse until a person looks, as one stray page already did in a database
+   without pages; it never deletes on a guess.

@@ -281,6 +281,39 @@ def test_an_empty_database_with_only_originals_is_refused(
     assert extra.exists()
 
 
+def test_a_database_with_pages_but_no_originals_does_not_orphan_every_original(
+    ws_a: Workspace, backup_conninfo: str
+) -> None:
+    # Re-review of PR #58, point 4: the refusal held for pages and originals together, so a
+    # database that knows pages but no originals (a wrong or older database) listed every
+    # original on disk as an orphan. Each kind now needs a known file of its own.
+    upload_letter(ws_a)
+    extra = stray(ws_a, "original")
+
+    with pytest.raises(BackupError) as raised:
+        found(backup_conninfo)
+    assert raised.value.code == "internal_error"
+    with pytest.raises(BackupError):
+        sweep(delete=True)
+    assert extra.exists()
+    assert page_file(ws_a).exists()
+
+
+def test_a_database_with_originals_but_no_pages_does_not_orphan_every_page(
+    ws_a: Workspace, backup_conninfo: str
+) -> None:
+    live = upload_original(ws_a)
+    age(live, timedelta(days=2))
+    with workspace_context(ws_a.id, actor=SYSTEM):
+        DocumentPage.objects.all().delete()
+    extra = stray(ws_a)
+
+    with pytest.raises(BackupError) as raised:
+        found(backup_conninfo)
+    assert raised.value.code == "internal_error"
+    assert extra.exists()
+
+
 def test_an_empty_database_still_lists_old_temp_files(
     ws_a: Workspace, backup_conninfo: str
 ) -> None:
