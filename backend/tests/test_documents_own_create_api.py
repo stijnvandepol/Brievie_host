@@ -289,3 +289,35 @@ def test_a_sensitive_type_without_private_is_made_private(client: Client) -> Non
         ),
     )
     assert response.json()["visibility"] == "workspace"
+
+
+def test_private_on_someone_elses_person_keeps_the_uploader_and_the_person(
+    client: Client,
+) -> None:
+    """Security review of PR #54, point 9: in a workspace where members see only their own
+    post, a private document on another member's person is read by its uploader (a share)
+    and that person's account, nobody else; also once processing made it `done`."""
+    from apps.pipeline.steps import run_pipeline
+    from tests.visibility_support import readers
+
+    o = office()
+    client.force_login(o.plain)
+    page = jpeg()
+    response = upload(
+        client,
+        o.workspace.id,
+        [page],
+        metadata=_document_metadata(
+            page, document_type="medical", person_ids=[str(o.persons["Femke"].id)], private=True
+        ),
+    )
+    assert response.status_code == 201, response.json()
+    assert response.json()["visibility"] == "restricted"
+    with as_actor(o.workspace, SYSTEM):
+        document = Document.objects.get(id=response.json()["id"])
+    run_pipeline(o.workspace.id, document.id, provider_factory=lambda _: None)
+    assert readers(document) == {("Piet", "share"), ("Femke", "addressee")}
+    assert sees(o.plain, document)
+    assert sees(o.finance, document)
+    for other in (o.admin, o.sorter, o.hr, o.viewer):
+        assert not sees(other, document), other.name

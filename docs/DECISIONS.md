@@ -3298,3 +3298,9 @@ Every point was checked against the code first.
   identity document, medical, a payslip and a tax return start private on the server too
   (Besluit B3); an explicit `false` is honoured. The field is new in this PR, so its type change
   breaks no client.
+- **Point 9 (unverified by the reviewer), tested.** A private own document on another member's
+  person, in a workspace where members see only their own post: `make_private` adds the
+  uploader as a share before the flip and recomputes the readers as the system, so the flip
+  as the uploader succeeds. Who reads it: the uploader (share), the person's account
+  (addressee), nobody else, also after processing made it `done`
+  (`test_private_on_someone_elses_person_keeps_the_uploader_and_the_person`).
