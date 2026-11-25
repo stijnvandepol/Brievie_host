@@ -799,6 +799,7 @@ function RuleForm({
             documents={test.data.documents}
             persons={choices.everyone}
             labels={choices.labels}
+            caption={t`Brieven die passen`}
             empty={t`Geen brieven passen.`}
           />
         </section>

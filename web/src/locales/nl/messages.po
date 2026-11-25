@@ -1235,6 +1235,10 @@ msgstr "Brieven ({letters})"
 msgid "Brieven die je nog moet nakijken of een naam moet geven. Wat je daarna moet doen, staat bij Mijn taken."
 msgstr "Brieven die je nog moet nakijken of een naam moet geven. Wat je daarna moet doen, staat bij Mijn taken."
 
+#: src/routes/rule-editor.tsx
+msgid "Brieven die passen"
+msgstr "Brieven die passen"
+
 #: src/routes/trash.tsx
 msgid "Brieven in de prullenbak worden na {days} dagen voorgoed gewist. Tot die tijd kun je ze terugzetten."
 msgstr "Brieven in de prullenbak worden na {days} dagen voorgoed gewist. Tot die tijd kun je ze terugzetten."

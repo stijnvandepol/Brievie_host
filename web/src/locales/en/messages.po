@@ -1235,6 +1235,10 @@ msgstr "Letters ({letters})"
 msgid "Brieven die je nog moet nakijken of een naam moet geven. Wat je daarna moet doen, staat bij Mijn taken."
 msgstr "Letters you still need to check or give a name. What to do after that is under My tasks."
 
+#: src/routes/rule-editor.tsx
+msgid "Brieven die passen"
+msgstr "Letters that match"
+
 #: src/routes/trash.tsx
 msgid "Brieven in de prullenbak worden na {days} dagen voorgoed gewist. Tot die tijd kun je ze terugzetten."
 msgstr "Letters in the trash are erased for good after {days} days. Until then you can restore them."
