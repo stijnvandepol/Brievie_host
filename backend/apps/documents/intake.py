@@ -35,6 +35,15 @@ def page_aad(workspace_id: UUID, document_id: UUID, index: int) -> bytes:
     return f"{workspace_id}/{document_id}/{index}".encode()
 
 
+def original_path(workspace_id: UUID, document_id: UUID) -> str:
+    return f"{workspace_id}/{document_id}/original"
+
+
+def original_aad(workspace_id: UUID, document_id: UUID) -> bytes:
+    """Binds the sealed original to its place; never equal to a page's AAD."""
+    return f"{workspace_id}/{document_id}/original".encode()
+
+
 def create_document_from_upload(
     *,
     workspace: Workspace,

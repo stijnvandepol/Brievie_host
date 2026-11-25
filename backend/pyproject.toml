@@ -13,8 +13,10 @@ dependencies = [
     "django-ninja>=1.8.0",
     "gunicorn>=27.0.1",
     "httpx>=0.28.1",
+    "pillow>=13.0.0",
     "procrastinate>=3.11.0",
     "psycopg[binary]>=3.3.9",
+    "pypdfium2>=5.15.2",
     "whitenoise>=6.12.0",
 ]
 

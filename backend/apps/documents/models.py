@@ -107,6 +107,14 @@ class Document(WorkspaceModel):
         MAIL = "mail", gettext_lazy("Mail")
         WATCH_FOLDER = "watch_folder", gettext_lazy("Watch-map")
 
+    class OriginalKind(models.TextChoices):
+        """The file a browser upload (or the scan folder) sent; empty for an app scan."""
+
+        NONE = "", gettext_lazy("Geen")
+        PDF = "pdf", gettext_lazy("PDF")
+        JPEG = "jpeg", gettext_lazy("JPEG")
+        PNG = "png", gettext_lazy("PNG")
+
     class Type(models.TextChoices):
         INVOICE = "invoice", gettext_lazy("Factuur")
         ASSESSMENT = "assessment", gettext_lazy("Aanslag")
@@ -153,6 +161,15 @@ class Document(WorkspaceModel):
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
     )
     source = models.CharField(max_length=20, choices=Source.choices, default=Source.SCAN)
+    # The uploaded file itself, sealed at `intake.original_path` (intake spec S 1); the
+    # pages are rendered from it by the worker. Empty / None for an app scan. The name is
+    # the base name only, BSN-masked: never in a log, a URL or an AI request.
+    original_kind = models.CharField(
+        max_length=10, choices=OriginalKind.choices, blank=True, default=OriginalKind.NONE
+    )
+    original_sha256 = models.CharField(max_length=64, blank=True, default="")
+    original_size = models.PositiveBigIntegerField(null=True, blank=True)
+    original_name = models.CharField(max_length=200, blank=True, default="")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PROCESSING)
     # Why processing failed (snake_case code); empty otherwise.
     failure_code = models.CharField(max_length=50, blank=True, default="")
@@ -238,6 +255,12 @@ class Document(WorkspaceModel):
         ]
         indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=["workspace", "-created_at"], name="documents_document_recent"),
+            # A later duplicate check of uploaded files is a query (intake spec S 1.4).
+            models.Index(
+                fields=["workspace", "original_sha256"],
+                condition=~models.Q(original_sha256=""),
+                name="documents_document_original",
+            ),
             # The trash list and the expiry query.
             models.Index(
                 fields=["workspace", "trashed_at"],

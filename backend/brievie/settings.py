@@ -91,6 +91,7 @@ INSTALLED_APPS = [
     "apps.installer",
     "apps.audit",
     "apps.access",
+    "apps.intake",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
@@ -368,6 +369,8 @@ DATA_UPLOAD_MAX_MEMORY_SIZE: int = BRIEVIE_MAX_BODY_BYTES
 # limit; Caddy enforces the same one on that route.
 BRIEVIE_MAX_UPLOAD_BYTES: int = env.int("BRIEVIE_MAX_UPLOAD_BYTES", default=33554432)
 BRIEVIE_MAX_PAGES: int = env.int("BRIEVIE_MAX_PAGES", default=30)
+# Tesseract's time per page of an uploaded file (intake spec S 1.1).
+BRIEVIE_OCR_TIMEOUT_SECONDS: int = env.int("BRIEVIE_OCR_TIMEOUT_SECONDS", default=60)
 # An export (a member's archive, an admin's "Alles exporteren") holds every page twice; one
 # larger than this is refused, and so is one the disk has no room for with this much to
 # spare (security review of PR #54, point 2).

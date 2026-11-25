@@ -3434,3 +3434,30 @@ checks the combined count against the separate ones; the leak tests are unchange
   locks writes to the table for the seconds it takes at 100,000 letters, and
   `./brievie update` and the compose `init` service migrate with the app stopped, so
   nothing waits. Both migrations are reversible.
+
+## 2026-11-25: Intake without an iPhone, phase 0 and 1 (web upload)
+
+Spec `docs/superpowers/specs/2026-11-20-inname-zonder-iphone-design.md`, plan
+`docs/superpowers/plans/2026-11-20-host-inname-zonder-iphone.md` (Tasks 0-8; the scan
+folder, Tasks 9-15, is not built yet).
+
+- **The gate (plan Task 0), passed.** CI job `ocr-gate` (`python:3.13-slim`, Debian trixie's
+  Tesseract 5.5.0 with `tesseract-ocr-nld`, Pillow 13.0.0) read 12 synthetic Dutch letters
+  (4+ invoices, 2 tables, 2 with the deadline in 8 pt small print) at 200 dpi: clean 36/36
+  facts (sender, date, deadline) and 12/12 deadlines; scanned variant (0.8° rotation, blur,
+  noise, JPEG 70) 36/36 and 12/12. Threshold 35/36 + 12/12 clean, 33/36 + 11/12 scan. The
+  job stays as a check on every pull request: a Debian update that worsens OCR shows there.
+- **Dependency `pypdfium2` 5.15.2** (Apache-2.0 / BSD-3-Clause; PDFium, Chrome's PDF engine,
+  fuzzed continuously; wheels for amd64 and arm64 with no system libraries): counts and
+  renders PDF pages. Rejected: `pypdf` (cannot render), poppler `pdftoppm` (an extra system
+  tool with a weaker security record), PyMuPDF (AGPL or a commercial licence).
+- **Dependency `Pillow` 13.0.0** (MIT-CMU): reads PNG and JPEG (EXIF orientation), writes the
+  JPEG pages. `Image.MAX_IMAGE_PIXELS` is set to 40 megapixels, the same as the header check.
+- **Debian `tesseract-ocr` and `tesseract-ocr-nld`** (Apache-2.0) in the runtime stage of
+  `deploy/Dockerfile`, the image both installs run (`./brievie` and compose-only), in the
+  layer that installs the PostgreSQL client and Debian's pending security updates. Pinned by
+  the Debian release of the pinned base image; trivy scans them with the image. Tesseract
+  directly, not OCRmyPDF (spec S 1.1): we need page images and text, not a searchable PDF,
+  and OCRmyPDF pulls in Ghostscript and qpdf.
+- **`ABANDONED_AFTER` is 45 minutes** (was 15): an upload of 30 pages that each need OCR
+  takes up to 30 x 60 s before the AI call; a shorter limit would queue it a second time.

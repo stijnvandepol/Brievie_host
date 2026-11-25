@@ -48,6 +48,8 @@ COPY --from=restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35
 # image (the app's packages are in /opt/venv from the builder stage, whose python is
 # first on PATH, hence the full path), and it ships vendored packages of its own
 # (urllib3, msgpack, setuptools) with their own vulnerabilities.
+# Tesseract with its Dutch data reads uploaded files without a text layer (intake,
+# DECISIONS 2026-11-25); Debian's package, so the update above patches it too.
 ADD --checksum=sha256:0144068502a1eddd2a0280ede10ef607d1ec592ce819940991203941564e8e76 --chmod=0644 \
     https://www.postgresql.org/media/keys/ACCC4CF8.asc /usr/share/keyrings/pgdg.asc
 RUN . /etc/os-release \
@@ -55,7 +57,7 @@ RUN . /etc/os-release \
         > /etc/apt/sources.list.d/pgdg.list \
     && apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --no-install-recommends \
-    && apt-get install -y --no-install-recommends postgresql-client-18 \
+    && apt-get install -y --no-install-recommends postgresql-client-18 tesseract-ocr tesseract-ocr-nld \
     && rm -rf /var/lib/apt/lists/* \
     && /usr/local/bin/python3 -m pip uninstall --yes pip
 
