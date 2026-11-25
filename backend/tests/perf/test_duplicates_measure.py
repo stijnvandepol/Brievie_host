@@ -9,6 +9,13 @@ the guards. Then the workspace grows to 10,000 and 100,000 letters and `duplicat
 is timed per arrival (warm, median of 7). The report is printed and, when
 BRIEVIE_PERF_REPORT names a file, written next to it as `duplicates-measure.md`.
 
+The corpus is written as of a fixed day (`ANCHOR`), never the clock: a letter's text holds
+its dates, the OCR noise draws one number per character, so a day that changes one date's
+length shifts every draw after it and the seed no longer names one experiment (on
+2026-11-25 the same code measured recall 0.930 instead of 0.950). The rows go in at the
+same age they had at `ANCHOR`, counted back from now, so the 180-day window and `detect`
+see the experiment of the decision.
+
 `test_verdict` runs last (file order) and applies the aim: recall >= 0.95, false proposals
 <= 2% of hard negatives and 0 of random pairs at the chosen thresholds; time per arrival
 under the aim of its size: < 50 ms at 10,000 letters, < 150 ms at 100,000 (controller ruling
@@ -49,6 +56,9 @@ pytestmark = pytest.mark.skipif(
 )
 
 SEED: Final = 20261121
+# The day the thresholds were measured (DECISIONS, duplicate letters: recall 0.950 at
+# 0.80/0.60). Start of the day: before the noon every letter is scanned at, as the run then.
+ANCHOR: Final = datetime(2026, 11, 21, tzinfo=UTC)
 CORPUS: Final = 2_000
 POSITIVES: Final = 300
 NEGATIVES: Final = 300
@@ -83,7 +93,7 @@ class Arrival:
 @dataclass
 class World:
     workspace_id: UUID
-    today: datetime
+    today: datetime  # now: the database's clock, which `detect` and the window read
     letters: list[Letter]
     ids: list[UUID]
     power: list[Strength]
@@ -101,9 +111,48 @@ class Results:
 
 
 def _created(today: datetime, meta: Meta) -> datetime:
-    """A letter is scanned two days after its date, at noon (never in the future)."""
+    """A letter is scanned two days after its date, at noon (never after `ANCHOR`), and
+    stored at the age it had then, counted back from `today`."""
     when = datetime.combine(meta.letter_date + timedelta(days=2), day_time(12), tzinfo=UTC)
-    return min(when, today - timedelta(minutes=1))
+    return min(when, ANCHOR - timedelta(minutes=1)) + (today - ANCHOR)
+
+
+def sample() -> World:
+    """The letters, rescans and look-alikes of the measurement, as of `ANCHOR`. No
+    database and no clock: the same every run (`test_duplicates_corpus`)."""
+    rng = random.Random(SEED)  # noqa: S311 - test data, not a secret
+    today = ANCHOR.date()
+    metas = [corpus.new_meta(rng, i % 40, today) for i in range(CORPUS)]
+    letters = [Letter(m, corpus.render(m)) for m in metas]
+    power = [corpus.strength(rng, already_there=True, misread_rate=0) for _ in letters]
+    in_window = [i for i, m in enumerate(metas) if (today - m.letter_date).days <= 170]
+    positives = [
+        Arrival(
+            text=corpus.scan_again(letters[i], rng),
+            meta=letters[i].meta,
+            power=corpus.strength(rng, already_there=False, misread_rate=MISREAD),
+            partner=i,
+            kind="positive",
+        )
+        for i in rng.sample(in_window, POSITIVES)
+    ]
+    paying = [i for i in in_window if metas[i].kind in corpus.PAYING]
+    negatives = []
+    for n, i in enumerate(rng.sample(paying, NEGATIVES)):
+        how = corpus.NEGATIVE_KINDS[n % len(corpus.NEGATIVE_KINDS)]
+        meta = corpus.hard_negative(metas[i], how, rng)
+        text = corpus.noisy(corpus.render(meta), rng.uniform(0, 0.01), rng)
+        negatives.append(
+            Arrival(
+                text=text,
+                meta=meta,
+                power=corpus.strength(rng, already_there=False, misread_rate=0),
+                partner=i,
+                kind=how,
+            )
+        )
+    ids = [uuid.UUID(int=rng.getrandbits(128), version=4) for _ in letters]
+    return World(uuid.uuid4(), ANCHOR, letters, ids, power, positives, negatives)
 
 
 def _insert(world: World, letters: list[tuple[UUID, datetime, Letter, Strength]]) -> None:
@@ -150,41 +199,10 @@ def _insert(world: World, letters: list[tuple[UUID, datetime, Letter, Strength]]
 
 @pytest.fixture(scope="module")
 def world(django_db_setup: None, django_db_blocker: DjangoDbBlocker) -> Iterator[World]:
-    rng = random.Random(SEED)  # noqa: S311 - test data, not a secret
+    built = sample()
     now = timezone.now()
-    today = now.date()
-    metas = [corpus.new_meta(rng, i % 40, today) for i in range(CORPUS)]
-    letters = [Letter(m, corpus.render(m)) for m in metas]
-    power = [corpus.strength(rng, already_there=True, misread_rate=0) for _ in letters]
-    in_window = [i for i, m in enumerate(metas) if (today - m.letter_date).days <= 170]
-    positives = [
-        Arrival(
-            text=corpus.scan_again(letters[i], rng),
-            meta=letters[i].meta,
-            power=corpus.strength(rng, already_there=False, misread_rate=MISREAD),
-            partner=i,
-            kind="positive",
-        )
-        for i in rng.sample(in_window, POSITIVES)
-    ]
-    paying = [i for i in in_window if metas[i].kind in corpus.PAYING]
-    negatives = []
-    for n, i in enumerate(rng.sample(paying, NEGATIVES)):
-        how = corpus.NEGATIVE_KINDS[n % len(corpus.NEGATIVE_KINDS)]
-        meta = corpus.hard_negative(metas[i], how, rng)
-        text = corpus.noisy(corpus.render(meta), rng.uniform(0, 0.01), rng)
-        negatives.append(
-            Arrival(
-                text=text,
-                meta=meta,
-                power=corpus.strength(rng, already_there=False, misread_rate=0),
-                partner=i,
-                kind=how,
-            )
-        )
-    workspace_id = uuid.uuid4()
-    ids = [uuid.UUID(int=rng.getrandbits(128), version=4) for _ in letters]
-    built = World(workspace_id, now, letters, ids, power, positives, negatives)
+    built.today = now
+    workspace_id = built.workspace_id
     with django_db_blocker.unblock():
         with connection.cursor() as c:
             c.execute(
@@ -197,7 +215,10 @@ def world(django_db_setup: None, django_db_blocker: DjangoDbBlocker) -> Iterator
             )
         _insert(
             built,
-            [(ids[i], _created(now, m.meta), m, power[i]) for i, m in enumerate(letters)],
+            [
+                (built.ids[i], _created(now, m.meta), m, built.power[i])
+                for i, m in enumerate(built.letters)
+            ],
         )
         yield built
 
@@ -381,7 +402,7 @@ def _evaluate(
 
 def _grow(world: World, size: int) -> None:
     rng = random.Random(SEED + size)  # noqa: S311 - test data
-    today = world.today.date()
+    today = ANCHOR.date()
     extra = []
     for _ in range(size - world.size):
         meta = corpus.new_meta(rng, rng.randrange(40), today)
