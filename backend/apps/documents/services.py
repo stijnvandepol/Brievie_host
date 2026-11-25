@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -439,8 +439,15 @@ def archive_q(filters: ArchiveFilters, today: date) -> models.Q:
         condition &= models.Q(sender=filters.sender)
     if filters.year:
         start, end = date(filters.year, 1, 1), date(filters.year + 1, 1, 1)
+        # Plain comparisons with the local midnights, not `created_at__date` (a time-zone
+        # conversion): under row security only leakproof comparisons may use an index
+        # (`documents_document_year`) before the policy runs; the conversion made the list
+        # read every letter of the workspace (DECISIONS 2026-11-25). Same local year.
+        zone = timezone.get_current_timezone()
+        from_moment = datetime.combine(start, time.min, tzinfo=zone)
+        until_moment = datetime.combine(end, time.min, tzinfo=zone)
         condition &= models.Q(letter_date__gte=start, letter_date__lt=end) | models.Q(
-            letter_date__isnull=True, created_at__date__gte=start, created_at__date__lt=end
+            letter_date__isnull=True, created_at__gte=from_moment, created_at__lt=until_moment
         )
     if filters.expiring:
         condition &= models.Q(

@@ -3600,3 +3600,26 @@ The re-review of PR #58 (intake web upload) left six points; each is fixed with 
    fits 30 letter pages of about 1.6 MB each as JPEG (letters are mostly white and far
    smaller); a scan's whole upload is 32 MiB (`BRIEVIE_MAX_UPLOAD_BYTES`). A file over it is
    refused as unreadable, as an oversized answer was before.
+
+### The archive's year list (`list_archive_person_year`)
+
+The `visibility-perf` gate (median <= 250 ms, unchanged) failed at random on
+`list_archive_person_year` (one person's archive in one year): 210-284 ms on CI, also on
+main. The EXPLAIN (ANALYZE, BUFFERS) the workflow keeps showed why: the plan walked all
+100,000 letters of the workspace (`documents_document_workspace_id` index, about 30,000
+heap blocks, the visibility policy's reader check 84,000 times) to keep 158. Neither the
+person filter (`addressee_ids @>`, GIN) nor the year could use an index: under row security
+PostgreSQL runs a condition before the policy, and so as an index condition, only when its
+operators are leakproof. `@>` on arrays is not, and the year's second arm,
+`created_at__date` (`(created_at AT TIME ZONE 'Europe/Amsterdam')::date`), is a conversion
+that is not either.
+
+- **The year compares plain columns.** `archive_q` now says `letter_date` in the year, or no
+  `letter_date` and `created_at` from local midnight of 1 January up to that of the next
+  year (`timezone.get_current_timezone()`, the zone `__date` used): the same local year
+  (tested at the Amsterdam midnights). Date and timestamp comparisons are leakproof.
+- **An index for it** (`documents` 0034, `documents_document_year`: `workspace,
+  letter_date, created_at`), plain `CREATE INDEX` as in 0025: the plan reads one year's
+  letters (an eighth of them in the measured world) instead of all.
+- Results and visibility are unchanged: the list still starts from `visible_documents`, the
+  year only narrows it, and the measured result hashes are the same.
