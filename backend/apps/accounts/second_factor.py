@@ -37,7 +37,7 @@ from django.utils import formats, timezone
 from django.utils.translation import gettext as _
 
 from apps.accounts import recovery_codes, totp
-from apps.accounts.models import AccountNotice, RecoveryCode, SecondFactor, User
+from apps.accounts.models import AccountNotice, RecoveryCode, SecondFactor, User, UserSession
 from apps.accounts.notices import NOTICE_ZONE, notify
 from apps.accounts.second_factor_policy import requirement_for
 from apps.audit.codes import AuditCode, TargetKind
@@ -537,7 +537,8 @@ def remove_factor(
 ) -> None:
     """The account's own removal: its password (counted like a sign-in) and a code. 409
     `second_factor_required` while a rule asks it (a new phone is the way then). Every
-    other session of the account ends: what it signed in with is gone."""
+    other session of the account ends: what it signed in with is gone; this one stays,
+    but no longer counts as having passed the second step."""
     from apps.accounts.services import check_own_password
     from apps.accounts.sessions import end_sessions
     from apps.common.net import valid_client_ip
@@ -570,6 +571,10 @@ def remove_factor(
                 target=_target(user),
                 values={"count": ended, "reason": "second_factor_removed"},
             )
+        # The step this session passed was with the factor that is gone.
+        UserSession.objects.filter(session_key=request.session.session_key).update(
+            second_factor=False
+        )
 
 
 def clear_factor(
