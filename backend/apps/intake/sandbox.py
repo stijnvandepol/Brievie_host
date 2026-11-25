@@ -82,7 +82,9 @@ def execute(
         raise IsolationError("") from None
     try:
         answer = json.loads(raw)
-    except (ValueError, UnicodeDecodeError):
+    except (ValueError, UnicodeDecodeError, RecursionError):
+        # RecursionError: an answer nested deeper than the parser's stack (re-review of
+        # PR #58, point 1), a refusal and not a 500.
         raise IsolationError("") from None
     if not isinstance(answer, dict) or not isinstance(answer.get("ok"), bool):
         raise IsolationError("")

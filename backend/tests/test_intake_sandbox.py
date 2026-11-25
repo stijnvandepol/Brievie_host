@@ -69,6 +69,14 @@ def test_a_malformed_answer_is_refused(output: str) -> None:
         sandbox.execute(_python(f"import json; {output}"), b"", timeout=10, answer_limit=1024)
 
 
+def test_a_deeply_nested_answer_is_refused() -> None:
+    # Re-review of PR #58, point 1: json.loads raised RecursionError (a 500), not a refusal.
+    probe = "import sys; sys.stdout.write('[' * 200000 + ']' * 200000)"
+
+    with pytest.raises(IsolationError):
+        sandbox.execute(_python(probe), b"", timeout=10, answer_limit=1024 * 1024)
+
+
 def test_an_oversized_answer_is_refused() -> None:
     probe = "import json; print(json.dumps({'ok': True, 'fill': 'x' * 5000}))"
 

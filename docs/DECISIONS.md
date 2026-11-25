@@ -3549,3 +3549,11 @@ against the code first and all six held.
    `deploy/Dockerfile` pins `python:3.13-slim` by its multi-architecture index digest, the
    same as `ocr-gate`; Dependabot raises it. The web build stage (`node:26.13-slim`) stays a
    tag: nothing of it reaches the running image.
+
+## 2026-11-25: Follow-ups of the re-review of PR #58 and the archive list's speed
+
+The re-review of PR #58 (intake web upload) left six points; each is fixed with a test.
+
+1. **A deeply nested answer is a refusal.** `json.loads` of an answer such as 200 000
+   nested brackets raised `RecursionError`, which reached the request as a 500. It is now
+   `IsolationError("")`, as any other malformed answer.
