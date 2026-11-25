@@ -1,6 +1,7 @@
 """Taking in an uploaded document: check it, store it encrypted, queue the pipeline."""
 
 import hashlib
+from collections.abc import Sequence
 from uuid import UUID
 
 from django.conf import settings
@@ -170,8 +171,28 @@ def _store_pages(
     written: list[str],
 ) -> None:
     """Write the encrypted pages and their rows; every written path goes into `written`."""
+    write_pages(
+        document,
+        [
+            (data, meta.sha256, mask_bsns(meta.text))
+            for data, meta in zip(pages, metadata.pages, strict=True)
+        ],
+        storage,
+        written,
+    )
+
+
+def write_pages(
+    document: Document,
+    pages: Sequence[tuple[bytes, str, str]],
+    storage: DocumentStorage,
+    written: list[str],
+) -> None:
+    """Seal and write `(jpeg, sha256, masked_text)` per page, with its `DocumentPage` row,
+    from index 1; every written path goes into `written` first (the caller removes them
+    when its transaction fails). The text must already be BSN-masked."""
     key = workspace_key(document.workspace_id)
-    for index, (data, meta) in enumerate(zip(pages, metadata.pages, strict=True), start=1):
+    for index, (data, sha256, masked_text) in enumerate(pages, start=1):
         path = page_path(document.workspace_id, document.id, index)
         aad = page_aad(document.workspace_id, document.id, index)
         # Recorded first: a write that fails halfway must be cleaned up too.
@@ -182,8 +203,8 @@ def _store_pages(
             document=document,
             index=index,
             size=len(data),
-            sha256=meta.sha256,
-            ocr_text=mask_bsns(meta.text),
+            sha256=sha256,
+            ocr_text=masked_text,
             storage_path=path,
         )
 
