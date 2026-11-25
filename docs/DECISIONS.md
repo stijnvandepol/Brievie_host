@@ -3282,3 +3282,6 @@ Every point was checked against the code first.
   sentence now says that an admin can take the date away.
 - **Point 4 (low), held, fixed:** reopening a ticked-off reminder while a newer one is open hit
   the unique index (500). `reopenTask` now answers 409 `reminder_already_open` and changes nothing.
+- **Point 5 (low), held, fixed:** a new title left the old one in the open reminder's
+  description (and so in Mijn taken and the export). `reminders.on_details_changed` (was
+  `on_expiry_changed`) now runs on a changed title too and rewrites the description.

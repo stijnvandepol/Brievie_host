@@ -301,9 +301,10 @@ def update_details(
         for name in changed:
             setattr(document, name, wanted[name])
         document.save(update_fields=[*changed, "updated_at"])
-        if "expires_on" in changed:
-            # The open reminder follows the new end date, or ends with a cleared one.
-            reminders.on_expiry_changed(document)
+        if "expires_on" in changed or "title" in changed:
+            # The open reminder follows the new end date and title, or ends with a cleared
+            # date.
+            reminders.on_details_changed(document)
         for name in changed:
             if name == "retain_until":
                 organise.record_retention_changed(document, actor=user, until=document.retain_until)

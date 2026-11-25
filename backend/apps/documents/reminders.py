@@ -2,7 +2,7 @@
 
 `start_reminder` is the one writer of a task of type `expiry`, as the system; the daily job
 (`start_expiry_reminders`) asks it for every own document whose reminder lead has started.
-`on_expiry_changed` follows a changed end date: it moves the open reminder's deadline, or
+`on_details_changed` follows a changed end date or title: it moves the open reminder, or
 ends the reminder when the date is cleared; it never makes one (the job does). A document
 has at most one open reminder (`tasks_task_one_reminder`, a partial unique index), and a
 reminder ticked off is not made again for the same date: only a later end date (the
@@ -96,10 +96,11 @@ def start_reminder(document: Document, *, today: date) -> Task | None:
     return task
 
 
-def on_expiry_changed(document: Document) -> None:
-    """The document's end date changed (`own.update_details`, as the member, who may edit
-    it; the caller holds its row lock): the open reminder follows the new date, or ends
-    when the date is cleared. Makes no reminder itself."""
+def on_details_changed(document: Document) -> None:
+    """The document's end date or title changed (`own.update_details`, as the member, who
+    may edit it; the caller holds its row lock): the open reminder follows the new date and
+    title (security review of PR #54, point 5), or ends when the date is cleared. Makes no
+    reminder itself."""
     reminders = _open_reminders(document)
     if document.expires_on is None:
         delete_tasks(reminders)

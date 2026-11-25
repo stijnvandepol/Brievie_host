@@ -219,3 +219,19 @@ def test_the_job_is_registered_daily_with_a_queueing_lock() -> None:
         for entry in procrastinate_app.periodic_registry.periodic_tasks.values()
     }
     assert periodic["start_expiry_reminders"] == "10 4 * * *"
+
+
+def test_a_new_title_is_in_the_open_reminder_too(client: Client) -> None:
+    """Security review of PR #54, point 5: the reminder's description follows the title."""
+    h = household()
+    document = own_document(
+        h.workspace, scanned_by=h.anne, title="Paspoort", expires_on=END, remind_days=90
+    )
+    reminders.start_expiry_reminders(today=TODAY)
+    client.force_login(h.anne)
+    url = f"/api/v1/workspaces/{h.workspace.id}/documents/{document.id}/details"
+    response = client.patch(url, {"title": "Rijbewijs"}, content_type="application/json")
+    assert response.status_code == 200
+    [task] = _reminders(document)
+    assert task.description == "Geldig tot 23 januari 2027: Rijbewijs"
+    assert task.deadline == END
