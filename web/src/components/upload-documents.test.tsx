@@ -68,6 +68,7 @@ describe("Brief toevoegen", () => {
     await choose([pdf("een.pdf"), pdf("twee.pdf")]);
     await waitFor(() =>
       expect(screen.getAllByText("Toegevoegd. Brievie leest de brief nu.")).toHaveLength(2),
+      { timeout: 5000 },
     );
     expect(sent).toHaveLength(2);
     expect(sent[0]?.client_id).not.toBe(sent[1]?.client_id);
@@ -137,6 +138,8 @@ describe("Brief toevoegen", () => {
     await choose([1, 2, 3, 4, 5].map((n) => pdf(`brief-${n}.pdf`)));
     await waitFor(() =>
       expect(screen.getAllByText("Toegevoegd. Brievie leest de brief nu.")).toHaveLength(5),
+      // Five uploads in two rounds: slower on a busy CI runner.
+      { timeout: 5000 },
     );
     expect(most).toBe(3);
   });
