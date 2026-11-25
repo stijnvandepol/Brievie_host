@@ -3158,3 +3158,36 @@ route is public (`apps.access.route.is_public_route`, never a header from a non-
   `public_web_admin_without_second_factor` (a warning while an active server admin has no
   factor: that admin cannot sign in to the web from outside). Both additive to the closed
   list.
+
+### Security review of PR #56 (2026-11-25)
+
+Every point was checked against the code first; all held.
+
+- **Point 1 (medium), fixed: outside, the password of an account without a factor is not
+  checked.** A right password with an outdated hash was rehashed and written, a wrong one
+  not: a timing difference once per account after each hasher upgrade. `login` and
+  `verify_password` now look the account up first; without a confirmed factor on the
+  public route they make one hash of the typed password (`make_password`, as long as a
+  check) and take the failure path (same 401, axes, per-address and per-account counts).
+  — Ruling: an unknown address still goes through `authenticate` (Django hashes for it
+  too). Cost if wrong: none for timing; the refusal row keeps `step` second_factor.
+- **Point 2 (low), fixed.** Removing one's own factor sets the current session's
+  `second_factor` to false: the step it passed was with the factor that is gone.
+- **Point 3 (low), fixed.** `PendingSetupAuth` answers none on the public route, so a
+  pending `setup` step begun at home cannot set up a factor from outside.
+- **Point 4 (low), fixed.** `UserSessionMiddleware` refreshes a session (last use, client
+  address, expiry) only where it counts (`session_allowed`); outside without the second
+  step it is refused and left untouched.
+- **Point 5 (low), fixed in CI.** `routes-check.sh session` (with the web on outside):
+  six wrong passwords for one new address through the tunnel, one `CF-Connecting-IP`,
+  each with another `X-Forwarded-For`: the sixth is 429, and another `CF-Connecting-IP`
+  is not locked. The per-account slow-down starts after 10, so only the address can make
+  the sixth a 429. The 401 of a home session through the tunnel is shown to be the
+  session refused: the same request for the same session, marked in the database as
+  having passed the second step, gets 200 (then the mark is taken back).
+- **Point 6 (low), fixed.** Without `BRIEVIE_BEHIND_CADDY` no request is on the public
+  route, so nothing asks the second step outside. The page then shows
+  `public_web_without_second_factor` (the red line) instead of
+  `public_web_second_factor_required`, and `brievie.W002` warns. — Ruling: the existing
+  code, no new one: its sentence is exactly true there and the API's closed list stays as
+  it is. Cost if wrong: a developer install with the web on and a public way set shows red.
