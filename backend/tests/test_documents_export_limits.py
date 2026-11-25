@@ -104,3 +104,9 @@ def test_a_documents_pages_are_read_one_at_a_time(monkeypatch: pytest.MonkeyPatc
     # Three pages, each opened for its picture, then again one by one for the PDF (no list
     # of a document's pages is held).
     assert opened == [1, 2, 3, 1, 2, 3]
+
+
+def test_free_space_is_read_before_the_export_directory_exists() -> None:
+    from apps.documents.export_files import free_bytes
+
+    assert free_bytes() > 0

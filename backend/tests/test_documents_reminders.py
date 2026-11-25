@@ -208,7 +208,13 @@ def test_source_test_names_the_new_task_writers() -> None:
             expiry.add(relative)
     assert creators == {"documents/review.py", "documents/reminders.py"}
     # Who names the reminder's type: its writer, the review's refusal, the answers.
-    assert expiry == {"documents/reminders.py", "documents/review.py", "documents/services.py"}
+    # ... and the task services' refusals (reopening beside an open one, a date by hand).
+    assert expiry == {
+        "documents/reminders.py",
+        "documents/review.py",
+        "documents/services.py",
+        "tasks/services.py",
+    }
 
 
 def test_the_job_is_registered_daily_with_a_queueing_lock() -> None:

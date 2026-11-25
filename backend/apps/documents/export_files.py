@@ -149,8 +149,10 @@ def open_export_for_write(path: Path) -> BinaryIO:
 def free_bytes() -> int:
     """Free bytes on the disk of the export directory (of the storage root while the
     directory does not exist yet). Looks only; makes and removes nothing."""
-    root = judge_export_root(export_root())
-    target = root if root.exists() else root.parent
+    target = judge_export_root(export_root())
+    # The nearest directory that exists (a fresh install has no export directory yet).
+    while not target.exists() and target.parent != target:
+        target = target.parent
     return shutil.disk_usage(target).free
 
 

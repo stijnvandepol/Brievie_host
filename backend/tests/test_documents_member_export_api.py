@@ -284,6 +284,7 @@ def test_business_workspace_refuses_until_allowed(ws_b: Workspace) -> None:
         "document_count": 0,
         "size": 0,
         "scope": "mine",
+        "failure_code": "",
     }
     refused = post_json(client, f"/workspaces/{ws_b.id}/my-export")
     assert refused.status_code == 403
