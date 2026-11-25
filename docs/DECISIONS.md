@@ -3096,3 +3096,65 @@ Every point was checked against the code first; all held.
 - **Accepted, and written in SELFHOST:** whoever knows the password can keep the second
   step locked (the user sees the notice; an admin can clear), and after a grace period the
   password alone leads to setting a factor up, so the grace should be short.
+
+## 2026-11-25: The public route needs the second step (two-step Task 13, external access B2)
+
+Built on PR #52 (two-step sign-in) and PR #53 (external access). The owner's rules: with
+`BRIEVIE_PUBLIC_WEB` on, every password sign-in that arrives on the public route needs the
+second step; an account without a factor cannot sign in there at all; the answer must not
+tell whether the password was right; home and VPN are unchanged; an unknown or missing
+route is public (`apps.access.route.is_public_route`, never a header from a non-Caddy peer).
+
+- **Order of checks, and why the plan's 403 was dropped for the password.** The plan had
+  `begin_sign_in` answer 403 `second_factor_needed_outside` for an account without a factor.
+  It runs only after the password was right, so a wrong password (401) and "no factor"
+  (403) would tell an attacker the password. Ruling: `services.login` and
+  `services.verify_password` (an invitation with an existing account) check the password
+  first, then, on the public route, whether the account has a confirmed factor; without
+  one the right password is handled **exactly as a wrong one**: axes counts it (the
+  `user_login_failed` signal), the address throttle and the per-account slow-down count it,
+  the slow-down is not cleared, and the answer is the one 401 `invalid_credentials` that
+  every failed password gets on the public route, whose sentence covers both cases ("Het
+  e-mailadres of wachtwoord klopt niet, of tweestapsverificatie staat nog niet aan. Van
+  buiten kun je alleen inloggen met tweestapsverificatie. Zet die eerst thuis aan.").
+  Without the counting, five right passwords would not lock where five wrong ones do, and
+  the lock would tell. The log row is `sign_in_failed` with `step` `second_factor` (admins
+  and the account read it, an attacker does not). Accepted: the right password costs one
+  more indexed query than a wrong one, next to the hash. Cost: the owner without a factor
+  who tries from outside is counted towards the lock as for wrong passwords.
+- **The wall in `begin_sign_in`** stays (403 `second_factor_needed_outside`, before any write
+  of its own): no session and no pending step on the public route without a factor, and so
+  never a pending `setup` (a password alone must not enrol a factor from the internet). The
+  callers refuse earlier; this only catches a path that forgets.
+- **Setting up the server** on the public route: 403 `second_factor_needed_outside` before
+  the setup code is checked or anything is made (the first account has no factor; the code
+  comes from the server log, read at home anyway).
+- **A reset link** on the public route: the link is checked first (a dead link answers
+  `reset_link_invalid` as everywhere), then, for an account without a factor, 403
+  `second_factor_needed_outside` before the password changes. The link stays unused and
+  usable at home; nobody outside ends the member's sessions or unpairs their phones with
+  it. With a factor it completes and the code step follows, as at home. Accepted: the
+  holder of a live link learns that the account has no factor (they hold the secret
+  already, and can do nothing with it from outside).
+- **An invitation** on the public route: account `new` gets 403
+  `second_factor_needed_outside` after the dead-link and address checks, before anything is
+  made (a new account has no factor); account `existing` goes through `verify_password`, so
+  without a factor it answers as a wrong password (above). With a factor the account joins
+  and the code step follows (the ruling of PR #52). The invitation stays unaccepted. Where
+  it leads: the invitee opens the same link at home or through the VPN; there the normal
+  rules apply, including setting up a factor when the server's rule and its grace ask it.
+- **A web session on the public route counts only when it passed the second step**
+  (`apps.access.middleware.session_allowed`, the hook PR #53 left for this): without it, a
+  session started at home without a code could be carried outside. Such a session is not
+  ended: outside it is not signed in (401), at home it still works. Also on the public
+  route, `reauthenticate` for an account without a factor answers 403
+  `second_factor_needed_outside` before the password is checked, so a session there is no
+  password oracle (a session that passed the code and whose factor was removed since).
+- **Device tokens** are unchanged: the app's token is a factor of its own (S 8).
+- **`BRIEVIE_SECOND_FACTOR_AVAILABLE` is `True`** and stays a constant, not a setting: the
+  rule itself cannot be switched off. `brievie.W002` and the page's red line
+  (`public_web_without_second_factor`, a problem) remain for the case it is false. The page
+  adds `public_web_second_factor_required` (ok) and, per the plan,
+  `public_web_admin_without_second_factor` (a warning while an active server admin has no
+  factor: that admin cannot sign in to the web from outside). Both additive to the closed
+  list.

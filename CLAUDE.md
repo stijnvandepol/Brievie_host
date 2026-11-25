@@ -133,6 +133,12 @@ Web (`web/`, from the repo root through `cd web &&`; Node 24+ and pnpm):
   devices of others, workspace settings, the log, exports, linking a person to a member)
   use `auth=session_auth`: a device token gets 401. A response that carries a secret once
   sets `Cache-Control: no-store`.
+- On the public route (`apps.access.route.is_public_route`; unknown or missing is public) a
+  password sign-in needs a confirmed factor: `login` and `verify_password` treat the right
+  password of an account without one exactly as a wrong one (same 401, same counting);
+  setup, a new account by invitation, a reset link and `reauthenticate` answer 403
+  `second_factor_needed_outside` before any write; `begin_sign_in` refuses as the last wall.
+  A web session counts there only when it passed the second step (`session_allowed`).
 - Every password check of a sign-in path (`login`, `verify_password`) goes through
   `apps.accounts.signin_limits` (per-account slow-down) as well as axes. `createPairingCode`
   needs a session that signed in or called `reauthenticate` within 15 minutes, and every

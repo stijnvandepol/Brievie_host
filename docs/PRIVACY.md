@@ -362,7 +362,10 @@ for it; see the table above.
   encryption on its own servers: everything that passes through, including scanned pages,
   BSN-masked text and the app's device token, is readable there, and Cloudflare's terms apply.
 - Through the public address only the app works by default; the web sign-in stays at home
-  (`BRIEVIE_PUBLIC_WEB`, docs/SELFHOST.md section 25). The tunnel token stays in the
+  (`BRIEVIE_PUBLIC_WEB`, docs/SELFHOST.md section 25). With the web on there, a password
+  sign-in through the public address always needs two-step verification: an account
+  without it cannot sign in from outside, and the answer is the same as for a wrong
+  password, so it never tells whether the password was right. The tunnel token stays in the
   `cloudflared` container: the api never has it, no log or page shows it.
 
 ## Honest limits
