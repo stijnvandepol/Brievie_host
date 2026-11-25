@@ -457,6 +457,7 @@ function DocumentView({
             </div>
           ) : null}
         </section>
+        <DocumentOrigin workspaceId={workspaceId} document={document} />
         <SuggestionList
           workspaceId={workspaceId}
           document={document}
@@ -628,3 +629,35 @@ export const documentRoute = createRoute({
   path: "post/$documentId",
   component: DocumentPage,
 });
+
+/** How the letter arrived, and its original file when a browser or the scan folder sent one
+ * (intake spec S 2). The download is the server's: session-only, never cached. */
+function DocumentOrigin({
+  workspaceId,
+  document,
+}: {
+  workspaceId: string;
+  document: { id: string; source?: string; has_original?: boolean };
+}) {
+  const source =
+    document.source === "upload"
+      ? t`Binnengekomen via upload`
+      : document.source === "watch_folder"
+        ? t`Binnengekomen via de scanmap`
+        : "";
+  if (!source && !document.has_original) return null;
+  return (
+    <section className="panel" aria-label={t`Herkomst`}>
+      {source ? <p className="muted small">{source}</p> : null}
+      {document.has_original ? (
+        <a
+          className="button"
+          href={`/api/v1/workspaces/${workspaceId}/documents/${document.id}/original`}
+          download
+        >
+          {t`Origineel downloaden`}
+        </a>
+      ) : null}
+    </section>
+  );
+}

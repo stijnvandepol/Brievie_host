@@ -792,6 +792,10 @@ msgstr "Alleen te laat ({late})"
 msgid "Alleen voor een andere dienst die werkt zoals OpenAI. Begint met https://. Vul je dit in, dan geldt de dienst die je hierboven koos niet meer en is een model verplicht."
 msgstr "Alleen voor een andere dienst die werkt zoals OpenAI. Begint met https://. Vul je dit in, dan geldt de dienst die je hierboven koos niet meer en is een model verplicht."
 
+#: src/components/upload-documents.tsx
+msgid "Alleen voor mij"
+msgstr "Alleen voor mij"
+
 #: src/components/assign-dialog.tsx
 msgid "Alleen wie deze brief mag lezen, staat in de lijst."
 msgstr "Alleen wie deze brief mag lezen, staat in de lijst."
@@ -1066,6 +1070,14 @@ msgstr "Belastingaangifte"
 msgid "Beschikking"
 msgstr "Beschikking"
 
+#: src/components/upload-documents.tsx
+msgid "Bestand"
+msgstr "Bestand"
+
+#: src/components/upload-documents.tsx
+msgid "Bestanden"
+msgstr "Bestanden"
+
 #: src/routes/backup.tsx
 msgid "Bestemming"
 msgstr "Bestemming"
@@ -1107,6 +1119,7 @@ msgid "Bewaren"
 msgstr "Bewaren"
 
 #: src/components/document-details-form.tsx
+#: src/components/upload-documents.tsx
 msgid "Bewaren tot"
 msgstr "Bewaren tot"
 
@@ -1135,6 +1148,10 @@ msgstr "Bewaren tot weghalen"
 #: src/routes/trash.tsx
 msgid "Bewaren tot weghalen: {name}"
 msgstr "Bewaren tot weghalen: {name}"
+
+#: src/components/upload-documents.tsx
+msgid "Bezig met uploaden…"
+msgstr "Bezig met uploaden…"
 
 #: src/routes/search.tsx
 msgid "Bezig met zoeken…"
@@ -1175,6 +1192,14 @@ msgstr "Bijvoorbeeld http://ollama:11434/v1"
 #: src/task-time.ts
 msgid "Binnen 7 dagen"
 msgstr "Binnen 7 dagen"
+
+#: src/routes/document.tsx
+msgid "Binnengekomen via de scanmap"
+msgstr "Binnengekomen via de scanmap"
+
+#: src/routes/document.tsx
+msgid "Binnengekomen via upload"
+msgstr "Binnengekomen via upload"
 
 #: src/components/label-chip.tsx
 msgid "Blauw"
@@ -1234,6 +1259,10 @@ msgstr "Brief openen"
 #: src/components/audit-codes.ts
 msgid "Brief teruggezet"
 msgstr "Brief teruggezet"
+
+#: src/components/upload-documents.tsx
+msgid "Brief toevoegen"
+msgstr "Brief toevoegen"
 
 #: src/routes/inbox.tsx
 msgid "Brief toewijzen?"
@@ -1814,6 +1843,10 @@ msgstr "Dit voorbeeld bestaat niet (meer)."
 msgid "Document"
 msgstr "Document"
 
+#: src/components/upload-documents.tsx
+msgid "Document toevoegen"
+msgstr "Document toevoegen"
+
 #: src/routes/document.tsx
 msgid "Document verwijderen?"
 msgstr "Document verwijderen?"
@@ -1900,6 +1933,10 @@ msgstr "Een AI-dienst op internet"
 #: src/components/privacy-settings.tsx
 msgid "Een beheerder kan dan een uur lang post lezen die hij anders niet ziet, met een reden die in het logboek komt. Uitzetten beëindigt een noodtoegang die nog loopt."
 msgstr "Een beheerder kan dan een uur lang post lezen die hij anders niet ziet, met een reden die in het logboek komt. Uitzetten beëindigt een noodtoegang die nog loopt."
+
+#: src/components/upload-documents.tsx
+msgid "Eén bestand wordt één brief. Zitten er meer brieven in één bestand? Scan of bewaar ze dan los."
+msgstr "Eén bestand wordt één brief. Zitten er meer brieven in één bestand? Scan of bewaar ze dan los."
 
 #: src/components/privacy-settings.tsx
 msgid "Een brief met het label Zorg wordt dan vanzelf privé. Brieven die er al zijn, blijven zoals ze zijn."
@@ -2238,6 +2275,7 @@ msgid "Geldig"
 msgstr "Geldig"
 
 #: src/components/document-details-form.tsx
+#: src/components/upload-documents.tsx
 #: src/routes/pair-app.tsx
 msgid "Geldig tot"
 msgstr "Geldig tot"
@@ -2345,6 +2383,10 @@ msgstr "Herinnering"
 #: src/components/suggestion-list.tsx
 msgid "Herkend in de brief"
 msgstr "Herkend in de brief"
+
+#: src/routes/document.tsx
+msgid "Herkomst"
+msgstr "Herkomst"
 
 #: src/components/page.tsx
 #: src/routes/recovery-sheet.tsx
@@ -2998,6 +3040,10 @@ msgstr "Kies een persoon"
 #: src/components/rule-templates.tsx
 msgid "Kies een voorbeeld en vul de gemarkeerde delen in. Er wordt niets opgeslagen tot je op Opslaan drukt."
 msgstr "Kies een voorbeeld en vul de gemarkeerde delen in. Er wordt niets opgeslagen tot je op Opslaan drukt."
+
+#: src/components/upload-documents.tsx
+msgid "Kies maximaal 50 bestanden tegelijk."
+msgstr "Kies maximaal 50 bestanden tegelijk."
 
 #: src/routes/invitation.tsx
 #: src/routes/password-reset.tsx
@@ -3888,6 +3934,7 @@ msgstr "Opgeslagen."
 msgid "Opnieuw inloggen"
 msgstr "Opnieuw inloggen"
 
+#: src/components/upload-documents.tsx
 #: src/routes/document.tsx
 msgid "Opnieuw proberen"
 msgstr "Opnieuw proberen"
@@ -3933,6 +3980,10 @@ msgstr "Oranje"
 #: src/routes/visibility.tsx
 msgid "Organisatie"
 msgstr "Organisatie"
+
+#: src/routes/document.tsx
+msgid "Origineel downloaden"
+msgstr "Origineel downloaden"
 
 #: src/routes/security.tsx
 msgid "Oude telefoon kwijt? Gebruik een herstelcode."
@@ -4261,6 +4312,10 @@ msgstr "Sessie"
 msgid "Sessies"
 msgstr "Sessies"
 
+#: src/components/upload-documents.tsx
+msgid "Sleep PDF's of foto's hierheen."
+msgstr "Sleep PDF's of foto's hierheen."
+
 #: src/routes/ai.tsx
 msgid "Sleutel van de dienst (API-sleutel)"
 msgstr "Sleutel van de dienst (API-sleutel)"
@@ -4471,6 +4526,7 @@ msgid "Tijdstip"
 msgstr "Tijdstip"
 
 #: src/components/document-details-form.tsx
+#: src/components/upload-documents.tsx
 msgid "Titel"
 msgstr "Titel"
 
@@ -4487,6 +4543,14 @@ msgstr "Toch niet klaar"
 msgid "Toch niet klaar: {description}"
 msgstr "Toch niet klaar: {description}"
 
+#: src/components/upload-documents.tsx
+msgid "Toegevoegd. Brievie leest de brief nu."
+msgstr "Toegevoegd. Brievie leest de brief nu."
+
+#: src/components/upload-documents.tsx
+msgid "Toegevoegd. Brievie leest het document nu."
+msgstr "Toegevoegd. Brievie leest het document nu."
+
 #: src/routes/rule-editor.tsx
 msgid "Toepassen"
 msgstr "Toepassen"
@@ -4500,6 +4564,7 @@ msgid "Toepassen op bestaande post?"
 msgstr "Toepassen op bestaande post?"
 
 #: src/components/suggestion-list.tsx
+#: src/components/upload-documents.tsx
 #: src/routes/labels.tsx
 #: src/routes/visibility.tsx
 msgid "Toevoegen"
@@ -4602,6 +4667,7 @@ msgid "Typ minstens twee tekens."
 msgstr "Typ minstens twee tekens."
 
 #: src/components/document-details-form.tsx
+#: src/components/upload-documents.tsx
 #: src/routes/archive.tsx
 msgid "Type"
 msgstr "Type"
@@ -5048,6 +5114,10 @@ msgstr "Wacht op reactie: {description}"
 #: src/components/waiting-dialog.tsx
 msgid "Wacht op reactie…"
 msgstr "Wacht op reactie…"
+
+#: src/components/upload-documents.tsx
+msgid "Wacht…"
+msgstr "Wacht…"
 
 #: src/components/task-wait.tsx
 msgid "Wachten voorbij sinds {waitDay}"
