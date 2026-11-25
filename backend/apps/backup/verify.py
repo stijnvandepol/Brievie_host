@@ -24,6 +24,7 @@ from apps.backup.manifest import Manifest, authority_fingerprint, manifest_from_
 from apps.backup.restore import parse_master_key
 from apps.common import crypto
 from apps.documents.intake import page_aad
+from apps.documents.page_files import ORIGINAL_NAME
 
 
 @dataclass(frozen=True)
@@ -48,6 +49,8 @@ class _Restored:
     pages: list[_Page]
     wrapped_keys: dict[UUID, bytes]
     privacy: list[str]
+    # (workspace, document) of every document with an uploaded file's original.
+    originals: list[tuple[UUID, UUID]]
 
 
 # The helper functions the visibility policies call (S 4.9.1); all six or the policies
@@ -164,10 +167,60 @@ def _read(conninfo: str) -> _Restored:
                 )
             }
             privacy = privacy_problems(conn)
+            originals = _originals(conn)
     except psycopg.Error:
         # The driver's message can quote the connection string; say only the code.
         raise BackupError("restore_failed") from None
-    return _Restored(workspaces, documents, pages, wrapped_keys, privacy)
+    return _Restored(workspaces, documents, pages, wrapped_keys, privacy, originals)
+
+
+def _originals(conn: psycopg.Connection[tuple[object, ...]]) -> list[tuple[UUID, UUID]]:
+    """The documents that have an uploaded file's original, in the caller's transaction.
+    A back-up from before originals existed (`documents.0033_original_file`) has none and
+    no such column."""
+    known = conn.execute(
+        "SELECT EXISTS (SELECT 1 FROM django_migrations"
+        " WHERE app = 'documents' AND name = '0033_original_file')"
+    ).fetchone()
+    if known is None or not known[0]:
+        return []
+    return [
+        (UUID(str(row[0])), UUID(str(row[1])))
+        for row in conn.execute(
+            "SELECT workspace_id, id FROM documents_document WHERE original_kind <> ''"
+            " ORDER BY workspace_id, id"
+        )
+    ]
+
+
+def _original_problem(storage_root: Path, workspace_id: UUID, document_id: UUID) -> str | None:
+    """None when the document's original is a regular file inside the store, else the
+    problem's sentence (ids only). Only its presence is checked: it is not opened."""
+    names = {"document": document_id, "workspace": workspace_id}
+    candidate = storage_root / str(workspace_id) / str(document_id) / ORIGINAL_NAME
+    try:
+        inside = candidate.resolve().is_relative_to(storage_root.resolve())
+        info = os.lstat(candidate)
+    except FileNotFoundError:
+        return (
+            _(
+                "Het originele bestand van document %(document)s in werkruimte %(workspace)s "
+                "ontbreekt in de opslag."
+            )
+            % names
+        )
+    except (OSError, RuntimeError):  # a link loop, no permission
+        inside = False
+        info = None
+    if not inside or info is None or not stat.S_ISREG(info.st_mode):
+        return (
+            _(
+                "Het originele bestand van document %(document)s in werkruimte %(workspace)s "
+                "is geen gewoon bestand in de opslag."
+            )
+            % names
+        )
+    return None
 
 
 def _page_file(storage_root: Path, stored: str) -> tuple[Path | None, str]:
@@ -308,6 +361,13 @@ def verify_restore(
             files[page] = path
         else:
             problems.append(_page_sentence(why, page))
+
+    for workspace_id, document_id in restored.originals:
+        # A restore of the database and pages without the originals must not pass (re-review
+        # of PR #58, point 5).
+        original = _original_problem(storage_root, workspace_id, document_id)
+        if original is not None:
+            problems.append(original)
 
     opened = 0
     for workspace_id in restored.workspaces:

@@ -3585,3 +3585,10 @@ The re-review of PR #58 (intake web upload) left six points; each is fixed with 
    database knows no original at all (the only file upload failed after writing it) makes
    the sweep refuse until a person looks, as one stray page already did in a database
    without pages; it never deletes on a guess.
+5. **A restore without the originals fails the check.** `verify_restore` reads, in its one
+   read-only transaction, every document whose `original_kind` is set and requires its
+   `<workspace>/<document>/original` to be a regular file inside the store (not a link);
+   a missing one is a problem naming the document and workspace by id. Only its presence
+   is checked, as the original is not needed to prove the master key (a page is opened
+   for that). A back-up from before `documents.0033_original_file` has no originals and is
+   not checked for them.

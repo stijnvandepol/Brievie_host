@@ -1223,6 +1223,16 @@ msgstr "The database lacks the rules for who sees which post in table %(table)s.
 
 #: apps/backup/verify.py
 #, python-format
+msgid "Het originele bestand van document %(document)s in werkruimte %(workspace)s ontbreekt in de opslag."
+msgstr "The original file of document %(document)s in workspace %(workspace)s is missing from the storage."
+
+#: apps/backup/verify.py
+#, python-format
+msgid "Het originele bestand van document %(document)s in werkruimte %(workspace)s is geen gewoon bestand in de opslag."
+msgstr "The original file of document %(document)s in workspace %(workspace)s is not an ordinary file in the storage."
+
+#: apps/backup/verify.py
+#, python-format
 msgid "Pagina %(index)s van document %(document)s in werkruimte %(workspace)s ligt buiten de opslag."
 msgstr "Page %(index)s of document %(document)s in workspace %(workspace)s is outside the storage."
 
