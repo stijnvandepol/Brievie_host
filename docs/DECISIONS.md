@@ -2861,6 +2861,15 @@ B1–B4.
   CVE-2026-85091 (`zlib1g` of its Debian base, unused by the Go binary). Accepted in a list of
   its own, `.trivyignore.cloudflared.yaml`, used only by the cloudflared scan, until
   2026-12-15: then the job fails and the pin moves to a 2026.11.x release that is old enough.
+- **Trivy on cloudflared, second finding (2026-11-25):** the scan of the unchanged 2026.10.7
+  now also reports CVE-2026-124851 (HIGH, `libzstd1` 1.5.7+dfsg-1 of the Debian base; fixed in
+  1.5.7+dfsg-1+deb13u1). It is the only cloudflared finding; the CVE ids named in the failed
+  run's log (CVE-2026-63209 and others) belong to the restic list of `.trivyignore.yaml`, which
+  the log prints. The pin does not move: 2026.11.0 (2026-11-12) is 13 days old, 2026.11.1 and
+  2026.11.2 are younger, and the digest of 2026.10.7 is unchanged. Accepted for that package
+  only (`pkg:deb/debian/libzstd1`), until 2026-12-15 like the others: cloudflared is a Go
+  binary and does not use libzstd. Then the pin moves to the newest release that is old
+  enough (2026.11.0 from 2026-11-26) and the entries it no longer needs are removed.
 
 ### Security review of PR #53 (2026-11-25)
 
