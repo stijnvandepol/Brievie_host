@@ -268,6 +268,12 @@ class Document(WorkspaceModel):
                 name="documents_document_trash",
             ),
             GinIndex(fields=["addressee_ids"], name="documents_document_addressees"),
+            # The archive's year: the document's own date, else the upload's (`archive_q`).
+            # Plain columns, so the planner may use it under row security (2026-11-25).
+            models.Index(
+                fields=["workspace", "letter_date", "created_at"],
+                name="documents_document_year",
+            ),
             # Post without a name ("Zonder naam"), newest first: the list and its count
             # (measured, DECISIONS 2026-11-20).
             models.Index(

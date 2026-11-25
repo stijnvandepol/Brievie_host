@@ -20,7 +20,8 @@ from apps.backup.manifest import Manifest, build_manifest, manifest_to_json
 from apps.backup.verify import VerifyReport, verify_restore
 from apps.devices.pki import certificate_sha256
 from apps.workspaces.models import Workspace
-from tests.documents_support import admin_of, jpeg, upload
+from tests.documents_support import admin_of, jpeg, upload, upload_file
+from tests.intake_fixtures import make_pdf
 
 MASTER = bytes.fromhex("5a" * 32)  # the autouse fixture's BRIEVIE_MASTER_KEY
 CA_FIXTURE = Path(__file__).parent / "fixtures" / "ca_root.crt"
@@ -462,3 +463,68 @@ def test_verify_restore_command_counts_problems_in_good_dutch(
             str(tmp_path / "m.json"),
         )
     assert str(caught.value) == sentence
+
+
+def upload_original(workspace: Workspace) -> Path:
+    """An uploaded file: a document with a sealed original, `<ws>/<doc>/original`."""
+    client = Client()
+    client.force_login(admin_of(workspace))
+    response = upload_file(client, workspace.id, make_pdf([f"Brief {workspace.id}"]))
+    assert response.status_code == 201, response.content
+    return storage_root() / str(workspace.id) / str(response.json()["id"]) / "original"
+
+
+@pytest.fixture
+def with_original(ws_a: Workspace, ws_b: Workspace, backup_conninfo: str) -> tuple[Manifest, Path]:
+    """`installation`'s letters plus an uploaded file in workspace A, and its manifest."""
+    upload_letter(ws_a)
+    upload_letter(ws_b)
+    original = upload_original(ws_a)
+    authority = authority_dir()
+    authority.mkdir()
+    (authority / "root.crt").write_text(CA_FIXTURE.read_text())
+    return manifest_now(backup_conninfo, authority), original
+
+
+@pytest.mark.django_db(transaction=True)
+def test_verify_passes_with_the_originals_in_place(
+    with_original: tuple[Manifest, Path], backup_conninfo: str
+) -> None:
+    manifest, original = with_original
+    assert original.is_file()
+
+    assert verify(backup_conninfo, manifest).problems == []
+
+
+@pytest.mark.django_db(transaction=True)
+def test_verify_reports_a_restore_without_the_original(
+    with_original: tuple[Manifest, Path], backup_conninfo: str, ws_a: Workspace
+) -> None:
+    # Re-review of PR #58, point 5: a restore of the database and pages without the
+    # originals passed the check; the download of such a file then failed.
+    manifest, original = with_original
+    original.unlink()
+
+    report = verify(backup_conninfo, manifest)
+
+    (problem,) = report.problems
+    assert original.parent.name in problem
+    assert str(ws_a.id) in problem
+    assert_plain(problem)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_verify_reports_an_original_that_is_not_a_plain_file(
+    with_original: tuple[Manifest, Path], backup_conninfo: str, tmp_path: Path
+) -> None:
+    manifest, original = with_original
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.write_bytes(original.read_bytes())
+    original.unlink()
+    original.symlink_to(elsewhere)
+
+    report = verify(backup_conninfo, manifest)
+
+    (problem,) = report.problems
+    assert original.parent.name in problem
+    assert_plain(problem)

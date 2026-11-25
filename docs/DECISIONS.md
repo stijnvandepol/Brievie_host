@@ -3558,3 +3558,85 @@ against the code first and all six held.
    `deploy/Dockerfile` pins `python:3.13-slim` by its multi-architecture index digest, the
    same as `ocr-gate`; Dependabot raises it. The web build stage (`node:26.13-slim`) stays a
    tag: nothing of it reaches the running image.
+
+## 2026-11-25: Follow-ups of the re-review of PR #58 and the archive list's speed
+
+The re-review of PR #58 (intake web upload) left six points; each is fixed with a test.
+
+1. **A deeply nested answer is a refusal.** `json.loads` of an answer such as 200 000
+   nested brackets raised `RecursionError`, which reached the request as a 500. It is now
+   `IsolationError("")`, as any other malformed answer.
+2. **The timeout kills the child's whole process group, and the child cannot fork.** The
+   child starts in a session of its own (`start_new_session`); when it ends or its time is
+   up the parent kills its process group with `SIGKILL`, so nothing it forked lives on.
+   Because a grandchild could leave the group (`setsid`), the child also sets
+   `RLIMIT_NPROC` to 0 before it reads the file: a fork fails. Ruling: 0, not a small
+   number, as the limit counts every process and thread of the uid (the worker's
+   included); PDFium and Pillow render in the calling thread. Root is not bound by it; the
+   server never runs as root.
+3. **Processes that hold secrets are not dumpable.** `apps.common.hardening.forbid_inspection`
+   calls `prctl(PR_SET_DUMPABLE, 0)` through `ctypes` (Linux only, no dependency; elsewhere
+   it does nothing): `manage.py` before any command (so both `procrastinate worker`
+   services), gunicorn's master in `on_starting` before it forks its workers (`gunicorn
+   --config python:brievie.gunicorn_config` in `deploy/Dockerfile`; the workers inherit
+   it), and `brievie.wsgi` for another server. A process of the same user, such as a
+   parser child taken over by a crafted file, can then no longer read their
+   `/proc/<pid>/environ` or `mem` (and no core dump is written). A kernel that refuses
+   stops the process from starting. The parser child itself is started by `exec` and is
+   dumpable again, which is harmless: it holds no secret.
+   **Follow-up, still open:** the parser in its own uid or a container without network.
+   The child can still read every file the worker's user can read (a key file, the
+   storage) and reach the network; only the inheritance and `/proc` are closed.
+4. **The orphan sweep refuses per kind.** The refusal "files on disk and none of them known"
+   held for pages and originals together, so a database that knew pages but no originals
+   (a wrong or older database) listed every original as an orphan. It now holds for pages
+   and for originals apart. Consequence, accepted: an original left behind while the
+   database knows no original at all (the only file upload failed after writing it) makes
+   the sweep refuse until a person looks, as one stray page already did in a database
+   without pages; it never deletes on a guess.
+5. **A restore without the originals fails the check.** `verify_restore` reads, in its one
+   read-only transaction, every document whose `original_kind` is set and requires its
+   `<workspace>/<document>/original` to be a regular file inside the store (not a link);
+   a missing one is a problem naming the document and workspace by id. Only its presence
+   is checked, as the original is not needed to prove the master key (a page is opened
+   for that). A back-up from before `documents.0033_original_file` has no originals and is
+   not checked for them.
+6. **The child's answer has a fixed ceiling.** The limit was 8 MiB per page times the
+   pages allowed, so a large `BRIEVIE_MAX_PAGES` (an unbounded setting) let the child write,
+   and the parent read, parse and decode, gigabytes. The limit is now
+   `min(8 MiB x pages, 64 MiB)` (`ANSWER_BYTES_MAX`), the same number as the child's own
+   `RLIMIT_FSIZE`, and each page's base64 is refused over 8 MiB on its own. Ruling: 64 MiB
+   fits 30 letter pages of about 1.6 MB each as JPEG (letters are mostly white and far
+   smaller); a scan's whole upload is 32 MiB (`BRIEVIE_MAX_UPLOAD_BYTES`). A file over it is
+   refused as unreadable, as an oversized answer was before.
+
+### The archive's year list (`list_archive_person_year`)
+
+The `visibility-perf` gate (median <= 250 ms, unchanged) failed at random on
+`list_archive_person_year` (one person's archive in one year): 210-284 ms on CI, also on
+main. The EXPLAIN (ANALYZE, BUFFERS) the workflow keeps showed why: the plan walked all
+100,000 letters of the workspace (`documents_document_workspace_id` index, about 30,000
+heap blocks, the visibility policy's reader check 84,000 times) to keep 158. Neither the
+person filter (`addressee_ids @>`, GIN) nor the year could use an index: under row security
+PostgreSQL runs a condition before the policy, and so as an index condition, only when its
+operators are leakproof. `@>` on arrays is not, and the year's second arm,
+`created_at__date` (`(created_at AT TIME ZONE 'Europe/Amsterdam')::date`), is a conversion
+that is not either.
+
+- **The year compares plain columns.** `archive_q` now says `letter_date` in the year, or no
+  `letter_date` and `created_at` from local midnight of 1 January up to that of the next
+  year (`timezone.get_current_timezone()`, the zone `__date` used): the same local year
+  (tested at the Amsterdam midnights). Date and timestamp comparisons are leakproof.
+- **An index for it** (`documents` 0034, `documents_document_year`: `workspace,
+  letter_date, created_at`), plain `CREATE INDEX` as in 0025: the plan reads one year's
+  letters (an eighth of them in the measured world) instead of all.
+- Results and visibility are unchanged: the list still starts from `visible_documents`, the
+  year only narrows it, and the measured result hashes are the same.
+- **Measured** (CI `visibility-perf`, 100,000 letters, median per state and actor): before
+  98-179 ms on a good run and 263-282 ms (FAIL) on a bad one; after 28-39 ms, the plan a
+  bitmap scan of `documents_document_year`, the same result hashes. No other gated list
+  got slower. No temporary EXPLAIN was needed: the workflow's artifact holds one for every
+  measured query.
+- **Observation, not changed:** `list_archive_kind_type` (90-200 ms) walks the workspace the
+  same way; `kind` and `document_type` are leakproof, so an index on them would help it
+  when it nears the gate.

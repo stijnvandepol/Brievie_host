@@ -9,6 +9,8 @@ This deletes user data when it is wrong, so it is conservative:
   `<uuid>/<uuid>/<n>.page`, an uploaded file's sealed `<uuid>/<uuid>/original`, or a
   `.tmp-*` file next to them, and nothing else. An original is known when its document
   row says it has one (`original_kind` not empty).
+- Pages and originals are judged apart: when files of a kind are on disk and the
+  database knows none of them, the sweep refuses instead of listing them all.
 - The files on disk are listed FIRST and the known paths read AFTER. A page written
   between the two reads is then known instead of taken for an orphan.
 - Files younger than `ORPHAN_MIN_AGE` are skipped, and deleting checks that again.
@@ -153,10 +155,15 @@ def find_orphans(*, conninfo: str, storage_root: Path, now: datetime) -> list[Or
         # A stored path in a form this code cannot place: its file would look orphaned.
         raise BackupError("internal_error")
     stored_on_disk = {item.path for item in on_disk if item.is_stored}
-    if stored_on_disk and not (known & stored_on_disk):
-        # No known path matches any page or original on disk: an empty or wrong database,
-        # or a path form this code does not read. Refuse rather than list the whole store.
-        raise BackupError("internal_error")
+    for kind in (_PAGE_PATH, _ORIGINAL_PATH):
+        # Per kind: no known page matches any page on disk, or no known original any
+        # original: an empty, wrong or older database, or a path form this code does not
+        # read. Refuse rather than list all of that kind as orphans (a database that
+        # knows pages but no originals must not orphan every original; re-review of
+        # PR #58, point 4).
+        of_kind = {path for path in stored_on_disk if kind.fullmatch(path)}
+        if of_kind and not (known & of_kind):
+            raise BackupError("internal_error")
     cutoff = now - ORPHAN_MIN_AGE
     return sorted(
         (

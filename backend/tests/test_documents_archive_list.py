@@ -2,7 +2,7 @@
 the member sees, with filters that only narrow."""
 
 import uuid
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from django.test import Client
@@ -69,6 +69,31 @@ def test_year_uses_letter_date_then_created_at() -> None:
     assert _list(h, ArchiveFilters(year=2019)) == {dated.id}
     assert _list(h, ArchiveFilters(year=2021)) == {undated.id}
     assert _list(h, ArchiveFilters(year=2020)) == set()
+
+
+def test_an_undated_document_counts_in_the_year_of_its_upload_in_amsterdam() -> None:
+    # The year arm compares `created_at` with Amsterdam midnights (2026-11-25, archive
+    # speed); the year is still the local one, as `created_at__date` gave it.
+    h = household()
+    new_year = own_document(h.workspace, scanned_by=h.anne)
+    old_year = own_document(h.workspace, scanned_by=h.anne)
+    _set(new_year, created_at=datetime(2020, 12, 31, 23, 0, tzinfo=UTC))  # 00:00 local
+    _set(old_year, created_at=datetime(2021, 12, 31, 22, 59, 59, tzinfo=UTC))  # 23:59:59
+    assert _list(h, ArchiveFilters(year=2020)) == set()
+    assert _list(h, ArchiveFilters(year=2021)) == {new_year.id, old_year.id}
+    assert _list(h, ArchiveFilters(year=2022)) == set()
+
+
+def test_the_year_filter_compares_plain_columns() -> None:
+    # Under row security only leakproof comparisons can use an index before the policy
+    # runs; a time-zone conversion of `created_at` cannot, and made the archive's year
+    # list read every letter of the workspace (visibility-perf, 2026-11-25).
+    sql = str(
+        Document.objects.filter(services.archive_q(ArchiveFilters(year=2021), date.today())).query
+    )
+    assert "AT TIME ZONE" not in sql.upper()
+    assert "letter_date" in sql
+    assert "created_at" in sql
 
 
 def test_expiring_lists_documents_ending_within_90_days_or_past() -> None:

@@ -2,8 +2,10 @@
 of PR #58, points 2 and 6): it gets no secret from the environment, answers in JSON only
 (never pickle), and a malformed, oversized, slow or greedy child is refused."""
 
+import base64
 import dataclasses
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -69,6 +71,14 @@ def test_a_malformed_answer_is_refused(output: str) -> None:
         sandbox.execute(_python(f"import json; {output}"), b"", timeout=10, answer_limit=1024)
 
 
+def test_a_deeply_nested_answer_is_refused() -> None:
+    # Re-review of PR #58, point 1: json.loads raised RecursionError (a 500), not a refusal.
+    probe = "import sys; sys.stdout.write('[' * 200000 + ']' * 200000)"
+
+    with pytest.raises(IsolationError):
+        sandbox.execute(_python(probe), b"", timeout=10, answer_limit=1024 * 1024)
+
+
 def test_an_oversized_answer_is_refused() -> None:
     probe = "import json; print(json.dumps({'ok': True, 'fill': 'x' * 5000}))"
 
@@ -88,6 +98,80 @@ def test_a_slow_child_is_killed_on_time() -> None:
         sandbox.execute(_python("import time; time.sleep(30)"), b"", timeout=1, answer_limit=1024)
 
     assert time.monotonic() - started < 10
+
+
+def _gone(pid: int, *, within: float = 10.0) -> bool:
+    """True once `pid` no longer runs (gone, or a zombie waiting for init to reap it)."""
+    deadline = time.monotonic() + within
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        status = Path(f"/proc/{pid}/status")
+        try:
+            if "\tZ" in status.read_text().split("State:", 1)[1].split("\n", 1)[0]:
+                return True
+        except (OSError, IndexError):
+            pass
+        time.sleep(0.1)
+    return False
+
+
+def _forking(pid_file: Path, then: str) -> list[str]:
+    """A child that forks a grandchild sleeping for a minute (its pid in `pid_file`), then
+    runs `then` itself."""
+    return _python(
+        "import os, sys, time\n"
+        "if os.fork() == 0:\n"
+        f"    open({str(pid_file)!r}, 'w').write(str(os.getpid()))\n"
+        "    time.sleep(60)\n"
+        "    os._exit(0)\n"
+        f"while not os.path.exists({str(pid_file)!r}): time.sleep(0.01)\n"
+        f"{then}\n"
+    )
+
+
+def _pid_in(pid_file: Path) -> int:
+    for _ in range(100):
+        text = pid_file.read_text() if pid_file.exists() else ""
+        if text:
+            return int(text)
+        time.sleep(0.05)
+    raise AssertionError("the grandchild never started")
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX process groups")
+def test_a_timeout_kills_the_childs_whole_process_group(tmp_path: Path) -> None:
+    # Re-review of PR #58, point 2: the timeout killed the child only; what it forked lived on.
+    pid_file = tmp_path / "grandchild"
+
+    with pytest.raises(IsolationError):
+        sandbox.execute(_forking(pid_file, "time.sleep(60)"), b"", timeout=2, answer_limit=1024)
+
+    assert _gone(_pid_in(pid_file))
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX process groups")
+def test_what_a_child_left_behind_is_killed_after_its_answer(tmp_path: Path) -> None:
+    pid_file = tmp_path / "grandchild"
+    answer = "import json; print(json.dumps({'ok': True}))"
+
+    assert sandbox.execute(_forking(pid_file, answer), b"", timeout=10, answer_limit=1024) == {
+        "ok": True
+    }
+
+    assert _gone(_pid_in(pid_file))
+
+
+@pytest.mark.skipif(
+    sys.platform != "linux" or os.geteuid() == 0,
+    reason="RLIMIT_NPROC binds a non-root user on Linux",
+)
+def test_the_parser_child_cannot_fork() -> None:
+    # A grandchild could leave the process group (setsid); one that cannot be made cannot.
+    with pytest.raises(IsolationError):
+        sandbox.execute(_limited("import os; os.fork()"), b"", timeout=10, answer_limit=1024)
 
 
 def _limited(statement: str, *, cpu: int = 30, memory: int = 256 * 1024 * 1024) -> list[str]:
@@ -173,3 +257,50 @@ def test_an_unknown_error_code_from_the_child_is_not_passed_on() -> None:
         sandbox.count_from({"ok": False, "code": "<script>"})
 
     assert str(caught.value) == ""
+
+
+def _capture(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
+    """Stand in for the child: record the command and answer limit, answer one page."""
+    seen: dict[str, object] = {}
+
+    def fake(command: list[str], data: bytes, *, timeout: float, answer_limit: int) -> object:
+        seen["command"], seen["answer_limit"] = command, answer_limit
+        return {"ok": True, "pages": [{"jpeg": "/9j/"}]}
+
+    monkeypatch.setattr(sandbox, "execute", fake)
+    return seen
+
+
+def test_the_answer_has_a_ceiling_whatever_the_page_setting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Re-review of PR #58, point 6: the limit was pages x 8 MiB, so a large
+    # BRIEVIE_MAX_PAGES let the child send (and the parent hold) gigabytes.
+    seen = _capture(monkeypatch)
+
+    sandbox.render(b"%PDF", kind="pdf", max_pages=10_000, timeout=1)
+
+    assert seen["answer_limit"] == sandbox.ANSWER_BYTES_MAX
+    command = seen["command"]
+    assert isinstance(command, list)
+    # The child's own RLIMIT_FSIZE (its answer argument) is the same number.
+    assert command[6] == str(sandbox.ANSWER_BYTES_MAX)
+
+
+def test_a_few_pages_keep_their_own_smaller_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen = _capture(monkeypatch)
+
+    sandbox.render(b"%PDF", kind="pdf", max_pages=3, timeout=1)
+
+    assert seen["answer_limit"] == 3 * sandbox.ANSWER_BYTES_PER_PAGE
+    assert sandbox.ANSWER_BYTES_MAX < 30 * sandbox.ANSWER_BYTES_PER_PAGE
+
+
+def test_a_page_over_its_own_limit_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sandbox, "ANSWER_BYTES_PER_PAGE", 64)
+    small = base64.b64encode(b"\xff\xd8" + b"x" * 40).decode()
+    large = base64.b64encode(b"\xff\xd8" + b"x" * 60).decode()
+
+    assert len(sandbox.pages_from({"ok": True, "pages": [{"jpeg": small}]}, max_pages=2)) == 1
+    with pytest.raises(IsolationError):
+        sandbox.pages_from({"ok": True, "pages": [{"jpeg": small}, {"jpeg": large}]}, max_pages=2)

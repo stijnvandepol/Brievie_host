@@ -101,8 +101,10 @@ def render_image(data: bytes) -> list[ParsedPage]:
 
 
 def set_limits(*, cpu_seconds: int, memory_bytes: int, answer_bytes: int) -> None:
-    """The child's own limits, set before it reads the file: address space, CPU time and
-    the size of any file it writes (its answer). macOS refuses `RLIMIT_AS`; the parent's
+    """The child's own limits, set before it reads the file: address space, CPU time, the
+    size of any file it writes (its answer) and no new process (`RLIMIT_NPROC` 0: a fork
+    fails, so nothing can outlive the child or leave its process group; root is not bound
+    by it, and the server never runs as root). macOS refuses `RLIMIT_AS`; the parent's
     timeout and answer limit still hold there."""
     try:
         import resource
@@ -112,6 +114,7 @@ def set_limits(*, cpu_seconds: int, memory_bytes: int, answer_bytes: int) -> Non
         (resource.RLIMIT_AS, memory_bytes),
         (resource.RLIMIT_CPU, cpu_seconds),
         (resource.RLIMIT_FSIZE, answer_bytes),
+        (resource.RLIMIT_NPROC, 0),
     ):
         try:
             resource.setrlimit(limit, (value, value))
