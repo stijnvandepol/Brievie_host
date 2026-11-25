@@ -3456,7 +3456,9 @@ folder, Tasks 9-15, is not built yet).
 - **Debian `tesseract-ocr` and `tesseract-ocr-nld`** (Apache-2.0) in the runtime stage of
   `deploy/Dockerfile`, the image both installs run (`./brievie` and compose-only), in the
   layer that installs the PostgreSQL client and Debian's pending security updates. Pinned by
-  the Debian release of the pinned base image; trivy scans them with the image. Tesseract
+  the Debian release of the base image; trivy scans them with the image. (Corrected by the
+  security review of PR #58: the base image was a tag, not pinned, until that review pinned
+  `python:3.13-slim` by its index digest.) Tesseract
   directly, not OCRmyPDF (spec S 1.1): we need page images and text, not a searchable PDF,
   and OCRmyPDF pulls in Ghostscript and qpdf.
 - **`ABANDONED_AFTER` is 45 minutes** (was 15): an upload of 30 pages that each need OCR
@@ -3476,9 +3478,11 @@ folder, Tasks 9-15, is not built yet).
   toevoegen" sends title, type, "Geldig tot", "Bewaren tot" and "Alleen voor mij"; persons
   and labels are set afterwards on the document's page.
 - **Parsers in a child process.** PDFium (page count in the request, rendering in the
-  worker) and Pillow run in a spawned child (`apps.intake.sandbox`: a fresh interpreter
-  without Django or keys, `RLIMIT_AS` 1.5 GiB and `RLIMIT_CPU`, killed after its time:
-  5 s to count, 30 s + 5 s per page to render). PDFium runs without its form environment,
+  worker) and Pillow run in a child (`apps.intake.sandbox`), killed after its time: 5 s to
+  count, 30 s + 5 s per page to render. (Corrected by the security review of PR #58: the
+  first version, a `multiprocessing` spawn, inherited the worker's whole environment,
+  master key and database URLs included, and unpickled the child's answer; "without keys"
+  was wrong. See that section for what it is now.) PDFium runs without its form environment,
   so a PDF's JavaScript never runs and nothing is fetched. Tesseract is its own process
   (no shell, stdin, 60 s per page, one thread). Images are measured from the header
   before any decoder runs (> 40 MP: `image_too_large`).
@@ -3486,8 +3490,62 @@ folder, Tasks 9-15, is not built yet).
   the EXIF orientation is applied and the EXIF data (a phone's location) does not reach
   the pages; the sealed original keeps the file as sent.
 - **Rate limits are shared with `createDocument`** (`check_upload_limits`, 60 per member
-  per 10 minutes, 600 per workspace per hour), checked after the membership.
+  per 10 minutes, 600 per workspace per hour), checked after the membership. File uploads
+  also have lower limits of their own since the security review of PR #58.
 - **The upload sits on the Archief page** (the post page of the spec became Archief in
   PR #54); an uploaded letter appears in the Inbox once read, like a scan.
 - **No duplicate check yet** (spec S 1.4): `original_sha256` has a partial index per
   workspace for it.
+
+### Security review of PR #58
+
+An independent review before merging found two high and four lower points; each was checked
+against the code first and all six held.
+
+1. **The purge removes the original.** `page_files.judge_page_path` accepts exactly
+   `<workspace>/<document>/original` beside `<n>.page`, with the same refusals (every path
+   judged first, the root judged, no link followed); the purge names it for a letter whose
+   `original_kind` is set, so an erased letter leaves nothing on disk and nothing in the next
+   back-up. The orphan sweep knows the name (known when the document row has an original;
+   it refuses when originals or pages are on disk and none is known, as for pages),
+   so an original left by a request that failed after writing it is listed once it is 24
+   hours old and removed by `sweep --delete`. The manifest counts `original_files` per workspace (0 in older manifests).
+2. **The parser child gets no secret and answers in JSON.** It is started as Tesseract is:
+   `python -I apps/intake/parsers.py`, environment `PATH` and `LANG` only, no inherited
+   descriptors, the file on stdin. It sets `RLIMIT_AS` (1.5 GiB), `RLIMIT_CPU` and
+   `RLIMIT_FSIZE` (its answer: 8 MiB per page) itself before reading, and writes one JSON
+   object to a temporary file that the parent measures before reading and checks field by
+   field (pages as base64 JPEGs that must start as a JPEG; only known refusal codes pass).
+   Nothing is unpickled. The child is started by its script path, not `-m`: with `-I` the
+   working directory is not on `sys.path`, and the script imports nothing of the project.
+   **Follow-up, not done:** real isolation (its own user or container, no network). The
+   child still runs as the worker's user with its network, so a child taken over by a
+   crafted file could still read what that user can, such as the parent's
+   `/proc/<pid>/environ` or a key file; its clean environment closes only the plain
+   inheritance.
+3. **No page brings more than `BRIEVIE_MAX_PAGE_TEXT_CHARS`** (20 000), as for a scan from
+   the app. The cut is on the OCR text in the worker, not in the child: since point 4 the
+   child sends pictures only.
+4. **A PDF's text layer is not used; every page is read by OCR** (chosen over comparing the
+   layer with OCR: comparing needs the OCR anyway, and a threshold for "the same" would be
+   a guess). Hidden or white text, another amount or an instruction to the AI no longer
+   reaches the AI. Cost: OCR on pages that had text (the gate read synthetic letters at
+   36/36). On top, **a document from a PDF file never confirms on its own**
+   (`steps._confirm_guarded`): a person confirms it; a photo can still be confirmed by the
+   autopilot. The autopilot may still apply its picks (labels, addressees) as for a scan.
+5. **A time budget per file and lower limits for files.** Rendering and OCR of one file
+   share `BRIEVIE_FILE_PROCESSING_SECONDS` (600); each step gets at most what is left, and a
+   file that runs out fails `file_too_slow`. File uploads have limits of their own,
+   `BRIEVIE_FILE_UPLOADS_PER_MEMBER` 50 per 10 minutes (one full selection in the web) and
+   `BRIEVIE_FILE_UPLOADS_PER_WORKSPACE` 200 per hour, checked before the limits shared
+   with scans (60 per 10 minutes, 600 per hour).
+6. **Smaller points.** The download's extension comes from the sniffed kind (a PDF sent as
+   `brief.exe` downloads as `brief.pdf`); direction marks (U+061C, U+200E/F, U+2028-U+202E,
+   U+2066-U+2069) and control characters are removed from names. A missing or damaged
+   original answers 404 `original_unreadable` instead of a 500. An upload that would leave
+   less than `BRIEVIE_UPLOAD_FREE_RESERVE_BYTES` (1 GiB) free on the storage disk answers
+   507 `storage_full` before anything is written. `ocr-gate` installs Pillow with
+   `--require-hashes` from `tools/ocr-gate/requirements.txt` (the hashes of `uv.lock`).
+   `deploy/Dockerfile` pins `python:3.13-slim` by its multi-architecture index digest, the
+   same as `ocr-gate`; Dependabot raises it. The web build stage (`node:26.13-slim`) stays a
+   tag: nothing of it reaches the running image.

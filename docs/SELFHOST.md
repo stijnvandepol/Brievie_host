@@ -256,8 +256,8 @@ profile: they would switch off the questions for good.
 ## 8. After a restore
 
 The database is copied first, the files after. A letter scanned between those two
-moments can have a file in the back-up without a letter in the database. Those are
-harmless loose files. `./brievie sweep` lists them; `./brievie sweep --delete` removes
+moments can have a file in the back-up without a letter in the database (a page, or the
+original of an uploaded file). Those are harmless loose files. `./brievie sweep` lists them; `./brievie sweep --delete` removes
 them (section 9).
 
 A restore also brings back **who was signed in and which phones worked** at the moment
@@ -282,7 +282,8 @@ it has not expired). So after a restore:
 
 Files younger than 24 hours are never touched: a letter may just be arriving. It
 refuses, and deletes nothing, when it is in doubt: when it cannot read the list of
-known pages as the back-up role, when no file on disk matches the database at all, or
+known pages and originals as the back-up role, when no file on disk matches the database
+at all, or
 when a path has a form it does not know. It never follows a link. An error then means
 "nothing was deleted".
 
@@ -311,10 +312,14 @@ database is not in it either, so `./brievie backup` is still needed.
 
 "Brief toevoegen" on the Archief page takes PDFs, JPEGs and PNGs (at most 32 MB and 30
 pages each). The worker draws the pages and reads the text with Tesseract (Dutch and
-English), both in the image: it is about 60-80 MB larger than before. On a small NAS a
-page without its own text takes a few seconds to read, up to a minute at most; a file of
-30 such pages can take several minutes before it shows in the Inbox. The original is kept
-next to the pages, so an upload takes roughly twice the space of a scan.
+English), both in the image: it is about 60-80 MB larger than before. Every page is read
+from its picture, also a PDF page that has its own text. On a small NAS a page takes a few
+seconds to read, up to a minute at most; one file gets at most 10 minutes in all
+(`BRIEVIE_FILE_PROCESSING_SECONDS`, 600), after which it shows as failed. A member may add
+50 files per 10 minutes and a workspace 200 per hour (`BRIEVIE_FILE_UPLOADS_PER_MEMBER`,
+`BRIEVIE_FILE_UPLOADS_PER_WORKSPACE`). The original is kept next to the pages, so an
+upload takes roughly twice the space of a scan; an upload is refused while less than 1 GB
+would stay free on the documents' disk (`BRIEVIE_UPLOAD_FREE_RESERVE_BYTES`).
 
 ## 12. Not verified yet
 

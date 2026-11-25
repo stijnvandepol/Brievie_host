@@ -54,8 +54,10 @@ names are still recognised in the letter and rules still run, on the server itse
 
 
 Reading an uploaded file happens on the server itself: its pages are drawn with PDFium
-and its text read with Tesseract, both inside the Brievie image. Nothing of the file
-leaves the server for that; only the text, BSN-masked, goes to an AI service, and only
+and its text read with Tesseract from those pictures, both inside the Brievie image. A
+PDF's own hidden text is not used: only what the page shows is read, and a letter from a
+PDF is never confirmed by the autopilot on its own. Nothing of the file leaves the server
+for that; only the text, BSN-masked, goes to an AI service, and only
 with recorded consent, exactly as for a scan from the app. A photo's EXIF data (such as
 the place it was taken) is not kept in the pages; the original keeps it, as you sent it.
 
@@ -241,7 +243,8 @@ an AI service, but nothing is removed yet: it can be put back for 30 days. Only 
 may see the letter see it in the trash.
 
 - **The purge.** After 30 days, or earlier when an admin chooses "Definitief verwijderen" or
-  "Prullenbak legen", Brievie removes the letter for good: its sealed page files, its rows
+  "Prullenbak legen", Brievie removes the letter for good: its sealed page files and, for an
+  uploaded file, its sealed original, its rows
   (text, summary, proposals, links to persons and labels, suggestions, history, shares,
   rule runs) and its tasks, also the done ones. Persons and labels stay. What remains is
   the log: who moved it, put it back or purged it, with the letter's id only, never its
