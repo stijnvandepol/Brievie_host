@@ -3059,3 +3059,33 @@ Rulings of the spec, kept as written:
   through emergency access is left out too. The build and the download check the admin role
   again (a demoted admin's export fails or is not found). One export row per member, whatever
   its scope; `export_created` records `scope` with the count.
+- **Measured at 100,000 documents (plan Task 12, `visibility-perf` on 9be29ef).** The world
+  now has own documents (about 21 %, titled with everyday words, no letter facts), end dates
+  (about 5 %), 400 senders and 8 years. Slowest median of the 12 state × actor runs, jit off:
+
+  | List | Median | Where |
+  |---|---|---|
+  | `list_archive` | 58 ms | own, admin |
+  | `list_archive_kind_type` | 174 ms | own, sorter |
+  | `list_archive_person_year` | 249 ms | own, department member (closest to the budget) |
+  | `archive_facets` | 209 ms | E, sorter |
+  | `list_archive_expiring` | 167 ms | own, sorter |
+  | `menu_counts` (re-measured) | 168 ms | own, sorter |
+  | `inbox_counts` (re-measured) | 175 ms | own, sorter |
+  | `lingering_letters` (re-measured) | 174 ms | own+D, admin |
+  | `list_my_post`, `_unread`, `list_all_unread` | 60, 20, 49 ms | |
+  | `list_tasks_all` | 197 ms | own, sorter |
+  | `search_with_title` (not gated) | 510 ms | E, sorter |
+  | `search_sender` (not gated, as before) | 487 ms | E, sorter |
+
+  Lists: 306 PASS, 0 FAIL. The facets first read the visible rows three times (400–540 ms);
+  they are one query now (grouping sets over the seam's own statement, as the member). The
+  `(workspace, -letter_date)` index was not needed. **`search_with_title` is not gated**, as
+  `search_sender` and `search_common_word` are not (DECISIONS 2026-11-20, M1): every search
+  term gets the same plan in this world (the workspace through the policies, not the GIN
+  index), 393–510 ms on the same runs and over on main too; the owner can make it gated
+  again once search is faster. The job itself is red on this branch and on main alike (a
+  run of main dispatched the same day): the duplicate measurement's recall is 0.930 < 0.95
+  for a corpus whose dates follow the day it runs; nothing of the archive touches it. The
+  one-off time of documents 0027 at 100,000 documents is not measured (the job migrates an
+  empty database before it builds the world).
