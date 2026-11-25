@@ -18,6 +18,7 @@ from psycopg.rows import TupleRow
 from apps.backup.errors import BackupError
 from apps.common.version import server_version
 from apps.devices.pki import certificate_sha256
+from apps.documents.page_files import ORIGINAL_NAME
 
 MANIFEST_FORMAT = 1
 MANIFEST_NAME = "manifest.json"
@@ -36,6 +37,9 @@ class WorkspaceCounts:
     documents: int
     pages: int
     page_files: int
+    # Uploaded files' sealed originals (security review of PR #58); 0 in a manifest
+    # written before they existed.
+    original_files: int = 0
 
 
 @dataclass(frozen=True)
@@ -69,6 +73,14 @@ def authority_fingerprint(authority_dir: Path) -> str | None:
 
 def _count_page_files(storage_root: Path, workspace_id: UUID) -> int:
     return sum(1 for path in (storage_root / str(workspace_id)).glob("*/*.page") if path.is_file())
+
+
+def _count_original_files(storage_root: Path, workspace_id: UUID) -> int:
+    return sum(
+        1
+        for path in (storage_root / str(workspace_id)).glob(f"*/{ORIGINAL_NAME}")
+        if path.is_file()
+    )
 
 
 @contextmanager
@@ -147,6 +159,7 @@ def build_manifest(
                     documents=int(documents.get(workspace_id, 0)),
                     pages=int(pages.get(workspace_id, 0)),
                     page_files=_count_page_files(storage_root, workspace_id),
+                    original_files=_count_original_files(storage_root, workspace_id),
                 )
                 for workspace_id in workspace_ids
             },
@@ -171,6 +184,7 @@ def manifest_to_json(m: Manifest) -> str:
                     "documents": counts.documents,
                     "pages": counts.pages,
                     "page_files": counts.page_files,
+                    "original_files": counts.original_files,
                 }
                 for workspace_id, counts in m.workspaces.items()
             },
@@ -246,6 +260,7 @@ def manifest_from_json(text: str) -> Manifest:
                     documents=int(value["documents"]),
                     pages=int(value["pages"]),
                     page_files=int(value["page_files"]),
+                    original_files=int(value.get("original_files", 0)),
                 )
                 for key, value in data["workspaces"].items()
             },

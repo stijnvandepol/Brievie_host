@@ -44,8 +44,9 @@ from apps.rules.models import RuleRun
 from apps.tasks.models import Task
 from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
-from tests.documents_support import admin_of, jpeg, make_document, trashed, upload
+from tests.documents_support import admin_of, jpeg, make_document, trashed, upload, upload_file
 from tests.helpers import post_json
+from tests.intake_fixtures import make_pdf
 from tests.members_support import as_user, workspace_rows
 from tests.visibility_support import office
 
@@ -150,6 +151,31 @@ def test_purge_removes_rows_files_and_tasks(ws_a: Workspace) -> None:
     assert sorted(p.name for p in letter_dir(other).iterdir()) == ["1.page", "2.page"]
     assert fresh(other) is not None
     assert count(Task, other) == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_purge_removes_an_uploaded_files_original(ws_a: Workspace) -> None:
+    """Security review of PR #58: the sealed original is user data like the pages; after
+    the purge nothing of the letter is left on disk (nor in the next back-up)."""
+    client = Client()
+    client.force_login(admin_of(ws_a))
+    r = upload_file(client, ws_a.id, make_pdf(["Een brief"]))
+    assert r.status_code == 201, r.content
+    document = fresh_by_id(ws_a, r.json()["id"])
+    assert (letter_dir(document) / "original").is_file()
+    trashed(document, days_ago=31)
+    mark(document)
+
+    result = purge.purge_marked(ws_a.id)
+
+    assert result == purge.PurgeResult(purged=1, refused=0)
+    assert fresh(document) is None
+    assert not letter_dir(document).exists()
+
+
+def fresh_by_id(ws: Workspace, document_id: str) -> Document:
+    with workspace_context(ws.id, actor=SYSTEM):
+        return Document.objects.get(id=document_id)
 
 
 @pytest.mark.django_db(transaction=True)

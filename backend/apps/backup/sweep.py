@@ -6,7 +6,9 @@ This deletes user data when it is wrong, so it is conservative:
   cannot bypass row-level security fails with an error; it never yields a partial
   list that would make live pages look like orphans.
 - A candidate is a regular file (never a symlink) in the document layout
-  `<uuid>/<uuid>/<n>.page` or a `.tmp-*` file next to it, and nothing else.
+  `<uuid>/<uuid>/<n>.page`, an uploaded file's sealed `<uuid>/<uuid>/original`, or a
+  `.tmp-*` file next to them, and nothing else. An original is known when its document
+  row says it has one (`original_kind` not empty).
 - The files on disk are listed FIRST and the known paths read AFTER. A page written
   between the two reads is then known instead of taken for an orphan.
 - Files younger than `ORPHAN_MIN_AGE` are skipped, and deleting checks that again.
@@ -29,6 +31,7 @@ from apps.backup import safepaths
 from apps.backup.database import backup_conninfo
 from apps.backup.errors import BackupError
 from apps.backup.locks import backup_lock
+from apps.documents.page_files import ORIGINAL_NAME
 
 ORPHAN_MIN_AGE = timedelta(hours=24)
 
@@ -36,8 +39,9 @@ _UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 _PAGE_NAME = re.compile(r"[0-9]+\.page")
 _TEMP_NAME = re.compile(r"\.tmp-[A-Za-z0-9_]+")
 _UUID_NAME = re.compile(_UUID)
-_LAYOUT = re.compile(rf"({_UUID})/({_UUID})/([0-9]+\.page|\.tmp-[A-Za-z0-9_]+)")
+_LAYOUT = re.compile(rf"({_UUID})/({_UUID})/([0-9]+\.page|{ORIGINAL_NAME}|\.tmp-[A-Za-z0-9_]+)")
 _PAGE_PATH = re.compile(rf"{_UUID}/{_UUID}/[0-9]+\.page")
+_ORIGINAL_PATH = re.compile(rf"{_UUID}/{_UUID}/{ORIGINAL_NAME}")
 
 
 @dataclass(frozen=True)
@@ -58,7 +62,8 @@ class _OnDisk:
     path: str
     size: int
     modified_at: datetime
-    is_page: bool
+    # A page or an original: a file a database row names (a temp file is not).
+    is_stored: bool
 
 
 def _modified(info: os.stat_result) -> datetime:
@@ -86,8 +91,11 @@ def _scan_disk(root: Path) -> list[_OnDisk]:
             for document_dir in _subdirectories(workspace_dir):
                 with os.scandir(document_dir) as entries:
                     for entry in entries:
-                        is_page = _PAGE_NAME.fullmatch(entry.name) is not None
-                        if not (is_page or _TEMP_NAME.fullmatch(entry.name)):
+                        is_stored = (
+                            _PAGE_NAME.fullmatch(entry.name) is not None
+                            or entry.name == ORIGINAL_NAME
+                        )
+                        if not (is_stored or _TEMP_NAME.fullmatch(entry.name)):
                             continue
                         try:
                             info = entry.stat(follow_symlinks=False)
@@ -100,7 +108,7 @@ def _scan_disk(root: Path) -> list[_OnDisk]:
                                 path=f"{workspace_dir.name}/{document_dir.name}/{entry.name}",
                                 size=info.st_size,
                                 modified_at=_modified(info),
-                                is_page=is_page,
+                                is_stored=is_stored,
                             )
                         )
     except OSError:
@@ -129,20 +137,25 @@ def _known_paths(conninfo: str, root: Path) -> set[str]:
         # Without BYPASSRLS this fails instead of returning only some rows.
         conn.execute("SET row_security = off")
         rows = conn.execute("SELECT storage_path FROM documents_documentpage").fetchall()
-    return {_relative(str(row[0]), root) for row in rows}
+        originals = conn.execute(
+            "SELECT workspace_id, id FROM documents_document WHERE original_kind <> ''"
+        ).fetchall()
+    return {_relative(str(row[0]), root) for row in rows} | {
+        f"{workspace_id}/{document_id}/{ORIGINAL_NAME}" for workspace_id, document_id in originals
+    }
 
 
 def find_orphans(*, conninfo: str, storage_root: Path, now: datetime) -> list[Orphan]:
     # Order matters: the disk first, the database after (see the module docstring).
     on_disk = _scan_disk(storage_root)
     known = _known_paths(conninfo, storage_root)
-    if not all(_PAGE_PATH.fullmatch(path) for path in known):
+    if not all(_PAGE_PATH.fullmatch(path) or _ORIGINAL_PATH.fullmatch(path) for path in known):
         # A stored path in a form this code cannot place: its file would look orphaned.
         raise BackupError("internal_error")
-    pages_on_disk = {item.path for item in on_disk if item.is_page}
-    if pages_on_disk and not (known & pages_on_disk):
-        # No known path matches any page file: an empty or wrong database, or a path form
-        # this code does not read. Refuse rather than list the whole store.
+    stored_on_disk = {item.path for item in on_disk if item.is_stored}
+    if stored_on_disk and not (known & stored_on_disk):
+        # No known path matches any page or original on disk: an empty or wrong database,
+        # or a path form this code does not read. Refuse rather than list the whole store.
         raise BackupError("internal_error")
     cutoff = now - ORPHAN_MIN_AGE
     return sorted(

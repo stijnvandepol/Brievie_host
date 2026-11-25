@@ -108,6 +108,24 @@ def upload(
     )
 
 
+def upload_file(
+    client: Client,
+    workspace_id: object,
+    data: bytes,
+    *,
+    name: str = "brief.pdf",
+    client_id: uuid.UUID | None = None,
+) -> "Response":
+    """A browser's `uploadDocumentFile`: one file, its kind read from the content."""
+    return client.post(
+        f"/api/v1/workspaces/{workspace_id}/documents/files",
+        {
+            "metadata": json.dumps({"client_id": str(client_id or uuid.uuid4())}),
+            "file": SimpleUploadedFile(name, data, content_type="application/octet-stream"),
+        },
+    )
+
+
 def make_document(workspace: Workspace, status: str = "done") -> Document:
     """A document row without pages, in `status`; enough for organising tests."""
     with workspace_context(workspace.id, actor=SYSTEM):

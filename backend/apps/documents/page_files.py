@@ -1,16 +1,18 @@
 """The only code that removes a letter's sealed page files, and the guard it goes through.
 
 A letter's pages are `<storage root>/<workspace id>/<document id>/<n>.page` (see
-`intake.page_path`), written through a `.tmp-*` file next to them. The purge removes
-them before it deletes the rows; nothing else in the trash or the purge removes a file
-(`DocumentStorage.delete` stays for the upload rollback only).
+`intake.page_path`), written through a `.tmp-*` file next to them; an uploaded file's
+sealed original is `original` in the same folder (`intake.original_path`). The purge
+removes them before it deletes the rows; nothing else in the trash or the purge removes a
+file (`DocumentStorage.delete` stays for the upload rollback only).
 
 The refusal lives here, whoever calls:
 
 - `judge_page_path` is pure (no file system call): it accepts exactly
-  `<workspace id>/<document id>/<n>.page` for the ids of the call (lowercase, `n` ASCII
-  digits) and refuses everything else: an absolute path, `..`, `\\`, NUL, another
-  workspace's or letter's path, a directory, any other name.
+  `<workspace id>/<document id>/<n>.page` or `<workspace id>/<document id>/original` for
+  the ids of the call (lowercase, `n` ASCII digits) and refuses everything else: an
+  absolute path, `..`, `\\`, NUL, another workspace's or letter's path, a directory, any
+  other name.
 - `judge_storage_root` accepts only the configured storage root when it is
   `/data/documents` (or strictly inside the test root, tests only), not a link, not
   reached through one, not a home directory or above one, and clear of the back-up
@@ -19,8 +21,9 @@ The refusal lives here, whoever calls:
   before anything is looked at), then the root, then opens the root, the workspace
   directory and the letter's directory each without following a link, relative to its
   parent, and checks each is the directory it saw (same inode, same file system). It
-  unlinks only regular files with a judged page name or a `.tmp-*` name, never a link
-  and never a directory, and removes the letter's directory only when it is empty. A
+  unlinks only regular files with a judged name (a page or the original) or a `.tmp-*`
+  name, never a link and never a directory, and removes the letter's directory only when
+  it is empty. A
   linked or swapped directory is refused.
 
 `PageFileRefused` never carries a path or an id; callers log the type only.
@@ -43,6 +46,8 @@ from apps.backup.errors import BackupError
 logger = logging.getLogger(__name__)
 
 _TEMP_NAME = re.compile(r"\.tmp-[A-Za-z0-9_]+")
+# An uploaded file's sealed original, next to its pages (`intake.original_path`).
+ORIGINAL_NAME = "original"
 _DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 # What opening a link (or a file) with O_DIRECTORY | O_NOFOLLOW answers.
 _LINK_ERRORS = frozenset({errno.ELOOP, errno.ENOTDIR, errno.EMLINK})
@@ -58,14 +63,15 @@ def _refused() -> PageFileRefused:
 
 
 def judge_page_path(storage_path: str, *, workspace_id: UUID, document_id: UUID) -> PurePosixPath:
-    """`storage_path` when it is exactly `<workspace_id>/<document_id>/<n>.page`.
+    """`storage_path` when it is exactly `<workspace_id>/<document_id>/<n>.page` or
+    `<workspace_id>/<document_id>/original` (an uploaded file's sealed original).
 
     Pure: decided by the text alone, nothing is looked at.
     """
     if "\\" in storage_path or "\0" in storage_path:
         raise _refused()
     expected = re.compile(
-        rf"{re.escape(str(workspace_id))}/{re.escape(str(document_id))}/[0-9]+\.page",
+        rf"{re.escape(str(workspace_id))}/{re.escape(str(document_id))}/(?:[0-9]+\.page|{ORIGINAL_NAME})",
         re.ASCII,
     )
     if expected.fullmatch(storage_path) is None:
@@ -139,7 +145,8 @@ def _unlink_regular(directory: int, name: str) -> bool:
 
 
 def _remove_in_letter_dir(letter: int, page_names: set[str]) -> tuple[int, int]:
-    """Unlink the judged pages and the `.tmp-*` leftovers; returns (removed, left)."""
+    """Unlink the judged files (pages, original) and the `.tmp-*` leftovers; returns
+    (removed, left)."""
     with os.scandir(letter) as entries:
         temps = {entry.name for entry in entries if _TEMP_NAME.fullmatch(entry.name)}
     removed = sum(1 for name in sorted(page_names | temps) if _unlink_regular(letter, name))
@@ -170,7 +177,7 @@ def _nothing_there(page_names: set[str]) -> int:
 def remove_document_files(
     workspace_id: UUID, document_id: UUID, storage_paths: Sequence[str]
 ) -> int:
-    """Remove the letter's page files and leftovers; returns how many files went.
+    """Remove the letter's page files, its original and leftovers; returns how many went.
 
     All or nothing on the paths: every one is judged before anything is looked at. Then
     the root is judged and opened without following a link. A page file or the letter's

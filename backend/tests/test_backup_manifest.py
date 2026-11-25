@@ -24,7 +24,8 @@ from apps.backup.manifest import (
 )
 from apps.devices.pki import certificate_sha256
 from apps.workspaces.models import Workspace
-from tests.documents_support import admin_of, jpeg, upload
+from tests.documents_support import admin_of, jpeg, upload, upload_file
+from tests.intake_fixtures import make_pdf
 
 CA_FIXTURE = Path(__file__).parent / "fixtures" / "ca_root.crt"
 
@@ -127,7 +128,35 @@ def test_manifest_json_round_trip() -> None:
     ]
     assert data["created_at"] == "2026-11-17T21:03:00+01:00"
     (counts,) = data["workspaces"].values()
-    assert counts == {"documents": 3, "pages": 5, "page_files": 5}
+    assert counts == {"documents": 3, "pages": 5, "page_files": 5, "original_files": 0}
+
+
+def test_a_manifest_from_before_originals_reads_as_none() -> None:
+    data = json.loads(manifest_to_json(sample_manifest()))
+    for counts in data["workspaces"].values():
+        del counts["original_files"]
+
+    (counts,) = manifest_from_json(json.dumps(data)).workspaces.values()
+    assert counts.original_files == 0
+
+
+@pytest.mark.django_db(transaction=True)
+def test_manifest_counts_the_sealed_originals(
+    ws_a: Workspace, backup_conninfo: str, tmp_path: Path
+) -> None:
+    # Security review of PR #58: an uploaded file's original is in the back-up too.
+    client = Client()
+    client.force_login(admin_of(ws_a))
+    assert upload_file(client, ws_a.id, make_pdf(["Een brief"])).status_code == 201
+
+    manifest = build_manifest(
+        run_id=uuid.uuid4(),
+        conninfo=backup_conninfo,
+        storage_root=Path(django_settings.BRIEVIE_STORAGE_ROOT),
+        authority_dir=tmp_path / "no-authority",
+    )
+
+    assert manifest.workspaces[ws_a.id].original_files == 1
 
 
 def test_manifest_without_authority_round_trips() -> None:

@@ -17,6 +17,7 @@ from apps.common.privacy import mask_bsns
 from apps.documents import own, reading, visibility
 from apps.documents.jpeg import jpeg_size
 from apps.documents.models import Document, DocumentPage
+from apps.documents.page_files import ORIGINAL_NAME
 from apps.documents.schemas import UploadMetadataIn
 from apps.documents.storage import DocumentStorage, default_storage
 from apps.pipeline.jobs import defer_processing
@@ -37,7 +38,7 @@ def page_aad(workspace_id: UUID, document_id: UUID, index: int) -> bytes:
 
 
 def original_path(workspace_id: UUID, document_id: UUID) -> str:
-    return f"{workspace_id}/{document_id}/original"
+    return f"{workspace_id}/{document_id}/{ORIGINAL_NAME}"
 
 
 def original_aad(workspace_id: UUID, document_id: UUID) -> bytes:
