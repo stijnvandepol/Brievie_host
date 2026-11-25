@@ -5,6 +5,7 @@ import shutil
 
 import pytest
 from PIL import Image, ImageDraw, ImageFont
+from pytest_django import Settings
 
 from apps.documents.jpeg import jpeg_size
 from apps.intake.files import FileKind
@@ -36,6 +37,14 @@ def test_a_text_layer_is_never_trusted() -> None:
     pages = render_pages(make_pdf([LAYER]), FileKind.PDF, ocr)
     assert [page.text for page in pages] == ["Wat de pagina laat zien"]
     assert len(ocr.calls) == 1
+
+
+def test_the_text_of_a_page_is_cut_to_the_page_limit(settings: Settings) -> None:
+    """Security review of PR #58, point 3: as for a scan from the app
+    (`BRIEVIE_MAX_PAGE_TEXT_CHARS`), no page of a file brings more text than that."""
+    settings.BRIEVIE_MAX_PAGE_TEXT_CHARS = 1000
+    pages = render_pages(make_pdf([None, None]), FileKind.PDF, FakeOcr("woord " * 2000))
+    assert [len(page.text) for page in pages] == [1000, 1000]
 
 
 def test_image_only_page_is_read_once() -> None:

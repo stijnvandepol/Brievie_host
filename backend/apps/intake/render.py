@@ -39,6 +39,8 @@ def render_pages(data: bytes, kind: FileKind, ocr: OcrEngine) -> list[RenderedPa
 
     # Every page is read from its picture, also a PDF page with its own text: that layer
     # can hold text the page does not show (security review of PR #58).
+    # No page brings more text than a scan from the app may (security review of PR #58).
+    limit = settings.BRIEVIE_MAX_PAGE_TEXT_CHARS
     pages: list[RenderedPage] = []
     failed = 0
     for page in parsed:
@@ -47,7 +49,7 @@ def render_pages(data: bytes, kind: FileKind, ocr: OcrEngine) -> list[RenderedPa
         except OcrFailedError:
             failed += 1
             text = ""
-        pages.append(RenderedPage(jpeg=page.jpeg, text=text))
+        pages.append(RenderedPage(jpeg=page.jpeg, text=text[:limit]))
     if failed == len(pages):
         raise PermanentError("ocr_failed")
     return pages
