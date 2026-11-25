@@ -57,6 +57,11 @@ untyped_calls_exclude = ["factory"]
 module = ["environ", "environ.*"]
 ignore_missing_imports = true
 
+# pypdfium2 ships no type information; apps.intake.parsers is its only user.
+[[tool.mypy.overrides]]
+module = ["pypdfium2", "pypdfium2.*"]
+ignore_missing_imports = true
+
 [tool.django-stubs]
 django_settings_module = "brievie.settings"
 
