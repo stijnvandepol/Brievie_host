@@ -68,7 +68,7 @@ def _fresh(ws: Workspace, document: Document) -> tuple[Document, list[DocumentPa
 
 def test_an_uploaded_pdf_gets_its_pages_and_text(ws_a: Workspace) -> None:
     document = _uploaded(ws_a, make_pdf([LAYER, None]))
-    ocr = FakeOcr("Tweede pagina gelezen")
+    ocr = FakeOcr("Pagina gelezen")
 
     jobs.run_job(ws_a.id, document.id, attempts=0, run=_runner(ocr))
 
@@ -82,10 +82,10 @@ def test_an_uploaded_pdf_gets_its_pages_and_text(ws_a: Workspace) -> None:
         sealed = default_storage().read(page.storage_path)
         plain = crypto.open_sealed(key, sealed, aad=page_aad(ws_a.id, document.id, page.index))
         assert hashlib.sha256(plain).hexdigest() == page.sha256
-    assert "Voorbeeldstad" in pages[0].ocr_text
-    assert pages[1].ocr_text == "Tweede pagina gelezen"
+    # Both pages are read from their picture: the first page's own text layer is not used.
+    assert [page.ocr_text for page in pages] == ["Pagina gelezen", "Pagina gelezen"]
     assert fresh.ocr_text == PAGE_SEPARATOR.join(page.ocr_text for page in pages)
-    assert len(ocr.calls) == 1
+    assert len(ocr.calls) == 2
 
 
 def test_a_bsn_is_masked_in_page_and_document_text(ws_a: Workspace) -> None:
@@ -106,7 +106,7 @@ def test_the_ai_never_sees_the_file_name(ws_a: Workspace) -> None:
     jobs.run_job(ws_a.id, document.id, attempts=0, run=_runner(FakeOcr(), provider))
 
     assert len(provider.requests) == 1
-    assert "Voorbeeldstad" in provider.texts[0]
+    assert "Tekst van de scan" in provider.texts[0]
     assert "voorbeeldnaam" not in repr(provider.requests[0])
 
 

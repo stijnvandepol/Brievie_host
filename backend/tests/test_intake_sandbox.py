@@ -2,6 +2,7 @@
 of PR #58, points 2 and 6): it gets no secret from the environment, answers in JSON only
 (never pickle), and a malformed, oversized, slow or greedy child is refused."""
 
+import dataclasses
 import json
 import sys
 import time
@@ -135,15 +136,24 @@ def test_the_parser_renders_pages_in_the_child() -> None:
     assert pages[0].jpeg.startswith(b"\xff\xd8")
 
 
+def test_the_child_sends_no_text_of_a_pdf() -> None:
+    # Point 4: the PDF's own text layer never leaves the child; every page is OCR'd.
+    pages = sandbox.render(
+        make_pdf(["Gemeente Voorbeeldstad, aanslag 2026"]), kind="pdf", max_pages=30, timeout=30
+    )
+
+    assert [field.name for field in dataclasses.fields(pages[0])] == ["jpeg"]
+
+
 @pytest.mark.parametrize(
     "answer",
     [
         {"ok": True, "pages": "x"},
-        {"ok": True, "pages": [{"jpeg": "not base64!", "text": "", "needs_ocr": True}]},
-        {"ok": True, "pages": [{"jpeg": "aGVsbG8=", "text": "", "needs_ocr": True}]},
-        {"ok": True, "pages": [{"jpeg": "/9j/", "text": 3, "needs_ocr": True}]},
-        {"ok": True, "pages": [{"jpeg": "/9j/", "text": "", "needs_ocr": "yes"}]},
-        {"ok": True, "pages": [{"jpeg": "/9j/", "text": "", "needs_ocr": True}] * 3},
+        {"ok": True, "pages": ["/9j/"]},
+        {"ok": True, "pages": [{"jpeg": 3}]},
+        {"ok": True, "pages": [{"jpeg": "not base64!"}]},
+        {"ok": True, "pages": [{"jpeg": "aGVsbG8="}]},
+        {"ok": True, "pages": [{"jpeg": "/9j/"}] * 3},
         {"ok": True, "pages": []},
     ],
 )

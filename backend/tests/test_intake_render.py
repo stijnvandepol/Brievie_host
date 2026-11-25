@@ -28,12 +28,14 @@ def _failure(data: bytes, kind: FileKind) -> str:
     return caught.value.code
 
 
-def test_text_layer_page_needs_no_ocr() -> None:
-    ocr = FakeOcr()
+def test_a_text_layer_is_never_trusted() -> None:
+    """Security review of PR #58, point 4: a PDF's own text can differ from what the page
+    shows (white or hidden text, another amount, an instruction to the AI). Every page is
+    read from its picture; the layer is not used."""
+    ocr = FakeOcr("Wat de pagina laat zien")
     pages = render_pages(make_pdf([LAYER]), FileKind.PDF, ocr)
-    assert len(pages) == 1
-    assert "Voorbeeldstad" in pages[0].text
-    assert ocr.calls == []
+    assert [page.text for page in pages] == ["Wat de pagina laat zien"]
+    assert len(ocr.calls) == 1
 
 
 def test_image_only_page_is_read_once() -> None:
@@ -43,10 +45,11 @@ def test_image_only_page_is_read_once() -> None:
     assert len(ocr.calls) == 1
 
 
-def test_mixed_pdf() -> None:
-    pages = render_pages(make_pdf([LAYER, None]), FileKind.PDF, FakeOcr("Gelezen tekst"))
-    assert "Voorbeeldstad" in pages[0].text
-    assert pages[1].text == "Gelezen tekst"
+def test_mixed_pdf_is_read_from_its_pictures() -> None:
+    ocr = FakeOcr("Gelezen tekst")
+    pages = render_pages(make_pdf([LAYER, None]), FileKind.PDF, ocr)
+    assert [page.text for page in pages] == ["Gelezen tekst", "Gelezen tekst"]
+    assert len(ocr.calls) == 2
 
 
 def test_every_page_is_a_jpeg_within_the_size() -> None:

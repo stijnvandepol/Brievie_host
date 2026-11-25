@@ -23,8 +23,6 @@ MAX_IMAGE_PIXELS = 40_000_000
 RENDER_DPI = 200
 MAX_SIDE = 2500
 JPEG_QUALITY = 85
-# A page whose own text layer has fewer non-space characters is read with OCR.
-MIN_LAYER_CHARS = 20
 
 
 class ParseError(Exception):
@@ -35,10 +33,11 @@ class ParseError(Exception):
 
 @dataclass(frozen=True)
 class ParsedPage:
+    """A page as a picture only: its text is read from that picture by OCR. A PDF's own
+    text layer is never read, as it can say something the page does not show (security
+    review of PR #58)."""
+
     jpeg: bytes
-    # The PDF's own text when it has enough, else "" and `needs_ocr`.
-    text: str
-    needs_ocr: bool
 
 
 def _open_pdf(data: bytes) -> pypdfium2.PdfDocument:
@@ -78,13 +77,7 @@ def render_pdf(data: bytes, max_pages: int) -> list[ParsedPage]:
             width, height = page.get_size()
             scale = min(RENDER_DPI / 72, MAX_SIDE / max(width, height, 1))
             bitmap = page.render(scale=scale, may_draw_forms=False)
-            text = page.get_textpage().get_text_range()
-            layer = sum(1 for char in text if not char.isspace()) >= MIN_LAYER_CHARS
-            pages.append(
-                ParsedPage(
-                    jpeg=_jpeg(bitmap.to_pil()), text=text if layer else "", needs_ocr=not layer
-                )
-            )
+            pages.append(ParsedPage(jpeg=_jpeg(bitmap.to_pil())))
         return pages
     except pypdfium2.PdfiumError:
         raise ParseError("file_unreadable") from None
@@ -100,7 +93,7 @@ def render_image(data: bytes) -> list[ParsedPage]:
     try:
         with Image.open(io.BytesIO(data), formats=["JPEG", "PNG"]) as image:
             upright = ImageOps.exif_transpose(image)
-            return [ParsedPage(jpeg=_jpeg(upright), text="", needs_ocr=True)]
+            return [ParsedPage(jpeg=_jpeg(upright))]
     except (Image.DecompressionBombError, Image.DecompressionBombWarning):
         raise ParseError("image_too_large") from None
     except (OSError, ValueError, SyntaxError):
@@ -127,11 +120,7 @@ def set_limits(*, cpu_seconds: int, memory_bytes: int, answer_bytes: int) -> Non
 
 
 def _page(page: ParsedPage) -> dict[str, object]:
-    return {
-        "jpeg": base64.b64encode(page.jpeg).decode("ascii"),
-        "text": page.text,
-        "needs_ocr": page.needs_ocr,
-    }
+    return {"jpeg": base64.b64encode(page.jpeg).decode("ascii")}
 
 
 def _answer(operation: str, data: bytes, max_pages: int) -> dict[str, object]:

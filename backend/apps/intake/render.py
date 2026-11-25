@@ -1,7 +1,7 @@
 """An uploaded file to JPEG pages and their text (intake spec S 1.1), in the worker.
 
-PDFium and Pillow run in a child process (`apps.intake.sandbox`); OCR runs Tesseract per
-page that has no usable text layer. The text is returned unmasked: the caller masks it
+PDFium and Pillow run in a child process (`apps.intake.sandbox`); OCR runs Tesseract on
+every page (a PDF's own text layer is not used). The text is returned unmasked: the caller masks it
 before it is stored. Failures are `PermanentError` with a code `mark_failed` shows.
 """
 
@@ -37,18 +37,17 @@ def render_pages(data: bytes, kind: FileKind, ocr: OcrEngine) -> list[RenderedPa
     except IsolationError as error:
         raise PermanentError(str(error) or "file_unreadable") from None
 
+    # Every page is read from its picture, also a PDF page with its own text: that layer
+    # can hold text the page does not show (security review of PR #58).
     pages: list[RenderedPage] = []
-    needed = failed = 0
+    failed = 0
     for page in parsed:
-        text = page.text
-        if page.needs_ocr:
-            needed += 1
-            try:
-                text = ocr.read(page.jpeg)
-            except OcrFailedError:
-                failed += 1
-                text = ""
+        try:
+            text = ocr.read(page.jpeg)
+        except OcrFailedError:
+            failed += 1
+            text = ""
         pages.append(RenderedPage(jpeg=page.jpeg, text=text))
-    if needed and failed == needed:
+    if failed == len(pages):
         raise PermanentError("ocr_failed")
     return pages

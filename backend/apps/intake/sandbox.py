@@ -121,10 +121,8 @@ def pages_from(answer: dict[str, object], *, max_pages: int) -> list[ParsedPage]
     for item in items:
         if not isinstance(item, dict):
             raise IsolationError("")
-        encoded, text, needs_ocr = item.get("jpeg"), item.get("text"), item.get("needs_ocr")
-        if not isinstance(encoded, str) or not isinstance(text, str):
-            raise IsolationError("")
-        if not isinstance(needs_ocr, bool):
+        encoded = item.get("jpeg")
+        if not isinstance(encoded, str):
             raise IsolationError("")
         try:
             jpeg = base64.b64decode(encoded, validate=True)
@@ -132,7 +130,7 @@ def pages_from(answer: dict[str, object], *, max_pages: int) -> list[ParsedPage]
             raise IsolationError("") from None
         if not jpeg.startswith(_JPEG_START):
             raise IsolationError("")
-        pages.append(ParsedPage(jpeg=jpeg, text=text, needs_ocr=needs_ocr))
+        pages.append(ParsedPage(jpeg=jpeg))
     return pages
 
 
