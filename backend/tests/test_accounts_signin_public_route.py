@@ -9,6 +9,7 @@ unchanged; an unknown or missing route is public.
 """
 
 import re
+from datetime import timedelta
 
 import pytest
 from django.conf import settings as django_settings
@@ -17,9 +18,16 @@ from django.contrib.auth.models import AnonymousUser
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.http import HttpResponse
 from django.test import Client, RequestFactory
+from django.utils import timezone
 from pytest_django import Settings
 
-from apps.accounts.models import PasswordReset, SignInFailures, User, UserSession
+from apps.accounts.models import (
+    PasswordReset,
+    SecondFactor,
+    SignInFailures,
+    User,
+    UserSession,
+)
 from apps.accounts.signin import PENDING_KEY, begin_sign_in
 from apps.accounts.signin_limits import account_key
 from apps.audit.models import ServerAuditEvent
@@ -283,6 +291,24 @@ def test_a_session_that_passed_the_second_step_counts_outside(user: User) -> Non
     )
 
     assert client.get("/api/v1/me", headers=PUBLIC).status_code == 200
+
+
+def test_a_pending_setup_begun_at_home_does_not_reach_the_set_up_outside(
+    user: User, settings: Settings
+) -> None:
+    settings.BRIEVIE_REQUIRE_SECOND_FACTOR = "everyone"
+    User.objects.filter(pk=user.pk).update(
+        second_factor_required_since=timezone.now() - timedelta(days=30)
+    )
+    client = Client()
+    status, body = sign_in(client, user, route=PRIVATE)
+    assert (status, body["step"]) == (202, "setup")
+
+    assert client.get("/api/v1/me/second-factor", headers=PUBLIC).status_code == 401
+    assert post_json(client, "/me/second-factor/setup", None, PUBLIC).status_code == 401
+    assert not SecondFactor.objects.filter(user=user).exists()
+    # At home the set-up still goes on.
+    assert client.get("/api/v1/me/second-factor", headers=PRIVATE).status_code == 200
 
 
 def test_reauthenticate_outside_without_a_factor_is_refused_before_the_password(
