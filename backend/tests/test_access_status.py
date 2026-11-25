@@ -97,12 +97,17 @@ def codes(
     *,
     tunnel_seen: bool = True,
     versions: list[str] | None = None,
+    admin_without_factor: bool = False,
 ) -> list[str]:
     if tunnel_seen:
         SEEN.setdefault("tunnel", datetime.now(UTC))
     else:
         SEEN.pop("tunnel", None)
-    found = external_access_status(made or request(), app_versions=lambda: versions or [])
+    found = external_access_status(
+        made or request(),
+        app_versions=lambda: versions or [],
+        admin_without_factor=lambda: admin_without_factor,
+    )
     return [check.code for check in found.checks]
 
 
@@ -177,6 +182,26 @@ def test_check_public_web_without_second_factor_and_public_web_off(home: Setting
     assert "public_web_off" not in codes()
     home.BRIEVIE_SECOND_FACTOR_AVAILABLE = True
     assert "public_web_without_second_factor" not in codes()
+
+
+def test_with_the_second_step_required_outside_the_page_says_so(home: Settings) -> None:
+    # Task 13 of the two-step plan: the flag is true, so the red line is gone.
+    with_public(home)
+    home.BRIEVIE_TUNNEL_TOKEN_SET = True
+    home.BRIEVIE_PUBLIC_WEB = True
+    home.BRIEVIE_SECOND_FACTOR_AVAILABLE = True
+
+    found = codes()
+    assert "public_web_without_second_factor" not in found
+    assert "public_web_second_factor_required" in found
+    assert "public_web_admin_without_second_factor" not in found
+    assert "public_web_admin_without_second_factor" in codes(admin_without_factor=True)
+    assert status.CHECK_LEVELS["public_web_second_factor_required"] == "ok"
+    assert status.CHECK_LEVELS["public_web_admin_without_second_factor"] == "warning"
+
+    home.BRIEVIE_PUBLIC_WEB = False
+    assert "public_web_second_factor_required" not in codes(admin_without_factor=True)
+    assert "public_web_admin_without_second_factor" not in codes(admin_without_factor=True)
 
 
 def test_check_request_not_secure() -> None:

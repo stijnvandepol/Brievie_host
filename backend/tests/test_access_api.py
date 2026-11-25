@@ -11,6 +11,7 @@ from apps.workspaces.models import Membership
 from apps.workspaces.services import create_workspace
 from tests.factories import UserFactory
 from tests.members_support import as_user, bearer, paired
+from tests.second_factor_support import give_factor, signed_in_with_code
 
 PATH = "/api/v1/server/external-access"
 # Made at run time: no token-like literal in the repository.
@@ -51,9 +52,32 @@ def test_get_external_access_no_store_and_shape(
         {"url": "https://192.168.1.20:443", "kind": "home", "certificate": "private_ca"}
     ]
     assert body["docs_url"] == "https://brievie.com/docs/installeren#van-buiten"
-    assert body["second_factor_available"] is False
+    assert body["second_factor_available"] is True
     assert TOKEN_LIKE not in response.content.decode()
 
 
 def test_probe_runs_outside_a_transaction() -> None:
     assert resolve(PATH).func._non_atomic_requests == {"default"}  # type: ignore[attr-defined]
+
+
+def test_the_page_names_a_server_admin_without_a_second_factor(settings: Settings) -> None:
+    settings.BRIEVIE_HOSTNAME = "192.168.1.20"
+    settings.BRIEVIE_PUBLIC_HOSTNAME = "brievie.example.nl"
+    settings.BRIEVIE_PUBLIC_URLS = ["https://192.168.1.20:443", "https://brievie.example.nl"]
+    settings.BRIEVIE_TUNNEL_TOKEN_SET = True
+    settings.BRIEVIE_PUBLIC_WEB = True
+    admin = UserFactory.create(is_server_admin=True)
+    client = signed_in_with_code(admin, give_factor(admin))
+
+    def codes() -> list[str]:
+        return [check["code"] for check in client.get(PATH).json()["checks"]]
+
+    assert "public_web_second_factor_required" in codes()
+    assert "public_web_without_second_factor" not in codes()
+    assert "public_web_admin_without_second_factor" not in codes()
+    other = UserFactory.create(is_server_admin=True)
+    assert "public_web_admin_without_second_factor" in codes()
+    # A switched-off admin does not count.
+    other.is_active = False
+    other.save(update_fields=["is_active"])
+    assert "public_web_admin_without_second_factor" not in codes()
