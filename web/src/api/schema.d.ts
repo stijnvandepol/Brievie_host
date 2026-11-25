@@ -15,7 +15,7 @@ export interface paths {
         put?: never;
         /**
          * Login
-         * @description 429 too_many_attempts with Retry-After: five wrong passwords for this email from this address, thirty from this address, or, from a browser that never signed in to this account, more than ten for the account from anywhere (then a wait that doubles from 15 seconds to at most 15 minutes). 202 when a second step follows (SignInStepOut): the browser is not signed in yet; `code` asks verifySignInCode, `setup` asks to set up two-step verification first.
+         * @description 429 too_many_attempts with Retry-After: five wrong passwords for this email from this address, thirty from this address, or, from a browser that never signed in to this account, more than ten for the account from anywhere (then a wait that doubles from 15 seconds to at most 15 minutes). On the public route (tunnel, own reverse proxy) an account without two-step verification cannot sign in: the right password answers 401 invalid_credentials and counts, exactly as a wrong one (the sentence says both). 202 when a second step follows (SignInStepOut): the browser is not signed in yet; `code` asks verifySignInCode, `setup` asks to set up two-step verification first.
          */
         post: operations["login"];
         delete?: never;
@@ -75,7 +75,7 @@ export interface paths {
         put?: never;
         /**
          * Complete Password Reset
-         * @description Set a new password with the token from a reset link's fragment and sign in; every other session of the account ends. 400 reset_link_invalid for an unknown, used, expired or revoked link, or when its maker may no longer act on the account; 422 when the password rules refuse it (the link stays usable). Every paired device and every other open reset link of the account is revoked. 202 when a second step follows (SignInStepOut): the browser is not signed in yet; `code` asks verifySignInCode, `setup` asks to set up two-step verification first.
+         * @description Set a new password with the token from a reset link's fragment and sign in; every other session of the account ends. 400 reset_link_invalid for an unknown, used, expired or revoked link, or when its maker may no longer act on the account; 422 when the password rules refuse it (the link stays usable). Every paired device and every other open reset link of the account is revoked. On the public route (tunnel, own reverse proxy) an account without two-step verification cannot sign in: 403 second_factor_needed_outside, nothing changes. The link stays usable at home. 202 when a second step follows (SignInStepOut): the browser is not signed in yet; `code` asks verifySignInCode, `setup` asks to set up two-step verification first.
          */
         post: operations["completePasswordReset"];
         delete?: never;
@@ -95,7 +95,7 @@ export interface paths {
         put?: never;
         /**
          * Reauthenticate
-         * @description Web session only: a bearer token answers 401 not_authenticated. Type the password again before an action that needs a recent sign-in (creating a pairing code answers 403 reauthentication_required otherwise). 400 wrong_password; wrong passwords count for the same lockout as signing in (429). With two-step verification on, `code` from the app too: 400 second_factor_invalid, 429 second_factor_locked; the session has then passed the second step.
+         * @description Web session only: a bearer token answers 401 not_authenticated. Type the password again before an action that needs a recent sign-in (creating a pairing code answers 403 reauthentication_required otherwise). 400 wrong_password; wrong passwords count for the same lockout as signing in (429). With two-step verification on, `code` from the app too: 400 second_factor_invalid, 429 second_factor_locked; the session has then passed the second step. On the public route an account without two-step verification gets 403 second_factor_needed_outside before the password is checked.
          */
         post: operations["reauthenticate"];
         delete?: never;
@@ -243,7 +243,7 @@ export interface paths {
         put?: never;
         /**
          * Accept Invitation
-         * @description Join with the invitation's role and sign in. account `new`: name, email address and password (the rules of every account; 409 account_exists when the address has an account, which says that it has one, as registering does). account `existing`: the account's email address and password, with the sign-in lockout (401 invalid_credentials, 429 too_many_attempts); a deactivated account is reactivated. 403 invitation_email_mismatch when the invitation is for another address; 409 already_member, invitation_person_taken; 422 for another account kind. 400 invitation_invalid for an unknown, used, expired or revoked link, or one whose maker is no admin of the workspace any more (one sentence for all). 202 when a second step follows (SignInStepOut): the browser is not signed in yet; `code` asks verifySignInCode, `setup` asks to set up two-step verification first. An account with two-step verification joins at once; only its sign-in waits.
+         * @description Join with the invitation's role and sign in. account `new`: name, email address and password (the rules of every account; 409 account_exists when the address has an account, which says that it has one, as registering does). account `existing`: the account's email address and password, with the sign-in lockout (401 invalid_credentials, 429 too_many_attempts); a deactivated account is reactivated. 403 invitation_email_mismatch when the invitation is for another address; 409 already_member, invitation_person_taken; 422 for another account kind. 400 invitation_invalid for an unknown, used, expired or revoked link, or one whose maker is no admin of the workspace any more (one sentence for all). 202 when a second step follows (SignInStepOut): the browser is not signed in yet; `code` asks verifySignInCode, `setup` asks to set up two-step verification first. An account with two-step verification joins at once; only its sign-in waits. On the public route (tunnel, own reverse proxy): account `new` gets 403 second_factor_needed_outside before anything is made, and an existing account without two-step verification answers 401 invalid_credentials, exactly as a wrong password; the invitation stays usable at home.
          */
         post: operations["acceptInvitation"];
         delete?: never;
@@ -702,7 +702,7 @@ export interface paths {
         put?: never;
         /**
          * Setup Server
-         * @description Create the first account and workspace, and sign in. 202 when a second step follows (SignInStepOut): the browser is not signed in yet; `code` asks verifySignInCode, `setup` asks to set up two-step verification first.
+         * @description Create the first account and workspace, and sign in. 403 second_factor_needed_outside on the public route (tunnel, own reverse proxy): set up at home or through a VPN. 202 when a second step follows (SignInStepOut): the browser is not signed in yet; `code` asks verifySignInCode, `setup` asks to set up two-step verification first.
          */
         post: operations["setupServer"];
         delete?: never;
@@ -5920,6 +5920,15 @@ export interface operations {
             };
             /** @description Bad Request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

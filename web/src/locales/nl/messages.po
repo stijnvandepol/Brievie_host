@@ -2377,6 +2377,10 @@ msgstr "Inloggen op de webinterface kan van buiten zonder tweede stap."
 msgid "Inloggen op de webinterface kan van buiten zonder tweede stap. Zet BRIEVIE_PUBLIC_WEB uit, of gebruik een VPN."
 msgstr "Inloggen op de webinterface kan van buiten zonder tweede stap. Zet BRIEVIE_PUBLIC_WEB uit, of gebruik een VPN."
 
+#: src/routes/server-external-access.tsx
+msgid "Inloggen op de webinterface via het publieke adres vraagt altijd om tweestapsverificatie. Wie dat niet aan heeft, logt alleen thuis of via VPN in."
+msgstr "Inloggen op de webinterface via het publieke adres vraagt altijd om tweestapsverificatie. Wie dat niet aan heeft, logt alleen thuis of via VPN in."
+
 #: src/components/audit-codes.ts
 msgid "Inloggen tijdelijk geblokkeerd"
 msgstr "Inloggen tijdelijk geblokkeerd"
@@ -3255,6 +3259,10 @@ msgstr "Niemand gevonden."
 #: src/routes/people.tsx
 msgid "Niet actief"
 msgstr "Niet actief"
+
+#: src/routes/server-external-access.tsx
+msgid "Niet elke serverbeheerder heeft tweestapsverificatie aan. Zonder kan hij van buiten niet inloggen op de webinterface. Zet het thuis aan onder Account, Beveiliging."
+msgstr "Niet elke serverbeheerder heeft tweestapsverificatie aan. Zonder kan hij van buiten niet inloggen op de webinterface. Zet het thuis aan onder Account, Beveiliging."
 
 #: src/components/task-actions.tsx
 msgid "Niet meer aan mij"
