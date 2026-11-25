@@ -614,7 +614,9 @@ def handle_document(
 def update_document_details(
     request: HttpRequest, workspace_id: UUID, document_id: UUID, payload: DocumentDetailsIn
 ) -> DocumentOut:
-    membership = workspace_member(request, workspace_id, min_role=Membership.Role.MEMBER)
+    # Any role: the service reads it under the lock, and a read-only member may only take
+    # "Bewaren tot" away from a document that is theirs (security review of PR #54, point 3).
+    membership = workspace_member(request, workspace_id)
     document = own.update_details(
         membership=membership,
         user=current_user(request),
