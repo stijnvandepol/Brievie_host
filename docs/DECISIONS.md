@@ -3565,3 +3565,16 @@ The re-review of PR #58 (intake web upload) left six points; each is fixed with 
    number, as the limit counts every process and thread of the uid (the worker's
    included); PDFium and Pillow render in the calling thread. Root is not bound by it; the
    server never runs as root.
+3. **Processes that hold secrets are not dumpable.** `apps.common.hardening.forbid_inspection`
+   calls `prctl(PR_SET_DUMPABLE, 0)` through `ctypes` (Linux only, no dependency; elsewhere
+   it does nothing): `manage.py` before any command (so both `procrastinate worker`
+   services), gunicorn's master in `on_starting` before it forks its workers (`gunicorn
+   --config python:brievie.gunicorn_config` in `deploy/Dockerfile`; the workers inherit
+   it), and `brievie.wsgi` for another server. A process of the same user, such as a
+   parser child taken over by a crafted file, can then no longer read their
+   `/proc/<pid>/environ` or `mem` (and no core dump is written). A kernel that refuses
+   stops the process from starting. The parser child itself is started by `exec` and is
+   dumpable again, which is harmless: it holds no secret.
+   **Follow-up, still open:** the parser in its own uid or a container without network.
+   The child can still read every file the worker's user can read (a key file, the
+   storage) and reach the network; only the inheritance and `/proc` are closed.

@@ -92,4 +92,4 @@ EXPOSE 8000
 # worker, and is not killed by the worker timeout.
 # Before gunicorn starts, prepare_setup_token prints the first-run installation code
 # once (only while the server is not set up and BRIEVIE_SETUP_TOKEN is unset).
-CMD ["sh", "-c", "python manage.py check_master_key && python manage.py prepare_setup_token && exec gunicorn brievie.wsgi:application --bind 0.0.0.0:8000 --workers 2 --worker-class gthread --threads 4 --timeout 120"]
+CMD ["sh", "-c", "python manage.py check_master_key && python manage.py prepare_setup_token && exec gunicorn --config python:brievie.gunicorn_config brievie.wsgi:application --bind 0.0.0.0:8000 --workers 2 --worker-class gthread --threads 4 --timeout 120"]
