@@ -9,8 +9,9 @@
 #   routes-check.sh session JAR  a signed-in server admin's view (getExternalAccess) on :443
 #                                with forged address headers, and on :8080 (closed unless
 #                                BRIEVIE_PUBLIC_WEB; then a session started at home without
-#                                the second step counts as none, and a password sign-in gets
-#                                the outside sentence)
+#                                the second step counts as none (and only because of that
+#                                step), a password sign-in gets the outside sentence, and the
+#                                visitor's address is CF-Connecting-IP)
 #   routes-check.sh isolation   the tunnel network reaches Caddy only; a request that reaches
 #                                the api without Caddy counts as public with its own address
 #   routes-check.sh token NAME   no value of the file NAME (a planted tunnel token) in any
@@ -46,6 +47,20 @@ resp = conn.getresponse()
 print(resp.status)
 print(json.dumps({k.lower(): v for k, v in resp.getheaders()}))
 print(resp.read().decode("utf-8", "replace"))
+PY
+}
+
+# Whether the session with key $1 counts as having passed the second step ($2: True|False),
+# straight in the database from inside the api container. Fails unless one row changed.
+mark_passed() {
+	$COMPOSE exec -T api python - "$1" "$2" <<'PY'
+import os, sys
+import django
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "brievie.settings")
+django.setup()
+from apps.accounts.models import UserSession
+key, passed = sys.argv[1], sys.argv[2] == "True"
+assert UserSession.objects.filter(session_key=key).update(second_factor=passed) == 1
 PY
 }
 
@@ -224,6 +239,13 @@ PY
 		# The web is on outside, but the home session without the second step does not count.
 		test "$(status_of "$work/t")" = 401
 		test "$(body_of "$work/t" | jq -r .code)" = not_authenticated
+		# The cookie did arrive: the same request for the same session, marked as having
+		# passed the second step, is let in. So the 401 above is the session refused.
+		mark_passed "$session" True
+		inside GET caddy:8080 /api/v1/server/external-access "$cookie_header" 0 >"$work/t"
+		mark_passed "$session" False
+		test "$(status_of "$work/t")" = 200
+		test "$(body_of "$work/t" | jq -r .seen_as.route)" = public
 		# A password sign-in through the tunnel answers the outside sentence (an account
 		# without a factor gets the same answer as a wrong password).
 		wrong=$(head -c 18 /dev/urandom | base64)
@@ -231,6 +253,25 @@ PY
 		inside POST caddy:8080 /api/v1/auth/login '{"X-Forwarded-Proto": "https", "Content-Type": "application/json"}' 0 "$login" >"$work/t"
 		test "$(status_of "$work/t")" = 401
 		body_of "$work/t" | jq -e '.code == "invalid_credentials" and (.message | contains("tweestapsverificatie"))' >/dev/null
+		# The visitor's address through the tunnel is CF-Connecting-IP, never a forwarded
+		# header: six wrong passwords for one new address, from one CF-Connecting-IP and each
+		# with another X-Forwarded-For, lock that pair (axes, after 5); the per-account
+		# slow-down starts only after 10, so only the address makes the sixth a 429 ...
+		email="ci-$(head -c 6 /dev/urandom | od -An -tx1 | tr -d ' \n')@example.invalid"
+		login=$(jq -cn --arg e "$email" --arg p "$wrong" '{email: $e, password: $p}')
+		for attempt in 1 2 3 4 5 6; do
+			headers=$(jq -cn --arg f "198.51.100.$((20 + attempt))" '{"X-Forwarded-Proto": "https", "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.81", "X-Forwarded-For": $f}')
+			inside POST caddy:8080 /api/v1/auth/login "$headers" 0 "$login" >"$work/t"
+			if [ "$attempt" -lt 6 ]; then
+				test "$(status_of "$work/t")" = 401
+			else
+				test "$(status_of "$work/t")" = 429
+			fi
+		done
+		# ... and another CF-Connecting-IP is another visitor: not locked.
+		inside POST caddy:8080 /api/v1/auth/login '{"X-Forwarded-Proto": "https", "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.82", "X-Forwarded-For": "198.51.100.21"}' 0 "$login" >"$work/t"
+		test "$(status_of "$work/t")" = 401
+		echo "Tunnel route: the visitor is CF-Connecting-IP; X-Forwarded-For changes nothing."
 		echo "Tunnel route: a session needs the second step, and so does a password sign-in."
 	else
 		test "$(status_of "$work/t")" = 403
