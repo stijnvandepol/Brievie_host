@@ -257,7 +257,7 @@ Alles draait standaard op de server van de gebruiker.
 1. **Vastleggen:** documentscanner van iOS in de app (VisionKit), of PDF/afbeelding via upload, mail of watch-map.
 2. **OCR:**
    - In de app: Apple Vision op het toestel. De herkende tekst gaat mee met de upload, zodat de server voor scans geen OCR hoeft te doen. Dat scheelt het meeste rekenwerk op een lichte NAS.
-   - Op de server, voor upload, mail en watch-map: OCRmyPDF met Tesseract (Nederlands). Optioneel per hardware-profiel: PaddleOCR (*Normaal*) of granite-docling (*Sterk*).
+   - Op de server, voor upload, mail en watch-map: Tesseract (Nederlands) direct, zonder OCRmyPDF (DECISIONS 2026-11-25, intake). Optioneel per hardware-profiel: PaddleOCR (*Normaal*) of granite-docling (*Sterk*).
 3. **E-factuur:** is er UBL-XML, dan die gebruiken in plaats van OCR + AI.
 4. **Privacy-voorfilter:** BSN herkennen (9 cijfers + elfproef) en maskeren; IBAN/kenmerken apart versleuteld opslaan.
 5. **Extractie** via een `LLMProvider`-interface die de OpenAI-compatibele API spreekt. Daardoor zijn Ollama, llama.cpp en EU-gehoste diensten onderling uitwisselbaar zonder extra code.

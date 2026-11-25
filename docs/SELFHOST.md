@@ -307,6 +307,15 @@ For now in a Docker volume on the machine. A setting to place them on a NAS shar
 later. Until then a NAS's own back-up covers the volume only if it reaches it; the
 database is not in it either, so `./brievie backup` is still needed.
 
+## 11a. Adding letters from a browser
+
+"Brief toevoegen" on the Archief page takes PDFs, JPEGs and PNGs (at most 32 MB and 30
+pages each). The worker draws the pages and reads the text with Tesseract (Dutch and
+English), both in the image: it is about 60-80 MB larger than before. On a small NAS a
+page without its own text takes a few seconds to read, up to a minute at most; a file of
+30 such pages can take several minutes before it shows in the Inbox. The original is kept
+next to the pages, so an upload takes roughly twice the space of a scan.
+
 ## 12. Not verified yet
 
 Tested on GitHub's Linux runners and on a Mac with Docker Desktop: a restore on an

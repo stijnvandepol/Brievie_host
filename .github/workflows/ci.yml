@@ -556,6 +556,11 @@ jobs:
           grep -qi '<!doctype html>' "$RUNNER_TEMP/index.html"
       - name: The worker is running
         run: test "$($COMPOSE ps --status running --services | grep -c '^worker$')" = 1
+      # Intake (DECISIONS 2026-11-25): the image reads Dutch and renders PDFs.
+      - name: The worker has Tesseract with Dutch, PDFium and Pillow
+        run: |
+          $COMPOSE exec -T worker tesseract --list-langs | grep -qx nld
+          $COMPOSE exec -T worker python -c "import pypdfium2, PIL"
       - name: The keeper is running
         run: test "$($COMPOSE ps --status running --services | grep -c '^keeper$')" = 1
       - name: The installation code is printed once
