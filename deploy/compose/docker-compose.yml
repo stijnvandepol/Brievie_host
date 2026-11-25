@@ -8,7 +8,7 @@ name: brievie
 
 x-backend: &backend
   # <-- The version. Change it only to update (Brievie then makes a back-up first).
-  image: ghcr.io/stijnvandepol/brievie-backend:${BRIEVIE_VERSION:-0.4.0}
+  image: ghcr.io/stijnvandepol/brievie-backend:${BRIEVIE_VERSION:-0.5.0}
   restart: unless-stopped
   logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
 
@@ -114,7 +114,7 @@ services:
       BRIEVIE_BACKUP_AUTO_INIT: ${BRIEVIE_BACKUP_AUTO_INIT:-false}
       BRIEVIE_HTTP_PORT: ${BRIEVIE_HTTP_PORT:-80}
       BRIEVIE_HTTPS_PORT: ${BRIEVIE_HTTPS_PORT:-443}
-      BRIEVIE_VERSION: ${BRIEVIE_VERSION:-0.4.0}
+      BRIEVIE_VERSION: ${BRIEVIE_VERSION:-0.5.0}
     volumes:
       # Every password but never the master key (no step of `init` decrypts a document).
       - secrets-init:/run/brievie:ro
@@ -263,7 +263,7 @@ services:
     security_opt: ["no-new-privileges:true"]
 
   caddy:
-    image: ghcr.io/stijnvandepol/brievie-proxy:${BRIEVIE_VERSION:-0.4.0}
+    image: ghcr.io/stijnvandepol/brievie-proxy:${BRIEVIE_VERSION:-0.5.0}
     restart: unless-stopped
     logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
     depends_on:

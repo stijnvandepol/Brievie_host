@@ -5,13 +5,27 @@ Alle veranderingen in Brievie (de server) die je als beheerder merkt. De vorm vo
 [Semantic Versioning](https://semver.org/lang/nl/). Elke versie heeft een tag `vX.Y.Z`.
 Lees bij elke versie eerst **Voor je bijwerkt**, als die er staat.
 
-## [Onuitgebracht]
+## [0.5.0] - 2026-11-25
 
-Installeren met alleen een compose-bestand. Van buiten bereikbaar (VPN, Cloudflare Tunnel, eigen
-reverse proxy). Het Archief: elke gecontroleerde brief en je eigen documenten op één plek.
+Mensen op één plek, een nieuw menu met Mijn post, een status voor elke brief,
+tweestapsverificatie, van buiten bereikbaar, installeren met alleen een compose-bestand, het
+Archief met eigen documenten, brieven toevoegen in de browser, en snellere lijsten.
 
 ### Voor je bijwerkt
 
+- Werk bij met `./brievie update`, of (installatie met alleen een compose-bestand) zet
+  `BRIEVIE_VERSION` op `0.5.0`. De API-sleutel van de AI hoef je niet opnieuw in te voeren.
+- De webinterface krijgt een nieuw menu: Inbox, Mijn post, Mijn taken, Archief, Labels, Mensen,
+  Afdelingen of Groepen, Automatisering en Prullenbak, met Instellingen onderaan. Personen en
+  Leden zijn samen **Mensen** geworden; de oude adressen sturen door.
+- Elke brief heeft nu een status, afgeleid van de controle en de taken; je zet hem niet zelf.
+- Tweestapsverificatie staat voor niemand verplicht, tot een serverbeheerder het vraagt
+  (`BRIEVIE_REQUIRE_SECOND_FACTOR`, standaard `none`). Van buiten inloggen kan alleen met
+  tweestapsverificatie (zie hieronder).
+- Brieven toevoegen in de browser leest de tekst op de server met Tesseract. Het image is
+  daardoor 60 tot 80 MB groter. De ingebouwde tekstlezer voor uploads draait nog niet onder een
+  eigen gebruiker en zonder netwerk; dat is een vervolgstap. Hij kan dus nog bestanden lezen
+  die de werker ook kan lezen.
 - Thuis verandert er niets. Van buiten bereikbaar stel je in met een paar regels in
   `deploy/.env` (docs/SELFHOST.md, sectie 25); een serverbeheerder ziet onder Account, Van buiten
   bereikbaar wat er is ingesteld. Via het publieke adres werkt standaard alleen de app.
@@ -29,7 +43,8 @@ reverse proxy). Het Archief: elke gecontroleerde brief en je eigen documenten op
   Wie het niet aan heeft, logt thuis of via VPN in en zet het daar aan (Account, Beveiliging).
   Ook installeren, een uitnodiging voor een nieuw account en een herstellink voor een account
   zonder tweestapsverificatie werken dan alleen thuis of via VPN.
-- Docker Swarm en Podman-pods worden niet ondersteund.
+- Installeren met alleen een compose-bestand is niet getest op Synology, Unraid of Portainer;
+  alleen op gewone Docker met Compose. Docker Swarm en Podman-pods worden niet ondersteund.
 - Deze update duurt wat langer om toe te passen: de zoekindex van alle brieven wordt opnieuw
   opgebouwd (bij duizenden brieven een paar minuten).
 - "Alle post" heet nu "Archief" (`/w/<id>/archief`); de oude link werkt nog. Het Archief toont
@@ -53,6 +68,38 @@ reverse proxy). Het Archief: elke gecontroleerde brief en je eigen documenten op
   voorkeur als bestand (`..._FILE`, met `BRIEVIE_BACKUP_SECRETS_DIR`), niet als variabele.
 
 ### Toegevoegd
+
+- **Mensen.** Eén lijst van iedereen die post kan krijgen, met de stand van het account (Niet
+  actief, Uitgenodigd, Actief, Uitgeschakeld). Beheerders nodigen uit, sturen een nieuwe link,
+  veranderen een rol of schakelen iemand uit; bij uitschakelen waarschuwt Brievie als er
+  privé-post op de naam staat en kun je kiezen wie die post beheert. Elke persoon heeft een
+  eigen pagina. Staat er op een brief een naam die nog niet in Brievie staat, dan stelt Brievie
+  voor die als persoon toe te voegen.
+- **Nieuw menu en Mijn post.** Mijn post is de startpagina: de brieven voor jou, met ongelezen
+  brieven vet gedrukt, en de knoppen "Alleen ongelezen" en "Alles gelezen". Op een brief kun je
+  "Markeer als ongelezen" kiezen. Onder Instellingen staat wat vroeger bij Account, Apparaten en
+  AI stond. Met meer dan één werkruimte wissel je bovenaan het menu.
+- **Blijft liggen.** Boven de Inbox staan brieven die te lang wachten (2 dagen) en bevestigde
+  brieven die geen geadresseerde heeft geopend (5 dagen), voor wie post verdeelt en voor
+  beheerders. Een beheerder stelt het in onder Instellingen.
+- **Taken.** "Ik doe dit" staat alleen bij een taak die nog niemand heeft. Een taak van een ander
+  geef je alleen door als je die ander bent of beheerder.
+- **Status van een brief.** Elke brief is Nieuw, Openstaand, Wacht op reactie of Afgehandeld,
+  met de markering "Te laat". Je stelt de status niet zelf in: hij volgt uit de controle en de
+  taken. Een taak kan wachten op een reactie (met een datum) of een tijdje worden uitgesteld.
+  Met "Brief afhandelen" vink je de open taken in één keer af. In het Archief filter je op
+  status, "Alleen te laat" en "Post van <naam>".
+- **Tweestapsverificatie** met een authenticator-app. Je stelt het in onder Account, Beveiliging,
+  met een QR-code en herstelcodes. Bij inloggen, na een uitnodiging en na een nieuw wachtwoord
+  vraagt Brievie om de code. Een serverbeheerder kan het voor beheerders of voor iedereen
+  verplicht stellen, met een aantal dagen om het aan te zetten, en kan een verloren code wissen.
+  Koppelen van de app vraagt dan ook de code.
+- **Brieven toevoegen in de browser.** "Brief toevoegen" op de pagina Archief neemt PDF's, JPEG's
+  en PNG's (32 MB en 30 pagina's per bestand). De server leest de tekst zelf, met Tesseract
+  (Nederlands en Engels), en de brief gaat naar de Inbox. Elke pagina wordt van haar plaatje
+  gelezen; op een kleine NAS duurt dat een paar seconden per pagina.
+- **Snellere lijsten.** De lijsten en tellers (Inbox, Mijn taken, menu, Archief per jaar) blijven
+  ook bij 100.000 brieven ruim onder een kwart seconde, met nieuwe indexen in de database.
 
 - Van buiten bereikbaar: een tweede naam voor een VPN op de server (`BRIEVIE_VPN_HOSTNAME`),
   Cloudflare Tunnel als optionele container (`BRIEVIE_TUNNEL_TOKEN` of `BRIEVIE_TUNNEL_TOKEN_FILE`)
@@ -86,6 +133,11 @@ reverse proxy). Het Archief: elke gecontroleerde brief en je eigen documenten op
 - Herstelblad downloaden in de webinterface (serverbeheerder, na opnieuw inloggen), en
   `manage.py restore_install` om een back-up terug te zetten zonder `./brievie`.
 - Back-up: elke nacht, een paneel met "Nu back-uppen", en `BRIEVIE_BACKUP_AUTO_INIT`.
+
+### Gewijzigd
+
+- "Alle post" heet nu **Archief**; "Personen" en "Leden" zijn samen **Mensen**.
+- Inloggen van buiten (via het publieke adres) vraagt altijd om tweestapsverificatie.
 
 ## [0.4.0] - 2026-11-21
 
