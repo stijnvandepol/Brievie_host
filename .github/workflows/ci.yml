@@ -91,6 +91,9 @@ jobs:
       # tests/test_brievie_wrapper.py runs ShellCheck on ./brievie and fails in CI without it.
       - name: ShellCheck is available
         run: command -v shellcheck || { sudo apt-get update && sudo apt-get install -y shellcheck; }
+      # The intake's real-OCR test (marker `tesseract`) reads Dutch as the image does.
+      - name: Tesseract with its Dutch data
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-nld
       # The real-restic tests run here and fail without restic (like ShellCheck): the
       # image's own binary, from the official image pinned by version and digest, exactly
       # as deploy/Dockerfile copies it (a text test compares the two).

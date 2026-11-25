@@ -81,6 +81,9 @@ skip_covered = true
 DJANGO_SETTINGS_MODULE = "brievie.settings"
 testpaths = ["tests"]
 addopts = "--strict-markers -p tests.backup_support"
+markers = [
+    "tesseract: reads with the real tesseract binary (skipped where it is not installed)",
+]
 pythonpath = ["."]
 filterwarnings = [
     "error",

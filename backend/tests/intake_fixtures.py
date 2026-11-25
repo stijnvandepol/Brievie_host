@@ -9,6 +9,8 @@ import zlib
 
 from PIL import Image
 
+from apps.intake.ocr import OcrFailedError
+
 # The standard security handler's padding (PDF 32000-1, 7.6.3.3).
 _PAD = bytes.fromhex("28bf4e5e4e758a4164004e56fffa01082e2e00b6d0683e802f0ca9fe6453697a")
 _FILE_ID = bytes(range(16))
@@ -174,3 +176,20 @@ def make_encrypted_pdf(password: str = "geheim") -> bytes:  # noqa: S107 - a tes
     )
     trailer = f"/Encrypt {encrypt} 0 R /ID [<{_FILE_ID.hex()}> <{_FILE_ID.hex()}>] ".encode()
     return _assemble(objects, trailer)
+
+
+class FakeOcr:
+    """Returns `text` per call, records the calls, fails on chosen call numbers (1-based)."""
+
+    def __init__(
+        self, text: str = "Tekst van de scan", *, fail_on: frozenset[int] = frozenset()
+    ) -> None:
+        self.text = text
+        self.fail_on = fail_on
+        self.calls: list[bytes] = []
+
+    def read(self, jpeg: bytes) -> str:
+        self.calls.append(jpeg)
+        if len(self.calls) in self.fail_on:
+            raise OcrFailedError("ocr_failed")
+        return self.text
