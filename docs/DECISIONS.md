@@ -3288,3 +3288,8 @@ Every point was checked against the code first.
 - **Point 6 (low), held, fixed:** `setTaskDeadline` could move a reminder's date before the end
   date; ticked off, it was made again every night. A reminder's date is the document's "Geldig
   tot": `setTaskDeadline` on one answers 409 `reminder_deadline_fixed` (change "Geldig tot").
+- **Point 7 (low), held, fixed:** the reminder of an own document on nobody's name was "Op te
+  pakken" for sorters only, so the uploader of a private one never had it. It is now the
+  uploader's own task (`mine.reason_for`, `TaskFacts.reminder_of`, and the same arm in the
+  query); another sorter still has it to pick up when it is somebody else's. A reminder of a
+  document on a person stays that person's.

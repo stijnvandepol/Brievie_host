@@ -235,3 +235,18 @@ def test_a_new_title_is_in_the_open_reminder_too(client: Client) -> None:
     [task] = _reminders(document)
     assert task.description == "Geldig tot 23 januari 2027: Rijbewijs"
     assert task.deadline == END
+
+
+def test_the_reminder_of_a_private_document_without_a_person_reaches_its_uploader() -> None:
+    """Security review of PR #54, point 7."""
+    from tests.archive_support import private_own_document
+
+    o = office()
+    document = private_own_document(o.workspace, on=[], scanned_by=o.plain)
+    with as_actor(o.workspace, SYSTEM):
+        Document.objects.filter(id=document.id).update(expires_on=END, remind_days=90)
+    reminders.start_expiry_reminders(today=TODAY)
+    [task] = _reminders(document)
+    assert task.id in ids(mine(o.workspace, o.plain))
+    for other in (o.sorter, o.admin, o.finance):
+        assert task.id not in ids(mine(o.workspace, other, part="all")), other.name

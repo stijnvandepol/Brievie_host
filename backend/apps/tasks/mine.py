@@ -63,6 +63,9 @@ class TaskFacts:
     created_by_id: UUID | None
     has_letter: bool
     addressee_ids: frozenset[UUID]
+    # An own document's end-date reminder: who uploaded the document (security review of
+    # PR #54, point 7). None for every other task.
+    reminder_of: UUID | None = None
 
 
 def reason_for(task: TaskFacts, member: MemberFacts) -> Reason:
@@ -73,6 +76,10 @@ def reason_for(task: TaskFacts, member: MemberFacts) -> Reason:
         return Reason.ASSIGNED if task.assigned_to_id == member.user_id else Reason.OTHER
     if not task.has_letter:
         return Reason.ADDRESSEE if task.created_by_id == member.user_id else Reason.OTHER
+    # The reminder of an own document on nobody's name is its uploader's (they read it, also
+    # a private one); a sorter still sees it to pick up when it is somebody else's.
+    if task.reminder_of == member.user_id and not task.addressee_ids:
+        return Reason.ADDRESSEE
     if _meets(task.addressee_ids, member.person_ids):
         return Reason.ADDRESSEE
     if _meets(task.addressee_ids, member.department_ids):

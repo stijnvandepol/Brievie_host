@@ -130,6 +130,7 @@ def reopen_task(*, workspace: Workspace, user: User, task_id: UUID) -> Task:
         if (
             task.status != Task.Status.OPEN
             and task.type == Task.Type.EXPIRY
+            and task.document_id is not None
             and Task.objects.filter(
                 document_id=task.document_id, type=Task.Type.EXPIRY, status=Task.Status.OPEN
             ).exists()
@@ -282,10 +283,14 @@ def _reason_filter(reason: Reason, facts: MemberFacts) -> Q | None:
     if reason == Reason.ASSIGNED:
         return Q(assigned_to_id=me)
     unassigned_letter = Q(assigned_to__isnull=True, document__isnull=False)
+    # An own document's reminder on nobody's name: its uploader's (`mine.reason_for`).
+    own_reminder = unassigned_letter & Q(
+        type=Task.Type.EXPIRY, document__addressee_ids=[], document__scanned_by_id=me
+    )
     persons = _overlap(facts.person_ids)
     departments = _overlap(facts.department_ids)
     if reason == Reason.ADDRESSEE:
-        own = Q(assigned_to__isnull=True, document__isnull=True, created_by_id=me)
+        own = Q(assigned_to__isnull=True, document__isnull=True, created_by_id=me) | own_reminder
         return own if persons is None else own | (unassigned_letter & persons)
     if reason == Reason.DEPARTMENT:
         if departments is None:
@@ -295,7 +300,7 @@ def _reason_filter(reason: Reason, facts: MemberFacts) -> Q | None:
     if reason == Reason.UNASSIGNED:
         if not facts.sorts_post:
             return None
-        arm = unassigned_letter
+        arm = unassigned_letter & ~own_reminder
         for taken in (persons, departments, _overlap(facts.covered_ids)):
             if taken is not None:
                 arm &= ~taken
@@ -498,6 +503,9 @@ def _task_facts(task: Task) -> TaskFacts:
         created_by_id=task.created_by_id,
         has_letter=document is not None,
         addressee_ids=frozenset(document.addressee_ids) if document is not None else frozenset(),
+        reminder_of=document.scanned_by_id
+        if document is not None and task.type == Task.Type.EXPIRY
+        else None,
     )
 
 
