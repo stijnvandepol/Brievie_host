@@ -405,7 +405,17 @@ Brievie_ios/
 
 De extensie en de widget gebruiken dezelfde pakketten als de app. Gedeelde gegevens lopen via een App Group.
 
-### Toegang van buitenaf: Cloudflare Tunnel als advies
+### Toegang van buitenaf
+
+> **Bijgewerkt 2026-11-24 (DECISIONS "Van buiten bereikbaar"):** compose beslist, de webinterface
+> laat alleen zien (pagina "Van buiten bereikbaar" voor serverbeheerders, zonder schakelaar en
+> zonder token). Geen wizard-stap waarin de gebruiker een token plakt: de wizard linkt naar de
+> uitleg op de website. Volgorde: **VPN (aanbevolen) · Cloudflare Tunnel (makkelijkst, Cloudflare
+> leest mee) · eigen reverse proxy · alleen thuis.** Via het publieke adres werkt standaard
+> alleen de app (`BRIEVIE_PUBLIC_WEB`), tot tweestapsverificatie er is. Wat hieronder over de
+> wizard en de volgorde staat, is daarmee vervangen.
+
+Oorspronkelijk (Cloudflare Tunnel als advies):
 
 - Geen poorten open op de router, geen vast IP nodig, gratis, geldig HTTPS-certificaat op een eigen (sub)domein. Daarmee vervalt ook het eigen certificaat voor de app buitenshuis.
 - **Wizard-stap:** gebruiker plakt zijn tunnel-token; Brievie start een `cloudflared`-container in dezelfde Compose-stack en zet de publieke hostname in de app-koppeling.
@@ -479,7 +489,7 @@ De namen hieronder zijn de begrippen uit dit document. In de code zijn tabel- en
 
 ## 13. Schermen en UX
 
-**Installatiewizard (web):** welkom → kies Thuis of Zakelijk (twee grote kaarten met uitleg) → naam werkruimte → beheerdersaccount → hardware-profiel en AI-keuze → opslaglocatie → toegang van buitenaf → QR-code om de app te koppelen.
+**Installatiewizard (web):** welkom → kies Thuis of Zakelijk (twee grote kaarten met uitleg) → naam werkruimte → beheerdersaccount → hardware-profiel en AI-keuze → opslaglocatie → toegang van buitenaf (link naar de uitleg op de website; compose beslist) → QR-code om de app te koppelen.
 
 **App (tabbalk):** Vandaag · Documenten · [scanknop] · Geld · Werkruimte
 

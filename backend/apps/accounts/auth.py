@@ -3,6 +3,7 @@ from django.utils.translation import gettext as _
 from ninja.errors import HttpError
 from ninja.security import SessionAuth as NinjaSessionAuth
 
+from apps.access.middleware import session_allowed
 from apps.common.errors import ApiError
 
 
@@ -34,6 +35,12 @@ class SessionAuth(NinjaSessionAuth):
                     "probeer het opnieuw."
                 ),
             ) from exc
+
+    def authenticate(self, request: HttpRequest, key: str | None) -> object | None:
+        # No web session counts on the public route while the web is off there (S 7.6).
+        if not session_allowed(request):
+            return None
+        return super().authenticate(request, key)
 
 
 session_auth = SessionAuth()

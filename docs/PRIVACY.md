@@ -363,6 +363,17 @@ for it; see the table above.
   end their sessions or manage their devices.
 - The log names a private letter by its id only.
 
+## Reaching Brievie from outside
+
+- With a **VPN** (Tailscale, WireGuard) the connection is encrypted from the phone to the
+  home server; nobody in between can read it. This is the recommended way.
+- With **Cloudflare Tunnel** (and with a reverse proxy at a hosting party) Cloudflare ends the
+  encryption on its own servers: everything that passes through, including scanned pages,
+  BSN-masked text and the app's device token, is readable there, and Cloudflare's terms apply.
+- Through the public address only the app works by default; the web sign-in stays at home
+  (`BRIEVIE_PUBLIC_WEB`, docs/SELFHOST.md section 25). The tunnel token stays in the
+  `cloudflared` container: the api never has it, no log or page shows it.
+
 ## Honest limits
 
 - The e-mail address on an invitation is not verified (above).

@@ -53,4 +53,8 @@ else
 	# No key, no sheet: only the error sentence.
 	test "$(jq -r .code "$work/body")" = recovery_sheet_not_here
 fi
+# The signed-in admin's cookies for a later check (routes-check.sh session), when asked.
+if [ -n "${KEEP_JAR:-}" ]; then
+	cp "$work/jar" "$KEEP_JAR"
+fi
 echo "Recovery sheet check passed ($expected)."

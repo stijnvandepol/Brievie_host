@@ -4,6 +4,7 @@ from django.utils.translation import gettext as _
 from ninja import NinjaAPI
 from pydantic import BaseModel
 
+from apps.access.api import router as access_router
 from apps.accounts.api import router as accounts_router
 from apps.accounts.auth import session_auth
 from apps.audit.api import router as audit_router
@@ -77,3 +78,4 @@ api.add_router("", pipeline_router)
 api.add_router("", devices_router)
 api.add_router("", audit_router)
 api.add_router("", backup_router)
+api.add_router("", access_router)

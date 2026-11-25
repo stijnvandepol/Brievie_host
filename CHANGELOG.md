@@ -7,18 +7,33 @@ Lees bij elke versie eerst **Voor je bijwerkt**, als die er staat.
 
 ## [Onuitgebracht]
 
-Installeren met alleen een compose-bestand. Het Archief: elke gecontroleerde brief en je eigen
-documenten op één plek.
+Installeren met alleen een compose-bestand. Van buiten bereikbaar (VPN, Cloudflare Tunnel, eigen
+reverse proxy). Het Archief: elke gecontroleerde brief en je eigen documenten op één plek.
 
 ### Voor je bijwerkt
 
+- Thuis verandert er niets. Van buiten bereikbaar stel je in met een paar regels in
+  `deploy/.env` (docs/SELFHOST.md, sectie 25); een serverbeheerder ziet onder Account, Van buiten
+  bereikbaar wat er is ingesteld. Via het publieke adres werkt standaard alleen de app.
+- Met Cloudflare Tunnel kan Cloudflare alles lezen wat er langskomt; met een VPN niet. Een VPN is
+  daarom het advies.
+- `./brievie start` weigert een regel `COMPOSE_PROFILES` in `deploy/.env`: het start de tunnel zelf.
+- Van buiten bereikbaar is niet getest met een echte tunnel, een echte reverse proxy of een echte
+  VPN; alleen in CI met een nagebootste tunnel.
+- Eigen reverse proxy: zet `BRIEVIE_TRUSTED_PROXIES` vóór de proxy van internet bereikbaar is, en
+  laat de proxy de oorspronkelijke Host doorgeven (`proxy_set_header Host $host;` bij nginx,
+  `ProxyPreserveHost On` bij Apache). Anders kan inloggen op de webinterface van buiten openstaan.
+- Koppel de app alleen thuis of via VPN; via het publieke adres kan koppelen niet.
+- Met Cloudflare Tunnel kan Cloudflare alles lezen wat er langskomt, ook gescande brieven.
+- `BRIEVIE_PUBLIC_WEB=true` vraagt nog niet om de tweede stap van tweestapsverificatie bij
+  inloggen van buiten.
+- Docker Swarm en Podman-pods worden niet ondersteund.
 - Deze update duurt wat langer om toe te passen: de zoekindex van alle brieven wordt opnieuw
   opgebouwd (bij duizenden brieven een paar minuten).
 - "Alle post" heet nu "Archief" (`/w/<id>/archief`); de oude link werkt nog. Het Archief toont
   alleen gecontroleerde brieven: brieven die nog gecontroleerd moeten worden, staan in de Inbox.
 - De export heeft versie 2: er zit een PDF per brief of document in, en de herkende tekst (met
   het BSN weggehaald) staat nu ook in het gegevensbestand.
-
 - Een bestaande installatie met `./brievie` verandert niet. Het compose-bestand is een tweede
   manier om te installeren (docs/SELFHOST.md, sectie 24); beide gebruiken dezelfde volumes,
   start nooit allebei tegelijk. Verhuizen van de een naar de ander staat in dezelfde sectie.
@@ -37,6 +52,11 @@ documenten op één plek.
 
 ### Toegevoegd
 
+- Van buiten bereikbaar: een tweede naam voor een VPN op de server (`BRIEVIE_VPN_HOSTNAME`),
+  Cloudflare Tunnel als optionele container (`BRIEVIE_TUNNEL_TOKEN` of `BRIEVIE_TUNNEL_TOKEN_FILE`)
+  en een eigen reverse proxy (`BRIEVIE_TRUSTED_PROXIES`), met de publieke naam in
+  `BRIEVIE_PUBLIC_HOSTNAME`. De pagina "Van buiten bereikbaar" voor serverbeheerders, en
+  `getServerAddresses` plus `public_urls` bij het koppelen voor de app.
 - Archief: zoeken en filteren op soort (brief of eigen document), type, van wie, afzender,
   jaar, label, status en "Loopt af".
 - Eigen documenten (contract, diploma, paspoortkopie, garantiebewijs, polis …): via de app
@@ -47,7 +67,6 @@ documenten op één plek.
 - "Bewaren tot": naar de prullenbak mag (met een vraag), definitief wissen pas na die datum.
 - "Alles exporteren" voor een beheerder: alles wat die mag lezen, zonder privébrieven van
   anderen.
-
 - Het compose-bestand (`deploy/compose/docker-compose.yml`, bij elke release als
   `docker-compose.yml` en als `docker-compose.pinned.yml` met de images op digest) en het
   image `brievie-proxy` (Caddy met onze Caddyfile).

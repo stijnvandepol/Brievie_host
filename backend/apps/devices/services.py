@@ -16,6 +16,7 @@ from django.http import HttpRequest
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
+from apps.access.services import server_addresses
 from apps.accounts.authority import account_authority
 from apps.accounts.models import AccountNotice, User, UserSession
 from apps.accounts.notices import notify
@@ -154,12 +155,18 @@ def qr_payload(code: str) -> str:
 
     `ca_sha256` pins Caddy's private root; it is null when there is none (yet).
     """
-    payload = {
+    payload: dict[str, object] = {
         "v": 1,
         "urls": list(settings.BRIEVIE_PUBLIC_URLS),
         "code": code,
         "ca_sha256": pki.ca_certificate_sha256(),
     }
+    # Additive (security review of PR #53, point 5): which of `urls` carry a public
+    # certificate, from the admin's own screen. Only when there are any, so the QR of a
+    # home installation stays exactly as it was.
+    public = server_addresses().public_urls
+    if public:
+        payload["public_urls"] = public
     return json.dumps(payload, separators=(",", ":"))
 
 
