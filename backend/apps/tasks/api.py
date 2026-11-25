@@ -251,7 +251,13 @@ def list_task_assignees(
 
 @router.post(
     f"{_TASK}/deadline",
-    response={200: TaskItemOut, 404: ErrorOut, **SESSION_WRITE_ERRORS, **BODY_ERRORS},
+    response={
+        200: TaskItemOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
     operation_id="setTaskDeadline",
     description=(
         '"Datum invullen": the date the letter names, filled in by hand (`deadline`; null '

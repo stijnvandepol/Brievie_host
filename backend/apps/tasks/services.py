@@ -157,6 +157,14 @@ def set_deadline(*, workspace: Workspace, user: User, task_id: UUID, deadline: d
     before the letter's date; 404 like an unknown id for a task the caller does not see."""
     with transaction.atomic():
         task = get_for_update(workspace, task_id)
+        if task.type == Task.Type.EXPIRY:
+            # The reminder's date is the document's "Geldig tot" (security review of PR #54,
+            # point 6): moved by hand, a ticked-off one would be made again every night.
+            raise ApiError(
+                409,
+                "reminder_deadline_fixed",
+                _("Deze datum volgt Geldig tot van het document. Pas die daar aan."),
+            )
         letter_date = task.document.letter_date if task.document is not None else None
         if deadline is not None and letter_date is not None and deadline < letter_date:
             raise ApiError(422, "validation_error", _("Die datum ligt voor de datum van de brief."))

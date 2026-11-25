@@ -3285,3 +3285,6 @@ Every point was checked against the code first.
 - **Point 5 (low), held, fixed:** a new title left the old one in the open reminder's
   description (and so in Mijn taken and the export). `reminders.on_details_changed` (was
   `on_expiry_changed`) now runs on a changed title too and rewrites the description.
+- **Point 6 (low), held, fixed:** `setTaskDeadline` could move a reminder's date before the end
+  date; ticked off, it was made again every night. A reminder's date is the document's "Geldig
+  tot": `setTaskDeadline` on one answers 409 `reminder_deadline_fixed` (change "Geldig tot").

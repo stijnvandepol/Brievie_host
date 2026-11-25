@@ -51,3 +51,14 @@ def test_reopening_the_only_reminder_works() -> None:
         services.complete_task(workspace=h.workspace, user=h.anne, task_id=task.id)
         again = services.reopen_task(workspace=h.workspace, user=h.anne, task_id=task.id)
     assert again.status == "open"
+
+
+def test_a_reminders_deadline_cannot_be_set_by_hand() -> None:
+    h = household()
+    document = own_document(h.workspace, scanned_by=h.anne, expires_on=END, remind_days=30)
+    reminders.start_expiry_reminders(today=TODAY)
+    [task] = _reminders(document)
+    with as_actor(h.workspace, h.anne.id), pytest.raises(ApiError) as caught:
+        services.set_deadline(workspace=h.workspace, user=h.anne, task_id=task.id, deadline=TODAY)
+    assert (caught.value.status, caught.value.code) == (409, "reminder_deadline_fixed")
+    assert _reminders(document)[0].deadline == END

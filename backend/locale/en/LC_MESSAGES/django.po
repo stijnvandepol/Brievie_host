@@ -2900,6 +2900,10 @@ msgid "Er staat al een nieuwere herinnering voor dit document open."
 msgstr "A newer reminder for this document is open already."
 
 #: apps/tasks/services.py
+msgid "Deze datum volgt Geldig tot van het document. Pas die daar aan."
+msgstr "This date follows the document's Valid until. Change it there."
+
+#: apps/tasks/services.py
 msgid "Die datum ligt voor de datum van de brief."
 msgstr "That date is before the date of the letter."
 
