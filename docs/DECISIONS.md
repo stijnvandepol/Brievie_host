@@ -3461,3 +3461,33 @@ folder, Tasks 9-15, is not built yet).
   and OCRmyPDF pulls in Ghostscript and qpdf.
 - **`ABANDONED_AFTER` is 45 minutes** (was 15): an upload of 30 pages that each need OCR
   takes up to 30 x 60 s before the AI call; a shorter limit would queue it a second time.
+
+### Rulings made while building (intake phase 1)
+
+- **Web session only (overrides spec S 2 "session or device token").** `uploadDocumentFile`
+  and `downloadDocumentOriginal` use `auth=session_auth`: a device token gets 401, and on
+  the public route both are closed (external access, PR #53; listed in
+  `test_access_gate.py`'s closed operations). A future Android app or script can be given
+  a device-token endpoint on purpose later; nothing needs it now.
+- **Own documents through the same path (archive W3).** `FileMetadataIn` is
+  `UploadMetadataIn` without `pages`: `client_id` and the archive fields, checked by
+  `own.validate_fields` and created as `create_document_from_upload` does (membership lock
+  first, persons and labels through `organise`, `private` last). The web's "Document
+  toevoegen" sends title, type, "Geldig tot", "Bewaren tot" and "Alleen voor mij"; persons
+  and labels are set afterwards on the document's page.
+- **Parsers in a child process.** PDFium (page count in the request, rendering in the
+  worker) and Pillow run in a spawned child (`apps.intake.sandbox`: a fresh interpreter
+  without Django or keys, `RLIMIT_AS` 1.5 GiB and `RLIMIT_CPU`, killed after its time:
+  5 s to count, 30 s + 5 s per page to render). PDFium runs without its form environment,
+  so a PDF's JavaScript never runs and nothing is fetched. Tesseract is its own process
+  (no shell, stdin, 60 s per page, one thread). Images are measured from the header
+  before any decoder runs (> 40 MP: `image_too_large`).
+- **Every image page is re-encoded** (spec: "kept as is when `jpeg_size` accepts it"):
+  the EXIF orientation is applied and the EXIF data (a phone's location) does not reach
+  the pages; the sealed original keeps the file as sent.
+- **Rate limits are shared with `createDocument`** (`check_upload_limits`, 60 per member
+  per 10 minutes, 600 per workspace per hour), checked after the membership.
+- **The upload sits on the Archief page** (the post page of the spec became Archief in
+  PR #54); an uploaded letter appears in the Inbox once read, like a scan.
+- **No duplicate check yet** (spec S 1.4): `original_sha256` has a partial index per
+  workspace for it.
