@@ -3096,3 +3096,35 @@ Every point was checked against the code first; all held.
 - **Accepted, and written in SELFHOST:** whoever knows the password can keep the second
   step locked (the user sees the notice; an admin can clear), and after a grace period the
   password alone leads to setting a factor up, so the grace should be short.
+
+## 2026-11-25: List headroom at 100,000 letters
+
+The `visibility-perf` gate (median <= 250 ms per list at 100,000 letters, S 4.9.5, P1)
+failed at random on `list_tasks_all`, `menu_counts` and `list_persons` (253-261 ms on
+CI). The threshold and the gated lists stay; the lists got faster instead. Results and
+visibility are unchanged: every read still starts from `visible_documents` (or the task
+and people equivalents). The seam test lists the two new readers
+(`services._waiting_and_lingering`, `lingering.count_not_opened`); `test_menu_counts`
+checks the combined count against the separate ones; the leak tests are unchanged.
+
+- **Covering indexes for the letter policy** (`documents` 0025). A count over the visible
+  letters, and the policy check of a task's letter, read a letter row only for the
+  policy's columns and the trash, but the rows are wide (text, search vector): one pass
+  read about 230 MB. `documents_document_policy` (`workspace, id` INCLUDE the policy's
+  columns, `trashed_at` and the counted facts) lets PostgreSQL answer from the index
+  alone. `documents_document_review` is now by arrival and `documents_document_unassigned`
+  includes the policy's columns.
+- **The task list in its own order** (`tasks` 0008, `tasks_task_list_order`:
+  `workspace, deadline, created_at, id`). `list_tasks` takes the page's ids in that order
+  (the policy runs only until the page is full), then loads those rows with their letters,
+  without the letter's text and search vector (`LETTER_TEXT`, also in `my_tasks`).
+- **One count per Inbox state for the menu.** `menu_counts` counts the waiting letters
+  and the first group of "Blijft liggen" in one aggregate (a `FILTER` on the cutoff), so
+  the policy runs once per letter, not twice.
+- **Noise.** The gate takes the median of nine timed runs (was five) after one first run,
+  which also warms the caches for that list; the "jit on" comparison (never gated) takes
+  three. The threshold is unchanged.
+- **Migrations use plain `CREATE INDEX` / `DROP INDEX`**, not `CONCURRENTLY`: the build
+  locks writes to the table for the seconds it takes at 100,000 letters, and
+  `./brievie update` and the compose `init` service migrate with the app stopped, so
+  nothing waits. Both migrations are reversible.
