@@ -2,7 +2,6 @@
 layer or an image-only page, a password-protected PDF, JPEGs with EXIF orientation, PNGs,
 and a fake OCR engine."""
 
-import hashlib
 import io
 import secrets
 import struct
@@ -12,8 +11,6 @@ from PIL import Image
 
 from apps.intake.ocr import OcrFailedError
 
-# The standard security handler's padding (PDF 32000-1, 7.6.3.3).
-_PAD = bytes.fromhex("28bf4e5e4e758a4164004e56fffa01082e2e00b6d0683e802f0ca9fe6453697a")
 _FILE_ID = bytes(range(16))
 
 
@@ -123,45 +120,14 @@ def make_pdf(pages: list[str | None]) -> bytes:
     return _assemble(objects)
 
 
-def _rc4(key: bytes, data: bytes) -> bytes:
-    state = list(range(256))
-    j = 0
-    for i in range(256):
-        j = (j + state[i] + key[i % len(key)]) % 256
-        state[i], state[j] = state[j], state[i]
-    i = j = 0
-    out = bytearray()
-    for byte in data:
-        i = (i + 1) % 256
-        j = (j + state[i]) % 256
-        state[i], state[j] = state[j], state[i]
-        out.append(byte ^ state[(state[i] + state[j]) % 256])
-    return bytes(out)
-
-
 def make_encrypted_pdf() -> bytes:
-    """A one-page PDF under the standard security handler, revision 3 (RC4, 128 bits),
-    with a random user password: PDFium asks for it before anything else."""
-    padded = (secrets.token_hex(8).encode() + _PAD)[:32]
+    """A one-page PDF under the standard security handler (revision 3, 128 bits) that no
+    password opens: its /O and /U entries are random bytes, so the empty password fails
+    and PDFium asks for one before anything else. No key is derived, so no password hash
+    is computed here."""
     permissions = -4
-    # Algorithm 3: the owner entry (the owner password is the same).
-    owner_key = hashlib.md5(padded).digest()  # noqa: S324 - the PDF format's own hash
-    for _ in range(50):
-        owner_key = hashlib.md5(owner_key).digest()  # noqa: S324
-    owner = _rc4(owner_key, padded)
-    for round_ in range(1, 20):
-        owner = _rc4(bytes(b ^ round_ for b in owner_key), owner)
-    # Algorithm 2: the file key.
-    key = hashlib.md5(  # noqa: S324
-        padded + owner + struct.pack("<i", permissions) + _FILE_ID
-    ).digest()
-    for _ in range(50):
-        key = hashlib.md5(key).digest()  # noqa: S324
-    # Algorithm 5: the user entry.
-    user = _rc4(key, hashlib.md5(_PAD + _FILE_ID).digest())  # noqa: S324
-    for round_ in range(1, 20):
-        user = _rc4(bytes(b ^ round_ for b in key), user)
-    user += bytes(16)
+    owner = secrets.token_bytes(32)
+    user = secrets.token_bytes(32)
     plain = make_pdf(["Vertrouwelijk"])
     body = plain[: plain.index(b"xref\n")]
     objects = [part.split(b" 0 obj\n", 1)[1] for part in body.split(b"\nendobj\n")[:-1]]
