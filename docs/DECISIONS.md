@@ -3072,3 +3072,14 @@ Every point was checked against the code first; all held.
 - **Accepted, and written in SELFHOST:** whoever knows the password can keep the second
   step locked (the user sees the notice; an admin can clear), and after a grace period the
   password alone leads to setting a factor up, so the grace should be short.
+- **The hook for two-step sign-in's Task 13 (EA B2)** is in place and needs nothing new:
+  `apps.access.route.is_public_route(request)` (public for the tunnel, a trusted proxy, the
+  public name from any source, Cloudflare's headers on :443, and any request that did not come
+  from Caddy's own address; never trust a header for it), `settings.BRIEVIE_PUBLIC_WEB`, and
+  `settings.BRIEVIE_SECOND_FACTOR_AVAILABLE` (Task 13 sets it to `True`; `brievie.W002` and the
+  page's `public_web_without_second_factor` read it). `begin_sign_in` calls `is_public_route`
+  for a password sign-in. Its tests set `BRIEVIE_BEHIND_CADDY=True`, send `X-Brievie-Route`,
+  and since point 2 must also make the peer Caddy's: monkeypatch
+  `apps.common.net.caddy_addresses` to return the test client's `REMOTE_ADDR` (`127.0.0.1`),
+  as `tests/test_access_gate.py` does. With `BRIEVIE_PUBLIC_WEB=false` the gate already refuses
+  every sign-in operation on the public route.
