@@ -57,6 +57,23 @@ class UploadMetadataIn(InputSchema):
     private: bool | None = None
 
 
+class FileMetadataIn(InputSchema):
+    """The `metadata` field of `uploadDocumentFile`, as a JSON string: `UploadMetadataIn`
+    without pages (the server makes them from the file). The archive fields mean the same."""
+
+    client_id: UUID
+    kind: str = "letter"
+    title: str = Field(default="", max_length=400)
+    document_type: str = ""
+    document_date: date | None = None
+    person_ids: list[UUID] = Field(default=[], max_length=10)
+    label_ids: list[UUID] = Field(default=[], max_length=30)
+    expires_on: date | None = None
+    remind_days: int = 30
+    retain_until: date | None = None
+    private: bool | None = None
+
+
 class DocumentSummaryOut(Schema):
     id: UUID
     client_id: UUID

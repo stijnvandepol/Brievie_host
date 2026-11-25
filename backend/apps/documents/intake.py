@@ -134,7 +134,13 @@ def _same_upload(existing: Document, hashes: list[str]) -> Document:
     once the pages and the right to read it are established."""
     with system_actor():
         stored = list(existing.pages.order_by("index").values_list("sha256", flat=True))
-    if stored != hashes or not visibility.can_read(existing.id):
+    return existing_or_conflict(existing, same=stored == hashes)
+
+
+def existing_or_conflict(existing: Document, *, same: bool) -> Document:
+    """The repeated upload's answer once the caller compared the content (`same`): the
+    existing document, or 409 (`document_conflict`, `document_trashed`)."""
+    if not same or not visibility.can_read(existing.id):
         raise ApiError(
             409,
             "document_conflict",
