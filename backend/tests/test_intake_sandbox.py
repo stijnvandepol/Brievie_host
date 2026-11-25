@@ -4,6 +4,7 @@ of PR #58, points 2 and 6): it gets no secret from the environment, answers in J
 
 import dataclasses
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -96,6 +97,80 @@ def test_a_slow_child_is_killed_on_time() -> None:
         sandbox.execute(_python("import time; time.sleep(30)"), b"", timeout=1, answer_limit=1024)
 
     assert time.monotonic() - started < 10
+
+
+def _gone(pid: int, *, within: float = 10.0) -> bool:
+    """True once `pid` no longer runs (gone, or a zombie waiting for init to reap it)."""
+    deadline = time.monotonic() + within
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        status = Path(f"/proc/{pid}/status")
+        try:
+            if "\tZ" in status.read_text().split("State:", 1)[1].split("\n", 1)[0]:
+                return True
+        except (OSError, IndexError):
+            pass
+        time.sleep(0.1)
+    return False
+
+
+def _forking(pid_file: Path, then: str) -> list[str]:
+    """A child that forks a grandchild sleeping for a minute (its pid in `pid_file`), then
+    runs `then` itself."""
+    return _python(
+        "import os, sys, time\n"
+        "if os.fork() == 0:\n"
+        f"    open({str(pid_file)!r}, 'w').write(str(os.getpid()))\n"
+        "    time.sleep(60)\n"
+        "    os._exit(0)\n"
+        f"while not os.path.exists({str(pid_file)!r}): time.sleep(0.01)\n"
+        f"{then}\n"
+    )
+
+
+def _pid_in(pid_file: Path) -> int:
+    for _ in range(100):
+        text = pid_file.read_text() if pid_file.exists() else ""
+        if text:
+            return int(text)
+        time.sleep(0.05)
+    raise AssertionError("the grandchild never started")
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX process groups")
+def test_a_timeout_kills_the_childs_whole_process_group(tmp_path: Path) -> None:
+    # Re-review of PR #58, point 2: the timeout killed the child only; what it forked lived on.
+    pid_file = tmp_path / "grandchild"
+
+    with pytest.raises(IsolationError):
+        sandbox.execute(_forking(pid_file, "time.sleep(60)"), b"", timeout=2, answer_limit=1024)
+
+    assert _gone(_pid_in(pid_file))
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX process groups")
+def test_what_a_child_left_behind_is_killed_after_its_answer(tmp_path: Path) -> None:
+    pid_file = tmp_path / "grandchild"
+    answer = "import json; print(json.dumps({'ok': True}))"
+
+    assert sandbox.execute(_forking(pid_file, answer), b"", timeout=10, answer_limit=1024) == {
+        "ok": True
+    }
+
+    assert _gone(_pid_in(pid_file))
+
+
+@pytest.mark.skipif(
+    sys.platform != "linux" or os.geteuid() == 0,
+    reason="RLIMIT_NPROC binds a non-root user on Linux",
+)
+def test_the_parser_child_cannot_fork() -> None:
+    # A grandchild could leave the process group (setsid); one that cannot be made cannot.
+    with pytest.raises(IsolationError):
+        sandbox.execute(_limited("import os; os.fork()"), b"", timeout=10, answer_limit=1024)
 
 
 def _limited(statement: str, *, cpu: int = 30, memory: int = 256 * 1024 * 1024) -> list[str]:

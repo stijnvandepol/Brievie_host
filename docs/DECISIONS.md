@@ -3557,3 +3557,11 @@ The re-review of PR #58 (intake web upload) left six points; each is fixed with 
 1. **A deeply nested answer is a refusal.** `json.loads` of an answer such as 200 000
    nested brackets raised `RecursionError`, which reached the request as a 500. It is now
    `IsolationError("")`, as any other malformed answer.
+2. **The timeout kills the child's whole process group, and the child cannot fork.** The
+   child starts in a session of its own (`start_new_session`); when it ends or its time is
+   up the parent kills its process group with `SIGKILL`, so nothing it forked lives on.
+   Because a grandchild could leave the group (`setsid`), the child also sets
+   `RLIMIT_NPROC` to 0 before it reads the file: a fork fails. Ruling: 0, not a small
+   number, as the limit counts every process and thread of the uid (the worker's
+   included); PDFium and Pillow render in the calling thread. Root is not bound by it; the
+   server never runs as root.

@@ -5,9 +5,10 @@ started as Tesseract is (`apps.intake.ocr`): `python -I apps/intake/parsers.py`,
 interpreter that ignores `PYTHON*` variables and the user's site, with an environment of
 `PATH` and `LANG` only (so none of the worker's secrets: master key, `SECRET_KEY`,
 database URLs), no inherited descriptors, the file on stdin. The child sets its own
-address-space, CPU and output-size limits before it reads a byte (`parsers.set_limits`)
-and answers one JSON object on stdout, written to a temporary file the parent measures
-before it reads; the parent kills it after `timeout`. Nothing is unpickled: a hijacked
+address-space, CPU, output-size and process limits before it reads a byte
+(`parsers.set_limits`; it cannot fork) and answers one JSON object on stdout, written to a
+temporary file the parent measures before it reads; the parent kills its process group
+after `timeout`, and when it ends. Nothing is unpickled: a hijacked
 child can only send JSON, which the parent checks field by field.
 
 A crash, a kill, an answer too large or of the wrong shape is `IsolationError("")`; a
@@ -22,8 +23,10 @@ container closes that; it is a follow-up (DECISIONS, "Security review of PR #58"
 
 import base64
 import binascii
+import contextlib
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -53,27 +56,43 @@ def _child_env() -> dict[str, str]:
     return {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"}
 
 
+def _kill_group(process: "subprocess.Popen[bytes]") -> None:
+    """Kill the child's process group (the child and all it forked, also after it
+    answered) and reap the child. The parser child cannot fork at all (`RLIMIT_NPROC`
+    in `parsers.set_limits`), so nothing of it can leave the group first."""
+    # ProcessLookupError: the group is gone already.
+    with contextlib.suppress(ProcessLookupError, PermissionError):
+        os.killpg(process.pid, signal.SIGKILL)
+    process.wait()
+
+
 def execute(
     command: list[str], data: bytes, *, timeout: float, answer_limit: int
 ) -> dict[str, object]:
     """Run `command` with `data` on stdin; its stdout as one JSON object.
 
     `IsolationError("")` when it does not exit 0 within `timeout`, writes more than
-    `answer_limit` bytes, or writes anything but a JSON object with a boolean `ok`.
+    `answer_limit` bytes, or writes anything but a JSON object with a boolean `ok`. The
+    child runs in a session of its own; its whole process group is killed when it ends or
+    its time is up.
     """
     try:
         with tempfile.TemporaryFile() as out:
-            completed = subprocess.run(  # noqa: S603 - our interpreter and script, no shell
+            process = subprocess.Popen(  # noqa: S603 - our interpreter and script, no shell
                 command,
-                input=data,
+                stdin=subprocess.PIPE,
                 stdout=out,
                 stderr=subprocess.DEVNULL,
                 env=_child_env(),
-                timeout=timeout,
-                check=False,
                 close_fds=True,
+                # Its own process group: whatever it forks is killed with it.
+                start_new_session=True,
             )
-            if completed.returncode != 0 or os.fstat(out.fileno()).st_size > answer_limit:
+            try:
+                process.communicate(input=data, timeout=timeout)
+            finally:
+                _kill_group(process)
+            if process.returncode != 0 or os.fstat(out.fileno()).st_size > answer_limit:
                 raise IsolationError("")
             out.seek(0)
             raw = out.read(answer_limit + 1)
