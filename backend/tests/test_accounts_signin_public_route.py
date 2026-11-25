@@ -282,6 +282,23 @@ def test_a_session_without_the_second_step_does_not_count_outside(user: User) ->
     assert client.get("/api/v1/me", headers=PRIVATE).status_code == 200
 
 
+def test_a_session_that_does_not_count_outside_is_not_refreshed_there(user: User) -> None:
+    client = Client()
+    assert sign_in(client, user, route=PRIVATE)[0] == 200
+    long_ago = timezone.now() - timedelta(hours=1)
+    UserSession.objects.filter(user=user).update(last_used_at=long_ago, client_ip="192.0.2.7")
+    expiry = client.session.get_expiry_date()
+
+    assert client.get("/api/v1/me", headers=PUBLIC).status_code == 401
+
+    row = UserSession.objects.get(user=user)
+    assert (row.last_used_at, row.client_ip) == (long_ago, "192.0.2.7")
+    assert client.session.get_expiry_date() == expiry
+    # At home the use is noted.
+    assert client.get("/api/v1/me", headers=PRIVATE).status_code == 200
+    assert UserSession.objects.get(user=user).last_used_at > long_ago
+
+
 def test_a_session_that_passed_the_second_step_counts_outside(user: User) -> None:
     factor = give_factor(user)
     client = Client()
