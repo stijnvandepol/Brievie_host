@@ -1125,6 +1125,11 @@
             "title": "Failure Code",
             "type": "string"
           },
+          "has_original": {
+            "default": false,
+            "title": "Has Original",
+            "type": "boolean"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -1182,6 +1187,11 @@
             "default": 0,
             "title": "Open Task Count",
             "type": "integer"
+          },
+          "original_name": {
+            "default": "",
+            "title": "Original Name",
+            "type": "string"
           },
           "overdue": {
             "default": false,
@@ -1263,6 +1273,11 @@
             },
             "title": "Shared User Ids",
             "type": "array"
+          },
+          "source": {
+            "default": "scan",
+            "title": "Source",
+            "type": "string"
           },
           "status": {
             "title": "Status",
@@ -1394,6 +1409,11 @@
               "null"
             ]
           },
+          "has_original": {
+            "default": false,
+            "title": "Has Original",
+            "type": "boolean"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -1444,6 +1464,11 @@
             "default": 0,
             "title": "Open Task Count",
             "type": "integer"
+          },
+          "original_name": {
+            "default": "",
+            "title": "Original Name",
+            "type": "string"
           },
           "overdue": {
             "default": false,
@@ -1510,6 +1535,11 @@
             },
             "title": "Snippet",
             "type": "array"
+          },
+          "source": {
+            "default": "scan",
+            "title": "Source",
+            "type": "string"
           },
           "status": {
             "title": "Status",
@@ -1734,6 +1764,11 @@
               "null"
             ]
           },
+          "has_original": {
+            "default": false,
+            "title": "Has Original",
+            "type": "boolean"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -1784,6 +1819,11 @@
             "default": 0,
             "title": "Open Task Count",
             "type": "integer"
+          },
+          "original_name": {
+            "default": "",
+            "title": "Original Name",
+            "type": "string"
           },
           "overdue": {
             "default": false,
@@ -1842,6 +1882,11 @@
           },
           "sender": {
             "title": "Sender",
+            "type": "string"
+          },
+          "source": {
+            "default": "scan",
+            "title": "Source",
             "type": "string"
           },
           "status": {
@@ -2276,6 +2321,97 @@
           "count"
         ],
         "title": "FacetOut",
+        "type": "object"
+      },
+      "FileMetadataIn": {
+        "description": "The `metadata` field of `uploadDocumentFile`, as a JSON string: `UploadMetadataIn`\nwithout pages (the server makes them from the file). The archive fields mean the same.",
+        "properties": {
+          "client_id": {
+            "format": "uuid",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "document_date": {
+            "default": null,
+            "format": "date",
+            "title": "Document Date",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "document_type": {
+            "default": "",
+            "title": "Document Type",
+            "type": "string"
+          },
+          "expires_on": {
+            "default": null,
+            "format": "date",
+            "title": "Expires On",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "default": "letter",
+            "title": "Kind",
+            "type": "string"
+          },
+          "label_ids": {
+            "default": [],
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 30,
+            "title": "Label Ids",
+            "type": "array"
+          },
+          "person_ids": {
+            "default": [],
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Person Ids",
+            "type": "array"
+          },
+          "private": {
+            "default": null,
+            "title": "Private",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "remind_days": {
+            "default": 30,
+            "title": "Remind Days",
+            "type": "integer"
+          },
+          "retain_until": {
+            "default": null,
+            "format": "date",
+            "title": "Retain Until",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "default": "",
+            "maxLength": 400,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id"
+        ],
+        "title": "FileMetadataIn",
         "type": "object"
       },
       "FolderIn": {
@@ -2817,6 +2953,11 @@
               "null"
             ]
           },
+          "has_original": {
+            "default": false,
+            "title": "Has Original",
+            "type": "boolean"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -2867,6 +3008,11 @@
             "default": 0,
             "title": "Open Task Count",
             "type": "integer"
+          },
+          "original_name": {
+            "default": "",
+            "title": "Original Name",
+            "type": "string"
           },
           "overdue": {
             "default": false,
@@ -2925,6 +3071,11 @@
           },
           "sender": {
             "title": "Sender",
+            "type": "string"
+          },
+          "source": {
+            "default": "scan",
+            "title": "Source",
             "type": "string"
           },
           "status": {
@@ -5469,6 +5620,11 @@
               "null"
             ]
           },
+          "has_original": {
+            "default": false,
+            "title": "Has Original",
+            "type": "boolean"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -5519,6 +5675,11 @@
             "default": 0,
             "title": "Open Task Count",
             "type": "integer"
+          },
+          "original_name": {
+            "default": "",
+            "title": "Original Name",
+            "type": "string"
           },
           "overdue": {
             "default": false,
@@ -5582,6 +5743,11 @@
           },
           "sender": {
             "title": "Sender",
+            "type": "string"
+          },
+          "source": {
+            "default": "scan",
+            "title": "Source",
             "type": "string"
           },
           "status": {
@@ -11071,6 +11237,181 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/documents/files": {
+      "post": {
+        "description": "Web session only: a bearer token answers 401 not_authenticated. Add a PDF, JPEG or PNG as one document (multipart/form-data): `metadata` is a JSON string (schema `FileMetadataIn`: `client_id` and, for an own document, the archive fields of `UploadMetadataIn`), `file` the file. The kind is read from the content. The server keeps the original sealed and makes the pages in the background; the document answers `processing` with no pages yet. The same `client_id` and file again answers 200 with the existing document, another file 409 `document_conflict`. 422 `file_type_not_supported`, `file_unreadable`, `too_many_pages`, `file_encrypted`, `image_too_large`; 413 `file_too_large`; 429 `too_many_uploads` (the limits of `createDocument`, shared with it). A read-only member gets 403.",
+        "operationId": "uploadDocumentFile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "file": {
+                    "format": "binary",
+                    "title": "File",
+                    "type": "string"
+                  },
+                  "metadata": {
+                    "title": "Metadata",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "metadata",
+                  "file"
+                ],
+                "title": "MultiPartBodyParams",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "411": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Length Required"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Upload Document File",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/documents/read": {
       "post": {
         "description": "\"Alles gelezen\": mark the given letters read for the caller (at most 200; 422 `validation_error` for more). Ids the caller does not see are skipped without a word. `marked`: how many were newly marked. The caller's own state only: nobody else sees it; no history line, no log.",
@@ -12627,6 +12968,76 @@
           }
         ],
         "summary": "Dismiss New Person Suggestion",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/original": {
+      "get": {
+        "description": "Web session only: a bearer token answers 401 not_authenticated. The file a browser uploaded, as it came (PDF, JPEG or PNG), for a member who sees the document. 404 `original_not_found` for an app scan.",
+        "operationId": "downloadDocumentOriginal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The original file"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Download Document Original",
         "tags": [
           "documents"
         ]

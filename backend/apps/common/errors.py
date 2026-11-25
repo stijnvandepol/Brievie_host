@@ -224,8 +224,8 @@ class ApiMethodNotAllowedMiddleware:
         return response
 
 
-# The one endpoint that takes a multipart body (page images) and has a larger limit.
-_DOCUMENT_UPLOAD_PATH = re.compile(r"^/api/v1/workspaces/[^/]+/documents$")
+# The endpoints that take a multipart body (page images, a file) and have a larger limit.
+_DOCUMENT_UPLOAD_PATH = re.compile(r"^/api/v1/workspaces/[^/]+/documents(/files)?$")
 
 
 def is_document_upload(request: HttpRequest) -> bool:

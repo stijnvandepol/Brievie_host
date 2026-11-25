@@ -2,14 +2,19 @@
 (intake spec S 1). The request checks the file and stores the original sealed; the worker
 makes the pages (`apps.intake.prepare`)."""
 
+from uuid import UUID
+
 from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
+from django.utils.translation import gettext as _
 
 from apps.accounts.models import User
 from apps.audit.services import AuditActor
 from apps.common import crypto
+from apps.common.errors import ApiError
 from apps.documents import intake, own, reading
+from apps.documents import services as document_services
 from apps.documents.models import Document
 from apps.documents.schemas import FileMetadataIn
 from apps.documents.storage import DocumentStorage, default_storage
@@ -17,7 +22,7 @@ from apps.intake.files import check_file, safe_original_name
 from apps.pipeline.jobs import defer_processing
 from apps.workspaces.context import system_actor
 from apps.workspaces.keys import workspace_key
-from apps.workspaces.models import Workspace
+from apps.workspaces.models import Membership, Workspace
 
 
 def create_document_from_file(
@@ -113,3 +118,27 @@ def create_document_from_file(
 
 def _same_file(existing: Document, sha256: str) -> Document:
     return intake.existing_or_conflict(existing, same=existing.original_sha256 == sha256)
+
+
+_CONTENT_TYPES = {
+    Document.OriginalKind.PDF: ("application/pdf", "pdf"),
+    Document.OriginalKind.JPEG: ("image/jpeg", "jpg"),
+    Document.OriginalKind.PNG: ("image/png", "png"),
+}
+
+
+def read_original(*, membership: Membership, document_id: UUID) -> tuple[bytes, str, str]:
+    """The opened original of a document the member sees (through the visibility seam),
+    its content type and a file name; 404 `original_not_found` without one."""
+    document = document_services.get_document(membership=membership, document_id=document_id)
+    kind = Document.OriginalKind(document.original_kind)
+    if kind == Document.OriginalKind.NONE:
+        raise ApiError(404, "original_not_found", _("Deze brief heeft geen origineel bestand."))
+    workspace_id = membership.workspace_id
+    data = crypto.open_sealed(
+        workspace_key(workspace_id),
+        default_storage().read(intake.original_path(workspace_id, document.id)),
+        aad=intake.original_aad(workspace_id, document.id),
+    )
+    content_type, extension = _CONTENT_TYPES[kind]
+    return data, content_type, document.original_name or f"origineel.{extension}"

@@ -17,7 +17,8 @@ from apps.devices.api import router as devices_router
 from apps.devices.auth import DeviceTokenAuth
 from apps.documents.api import router as documents_router
 from apps.documents.duplicates_api import router as duplicates_router
-from apps.documents.schemas import UploadMetadataIn
+from apps.documents.schemas import FileMetadataIn, UploadMetadataIn
+from apps.intake.api import router as intake_router
 from apps.labels.api import router as labels_router
 from apps.people.api import router as people_router
 from apps.pipeline.api import router as pipeline_router
@@ -38,7 +39,7 @@ def docs_urls(*, debug: bool) -> dict[str, str | None]:
 
 # In the exported contract although no operation names them: the JSON inside the
 # `metadata` field of the multipart upload.
-CONTRACT_ONLY_SCHEMAS: list[type[BaseModel]] = [UploadMetadataIn]
+CONTRACT_ONLY_SCHEMAS: list[type[BaseModel]] = [UploadMetadataIn, FileMetadataIn]
 
 _urls = docs_urls(debug=settings.DEBUG)
 api = NinjaAPI(
@@ -79,3 +80,4 @@ api.add_router("", devices_router)
 api.add_router("", audit_router)
 api.add_router("", backup_router)
 api.add_router("", access_router)
+api.add_router("", intake_router)

@@ -82,7 +82,7 @@
 	# apply, and the smaller one would win.
 	@documentUpload {
 		method POST
-		path_regexp ^/api/v1/workspaces/[^/]+/documents$
+		path_regexp ^/api/v1/workspaces/[^/]+/documents(/files)?$
 	}
 	handle @documentUpload {
 		# Same limit as Django's BRIEVIE_MAX_UPLOAD_BYTES.

@@ -285,6 +285,10 @@ def test_app_operations_exist_and_need_no_sign_in() -> None:
         "createPairingCode",
         "listServerAuditEvents",
         "updateAiSettings",
+        # Intake (DECISIONS 2026-11-25): a browser's file upload and the original's
+        # download are web-session only, closed on the public route.
+        "uploadDocumentFile",
+        "downloadDocumentOriginal",
     ],
 )
 def test_sign_in_and_session_operations_stay_closed(operation_id: str) -> None:

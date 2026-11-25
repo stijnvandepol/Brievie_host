@@ -1512,7 +1512,7 @@ msgstr "We can't find this device."
 msgid "Deze server gebruikt geen eigen certificaat."
 msgstr "This server does not use a certificate of its own."
 
-#: apps/documents/api.py
+#: apps/documents/api.py apps/intake/api.py
 msgid "De gegevens bij deze upload kloppen niet."
 msgstr "The details of this upload are not correct."
 
@@ -2281,6 +2281,36 @@ msgstr "The backup folder is ready for the backups."
 #: apps/installer/runtime.py
 msgid "De versiegegevens van dit image kloppen niet."
 msgstr "The version data of this image is not right."
+
+#: apps/intake/api.py
+#, python-format
+msgid "Dit bestand is groter dan %(size)s MB."
+msgstr "This file is larger than %(size)s MB."
+
+#: apps/intake/api.py
+msgid "Dit bestand kan Brievie niet lezen. Gebruik een PDF, JPG of PNG."
+msgstr "Brievie cannot read this file. Use a PDF, JPG or PNG."
+
+#: apps/intake/api.py
+msgid "Dit bestand kan Brievie niet openen. Misschien is het beschadigd."
+msgstr "Brievie cannot open this file. It may be damaged."
+
+#: apps/intake/api.py
+#, python-format
+msgid "Deze PDF heeft meer dan %(count)s pagina's."
+msgstr "This PDF has more than %(count)s pages."
+
+#: apps/intake/api.py
+msgid "Deze PDF is beveiligd met een wachtwoord. Haal de beveiliging eraf en probeer het opnieuw."
+msgstr "This PDF is protected with a password. Remove the protection and try again."
+
+#: apps/intake/api.py
+msgid "Deze afbeelding is te groot. Maak een kleinere foto of scan."
+msgstr "This image is too large. Take a smaller photo or scan."
+
+#: apps/intake/services.py
+msgid "Deze brief heeft geen origineel bestand."
+msgstr "This letter has no original file."
 
 #: apps/labels/presets.py
 msgid "Belastingdienst"

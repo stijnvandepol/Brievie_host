@@ -35,7 +35,12 @@ def test_document_upload_has_its_own_body_limit() -> None:
     # Two request_body directives on one request both apply and the smaller wins,
     # so each limit lives in its own handle block.
     matcher = handle_block("@documentUpload {").split()
-    assert matcher == ["method", "POST", "path_regexp", "^/api/v1/workspaces/[^/]+/documents$"]
+    assert matcher == [
+        "method",
+        "POST",
+        "path_regexp",
+        "^/api/v1/workspaces/[^/]+/documents(/files)?$",
+    ]
     upload = handle_block("handle @documentUpload {")
     general = handle_block("handle {")
     assert re.search(r"request_body\s*\{\s*max_size \{\$BRIEVIE_MAX_UPLOAD_BYTES\}", upload)
