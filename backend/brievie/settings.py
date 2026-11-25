@@ -5,6 +5,7 @@ from pathlib import Path
 import environ
 from django.core.exceptions import ImproperlyConfigured
 
+from apps.access.addresses import derive as _derive_addresses
 from apps.common import secrets as _secrets
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -42,7 +43,27 @@ DEBUG: bool = env.bool("DEBUG", default=False)
 _secret_key_problem = _secrets.check_secret_key(SECRET_KEY, debug=DEBUG)
 if _secret_key_problem:
     raise ImproperlyConfigured(_secret_key_problem)
-ALLOWED_HOSTS: list[str] = env.list("ALLOWED_HOSTS", default=["localhost"])
+# The server's names (S 6, apps.access.addresses): the home name, the server's own VPN
+# name and the public name of a tunnel or an own reverse proxy. ALLOWED_HOSTS and
+# BRIEVIE_PUBLIC_URLS follow from them (below) unless deploy/.env sets them itself.
+BRIEVIE_HOSTNAME: str = env.str("BRIEVIE_HOSTNAME", default="")
+BRIEVIE_VPN_HOSTNAME: str = env.str("BRIEVIE_VPN_HOSTNAME", default="")
+BRIEVIE_PUBLIC_HOSTNAME: str = env.str("BRIEVIE_PUBLIC_HOSTNAME", default="")
+BRIEVIE_HTTPS_PORT: int = env.int("BRIEVIE_HTTPS_PORT", default=443)
+# Nothing is derived without a home name (a developer's test run): today's defaults.
+_addresses = (
+    _derive_addresses(
+        hostname=BRIEVIE_HOSTNAME,
+        vpn_hostname=BRIEVIE_VPN_HOSTNAME,
+        public_hostname=BRIEVIE_PUBLIC_HOSTNAME,
+        https_port=BRIEVIE_HTTPS_PORT,
+    )
+    if BRIEVIE_HOSTNAME
+    else None
+)
+ALLOWED_HOSTS: list[str] = [
+    host.strip() for host in env.list("ALLOWED_HOSTS", default=[]) if host.strip()
+] or (list(_addresses.allowed_hosts) if _addresses else ["localhost"])
 
 INSTALLED_APPS = [
     "django.contrib.auth",
@@ -69,6 +90,7 @@ INSTALLED_APPS = [
     "apps.updates",
     "apps.installer",
     "apps.audit",
+    "apps.access",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
@@ -90,6 +112,9 @@ AUTH_PASSWORD_VALIDATORS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "apps.common.errors.ApiCacheControlMiddleware",
+    # The public route (tunnel, own reverse proxy) is app-only unless BRIEVIE_PUBLIC_WEB:
+    # before WhiteNoise and the session, so neither a page nor a session is reached.
+    "apps.access.middleware.PublicRouteGate",
     "apps.common.errors.ApiMethodNotAllowedMiddleware",
     "apps.common.errors.ApiContentLengthMiddleware",
     "apps.common.errors.ApiJsonBodyMiddleware",
@@ -260,6 +285,33 @@ X_FRAME_OPTIONS = "DENY"
 # Number of reverse proxies in front of the app (Caddy in Compose: 1). Decides
 # which X-Forwarded-For entry is the client address (apps.common.net.client_ip).
 BRIEVIE_PROXY_COUNT: int = env.int("BRIEVIE_PROXY_COUNT", default=0)
+# Requests arrive through Brievie's own Caddy (compose sets it): the client address and
+# the route are then Caddy's X-Brievie-Client-IP and X-Brievie-Route, which Caddy writes
+# itself on every request (apps.common.net, apps.access.route; S 7.3).
+BRIEVIE_BEHIND_CADDY: bool = env.bool("BRIEVIE_BEHIND_CADDY", default=False)
+# Caddy's compose name: only a request whose socket peer has one of its addresses is Caddy's
+# (apps.common.net.from_caddy); a request that reaches the api any other way is public.
+BRIEVIE_CADDY_HOST: str = env.str("BRIEVIE_CADDY_HOST", default="caddy")
+# The web interface and its password sign-in on the public route (tunnel, own reverse
+# proxy). Off: there only the app works (device tokens and pairing; S 7.6).
+BRIEVIE_PUBLIC_WEB: bool = env.bool("BRIEVIE_PUBLIC_WEB", default=False)
+# Your own reverse proxy's address(es), CIDRs separated by spaces: Caddy believes its
+# X-Forwarded-For and marks its requests as the public route. Empty: none.
+BRIEVIE_TRUSTED_PROXIES: list[str] = env.str("BRIEVIE_TRUSTED_PROXIES", default="").split()
+# A trusted range wider than a /24 (IPv4) or /64 (IPv6) only when this says so
+# (apps.common.checks.check_trusted_proxies); 0.0.0.0/0 and ::/0 never.
+BRIEVIE_TRUSTED_PROXIES_WIDE: bool = env.bool("BRIEVIE_TRUSTED_PROXIES_WIDE", default=False)
+# Whether a Cloudflare Tunnel token is set (as a variable or a file). The api never gets
+# the token itself: only the cloudflared container does.
+BRIEVIE_TUNNEL_TOKEN_SET: bool = bool(
+    env.str("BRIEVIE_TUNNEL_TOKEN_SET", default="").strip()
+    or env.str("BRIEVIE_TUNNEL_TOKEN_FILE_SET", default="").strip()
+)
+# True once the public route requires a second step for a password sign-in (B2). Two-step
+# sign-in exists (PR #52), but nothing asks for it on the public route yet, so a password
+# alone can still sign in there with BRIEVIE_PUBLIC_WEB on. The external-access warnings
+# (brievie.W002, the settings page) read it.
+BRIEVIE_SECOND_FACTOR_AVAILABLE = False
 
 # Login lockout (django-axes): 5 failures for the same email + address lock that
 # pair for 15 minutes. apps.accounts.services.login checks the lock itself and
@@ -282,6 +334,13 @@ SILENCED_SYSTEM_CHECKS = ["axes.W002"]  # AxesMiddleware: see above.
 # that code useless and a new one must be made.
 BRIEVIE_PUBLIC_URLS: list[str] = [
     url.strip() for url in env.list("BRIEVIE_PUBLIC_URLS", default=[]) if url.strip()
+] or (list(_addresses.public_urls) if _addresses else [])
+# The entries of BRIEVIE_PUBLIC_URLS served with a public certificate (the public name),
+# not the private CA: the app trusts them with the system's roots (S 9).
+BRIEVIE_PUBLIC_CERTIFICATE_URLS: list[str] = [
+    url
+    for url in (_addresses.public_certificate_urls if _addresses else ())
+    if url in BRIEVIE_PUBLIC_URLS
 ]
 if any(not url.startswith("https://") for url in BRIEVIE_PUBLIC_URLS):
     raise ImproperlyConfigured("Every BRIEVIE_PUBLIC_URLS entry must start with https://.")
@@ -360,7 +419,6 @@ if not 0 <= BRIEVIE_BACKUP_HOUR <= 23:
 BRIEVIE_BACKUP_AUTO_INIT: bool = env.bool("BRIEVIE_BACKUP_AUTO_INIT", default=False)
 BRIEVIE_BACKUP_CONFIG_DIR: str = env.str("BRIEVIE_BACKUP_CONFIG_DIR", default="/data/backup-config")
 BRIEVIE_AUTHORITY_COPY_DIR: str = env.str("BRIEVIE_AUTHORITY_COPY_DIR", default="/data/authority")
-BRIEVIE_HOSTNAME: str = env.str("BRIEVIE_HOSTNAME", default="")
 # True only where the standalone compose file (deploy/compose/docker-compose.yml) says so;
 # never set by the image or by `deploy/docker-compose.yml`. The web interface offers the
 # recovery sheet only there: the api of a `./brievie` install lacks what the sheet needs.

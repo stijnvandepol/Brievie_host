@@ -237,7 +237,7 @@ def test_a_link_pairing_pairs_without_the_code(session_client: Client, user: Use
 
     assert r.status_code == 201, r.content
     body = r.json()
-    assert set(body) == {"device_id", "token", "user"}
+    assert set(body) == {"device_id", "token", "user", "public_urls"}
     assert r["Cache-Control"] == "no-store"
     assert body["user"]["id"] == str(user.id)
     device = Device.objects.get(id=body["device_id"])
@@ -761,7 +761,7 @@ def test_a_1c_app_still_pairs_by_qr_with_the_code(session_client: Client) -> Non
     r = post_json(fresh_client(), "/devices/pair", {"code": code, "device_name": "iPhone"})
 
     assert r.status_code == 201
-    assert set(r.json()) == {"device_id", "token", "user"}
+    assert set(r.json()) == {"device_id", "token", "user", "public_urls"}
     assert r["Cache-Control"] == "no-store"
     [row] = ServerAuditEvent.objects.filter(code="device_paired")
     assert row.values == {"via": "code"}

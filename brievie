@@ -763,6 +763,121 @@ loopback_host() {
 	return 1
 }
 
+# --- reachable from outside (docs/SELFHOST.md, "Van buiten bereikbaar") ---------------------
+
+# Whether a Cloudflare Tunnel is set: a token, or a file with the token, in deploy/.env. Only
+# whether one is there: the value goes into no variable that is printed, and into no argument
+# (compose reads it from deploy/.env and hands it to the cloudflared container alone).
+tunnel_on() {
+	[ -n "$(env_value BRIEVIE_TUNNEL_TOKEN)$(env_value BRIEVIE_TUNNEL_TOKEN_FILE)" ]
+}
+
+# Whether $1 is a bare host name or an IP address: no scheme, port, path or space.
+bare_host() {
+	case $1 in
+	'' | -* | .* | *- | *..* | *-.* | *.-*) return 1 ;;
+	*:*:*)
+		# An IPv6 address: hexadecimal digits, colons and (for a mapped IPv4) dots.
+		case $1 in
+		*[!0-9A-Fa-f:.]*) return 1 ;;
+		esac
+		return 0
+		;;
+	*[!A-Za-z0-9.-]*) return 1 ;;
+	esac
+	return 0
+}
+
+# $1 in lower case without a trailing dot, to compare names.
+plain_name() {
+	printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's/\.$//'
+}
+
+# Refuses names Caddy and the api would refuse anyway, before anything starts, and a
+# COMPOSE_PROFILES line that would pull the tunnel into the main start.
+check_external_settings() {
+	if [ -n "$(env_value COMPOSE_PROFILES)" ]; then
+		fail "In deploy/.env staat COMPOSE_PROFILES. Haal die regel weg: ./brievie start de tunnel zelf als BRIEVIE_TUNNEL_TOKEN is ingesteld. Er is niets veranderd."
+	fi
+	home_name=$(plain_name "$(unquote "$(env_value BRIEVIE_HOSTNAME)")")
+	vpn_name=$(unquote "$(env_value BRIEVIE_VPN_HOSTNAME)")
+	public_name=$(unquote "$(env_value BRIEVIE_PUBLIC_HOSTNAME)")
+	for pair in "BRIEVIE_VPN_HOSTNAME=$vpn_name" "BRIEVIE_PUBLIC_HOSTNAME=$public_name"; do
+		key=${pair%%=*}
+		name=${pair#*=}
+		[ -n "$name" ] || continue
+		if ! bare_host "$name"; then
+			fail "$key in deploy/.env is geen kale naam. Zet alleen de naam, zoals brievie.voorbeeld.nl: zonder https://, zonder poort en zonder pad. Er is niets veranderd."
+		fi
+	done
+	if [ -n "$vpn_name" ] && [ "$(plain_name "$vpn_name")" = "$home_name" ]; then
+		fail "BRIEVIE_VPN_HOSTNAME is dezelfde naam als BRIEVIE_HOSTNAME. Gebruik elke naam maar één keer. Er is niets veranderd."
+	fi
+	if [ -n "$public_name" ] && { [ "$(plain_name "$public_name")" = "$home_name" ] ||
+		{ [ -n "$vpn_name" ] && [ "$(plain_name "$public_name")" = "$(plain_name "$vpn_name")" ]; }; }; then
+		fail "BRIEVIE_PUBLIC_HOSTNAME is dezelfde naam als BRIEVIE_HOSTNAME of BRIEVIE_VPN_HOSTNAME. Gebruik elke naam maar één keer. Er is niets veranderd."
+	fi
+	if [ -n "$public_name" ] && ! tunnel_on && [ -z "$(env_value BRIEVIE_TRUSTED_PROXIES)" ]; then
+		echo "Let op: BRIEVIE_PUBLIC_HOSTNAME is ingesteld, maar er is geen tunnel en geen BRIEVIE_TRUSTED_PROXIES. Verzoeken voor die naam krijgen alleen de app, en alle bezoekers tellen als één adres. Het adres van je proxy staat thuis op de pagina Van buiten bereikbaar."
+	fi
+	if tunnel_on && [ -z "$public_name" ]; then
+		echo "Let op: er is een tunnel-token ingesteld, maar geen BRIEVIE_PUBLIC_HOSTNAME. Zet in deploy/.env de publieke naam van de tunnel (zoals brievie.voorbeeld.nl)."
+	fi
+}
+
+# After the stack is up: the tunnel, when one is set. It starts after the rest and on its
+# own: a tunnel that does not start is a warning, never a failed start (the home network
+# keeps working). Waits up to BRIEVIE_TUNNEL_WAIT seconds (15) for it to run.
+start_tunnel() {
+	tunnel_on || return 0
+	limit=${BRIEVIE_TUNNEL_WAIT:-15}
+	case $limit in
+	'' | *[!0-9]*) limit=15 ;;
+	esac
+	waited=0
+	if quietly compose_raw --profile tunnel up -d --no-deps cloudflared; then
+		while :; do
+			if compose_raw --profile tunnel ps --status running --services 2>/dev/null | grep -qx cloudflared; then
+				echo "De tunnel naar Cloudflare draait."
+				return 0
+			fi
+			[ "$waited" -lt "$limit" ] || break
+			sleep 1
+			waited=$((waited + 1))
+		done
+	fi
+	echo "Brievie draait, maar de tunnel naar Cloudflare start niet. Controleer BRIEVIE_TUNNEL_TOKEN." >&2
+	return 0
+}
+
+# Stops the named services, and the tunnel with them when one is set.
+compose_stop() {
+	if tunnel_on; then
+		compose --profile tunnel stop "$@" cloudflared
+	else
+		compose stop "$@"
+	fi
+}
+
+# The addresses besides the home one, and the warning about the web sign-in on the internet.
+print_external_addresses() {
+	vpn_name=$(unquote "$(env_value BRIEVIE_VPN_HOSTNAME)")
+	public_name=$(unquote "$(env_value BRIEVIE_PUBLIC_HOSTNAME)")
+	if [ -n "$vpn_name" ]; then
+		echo "Via je VPN: https://$vpn_name$1."
+	fi
+	if [ -n "$public_name" ]; then
+		echo "Van buiten (publiek adres): https://$public_name."
+	fi
+	case $(unquote "$(env_value BRIEVIE_PUBLIC_WEB)" | tr '[:upper:]' '[:lower:]') in
+	1 | true | yes | on)
+		if tunnel_on || [ -n "$(env_value BRIEVIE_TRUSTED_PROXIES)" ]; then
+			echo "Let op: inloggen op de webinterface kan van buiten zonder tweede stap (BRIEVIE_PUBLIC_WEB=true). Zet het uit of gebruik een VPN."
+		fi
+		;;
+	esac
+}
+
 # The settings compose reads: deploy/.env, or (set for one call) another file.
 compose_env_file=""
 compose_raw() {
@@ -994,6 +1109,7 @@ cmd_start() {
 		echo "Een eerdere update naar versie $(update_marker_value to) is afgebroken voordat er iets veranderde."
 		rm -f "${here:?}/deploy/.update/in-progress"
 	fi
+	check_external_settings
 	# start runs the code that is checked out, and pins its version in deploy/.env.
 	start_version=$(checkout_version)
 	choose_image "$start_version"
@@ -1028,6 +1144,7 @@ cmd_start() {
 	echo "Brievie wordt gestart (en zo nodig bijgewerkt). Dat kan een paar minuten duren…"
 	with_watchdog "typ daarna opnieuw ./brievie start." quietly all compose_raw up -d --build --wait ||
 		fail "Brievie is niet goed gestart. Typ daarna opnieuw ./brievie start."
+	start_tunnel
 	ensure_backup_role ||
 		fail "De database kon niet worden bijgewerkt voor de back-up. Lees de melding hierboven."
 	ensure_backup_password
@@ -1051,10 +1168,12 @@ cmd_start() {
 	host=$(unquote "$(env_value BRIEVIE_HOSTNAME)")
 	https_port=$(unquote "$(env_value BRIEVIE_HTTPS_PORT)")
 	address="https://${host:-localhost}"
+	port_suffix=""
 	case ${https_port:-443} in
 	443) ;;
-	*) address="$address:$https_port" ;;
+	*) port_suffix=":$https_port" ;;
 	esac
+	address="$address$port_suffix"
 	if loopback_host "${host:-localhost}"; then
 		# Not a reason to stop (a developer may want it), but a phone can never pair.
 		echo "Brievie draait op $address, alleen in een browser op deze computer."
@@ -1062,6 +1181,7 @@ cmd_start() {
 	else
 		echo "Brievie draait op $address."
 	fi
+	print_external_addresses "$port_suffix"
 	if [ -n "$(env_value BRIEVIE_BACKUP_DIR)$(env_value BRIEVIE_BACKUP_REPOSITORY)" ]; then
 		echo "Back-up: ingesteld in deploy/.env. Typ ./brievie status om te zien hoe het gaat."
 	else
@@ -1919,7 +2039,7 @@ EOF
 		else
 			confirm_replace
 		fi
-		compose stop api worker caddy ||
+		compose_stop api worker caddy ||
 			fail "Brievie kon niet worden gestopt; er is niets teruggezet. Lees de melding hierboven en start Brievie weer met ./brievie start."
 		if [ -z "$skip_safety" ]; then
 			echo "Eerst een veiligheidsback-up van de gegevens die er nu zijn…"
@@ -1999,7 +2119,7 @@ EOF
 		fi
 	fi
 	# Nothing may write while the data comes back: stop whatever runs.
-	compose stop api worker caddy keeper || step_failed $? "Brievie kon niet worden gestopt."
+	compose_stop api worker caddy keeper || step_failed $? "Brievie kon niet worden gestopt."
 
 	# 6. The database: only postgres runs, so the database stays empty until pg_restore.
 	# A new machine has no data volume yet, so there is no id to check; an existing one is
@@ -2042,6 +2162,7 @@ EOF
 	write_marker "het starten" || true
 	echo "Brievie wordt gestart…"
 	compose up -d --wait || step_failed $? "Brievie is niet goed gestart na het terugzetten."
+	start_tunnel
 
 	# 9. Check the result against the back-up.
 	write_marker "de controle" || true
@@ -2307,6 +2428,7 @@ update_backup() {
 cmd_update() {
 	parse_update_args "$@"
 	refuse_while_halfway
+	check_external_settings
 	command -v git >/dev/null 2>&1 ||
 		fail "git ontbreekt op deze computer; ./brievie update haalt de nieuwe versie met git op. Er is niets veranderd."
 	[ -d "${here:?}/.git" ] || [ -f "${here:?}/.git" ] ||
@@ -2440,7 +2562,7 @@ cmd_update() {
 	fi
 	update_live=yes
 	echo "Brievie wordt gestopt…"
-	compose stop api worker caddy || fail "Brievie kon niet worden gestopt."
+	compose_stop api worker caddy || fail "Brievie kon niet worden gestopt."
 	store_env_copy
 
 	# 4. Back up, then stop the keeper too.
@@ -2463,7 +2585,7 @@ finish_failed() {
 	finish_live=""
 	printf '%s\n' "$1" >&2
 	show_tail
-	quietly compose_raw stop api worker keeper caddy || true
+	compose_stop api worker keeper caddy || true
 	echo "Het bijwerken naar versie $finish_to is niet gelukt. Brievie is gestopt."
 	print_way_back
 	exit 3
@@ -2511,6 +2633,7 @@ cmd_update_finish() {
 	compose exec -T api python manage.py check_health --expect-version "$finish_to" ||
 		finish_failed "Brievie antwoordt niet goed na het bijwerken."
 	quietly all compose_raw up -d --wait --no-build caddy || finish_failed "Caddy is niet goed gestart."
+	start_tunnel
 	if ! compose exec -T api python manage.py record_update --from "$finish_from" --to "$finish_to" \
 		${finish_run:+--backup-run "$finish_run"} >/dev/null; then
 		echo "Bijgewerkt, maar het vastleggen lukte niet. ./brievie status laat deze update daarom niet zien."

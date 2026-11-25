@@ -10,10 +10,25 @@ from django.http import HttpRequest
 _HOME_SUFFIXES = (".local", ".lan", ".home.arpa")
 
 
-def public_base_url(request: HttpRequest) -> str:
-    """The server's address for links: the first `BRIEVIE_PUBLIC_URLS` entry, else the
-    address this request came in on. Without a trailing slash."""
+def web_urls() -> list[str]:
+    """The `BRIEVIE_PUBLIC_URLS` entries where the web interface answers: the public
+    name (tunnel, own reverse proxy) only while `BRIEVIE_PUBLIC_WEB` is on (S 7.6)."""
     urls: list[str] = settings.BRIEVIE_PUBLIC_URLS
+    if settings.BRIEVIE_PUBLIC_WEB:
+        return list(urls)
+    public: list[str] = settings.BRIEVIE_PUBLIC_CERTIFICATE_URLS
+    return [url for url in urls if url not in public]
+
+
+def public_base_url(request: HttpRequest) -> str:
+    """The server's address for links (invitations, password resets): the public address
+    while the web interface answers there, else the first address where it does, else
+    the address this request came in on. Without a trailing slash."""
+    urls = web_urls()
+    public: list[str] = settings.BRIEVIE_PUBLIC_CERTIFICATE_URLS
+    for url in urls:
+        if url in public:
+            return url.rstrip("/")
     if urls:
         return urls[0].rstrip("/")
     return request.build_absolute_uri("/").rstrip("/")
@@ -37,9 +52,10 @@ def _is_home_host(host: str) -> bool:
 
 
 def home_network_only(request: HttpRequest) -> bool:
-    """Whether the server can only be reached inside a home network: every public URL
-    (or, without one, this request's own host) is a home name or a private address."""
-    urls: list[str] = settings.BRIEVIE_PUBLIC_URLS
+    """Whether the web interface can only be reached inside a home network: every URL
+    where it answers (or, without one, this request's own host) is a home name or a
+    private address."""
+    urls = web_urls()
     hosts = [urlsplit(url).hostname or "" for url in urls]
     if not urls:
         hosts = [urlsplit(f"//{request.get_host()}").hostname or ""]

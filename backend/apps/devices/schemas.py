@@ -42,6 +42,10 @@ class PairOut(Schema):
     device_id: UUID
     token: str
     user: UserOut
+    # The server's addresses that carry a public certificate (a tunnel or an own reverse
+    # proxy): the app trusts them with the system's roots, every other one with the
+    # pinned CA only. Empty without a public name.
+    public_urls: list[str] = Field(default_factory=list)
 
 
 class DeviceOut(Schema):

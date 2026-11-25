@@ -553,3 +553,14 @@ export const backupStatusQuery = queryOptions({
   },
   refetchInterval: (query) => (query.state.data?.running ? 5000 : false),
 });
+
+/** "Van buiten bereikbaar": server admins only; never cached between visits. */
+export const externalAccessQuery = queryOptions({
+  queryKey: ["server", "external-access"],
+  queryFn: async () => {
+    const { data, error } = await api.GET("/api/v1/server/external-access");
+    if (error !== undefined || !data) throw new ApiFailure(error);
+    return data;
+  },
+  gcTime: 0,
+});

@@ -55,13 +55,18 @@ services:
       DATABASE_URL: postgres://brievie_app:${BRIEVIE_APP_PASSWORD}@postgres:5432/brievie
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in deploy/.env}
       DEBUG: ${DEBUG:-false}
-      # Both follow BRIEVIE_HOSTNAME; set them only to deviate (they must agree: the api
+      # The names; the api derives ALLOWED_HOSTS and BRIEVIE_PUBLIC_URLS from them
+      # (apps.access.addresses). Set those two only to deviate (they must agree: the api
       # refuses to start when a public URL's host is not in ALLOWED_HOSTS).
-      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-${BRIEVIE_HOSTNAME:?set BRIEVIE_HOSTNAME in deploy/.env}}
+      BRIEVIE_HOSTNAME: ${BRIEVIE_HOSTNAME:?set BRIEVIE_HOSTNAME in deploy/.env}
+      BRIEVIE_VPN_HOSTNAME: ${BRIEVIE_VPN_HOSTNAME:-}
+      BRIEVIE_PUBLIC_HOSTNAME: ${BRIEVIE_PUBLIC_HOSTNAME:-}
+      BRIEVIE_HTTPS_PORT: ${BRIEVIE_HTTPS_PORT:-443}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
       CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-}
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
       CSRF_COOKIE_SECURE: ${CSRF_COOKIE_SECURE:-true}
-      BRIEVIE_PUBLIC_URLS: ${BRIEVIE_PUBLIC_URLS:-https://${BRIEVIE_HOSTNAME}:${BRIEVIE_HTTPS_PORT:-443}}
+      BRIEVIE_PUBLIC_URLS: ${BRIEVIE_PUBLIC_URLS:-}
       BRIEVIE_HSTS_SECONDS: ${BRIEVIE_HSTS_SECONDS:-0}
       BRIEVIE_MAX_BODY_BYTES: ${BRIEVIE_MAX_BODY_BYTES:-2621440}
       BRIEVIE_MAX_UPLOAD_BYTES: ${BRIEVIE_MAX_UPLOAD_BYTES:-33554432}
@@ -69,6 +74,17 @@ services:
       BRIEVIE_MASTER_KEY: ${BRIEVIE_MASTER_KEY:?set BRIEVIE_MASTER_KEY in deploy/.env (sh deploy/init-env.sh adds it)}
       # Requests arrive through Caddy, which sets X-Forwarded-For.
       BRIEVIE_PROXY_COUNT: "1"
+      # Requests arrive through Brievie's Caddy, which writes the route and the client
+      # address itself (X-Brievie-Route, X-Brievie-Client-IP).
+      BRIEVIE_BEHIND_CADDY: "true"
+      # Off: through the public address (tunnel, own reverse proxy) only the app works.
+      BRIEVIE_PUBLIC_WEB: ${BRIEVIE_PUBLIC_WEB:-false}
+      BRIEVIE_TRUSTED_PROXIES: ${BRIEVIE_TRUSTED_PROXIES:-}
+      # A trusted range wider than a /24 or /64 only when this says true.
+      BRIEVIE_TRUSTED_PROXIES_WIDE: ${BRIEVIE_TRUSTED_PROXIES_WIDE:-false}
+      # Only whether a tunnel token is set, never the token (the settings page).
+      BRIEVIE_TUNNEL_TOKEN_SET: ${BRIEVIE_TUNNEL_TOKEN:+true}
+      BRIEVIE_TUNNEL_TOKEN_FILE_SET: ${BRIEVIE_TUNNEL_TOKEN_FILE:+true}
       # How long a web session may sit idle and how long it lives at most; the worker
       # applies the same limits when it cleans up. The idle limit may not exceed the other.
       BRIEVIE_SESSION_IDLE_DAYS: ${BRIEVIE_SESSION_IDLE_DAYS:-14}
@@ -79,12 +95,13 @@ services:
       BRIEVIE_REQUIRE_SECOND_FACTOR: ${BRIEVIE_REQUIRE_SECOND_FACTOR:-none}
       BRIEVIE_SECOND_FACTOR_GRACE_DAYS: ${BRIEVIE_SECOND_FACTOR_GRACE_DAYS:-7}
     healthcheck:
-      # The Host header must be an allowed host, so the first ALLOWED_HOSTS entry is used.
+      # The Host header must be an allowed host: the first ALLOWED_HOSTS entry, else the
+      # home name (from which the api derives ALLOWED_HOSTS).
       test:
         - CMD
         - python
         - -c
-        - "import os, urllib.request as u; h = os.environ['ALLOWED_HOSTS'].split(',')[0].strip().lstrip('.'); u.urlopen(u.Request('http://127.0.0.1:8000/api/v1/health', headers={'Host': 'localhost' if h in ('', '*') else h}), timeout=3)"
+        - "import os, urllib.request as u; h = (os.environ.get('ALLOWED_HOSTS') or os.environ['BRIEVIE_HOSTNAME']).split(',')[0].strip().lstrip('.'); u.urlopen(u.Request('http://127.0.0.1:8000/api/v1/health', headers={'Host': 'localhost' if h in ('', '*') else h}), timeout=3)"
       interval: 5s
       timeout: 5s
       retries: 20
@@ -235,9 +252,17 @@ services:
       BRIEVIE_HSTS_SECONDS: ${BRIEVIE_HSTS_SECONDS:-0}
       BRIEVIE_MAX_BODY_BYTES: ${BRIEVIE_MAX_BODY_BYTES:-2621440}
       BRIEVIE_MAX_UPLOAD_BYTES: ${BRIEVIE_MAX_UPLOAD_BYTES:-33554432}
+      # The other names it serves, your own reverse proxy's address(es) and the public
+      # name the tunnel listener passes on as Host ("Van buiten bereikbaar").
+      BRIEVIE_VPN_HOSTNAME: ${BRIEVIE_VPN_HOSTNAME:-}
+      BRIEVIE_PUBLIC_HOSTNAME: ${BRIEVIE_PUBLIC_HOSTNAME:-}
+      BRIEVIE_TUNNEL_HOST: ${BRIEVIE_PUBLIC_HOSTNAME:-public-hostname-not-set.invalid}
+      BRIEVIE_TRUSTED_PROXIES: ${BRIEVIE_TRUSTED_PROXIES:-127.0.0.1/32}
     ports:
       - "${BRIEVIE_HTTP_PORT:-80}:80"
       - "${BRIEVIE_HTTPS_PORT:-443}:443"
+    # Its own network with the optional tunnel; the rest of the stack on the default one.
+    networks: [default, tunnel]
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./caddy-publish-root.sh:/etc/caddy/publish-root.sh:ro
@@ -246,6 +271,36 @@ services:
       # A copy of the CA for the back-up (keeper and admin only; see caddy-publish-root.sh).
       - caddy-authority:/authority
       - caddy-config:/config
+
+  # Optional: Cloudflare Tunnel ("Van buiten bereikbaar", docs/SELFHOST.md). Started only
+  # with the profile `tunnel`: ./brievie does that when BRIEVIE_TUNNEL_TOKEN (or
+  # BRIEVIE_TUNNEL_TOKEN_FILE) is set; by hand, COMPOSE_PROFILES=tunnel. The token reaches
+  # this container only, never the api. It forwards to Caddy's unpublished listener
+  # http://caddy:8080. Cloudflare ends the encryption on its own servers: it can read
+  # everything that passes; a VPN cannot be read in between.
+  cloudflared:
+    image: cloudflare/cloudflared:2026.10.7@sha256:4955524aeaa379e154023d5a027c250f7b35041a2e7e950cf13f144bc9b9c5ba
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    depends_on:
+      caddy:
+        condition: service_started
+    # Its metrics only on its own loopback: nothing on the network reads them.
+    command: ["tunnel", "--no-autoupdate", "--metrics", "127.0.0.1:2000", "run"]
+    environment:
+      # The token as a variable, or (better: it then shows nowhere but in the file) a file
+      # on the host, owned by uid 65532 (cloudflared's user) with mode 0400.
+      TUNNEL_TOKEN: ${BRIEVIE_TUNNEL_TOKEN:-}
+      TUNNEL_TOKEN_FILE: ${BRIEVIE_TUNNEL_TOKEN_FILE:+/run/brievie-tunnel/token}
+    volumes:
+      - ${BRIEVIE_TUNNEL_TOKEN_FILE:-/dev/null}:/run/brievie-tunnel/token:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    # Only the network it shares with Caddy: it can reach caddy:8080 and the internet,
+    # never the api, the worker or PostgreSQL.
+    networks: [tunnel]
+    # No published port: it only dials out to Cloudflare.
 
 volumes:
   pgdata:
@@ -260,3 +315,7 @@ volumes:
   # it: ./brievie mounts it at /backup of the one-off admin container for one call
   # (BRIEVIE_BACKUP_DIR=update-backup), so only the update itself ever prunes it.
   update-backup:
+
+networks:
+  # Caddy and the optional cloudflared only (security review of PR #53).
+  tunnel: {}

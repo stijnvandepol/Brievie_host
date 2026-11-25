@@ -1,0 +1,18 @@
+# Trivy: what is accepted for the optional cloudflared image only (the CI scan of
+# cloudflare/cloudflared in job `image`; never the backend or proxy image). Each entry ends
+# on `expired_at`: from then the job fails again, which is the reminder to pin a newer
+# cloudflared (the newest release that is at least two weeks old; DECISIONS "Van buiten
+# bereikbaar"). The pinned 2026.10.7 is that release on 2026-11-24; the releases that may
+# carry these fixes (2026.11.x) are younger than two weeks.
+vulnerabilities:
+  - id: CVE-2026-78661
+    paths:
+      - usr/local/bin/cloudflared
+    statement: "cloudflared 2026.10.7 ships golang.org/x/net 0.61.0; fixed in 0.62.0 (x/net/html). The tunnel connector parses no HTML from visitors."
+    expired_at: 2026-12-15
+  - id: CVE-2026-85091
+    # An OS package has no file path in Trivy's report: scoped by its package URL instead.
+    purls:
+      - pkg:deb/debian/zlib1g
+    statement: "zlib1g of the cloudflared base image (Debian 13); fixed in deb13u1. cloudflared is a Go binary and does not use zlib's gz functions. Only in the cloudflared scan."
+    expired_at: 2026-12-15

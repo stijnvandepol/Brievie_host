@@ -2812,6 +2812,158 @@ first; all nine held.
   records. The accidental first `up` before an import is handled in SELFHOST (start over).
 
 
+## 2026-11-24: Van buiten bereikbaar (external access)
+
+Design: `docs/superpowers/specs/2026-11-21-externe-toegang-design.md`, plan
+`docs/superpowers/plans/2026-11-21-host-externe-toegang.md` (host tasks T1–T13; the iOS tasks
+I1–I3 are a separate branch of `Brievie_ios`). The owner follows the spec's recommendations
+B1–B4.
+
+- **Compose decides, the settings page shows.** Exposure is configured in `deploy/.env` (or the
+  variables of the compose-only file) and nowhere else. The web interface gets an admin-only page
+  "Van buiten bereikbaar" (session only, server admins only) that reads the configuration and
+  shows what works and what not; it has no switch and shows no token or secret, only that one is
+  set. This replaces SPEC 11's "gebruiker plakt zijn tunnel-token" and SPEC 13's wizard step
+  "toegang van buitenaf": the wizard links to the docs.
+- **Four ways, derived, no mode variable:** home network (always), VPN (recommended; docs only for
+  a VPN into the router, `BRIEVIE_VPN_HOSTNAME` for a VPN on the server), Cloudflare Tunnel
+  (`BRIEVIE_TUNNEL_TOKEN` or `BRIEVIE_TUNNEL_TOKEN_FILE`), own reverse proxy
+  (`BRIEVIE_TRUSTED_PROXIES`, in v1: B3). `BRIEVIE_PUBLIC_HOSTNAME` is the public name of either.
+- **New image `cloudflare/cloudflared`** (2026.10.7, pinned by digest, multi-architecture), only
+  under the compose profile `tunnel`, in both compose files. Why: the official, maintained
+  connector of Cloudflare Tunnel; there is no alternative for it (Tailscale and WireGuard need no
+  container in the stack). Read-only root, all capabilities dropped, `no-new-privileges`, its own
+  nonroot user, no published port. The token reaches only this container: as `TUNNEL_TOKEN` from
+  `BRIEVIE_TUNNEL_TOKEN`, or as `TUNNEL_TOKEN_FILE` (cloudflared 2025.4 or newer) from a host file
+  named by `BRIEVIE_TUNNEL_TOKEN_FILE`, bind-mounted read-only (the advised form on the compose-only
+  install: the value then shows in no `docker inspect` and no `compose config`). The api gets only
+  `BRIEVIE_TUNNEL_TOKEN_SET` / `BRIEVIE_TUNNEL_TOKEN_FILE_SET` (two variables: compose cannot
+  write an "or", and `truetrue` is no boolean).
+- **Tunnel hop over plain HTTP** to an internal Caddy listener `http://caddy:8080`, never
+  published (S 7.2). Caddy forces `X-Forwarded-Proto: https` and `Host` = the public name there
+  (after a 308 to https for a request Cloudflare got over http).
+- **Client address and route only from Caddy** (S 7.3): Caddy writes `X-Brievie-Route`,
+  `X-Brievie-Client-IP` and `X-Brievie-Peer-IP` itself on every request to the api (`header_up`
+  overwrites a client's value); Django reads them only with `BRIEVIE_BEHIND_CADDY` (compose sets
+  it on the api) and never reads `CF-Connecting-IP`. Caddy reads that only on `:8080`; on `:443` it
+  believes `X-Forwarded-For` only from `BRIEVIE_TRUSTED_PROXIES` (`trusted_proxies_strict`).
+- **HSTS is Caddy's alone, per route:** `BRIEVIE_HSTS_SECONDS` (0) on the private-CA names, one
+  year on the tunnel and from a trusted proxy.
+- **`BRIEVIE_PUBLIC_WEB` is off by default** (B1): through the public address only the app works
+  (device token and the unauthenticated pairing paths) until two-step sign-in exists. The 2FA work
+  (branch `feat/two-factor`) reads `X-Brievie-Route` through `apps.access.route` and the setting
+  `BRIEVIE_SECOND_FACTOR_AVAILABLE` (B2: a second step required on the public route).
+- **Docs address** (B4): `https://brievie.com/docs/installeren#van-buiten`.
+- **Privacy, said plainly:** with a tunnel Cloudflare can read everything that passes; a VPN is
+  encrypted end to end. In `.env.example`, `docs/PRIVACY.md`, `docs/SELFHOST.md` and on the page.
+- **Trivy on cloudflared:** the pinned 2026.10.7 (the newest release at least two weeks old on
+  2026-11-24) carries CVE-2026-78661 (`golang.org/x/net/html`, unused by the connector) and
+  CVE-2026-85091 (`zlib1g` of its Debian base, unused by the Go binary). Accepted in a list of
+  its own, `.trivyignore.cloudflared.yaml`, used only by the cloudflared scan, until
+  2026-12-15: then the job fails and the pin moves to a 2026.11.x release that is old enough.
+
+### Security review of PR #53 (2026-11-25)
+
+An independent review of external access. Every point was checked against the code first;
+all six held.
+
+- **Point 1 (high), fixed: the route defaulted to private on :443.** Caddy now decides by
+  name first and fails closed: a request whose Host is the public name is always public,
+  whatever its source; so is one that carries `Cf-Ray` or `Cf-Connecting-Ip` (a tunnel
+  pointed at `https://caddy:443`). Only the rest is private. The source address decides only
+  whose client address is believed (`trusted_proxies`) and the HSTS of a proxied request.
+  Ruling: the public name from an untrusted source is **served as public** (app only while
+  `BRIEVIE_PUBLIC_WEB` is off) with the direct peer as client address, not refused: refusing
+  would break the app at the moment a proxy's address changes, and app-only already closes the
+  web sign-in. Its HSTS stays the home value (Caddy's own certificate answers there). Caddy
+  names the exact way in `X-Brievie-Via`; the gate remembers, per kind, when it last saw the
+  public name from an untrusted source (and that source when it is a local address, never an
+  internet one) and Cloudflare on the https port (`apps.access.observed`, the database cache,
+  seven days, at most one write per kind per process per ten minutes). The page shows both as
+  problems and names the local address, so the admin finds the proxy's address at home
+  without opening the web through the proxy. CI (`stack`, `compose-stack`) sends both cases
+  and requires the page to show them.
+- **Point 2 (medium), fixed: cloudflared shared a network with the api** (and in the wrapper's
+  file with PostgreSQL). Both compose files now give cloudflared only a network `tunnel`,
+  shared with Caddy alone; a tunnel ingress set to `http://api:8000` reaches nothing. The api's
+  probe of `cloudflared:2000/ready` is gone with it: the page says whether a request came
+  through the tunnel listener in the last seven days (`tunnel_not_seen`, a warning), and the
+  api makes no outgoing call at all. Defence in depth, ruling: **the api believes
+  `X-Brievie-*` only from Caddy's own address** (`apps.common.net.from_caddy`: the socket
+  peer must be an address of `BRIEVIE_CADDY_HOST`, compose name `caddy`, resolved per process
+  for 30 seconds); a request that reaches the api any other way gets the public route and its
+  own socket peer as client address. Rejected: a shared header secret. It would need a new
+  secret in both installs (`init-env.sh`, `init-secrets`, a vault file and volume for Caddy,
+  the secrets checks), while the peer check needs nothing a user can get wrong; Docker does
+  not let a container without capabilities send from another container's address. Cost if
+  wrong: a container that can take Caddy's address could pose as Caddy (none of ours can).
+  CI (`routes-check.sh isolation`) proves the tunnel network reaches `caddy:8080` and not
+  `api:8000`, and that the worker, calling the api directly with forged headers, gets the
+  closed route.
+- **Point 3 (medium), fixed: two checks could never fire.** The page is opened at home, so
+  `public_host_not_forwarded` and `trusted_proxy_without_forwarding` now also read what the
+  gate saw on the public route (`host_not_forwarded`, `proxy_without_forwarding` in
+  `apps.access.observed`), next to the admin's own request when it came that way. Config-time
+  checks at start: `brievie.W005` (a public name without a tunnel or trusted proxy) and the same
+  sentence from `./brievie start`; the proxy-address rules of point 4. SELFHOST says what the
+  page can know and that its lines appear only after such a request came through.
+- **Point 4 (low), fixed: `BRIEVIE_TRUSTED_PROXIES` was not validated.** `brievie.E003` refuses
+  an entry that is no address or CIDR (also Caddy's `private_ranges`), `0.0.0.0/0` and `::/0`
+  always, and a range wider than a /24 (IPv4) or /64 (IPv6) unless
+  `BRIEVIE_TRUSTED_PROXIES_WIDE=true`. An error stops the api, and Caddy waits for a healthy
+  api: closed, not open. `brievie.W006` warns about a single address that looks like Docker's
+  gateway (`172.16.0.0/12`, ending in `.1`).
+- **Point 5 (low), fixed: addresses passed through the party that ends TLS.** On the public
+  route `getServerAddresses` and the three pairing operations answer 403 `pair_at_home`
+  ("Koppel de app thuis of via VPN"), also with `BRIEVIE_PUBLIC_WEB=true`. Ruling: **the first
+  pairing happens only over a CA-pinned connection** (home or VPN); a proof bound to the CA
+  cannot be checked by an app that reached the server through Cloudflare's certificate, so the
+  spec's second pairing pass with system trust (iOS I2) is dropped. Cost: pairing while away
+  needs the VPN. `public_urls` is the https entries of `urls` whose host is the configured public
+  name, nothing else. The QR payload gains `public_urls`, additively and only when a public name
+  exists (a home QR stays byte for byte the same; version stays 1). The spec says what changes for
+  the iOS plan.
+- **Point 6 (low), fixed:** cloudflared's metrics listen on `127.0.0.1:2000` inside its own
+  container (nothing on the network reads them; the api no longer probes it, point 2), and the
+  second accepted Trivy finding is scoped by its package URL (`pkg:deb/debian/zlib1g`): an OS
+  package has no file path in Trivy's report. A test requires a scope and an expiry on every
+  entry.
+- **Rejected:** none.
+- **With two-step sign-in merged (PR #52):** main's `brievie.W004` is the two-step rule, so the
+  warnings of this review are `brievie.W005` (a public name without a tunnel or trusted proxy)
+  and `brievie.W006` (a Docker gateway as trusted proxy). `BRIEVIE_SECOND_FACTOR_AVAILABLE` stays
+  false: two-step sign-in exists, but nothing requires it on the public route yet (B2), so the
+  red line for `BRIEVIE_PUBLIC_WEB=true` stays true.
+- **Point 2, follow-up (found in CI):** the api starts before Caddy, so its first lookup of
+  `caddy` found nothing and was kept for 30 seconds, during which Caddy's own requests counted
+  as public. An empty answer is no longer kept, and a peer that is not among the known addresses
+  triggers a new lookup at once (first with a pause of 2 seconds, which CI showed still let
+  Caddy's first request through as public), which also covers a recreated Caddy with a new
+  address. Only the stack's own containers reach the api, so the extra lookups are few.
+- **Re-review of PR #53, fixed:** (1) a proxy that is not trusted yet and rewrites Host to the
+  home name got the private route. A request on :443 that carries `X-Forwarded-For`,
+  `X-Forwarded-Host`, `X-Forwarded-Proto`, `X-Real-IP`, `Forwarded` or `Via` from an untrusted
+  source is now public and remembered as `unknown_proxy` (with its local address) for the page.
+  A proxy that sends none of these and rewrites Host stays invisible, so SELFHOST states two
+  security requirements: `BRIEVIE_TRUSTED_PROXIES` is set before the proxy is on the internet,
+  and the proxy passes the original Host; finding the proxy's address is done from the home
+  network only. (2) `createPairingCode` joins `CLOSED_ON_PUBLIC_ROUTE`: the QR (`urls`,
+  `ca_sha256`) does not pass the party that ends TLS either. (3) The page says to use the named
+  address only if it is your own proxy. (4) `brievie.W006` finds the gateways of the api's own
+  networks from `/proc/net/route` (any range, also custom networks such as `192.168.x.0/24`),
+  besides the default `172.16.0.0/12` guess.
+- **The hook for two-step sign-in's Task 13 (EA B2)** is in place and needs nothing new:
+  `apps.access.route.is_public_route(request)` (public for the tunnel, a trusted proxy, the
+  public name from any source, Cloudflare's headers on :443, and any request that did not come
+  from Caddy's own address; never trust a header for it), `settings.BRIEVIE_PUBLIC_WEB`, and
+  `settings.BRIEVIE_SECOND_FACTOR_AVAILABLE` (Task 13 sets it to `True`; `brievie.W002` and the
+  page's `public_web_without_second_factor` read it). `begin_sign_in` calls `is_public_route`
+  for a password sign-in. Its tests set `BRIEVIE_BEHIND_CADDY=True`, send `X-Brievie-Route`,
+  and since point 2 must also make the peer Caddy's: monkeypatch
+  `apps.common.net.caddy_addresses` to return the test client's `REMOTE_ADDR` (`127.0.0.1`),
+  as `tests/test_access_gate.py` does. With `BRIEVIE_PUBLIC_WEB=false` the gate already refuses
+  every sign-in operation on the public route.
+
 ## 2026-11-24: Two-step sign-in (TOTP)
 
 Plan `docs/superpowers/plans/2026-11-21-host-tweestapsverificatie.md`, design

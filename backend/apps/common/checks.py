@@ -4,7 +4,9 @@ They run with every management command, so the `api` container (which runs
 `prepare_setup_token` before gunicorn) refuses to start on a wrong configuration.
 """
 
+import ipaddress
 from collections.abc import Iterable
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from django.apps import AppConfig
@@ -13,6 +15,8 @@ from django.core.checks import CheckMessage, Error, Warning, register
 from django.db import DatabaseError
 from django.http.request import validate_host
 from django.utils.translation import gettext as _
+
+from apps.access.addresses import name_problems
 
 # Every secret in deploy/.env.example contains this: a server that still uses one is
 # open to anyone who has read this repository.
@@ -42,6 +46,185 @@ def check_public_urls(
                 )
             )
     return errors
+
+
+@register()
+def check_names(app_configs: Iterable[AppConfig] | None, **kwargs: object) -> list[CheckMessage]:
+    """The VPN and public names are bare host names and differ from each other and from
+    the home name (Caddy would refuse a site address twice; S 6)."""
+    return [
+        Error(
+            f"{variable} must be a bare host name (no https://, port or path) that differs "
+            "from BRIEVIE_HOSTNAME and the other name.",
+            hint=_(
+                "Zet in deploy/.env alleen de naam, zoals brievie.voorbeeld.nl, en gebruik "
+                "elke naam maar één keer."
+            ),
+            id="brievie.E002",
+        )
+        for variable in name_problems(
+            hostname=settings.BRIEVIE_HOSTNAME,
+            vpn_hostname=settings.BRIEVIE_VPN_HOSTNAME,
+            public_hostname=settings.BRIEVIE_PUBLIC_HOSTNAME,
+        )
+    ]
+
+
+# Cloudflare's free plan accepts request bodies up to this size (S 7.5).
+CLOUDFLARE_MAX_BODY_BYTES = 100_000_000
+
+
+@register()
+def check_external_access(
+    app_configs: Iterable[AppConfig] | None, **kwargs: object
+) -> list[CheckMessage]:
+    """Warnings, never a refusal: the home network must keep working whatever is set."""
+    messages: list[CheckMessage] = []
+    tunnel: bool = settings.BRIEVIE_TUNNEL_TOKEN_SET
+    public_way = tunnel or bool(settings.BRIEVIE_TRUSTED_PROXIES)
+    if public_way and settings.BRIEVIE_PUBLIC_WEB and not settings.BRIEVIE_SECOND_FACTOR_AVAILABLE:
+        messages.append(
+            Warning(
+                "BRIEVIE_PUBLIC_WEB is on: the web sign-in is reachable from the internet "
+                "without a second step.",
+                hint=_(
+                    "Inloggen op de webinterface kan van buiten zonder tweede stap. Zet "
+                    "BRIEVIE_PUBLIC_WEB uit, of gebruik een VPN."
+                ),
+                id="brievie.W002",
+            )
+        )
+    if settings.BRIEVIE_PUBLIC_HOSTNAME and not public_way:
+        messages.append(
+            Warning(
+                "BRIEVIE_PUBLIC_HOSTNAME is set, but neither a tunnel token nor "
+                "BRIEVIE_TRUSTED_PROXIES: requests for that name are served app-only, every "
+                "visitor counted by the address of whatever forwards them.",
+                hint=_(
+                    "Zet BRIEVIE_TRUSTED_PROXIES op het adres van je reverse proxy, of stel de "
+                    "tunnel in. Het adres van je proxy staat thuis op de pagina Van buiten "
+                    "bereikbaar."
+                ),
+                id="brievie.W005",
+            )
+        )
+    if tunnel and settings.BRIEVIE_MAX_UPLOAD_BYTES > CLOUDFLARE_MAX_BODY_BYTES:
+        messages.append(
+            Warning(
+                "BRIEVIE_MAX_UPLOAD_BYTES is larger than Cloudflare accepts (100 MB).",
+                hint=_(
+                    "Grote scans komen niet door de tunnel. Zet BRIEVIE_MAX_UPLOAD_BYTES op "
+                    "100000000 of minder."
+                ),
+                id="brievie.W003",
+            )
+        )
+    return messages
+
+
+# The widest range one reverse proxy needs; wider only with BRIEVIE_TRUSTED_PROXIES_WIDE.
+NARROWEST_PREFIX = {4: 24, 6: 64}
+# Docker's default bridge networks: their gateway is what every forwarded port looks like.
+_DOCKER_NETWORKS = ipaddress.ip_network("172.16.0.0/12")
+ROUTE_TABLE = Path("/proc/net/route")
+
+
+def _hex_address(value: str) -> ipaddress.IPv4Address:
+    # /proc/net/route writes addresses as little-endian hexadecimal.
+    return ipaddress.IPv4Address(int.from_bytes(bytes.fromhex(value), "little"))
+
+
+def docker_gateways(table: Path = ROUTE_TABLE) -> set[ipaddress.IPv4Address]:
+    """The gateways of this container's own networks, whatever their range: the default
+    gateway, and the first address of every network it is on (Docker's gateway). Empty
+    outside Linux or when the table cannot be read."""
+    try:
+        lines = table.read_text().splitlines()[1:]
+    except OSError:
+        return set()
+    found: set[ipaddress.IPv4Address] = set()
+    for line in lines:
+        fields = line.split()
+        if len(fields) < 8:
+            continue
+        try:
+            destination, gateway, mask = (
+                _hex_address(f) for f in (fields[1], fields[2], fields[7])
+            )
+        except ValueError:
+            continue
+        if int(gateway):
+            found.add(gateway)
+        elif int(destination):
+            network = ipaddress.IPv4Network(f"{destination}/{mask}", strict=False)
+            found.add(network.network_address + 1)
+    return found
+
+
+def trusted_proxy_problem(entry: str, *, allow_wide: bool) -> str:
+    """Why `entry` of BRIEVIE_TRUSTED_PROXIES is refused: "invalid", "everything", "wide",
+    or "" when it may stand."""
+    try:
+        network = ipaddress.ip_network(entry, strict=False)
+    except ValueError:
+        return "invalid"
+    if network.prefixlen == 0:
+        return "everything"
+    if network.prefixlen < NARROWEST_PREFIX[network.version] and not allow_wide:
+        return "wide"
+    return ""
+
+
+@register()
+def check_trusted_proxies(
+    app_configs: Iterable[AppConfig] | None, **kwargs: object
+) -> list[CheckMessage]:
+    """BRIEVIE_TRUSTED_PROXIES names your proxy, not a network: a wide range lets every device
+    in it pick its own client address (security review of PR #53, point 4). An error stops
+    the api, and Caddy (which waits for a healthy api) with it: closed, not open."""
+    messages: list[CheckMessage] = []
+    allow_wide: bool = settings.BRIEVIE_TRUSTED_PROXIES_WIDE
+    gateways = docker_gateways(ROUTE_TABLE) if settings.BRIEVIE_TRUSTED_PROXIES else set()
+    for entry in settings.BRIEVIE_TRUSTED_PROXIES:
+        problem = trusted_proxy_problem(entry, allow_wide=allow_wide)
+        if problem:
+            messages.append(
+                Error(
+                    f"BRIEVIE_TRUSTED_PROXIES has {entry!r} ({problem}): name your reverse "
+                    "proxy's own address, at most a /24 (IPv4) or /64 (IPv6).",
+                    hint=_(
+                        "Zet in BRIEVIE_TRUSTED_PROXIES alleen het adres van je reverse proxy, "
+                        "zoals 192.168.1.5/32. Een groter bereik kan alleen met "
+                        "BRIEVIE_TRUSTED_PROXIES_WIDE=true, alles nooit."
+                    ),
+                    id="brievie.E003",
+                )
+            )
+            continue
+        network = ipaddress.ip_network(entry, strict=False)
+        first = network.network_address
+        default_range_gateway = (
+            network.version == 4
+            and network.num_addresses == 1
+            and first in _DOCKER_NETWORKS
+            and int(first) % 256 == 1
+        )
+        # The gateway of one of this container's own networks, in any range (a custom
+        # network such as 192.168.x.0/24 or 10.x.0.0/16 too).
+        own_gateway = any(gateway in network for gateway in gateways)
+        if default_range_gateway or own_gateway:
+            messages.append(
+                Warning(
+                    f"BRIEVIE_TRUSTED_PROXIES has {entry}, which looks like Docker's own gateway.",
+                    hint=_(
+                        "Via Docker's eigen gateway lijkt elk apparaat in je netwerk hetzelfde "
+                        "adres te hebben, en kan het zijn eigen adres opgeven. Zet het adres van "
+                        "je reverse proxy zelf."
+                    ),
+                    id="brievie.W006",
+                )
+            )
+    return messages
 
 
 @register()
