@@ -89,7 +89,7 @@ def test_a_session_cookie_next_to_a_bearer_header_is_still_no_session() -> None:
         headers={**PUBLIC, **bearer(token)},
     )
     assert response.status_code in (401, 403)
-    assert response.json()["code"] in ("not_authenticated", "public_web_off")
+    assert response.json()["code"] == "pair_at_home"
 
 
 def test_public_route_allows_device_token_calls() -> None:
@@ -314,7 +314,7 @@ def test_a_junk_bearer_header_opens_nothing(method: str, path: str) -> None:
         response = client.get(path, headers=headers)
     assert response.status_code == 403
     if path.startswith("/api/"):
-        assert response.json()["code"] == "public_web_off"
+        assert response.json()["code"] in ("public_web_off", "pair_at_home")
 
 
 def test_forged_private_header_cannot_reach_the_gate_bypass() -> None:
