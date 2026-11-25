@@ -3,11 +3,18 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { Button } from "react-aria-components";
+import { ApiFailure, api } from "../api/client";
 import { trashQuery } from "../api/queries";
 import type { components } from "../api/schema";
 import { emptyTrash, purgeDocument, refreshAfterTrash, restoreDocument } from "../api/trash";
 import { ConfirmDialog } from "../components/confirm-dialog";
-import { LetterDateText, SenderText, TypeText } from "../components/document-table";
+import { isRetained } from "../components/document-details-form";
+import {
+  formatLetterDate,
+  LetterDateText,
+  SenderText,
+  TypeText,
+} from "../components/document-table";
 import { Icon } from "../components/icons";
 import { ErrorAlert, focusPageHeading, PageHeader, Shell, usePageTitle } from "../components/page";
 import { EmptyState, Loading, MessageBar } from "../components/ui";
@@ -66,6 +73,31 @@ function TrashPage() {
     focusPageHeading();
   }
 
+  // "Bewaren tot" stops a purge; an admin may take the date away here (security review of
+  // PR #54, point 3), so the purge (and an erasure request) is never blocked.
+  const unpin = useMutation({
+    mutationFn: async (documentId: string) => {
+      const { error } = await api.PATCH(
+        "/api/v1/workspaces/{workspace_id}/documents/{document_id}/details",
+        {
+          params: { path: { workspace_id: workspace.id, document_id: documentId } },
+          body: {
+            title: "",
+            document_type: "",
+            document_date: null,
+            expires_on: null,
+            clear_expires_on: false,
+            remind_days: 0,
+            retain_until: null,
+            clear_retain_until: true,
+          },
+        },
+      );
+      if (error !== undefined) throw new ApiFailure(error);
+    },
+    onSuccess: () => refreshAfterTrash(queryClient, workspace.id),
+  });
+
   const restore = useMutation({
     mutationFn: (documentId: string) => restoreDocument(workspace.id, documentId),
     onMutate: () => setRestoredOne(false),
@@ -116,7 +148,7 @@ function TrashPage() {
         </MessageBar>
       ) : null}
       {trash.isPending ? <Loading /> : null}
-      <ErrorAlert error={trash.error ?? restore.error} />
+      <ErrorAlert error={trash.error ?? restore.error ?? unpin.error} />
       {trash.data && count === 0 ? (
         <EmptyState icon="delete">{t`De prullenbak is leeg.`}</EmptyState>
       ) : null}
@@ -147,6 +179,11 @@ function TrashPage() {
                       <span className="muted small block">
                         <DaysLeft purgeAfter={letter.purge_after} />
                       </span>
+                      {isRetained(letter.retain_until) && letter.retain_until ? (
+                        <span className="muted small block">
+                          {t`Bewaren tot ${formatLetterDate(letter.retain_until)}: niet definitief te wissen.`}
+                        </span>
+                      ) : null}
                     </th>
                     <td>
                       <TypeText document={letter} />
@@ -166,6 +203,16 @@ function TrashPage() {
                             <Icon name="restore" />
                             {t`Terugzetten`}
                           </Button>
+                          {isAdmin && isRetained(letter.retain_until) ? (
+                            <Button
+                              className="button-text"
+                              aria-label={t`Bewaren tot weghalen: ${name}`}
+                              isDisabled={unpin.isPending}
+                              onPress={() => unpin.mutate(letter.id)}
+                            >
+                              {t`Bewaren tot weghalen`}
+                            </Button>
+                          ) : null}
                           {isAdmin ? (
                             <Button
                               className="button-text danger"

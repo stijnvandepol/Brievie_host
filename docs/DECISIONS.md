@@ -3268,3 +3268,15 @@ Every point was checked against the code first.
   are Django settings with these defaults, not yet passed by the compose files (as
   `BRIEVIE_MAX_PAGES`); the pictures stay next to the PDF (a reader of version 1 needs them),
   so the size stays about twice the pages and is now known in advance.
+- **Point 3 (medium), held, fixed: "Bewaren tot" had no audit trail and could block a purge.**
+  Every set, move or removal of the date writes the audit code `retention_changed` (the new date
+  or empty, the document by its id, never a title), at upload too; the history line stays, but
+  the audit row outlives a purge. A date lies at most 20 years ahead (422 beyond; the longest
+  Dutch term people meet, a medical file, is 20 years). Ruling, who may override: any editor of a
+  live document may set, move or take away the date (as before: nobody is trapped); in the
+  trash an **admin** may take it away (`updateDocumentDetails` with only `clear_retain_until`
+  answers for a document in the admin's trash; anything else there stays 404), and Prullenbak
+  shows "Bewaren tot … niet definitief te wissen" with "Bewaren tot weghalen" for an admin. So an
+  erasure request is never blocked by another member's date: the admin takes the date away and
+  purges. The person a document belongs to is an editor of it while it is live. The refusal's
+  sentence now says that an admin can take the date away.

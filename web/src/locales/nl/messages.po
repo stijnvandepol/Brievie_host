@@ -1110,6 +1110,11 @@ msgstr "Bewaren"
 msgid "Bewaren tot"
 msgstr "Bewaren tot"
 
+#. placeholder {0}: formatLetterDate(letter.retain_until)
+#: src/routes/trash.tsx
+msgid "Bewaren tot {0}: niet definitief te wissen."
+msgstr "Bewaren tot {0}: niet definitief te wissen."
+
 #. placeholder {0}: formatLetterDate(document.retain_until)
 #: src/routes/document.tsx
 msgid "Bewaren tot {0}. Weet je het zeker?"
@@ -1118,6 +1123,18 @@ msgstr "Bewaren tot {0}. Weet je het zeker?"
 #: src/components/document-details-form.tsx
 msgid "Bewaren tot aanpassen"
 msgstr "Bewaren tot aanpassen"
+
+#: src/components/audit-codes.ts
+msgid "Bewaren tot gewijzigd"
+msgstr "Bewaren tot gewijzigd"
+
+#: src/routes/trash.tsx
+msgid "Bewaren tot weghalen"
+msgstr "Bewaren tot weghalen"
+
+#: src/routes/trash.tsx
+msgid "Bewaren tot weghalen: {name}"
+msgstr "Bewaren tot weghalen: {name}"
 
 #: src/routes/search.tsx
 msgid "Bezig met zoeken…"

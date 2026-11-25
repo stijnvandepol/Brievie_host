@@ -693,6 +693,10 @@ msgid "Brief definitief verwijderd"
 msgstr "Letter deleted permanently"
 
 #: apps/audit/codes.py
+msgid "Bewaren tot gewijzigd"
+msgstr "Keep until changed"
+
+#: apps/audit/codes.py
 msgid "Gebruiker"
 msgstr "User"
 
@@ -1849,6 +1853,10 @@ msgid "Deze datum ligt te ver weg."
 msgstr "This date is too far away."
 
 #: apps/documents/own.py
+msgid "Bewaren tot ligt hoogstens 20 jaar vooruit."
+msgstr "Keep until lies at most 20 years ahead."
+
+#: apps/documents/own.py
 msgid "Geldig tot ligt na de datum van het document."
 msgstr "Valid until comes after the document's date."
 
@@ -1888,8 +1896,8 @@ msgstr "Keep until %(date)s. Are you sure?"
 
 #: apps/documents/retention.py
 #, python-format
-msgid "Dit document moet bewaard worden tot %(date)s. Haal de datum weg om het nu te wissen."
-msgstr "This document must be kept until %(date)s. Remove the date to delete it now."
+msgid "Dit document moet bewaard worden tot %(date)s. Een beheerder kan de datum weghalen om het nu te wissen."
+msgstr "This document must be kept until %(date)s. An admin can remove the date to delete it now."
 
 #: apps/documents/retention.py
 msgid "Deze brief moet nog bewaard worden. Je kunt hem nu niet wissen."

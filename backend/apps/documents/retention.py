@@ -47,7 +47,8 @@ def check_removal(
     return RemovalVerdict(
         allowed=False,
         warning=_(
-            "Dit document moet bewaard worden tot %(date)s. Haal de datum weg om het nu te wissen."
+            "Dit document moet bewaard worden tot %(date)s. Een beheerder kan de datum weghalen "
+            "om het nu te wissen."
         )
         % {"date": day},
     )

@@ -618,6 +618,7 @@ def update_document_details(
     document = own.update_details(
         membership=membership,
         user=current_user(request),
+        actor=actor_from_request(request),
         document_id=document_id,
         data=payload,
     )

@@ -21,7 +21,8 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from apps.accounts.models import User
-from apps.audit.services import AuditActor
+from apps.audit.codes import AuditCode, TargetKind
+from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
 from apps.documents import organise, reminders, visibility
@@ -39,6 +40,9 @@ DATE_FROM: Final = date(1900, 1, 1)
 # date lies at most a hundred years ahead.
 DATE_AHEAD: Final = timedelta(days=1)
 FAR_AHEAD: Final = timedelta(days=366 * 100)
+# "Bewaren tot" stops a permanent delete: at most this far ahead (security review of PR #54,
+# point 3; the longest Dutch term people meet, a medical file, is 20 years).
+RETAIN_AHEAD: Final = timedelta(days=366 * 20)
 DEFAULT_REMIND_DAYS: Final = 30
 
 
@@ -123,6 +127,8 @@ def check_dates(
     for value in (expires_on, retain_until):
         if value is not None and not (DATE_FROM <= value <= today + FAR_AHEAD):
             raise _invalid(_("Deze datum ligt te ver weg."))
+    if retain_until is not None and retain_until > today + RETAIN_AHEAD:
+        raise _invalid(_("Bewaren tot ligt hoogstens 20 jaar vooruit."))
     if expires_on is not None and document_date is not None and expires_on < document_date:
         raise _invalid(_("Geldig tot ligt na de datum van het document."))
 
@@ -143,11 +149,25 @@ def check_names(workspace: Workspace, data: OwnDocumentData) -> None:
             raise _invalid(_("Kies de labels uit de lijst."))
 
 
-def lock_creator(workspace: Workspace, user: User) -> None:
+def lock_creator(workspace: Workspace, user: User) -> str:
     """The first lock of adding an own document: the caller's membership, its role read
-    under the lock (a member demoted to read-only meanwhile may not add: 403)."""
-    if lock_own_role(workspace.id, user.id) == Membership.Role.VIEWER:
+    under the lock (a member demoted to read-only meanwhile may not add: 403). The role."""
+    role = lock_own_role(workspace.id, user.id)
+    if role == Membership.Role.VIEWER:
         raise ApiError(403, "forbidden", _("Je mag dit niet doen in deze werkruimte."))
+    return role
+
+
+def record_retention(document: Document, *, actor: AuditActor) -> None:
+    """The audit row of a changed "Bewaren tot": the date only, the document by its id (no
+    title or text), so the change outlives a purge of the document and its history."""
+    record(
+        AuditCode.RETENTION_CHANGED,
+        actor=actor,
+        target=AuditTarget(TargetKind.DOCUMENT, document.id),
+        workspace_id=document.workspace_id,
+        values={"until": document.retain_until.isoformat() if document.retain_until else ""},
+    )
 
 
 def document_fields(data: OwnDocumentData) -> dict[str, object]:
@@ -174,22 +194,37 @@ def create_document(
         organise.set_labels(document=document, label_ids=list(data.label_ids), actor=user)
         organise.set_addressees(document=document, person_ids=list(data.person_ids), actor=user)
         organise.record_document_added(document, actor=user)
+    if data.retain_until is not None:
+        record_retention(document, actor=actor)
     if data.private:
         visibility.make_private(document, actor=actor, origin=DocumentEvent.Origin.USER)
 
 
-def _locked_for_edit(membership: Membership, user: User, document_id: UUID) -> Document:
+def _locked_for_edit(
+    membership: Membership, user: User, document_id: UUID, *, only_clears_retention: bool
+) -> Document:
     """The document the member sees, locked for a change: the caller's membership first (its
     role read under the lock: a member demoted to read-only meanwhile gets 403), then the
     document. 404 `document_not_found` for one they may not see or that is in the trash;
-    403 `emergency_read_only` when they see it only through emergency access."""
-    lock_creator(membership.workspace, user)
+    403 `emergency_read_only` when they see it only through emergency access.
+
+    One exception (security review of PR #54, point 3): an admin may take "Bewaren tot"
+    away from a document in their trash (`only_clears_retention`), so purging it, and an
+    erasure request, is never blocked by another member's date."""
+    role = lock_creator(membership.workspace, user)
     document = (
         visibility.visible_documents(membership)
         .select_for_update(no_key=True, of=("self",))
         .filter(id=document_id)
         .first()
     )
+    if document is None and only_clears_retention and role == Membership.Role.ADMIN:
+        document = (
+            visibility.trashed_documents(membership)
+            .select_for_update(no_key=True, of=("self",))
+            .filter(id=document_id)
+            .first()
+        )
     if document is None:
         raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
     visibility.require_editable(document)
@@ -197,7 +232,12 @@ def _locked_for_edit(membership: Membership, user: User, document_id: UUID) -> D
 
 
 def update_details(
-    *, membership: Membership, user: User, document_id: UUID, data: DocumentDetailsIn
+    *,
+    membership: Membership,
+    user: User,
+    actor: AuditActor,
+    document_id: UUID,
+    data: DocumentDetailsIn,
 ) -> Document:
     """Change an own document's details, or a letter's "Bewaren tot" (archive spec S 10).
 
@@ -205,7 +245,12 @@ def update_details(
     date for a date; never the title), `retention_changed` for "Bewaren tot". Nothing that
     is sent unchanged writes a line."""
     with transaction.atomic():
-        document = _locked_for_edit(membership, user, document_id)
+        only_clears_retention = data.clear_retain_until and data == DocumentDetailsIn(
+            clear_retain_until=True
+        )
+        document = _locked_for_edit(
+            membership, user, document_id, only_clears_retention=only_clears_retention
+        )
         is_document = document.kind == Document.Kind.DOCUMENT
         if not is_document and (
             data.title
@@ -262,6 +307,7 @@ def update_details(
         for name in changed:
             if name == "retain_until":
                 organise.record_retention_changed(document, actor=user, until=document.retain_until)
+                record_retention(document, actor=actor)
                 continue
             value = getattr(document, name)
             organise.record_details_changed(

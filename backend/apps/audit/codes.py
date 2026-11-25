@@ -76,6 +76,8 @@ class AuditCode(models.TextChoices):
     DOCUMENT_TRASHED = "document_trashed", _("Brief naar de prullenbak")
     DOCUMENT_RESTORED = "document_restored", _("Brief teruggezet")
     DOCUMENT_PURGED = "document_purged", _("Brief definitief verwijderd")
+    # "Bewaren tot" set, moved or taken away: the date only, the document by its id.
+    RETENTION_CHANGED = "retention_changed", _("Bewaren tot gewijzigd")
 
 
 class ActorKind(models.TextChoices):
@@ -196,4 +198,6 @@ ALLOWED_VALUES: dict[AuditCode, frozenset[str]] = {
     AuditCode.DOCUMENT_RESTORED: _NONE,
     # reason: admin, emptied, expired.
     AuditCode.DOCUMENT_PURGED: frozenset({"reason"}),
+    # until: the new date (ISO), empty when it was taken away.
+    AuditCode.RETENTION_CHANGED: frozenset({"until"}),
 }
