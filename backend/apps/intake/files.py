@@ -2,7 +2,7 @@
 database. The kind comes from the content, never from the name or the browser's type;
 size first, then kind, then pages or pixels. Images are measured from their header only
 (no decoder in the request); a PDF is opened by PDFium in a child process with a time
-limit (`sandbox.run_isolated`)."""
+limit (`apps.intake.sandbox`)."""
 
 import hashlib
 import re
@@ -11,9 +11,9 @@ from enum import StrEnum
 
 from apps.common.privacy import mask_bsns
 from apps.documents.jpeg import jpeg_size
-from apps.intake import parsers
+from apps.intake import sandbox
 from apps.intake.parsers import MAX_IMAGE_PIXELS
-from apps.intake.sandbox import IsolationError, run_isolated
+from apps.intake.sandbox import IsolationError
 
 ORIGINAL_NAME_MAX = 200
 PAGE_COUNT_TIMEOUT = 5.0
@@ -90,7 +90,7 @@ def check_file(data: bytes, *, max_bytes: int, max_pages: int) -> CheckedFile:
 def pdf_page_count(data: bytes, *, timeout: float = PAGE_COUNT_TIMEOUT) -> int:
     """PDFium counts the pages in a child process, killed after `timeout` seconds."""
     try:
-        return run_isolated(parsers.pdf_page_count, data, timeout=timeout)
+        return sandbox.count_pdf_pages(data, timeout=timeout)
     except IsolationError as error:
         code = str(error)
         raise FileRefusedError(

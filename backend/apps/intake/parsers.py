@@ -1,11 +1,17 @@
-"""The parsers that run inside `sandbox.run_isolated`'s child: no Django imports here.
+"""The parsers that run in `apps.intake.sandbox`'s child, as a script:
+`python -I parsers.py <operation> <cpu seconds> <memory bytes> <answer bytes> [max pages]`
+with the file on stdin and one JSON object on stdout. No Django and nothing of this project
+is imported here: the child starts with no settings, keys or database.
 
 PDFium is used without its form environment (`init_forms` is never called), so a PDF's
 JavaScript never runs and nothing is fetched; Pillow decodes only PNG and JPEG and stops
 at `MAX_IMAGE_PIXELS`. Each raises `ParseError(code)` with a code a user may see.
 """
 
+import base64
 import io
+import json
+import sys
 import warnings
 from dataclasses import dataclass
 
@@ -99,3 +105,57 @@ def render_image(data: bytes) -> list[ParsedPage]:
         raise ParseError("image_too_large") from None
     except (OSError, ValueError, SyntaxError):
         raise ParseError("file_unreadable") from None
+
+
+def set_limits(*, cpu_seconds: int, memory_bytes: int, answer_bytes: int) -> None:
+    """The child's own limits, set before it reads the file: address space, CPU time and
+    the size of any file it writes (its answer). macOS refuses `RLIMIT_AS`; the parent's
+    timeout and answer limit still hold there."""
+    try:
+        import resource
+    except ImportError:  # pragma: no cover - not on Linux or macOS
+        return
+    for limit, value in (
+        (resource.RLIMIT_AS, memory_bytes),
+        (resource.RLIMIT_CPU, cpu_seconds),
+        (resource.RLIMIT_FSIZE, answer_bytes),
+    ):
+        try:
+            resource.setrlimit(limit, (value, value))
+        except (ValueError, OSError):
+            continue
+
+
+def _page(page: ParsedPage) -> dict[str, object]:
+    return {
+        "jpeg": base64.b64encode(page.jpeg).decode("ascii"),
+        "text": page.text,
+        "needs_ocr": page.needs_ocr,
+    }
+
+
+def _answer(operation: str, data: bytes, max_pages: int) -> dict[str, object]:
+    try:
+        if operation == "count":
+            return {"ok": True, "pages": pdf_page_count(data)}
+        if operation == "pdf":
+            return {"ok": True, "pages": [_page(page) for page in render_pdf(data, max_pages)]}
+        if operation == "image":
+            return {"ok": True, "pages": [_page(page) for page in render_image(data)]}
+    except ParseError as error:
+        return {"ok": False, "code": error.code}
+    raise ValueError("unknown operation")
+
+
+def main(arguments: list[str]) -> int:
+    operation, cpu, memory, answer_bytes, *rest = arguments
+    set_limits(cpu_seconds=int(cpu), memory_bytes=int(memory), answer_bytes=int(answer_bytes))
+    data = sys.stdin.buffer.read()
+    answer = _answer(operation, data, int(rest[0]) if rest else 1)
+    sys.stdout.write(json.dumps(answer))
+    sys.stdout.flush()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
