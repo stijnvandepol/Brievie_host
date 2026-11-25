@@ -15,7 +15,7 @@ CODEQL = (WORKFLOWS / "codeql.yml").read_text()
 FAILED = (WORKFLOWS / "audit-failed.yml").read_text()
 
 AUDITED = ["audit-python", "audit-node", "secrets", "workflows", "image", "dast"]
-CODE_ONLY = ["backend", "web", "stack", "restore", "update"]
+CODE_ONLY = ["backend", "web", "stack", "restore", "update", "ocr-gate"]
 
 
 def job(text: str, name: str) -> str:

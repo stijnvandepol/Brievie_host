@@ -301,7 +301,7 @@ jobs:
   # scanned variant); the job fails below the plan's threshold. Pillow is pinned here as a CI
   # tool only; the product pins it in backend/uv.lock.
   ocr-gate:
-    if: ${{ github.event_name != 'schedule' }}
+    if: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     container: python:3.13-slim@sha256:7249d5587b78209a006dc4a3b5340678f84ea729239193aa559962cd8c1fce50
