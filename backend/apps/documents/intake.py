@@ -1,6 +1,7 @@
 """Taking in an uploaded document: check it, store it encrypted, queue the pipeline."""
 
 import hashlib
+from collections.abc import Sequence
 from uuid import UUID
 
 from django.conf import settings
@@ -16,6 +17,7 @@ from apps.common.privacy import mask_bsns
 from apps.documents import own, reading, visibility
 from apps.documents.jpeg import jpeg_size
 from apps.documents.models import Document, DocumentPage
+from apps.documents.page_files import ORIGINAL_NAME
 from apps.documents.schemas import UploadMetadataIn
 from apps.documents.storage import DocumentStorage, default_storage
 from apps.pipeline.jobs import defer_processing
@@ -33,6 +35,15 @@ def page_path(workspace_id: UUID, document_id: UUID, index: int) -> str:
 def page_aad(workspace_id: UUID, document_id: UUID, index: int) -> bytes:
     """Binds an encrypted page file to its place: it does not open anywhere else."""
     return f"{workspace_id}/{document_id}/{index}".encode()
+
+
+def original_path(workspace_id: UUID, document_id: UUID) -> str:
+    return f"{workspace_id}/{document_id}/{ORIGINAL_NAME}"
+
+
+def original_aad(workspace_id: UUID, document_id: UUID) -> bytes:
+    """Binds the sealed original to its place; never equal to a page's AAD."""
+    return f"{workspace_id}/{document_id}/original".encode()
 
 
 def create_document_from_upload(
@@ -125,7 +136,13 @@ def _same_upload(existing: Document, hashes: list[str]) -> Document:
     once the pages and the right to read it are established."""
     with system_actor():
         stored = list(existing.pages.order_by("index").values_list("sha256", flat=True))
-    if stored != hashes or not visibility.can_read(existing.id):
+    return existing_or_conflict(existing, same=stored == hashes)
+
+
+def existing_or_conflict(existing: Document, *, same: bool) -> Document:
+    """The repeated upload's answer once the caller compared the content (`same`): the
+    existing document, or 409 (`document_conflict`, `document_trashed`)."""
+    if not same or not visibility.can_read(existing.id):
         raise ApiError(
             409,
             "document_conflict",
@@ -155,8 +172,28 @@ def _store_pages(
     written: list[str],
 ) -> None:
     """Write the encrypted pages and their rows; every written path goes into `written`."""
+    write_pages(
+        document,
+        [
+            (data, meta.sha256, mask_bsns(meta.text))
+            for data, meta in zip(pages, metadata.pages, strict=True)
+        ],
+        storage,
+        written,
+    )
+
+
+def write_pages(
+    document: Document,
+    pages: Sequence[tuple[bytes, str, str]],
+    storage: DocumentStorage,
+    written: list[str],
+) -> None:
+    """Seal and write `(jpeg, sha256, masked_text)` per page, with its `DocumentPage` row,
+    from index 1; every written path goes into `written` first (the caller removes them
+    when its transaction fails). The text must already be BSN-masked."""
     key = workspace_key(document.workspace_id)
-    for index, (data, meta) in enumerate(zip(pages, metadata.pages, strict=True), start=1):
+    for index, (data, sha256, masked_text) in enumerate(pages, start=1):
         path = page_path(document.workspace_id, document.id, index)
         aad = page_aad(document.workspace_id, document.id, index)
         # Recorded first: a write that fails halfway must be cleaned up too.
@@ -167,8 +204,8 @@ def _store_pages(
             document=document,
             index=index,
             size=len(data),
-            sha256=meta.sha256,
-            ocr_text=mask_bsns(meta.text),
+            sha256=sha256,
+            ocr_text=masked_text,
             storage_path=path,
         )
 

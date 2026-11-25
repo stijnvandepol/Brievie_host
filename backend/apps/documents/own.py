@@ -33,7 +33,7 @@ from apps.documents.models import (
     Document,
     DocumentEvent,
 )
-from apps.documents.schemas import DocumentDetailsIn, UploadMetadataIn
+from apps.documents.schemas import DocumentDetailsIn, FileMetadataIn, UploadMetadataIn
 from apps.labels.models import Label
 from apps.people.models import Person
 from apps.workspaces.locks import lock_own_role
@@ -71,7 +71,9 @@ def _invalid(message: str) -> ApiError:
     return ApiError(422, "validation_error", message)
 
 
-def validate_fields(metadata: UploadMetadataIn, *, today: date) -> OwnDocumentData | None:
+def validate_fields(
+    metadata: UploadMetadataIn | FileMetadataIn, *, today: date
+) -> OwnDocumentData | None:
     """The upload's archive fields checked without the database: None for a letter (an
     older app sends none of them), the data for an own document. 422 `validation_error`
     with a Dutch sentence that names no value."""

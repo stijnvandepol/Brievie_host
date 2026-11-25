@@ -8,6 +8,7 @@ recorded consent for AI). It is updated with every phase.
 | Data | Where | Protection |
 |---|---|---|
 | Page images of a document | Files in the `documents` volume | Encrypted (AES-256-GCM) with a key per workspace; that key is stored wrapped with `BRIEVIE_MASTER_KEY` |
+| The original of an uploaded file ("Brief toevoegen" in the web: PDF, JPEG or PNG) | Files in the `documents` volume, next to its pages | Encrypted like the pages, bound to its place. Kept so you can download it ("Origineel downloaden"); an upload therefore takes about twice the space of a scan. Its file name is kept without folders and with BSNs masked; it is never logged or sent to an AI service |
 | API key of an external AI service | Database | Encrypted with the workspace key |
 | Recognised text (OCR), proposals, summaries, tasks, persons (names and name variants), labels, rules, the history of changes | Database | **Not encrypted**: needed for review and (later) search. Protected by row-level security per workspace and by masking BSNs before anything is stored. Put the database volume on an encrypted disk |
 | The decisions about AI (see "Consent for AI") | Database | Not encrypted; row-level security per workspace. No API key, no full address, no document text |
@@ -50,6 +51,15 @@ lists; it answers with short numbers that the server translates back, and only t
 workspace's own labels and persons can be chosen. At most 50 persons and 100 labels
 (by name) are offered per letter. Rules are never sent. With `off`,
 names are still recognised in the letter and rules still run, on the server itself.
+
+
+Reading an uploaded file happens on the server itself: its pages are drawn with PDFium
+and its text read with Tesseract from those pictures, both inside the Brievie image. A
+PDF's own hidden text is not used: only what the page shows is read, and a letter from a
+PDF is never confirmed by the autopilot on its own. Nothing of the file leaves the server
+for that; only the text, BSN-masked, goes to an AI service, and only
+with recorded consent, exactly as for a scan from the app. A photo's EXIF data (such as
+the place it was taken) is not kept in the pages; the original keeps it, as you sent it.
 
 ## Consent for AI
 
@@ -233,7 +243,8 @@ an AI service, but nothing is removed yet: it can be put back for 30 days. Only 
 may see the letter see it in the trash.
 
 - **The purge.** After 30 days, or earlier when an admin chooses "Definitief verwijderen" or
-  "Prullenbak legen", Brievie removes the letter for good: its sealed page files, its rows
+  "Prullenbak legen", Brievie removes the letter for good: its sealed page files and, for an
+  uploaded file, its sealed original, its rows
   (text, summary, proposals, links to persons and labels, suggestions, history, shares,
   rule runs) and its tasks, also the done ones. Persons and labels stay. What remains is
   the log: who moved it, put it back or purged it, with the letter's id only, never its

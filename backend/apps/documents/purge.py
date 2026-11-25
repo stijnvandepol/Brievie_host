@@ -34,7 +34,7 @@ from apps.backup.errors import BackupError
 from apps.backup.locks import backup_lock
 from apps.documents import trash
 from apps.documents.models import Document, DocumentPage
-from apps.documents.page_files import PageFileRefused, remove_document_files
+from apps.documents.page_files import ORIGINAL_NAME, PageFileRefused, remove_document_files
 from apps.tasks.models import Task
 from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
@@ -83,21 +83,27 @@ def _marked_ids(workspace_id: UUID, limit: int, skip: Collection[UUID]) -> list[
 
 
 def _page_paths(workspace_id: UUID, document_id: UUID) -> list[str] | None:
-    """Step 1: the letter's stored page paths, while it is still marked; None when it
-    is gone or no longer marked."""
+    """Step 1: the letter's stored page paths and its original's, while it is still
+    marked; None when it is gone or no longer marked."""
     with workspace_context(workspace_id, actor=SYSTEM):
-        marked = (
+        kind = (
             Document.objects.select_for_update(no_key=True)
             .filter(id=document_id, workspace_id=workspace_id, purge_started_at__isnull=False)
-            .exists()
+            .values_list("original_kind", flat=True)
+            .first()
         )
-        if not marked:
+        if kind is None:
             return None
-        return list(
+        paths = list(
             DocumentPage.objects.filter(document_id=document_id)
             .order_by("index")
             .values_list("storage_path", flat=True)
         )
+        if kind != Document.OriginalKind.NONE:
+            # An uploaded file's sealed original goes with its pages (security review of
+            # PR #58): erased means erased, also from the next back-up.
+            paths.append(f"{workspace_id}/{document_id}/{ORIGINAL_NAME}")
+        return paths
 
 
 def _delete_rows(workspace_id: UUID, document_id: UUID) -> bool:

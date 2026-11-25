@@ -20,15 +20,24 @@ logger = logging.getLogger(__name__)
 
 QUEUE = "pipeline"
 MAX_ATTEMPTS = 3
-# Longer than a job with all its retries can take (about 8 minutes).
-ABANDONED_AFTER = timedelta(minutes=15)
+# Longer than a job with all its retries can take: an uploaded file takes up to
+# BRIEVIE_FILE_PROCESSING_SECONDS (10 minutes) for rendering and OCR before the AI call.
+ABANDONED_AFTER = timedelta(minutes=45)
 
 Runner = Callable[[UUID, UUID], None]
 
 
-def run_job(
-    workspace_id: UUID, document_id: UUID, *, attempts: int, run: Runner = run_pipeline
-) -> None:
+def process(workspace_id: UUID, document_id: UUID) -> None:
+    """An uploaded file gets its pages first (`apps.intake.prepare`, a no-op for an app
+    scan and for a retry after the pages exist), then the pipeline."""
+    # Late: apps.intake imports apps.documents.intake, which queues through this module.
+    from apps.intake.prepare import prepare_document
+
+    prepare_document(workspace_id, document_id)
+    run_pipeline(workspace_id, document_id)
+
+
+def run_job(workspace_id: UUID, document_id: UUID, *, attempts: int, run: Runner = process) -> None:
     """Run the pipeline and make sure the document never stays in `processing`.
 
     `attempts` is the number of earlier attempts. A retryable error is raised again

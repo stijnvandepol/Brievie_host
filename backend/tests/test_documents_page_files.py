@@ -79,6 +79,11 @@ def page_paths(
         "{ws}/{doc}/1.page\n",
         "./{ws}/{doc}/1.page",
         "{ws}//{doc}/1.page",
+        # The original: only its exact name (security review of PR #58).
+        "{ws}/{doc}/original.pdf",
+        "{ws}/{doc}/Original",
+        "{ws}/{other}/original",
+        "{ws}/{doc}/original/x",
     ],
 )
 def test_judge_page_path_refuses(stored: str) -> None:
@@ -98,6 +103,12 @@ def test_judge_page_path_accepts_own_page() -> None:
 
     assert judged == PurePosixPath(f"{WS}/{DOC}/3.page")
     assert judged.name == "3.page"
+
+
+def test_judge_page_path_accepts_own_original() -> None:
+    judged = judge_page_path(f"{WS}/{DOC}/original", workspace_id=WS, document_id=DOC)
+
+    assert judged == PurePosixPath(f"{WS}/{DOC}/original")
 
 
 @pytest.mark.parametrize(
@@ -342,3 +353,58 @@ def test_remove_leaves_other_letters_alone(tmp_path: Path) -> None:
 
     for folder in (sibling, other_ws):
         assert sorted(os.listdir(folder)) == [".tmp-x", "1.page"]
+
+
+def original_path(workspace_id: uuid.UUID = WS, document_id: uuid.UUID = DOC) -> str:
+    return f"{workspace_id}/{document_id}/original"
+
+
+def test_remove_deletes_the_original_with_the_pages(tmp_path: Path) -> None:
+    # Security review of PR #58: an uploaded file's sealed original goes with its pages.
+    folder = letter_dir(tmp_path)
+    for name in ("1.page", "original", ".tmp-abc"):
+        (folder / name).write_bytes(b"sealed")
+
+    assert remove_document_files(WS, DOC, [*page_paths(1), original_path()]) == 3
+
+    assert not folder.exists()
+
+
+def test_remove_of_an_original_alone_empties_the_folder(tmp_path: Path) -> None:
+    # A file whose pages were never made (processing failed): only the original is there.
+    folder = letter_dir(tmp_path)
+    (folder / "original").write_bytes(b"sealed")
+
+    assert remove_document_files(WS, DOC, [original_path()]) == 1
+
+    assert not folder.exists()
+
+
+def test_remove_never_unlinks_a_symlinked_original(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.write_bytes(b"someone else's")
+    folder = letter_dir(tmp_path)
+    (folder / "original").symlink_to(target)
+
+    assert remove_document_files(WS, DOC, [original_path()]) == 0
+
+    assert target.read_bytes() == b"someone else's"
+    assert (folder / "original").is_symlink()
+
+
+def test_remove_refuses_an_original_without_the_storage_root(tmp_path: Path) -> None:
+    root = storage_root(tmp_path)
+    assert not root.exists()
+
+    with pytest.raises(PageFileRefused):
+        remove_document_files(WS, DOC, [original_path()])
+
+
+def test_remove_refuses_the_whole_call_on_another_letters_original(tmp_path: Path) -> None:
+    folder = letter_dir(tmp_path)
+    (folder / "original").write_bytes(b"sealed")
+
+    with pytest.raises(PageFileRefused):
+        remove_document_files(WS, DOC, [original_path(), original_path(WS, OTHER)])
+
+    assert (folder / "original").read_bytes() == b"sealed"

@@ -272,3 +272,7 @@ the request that creates the workspace and keep that name.
 | eigen reverse proxy | own reverse proxy | |
 | tunnel (Cloudflare Tunnel) | tunnel (Cloudflare Tunnel) | |
 | Thuisnetwerk | Home network | |
+| Brief toevoegen | Add letter | The web's upload of PDFs and photos (intake). |
+| Document toevoegen | Add document | An own document by upload, with its archive fields. |
+| Origineel (downloaden) | Original (download original) | The file as it was uploaded, kept next to the pages. |
+| Scanmap | Scan folder | Phase 2 of the intake; `scan` in code (not "inbox"). |

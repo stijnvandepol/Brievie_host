@@ -160,6 +160,35 @@ def test_when_every_rail_holds_the_letter_is_confirmed_by_the_ai(ws_a: Workspace
     assert (event.origin, event.actor) == ("ai", None)
 
 
+@pytest.mark.parametrize(
+    ("kind", "confirmed"),
+    [
+        (Document.OriginalKind.PDF, False),
+        (Document.OriginalKind.JPEG, True),
+        (Document.OriginalKind.NONE, True),
+    ],
+)
+def test_an_uploaded_pdf_never_confirms_on_its_own(
+    ws_a: Workspace, kind: str, confirmed: bool
+) -> None:
+    """Security review of PR #58, point 4: a PDF can hold text the reader does not see
+    (an amount, a deadline, an instruction to the AI). An uploaded PDF stays for a
+    person to confirm; a photo has no such layer."""
+    switch_on(ws_a)
+    document = new_document(ws_a)
+    with workspace_context(ws_a.id, actor=SYSTEM):
+        Document.objects.filter(id=document.id).update(
+            source=Document.Source.UPLOAD if kind else Document.Source.SCAN,
+            original_kind=kind,
+        )
+
+    run(ws_a, document, Answering())
+
+    done = stored(ws_a, document)
+    assert done.confirmed_by_ai is confirmed
+    assert done.status == (Document.Status.DONE if confirmed else Document.Status.NEEDS_REVIEW)
+
+
 def test_the_rules_of_trigger_confirmed_run(ws_a: Workspace) -> None:
     switch_on(ws_a)
     with workspace_context(ws_a.id, actor=SYSTEM):

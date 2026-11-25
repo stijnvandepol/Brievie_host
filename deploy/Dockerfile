@@ -12,7 +12,8 @@ RUN pnpm build
 
 # Build stage: uv and the resolved virtualenv. Only /opt/venv is copied on, so the
 # running image has neither the uv binary nor its caches.
-FROM python:3.13-slim AS builder
+# Pinned by index digest (amd64 and arm64); Dependabot's docker updates raise it.
+FROM python:3.13-slim@sha256:7249d5587b78209a006dc4a3b5340678f84ea729239193aa559962cd8c1fce50 AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:0.13.8 /uv /usr/local/bin/uv
 
@@ -24,7 +25,7 @@ WORKDIR /app
 COPY backend/pyproject.toml backend/uv.lock backend/.python-version ./
 RUN uv sync --frozen --no-dev --no-install-project
 
-FROM python:3.13-slim
+FROM python:3.13-slim@sha256:7249d5587b78209a006dc4a3b5340678f84ea729239193aa559962cd8c1fce50
 
 # BRIEVIE_IN_CONTAINER: the destructive commands (restore, sweep --delete, back-up
 # init) refuse to run anywhere else (safepaths.require_container).
@@ -48,6 +49,8 @@ COPY --from=restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35
 # image (the app's packages are in /opt/venv from the builder stage, whose python is
 # first on PATH, hence the full path), and it ships vendored packages of its own
 # (urllib3, msgpack, setuptools) with their own vulnerabilities.
+# Tesseract with its Dutch data reads uploaded files without a text layer (intake,
+# DECISIONS 2026-11-25); Debian's package, so the update above patches it too.
 ADD --checksum=sha256:0144068502a1eddd2a0280ede10ef607d1ec592ce819940991203941564e8e76 --chmod=0644 \
     https://www.postgresql.org/media/keys/ACCC4CF8.asc /usr/share/keyrings/pgdg.asc
 RUN . /etc/os-release \
@@ -55,7 +58,7 @@ RUN . /etc/os-release \
         > /etc/apt/sources.list.d/pgdg.list \
     && apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --no-install-recommends \
-    && apt-get install -y --no-install-recommends postgresql-client-18 \
+    && apt-get install -y --no-install-recommends postgresql-client-18 tesseract-ocr tesseract-ocr-nld \
     && rm -rf /var/lib/apt/lists/* \
     && /usr/local/bin/python3 -m pip uninstall --yes pip
 

@@ -15,6 +15,7 @@ import { DocumentTable, typeLabel } from "../components/document-table";
 import { apiStatus, STATUS_FILTERS, type StatusFilter } from "../components/letter-status";
 import { ErrorAlert, PageHeader, Shell, usePageTitle } from "../components/page";
 import { Loading } from "../components/ui";
+import { UploadDocuments } from "../components/upload-documents";
 import { workspaceRoute } from "./workspace";
 
 type FilterOption = { value: string; text: string };
@@ -139,6 +140,7 @@ function ArchivePage() {
         description={t`Elke gecontroleerde brief en elk eigen document, om terug te vinden. Wat nog op jou wacht, staat in de Inbox.`}
       />
       <AiStatusLine workspaceId={workspace.id} />
+      <UploadDocuments workspaceId={workspace.id} role={workspace.role} />
       {facets.data ? (
         <p className="letter-counts" aria-live="polite">
           {plural(total, { one: "# document", other: "# documenten" })}

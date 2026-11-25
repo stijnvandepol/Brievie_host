@@ -1100,3 +1100,31 @@ describe("document: letter status", () => {
     expect(screen.queryByRole("button", { name: /Ik doe dit/ })).not.toBeInTheDocument();
   });
 });
+
+describe("the letter's origin (intake)", () => {
+  it("offers the original of an uploaded file", async () => {
+    server.use(
+      ...loggedInHandlers(),
+      ...documentHandlers({
+        ...documentDetail,
+        source: "upload",
+        has_original: true,
+        original_name: "aanslag.pdf",
+      }),
+    );
+    renderApp(path);
+    expect(await screen.findByText("Binnengekomen via upload")).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: "Origineel downloaden" });
+    expect(link.getAttribute("href")).toBe(
+      `/api/v1/workspaces/${workspace.id}/documents/${documentSummary.id}/original`,
+    );
+  });
+
+  it("has no download for an app scan", async () => {
+    server.use(...loggedInHandlers(), ...documentHandlers());
+    renderApp(path);
+    await screen.findByRole("img", { name: "Pagina 1 van 3" });
+    expect(screen.queryByRole("link", { name: "Origineel downloaden" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Binnengekomen via upload")).not.toBeInTheDocument();
+  });
+});

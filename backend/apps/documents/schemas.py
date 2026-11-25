@@ -57,6 +57,23 @@ class UploadMetadataIn(InputSchema):
     private: bool | None = None
 
 
+class FileMetadataIn(InputSchema):
+    """The `metadata` field of `uploadDocumentFile`, as a JSON string: `UploadMetadataIn`
+    without pages (the server makes them from the file). The archive fields mean the same."""
+
+    client_id: UUID
+    kind: str = "letter"
+    title: str = Field(default="", max_length=400)
+    document_type: str = ""
+    document_date: date | None = None
+    person_ids: list[UUID] = Field(default=[], max_length=10)
+    label_ids: list[UUID] = Field(default=[], max_length=30)
+    expires_on: date | None = None
+    remind_days: int = 30
+    retain_until: date | None = None
+    private: bool | None = None
+
+
 class DocumentSummaryOut(Schema):
     id: UUID
     client_id: UUID
@@ -76,6 +93,12 @@ class DocumentSummaryOut(Schema):
     open_suggestion_count: int = 0
     # The AI confirmed this letter itself (the autopilot); `reopenDocument` takes it back.
     confirmed_by_ai: bool = False
+    # How it arrived: "scan" (the app), "upload" (a browser) or "watch_folder" (the scan
+    # folder). An uploaded file keeps its original ("Origineel downloaden",
+    # `downloadDocumentOriginal`) and the base name it had.
+    source: str = "scan"
+    has_original: bool = False
+    original_name: str = ""
     # Of `label_ids` and `addressee_ids`: the ones Brievie put there itself (the autopilot).
     auto_label_ids: list[UUID] = Field(default_factory=list)
     auto_addressee_ids: list[UUID] = Field(default_factory=list)

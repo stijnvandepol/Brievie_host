@@ -435,3 +435,12 @@ def test_ci_checks_the_server_version_through_caddy() -> None:
     stack = CI.split("\n  stack:\n", 1)[1].split("\n  dast:\n", 1)[0]
     assert '["server_version"]' in stack
     assert "backend/pyproject.toml" in stack
+
+
+def test_the_image_reads_dutch_with_tesseract() -> None:
+    # Intake (DECISIONS 2026-11-25): the runtime stage, the one both installs run, has
+    # Tesseract and its Dutch language data, in the layer that installs the PG client.
+    runtime = DOCKERFILE.rsplit("\nFROM ", 1)[1]
+    install = next(line for line in runtime.splitlines() if "apt-get install" in line)
+    assert "tesseract-ocr " in install
+    assert "tesseract-ocr-nld" in install

@@ -91,6 +91,9 @@ jobs:
       # tests/test_brievie_wrapper.py runs ShellCheck on ./brievie and fails in CI without it.
       - name: ShellCheck is available
         run: command -v shellcheck || { sudo apt-get update && sudo apt-get install -y shellcheck; }
+      # The intake's real-OCR test (marker `tesseract`) reads Dutch as the image does.
+      - name: Tesseract with its Dutch data
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-nld
       # The real-restic tests run here and fail without restic (like ShellCheck): the
       # image's own binary, from the official image pinned by version and digest, exactly
       # as deploy/Dockerfile copies it (a text test compares the two).
@@ -295,6 +298,32 @@ jobs:
       # Kept in step with the job `audit-node` (a text test compares the two).
       - name: Audit dependencies
         run: pnpm audit --prod --audit-level high
+
+  # The intake gate (docs/superpowers/plans/2026-11-20-host-inname-zonder-iphone.md, Task 0):
+  # Debian's Tesseract, as the image installs it, reads synthetic Dutch letters (a clean and a
+  # scanned variant); the job fails below the plan's threshold. Pillow is pinned by hash in
+  # tools/ocr-gate/requirements.txt as a CI tool only; the product pins it in backend/uv.lock.
+  ocr-gate:
+    if: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container: python:3.13-slim@sha256:7249d5587b78209a006dc4a3b5340678f84ea729239193aa559962cd8c1fce50
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Tesseract and Pillow
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-nld fonts-dejavu-core
+          tesseract --version
+          pip install --no-cache-dir --require-hashes --only-binary=:all: -r tools/ocr-gate/requirements.txt
+      - name: Unit tests
+        run: python -m unittest tools/ocr-gate/test_measure.py
+      - name: Measure
+        run: |
+          python tools/ocr-gate/make_letters.py "$RUNNER_TEMP/letters"
+          python tools/ocr-gate/measure.py "$RUNNER_TEMP/letters" tools/ocr-gate/letters.json
 
   # The dependency audits alone, for the scheduled and manual runs: the lock files stay
   # the same, the advisories do not. On pull requests and pushes the same commands run
@@ -527,6 +556,11 @@ jobs:
           grep -qi '<!doctype html>' "$RUNNER_TEMP/index.html"
       - name: The worker is running
         run: test "$($COMPOSE ps --status running --services | grep -c '^worker$')" = 1
+      # Intake (DECISIONS 2026-11-25): the image reads Dutch and renders PDFs.
+      - name: The worker has Tesseract with Dutch, PDFium and Pillow
+        run: |
+          $COMPOSE exec -T worker tesseract --list-langs | grep -qx nld
+          $COMPOSE exec -T worker python -c "import pypdfium2, PIL"
       - name: The keeper is running
         run: test "$($COMPOSE ps --status running --services | grep -c '^keeper$')" = 1
       - name: The installation code is printed once

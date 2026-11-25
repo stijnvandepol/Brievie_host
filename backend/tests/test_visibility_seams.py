@@ -85,6 +85,8 @@ RAW_SQL: Final = {
     # The back-up's counts and the check of a restored copy, by the back-up role.
     "backup/manifest.py",
     "backup/verify.py",
+    # The orphan sweep's known originals (ids only, no content), by the back-up role.
+    "backup/sweep.py",
     # One count (no content) as the superuser, to see whether a restore would replace data.
     "installer/restore_runtime.py",
 }

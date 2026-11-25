@@ -412,6 +412,7 @@ def _confirm_guarded(
 
     `blocked_by_duplicate` (an open duplicate pair, or the duplicate check failed) stops it
     before anything is decided: a confirmed duplicate would make its tasks a second time.
+    So does a document made from an uploaded PDF (or one from the scan folder).
 
     An addressee proposal still open after the organise step also stops it when
     `organised`: whose letter it is, is then still a question. An open label proposal
@@ -423,6 +424,11 @@ def _confirm_guarded(
     """
     if blocked_by_duplicate:
         logger.info("Document %s not confirmed by AI: it may be a duplicate", document.id)
+        return False
+    if document.original_kind == Document.OriginalKind.PDF:
+        # A PDF can hold text the reader does not see; its pages are read by OCR, but a
+        # person confirms what came from a file (security review of PR #58).
+        logger.info("Document %s not confirmed by AI: it came from a PDF file", document.id)
         return False
     try:
         with transaction.atomic():

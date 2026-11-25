@@ -20,7 +20,8 @@ from apps.documents.models import DocumentPage
 from apps.workspaces.context import SYSTEM, workspace_context
 from apps.workspaces.models import Workspace
 from tests.backup_support import Recorder
-from tests.documents_support import admin_of, jpeg, upload
+from tests.documents_support import admin_of, jpeg, upload, upload_file
+from tests.intake_fixtures import make_pdf
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -78,6 +79,33 @@ def test_sweep_keeps_the_pages_of_every_workspace(
 
     assert found(backup_conninfo) == {relative(extra_page), relative(extra_temp)}
     assert page_file(ws_b).exists()
+
+
+def upload_original(workspace: Workspace) -> Path:
+    """A browser's file upload: its sealed original, `<ws>/<doc>/original`."""
+    client = Client()
+    client.force_login(admin_of(workspace))
+    response = upload_file(client, workspace.id, make_pdf([f"Brief {workspace.id}"]))
+    assert response.status_code == 201, response.content
+    return storage_root() / str(workspace.id) / str(response.json()["id"]) / "original"
+
+
+def test_sweep_keeps_a_live_original_and_removes_an_orphan_one(
+    ws_a: Workspace, backup_conninfo: str
+) -> None:
+    # Security review of PR #58: an original left behind (a request that failed after
+    # writing it, or an old purge) is user data the sweep must find; a live one stays.
+    upload_letter(ws_a)
+    live = upload_original(ws_a)
+    age(live, timedelta(days=2))
+    orphan = stray(ws_a, "original")
+
+    assert found(backup_conninfo) == {relative(orphan)}
+
+    done = sweep(delete=True)
+    assert done.deleted == 1
+    assert not orphan.exists()
+    assert live.exists()
 
 
 def test_young_orphans_are_left_alone(ws_a: Workspace, backup_conninfo: str) -> None:
@@ -150,6 +178,8 @@ def test_only_the_layout_is_a_candidate(ws_a: Workspace, backup_conninfo: str) -
         document_dir / "notes.txt",
         document_dir / "1.page.bak",
         document_dir / "x.page",
+        document_dir / "original.pdf",
+        document_dir / "Original",
         root / "1.page",
         root / str(ws_a.id) / "1.page",
         root / "not-a-uuid" / str(uuid.uuid4()) / "1.page",
@@ -227,6 +257,21 @@ def test_an_empty_database_with_page_files_is_refused(
     ws_a: Workspace, backup_conninfo: str
 ) -> None:
     extra = stray(ws_a)
+
+    with pytest.raises(BackupError) as raised:
+        found(backup_conninfo)
+    assert raised.value.code == "internal_error"
+    with pytest.raises(BackupError):
+        sweep(delete=True)
+    assert extra.exists()
+
+
+def test_an_empty_database_with_only_originals_is_refused(
+    ws_a: Workspace, backup_conninfo: str
+) -> None:
+    # A store of uploaded files only, read against an empty or wrong database, must not
+    # list every original as an orphan (security review of PR #58).
+    extra = stray(ws_a, "original")
 
     with pytest.raises(BackupError) as raised:
         found(backup_conninfo)

@@ -1020,6 +1020,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/documents/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Document File
+         * @description Web session only: a bearer token answers 401 not_authenticated. Add a PDF, JPEG or PNG as one document (multipart/form-data): `metadata` is a JSON string (schema `FileMetadataIn`: `client_id` and, for an own document, the archive fields of `UploadMetadataIn`), `file` the file. The kind is read from the content. The server keeps the original sealed and makes the pages in the background; the document answers `processing` with no pages yet. The same `client_id` and file again answers 200 with the existing document, another file 409 `document_conflict`. 422 `file_type_not_supported`, `file_unreadable`, `too_many_pages`, `file_encrypted`, `image_too_large`; 413 `file_too_large`; 429 `too_many_uploads` (lower limits of its own, and those shared with `createDocument`); 507 `storage_full` when the server's disk is nearly full. A read-only member gets 403.
+         */
+        post: operations["uploadDocumentFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/documents/read": {
         parameters: {
             query?: never;
@@ -1282,6 +1302,26 @@ export interface paths {
          * @description Members (not read-only). Say no to a proposed new person: nobody is made and the name is never proposed on this letter again.
          */
         post: operations["dismissNewPersonSuggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/original": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Document Original
+         * @description Web session only: a bearer token answers 401 not_authenticated. The file a browser uploaded, as it came (PDF, JPEG or PNG), for a member who sees the document, named with the extension of its kind. 404 `original_not_found` for an app scan, `original_unreadable` when the stored file is gone or damaged.
+         */
+        get: operations["downloadDocumentOriginal"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3201,6 +3241,11 @@ export interface components {
             /** Failure Code */
             failure_code: string;
             /**
+             * Has Original
+             * @default false
+             */
+            has_original: boolean;
+            /**
              * Id
              * Format: uuid
              */
@@ -3244,6 +3289,11 @@ export interface components {
              * @default 0
              */
             open_task_count: number;
+            /**
+             * Original Name
+             * @default
+             */
+            original_name: string;
             /**
              * Overdue
              * @default false
@@ -3291,6 +3341,11 @@ export interface components {
             sender: string;
             /** Shared User Ids */
             shared_user_ids?: string[];
+            /**
+             * Source
+             * @default scan
+             */
+            source: string;
             /** Status */
             status: string;
             /** Suggestions */
@@ -3355,6 +3410,11 @@ export interface components {
              */
             expires_on?: string | null;
             /**
+             * Has Original
+             * @default false
+             */
+            has_original: boolean;
+            /**
              * Id
              * Format: uuid
              */
@@ -3396,6 +3456,11 @@ export interface components {
              * @default 0
              */
             open_task_count: number;
+            /**
+             * Original Name
+             * @default
+             */
+            original_name: string;
             /**
              * Overdue
              * @default false
@@ -3439,6 +3504,11 @@ export interface components {
             sender: string;
             /** Snippet */
             snippet?: components["schemas"]["SnippetPartOut"][];
+            /**
+             * Source
+             * @default scan
+             */
+            source: string;
             /** Status */
             status: string;
             /**
@@ -3575,6 +3645,11 @@ export interface components {
              */
             expires_on?: string | null;
             /**
+             * Has Original
+             * @default false
+             */
+            has_original: boolean;
+            /**
              * Id
              * Format: uuid
              */
@@ -3617,6 +3692,11 @@ export interface components {
              */
             open_task_count: number;
             /**
+             * Original Name
+             * @default
+             */
+            original_name: string;
+            /**
              * Overdue
              * @default false
              */
@@ -3657,6 +3737,11 @@ export interface components {
             retain_until?: string | null;
             /** Sender */
             sender: string;
+            /**
+             * Source
+             * @default scan
+             */
+            source: string;
             /** Status */
             status: string;
             /**
@@ -3876,6 +3961,71 @@ export interface components {
             count: number;
             /** Value */
             value: string;
+        };
+        /**
+         * FileMetadataIn
+         * @description The `metadata` field of `uploadDocumentFile`, as a JSON string: `UploadMetadataIn`
+         *     without pages (the server makes them from the file). The archive fields mean the same.
+         */
+        FileMetadataIn: {
+            /**
+             * Client Id
+             * Format: uuid
+             */
+            client_id: string;
+            /**
+             * Document Date
+             * Format: date
+             * @default null
+             */
+            document_date: string | null;
+            /**
+             * Document Type
+             * @default
+             */
+            document_type: string;
+            /**
+             * Expires On
+             * Format: date
+             * @default null
+             */
+            expires_on: string | null;
+            /**
+             * Kind
+             * @default letter
+             */
+            kind: string;
+            /**
+             * Label Ids
+             * @default []
+             */
+            label_ids: string[];
+            /**
+             * Person Ids
+             * @default []
+             */
+            person_ids: string[];
+            /**
+             * Private
+             * @default null
+             */
+            private: boolean | null;
+            /**
+             * Remind Days
+             * @default 30
+             */
+            remind_days: number;
+            /**
+             * Retain Until
+             * Format: date
+             * @default null
+             */
+            retain_until: string | null;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
         };
         /** FolderIn */
         FolderIn: {
@@ -4191,6 +4341,11 @@ export interface components {
              */
             expires_on?: string | null;
             /**
+             * Has Original
+             * @default false
+             */
+            has_original: boolean;
+            /**
              * Id
              * Format: uuid
              */
@@ -4233,6 +4388,11 @@ export interface components {
              */
             open_task_count: number;
             /**
+             * Original Name
+             * @default
+             */
+            original_name: string;
+            /**
              * Overdue
              * @default false
              */
@@ -4273,6 +4433,11 @@ export interface components {
             retain_until?: string | null;
             /** Sender */
             sender: string;
+            /**
+             * Source
+             * @default scan
+             */
+            source: string;
             /** Status */
             status: string;
             /**
@@ -5688,6 +5853,11 @@ export interface components {
              */
             expires_on?: string | null;
             /**
+             * Has Original
+             * @default false
+             */
+            has_original: boolean;
+            /**
              * Id
              * Format: uuid
              */
@@ -5729,6 +5899,11 @@ export interface components {
              * @default 0
              */
             open_task_count: number;
+            /**
+             * Original Name
+             * @default
+             */
+            original_name: string;
             /**
              * Overdue
              * @default false
@@ -5775,6 +5950,11 @@ export interface components {
             retain_until?: string | null;
             /** Sender */
             sender: string;
+            /**
+             * Source
+             * @default scan
+             */
+            source: string;
             /** Status */
             status: string;
             /**
@@ -9598,6 +9778,148 @@ export interface operations {
             };
         };
     };
+    uploadDocumentFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * File
+                     * Format: binary
+                     */
+                    file: string;
+                    /** Metadata */
+                    metadata: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Length Required */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Insufficient Storage */
+            507: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     markDocumentsRead: {
         parameters: {
             query?: never;
@@ -10616,6 +10938,47 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    downloadDocumentOriginal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The original file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

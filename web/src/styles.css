@@ -3558,3 +3558,26 @@ tr.unread th,
   color: var(--neutral-fg1);
   font-family: var(--font-mono);
 }
+
+/* "Brief toevoegen" (intake): the archive is the drop zone. */
+.upload-zone {
+  border: 1px dashed transparent;
+  border-radius: 8px;
+  padding: 8px 0;
+}
+.upload-zone-active {
+  border-color: currentColor;
+  padding: 8px;
+}
+.upload-commands {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.upload-list {
+  list-style: none;
+  padding: 0;
+}
+.upload-name {
+  font-weight: 600;
+}
