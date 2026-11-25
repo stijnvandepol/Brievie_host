@@ -3623,3 +3623,11 @@ that is not either.
   letters (an eighth of them in the measured world) instead of all.
 - Results and visibility are unchanged: the list still starts from `visible_documents`, the
   year only narrows it, and the measured result hashes are the same.
+- **Measured** (CI `visibility-perf`, 100,000 letters, median per state and actor): before
+  98-179 ms on a good run and 263-282 ms (FAIL) on a bad one; after 28-39 ms, the plan a
+  bitmap scan of `documents_document_year`, the same result hashes. No other gated list
+  got slower. No temporary EXPLAIN was needed: the workflow's artifact holds one for every
+  measured query.
+- **Observation, not changed:** `list_archive_kind_type` (90-200 ms) walks the workspace the
+  same way; `kind` and `document_type` are leakproof, so an index on them would help it
+  when it nears the gate.
