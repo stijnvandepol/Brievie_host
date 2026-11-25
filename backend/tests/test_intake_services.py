@@ -46,7 +46,8 @@ def test_the_original_is_sealed_to_its_place(ws_a: Workspace) -> None:
     document, created = _store(ws_a, data)
     assert created
     sealed = default_storage().read(original_path(ws_a.id, document.id))
-    key = workspace_key(ws_a.id)
+    with workspace_context(ws_a.id, actor=SYSTEM):
+        key = workspace_key(ws_a.id)
     assert crypto.open_sealed(key, sealed, aad=original_aad(ws_a.id, document.id)) == data
     with pytest.raises(crypto.DecryptionError):
         crypto.open_sealed(key, sealed, aad=page_aad(ws_a.id, document.id, 1))

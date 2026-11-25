@@ -69,6 +69,8 @@ def get_health(request: HttpRequest) -> HealthOut:
 
 api.add_router("", accounts_router)
 api.add_router("", workspaces_router)
+# Before documents: its `/documents/{document_id}` would answer 405 to `/documents/files`.
+api.add_router("", intake_router)
 api.add_router("", documents_router)
 api.add_router("", duplicates_router)
 api.add_router("", people_router)
@@ -80,4 +82,3 @@ api.add_router("", devices_router)
 api.add_router("", audit_router)
 api.add_router("", backup_router)
 api.add_router("", access_router)
-api.add_router("", intake_router)

@@ -164,10 +164,10 @@ def test_abandoned_processing_document_is_queued_again(ws_a: Workspace, ws_b: Wo
     # Final review: marking a document failed can itself fail (database restart); then no
     # job is left and nothing would ever move the document again.
     abandoned = make_document(ws_a)
-    age(ws_a, abandoned, minutes=20)
+    age(ws_a, abandoned, minutes=50)
     fresh = make_document(ws_b)
     finished = make_document(ws_b, status="done")
-    age(ws_b, finished, minutes=20)
+    age(ws_b, finished, minutes=50)
 
     assert jobs.requeue_abandoned_documents() == 1
 
@@ -180,7 +180,7 @@ def test_abandoned_processing_document_is_queued_again(ws_a: Workspace, ws_b: Wo
 def test_document_with_a_waiting_job_is_not_queued_twice(ws_a: Workspace) -> None:
     document = make_document(ws_a)
     jobs.defer_processing(workspace_id=ws_a.id, document_id=document.id)
-    age(ws_a, document, minutes=20)
+    age(ws_a, document, minutes=50)
 
     assert jobs.requeue_abandoned_documents() == 0
     assert ProcrastinateJob.objects.count() == 1
