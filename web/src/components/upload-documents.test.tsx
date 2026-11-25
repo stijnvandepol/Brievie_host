@@ -120,22 +120,24 @@ describe("Brief toevoegen", () => {
   });
 
   it("has at most three requests in flight", async () => {
-    // The server holds every request until the test lets it go: no timers, so a busy
-    // runner cannot change what is in flight when it is counted.
+    // The client call itself is held until the test lets it go: no timers and no network,
+    // so neither a busy runner nor how undici streams a jsdom File changes what is counted.
     let inFlight = 0;
     let most = 0;
     const held: (() => void)[] = [];
-    server.use(
-      ...loggedInHandlers(),
-      ...documentHandlers(),
-      http.post(uploadUrl, async () => {
-        inFlight += 1;
-        most = Math.max(most, inFlight);
-        await new Promise<void>((resolve) => held.push(resolve));
-        inFlight -= 1;
-        return HttpResponse.json(documentSummary, { status: 201 });
-      }),
-    );
+    const original = api.POST.bind(api);
+    vi.spyOn(api, "POST").mockImplementation(((path: string, init: unknown) => {
+      if (!path.endsWith("/documents/files")) return original(path as never, init as never);
+      inFlight += 1;
+      most = Math.max(most, inFlight);
+      return new Promise((resolve) => {
+        held.push(() => {
+          inFlight -= 1;
+          resolve({ data: documentSummary, response: new Response() } as never);
+        });
+      });
+    }) as typeof api.POST);
+    server.use(...loggedInHandlers(), ...documentHandlers());
     renderApp(archive);
     await choose([1, 2, 3, 4, 5].map((n) => pdf(`brief-${n}.pdf`)));
     await waitFor(() => expect(held).toHaveLength(3));
@@ -145,9 +147,8 @@ describe("Brief toevoegen", () => {
       await waitFor(() => expect(held.length).toBeGreaterThan(0));
       held.shift()?.();
     }
-    await waitFor(
-      () => expect(screen.getAllByText("Toegevoegd. Brievie leest de brief nu.")).toHaveLength(5),
-      { timeout: 5000 },
+    await waitFor(() =>
+      expect(screen.getAllByText("Toegevoegd. Brievie leest de brief nu.")).toHaveLength(5),
     );
     expect(most).toBe(3);
   });
