@@ -2896,6 +2896,10 @@ msgid "De status moet open, done of all zijn."
 msgstr "The status must be open, done or all."
 
 #: apps/tasks/services.py
+msgid "Er staat al een nieuwere herinnering voor dit document open."
+msgstr "A newer reminder for this document is open already."
+
+#: apps/tasks/services.py
 msgid "Die datum ligt voor de datum van de brief."
 msgstr "That date is before the date of the letter."
 

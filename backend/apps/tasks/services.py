@@ -127,6 +127,20 @@ def reopen_task(*, workspace: Workspace, user: User, task_id: UUID) -> Task:
     """Make the task open again; asking again changes nothing and writes no second event."""
     with transaction.atomic():
         task = get_for_update(workspace, task_id)
+        if (
+            task.status != Task.Status.OPEN
+            and task.type == Task.Type.EXPIRY
+            and Task.objects.filter(
+                document_id=task.document_id, type=Task.Type.EXPIRY, status=Task.Status.OPEN
+            ).exists()
+        ):
+            # A document has one open end-date reminder (`tasks_task_one_reminder`; security
+            # review of PR #54, point 4): a newer one is open, this one stays ticked off.
+            raise ApiError(
+                409,
+                "reminder_already_open",
+                _("Er staat al een nieuwere herinnering voor dit document open."),
+            )
         if task.status != Task.Status.OPEN:
             task.status = Task.Status.OPEN
             task.completed_at = None

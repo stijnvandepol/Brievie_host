@@ -3280,3 +3280,5 @@ Every point was checked against the code first.
   erasure request is never blocked by another member's date: the admin takes the date away and
   purges. The person a document belongs to is an editor of it while it is live. The refusal's
   sentence now says that an admin can take the date away.
+- **Point 4 (low), held, fixed:** reopening a ticked-off reminder while a newer one is open hit
+  the unique index (500). `reopenTask` now answers 409 `reminder_already_open` and changes nothing.
