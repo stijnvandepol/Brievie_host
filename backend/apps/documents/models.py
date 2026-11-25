@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 from decimal import Decimal
-from typing import ClassVar
+from typing import ClassVar, Final
 
 from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
@@ -66,6 +66,20 @@ class Folder(WorkspaceModel):
             using=using,
             update_fields=update_fields,
         )
+
+
+# What the letter policy reads of a letter (`id` aside), and the trash
+# (`visibility_sql.document_condition`, `LIVE`): an index that holds them answers a policy
+# check without the letter's row. A new column in the policy belongs here too.
+POLICY_COLUMNS: Final = ("visibility", "addressee_ids", "scanned_by", "status", "trashed_at")
+# The cached facts the Inbox and letter-status counts read (`inbox_counts`, `status_counts`).
+COUNTED_COLUMNS: Final = (
+    "confirmed_by_ai",
+    "has_automatic_link",
+    "task_open_count",
+    "task_wait_until",
+    "task_overdue_from",
+)
 
 
 class Document(WorkspaceModel):
@@ -205,12 +219,18 @@ class Document(WorkspaceModel):
             # (measured, DECISIONS 2026-11-20).
             models.Index(
                 fields=["workspace", "-created_at"],
+                # The policy's columns: its count reads the index alone (2026-11-25).
+                include=["id", *POLICY_COLUMNS],
                 condition=models.Q(status="done", addressee_ids=[]),
                 name="documents_document_unassigned",
             ),
             # Letters to check ("Controleren"): "Mijn taken" counts them as waiting.
+            # By arrival, with the policy's columns (2026-11-25): its count, and the part
+            # that arrived before a day ("Blijft liggen"), read the index alone; the
+            # lingering list walks it oldest first.
             models.Index(
-                fields=["workspace"],
+                fields=["workspace", "created_at", "id"],
+                include=POLICY_COLUMNS,
                 condition=models.Q(status__in=["needs_review", "failed"]),
                 name="documents_document_review",
             ),
@@ -237,6 +257,16 @@ class Document(WorkspaceModel):
                 fields=["workspace", "-created_at"],
                 condition=models.Q(status="done", task_open_count__gt=0),
                 name="documents_document_open_tasks",
+            ),
+            # The letter policy's own columns, the trash and the facts the counts read: a
+            # pass over every visible letter (the counts of persons, labels, the Inbox and
+            # the letter status) and the policy check of a task's letter read this narrow
+            # index alone (index-only), not the wide rows with their text (DECISIONS
+            # 2026-11-25, list headroom).
+            models.Index(
+                fields=["workspace", "id"],
+                include=[*POLICY_COLUMNS, *COUNTED_COLUMNS],
+                name="documents_document_policy",
             ),
             GinIndex(fields=["search_vector"], name="documents_document_search"),
             # For the typo fallback of search (pg_trgm word similarity).
