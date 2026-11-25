@@ -4,6 +4,7 @@ and a fake OCR engine."""
 
 import hashlib
 import io
+import secrets
 import struct
 import zlib
 
@@ -138,10 +139,10 @@ def _rc4(key: bytes, data: bytes) -> bytes:
     return bytes(out)
 
 
-def make_encrypted_pdf(password: str = "geheim") -> bytes:  # noqa: S107 - a test file
+def make_encrypted_pdf() -> bytes:
     """A one-page PDF under the standard security handler, revision 3 (RC4, 128 bits),
-    with this user password: PDFium asks for it before anything else."""
-    padded = (password.encode() + _PAD)[:32]
+    with a random user password: PDFium asks for it before anything else."""
+    padded = (secrets.token_hex(8).encode() + _PAD)[:32]
     permissions = -4
     # Algorithm 3: the owner entry (the owner password is the same).
     owner_key = hashlib.md5(padded).digest()  # noqa: S324 - the PDF format's own hash
