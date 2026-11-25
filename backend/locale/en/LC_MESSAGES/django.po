@@ -1715,6 +1715,22 @@ msgid "Watch-map"
 msgstr "Watch folder"
 
 #: apps/documents/models.py
+msgid "Geen"
+msgstr "None"
+
+#: apps/documents/models.py
+msgid "PDF"
+msgstr "PDF"
+
+#: apps/documents/models.py
+msgid "JPEG"
+msgstr "JPEG"
+
+#: apps/documents/models.py
+msgid "PNG"
+msgstr "PNG"
+
+#: apps/documents/models.py
 msgid "Factuur"
 msgstr "Invoice"
 
