@@ -41,6 +41,10 @@ function checkText(code: string): string {
       return t`BRIEVIE_MAX_UPLOAD_BYTES is groter dan Cloudflare doorlaat (100 MB). Grote scans komen dan niet door de tunnel.`;
     case "public_web_without_second_factor":
       return t`Inloggen op de webinterface kan van buiten zonder tweede stap. Zet BRIEVIE_PUBLIC_WEB uit, of gebruik een VPN.`;
+    case "public_web_second_factor_required":
+      return t`Inloggen op de webinterface via het publieke adres vraagt altijd om tweestapsverificatie. Wie dat niet aan heeft, logt alleen thuis of via VPN in.`;
+    case "public_web_admin_without_second_factor":
+      return t`Niet elke serverbeheerder heeft tweestapsverificatie aan. Wie het niet aan heeft, kan van buiten niet inloggen op de webinterface. Zet het thuis aan onder Account, Beveiliging.`;
     case "public_web_off":
       return t`Via het publieke adres werkt alleen de app. De webinterface gebruik je thuis of via VPN.`;
     case "request_not_secure":
@@ -122,7 +126,9 @@ function Page({ found }: { found: ExternalAccess }) {
   const urls = (kind: string) => found.addresses.filter((a) => a.kind === kind).map((a) => a.url);
   const tunnelOn = found.tunnel.token_set;
   const proxyOn = found.trusted_proxies.length > 0;
-  const redLine = found.checks.some((c) => c.code === "public_web_without_second_factor");
+  // Red only while the web is on outside and its second step is somehow not required.
+  const redLine =
+    found.public_web && found.checks.some((c) => c.code === "public_web_without_second_factor");
   return (
     <>
       {redLine ? (

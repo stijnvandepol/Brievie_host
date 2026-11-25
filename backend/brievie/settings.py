@@ -307,11 +307,12 @@ BRIEVIE_TUNNEL_TOKEN_SET: bool = bool(
     env.str("BRIEVIE_TUNNEL_TOKEN_SET", default="").strip()
     or env.str("BRIEVIE_TUNNEL_TOKEN_FILE_SET", default="").strip()
 )
-# True once the public route requires a second step for a password sign-in (B2). Two-step
-# sign-in exists (PR #52), but nothing asks for it on the public route yet, so a password
-# alone can still sign in there with BRIEVIE_PUBLIC_WEB on. The external-access warnings
-# (brievie.W002, the settings page) read it.
-BRIEVIE_SECOND_FACTOR_AVAILABLE = False
+# Whether the public route requires a second step for a password sign-in (B2). It does
+# (apps.accounts.signin, two-step plan Task 13): with BRIEVIE_PUBLIC_WEB on, an account
+# without a factor cannot sign in there, and a web session counts there only when it
+# passed the second step. Not a setting: the rule itself cannot be switched off. The
+# external-access warnings (brievie.W002, the settings page) read it.
+BRIEVIE_SECOND_FACTOR_AVAILABLE = True
 
 # Login lockout (django-axes): 5 failures for the same email + address lock that
 # pair for 15 minutes. apps.accounts.services.login checks the lock itself and

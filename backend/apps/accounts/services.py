@@ -6,13 +6,14 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NoReturn
 from uuid import UUID
 
 from axes.handlers.proxy import AxesProxyHandler
 from django.conf import settings
 from django.contrib.auth import authenticate, update_session_auth_hash
 from django.contrib.auth import logout as django_logout
+from django.contrib.auth.hashers import make_password
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.signals import user_login_failed
 from django.contrib.sessions.models import Session
@@ -23,8 +24,10 @@ from django.http import HttpRequest
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
+from apps.access.route import is_public_route
 from apps.accounts import signin_limits
 from apps.accounts.models import SetupToken, User, UserSession, normalise_email
+from apps.accounts.second_factor_policy import has_factor
 from apps.accounts.sessions import (
     end_current_session,
     end_sessions,
@@ -178,6 +181,9 @@ def setup_server(
     until the request transaction ends, so a concurrent call waits and then sees
     the new user.
     """
+    if is_public_route(request):
+        # The first account has no second factor yet: set up at home or through a VPN.
+        raise second_factor_needed_outside()
     with transaction.atomic():
         _lock_setup()
         if User.objects.exists():
@@ -234,12 +240,14 @@ def login(request: HttpRequest, *, email: str, password: str) -> "SignInResult":
     """
     _refuse_when_locked(request, email)
     signin_limits.refuse_when_slowed(request, email)
+    if _outside_without_factor(request, email):
+        _refuse_outside(request, email, password, via="password")
     user = authenticate(request, username=email, password=password)
     if not isinstance(user, User):
         LOGIN_FAILURES.record_failure(request)
         signin_limits.record_failure(email)
         _record_sign_in_problem(AuditCode.SIGN_IN_FAILED, request, email)
-        raise ApiError(401, "invalid_credentials", _("Het e-mailadres of wachtwoord klopt niet."))
+        raise wrong_credentials(request)
     signin_limits.clear(email)
     return _begin_sign_in(request, user, via=UserSession.Via.PASSWORD)
 
@@ -255,6 +263,8 @@ def verify_password(request: HttpRequest, *, email: str, password: str) -> User:
     """
     _refuse_when_locked(request, email)
     signin_limits.refuse_when_slowed(request, email)
+    if _outside_without_factor(request, email):
+        _refuse_outside(request, email, password, via="invitation")
     account = User.objects.filter(email=normalise_email(email)).first()
     if account is None:
         # Hash anyway, so an unknown address takes as long as a wrong password.
@@ -267,9 +277,72 @@ def verify_password(request: HttpRequest, *, email: str, password: str) -> User:
         LOGIN_FAILURES.record_failure(request)
         signin_limits.record_failure(email)
         _record_sign_in_problem(AuditCode.SIGN_IN_FAILED, request, email)
-        raise ApiError(401, "invalid_credentials", _("Het e-mailadres of wachtwoord klopt niet."))
+        raise wrong_credentials(request)
     signin_limits.clear(email)
     return account
+
+
+def refused_outside(request: HttpRequest, user: User) -> bool:
+    """A password sign-in on the public route needs a confirmed second factor (two-step
+    plan Task 13, external access B2). Home and VPN are unchanged; a request that did not
+    come through Caddy with exactly `private` is public (`apps.access.route`)."""
+    return is_public_route(request) and not has_factor(user)
+
+
+def second_factor_needed_outside() -> ApiError:
+    """For a way in from outside that proves no password (a reset link, an invitation for a
+    new account, setting up, typing the password again in a session)."""
+    return ApiError(
+        403,
+        "second_factor_needed_outside",
+        _(
+            "Van buiten kun je alleen inloggen met tweestapsverificatie. Doe dit thuis of via "
+            "VPN, en zet daarna tweestapsverificatie aan."
+        ),
+    )
+
+
+def wrong_credentials(request: HttpRequest) -> ApiError:
+    """401 for a wrong password or address. On the public route one sentence also covers the
+    right password of an account without a second factor: the answer never tells which."""
+    if is_public_route(request):
+        return ApiError(
+            401,
+            "invalid_credentials",
+            _(
+                "Het e-mailadres of wachtwoord klopt niet, of tweestapsverificatie staat nog "
+                "niet aan. Van buiten kun je alleen inloggen met tweestapsverificatie. Zet die "
+                "eerst thuis aan."
+            ),
+        )
+    return ApiError(401, "invalid_credentials", _("Het e-mailadres of wachtwoord klopt niet."))
+
+
+def _outside_without_factor(request: HttpRequest, email: str) -> bool:
+    """On the public route, whether the address belongs to an account without a confirmed
+    second factor. Asked before the password: such an account cannot sign in there."""
+    if not is_public_route(request):
+        return False
+    account = User.objects.filter(email=normalise_email(email)).first()
+    return account is not None and not has_factor(account)
+
+
+def _refuse_outside(request: HttpRequest, email: str, password: str, *, via: str) -> NoReturn:
+    """An account without a factor, on the public route. Its password is never checked:
+    a right one with an outdated hash would be rehashed and written, a wrong one not, and
+    that difference would tell. One hash is made instead, so it takes as long as a check,
+    and the attempt is counted and answered exactly as a wrong password (axes, the
+    address, the per-account slow-down, the same 401), so neither the answer nor the next
+    attempt's lockout tells anything. The log row says why (`step` second_factor)."""
+    make_password(password)
+    with _checking_password_for(via):
+        user_login_failed.send(sender=__name__, credentials={"username": email}, request=request)
+    LOGIN_FAILURES.record_failure(request)
+    signin_limits.record_failure(email)
+    _record_sign_in_problem(
+        AuditCode.SIGN_IN_FAILED, request, email, values={"step": "second_factor"}
+    )
+    raise wrong_credentials(request)
 
 
 def _refuse_when_locked(request: HttpRequest, email: str) -> None:
@@ -418,9 +491,11 @@ def reauthenticate(request: HttpRequest, *, password: str, code: str = "") -> No
     """
     # Imported here: the second-factor modules import this one.
     from apps.accounts.second_factor import verify_code
-    from apps.accounts.second_factor_policy import has_factor
 
     user = current_user(request)
+    if refused_outside(request, user):
+        # Before the password: a session on the public route is no oracle for it.
+        raise second_factor_needed_outside()
     check_own_password(request, user, password, via="reauthenticate")
     with_code = has_factor(user)
     if with_code:

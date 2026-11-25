@@ -15,10 +15,12 @@ from typing import Literal
 from urllib.parse import urlsplit
 
 from django.conf import settings
+from django.db.models import Exists, OuterRef
 from django.http import HttpRequest
 
 from apps.access import observed
 from apps.access.route import is_public_route, peer_ip
+from apps.accounts.models import SecondFactor, User
 from apps.common.checks import CLOUDFLARE_MAX_BODY_BYTES
 from apps.common.net import client_ip
 from apps.devices.models import Device
@@ -41,7 +43,10 @@ CHECK_LEVELS: dict[str, Level] = {
     "public_url_overridden_without_public_host": "problem",
     "tunnel_not_seen": "warning",
     "upload_limit_above_cloudflare": "warning",
+    # Red only when the web is on outside and its second step is somehow not required.
     "public_web_without_second_factor": "problem",
+    "public_web_second_factor_required": "ok",
+    "public_web_admin_without_second_factor": "warning",
     "public_web_off": "ok",
     "request_not_secure": "problem",
     "public_host_not_forwarded": "problem",
@@ -118,6 +123,17 @@ def _active_app_versions() -> list[str]:
     )
 
 
+def _admin_without_factor() -> bool:
+    """Whether an active server admin has no confirmed second factor (and so cannot sign in
+    to the web from outside)."""
+    confirmed = SecondFactor.objects.filter(user_id=OuterRef("id"), confirmed_at__isnull=False)
+    return (
+        User.objects.filter(is_server_admin=True, is_active=True)
+        .exclude(Exists(confirmed))
+        .exists()
+    )
+
+
 def _is_loopback(host: str) -> bool:
     host = host.lower().rstrip(".")
     if host == "localhost" or host.endswith(".localhost"):
@@ -161,8 +177,10 @@ def external_access_status(
     *,
     app_versions: Callable[[], list[str]] | None = None,
     seen: Callable[[str], datetime | None] | None = None,
+    admin_without_factor: Callable[[], bool] | None = None,
 ) -> ExternalAccess:
     app_versions = app_versions or _active_app_versions
+    admin_without_factor = admin_without_factor or _admin_without_factor
     seen = seen or observed.last_seen
     hostname: str = settings.BRIEVIE_HOSTNAME
     public_hostname: str = settings.BRIEVIE_PUBLIC_HOSTNAME
@@ -196,15 +214,25 @@ def external_access_status(
         codes.append("tunnel_not_seen")
     if token_set and settings.BRIEVIE_MAX_UPLOAD_BYTES > CLOUDFLARE_MAX_BODY_BYTES:
         codes.append("upload_limit_above_cloudflare")
-    if public_way and public_web and not second_factor:
+    # Without Caddy no request counts as public (apps.access.route), so the second step is
+    # not asked outside either: say so rather than claim it always is (security review of
+    # PR #56, point 6).
+    second_step_outside = second_factor and bool(settings.BRIEVIE_BEHIND_CADDY)
+    if public_way and public_web and not second_step_outside:
         codes.append("public_web_without_second_factor")
+    if public_way and public_web and second_step_outside:
+        # A password sign-in on the public route needs the second step (apps.accounts.signin).
+        codes.append("public_web_second_factor_required")
+        if admin_without_factor():
+            codes.append("public_web_admin_without_second_factor")
     if public_way and not public_web:
         codes.append("public_web_off")
     if not seen_as.secure:
         codes.append("request_not_secure")
     # Both from what the server saw on the public route (apps.access.observed), since the page
-    # is opened at home and a web session never counts on the public route; and from the
-    # admin's own request when it did come that way (BRIEVIE_PUBLIC_WEB).
+    # is mostly opened at home (on the public route a web session counts only with the web on
+    # there and after the second step); and from the admin's own request when it did come
+    # that way (BRIEVIE_PUBLIC_WEB).
     host_wrong = seen("host_not_forwarded") is not None
     if public and public_hostname:
         host = urlsplit(f"//{request.get_host()}").hostname or ""

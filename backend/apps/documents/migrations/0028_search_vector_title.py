@@ -49,7 +49,7 @@ def _index() -> django.contrib.postgres.indexes.GinIndex:
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("documents", "0026_kind_indexes"),
+        ("documents", "0027_kind_indexes"),
     ]
 
     operations = [

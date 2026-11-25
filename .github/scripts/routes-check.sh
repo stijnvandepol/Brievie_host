@@ -8,7 +8,10 @@
 #                                route headers, the VPN name, a request without SNI
 #   routes-check.sh session JAR  a signed-in server admin's view (getExternalAccess) on :443
 #                                with forged address headers, and on :8080 (closed unless
-#                                BRIEVIE_PUBLIC_WEB; then the route, https and the address)
+#                                BRIEVIE_PUBLIC_WEB; then a session started at home without
+#                                the second step counts as none (and only because of that
+#                                step), a password sign-in gets the outside sentence, and the
+#                                visitor's address is CF-Connecting-IP)
 #   routes-check.sh isolation   the tunnel network reaches Caddy only; a request that reaches
 #                                the api without Caddy counts as public with its own address
 #   routes-check.sh token NAME   no value of the file NAME (a planted tunnel token) in any
@@ -27,13 +30,15 @@ trap 'echo "routes-check.sh: a check failed at line $LINENO." >&2' ERR
 
 # One HTTP request from inside the api container to Caddy (the compose network).
 # Prints "<status>\n<headers as JSON>\n<body>".
-inside() { # $1 method, $2 host:port, $3 path, $4 JSON of headers, $5 body size (bytes)
+inside() { # $1 method, $2 host:port, $3 path, $4 JSON of headers, $5 body size (bytes), [$6 body]
 	$COMPOSE exec -T api python - "$@" <<'PY'
 import http.client, json, sys
 method, target, path, headers, size = sys.argv[1:6]
 host, port = target.split(":")
 conn = http.client.HTTPConnection(host, int(port), timeout=10)
 body = b"x" * int(size) if int(size) else None
+if len(sys.argv) > 6:
+    body = sys.argv[6].encode()
 try:
     conn.request(method, path, body=body, headers=json.loads(headers))
 except (BrokenPipeError, ConnectionResetError):
@@ -42,6 +47,20 @@ resp = conn.getresponse()
 print(resp.status)
 print(json.dumps({k.lower(): v for k, v in resp.getheaders()}))
 print(resp.read().decode("utf-8", "replace"))
+PY
+}
+
+# Whether the session with key $1 counts as having passed the second step ($2: True|False),
+# straight in the database from inside the api container. Fails unless one row changed.
+mark_passed() {
+	$COMPOSE exec -T api python - "$1" "$2" <<'PY'
+import os, sys
+import django
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "brievie.settings")
+django.setup()
+from apps.accounts.models import UserSession
+key, passed = sys.argv[1], sys.argv[2] == "True"
+assert UserSession.objects.filter(session_key=key).update(second_factor=passed) == 1
 PY
 }
 
@@ -205,15 +224,11 @@ PY
 		--header 'X-Forwarded-For: 198.51.100.1' \
 		https://localhost/api/v1/server/external-access)
 	if [ "${PUBLIC_WEB:-false}" = true ]; then
-		test "$code" = 200
-		python3 - "$work/cf.json" <<'PY'
-import json, sys
-seen = json.load(open(sys.argv[1]))["seen_as"]
-assert seen["route"] == "public", seen
-assert seen["client_ip"] == seen["peer_ip"], seen
-assert not seen["client_ip"].startswith("198.51.100."), seen
-print("Cloudflare's and a proxy's headers on :443: public, and the peer still counts.")
-PY
+		# The session began at home without the second step: on the public route it does not
+		# count (two-step plan Task 13), so this is the public route.
+		test "$code" = 401
+		test "$(jq -r .code "$work/cf.json")" = not_authenticated
+		echo "Cloudflare's and a proxy's headers on :443: public, a session without the code is none."
 	else
 		test "$code" = 403
 		test "$(jq -r .code "$work/cf.json")" = public_web_off
@@ -221,20 +236,43 @@ PY
 	cookie_header=$(jq -cn --arg s "$session" '{"X-Forwarded-Proto": "https", "Cookie": ("sessionid=" + $s), "CF-Connecting-IP": "203.0.113.77", "X-Brievie-Client-IP": "198.51.100.3", "X-Brievie-Route": "private", "X-Forwarded-For": "198.51.100.1"}')
 	inside GET caddy:8080 /api/v1/server/external-access "$cookie_header" 0 >"$work/t"
 	if [ "${PUBLIC_WEB:-false}" = true ]; then
+		# The web is on outside, but the home session without the second step does not count.
+		test "$(status_of "$work/t")" = 401
+		test "$(body_of "$work/t" | jq -r .code)" = not_authenticated
+		# The cookie did arrive: the same request for the same session, marked as having
+		# passed the second step, is let in. So the 401 above is the session refused.
+		mark_passed "$session" True
+		inside GET caddy:8080 /api/v1/server/external-access "$cookie_header" 0 >"$work/t"
+		mark_passed "$session" False
 		test "$(status_of "$work/t")" = 200
-		body_of "$work/t" | python3 -c '
-import json, sys
-found = json.load(sys.stdin)
-seen = found["seen_as"]
-assert seen["route"] == "public", seen
-assert seen["secure"] is True, seen
-assert seen["client_ip"] == "203.0.113.77", seen
-codes = [c["code"] for c in found["checks"]]
-# (public_host_not_forwarded may be listed: the check above sent Cloudflare headers for
-# localhost on :443, which the page rightly remembers.)
-assert "request_not_secure" not in codes, codes
-print("Tunnel route: public, https, the visitor counted by CF-Connecting-IP only.")
-'
+		test "$(body_of "$work/t" | jq -r .seen_as.route)" = public
+		# A password sign-in through the tunnel answers the outside sentence (an account
+		# without a factor gets the same answer as a wrong password).
+		wrong=$(head -c 18 /dev/urandom | base64)
+		login=$(jq -cn --arg p "$wrong" '{email: "ci@example.invalid", password: $p}')
+		inside POST caddy:8080 /api/v1/auth/login '{"X-Forwarded-Proto": "https", "Content-Type": "application/json"}' 0 "$login" >"$work/t"
+		test "$(status_of "$work/t")" = 401
+		body_of "$work/t" | jq -e '.code == "invalid_credentials" and (.message | contains("tweestapsverificatie"))' >/dev/null
+		# The visitor's address through the tunnel is CF-Connecting-IP, never a forwarded
+		# header: six wrong passwords for one new address, from one CF-Connecting-IP and each
+		# with another X-Forwarded-For, lock that pair (axes, after 5); the per-account
+		# slow-down starts only after 10, so only the address makes the sixth a 429 ...
+		email="ci-$(head -c 6 /dev/urandom | od -An -tx1 | tr -d ' \n')@example.invalid"
+		login=$(jq -cn --arg e "$email" --arg p "$wrong" '{email: $e, password: $p}')
+		for attempt in 1 2 3 4 5 6; do
+			headers=$(jq -cn --arg f "198.51.100.$((20 + attempt))" '{"X-Forwarded-Proto": "https", "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.81", "X-Forwarded-For": $f}')
+			inside POST caddy:8080 /api/v1/auth/login "$headers" 0 "$login" >"$work/t"
+			if [ "$attempt" -lt 6 ]; then
+				test "$(status_of "$work/t")" = 401
+			else
+				test "$(status_of "$work/t")" = 429
+			fi
+		done
+		# ... and another CF-Connecting-IP is another visitor: not locked.
+		inside POST caddy:8080 /api/v1/auth/login '{"X-Forwarded-Proto": "https", "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.82", "X-Forwarded-For": "198.51.100.21"}' 0 "$login" >"$work/t"
+		test "$(status_of "$work/t")" = 401
+		echo "Tunnel route: the visitor is CF-Connecting-IP; X-Forwarded-For changes nothing."
+		echo "Tunnel route: a session needs the second step, and so does a password sign-in."
 	else
 		test "$(status_of "$work/t")" = 403
 		test "$(body_of "$work/t" | jq -r .code)" = public_web_off

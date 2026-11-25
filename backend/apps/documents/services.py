@@ -539,6 +539,27 @@ def waiting_letters(membership: Membership) -> int:
     )
 
 
+def _waiting_and_lingering(membership: Membership) -> tuple[int, int]:
+    """`waiting_letters` and `lingering.count_lingering` for the menu, in one count per
+    Inbox state: the same partial-index count also counts, with an aggregate FILTER, the
+    letters that arrived before the "Blijft liggen" cutoff (exactly its first group), so
+    the policy runs once per letter instead of twice (measured, DECISIONS 2026-11-25)."""
+    if not lingering.applies_to(membership):
+        return waiting_letters(membership), 0
+    moment = timezone.now()
+    before = lingering.cutoff(membership.workspace.lingering_inbox_days, moment)
+    letters = visibility.visible_documents(membership)
+    waiting = old = 0
+    for state in (InboxState.REVIEW, InboxState.UNASSIGNED):
+        numbers = letters.filter(_in_state(state)).aggregate(
+            every=models.Count("id"),
+            old=models.Count("id", filter=models.Q(created_at__lt=before)),
+        )
+        waiting += int(numbers["every"])
+        old += int(numbers["old"])
+    return waiting, old + lingering.count_not_opened(membership, now=moment)
+
+
 @dataclass(frozen=True)
 class MenuCounts:
     inbox: int
@@ -569,12 +590,13 @@ def menu_counts(membership: Membership) -> MenuCounts:
         else 0
     )
     tasks = count_my_tasks(membership)
+    inbox, lingers = _waiting_and_lingering(membership)
     return MenuCounts(
-        inbox=waiting_letters(membership),
+        inbox=inbox,
         my_post_unread=unread,
         my_tasks=tasks.mine,
         my_tasks_overdue=tasks.overdue,
-        lingering=lingering.count_lingering(membership),
+        lingering=lingers,
         shows_lingering=lingering.applies_to(membership),
         has_person=bool(own),
     )

@@ -466,6 +466,14 @@ msgid "Geef de werkruimte een naam."
 msgstr "Give the workspace a name."
 
 #: apps/accounts/services.py
+msgid "Van buiten kun je alleen inloggen met tweestapsverificatie. Doe dit thuis of via VPN, en zet daarna tweestapsverificatie aan."
+msgstr "From outside you can only sign in with two-step verification. Do this at home or through a VPN, then switch two-step verification on."
+
+#: apps/accounts/services.py
+msgid "Het e-mailadres of wachtwoord klopt niet, of tweestapsverificatie staat nog niet aan. Van buiten kun je alleen inloggen met tweestapsverificatie. Zet die eerst thuis aan."
+msgstr "The email address or password is not correct, or two-step verification is not on yet. From outside you can only sign in with two-step verification. Switch it on at home first."
+
+#: apps/accounts/services.py
 msgid "Het e-mailadres of wachtwoord klopt niet."
 msgstr "The email address or password is not correct."
 

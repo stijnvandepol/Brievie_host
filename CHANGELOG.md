@@ -25,8 +25,10 @@ reverse proxy). Het Archief: elke gecontroleerde brief en je eigen documenten op
   `ProxyPreserveHost On` bij Apache). Anders kan inloggen op de webinterface van buiten openstaan.
 - Koppel de app alleen thuis of via VPN; via het publieke adres kan koppelen niet.
 - Met Cloudflare Tunnel kan Cloudflare alles lezen wat er langskomt, ook gescande brieven.
-- `BRIEVIE_PUBLIC_WEB=true` vraagt nog niet om de tweede stap van tweestapsverificatie bij
-  inloggen van buiten.
+- Met `BRIEVIE_PUBLIC_WEB=true` kan van buiten alleen inloggen wie tweestapsverificatie aan heeft.
+  Wie het niet aan heeft, logt thuis of via VPN in en zet het daar aan (Account, Beveiliging).
+  Ook installeren, een uitnodiging voor een nieuw account en een herstellink voor een account
+  zonder tweestapsverificatie werken dan alleen thuis of via VPN.
 - Docker Swarm en Podman-pods worden niet ondersteund.
 - Deze update duurt wat langer om toe te passen: de zoekindex van alle brieven wordt opnieuw
   opgebouwd (bij duizenden brieven een paar minuten).
@@ -67,6 +69,11 @@ reverse proxy). Het Archief: elke gecontroleerde brief en je eigen documenten op
 - "Bewaren tot": naar de prullenbak mag (met een vraag), definitief wissen pas na die datum.
 - "Alles exporteren" voor een beheerder: alles wat die mag lezen, zonder privébrieven van
   anderen.
+- Inloggen op de webinterface via het publieke adres vraagt altijd om tweestapsverificatie.
+  Zonder tweestapsverificatie krijg je daar hetzelfde antwoord als bij een verkeerd wachtwoord;
+  een sessie die thuis zonder code begon, telt van buiten niet. De pagina "Van buiten bereikbaar"
+  zegt het, en waarschuwt als een serverbeheerder het nog niet aan heeft.
+
 - Het compose-bestand (`deploy/compose/docker-compose.yml`, bij elke release als
   `docker-compose.yml` en als `docker-compose.pinned.yml` met de images op digest) en het
   image `brievie-proxy` (Caddy met onze Caddyfile).

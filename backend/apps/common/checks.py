@@ -82,7 +82,10 @@ def check_external_access(
     messages: list[CheckMessage] = []
     tunnel: bool = settings.BRIEVIE_TUNNEL_TOKEN_SET
     public_way = tunnel or bool(settings.BRIEVIE_TRUSTED_PROXIES)
-    if public_way and settings.BRIEVIE_PUBLIC_WEB and not settings.BRIEVIE_SECOND_FACTOR_AVAILABLE:
+    # Without Caddy no request counts as public (apps.access.route): nothing asks the second
+    # step outside then.
+    second_step_outside = settings.BRIEVIE_SECOND_FACTOR_AVAILABLE and settings.BRIEVIE_BEHIND_CADDY
+    if public_way and settings.BRIEVIE_PUBLIC_WEB and not second_step_outside:
         messages.append(
             Warning(
                 "BRIEVIE_PUBLIC_WEB is on: the web sign-in is reachable from the internet "

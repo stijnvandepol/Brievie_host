@@ -21,7 +21,7 @@ DROP_DEFAULTS: Final = (
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("documents", "0024_letter_status"),
+        ("documents", "0025_policy_covering_indexes"),
     ]
 
     operations = [

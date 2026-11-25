@@ -560,7 +560,11 @@ def get_invitation(request: HttpRequest, payload: InvitationTokenIn) -> Invitati
     " already_member, invitation_person_taken; 422 for another account kind."
     + DEAD_LINK
     + SECOND_STEP
-    + " An account with two-step verification joins at once; only its sign-in waits.",
+    + " An account with two-step verification joins at once; only its sign-in waits. On the"
+    " public route (tunnel, own reverse proxy): account `new` gets 403"
+    " second_factor_needed_outside before anything is made, and an existing account without"
+    " two-step verification answers 401 invalid_credentials, exactly as a wrong password;"
+    " the invitation stays usable at home.",
     operation_id="acceptInvitation",
 )
 def accept_invitation(

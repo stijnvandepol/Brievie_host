@@ -10,6 +10,7 @@ from apps.access.middleware import (
     operation_for,
     operations,
 )
+from apps.accounts.models import UserSession
 from brievie.api import api
 from tests.factories import UserFactory
 from tests.members_support import as_user, bearer, paired
@@ -160,7 +161,11 @@ def test_private_route_is_unchanged() -> None:
 
 def test_public_web_true_opens_everything(settings: Settings) -> None:
     settings.BRIEVIE_PUBLIC_WEB = True
-    client = as_user(UserFactory.create())
+    user = UserFactory.create()
+    client = as_user(user)
+    # A session counts there only when it passed the second step (two-step plan Task 13).
+    assert client.get("/api/v1/me", headers=PUBLIC).status_code == 401
+    UserSession.objects.filter(user=user).update(second_factor=True)
     assert client.get("/api/v1/me", headers=PUBLIC).status_code == 200
     assert Client().get("/api/v1/me", headers=PUBLIC).json()["code"] == "not_authenticated"
 

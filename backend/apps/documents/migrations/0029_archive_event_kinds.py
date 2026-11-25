@@ -6,7 +6,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("documents", "0027_search_vector_title"),
+        ("documents", "0028_search_vector_title"),
     ]
 
     operations = [

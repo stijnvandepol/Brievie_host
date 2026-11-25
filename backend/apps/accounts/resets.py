@@ -18,7 +18,7 @@ from django.utils.translation import gettext as _
 from apps.accounts.authority import account_authority
 from apps.accounts.models import AccountNotice, PasswordReset, User, UserSession, normalise_email
 from apps.accounts.notices import notify
-from apps.accounts.services import current_user
+from apps.accounts.services import current_user, refused_outside, second_factor_needed_outside
 from apps.accounts.sessions import end_sessions
 from apps.accounts.signin import SignInResult, begin_sign_in
 from apps.audit.codes import ActorKind, AuditCode, TargetKind
@@ -109,7 +109,9 @@ def complete_password_reset(request: HttpRequest, *, token: str, password: str) 
     The account, then the link, is locked, so two attempts at once give one success. A
     password the rules refuse answers 422 and leaves the link usable. Every other
     session, every paired device and every other open link of the account ends; the
-    member gets a notice that this new session cannot dismiss.
+    member gets a notice that this new session cannot dismiss. On the public route an
+    account without a second factor gets 403 `second_factor_needed_outside` and nothing
+    changes (open the link at home).
     """
     digest = token_hash(token)
     with transaction.atomic():
@@ -142,6 +144,11 @@ def complete_password_reset(request: HttpRequest, *, token: str, password: str) 
         ):
             raise _dead_link()
         user = reset.user
+        if refused_outside(request, user):
+            # Before anything changes: the link stays usable at home, and nobody outside
+            # ends the member's sessions or unpairs their phones with it. Only the holder of
+            # a live link learns that the account has no second factor.
+            raise second_factor_needed_outside()
         validate_password(password, user)
         user.set_password(password)
         user.save(update_fields=["password", "updated_at"])

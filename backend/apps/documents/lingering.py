@@ -130,13 +130,19 @@ def count_lingering(membership: Membership, *, now: datetime | None = None) -> i
     `applies_to`. Four counts, each on a partial index."""
     if not applies_to(membership):
         return 0
-    workspace = membership.workspace
     moment = now or timezone.now()
     letters = visibility.visible_documents(membership)
-    arms = [
-        *_inbox_arms(cutoff(workspace.lingering_inbox_days, moment)),
-        *_not_opened_arms(cutoff(workspace.lingering_unopened_days, moment), moment),
-    ]
+    inbox = _inbox_arms(cutoff(membership.workspace.lingering_inbox_days, moment))
+    return sum(letters.filter(arm).count() for arm in inbox) + count_not_opened(
+        membership, now=moment
+    )
+
+
+def count_not_opened(membership: Membership, *, now: datetime) -> int:
+    """The second group's count alone (both arms, each on its partial index); the caller
+    checked `applies_to`. The menu counts the first group with its Inbox number."""
+    letters = visibility.visible_documents(membership)
+    arms = _not_opened_arms(cutoff(membership.workspace.lingering_unopened_days, now), now)
     return sum(letters.filter(arm).count() for arm in arms)
 
 

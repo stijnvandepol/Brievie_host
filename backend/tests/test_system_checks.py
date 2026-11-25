@@ -115,11 +115,22 @@ def test_any_password_containing_change_me_is_a_warning(
 # --- External access (S 7.5, 7.6) ----------------------------------------------------------
 
 
-def _external(settings: Settings, *, tunnel: bool, proxies: list[str], public_web: bool) -> None:
+def _external(
+    settings: Settings,
+    *,
+    tunnel: bool,
+    proxies: list[str],
+    public_web: bool,
+    second_factor: bool = False,
+    behind_caddy: bool = True,
+) -> None:
+    # `second_factor` False: as if the second step were somehow not required outside (it is
+    # since Task 13 of the two-step plan, so W002 is silent in a real install).
     settings.BRIEVIE_TUNNEL_TOKEN_SET = tunnel
     settings.BRIEVIE_TRUSTED_PROXIES = proxies
     settings.BRIEVIE_PUBLIC_WEB = public_web
-    settings.BRIEVIE_SECOND_FACTOR_AVAILABLE = False
+    settings.BRIEVIE_SECOND_FACTOR_AVAILABLE = second_factor
+    settings.BRIEVIE_BEHIND_CADDY = behind_caddy
     settings.BRIEVIE_MAX_UPLOAD_BYTES = 33554432
     settings.BRIEVIE_PUBLIC_HOSTNAME = "brievie.example.nl" if tunnel or proxies else ""
 
@@ -132,6 +143,27 @@ def test_w002_public_web_without_second_factor(
     found = check_external_access(None)
     assert [m.id for m in found] == ["brievie.W002"]
     assert isinstance(found[0], Warning)
+
+
+@pytest.mark.parametrize(("tunnel", "proxies"), [(True, []), (False, ["192.168.1.5/32"])])
+def test_w002_silent_now_the_public_route_needs_the_second_step(
+    settings: Settings, tunnel: bool, proxies: list[str]
+) -> None:
+    _external(settings, tunnel=tunnel, proxies=proxies, public_web=True, second_factor=True)
+    assert check_external_access(None) == []
+
+
+def test_w002_without_caddy_nothing_asks_the_second_step_outside(settings: Settings) -> None:
+    # Without Caddy no request counts as public (apps.access.route).
+    _external(
+        settings,
+        tunnel=True,
+        proxies=[],
+        public_web=True,
+        second_factor=True,
+        behind_caddy=False,
+    )
+    assert [m.id for m in check_external_access(None)] == ["brievie.W002"]
 
 
 def test_w002_silent_when_public_web_off(settings: Settings) -> None:

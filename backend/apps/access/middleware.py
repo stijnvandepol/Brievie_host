@@ -14,6 +14,10 @@ Everything else (sign-in, setup, password reset, invitations, every session-only
 operation, every web page and file, any path no operation answers) gets 403
 `public_web_off`. Lives in Django because only Django knows which operation is which;
 Caddy only marks the route.
+
+With `BRIEVIE_PUBLIC_WEB` everything passes the gate, but a web session counts there only
+when it passed the second step, and a password sign-in there needs one
+(`apps.accounts.signin`).
 """
 
 from collections.abc import Callable, Iterable
@@ -55,9 +59,18 @@ PAIR_AT_HOME = "pair_at_home"
 
 
 def session_allowed(request: HttpRequest) -> bool:
-    """Whether a web session may count for this request: not on the public route while
-    the web interface is off there. (Two-step sign-in hooks its rule in here, B2.)"""
-    return settings.BRIEVIE_PUBLIC_WEB or not is_public_route(request)
+    """Whether a web session may count for this request. On the public route only while
+    the web interface is on there, and only a session that passed the second step (B2,
+    two-step plan Task 13): a session started at home without a code does not count
+    outside (it is not ended; at home it still works)."""
+    if not is_public_route(request):
+        return True
+    if not settings.BRIEVIE_PUBLIC_WEB:
+        return False
+    # Imported here: the accounts modules import this one (apps.accounts.auth).
+    from apps.accounts.sessions import session_passed_second_factor
+
+    return session_passed_second_factor(request)
 
 
 def _auth_list(auth: object) -> list[object]:

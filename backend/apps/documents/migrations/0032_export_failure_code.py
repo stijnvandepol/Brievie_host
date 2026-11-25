@@ -11,7 +11,7 @@ DROP_DEFAULT: Final = "ALTER TABLE documents_memberexport ALTER COLUMN failure_c
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("documents", "0030_export_scope"),
+        ("documents", "0031_export_scope"),
     ]
 
     operations = [

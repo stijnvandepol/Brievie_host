@@ -12,7 +12,7 @@ DROP_DEFAULT: Final = "ALTER TABLE documents_memberexport ALTER COLUMN scope DRO
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("documents", "0029_letter_facts_letters_only"),
+        ("documents", "0030_letter_facts_letters_only"),
     ]
 
     operations = [

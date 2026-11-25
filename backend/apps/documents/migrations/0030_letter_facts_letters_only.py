@@ -55,7 +55,7 @@ def fill(apps: Apps, schema_editor: BaseDatabaseSchemaEditor) -> None:
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("documents", "0028_archive_event_kinds"),
+        ("documents", "0029_archive_event_kinds"),
         ("workspaces", "0010_unread_and_lingering"),
     ]
 

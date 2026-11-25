@@ -7,7 +7,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("tasks", "0007_snooze_cascade_in_database"),
+        ("tasks", "0008_task_list_order"),
     ]
 
     operations = [

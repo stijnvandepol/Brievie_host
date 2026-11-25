@@ -5,10 +5,13 @@ indexes."""
 
 from django.db import migrations, models
 
+# The policy's columns, as documents 0025 has them in this index.
+POLICY = ("visibility", "addressee_ids", "scanned_by", "status", "trashed_at")
+
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("documents", "0025_archive_fields"),
+        ("documents", "0026_archive_fields"),
     ]
 
     operations = [
@@ -29,6 +32,7 @@ class Migration(migrations.Migration):
             index=models.Index(
                 condition=models.Q(("addressee_ids", []), ("kind", "letter"), ("status", "done")),
                 fields=["workspace", "-created_at"],
+                include=["id", *POLICY],
                 name="documents_document_unassigned",
             ),
         ),
