@@ -12,6 +12,7 @@ import re
 
 import pytest
 from django.conf import settings as django_settings
+from django.contrib.auth.hashers import PBKDF2SHA1PasswordHasher
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.http import HttpResponse
@@ -156,6 +157,34 @@ def test_without_a_factor_the_right_password_answers_as_a_wrong_one(user: User) 
     assert (unknown.status_code, unknown.json()) == (401, OUTSIDE)
     # The same counters, so the next attempt cannot tell either.
     assert failures(user) == failures(other) == 1
+
+
+def outdated_hash(user: User, settings: Settings) -> str:
+    """Give `user` a hash of an older hasher, which a right password check rewrites."""
+    settings.PASSWORD_HASHERS = [
+        "django.contrib.auth.hashers.MD5PasswordHasher",
+        "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
+    ]
+    old = PBKDF2SHA1PasswordHasher().encode(TEST_PASSWORD, "oudzoutoudzout", iterations=1000)
+    User.objects.filter(pk=user.pk).update(password=old)
+    return old
+
+
+def test_outside_the_password_of_an_account_without_a_factor_is_not_checked(
+    user: User, settings: Settings, ws_a: Workspace
+) -> None:
+    # A right password with an outdated hash is rehashed and written; a wrong one is not.
+    # From outside nothing may tell them apart, so the password is not checked at all.
+    old = outdated_hash(user, settings)
+
+    assert sign_in(Client(), user, route=PUBLIC) == (401, OUTSIDE)
+    assert accept(Client(), invite(ws_a), account="existing", email=user.email) == (401, OUTSIDE)
+    assert User.objects.get(pk=user.pk).password == old
+    assert failures(user) == 2
+
+    # At home the right password is checked, and the hash brought up to date.
+    assert sign_in(Client(), user, route=PRIVATE)[0] == 200
+    assert User.objects.get(pk=user.pk).password.startswith("md5$")
 
 
 def test_a_wrong_password_with_a_factor_answers_the_same_outside(user: User) -> None:

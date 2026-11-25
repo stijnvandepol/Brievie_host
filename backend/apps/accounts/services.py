@@ -6,13 +6,14 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NoReturn
 from uuid import UUID
 
 from axes.handlers.proxy import AxesProxyHandler
 from django.conf import settings
 from django.contrib.auth import authenticate, update_session_auth_hash
 from django.contrib.auth import logout as django_logout
+from django.contrib.auth.hashers import make_password
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.signals import user_login_failed
 from django.contrib.sessions.models import Session
@@ -239,14 +240,13 @@ def login(request: HttpRequest, *, email: str, password: str) -> "SignInResult":
     """
     _refuse_when_locked(request, email)
     signin_limits.refuse_when_slowed(request, email)
+    if _outside_without_factor(request, email):
+        _refuse_outside(request, email, password, via="password")
     user = authenticate(request, username=email, password=password)
     if not isinstance(user, User):
         LOGIN_FAILURES.record_failure(request)
         signin_limits.record_failure(email)
         _record_sign_in_problem(AuditCode.SIGN_IN_FAILED, request, email)
-        raise wrong_credentials(request)
-    if refused_outside(request, user):
-        _count_refused_outside(request, email, via="password")
         raise wrong_credentials(request)
     signin_limits.clear(email)
     return _begin_sign_in(request, user, via=UserSession.Via.PASSWORD)
@@ -263,6 +263,8 @@ def verify_password(request: HttpRequest, *, email: str, password: str) -> User:
     """
     _refuse_when_locked(request, email)
     signin_limits.refuse_when_slowed(request, email)
+    if _outside_without_factor(request, email):
+        _refuse_outside(request, email, password, via="invitation")
     account = User.objects.filter(email=normalise_email(email)).first()
     if account is None:
         # Hash anyway, so an unknown address takes as long as a wrong password.
@@ -275,9 +277,6 @@ def verify_password(request: HttpRequest, *, email: str, password: str) -> User:
         LOGIN_FAILURES.record_failure(request)
         signin_limits.record_failure(email)
         _record_sign_in_problem(AuditCode.SIGN_IN_FAILED, request, email)
-        raise wrong_credentials(request)
-    if refused_outside(request, account):
-        _count_refused_outside(request, email, via="invitation")
         raise wrong_credentials(request)
     signin_limits.clear(email)
     return account
@@ -319,11 +318,23 @@ def wrong_credentials(request: HttpRequest) -> ApiError:
     return ApiError(401, "invalid_credentials", _("Het e-mailadres of wachtwoord klopt niet."))
 
 
-def _count_refused_outside(request: HttpRequest, email: str, *, via: str) -> None:
-    """The right password of an account without a factor, on the public route: counted
-    exactly as a wrong one (axes, the address, the per-account slow-down), so neither the
-    answer nor the next attempt's lockout tells that the password was right. The log row
-    says so (`step` second_factor): only admins and the account read it."""
+def _outside_without_factor(request: HttpRequest, email: str) -> bool:
+    """On the public route, whether the address belongs to an account without a confirmed
+    second factor. Asked before the password: such an account cannot sign in there."""
+    if not is_public_route(request):
+        return False
+    account = User.objects.filter(email=normalise_email(email)).first()
+    return account is not None and not has_factor(account)
+
+
+def _refuse_outside(request: HttpRequest, email: str, password: str, *, via: str) -> NoReturn:
+    """An account without a factor, on the public route. Its password is never checked:
+    a right one with an outdated hash would be rehashed and written, a wrong one not, and
+    that difference would tell. One hash is made instead, so it takes as long as a check,
+    and the attempt is counted and answered exactly as a wrong password (axes, the
+    address, the per-account slow-down, the same 401), so neither the answer nor the next
+    attempt's lockout tells anything. The log row says why (`step` second_factor)."""
+    make_password(password)
     with _checking_password_for(via):
         user_login_failed.send(sender=__name__, credentials={"username": email}, request=request)
     LOGIN_FAILURES.record_failure(request)
@@ -331,6 +342,7 @@ def _count_refused_outside(request: HttpRequest, email: str, *, via: str) -> Non
     _record_sign_in_problem(
         AuditCode.SIGN_IN_FAILED, request, email, values={"step": "second_factor"}
     )
+    raise wrong_credentials(request)
 
 
 def _refuse_when_locked(request: HttpRequest, email: str) -> None:
