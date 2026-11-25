@@ -74,7 +74,8 @@ function TrashPage() {
   }
 
   // "Bewaren tot" stops a purge; an admin may take the date away here (security review of
-  // PR #54, point 3), so the purge (and an erasure request) is never blocked.
+  // PR #54, point 3), and so may the person it belongs to (`can_clear_retention`), so the
+  // purge (and an erasure request) is never blocked.
   const unpin = useMutation({
     mutationFn: async (documentId: string) => {
       const { error } = await api.PATCH(
@@ -203,7 +204,7 @@ function TrashPage() {
                             <Icon name="restore" />
                             {t`Terugzetten`}
                           </Button>
-                          {isAdmin && isRetained(letter.retain_until) ? (
+                          {letter.can_clear_retention && isRetained(letter.retain_until) ? (
                             <Button
                               className="button-text"
                               aria-label={t`Bewaren tot weghalen: ${name}`}

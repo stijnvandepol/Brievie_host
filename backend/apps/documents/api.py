@@ -896,7 +896,7 @@ def restore_document(request: HttpRequest, workspace_id: UUID, document_id: UUID
 def list_trash(request: HttpRequest, workspace_id: UUID) -> TrashListOut:
     membership = workspace_member(request, workspace_id)
     return TrashListOut(
-        items=[trash.trashed_out(document) for document in trash.list_trash(membership)],
+        items=trash.list_trash_out(membership),
         retention_days=trash.TRASH_RETENTION.days,
         total=trash.count_trash(membership),
     )

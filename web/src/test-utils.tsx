@@ -417,6 +417,7 @@ export function trashedLetter(overrides: Partial<Trashed> = {}): Trashed {
     trashed_by_name: "Anna",
     purge_after: "2026-12-09T10:00:00Z",
     warning: "",
+    can_clear_retention: false,
     ...overrides,
   };
 }

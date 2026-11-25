@@ -171,7 +171,7 @@ def list_trash(membership: Membership) -> list[Document]:
     )
 
 
-def trashed_out(document: Document) -> TrashedDocumentOut:
+def trashed_out(document: Document, *, can_clear_retention: bool = False) -> TrashedDocumentOut:
     """A row of the trash: the summary, when and by whom, and when it is purged."""
     trashed_at = document.trashed_at
     if trashed_at is None:
@@ -182,7 +182,26 @@ def trashed_out(document: Document) -> TrashedDocumentOut:
         trashed_at=trashed_at,
         trashed_by_name=by.name if by is not None else "",
         purge_after=trashed_at + TRASH_RETENTION,
+        can_clear_retention=can_clear_retention,
     )
+
+
+def list_trash_out(membership: Membership) -> list[TrashedDocumentOut]:
+    """The rows of the member's trash, each saying whether the member may take "Bewaren
+    tot" away: an admin, or the person the document belongs to (security review of PR #54,
+    point 3)."""
+    admin = membership.role == Membership.Role.ADMIN
+    own: set[UUID] = (
+        set() if admin else visibility.own_person_ids(membership.workspace_id, membership.user_id)
+    )
+    return [
+        trashed_out(
+            document,
+            can_clear_retention=admin
+            or any(link.person_id in own for link in document.addressee_links.all()),
+        )
+        for document in list_trash(membership)
+    ]
 
 
 def mark_for_purge(document: Document, *, actor: AuditActor, reason: str) -> bool:

@@ -5437,6 +5437,11 @@
             "title": "Auto Rule Label Ids",
             "type": "array"
           },
+          "can_clear_retention": {
+            "default": false,
+            "title": "Can Clear Retention",
+            "type": "boolean"
+          },
           "client_id": {
             "format": "uuid",
             "title": "Client Id",

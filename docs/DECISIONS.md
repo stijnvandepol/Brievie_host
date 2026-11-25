@@ -3273,13 +3273,16 @@ Every point was checked against the code first.
   or empty, the document by its id, never a title), at upload too; the history line stays, but
   the audit row outlives a purge. A date lies at most 20 years ahead (422 beyond; the longest
   Dutch term people meet, a medical file, is 20 years). Ruling, who may override: any editor of a
-  live document may set, move or take away the date (as before: nobody is trapped); in the
-  trash an **admin** may take it away (`updateDocumentDetails` with only `clear_retain_until`
-  answers for a document in the admin's trash; anything else there stays 404), and Prullenbak
-  shows "Bewaren tot … niet definitief te wissen" with "Bewaren tot weghalen" for an admin. So an
-  erasure request is never blocked by another member's date: the admin takes the date away and
-  purges. The person a document belongs to is an editor of it while it is live. The refusal's
-  sentence now says that an admin can take the date away.
+  live document may set, move or take away the date (as before: nobody is trapped). An **admin**
+  and **the person the document belongs to** (an addressee that is the caller's own person) may
+  always take it away: also in their trash and also with a read-only role
+  (`updateDocumentDetails` with only `clear_retain_until`; anything else of a trashed document
+  stays 404, setting or moving the date stays an editor's). `TrashedDocumentOut.can_clear_retention`
+  says so per row, and Prullenbak shows "Bewaren tot … niet definitief te wissen" with "Bewaren
+  tot weghalen" where it is true. No other member can block an erasure: the person clears the
+  date and asks, or the admin clears it and purges. A manager ("Beheerd door") or a sharer is not
+  the person and has no override. The refusal's sentence says that an admin can take the date
+  away (the admin is the one who purges).
 - **Point 4 (low), held, fixed:** reopening a ticked-off reminder while a newer one is open hit
   the unique index (500). `reopenTask` now answers 409 `reminder_already_open` and changes nothing.
 - **Point 5 (low), held, fixed:** a new title left the old one in the open reminder's

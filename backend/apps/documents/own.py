@@ -218,25 +218,35 @@ def _locked_for_edit(
     document. 404 `document_not_found` for one they may not see or that is in the trash;
     403 `emergency_read_only` when they see it only through emergency access.
 
-    One exception (security review of PR #54, point 3): an admin may take "Bewaren tot"
-    away from a document in their trash (`only_clears_retention`), so purging it, and an
-    erasure request, is never blocked by another member's date."""
-    role = lock_creator(membership.workspace, user)
+    One exception (security review of PR #54, point 3): an admin and the person the
+    document belongs to may always take "Bewaren tot" away (`only_clears_retention`), also
+    from a document in their trash and with a read-only role, so purging it, and an erasure
+    request, is never blocked by another member's date."""
+    role = lock_own_role(membership.workspace.id, user.id)
     document = (
         visibility.visible_documents(membership)
         .select_for_update(no_key=True, of=("self",))
         .filter(id=document_id)
         .first()
     )
-    if document is None and only_clears_retention and role == Membership.Role.ADMIN:
+    in_trash = False
+    if document is None and only_clears_retention:
         document = (
             visibility.trashed_documents(membership)
             .select_for_update(no_key=True, of=("self",))
             .filter(id=document_id)
             .first()
         )
+        in_trash = document is not None
     if document is None:
         raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
+    overrides = only_clears_retention and (
+        role == Membership.Role.ADMIN or visibility.belongs_to(document, user.id)
+    )
+    if in_trash and not overrides:
+        raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
+    if role == Membership.Role.VIEWER and not overrides:
+        raise ApiError(403, "forbidden", _("Je mag dit niet doen in deze werkruimte."))
     visibility.require_editable(document)
     return document
 

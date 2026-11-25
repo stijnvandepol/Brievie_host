@@ -5661,6 +5661,11 @@ export interface components {
             /** Auto Rule Label Ids */
             auto_rule_label_ids?: string[];
             /**
+             * Can Clear Retention
+             * @default false
+             */
+            can_clear_retention: boolean;
+            /**
              * Client Id
              * Format: uuid
              */

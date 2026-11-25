@@ -221,7 +221,7 @@ describe("trash", () => {
 });
 
 describe("Bewaren tot in the trash", () => {
-  const kept = trashedLetter({ retain_until: "2099-01-01" });
+  const kept = trashedLetter({ retain_until: "2099-01-01", can_clear_retention: true });
 
   it("says a retained letter cannot be purged and lets an admin take the date away", async () => {
     const sent: Record<string, unknown>[] = [];
@@ -247,8 +247,15 @@ describe("Bewaren tot in the trash", () => {
     expect(sent[0]?.title).toBe("");
   });
 
-  it("a member sees the date but cannot take it away", async () => {
+  it("the person the document belongs to takes the date away too", async () => {
     server.use(asRole("member"), ...loggedInHandlers(), ...trashHandlers([kept]));
+    renderApp(path);
+    expect(await screen.findByRole("button", { name: /^Bewaren tot weghalen/ })).toBeVisible();
+  });
+
+  it("another member sees the date but cannot take it away", async () => {
+    const other = { ...kept, can_clear_retention: false };
+    server.use(asRole("member"), ...loggedInHandlers(), ...trashHandlers([other]));
     renderApp(path);
     expect(
       await screen.findByText("Bewaren tot 1 jan 2099: niet definitief te wissen."),

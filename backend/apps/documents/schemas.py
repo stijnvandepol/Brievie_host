@@ -137,6 +137,9 @@ class TrashedDocumentOut(DocumentSummaryOut):
     # zeker?") when the document is retained; the clients ask it before (from
     # `retain_until`). Empty otherwise.
     warning: str = ""
+    # Whether the caller may take "Bewaren tot" away here (`updateDocumentDetails` with only
+    # `clear_retain_until`): an admin, and the person the document belongs to.
+    can_clear_retention: bool = False
 
 
 class TrashListOut(Schema):
