@@ -234,6 +234,7 @@ def _candidates(world: World, text: str) -> dict[UUID, Decimal]:
         workspace_id=world.workspace_id,
         document_id=uuid.uuid4(),
         since=world.today - duplicates.WINDOW,
+        kind="letter",
     )
 
 
@@ -446,6 +447,7 @@ def _time_detect(world: World, results: Results, size: int) -> None:
                         "workspace": world.workspace_id,
                         "id": uuid.uuid4(),
                         "since": world.today - duplicates.WINDOW,
+                        "kind": "letter",
                         "limit": duplicates.MAX_CANDIDATES,
                     },
                 )

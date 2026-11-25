@@ -89,16 +89,17 @@ def apply_rule_batch(
         spec = _active_spec(workspace_id, rule_id)
         if spec is None:
             return
-        documents = Document.objects.filter(LIVE, workspace_id=workspace_id).exclude(
-            status=Document.Status.PROCESSING
-        )
+        # Letters only: no rule runs on an own document (archive spec S 6.2).
+        documents = Document.objects.filter(
+            LIVE, workspace_id=workspace_id, kind=Document.Kind.LETTER
+        ).exclude(status=Document.Status.PROCESSING)
         if after is not None:
             documents = documents.filter(id__gt=after)
         ids = list(documents.order_by("id").values_list("id", flat=True)[:BATCH_SIZE])
         if not ids:
             return
         locked = (
-            Document.objects.filter(LIVE, id__in=ids)
+            Document.objects.filter(LIVE, id__in=ids, kind=Document.Kind.LETTER)
             .exclude(status=Document.Status.PROCESSING)
             .select_for_update(no_key=True)
             .order_by("id")

@@ -22,7 +22,7 @@ from django.utils.translation import gettext as _
 from apps.accounts.models import User
 from apps.common.errors import ApiError
 from apps.documents import visibility
-from apps.documents.models import Document, DocumentReadMark
+from apps.documents.models import LETTERS_ONLY, Document, DocumentReadMark
 from apps.people.models import DepartmentMember, Person
 from apps.workspaces.context import current_actor, system_actor
 from apps.workspaces.models import Membership, Workspace
@@ -33,10 +33,12 @@ MARK_MANY_MAX: Final = 200
 
 def unread_q(membership: Membership) -> Q:
     """The condition of an unread letter for `membership` (S 5.2). Only ever applied on top
-    of `visibility.visible_documents(membership)`: it narrows, it never widens."""
+    of `visibility.visible_documents(membership)`: it narrows, it never widens. Letters
+    only: an own document is never unread (archive spec S 8, AR8)."""
     marked = DocumentReadMark.objects.filter(document=OuterRef("pk"), user_id=membership.user_id)
     return (
-        ~Q(status=Document.Status.PROCESSING)
+        LETTERS_ONLY
+        & ~Q(status=Document.Status.PROCESSING)
         & Q(created_at__gte=membership.unread_from)
         & Q(~Exists(marked))
     )
@@ -48,7 +50,9 @@ def unread_ids(membership: Membership, documents: Sequence[Document]) -> set[UUI
     candidates = [
         d.id
         for d in documents
-        if d.status != Document.Status.PROCESSING and d.created_at >= membership.unread_from
+        if d.kind == Document.Kind.LETTER
+        and d.status != Document.Status.PROCESSING
+        and d.created_at >= membership.unread_from
     ]
     if not candidates:
         return set()
@@ -164,7 +168,10 @@ def my_post_ids(user_id: UUID) -> frozenset[UUID]:
 def _note_addressee_opened(document: Document, membership: Membership) -> None:
     """The member opened the confirmed letter (`mark_read`); when it is addressed to them
     (their person, a person they manage, their department) it counts as opened by an
-    addressee (S 5.5), set once, as the system. It says nothing about who."""
+    addressee (S 5.5), set once, as the system. It says nothing about who. Never for an
+    own document: it is not post that waits to be opened (archive spec S 8)."""
+    if document.kind != Document.Kind.LETTER:
+        return
     if document.addressee_opened_at is not None or not document.addressee_ids:
         return
     if not my_post_ids(membership.user_id) & set(document.addressee_ids):
@@ -182,7 +189,10 @@ def recompute_addressee_opened(document: Document) -> None:
     confirmed (`review`): opened when one of the members it is now addressed to opened
     the confirmed letter (`opened_at`, the earliest), else not. A scan, "Alles gelezen",
     an opening during review or through emergency access never counts. As the system;
-    `document.addressee_ids` is the synced list."""
+    `document.addressee_ids` is the synced list. An own document is never opened by an
+    addressee: nothing to recompute (archive spec S 8)."""
+    if document.kind != Document.Kind.LETTER:
+        return
     with system_actor():
         opened = None
         ids = list(document.addressee_ids)

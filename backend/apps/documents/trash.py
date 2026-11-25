@@ -7,6 +7,7 @@ a member trashes, restores or lists starts from `visible_documents` or
 `trashed_documents`, so a letter they may not see answers as a missing one.
 """
 
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Final
 from uuid import UUID
@@ -170,7 +171,7 @@ def list_trash(membership: Membership) -> list[Document]:
     )
 
 
-def trashed_out(document: Document) -> TrashedDocumentOut:
+def trashed_out(document: Document, *, can_clear_retention: bool = False) -> TrashedDocumentOut:
     """A row of the trash: the summary, when and by whom, and when it is purged."""
     trashed_at = document.trashed_at
     if trashed_at is None:
@@ -181,7 +182,26 @@ def trashed_out(document: Document) -> TrashedDocumentOut:
         trashed_at=trashed_at,
         trashed_by_name=by.name if by is not None else "",
         purge_after=trashed_at + TRASH_RETENTION,
+        can_clear_retention=can_clear_retention,
     )
+
+
+def list_trash_out(membership: Membership) -> list[TrashedDocumentOut]:
+    """The rows of the member's trash, each saying whether the member may take "Bewaren
+    tot" away: an admin, or the person the document belongs to (security review of PR #54,
+    point 3)."""
+    admin = membership.role == Membership.Role.ADMIN
+    own: set[UUID] = (
+        set() if admin else visibility.own_person_ids(membership.workspace_id, membership.user_id)
+    )
+    return [
+        trashed_out(
+            document,
+            can_clear_retention=admin
+            or any(link.person_id in own for link in document.addressee_links.all()),
+        )
+        for document in list_trash(membership)
+    ]
 
 
 def mark_for_purge(document: Document, *, actor: AuditActor, reason: str) -> bool:
@@ -226,22 +246,38 @@ def purge_now(*, membership: Membership, actor: AuditActor, document_id: UUID) -
         defer_purge(membership.workspace_id)
 
 
-def empty_trash(*, membership: Membership, actor: AuditActor, up_to: datetime | None) -> int:
+@dataclass(frozen=True)
+class Emptied:
+    # Letters now being purged.
+    marked: int
+    # Letters the retention hook kept in the trash ("Bewaren tot").
+    retained: int
+
+
+def empty_trash(*, membership: Membership, actor: AuditActor, up_to: datetime | None) -> Emptied:
     """Purge every letter of the admin's trash trashed at or before `up_to` (all when
     None): what the admin was shown, never a letter trashed meanwhile and never one the
-    admin may not see. A letter the retention hook keeps is skipped. Returns how many."""
+    admin may not see. A letter the retention hook keeps is skipped and counted."""
+    marked = retained = 0
     with transaction.atomic():
         lock_own_membership(membership.workspace_id, membership.user_id)
         documents = visibility.trashed_documents(membership).select_for_update(no_key=True)
         if up_to is not None:
             documents = documents.filter(trashed_at__lte=up_to)
-        # A letter the admin sees only through emergency access stays: that access reads.
-        marked = sum(
-            1
-            for document in documents.order_by("trashed_at", "id")
-            if not visibility.only_through_emergency(document)
-            and mark_for_purge(document, actor=actor, reason="emptied")
-        )
+        for document in documents.order_by("trashed_at", "id"):
+            # A letter the admin sees only through emergency access stays: that access reads.
+            if visibility.only_through_emergency(document):
+                continue
+            if mark_for_purge(document, actor=actor, reason="emptied"):
+                marked += 1
+            else:
+                retained += 1
         if marked:
             defer_purge(membership.workspace_id)
-    return marked
+    return Emptied(marked=marked, retained=retained)
+
+
+def trash_warning(document: Document) -> str:
+    """The sentence a move to the trash came with ("Bewaren tot ..."), empty when none:
+    for an older client that did not ask first."""
+    return retention.check_removal(document, step="trash").warning

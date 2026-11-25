@@ -17,7 +17,13 @@ from apps.audit.services import AuditActor
 from apps.common.errors import ApiError, is_try_again
 from apps.common.privacy import mask_bsns
 from apps.documents import duplicates, organise, reading, visibility
-from apps.documents.models import LIVE, Document, DocumentEvent, DocumentSuggestion
+from apps.documents.models import (
+    LETTER_TYPES,
+    LIVE,
+    Document,
+    DocumentEvent,
+    DocumentSuggestion,
+)
 from apps.documents.schemas import ConfirmIn, TaskIn
 from apps.pipeline.autopilot import term_phrase
 from apps.pipeline.validation import dates_in, quote_in_text
@@ -79,6 +85,7 @@ def confirm_document(
             # the lookup as the system tells nobody else anything.
             if (
                 seen is not None
+                and seen.kind == Document.Kind.LETTER
                 and seen.status == Document.Status.DONE
                 and not seen.confirmed_by_ai
                 and seen.confirmed_by_id == user.id
@@ -89,7 +96,8 @@ def confirm_document(
         if document is None:
             raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
         visibility.require_editable(document)
-        if document.status not in _REVIEWABLE:
+        # An own document is never reviewed: its uploader named it (archive spec S 6.2).
+        if document.status not in _REVIEWABLE or document.kind != Document.Kind.LETTER:
             raise ApiError(
                 409,
                 "document_not_reviewable",
@@ -363,7 +371,8 @@ LETTER_DATE_AHEAD = timedelta(days=366)
 def _validate(data: ConfirmIn, document: Document) -> None:
     if data.visibility and data.visibility not in Document.Visibility.values:
         raise _invalid(_("Kies privé of zichtbaar voor iedereen."))
-    if data.document_type and data.document_type not in Document.Type.values:
+    # A letter's types only: the types of own documents are not post (archive spec S 4).
+    if data.document_type and data.document_type not in LETTER_TYPES:
         raise _invalid(_("Dit soort document kennen we niet."))
     if data.letter_date is not None and not (
         LETTER_DATE_FROM <= data.letter_date <= timezone.localdate() + LETTER_DATE_AHEAD
@@ -375,7 +384,8 @@ def _validate(data: ConfirmIn, document: Document) -> None:
 
 def _validate_task(task: TaskIn, document: Document) -> None:
     parse_amount(task.amount)
-    if task.type not in Task.Type.values:
+    # The end-date reminder is the system's (archive spec AR6), never a review's.
+    if task.type not in Task.Type.values or task.type == Task.Type.EXPIRY:
         raise _invalid(_("Dit soort taak kennen we niet."))
     if not task.description.strip():
         raise _invalid(_("Een taak heeft een omschrijving nodig."))

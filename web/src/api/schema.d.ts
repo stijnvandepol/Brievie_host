@@ -965,15 +965,55 @@ export interface paths {
         };
         /**
          * List Documents
-         * @description The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`). `addressed_to_me=true` keeps "Mijn post": the letters on the caller's own persons (their own and those they manage), with `include_departments=true` also on their departments; empty for a member without a person. `unread_only=true` keeps the letters the caller has not read (`unread`). `letter_status` (`new`, `open`, `waiting` or `handled`; 422 for another) and `overdue=true` keep the letters in that status, with the marker "Te laat"; `new` here is the letter not checked yet, not `unread`.
+         * @description The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`). `addressed_to_me=true` keeps "Mijn post": the letters on the caller's own persons (their own and those they manage), with `include_departments=true` also on their departments; empty for a member without a person. `unread_only=true` keeps the letters the caller has not read (`unread`). `letter_status` (`new`, `open`, `waiting` or `handled`; 422 for another) and `overdue=true` keep the letters in that status, with the marker "Te laat"; `new` here is the letter not checked yet, not `unread`. Archief (archive spec S 5): `archived=true` keeps the reviewed documents (`done`) of both kinds; `kind` (`letter` or `document`), `document_type`, `year` (the document's own date, else its upload's) and `expiring=true` (own documents ending within 90 days or already ended) narrow it. A sender is never a query parameter (it would land in a URL): `listArchive` takes it in its body. 422 `validation_error` for an unknown kind, type or year.
          */
         get: operations["listDocuments"];
         put?: never;
         /**
          * Create Document
-         * @description Upload a scanned document as multipart/form-data: `metadata` is a JSON string (schema `UploadMetadataIn`), followed by one `page` file (image/jpeg) per page in page order. Repeating an upload with the same `client_id` and pages answers 200 with the existing document. 429 `too_many_uploads` with Retry-After when the member or the workspace uploaded too much in a short time (by default 60 per member per 10 minutes, 600 per workspace per hour).
+         * @description Upload a scanned document as multipart/form-data: `metadata` is a JSON string (schema `UploadMetadataIn`), followed by one `page` file (image/jpeg) per page in page order. Repeating an upload with the same `client_id` and pages answers 200 with the existing document. 429 `too_many_uploads` with Retry-After when the member or the workspace uploaded too much in a short time (by default 60 per member per 10 minutes, 600 per workspace per hour). With `kind` `document` in the metadata it is an own document for the archive: `title` and `document_type` (an own document's type) are required, `person_ids` and `label_ids` organise it at once, `private` makes it private with the uploader as a reader; it skips the Inbox, gets no tasks and ends `done` after processing. A letter with any of these fields is 422 `validation_error`; a read-only member gets 403.
          */
         post: operations["createDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * List Archive
+         * @description Archief: the newest 200 reviewed documents (`done`) of both kinds the caller sees, filtered by the body: as `listDocuments` with `archived=true`, plus `sender` (exactly, a value of `getArchiveFacets`). A POST so a sender's name is never in a URL, a log line or the browser's history. Reads only; 422 `validation_error` for an unknown kind, type, year or status.
+         */
+        post: operations["listArchive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/archive-facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Archive Facets
+         * @description The choices of Archief's filters with their counts, over the reviewed documents (`done`) the caller sees: `kinds`, `types`, `years` (newest first) and the 50 most frequent `senders`. Nothing the caller may not read is counted. Any role, session or device.
+         */
+        get: operations["getArchiveFacets"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1011,7 +1051,7 @@ export interface paths {
         put?: never;
         /**
          * Search Documents
-         * @description Search the letters of the workspace by their text, sender, summary, label names and person names; every word must match, as a word beginning (Dutch stems too). Best first, then newest. The filters narrow the search; together they all apply. When nothing matches exactly, letters with similar words are answered with `fuzzy=true`. A BSN in `q` is removed before searching (`bsn_removed`). `next_offset` is null on the last page (offset at most 1000). Each hit has a fragment (`snippet`) with the matched words marked. The term is never logged. 422 `validation_error` for a term over 200 characters, an unknown `inbox_state` or `document_type`, or `date_from` after `date_to`; 429 after 30 searches a minute.
+         * @description Search the letters of the workspace by their text, sender, summary, label names and person names; every word must match, as a word beginning (Dutch stems too). Best first, then newest. The filters narrow the search; together they all apply. When nothing matches exactly, letters with similar words are answered with `fuzzy=true`. A BSN in `q` is removed before searching (`bsn_removed`). `next_offset` is null on the last page (offset at most 1000). Each hit has a fragment (`snippet`) with the matched words marked. The term is never logged. 422 `validation_error` for a term over 200 characters, an unknown `inbox_state` or `document_type`, or `date_from` after `date_to`; 429 after 30 searches a minute. Archief: `kind`, `year` and `archived` narrow as in `listDocuments`; an own document is found by its title too.
          */
         post: operations["searchDocuments"];
         delete?: never;
@@ -1112,6 +1152,26 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/details": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Document Details
+         * @description Change an own document's title, type, date (`document_date`), end date (`expires_on`, cleared with `clear_expires_on`) with its reminder lead (`remind_days`: 7, 30, 60 or 90; 0 leaves it) and "Bewaren tot" (`retain_until`, cleared with `clear_retain_until`); a letter takes only `retain_until`. Only what is sent changes; an empty text or a missing date leaves the field. Members (a read-only member gets 403; emergency access is read-only: 403 `emergency_read_only`). 404 `document_not_found` for a document the caller does not see or that is in the trash; 422 `validation_error` for a type of the other kind, a field a letter has not, or a date out of range. One history line per changed field (`details_changed`, `retention_changed`).
+         */
+        patch: operations["updateDocumentDetails"];
         trace?: never;
     };
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}/events": {
@@ -1377,7 +1437,7 @@ export interface paths {
         put?: never;
         /**
          * Trash Document
-         * @description Move the letter to the trash (role member or admin; a viewer gets 403). It is gone from every list, count, search and task list, and can be put back with `restoreDocument` until `purge_after` (30 days); then it is purged for good. Trashing a letter in the trash again answers the same. 404 `document_not_found` for a letter the caller does not see. Written to the log (`document_trashed`).
+         * @description Move the letter to the trash (role member or admin; a viewer gets 403). It is gone from every list, count, search and task list, and can be put back with `restoreDocument` until `purge_after` (30 days); then it is purged for good. Trashing a letter in the trash again answers the same. 404 `document_not_found` for a letter the caller does not see. Written to the log (`document_trashed`). A document with a "Bewaren tot" today or later is moved too, with `warning` (ask first, from `retain_until`); it cannot be purged before that day.
          */
         post: operations["trashDocument"];
         delete?: never;
@@ -1816,7 +1876,7 @@ export interface paths {
         put?: never;
         /**
          * Create My Export
-         * @description Web session only: a bearer token answers 401 not_authenticated. Any member asks for an export of their own post: the letters on their name, as a ZIP of the page images and their data. A job builds it; poll `getMyExport`. The file can be downloaded for 24 hours, by the member who asked for it only. A newer request replaces an older export. 403 `export_not_allowed` when an admin switched exports off in this workspace, 409 `export_running` while the last one is being built, 429 after five requests in an hour. Written to the log (`export_created`).
+         * @description Web session only: a bearer token answers 401 not_authenticated. Any member asks for an export of their own post: the letters on their name, as a ZIP of the page images and their data. A job builds it; poll `getMyExport`. The file can be downloaded for 24 hours, by the member who asked for it only. A newer request replaces an older export. 403 `export_not_allowed` when an admin switched exports off in this workspace, 409 `export_running` while the last one is being built, 429 after five requests in an hour. Written to the log (`export_created`). Version 2 holds a PDF per document next to the page images, own documents, the masked text and the history. `scope=all` ("Alles exporteren", admins only: 403 `not_admin` otherwise) exports every document the admin may read, whatever `allow_member_export` says; private letters the admin may not read are not in it. One export per member, whatever its scope.
          */
         post: operations["createMyExport"];
         delete?: never;
@@ -2434,7 +2494,7 @@ export interface paths {
         put?: never;
         /**
          * Empty Trash
-         * @description Web session only: a bearer token answers 401 not_authenticated. Purge every letter in the caller's trash for good (role admin), up to `up_to`: the newest `trashed_at` the caller showed (all when absent). Letters the caller does not see stay. Answers how many letters are now being purged; a job removes them. Written to the log, one `document_purged` row per letter.
+         * @description Web session only: a bearer token answers 401 not_authenticated. Purge every letter in the caller's trash for good (role admin), up to `up_to`: the newest `trashed_at` the caller showed (all when absent). Letters the caller does not see stay. Answers how many letters are now being purged; a job removes them. Written to the log, one `document_purged` row per letter. A letter with a "Bewaren tot" today or later stays in the trash; `retained` counts them.
          */
         post: operations["emptyTrash"];
         delete?: never;
@@ -2455,7 +2515,7 @@ export interface paths {
         post?: never;
         /**
          * Purge Document
-         * @description Web session only: a bearer token answers 401 not_authenticated. Purge a letter from the trash now, for good (role admin). Only a letter in the caller's trash: a live letter, one whose purge started, or one the caller does not see answers 404 `document_not_found`. From this answer on it cannot be restored; a job removes its scanned pages and its rows. A back-up made earlier still holds it. Written to the log (`document_purged`).
+         * @description Web session only: a bearer token answers 401 not_authenticated. Purge a letter from the trash now, for good (role admin). Only a letter in the caller's trash: a live letter, one whose purge started, or one the caller does not see answers 404 `document_not_found`. From this answer on it cannot be restored; a job removes its scanned pages and its rows. A back-up made earlier still holds it. Written to the log (`document_purged`). 409 `document_retained` while its "Bewaren tot" is today or later (remove the date first).
          */
         delete: operations["purgeDocument"];
         options?: never;
@@ -2679,6 +2739,80 @@ export interface components {
             key: string;
             /** Name */
             name: string;
+        };
+        /**
+         * ArchiveFacetsOut
+         * @description The choices of the archive's filters (`getArchiveFacets`), counted over the reviewed
+         *     documents the caller sees: kinds (`letter`, `document`), types, years (the document's
+         *     own date, else its upload's; newest first) and the 50 most frequent senders. A value
+         *     with no document is left out.
+         */
+        ArchiveFacetsOut: {
+            /** Kinds */
+            kinds?: components["schemas"]["FacetOut"][];
+            /** Senders */
+            senders?: components["schemas"]["FacetOut"][];
+            /** Types */
+            types?: components["schemas"]["FacetOut"][];
+            /** Years */
+            years?: components["schemas"]["FacetOut"][];
+        };
+        /**
+         * ArchiveListIn
+         * @description `listArchive`: the archive's filters, every one optional; together they all apply. In
+         *     a body, so a sender's name is never in a URL (security review of PR #54, point 1).
+         */
+        ArchiveListIn: {
+            /**
+             * Automatic
+             * @default false
+             */
+            automatic: boolean;
+            /**
+             * Document Type
+             * @default
+             */
+            document_type: string;
+            /**
+             * Expiring
+             * @default false
+             */
+            expiring: boolean;
+            /**
+             * Kind
+             * @default
+             */
+            kind: string;
+            /**
+             * Label Id
+             * Format: uuid
+             */
+            label_id?: string | null;
+            /**
+             * Letter Status
+             * @default
+             */
+            letter_status: string;
+            /**
+             * Overdue
+             * @default false
+             */
+            overdue: boolean;
+            /**
+             * Person Id
+             * Format: uuid
+             */
+            person_id?: string | null;
+            /**
+             * Sender
+             * @default
+             */
+            sender: string;
+            /**
+             * Year
+             * @default 0
+             */
+            year: number;
         };
         /** AssignIn */
         AssignIn: {
@@ -2924,6 +3058,55 @@ export interface components {
             /** Viewers */
             viewers: components["schemas"]["DocumentViewerOut"][];
         };
+        /**
+         * DocumentDetailsIn
+         * @description `updateDocumentDetails` (archive spec S 10): only what is sent changes. An empty
+         *     text, a missing date, `remind_days` 0 and the false flags mean "unchanged"; a date is
+         *     cleared with its `clear_` flag. An own document takes every field; a letter only
+         *     `retain_until` and `clear_retain_until`.
+         */
+        DocumentDetailsIn: {
+            /**
+             * Clear Expires On
+             * @default false
+             */
+            clear_expires_on: boolean;
+            /**
+             * Clear Retain Until
+             * @default false
+             */
+            clear_retain_until: boolean;
+            /**
+             * Document Date
+             * Format: date
+             */
+            document_date?: string | null;
+            /**
+             * Document Type
+             * @default
+             */
+            document_type: string;
+            /**
+             * Expires On
+             * Format: date
+             */
+            expires_on?: string | null;
+            /**
+             * Remind Days
+             * @default 0
+             */
+            remind_days: number;
+            /**
+             * Retain Until
+             * Format: date
+             */
+            retain_until?: string | null;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+        };
         /** DocumentEventOut */
         DocumentEventOut: {
             /**
@@ -3010,6 +3193,11 @@ export interface components {
             created_at: string;
             /** Document Type */
             document_type: string;
+            /**
+             * Expires On
+             * Format: date
+             */
+            expires_on?: string | null;
             /** Failure Code */
             failure_code: string;
             /**
@@ -3022,6 +3210,11 @@ export interface components {
              * @default
              */
             inbox_state: string;
+            /**
+             * Kind
+             * @default letter
+             */
+            kind: string;
             /** Label Ids */
             label_ids?: string[];
             /**
@@ -3079,6 +3272,21 @@ export interface components {
             proposed_sender: string;
             /** Reader Names */
             reader_names?: string[];
+            /**
+             * Remind Days
+             * @default 30
+             */
+            remind_days: number;
+            /**
+             * Reminder Task Id
+             * Format: uuid
+             */
+            reminder_task_id?: string | null;
+            /**
+             * Retain Until
+             * Format: date
+             */
+            retain_until?: string | null;
             /** Sender */
             sender: string;
             /** Shared User Ids */
@@ -3093,6 +3301,11 @@ export interface components {
             summary_by_ai: boolean;
             /** Tasks */
             tasks: components["schemas"]["TaskOut"][];
+            /**
+             * Title
+             * @default
+             */
+            title: string;
             /**
              * Unread
              * @default false
@@ -3137,6 +3350,11 @@ export interface components {
             /** Document Type */
             document_type: string;
             /**
+             * Expires On
+             * Format: date
+             */
+            expires_on?: string | null;
+            /**
              * Id
              * Format: uuid
              */
@@ -3146,6 +3364,11 @@ export interface components {
              * @default
              */
             inbox_state: string;
+            /**
+             * Kind
+             * @default letter
+             */
+            kind: string;
             /** Label Ids */
             label_ids?: string[];
             /**
@@ -3197,12 +3420,32 @@ export interface components {
             proposed_sender: string;
             /** Reader Names */
             reader_names?: string[];
+            /**
+             * Remind Days
+             * @default 30
+             */
+            remind_days: number;
+            /**
+             * Reminder Task Id
+             * Format: uuid
+             */
+            reminder_task_id?: string | null;
+            /**
+             * Retain Until
+             * Format: date
+             */
+            retain_until?: string | null;
             /** Sender */
             sender: string;
             /** Snippet */
             snippet?: components["schemas"]["SnippetPartOut"][];
             /** Status */
             status: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
             /**
              * Unread
              * @default false
@@ -3225,6 +3468,11 @@ export interface components {
          */
         DocumentSearchIn: {
             /**
+             * Archived
+             * @default false
+             */
+            archived: boolean;
+            /**
              * Date From
              * Format: date
              */
@@ -3244,6 +3492,11 @@ export interface components {
              * @default
              */
             inbox_state: string;
+            /**
+             * Kind
+             * @default
+             */
+            kind: string;
             /**
              * Label Id
              * Format: uuid
@@ -3266,6 +3519,11 @@ export interface components {
             person_id?: string | null;
             /** Q */
             q: string;
+            /**
+             * Year
+             * @default 0
+             */
+            year: number;
         };
         /** DocumentSearchOut */
         DocumentSearchOut: {
@@ -3312,6 +3570,11 @@ export interface components {
             /** Document Type */
             document_type: string;
             /**
+             * Expires On
+             * Format: date
+             */
+            expires_on?: string | null;
+            /**
              * Id
              * Format: uuid
              */
@@ -3321,6 +3584,11 @@ export interface components {
              * @default
              */
             inbox_state: string;
+            /**
+             * Kind
+             * @default letter
+             */
+            kind: string;
             /** Label Ids */
             label_ids?: string[];
             /**
@@ -3372,10 +3640,30 @@ export interface components {
             proposed_sender: string;
             /** Reader Names */
             reader_names?: string[];
+            /**
+             * Remind Days
+             * @default 30
+             */
+            remind_days: number;
+            /**
+             * Reminder Task Id
+             * Format: uuid
+             */
+            reminder_task_id?: string | null;
+            /**
+             * Retain Until
+             * Format: date
+             */
+            retain_until?: string | null;
             /** Sender */
             sender: string;
             /** Status */
             status: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
             /**
              * Unread
              * @default false
@@ -3528,6 +3816,11 @@ export interface components {
         EmptyTrashOut: {
             /** Document Count */
             document_count: number;
+            /**
+             * Retained
+             * @default 0
+             */
+            retained: number;
         };
         /**
          * ErrorOut
@@ -3572,6 +3865,17 @@ export interface components {
              * @default
              */
             vpn_hostname: string;
+        };
+        /**
+         * FacetOut
+         * @description One value a filter can choose and how many reviewed documents the caller sees with
+         *     it.
+         */
+        FacetOut: {
+            /** Count */
+            count: number;
+            /** Value */
+            value: string;
         };
         /** FolderIn */
         FolderIn: {
@@ -3882,6 +4186,11 @@ export interface components {
             /** Document Type */
             document_type: string;
             /**
+             * Expires On
+             * Format: date
+             */
+            expires_on?: string | null;
+            /**
              * Id
              * Format: uuid
              */
@@ -3891,6 +4200,11 @@ export interface components {
              * @default
              */
             inbox_state: string;
+            /**
+             * Kind
+             * @default letter
+             */
+            kind: string;
             /** Label Ids */
             label_ids?: string[];
             /**
@@ -3942,10 +4256,30 @@ export interface components {
             proposed_sender: string;
             /** Reader Names */
             reader_names?: string[];
+            /**
+             * Remind Days
+             * @default 30
+             */
+            remind_days: number;
+            /**
+             * Reminder Task Id
+             * Format: uuid
+             */
+            reminder_task_id?: string | null;
+            /**
+             * Retain Until
+             * Format: date
+             */
+            retain_until?: string | null;
             /** Sender */
             sender: string;
             /** Status */
             status: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
             /**
              * Unread
              * @default false
@@ -4125,10 +4459,20 @@ export interface components {
              */
             expires_at?: string | null;
             /**
+             * Failure Code
+             * @default
+             */
+            failure_code: string;
+            /**
              * Id
              * Format: uuid
              */
             id?: string | null;
+            /**
+             * Scope
+             * @default mine
+             */
+            scope: string;
             /**
              * Size
              * @default 0
@@ -5317,6 +5661,11 @@ export interface components {
             /** Auto Rule Label Ids */
             auto_rule_label_ids?: string[];
             /**
+             * Can Clear Retention
+             * @default false
+             */
+            can_clear_retention: boolean;
+            /**
              * Client Id
              * Format: uuid
              */
@@ -5334,6 +5683,11 @@ export interface components {
             /** Document Type */
             document_type: string;
             /**
+             * Expires On
+             * Format: date
+             */
+            expires_on?: string | null;
+            /**
              * Id
              * Format: uuid
              */
@@ -5343,6 +5697,11 @@ export interface components {
              * @default
              */
             inbox_state: string;
+            /**
+             * Kind
+             * @default letter
+             */
+            kind: string;
             /** Label Ids */
             label_ids?: string[];
             /**
@@ -5399,10 +5758,30 @@ export interface components {
             purge_after: string;
             /** Reader Names */
             reader_names?: string[];
+            /**
+             * Remind Days
+             * @default 30
+             */
+            remind_days: number;
+            /**
+             * Reminder Task Id
+             * Format: uuid
+             */
+            reminder_task_id?: string | null;
+            /**
+             * Retain Until
+             * Format: date
+             */
+            retain_until?: string | null;
             /** Sender */
             sender: string;
             /** Status */
             status: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
             /**
              * Trashed At
              * Format: date-time
@@ -5428,6 +5807,11 @@ export interface components {
              * Format: date
              */
             waiting_until?: string | null;
+            /**
+             * Warning
+             * @default
+             */
+            warning: string;
         };
         /** TunnelOut */
         TunnelOut: {
@@ -5446,8 +5830,61 @@ export interface components {
              * Format: uuid
              */
             client_id: string;
+            /**
+             * Document Date
+             * Format: date
+             * @default null
+             */
+            document_date: string | null;
+            /**
+             * Document Type
+             * @default
+             */
+            document_type: string;
+            /**
+             * Expires On
+             * Format: date
+             * @default null
+             */
+            expires_on: string | null;
+            /**
+             * Kind
+             * @default letter
+             */
+            kind: string;
+            /**
+             * Label Ids
+             * @default []
+             */
+            label_ids: string[];
             /** Pages */
             pages: components["schemas"]["PageMetaIn"][];
+            /**
+             * Person Ids
+             * @default []
+             */
+            person_ids: string[];
+            /**
+             * Private
+             * @default null
+             */
+            private: boolean | null;
+            /**
+             * Remind Days
+             * @default 30
+             */
+            remind_days: number;
+            /**
+             * Retain Until
+             * Format: date
+             * @default null
+             */
+            retain_until: string | null;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
         };
         /** UserOut */
         UserOut: {
@@ -8850,6 +9287,11 @@ export interface operations {
                 unread_only?: boolean;
                 letter_status?: string;
                 overdue?: boolean;
+                kind?: string;
+                document_type?: string;
+                year?: number;
+                archived?: boolean;
+                expiring?: boolean;
             };
             header?: never;
             path: {
@@ -9018,6 +9460,135 @@ export interface operations {
             };
             /** @description Too Many Requests */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    listArchive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveListIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSummaryOut"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    getArchiveFacets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchiveFacetsOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9500,6 +10071,96 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    updateDocumentDetails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentDetailsIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12189,7 +12850,9 @@ export interface operations {
     };
     createMyExport: {
         parameters: {
-            query?: never;
+            query?: {
+                scope?: string;
+            };
             header?: never;
             path: {
                 workspace_id: string;
@@ -12236,6 +12899,15 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14380,6 +15052,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
             /** @description Content Too Large */
             413: {
                 headers: {
@@ -14450,6 +15131,15 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

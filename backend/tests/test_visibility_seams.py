@@ -28,6 +28,7 @@ MEMBER_FACING: Final = (
     "documents/trash.py",
     "documents/lingering.py",
     "documents/handle.py",
+    "documents/own.py",
 )
 
 # Functions there that name `Document.objects` directly: each locks one letter by id
@@ -46,6 +47,8 @@ SEAM_READS: Final = {
     ("documents/services.py", "status_counts"),
     ("documents/handle.py", "handle_document"),
     ("documents/services.py", "menu_counts"),
+    ("documents/services.py", "list_archive_facets"),
+    ("documents/own.py", "_locked_for_edit"),
     ("documents/services.py", "_waiting_and_lingering"),
     ("documents/services.py", "get_document"),
     ("documents/search.py", "_filtered"),

@@ -63,6 +63,7 @@ export const WORKSPACE_CODES = [
   "document_trashed",
   "document_restored",
   "document_purged",
+  "retention_changed",
 ] as const;
 
 export const AUDIT_CODES = [...SERVER_CODES, ...WORKSPACE_CODES] as const;
@@ -179,6 +180,8 @@ function knownLabel(code: AuditCodeName): string {
       return t`Brief teruggezet`;
     case "document_purged":
       return t`Brief definitief verwijderd`;
+    case "retention_changed":
+      return t`Bewaren tot gewijzigd`;
   }
 }
 

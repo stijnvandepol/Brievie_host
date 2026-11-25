@@ -3097,6 +3097,217 @@ Every point was checked against the code first; all held.
   step locked (the user sees the notice; an admin can clear), and after a grace period the
   password alone leads to setting a factor up, so the grace should be short.
 
+## 2026-11-24: Archive (Archief replaces Alle post; own documents)
+
+Spec `docs/superpowers/specs/2026-11-24-archief-design.md`, plan
+`docs/superpowers/plans/2026-11-24-host-archief.md`.
+
+The owner's answers to "Besluiten voor Stijn" (Stijn, 2026-11-24): every recommendation.
+
+- **B1.** "Archief" replaces "Alle post" in the menu; the old link `/w/<id>/post` keeps working.
+- **B2.** Every checked letter is in the archive, also with an open task; "Afgehandeld" is a
+  filter.
+- **B3.** "Alleen voor deze persoon" is on from the start for identity document, medical,
+  payslip and tax return; the user can switch it off.
+- **B4.** "Bewaren tot": the trash is allowed with a warning; purge and emptying the trash
+  refuse until the date has passed or is removed.
+- **B5.** On the iPhone a + on the Archief screen; the round scan button stays for post.
+
+Rulings of the spec, kept as written:
+
+- **AR1.** One `Document` table with `kind` (`letter`, `document`), not a second model: every
+  protection (sealed pages, BSN mask, search, visibility, trash, purge, export, RLS) is on
+  `Document`.
+- **AR2.** `kind` is set by the server at creation and never changes; no API field writes it
+  afterwards.
+- **AR11.** No `folder_id`: the `Folder` model and `listFolders`/`createFolder` stay (the API is
+  additive), nothing points to a folder; labels, person, type and year do what a folder tree
+  would. SPEC section 8 strikes `folder_id`.
+- **Types.** `Document.Type` gains `identity`, `diploma`, `warranty`, `tax_return`, `medical`.
+  `LETTER_TYPES` (the fourteen of before) is what the AI returns and a review confirms (a
+  review with an own document's type is 422); `DOCUMENT_TYPES` is the closed list of an own
+  document.
+- **Database defaults.** `kind`, `title` and `remind_days` keep a Python default (no
+  `db_default`: PB decision 5) and get a database default by `RunSQL` (documents 0025).
+
+- **AR7, AR8 (plan Task 2, with the letter-status part of Task 13).** Post that waits is letters
+  only: the Inbox states, unread, "Blijft liggen", Mijn post, the letter status and its counts
+  all add `kind = 'letter'`, and the three partial indexes of waiting post (`unassigned`,
+  `unopened`, `opened`) name it in their condition (documents 0026). An own document has no
+  letter status: `letter_sync` keeps its task facts at zero, also in the nightly recompute, so
+  its reminder never makes it "Openstaand"; "Brief afhandelen" on one answers 409
+  `document_not_a_letter`.
+- **AR9 (plan Task 3).** `title` joins the generated `search_vector` with weight A, next to the
+  sender. A generated column cannot be altered: documents 0027 drops the GIN index and the
+  column and adds both again. Release notes: "Deze update duurt wat langer om toe te passen:
+  de zoekindex van alle brieven wordt opnieuw opgebouwd." The typo fallback (trigram on
+  sender and summary) does not look at the title.
+- **Adding an own document (plan Task 4).** `createDocument`'s metadata takes `kind`, `title`,
+  `document_type`, `document_date`, `person_ids`, `label_ids`, `expires_on`, `remind_days`,
+  `retain_until` and `private`, all defaulted: an older app makes a letter. A letter with any
+  of them is 422 (a new client may not smuggle a title into a letter). `apps.documents.own` is
+  the one creator of `kind = document`: checks first (title, an own document's type, sane
+  dates, 7/30/60/90, active persons, existing labels), then the caller's membership is locked
+  and re-read (a member demoted to read-only meanwhile gets 403), persons and labels go
+  through `organise` with a `document_added` line, the addressee list and readers follow at
+  the scope's end, and `private` flips it last with the uploader as a reader. The title is
+  BSN-masked before it is stored. `kind` and `status` are never taken from the request.
+- **AR3, AR5 (plan Task 5).** An own document ends `done` at the end of processing, confirmed
+  by its uploader (`confirmed_by = scanned_by`, `confirmed_by_ai` false); a failure ends `done`
+  with `failure_code`, and `retryDocumentProcessing` accepts it. Duplicates are compared within
+  a kind. No rule runs on an own document (the triggers, a manual run and a rule's test leave
+  them out); `confirmDocument` on one is 409 `document_not_reviewable`.
+- **AR4, narrowed for this round (ruling of the builder).** The pipeline makes **no AI call** for
+  an own document: no proposals (title, type, dates, labels) and no summary. The spec lets the
+  AI propose them as suggestions applied by a tap; that needs its own prompt, its own
+  validation and the "Brievie stelt voor" block, and nothing would show the proposals yet.
+  Without it nothing of an own document's text leaves the server, whatever the AI settings.
+  `UploadMetadataIn` has no `summary_by_ai`. Cost: the member fills in what the AI could have
+  guessed. Left for a later slice.
+- **The archive list (plan Task 7, AR12, B2).** The archive is `listDocuments` with
+  `archived=true`: every reviewed (`done`) document of both kinds the member sees, also with
+  an open task; `kind`, `document_type`, `year` (the own date, else the upload's), `sender`
+  (exactly, a facet's value) and `expiring` (own documents ending within 90 days or past)
+  narrow it, on top of `visible_documents`. `searchDocuments` takes `kind`, `year` and
+  `archived`. `getArchiveFacets` counts kinds and types in one pass with filtered counts, and
+  groups years and the 50 most frequent senders, all over `visible_documents` with
+  `status = done`; a value nobody visible has is never counted. `services.list_archive_facets`
+  and `own._locked_for_edit` join the seam test's list.
+- **AR6, AR7 (plan Task 8).** "Geldig tot" becomes a task of the new type `expiry` ("Verloopt")
+  made by one writer, `apps.documents.reminders.start_reminder`, as the system: no creator,
+  no assignee, `deadline = expires_on`, `deadline_source = calculated`, description "Geldig tot
+  {datum}: {titel}" (never the text), history `reminder_started` with origin `system` and no
+  actor. The daily job `start_expiry_reminders` (04:10, no payload) walks every workspace in
+  short transactions, at most 500 per workspace a night. A partial unique index
+  (`tasks_task_one_reminder`) allows one open reminder per document; a reminder ticked off is
+  not made again for the same date, only for a later one. A changed end date moves the open
+  reminder; a cleared one ends it (`delete_tasks`). A review may not make an `expiry` task.
+  Every change goes through `letter_sync`, which keeps an own document's letter facts at
+  zero: the reminder counts in Mijn taken, never as an "Openstaand" letter.
+- **B4 (plan Task 9).** `retention.check_removal` reads `retain_until`: until the day has passed
+  (Europe/Amsterdam; on the day itself it is still kept) the trash is allowed with a warning
+  (`trashDocument` answers it in `warning`; the clients ask first from `retain_until`),
+  purge-now answers 409 `document_retained`, emptying the trash leaves it and counts it
+  (`EmptyTrashOut.retained`), and the 30-day expiry leaves it in the trash until the day has
+  passed. Any editor may clear the date (`updateDocumentDetails`, history
+  `retention_changed`). The sentences name the date only.
+- **AR10 (plan Task 10).** The export is version 2: next to the page images (kept, so a reader
+  of version 1 finds every key it knew) a PDF per document,
+  `documents/<year>/<date>_<title-or-sender>_<id8>.pdf`, made by our own writer
+  (`apps.documents.pdf`, about 100 lines: each JPEG embedded as it is with `DCTDecode`, the
+  page as large as the scan at 144 dpi, no text layer, no new dependency). The pages are
+  opened once each, in memory, and written into the ZIP; nothing unsealed touches the disk.
+  A page a PDF cannot hold as it is leaves that document without a PDF (`pdf: null`). The JSON
+  adds `kind`, `title`, `document_date`, `expires_on`, `retain_until`, `source`, `ocr_text`
+  (the stored, BSN-masked text: a change from version 1, which left the text out, as the
+  archive spec asks), `people` (name, id, kind), a task's `completed_at`, `history` (kind,
+  origin, date; no names or free text), `pdf` and `original` (null until browser uploads
+  keep originals).
+- **AR13 (plan Task 10).** `createMyExport?scope=all` ("Alles exporteren") is an admin's (the
+  role re-read under the membership lock; 403 `not_admin`), web session only, and ignores
+  `allow_member_export`; `mine` obeys it as before. What `all` holds is read as the admin
+  (`admin_document_ids`, under `export_context` with the admin as reader), so the policies
+  leave out every private letter the admin may not read; a letter the admin reads only
+  through emergency access is left out too. The build and the download check the admin role
+  again (a demoted admin's export fails or is not found). One export row per member, whatever
+  its scope; `export_created` records `scope` with the count.
+- **Measured at 100,000 documents (plan Task 12, `visibility-perf` on 9be29ef).** The world
+  now has own documents (about 21 %, titled with everyday words, no letter facts), end dates
+  (about 5 %), 400 senders and 8 years. Slowest median of the 12 state × actor runs, jit off:
+
+  | List | Median | Where |
+  |---|---|---|
+  | `list_archive` | 58 ms | own, admin |
+  | `list_archive_kind_type` | 174 ms | own, sorter |
+  | `list_archive_person_year` | 249 ms | own, department member (closest to the budget) |
+  | `archive_facets` | 209 ms | E, sorter |
+  | `list_archive_expiring` | 167 ms | own, sorter |
+  | `menu_counts` (re-measured) | 168 ms | own, sorter |
+  | `inbox_counts` (re-measured) | 175 ms | own, sorter |
+  | `lingering_letters` (re-measured) | 174 ms | own+D, admin |
+  | `list_my_post`, `_unread`, `list_all_unread` | 60, 20, 49 ms | |
+  | `list_tasks_all` | 197 ms | own, sorter |
+  | `search_with_title` (not gated) | 510 ms | E, sorter |
+  | `search_sender` (not gated, as before) | 487 ms | E, sorter |
+
+  Lists: 306 PASS, 0 FAIL. The facets first read the visible rows three times (400–540 ms);
+  they are one query now (grouping sets over the seam's own statement, as the member). The
+  `(workspace, -letter_date)` index was not needed. **`search_with_title` is not gated**, as
+  `search_sender` and `search_common_word` are not (DECISIONS 2026-11-20, M1): every search
+  term gets the same plan in this world (the workspace through the policies, not the GIN
+  index), 393–510 ms on the same runs and over on main too; the owner can make it gated
+  again once search is faster. The job itself is red on this branch and on main alike (a
+  run of main dispatched the same day): the duplicate measurement's recall is 0.930 < 0.95
+  for a corpus whose dates follow the day it runs; nothing of the archive touches it. The
+  one-off time of documents 0027 at 100,000 documents is not measured (the job migrates an
+  empty database before it builds the world).
+
+### Security review of PR #54 (2026-11-25)
+
+Every point was checked against the code first.
+
+- **Point 1 (medium), held, fixed: a sender's name in a URL.** `listDocuments` took `sender` as a
+  query parameter and Archief put it in the address bar (`?afzender=`), so a name such as a
+  care provider or a bailiff reached proxy logs and the browser's history. The archive's list
+  is now `POST listArchive` (the filters in the body, the sender among them); `listDocuments`
+  has no `sender` any more (it was new in this PR, so nothing breaks). The web keeps the chosen
+  sender in the page's state, never in the URL; an old `?afzender=` is ignored. The other URL
+  filters name no content: a kind, a type of the closed list, a year, a status, ids of a person
+  and a label. A title is never a filter; search stays `POST searchDocuments`.
+- **Point 2 (medium), held, fixed: no size limit on an export.** Every page is in the ZIP twice
+  (the picture and in the PDF) and nothing measured it first. Now the export's size is estimated
+  before a byte is written (twice the pages, the text, a little per document): over
+  `BRIEVIE_EXPORT_MAX_BYTES` (default 10 GiB) it is refused when asked (409 `export_too_large`)
+  and failed when built (`failure_code` `too_large`); without room for it plus
+  `BRIEVIE_EXPORT_FREE_RESERVE_BYTES` (default 1 GiB) on the export disk it fails with
+  `not_enough_space` (`MyExportOut.failure_code`, said in words on Mensen). Free space is read
+  through `export_files.free_bytes` (looks only). A document's pages are opened one at a time
+  for the pictures and again one at a time for the PDF; no list of a document's pages is held.
+  One "Alles exporteren" runs at a time per workspace (a transaction advisory lock, then 409
+  `export_running_elsewhere`); a member's own archive is not held up by it. Ruling: both limits
+  are Django settings with these defaults, not yet passed by the compose files (as
+  `BRIEVIE_MAX_PAGES`); the pictures stay next to the PDF (a reader of version 1 needs them),
+  so the size stays about twice the pages and is now known in advance.
+- **Point 3 (medium), held, fixed: "Bewaren tot" had no audit trail and could block a purge.**
+  Every set, move or removal of the date writes the audit code `retention_changed` (the new date
+  or empty, the document by its id, never a title), at upload too; the history line stays, but
+  the audit row outlives a purge. A date lies at most 20 years ahead (422 beyond; the longest
+  Dutch term people meet, a medical file, is 20 years). Ruling, who may override: any editor of a
+  live document may set, move or take away the date (as before: nobody is trapped). An **admin**
+  and **the person the document belongs to** (an addressee that is the caller's own person) may
+  always take it away: also in their trash and also with a read-only role
+  (`updateDocumentDetails` with only `clear_retain_until`; anything else of a trashed document
+  stays 404, setting or moving the date stays an editor's). `TrashedDocumentOut.can_clear_retention`
+  says so per row, and Prullenbak shows "Bewaren tot … niet definitief te wissen" with "Bewaren
+  tot weghalen" where it is true. No other member can block an erasure: the person clears the
+  date and asks, or the admin clears it and purges. A manager ("Beheerd door") or a sharer is not
+  the person and has no override. The refusal's sentence says that an admin can take the date
+  away (the admin is the one who purges).
+- **Point 4 (low), held, fixed:** reopening a ticked-off reminder while a newer one is open hit
+  the unique index (500). `reopenTask` now answers 409 `reminder_already_open` and changes nothing.
+- **Point 5 (low), held, fixed:** a new title left the old one in the open reminder's
+  description (and so in Mijn taken and the export). `reminders.on_details_changed` (was
+  `on_expiry_changed`) now runs on a changed title too and rewrites the description.
+- **Point 6 (low), held, fixed:** `setTaskDeadline` could move a reminder's date before the end
+  date; ticked off, it was made again every night. A reminder's date is the document's "Geldig
+  tot": `setTaskDeadline` on one answers 409 `reminder_deadline_fixed` (change "Geldig tot").
+- **Point 7 (low), held, fixed:** the reminder of an own document on nobody's name was "Op te
+  pakken" for sorters only, so the uploader of a private one never had it. It is now the
+  uploader's own task (`mine.reason_for`, `TaskFacts.reminder_of`, and the same arm in the
+  query); another sorter still has it to pick up when it is somebody else's. A reminder of a
+  document on a person stays that person's.
+- **Point 8 (low), held, fixed:** "Alleen voor deze persoon" was on for the sensitive types in the
+  client only. `UploadMetadataIn.private` is now `bool | None` (default absent): absent, an
+  identity document, medical, a payslip and a tax return start private on the server too
+  (Besluit B3); an explicit `false` is honoured. The field is new in this PR, so its type change
+  breaks no client.
+- **Point 9 (unverified by the reviewer), tested.** A private own document on another member's
+  person, in a workspace where members see only their own post: `make_private` adds the
+  uploader as a share before the flip and recomputes the readers as the system, so the flip
+  as the uploader succeeds. Who reads it: the uploader (share), the person's account
+  (addressee), nobody else, also after processing made it `done`
+  (`test_private_on_someone_elses_person_keeps_the_uploader_and_the_person`).
+
 ## 2026-11-25: The public route needs the second step (two-step Task 13, external access B2)
 
 Built on PR #52 (two-step sign-in) and PR #53 (external access). The owner's rules: with

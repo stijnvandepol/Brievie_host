@@ -41,6 +41,9 @@ ALLOWED_SYSTEM_CALLERS = {
     # "Ongelezen": whether an addressee opened a letter is written as the system after the
     # member's own mark, and recomputed when its addressees change (navigation S 5.5).
     "apps/documents/reading.py",
+    # The end-date reminder of an own document is made as the system, with no actor
+    # (archive spec S 7.1, AR6), after the job or the editor's change was authorised.
+    "apps/documents/reminders.py",
     # Fills `addressee_opened_at` of every confirmed letter (documents/0022).
     "apps/documents/migrations/0022_read_marks.py",
     # Letter status: completing a task deletes every member's snooze row of it (the own-rows
@@ -51,6 +54,8 @@ ALLOWED_SYSTEM_CALLERS = {
     # and the nightly repair; the migration fills them for every letter.
     "apps/tasks/letter_sync.py",
     "apps/documents/migrations/0024_letter_status.py",
+    # The same statement once more, joining no task of an own document (archive AR7).
+    "apps/documents/migrations/0030_letter_facts_letters_only.py",
     # Fills the derived automatic flag of every letter (documents/0014).
     "apps/documents/migrations/0014_document_has_automatic_link.py",
 }

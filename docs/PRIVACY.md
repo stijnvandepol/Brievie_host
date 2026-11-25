@@ -207,14 +207,23 @@ an export or a session is an id only. Never a letter's content, a token or a pas
 
 ## The export
 
-Every member can download their own post as a ZIP ("Mijn post exporteren"): a photo of
-every page of the letters addressed to them, a data file with sender, summary, labels,
-persons and tasks, and a readme. In the text and the data file the BSN is replaced by
-`[BSN]`; **on the photos of the pages it is readable**, because they are the pages. The
-file is sealed while it is on the server and removed after 24 hours; it is not in the
-back-up. Once downloaded it is an ordinary unencrypted file: the member decides where it
-goes. An admin can switch exports off for a workspace (off by default in Zakelijk).
-Making and downloading are in the log, with the number of letters, not their names.
+Every member can download their own post and own documents as a ZIP ("Mijn archief
+exporteren"): a photo of every page and a PDF of every letter or document addressed to
+them, a data file with sender or title, summary, the recognised text, labels, persons,
+tasks, end and retention dates and what happened to it (kinds and dates, no names), and a
+readme. In the text and the data file the BSN is replaced by `[BSN]`; **on the photos and
+in the PDFs it is readable**, because they are the pages. The file is sealed while it is
+on the server and removed after 24 hours; it is not in the back-up. Once downloaded it is
+an ordinary unencrypted file: the member decides where it goes. An admin can switch
+exports off for the members of a workspace (off by default in Zakelijk).
+
+An admin can also export everything they may read ("Alles exporteren"), whatever that
+switch says: the same files for every letter and document the admin can open in Brievie
+at that moment. Private letters the admin may not read are not in it, nor what the admin
+reads only through an hour of emergency access. It is not a back-up.
+
+Making and downloading are in the log, with the number of documents and which of the two
+exports it was, not their names.
 
 ## The trash
 

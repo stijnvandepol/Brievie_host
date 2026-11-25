@@ -71,7 +71,7 @@ describe("a person's page", () => {
     expect(await screen.findByRole("button", { name: "Uitnodigen: Papa" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Brieven van Papa (2)" })).toHaveAttribute(
       "href",
-      `/w/${workspace.id}/post?persoon=${papa.id}`,
+      `/w/${workspace.id}/archief?persoon=${papa.id}`,
     );
   });
 

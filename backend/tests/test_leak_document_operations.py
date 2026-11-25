@@ -99,6 +99,9 @@ DOCUMENT_OPERATION_CASES: Final[dict[str, Case]] = {
     "listDocumentEvents": lambda c, ids, d: c.get(_url(ids, d, "/events")),
     "undoDocumentEvent": lambda c, ids, d: _post(c, _url(ids, d, f"/events/{ids.event_id}/undo")),
     "trashDocument": lambda c, ids, d: _post(c, _url(ids, d, "/trash")),
+    "updateDocumentDetails": lambda c, ids, d: c.patch(
+        _url(ids, d, "/details"), {"retain_until": "2030-01-01"}, content_type="application/json"
+    ),
     "restoreDocument": lambda c, ids, d: _post(c, _url(ids, d, "/restore")),
     "purgeDocument": lambda c, ids, d: c.delete(f"/api/v1/workspaces/{ids.workspace_id}/trash/{d}"),
     "markDocumentRead": lambda c, ids, d: _post(c, _url(ids, d, "/read")),

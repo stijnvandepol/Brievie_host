@@ -243,6 +243,8 @@ def test_the_list_of_codes_is_the_closed_list_of_d11() -> None:
         "document_trashed",
         "document_restored",
         "document_purged",
+        # "Bewaren tot" set or taken away (security review of PR #54, point 3).
+        "retention_changed",
     }
 
 

@@ -160,6 +160,61 @@ export const secondWorkspace = {
   role: "member",
 };
 
+/** The filters of a `listArchive` body as search params: what a test asserts on. Empty,
+ * false, zero and null values are left out (as an unset filter). */
+export async function bodyFilters(request: Request): Promise<URLSearchParams> {
+  const body = (await request.json()) as Record<string, unknown>;
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(body)) {
+    if (value === null || value === "" || value === false || value === 0) continue;
+    params.set(key, String(value));
+  }
+  return params;
+}
+
+/** What `getArchiveFacets` answers for the one letter of `documentSummary`. */
+export const archiveFacets: components["schemas"]["ArchiveFacetsOut"] = {
+  kinds: [{ value: "letter", count: 1 }],
+  types: [{ value: "assessment", count: 1 }],
+  years: [{ value: "2026", count: 1 }],
+  senders: [{ value: "Belastingdienst", count: 1 }],
+};
+
+/** An own document (archive): a title, an own document's type, an end date. */
+export const ownDocument = {
+  id: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b7777",
+  client_id: "3c2b1a09-8f7e-4d6c-9b5a-4e3d2c1b0777",
+  created_at: "2026-10-01T09:30:00Z",
+  document_type: "identity",
+  letter_date: "2025-06-01",
+  page_count: 1,
+  sender: "",
+  status: "done",
+  addressee_ids: [],
+  label_ids: [],
+  inbox_state: "",
+  open_suggestion_count: 0,
+  confirmed_by_ai: false,
+  auto_label_ids: [],
+  auto_addressee_ids: [],
+  proposed_sender: "",
+  proposed_document_type: "",
+  proposed_letter_date: null,
+  open_duplicate_count: 0,
+  visibility: "workspace",
+  reader_names: [],
+  unread: false,
+  letter_status: "",
+  overdue: false,
+  open_task_count: 0,
+  kind: "document",
+  title: "Paspoort",
+  expires_on: "2031-03-12",
+  remind_days: 30,
+  retain_until: null,
+  reminder_task_id: null,
+};
+
 /** What `countLetterStatuses` answers when nothing is counted. */
 export const noLetterCounts = { new: 0, open: 0, waiting: 0, handled: 0, overdue: 0 };
 
@@ -189,6 +244,12 @@ export const documentSummary = {
   letter_status: "",
   overdue: false,
   open_task_count: 0,
+  kind: "letter",
+  title: "",
+  expires_on: null,
+  remind_days: 30,
+  retain_until: null,
+  reminder_task_id: null,
 };
 
 export const documentDetail: components["schemas"]["DocumentOut"] = {
@@ -327,6 +388,13 @@ export function documentHandlers(detail: components["schemas"]["DocumentOut"] = 
     http.get(`*${API}/workspaces/${workspace.id}/documents/status-counts`, () =>
       HttpResponse.json(noLetterCounts),
     ),
+    http.get(`*${API}/workspaces/${workspace.id}/documents/archive-facets`, () =>
+      HttpResponse.json(archiveFacets),
+    ),
+    // Archief's list is a POST (a sender never goes into a URL).
+    http.post(`*${API}/workspaces/${workspace.id}/documents/archive`, () =>
+      HttpResponse.json([documentSummary]),
+    ),
     http.get(`*${API}/workspaces/${workspace.id}/documents/${documentSummary.id}/events`, () =>
       HttpResponse.json([]),
     ),
@@ -348,6 +416,8 @@ export function trashedLetter(overrides: Partial<Trashed> = {}): Trashed {
     trashed_at: "2026-11-09T10:00:00Z",
     trashed_by_name: "Anna",
     purge_after: "2026-12-09T10:00:00Z",
+    warning: "",
+    can_clear_retention: false,
     ...overrides,
   };
 }
@@ -474,12 +544,15 @@ export function ruleHandlers(
 export function exportState(
   status: "none" | "pending" | "ready" | "failed" = "none",
   allowed = true,
+  scope: "mine" | "all" = "mine",
 ): components["schemas"]["MyExportOut"] {
   return {
     allowed,
     status,
     document_count: 0,
     size: 0,
+    scope,
+    failure_code: "",
     ...(status === "ready"
       ? {
           id: "ee111111-1111-4111-8111-111111111111",

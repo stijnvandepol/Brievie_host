@@ -62,6 +62,12 @@ def run_pipeline(
         if document is None:
             logger.info("Skipped document %s in workspace %s", document_id, workspace_id)
             return
+        if document.kind == Document.Kind.DOCUMENT:
+            finish_own_document(document)
+            logger.info(
+                "Processed own document %s in %.1f s", document_id, time.monotonic() - started
+            )
+            return
         text = load_text(document)
         provider = provider_factory(workspace_id)
         persons = active_persons()
@@ -132,6 +138,31 @@ def run_pipeline(
         dropped,
         confirmed,
         time.monotonic() - started,
+    )
+
+
+def finish_own_document(document: Document, *, failure_code: str = "") -> None:
+    """The document branch (archive spec S 6.2): an own document ends `done`, confirmed by
+    its uploader, who named it, chose its type and its person in the form; that is the
+    confirmation (AR3). No AI call, no proposals, no rules, no autopilot, no task. Its
+    duplicates are looked for among own documents only (AR5). A failure ends `done` too,
+    with `failure_code` set: it is findable by title and person, and never enters the
+    Inbox. The caller holds the row lock on the `processing` document, as the system."""
+    _detect_guarded(document)
+    document.status = Document.Status.DONE
+    document.failure_code = failure_code
+    document.confirmed_by_id = document.scanned_by_id
+    document.confirmed_at = timezone.now()
+    document.confirmed_by_ai = False
+    document.save(
+        update_fields=[
+            "status",
+            "failure_code",
+            "confirmed_by",
+            "confirmed_at",
+            "confirmed_by_ai",
+            "updated_at",
+        ]
     )
 
 
@@ -295,6 +326,10 @@ def mark_failed(workspace_id: UUID, document_id: UUID, code: str) -> None:
     with workspace_context(workspace_id, actor=SYSTEM):
         document = _lock_processing(document_id)
         if document is None:
+            return
+        if document.kind == Document.Kind.DOCUMENT:
+            finish_own_document(document, failure_code=code)
+            logger.warning("Own document %s failed: %s", document_id, code)
             return
         # The text came with the upload: a failed AI step only means fewer facts.
         _detect_guarded(document)

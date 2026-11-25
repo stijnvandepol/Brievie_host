@@ -1,10 +1,15 @@
-"""A member's own export of their post (D 6.3, Beheer 5, part A).
+"""A member's own export of their post (D 6.3, Beheer 5, part A), and an admin's export of
+everything they may read ("Alles exporteren", archive spec S 9, AR13).
 
 Asked for over the web, built by a job into a sealed file, downloadable only by the
-member who asked for it, for 24 hours. What is in it comes from `member_document_ids`,
-the one seam that says which documents a member may read: part B replaces its query
-with the member's reader rows. Every read goes through `export_context` (see
-`apps.documents.export`); nothing here enters a workspace's context itself.
+member who asked for it, for 24 hours. What is in it comes from `member_document_ids`
+(scope `mine`) or `admin_document_ids` (scope `all`), the two places that say which
+documents an export holds; both read as the member, so the policies leave out every
+letter they may not read. Every read goes through `export_context` (see
+`apps.documents.export`); nothing here enters a workspace's context itself. `mine` obeys
+`allow_member_export`; `all` does not (the admin who sets that switch may export what they
+read), but needs an admin, re-read under the lock when asked for and again when built and
+downloaded.
 """
 
 import logging
@@ -14,7 +19,8 @@ from functools import partial
 from typing import BinaryIO
 from uuid import UUID, uuid4
 
-from django.db import IntegrityError, models, transaction
+from django.conf import settings
+from django.db import IntegrityError, connection, models, transaction
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
@@ -22,10 +28,11 @@ from apps.audit.codes import AuditCode, TargetKind
 from apps.audit.services import AuditActor, AuditTarget, record
 from apps.common.errors import ApiError
 from apps.common.sealed_stream import SealedWriter, iter_opened
-from apps.documents.export import export_context, write_export
+from apps.documents.export import estimate_bytes, export_context, write_export
 from apps.documents.export_files import (
     UnsafePathError,
     export_file_path,
+    free_bytes,
     list_export_files,
     open_export_for_read,
     open_export_for_write,
@@ -39,6 +46,7 @@ from apps.documents.models import (
     MemberExport,
 )
 from apps.workspaces.keys import workspace_key
+from apps.workspaces.locks import lock_own_role
 from apps.workspaces.models import Membership, Workspace
 
 logger = logging.getLogger(__name__)
@@ -102,6 +110,32 @@ def member_document_ids(workspace_id: UUID, user_id: UUID) -> list[UUID]:
         )
 
 
+def admin_document_ids(workspace_id: UUID, user_id: UUID) -> list[UUID]:
+    """The documents of an admin's "Alles exporteren", newest first: every live document
+    the admin may read, read as the admin (the policies leave out every private letter
+    they may not read, whatever the switches). A letter the admin reads through emergency
+    access is left out: an hour of reading is not a copy to keep."""
+    with export_context(workspace_id, reader_id=user_id):
+        emergency = DocumentReader.objects.filter(
+            document=models.OuterRef("pk"),
+            user_id=user_id,
+            reason=DocumentReader.Reason.EMERGENCY,
+        )
+        return list(
+            Document.objects.filter(workspace_id=workspace_id)
+            .filter(LIVE)
+            .exclude(models.Exists(emergency))
+            .order_by("-created_at", "-id")
+            .values_list("id", flat=True)
+        )
+
+
+def _document_ids(workspace_id: UUID, user_id: UUID, scope: str) -> list[UUID]:
+    if scope == MemberExport.Scope.ALL:
+        return admin_document_ids(workspace_id, user_id)
+    return member_document_ids(workspace_id, user_id)
+
+
 def _remove_files(storage_paths: list[str]) -> None:
     """Remove the files of these rows, one by one; a path that is not an export path is
     skipped (and the row's other files still go)."""
@@ -121,21 +155,59 @@ def _drop(exports: models.QuerySet[MemberExport]) -> None:
     transaction.on_commit(partial(_remove_files, paths))
 
 
-def create_my_export(*, membership: Membership, actor: AuditActor) -> MemberExport:
-    """Ask for an export of the member's post; a job builds it.
+def create_my_export(*, membership: Membership, actor: AuditActor, scope: str) -> MemberExport:
+    """Ask for an export of the member's post (`mine`) or, for an admin, of everything they
+    may read (`all`); a job builds it.
 
-    403 `export_not_allowed` when the workspace switched exports off, 409
-    `export_running` while an earlier one is being built; an older finished (or failed)
-    one is replaced, its file removed after the commit. Needs the workspace's RLS context
-    (see workspaces.deps). The `export_created` row is in the same transaction.
+    422 for another scope; `mine`: 403 `export_not_allowed` when the workspace switched
+    exports off; `all`: 403 `not_admin` unless the caller is an admin (re-read under the
+    lock of their membership), and 409 `export_running_elsewhere` while another admin's
+    `all` export of the workspace is being built (one at a time per workspace). 409
+    `export_too_large` when it would exceed `BRIEVIE_EXPORT_MAX_BYTES`. 409
+    `export_running` while an earlier one is being built;
+    an older finished (or failed) one is replaced, its file removed after the commit. One
+    export per member, whatever its scope. Needs the workspace's RLS context (see
+    workspaces.deps). The `export_created` row (count and scope) is in the same transaction.
     """
     workspace = membership.workspace
-    if not workspace.allow_member_export:
+    if scope not in MemberExport.Scope.values:
+        raise ApiError(422, "validation_error", _("Kies mijn archief of alles."))
+    if scope == MemberExport.Scope.MINE and not workspace.allow_member_export:
         raise _not_allowed()
     from apps.documents.jobs import build_member_export  # the job module imports this one
 
-    count = len(member_document_ids(workspace.id, membership.user_id))
     with transaction.atomic():
+        role = lock_own_role(workspace.id, membership.user_id)
+        if scope == MemberExport.Scope.ALL and role != Membership.Role.ADMIN:
+            raise _not_admin()
+        if scope == MemberExport.Scope.ALL:
+            # One "Alles exporteren" at a time per workspace: every one holds about the whole
+            # workspace twice (security review of PR #54, point 2).
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                    [f"export-all-{workspace.id}"],
+                )
+            if (
+                MemberExport.objects.filter(
+                    workspace=workspace,
+                    scope=MemberExport.Scope.ALL,
+                    status=MemberExport.Status.PENDING,
+                )
+                .exclude(user_id=membership.user_id)
+                .exists()
+            ):
+                raise ApiError(
+                    409,
+                    "export_running_elsewhere",
+                    _("Er wordt al een export van alles gemaakt. Probeer het later nog eens."),
+                )
+        document_ids = _document_ids(workspace.id, membership.user_id, scope)
+        count = len(document_ids)
+        if estimate_bytes(workspace.id, membership.user_id, document_ids) > (
+            settings.BRIEVIE_EXPORT_MAX_BYTES
+        ):
+            raise ApiError(409, "export_too_large", _too_large_message())
         mine = MemberExport.objects.select_for_update().filter(
             workspace=workspace, user_id=membership.user_id
         )
@@ -151,6 +223,7 @@ def create_my_export(*, membership: Membership, actor: AuditActor) -> MemberExpo
                     id=export_id,
                     workspace=workspace,
                     user_id=membership.user_id,
+                    scope=scope,
                     storage_path=f"exports/{workspace.id}/{export_id}.sealed",
                 )
         except IntegrityError:
@@ -161,10 +234,19 @@ def create_my_export(*, membership: Membership, actor: AuditActor) -> MemberExpo
             actor=actor,
             target=AuditTarget(TargetKind.EXPORT, export.id),
             workspace_id=workspace.id,
-            values={"document_count": count},
+            values={"document_count": count, "scope": scope},
         )
         build_member_export.defer(workspace_id=str(workspace.id), export_id=str(export.id))
     return export
+
+
+def _too_large_message() -> str:
+    return _("Deze export wordt groter dan deze server toestaat. Vraag de serverbeheerder.")
+
+
+def has_room(estimate: int) -> bool:
+    """Whether the export directory's disk holds `estimate` bytes with the reserve to spare."""
+    return free_bytes() >= estimate + settings.BRIEVIE_EXPORT_FREE_RESERVE_BYTES
 
 
 def _not_allowed() -> ApiError:
@@ -173,6 +255,10 @@ def _not_allowed() -> ApiError:
         "export_not_allowed",
         _("In deze werkruimte staat exporteren uit. Vraag de beheerder."),
     )
+
+
+def _not_admin() -> ApiError:
+    return ApiError(403, "not_admin", _("Alleen een beheerder kan alles exporteren."))
 
 
 def _running() -> ApiError:
@@ -218,7 +304,11 @@ def open_my_export(*, membership: Membership, actor: AuditActor) -> Iterator[byt
     ).first()
     if export is None:
         raise _not_found()
-    if not workspace.allow_member_export:
+    if export.scope == MemberExport.Scope.ALL:
+        # Only while they are an admin; a former admin's copy is nobody's.
+        if lock_own_role(workspace.id, membership.user_id) != Membership.Role.ADMIN:
+            raise _not_found()
+    elif not workspace.allow_member_export:
         raise _not_allowed()
     key = workspace_key(workspace.id)
     try:
@@ -267,7 +357,13 @@ def build_export(workspace_id: UUID, export_id: UUID) -> None:
         if export is None:
             return
         user_id, member_name, storage_path = export.user_id, export.user.name, export.storage_path
-        if not Membership.objects.filter(workspace_id=workspace_id, user_id=user_id).exists():
+        scope = export.scope
+        role = (
+            Membership.objects.filter(workspace_id=workspace_id, user_id=user_id)
+            .values_list("role", flat=True)
+            .first()
+        )
+        if role is None or (scope == MemberExport.Scope.ALL and role != Membership.Role.ADMIN):
             # The member left after asking (their export row normally goes with them):
             # nothing is read or written for someone who is no member.
             export.status = MemberExport.Status.FAILED
@@ -278,7 +374,25 @@ def build_export(workspace_id: UUID, export_id: UUID) -> None:
         path = export_file_path(storage_path)
         # A file from a job that died halfway.
         remove_export_file(path)
-        document_ids = member_document_ids(workspace_id, user_id)
+        document_ids = _document_ids(workspace_id, user_id, scope)
+        # Measured before a byte is written (security review of PR #54, point 2): too large
+        # for the server's limit, or for the room on its disk, is a failed export with a
+        # reason the member sees, not a full disk.
+        estimate = estimate_bytes(workspace_id, user_id, document_ids)
+        refusal = (
+            "too_large"
+            if estimate > settings.BRIEVIE_EXPORT_MAX_BYTES
+            else ("" if has_room(estimate) else "not_enough_space")
+        )
+        if refusal:
+            logger.warning("Export %s refused: %s", export_id, refusal)
+            _finish(workspace_id, export_id, MemberExport.Status.FAILED, failure_code=refusal)
+            return
+        title = (
+            _("Brievie: alles wat %(name)s mag lezen") % {"name": member_name}
+            if scope == MemberExport.Scope.ALL
+            else _("Brievie: de post van %(name)s") % {"name": member_name}
+        )
         with open_export_for_write(path) as handle:
             with SealedWriter(handle, key, aad=_stream_aad(workspace_id, export_id)) as sealed:
                 counts = write_export(
@@ -286,7 +400,7 @@ def build_export(workspace_id: UUID, export_id: UUID) -> None:
                     reader_id=user_id,
                     document_ids=document_ids,
                     target=sealed,
-                    title=_("Brievie: de post van %(name)s") % {"name": member_name},
+                    title=title,
                 )
             handle.flush()
             size = handle.tell()
@@ -306,7 +420,7 @@ def build_export(workspace_id: UUID, export_id: UUID) -> None:
         _remove_files([storage_path])
 
 
-def _finish(workspace_id: UUID, export_id: UUID, status: str, **fields: int) -> bool:
+def _finish(workspace_id: UUID, export_id: UUID, status: str, **fields: int | str) -> bool:
     """Move a still pending export to `status`; False when it is gone or not pending."""
     now = timezone.now()
     expires_at = now + VALIDITY if status == MemberExport.Status.READY else None

@@ -146,15 +146,15 @@ describe("unread elsewhere", () => {
     expect(screen.queryByText(/Ongelezen/)).not.toBeInTheDocument();
   });
 
-  it("Alle post marks unread rows and filters them", async () => {
-    const asked: URLSearchParams[] = [];
-    server.use(myPost(asked), ...loggedInHandlers(), ...documentHandlers());
-    const u = userEvent.setup();
-    renderApp(`/w/${workspace.id}/post`);
+  it("Archief shows no unread marks: those are for Mijn post", async () => {
+    server.use(
+      http.post(`${base}/documents/archive`, () => HttpResponse.json([unreadLetter, readLetter])),
+      ...loggedInHandlers(),
+      ...documentHandlers(),
+    );
+    renderApp(`/w/${workspace.id}/archief`);
     await screen.findByRole("link", { name: "Gemeente" });
-    expect(rowOf("Gemeente")).toHaveClass("unread");
-    await u.click(screen.getByRole("checkbox", { name: "Alleen ongelezen" }));
-    await waitFor(() => expect(asked.at(-1)?.get("unread_only")).toBe("true"));
-    expect(asked.at(-1)?.get("addressed_to_me")).toBeNull();
+    expect(rowOf("Gemeente")).not.toHaveClass("unread");
+    expect(screen.queryByRole("checkbox", { name: "Alleen ongelezen" })).not.toBeInTheDocument();
   });
 });

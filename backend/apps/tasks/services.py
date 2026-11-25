@@ -138,6 +138,21 @@ def reopen_task(*, workspace: Workspace, user: User, task_id: UUID) -> Task:
     """Make the task open again; asking again changes nothing and writes no second event."""
     with transaction.atomic():
         task = get_for_update(workspace, task_id)
+        if (
+            task.status != Task.Status.OPEN
+            and task.type == Task.Type.EXPIRY
+            and task.document_id is not None
+            and Task.objects.filter(
+                document_id=task.document_id, type=Task.Type.EXPIRY, status=Task.Status.OPEN
+            ).exists()
+        ):
+            # A document has one open end-date reminder (`tasks_task_one_reminder`; security
+            # review of PR #54, point 4): a newer one is open, this one stays ticked off.
+            raise ApiError(
+                409,
+                "reminder_already_open",
+                _("Er staat al een nieuwere herinnering voor dit document open."),
+            )
         if task.status != Task.Status.OPEN:
             task.status = Task.Status.OPEN
             task.completed_at = None
@@ -154,6 +169,14 @@ def set_deadline(*, workspace: Workspace, user: User, task_id: UUID, deadline: d
     before the letter's date; 404 like an unknown id for a task the caller does not see."""
     with transaction.atomic():
         task = get_for_update(workspace, task_id)
+        if task.type == Task.Type.EXPIRY:
+            # The reminder's date is the document's "Geldig tot" (security review of PR #54,
+            # point 6): moved by hand, a ticked-off one would be made again every night.
+            raise ApiError(
+                409,
+                "reminder_deadline_fixed",
+                _("Deze datum volgt Geldig tot van het document. Pas die daar aan."),
+            )
         letter_date = task.document.letter_date if task.document is not None else None
         if deadline is not None and letter_date is not None and deadline < letter_date:
             raise ApiError(422, "validation_error", _("Die datum ligt voor de datum van de brief."))
@@ -271,10 +294,14 @@ def _reason_filter(reason: Reason, facts: MemberFacts) -> Q | None:
     if reason == Reason.ASSIGNED:
         return Q(assigned_to_id=me)
     unassigned_letter = Q(assigned_to__isnull=True, document__isnull=False)
+    # An own document's reminder on nobody's name: its uploader's (`mine.reason_for`).
+    own_reminder = unassigned_letter & Q(
+        type=Task.Type.EXPIRY, document__addressee_ids=[], document__scanned_by_id=me
+    )
     persons = _overlap(facts.person_ids)
     departments = _overlap(facts.department_ids)
     if reason == Reason.ADDRESSEE:
-        own = Q(assigned_to__isnull=True, document__isnull=True, created_by_id=me)
+        own = Q(assigned_to__isnull=True, document__isnull=True, created_by_id=me) | own_reminder
         return own if persons is None else own | (unassigned_letter & persons)
     if reason == Reason.DEPARTMENT:
         if departments is None:
@@ -284,7 +311,7 @@ def _reason_filter(reason: Reason, facts: MemberFacts) -> Q | None:
     if reason == Reason.UNASSIGNED:
         if not facts.sorts_post:
             return None
-        arm = unassigned_letter
+        arm = unassigned_letter & ~own_reminder
         for taken in (persons, departments, _overlap(facts.covered_ids)):
             if taken is not None:
                 arm &= ~taken
@@ -487,6 +514,9 @@ def _task_facts(task: Task) -> TaskFacts:
         created_by_id=task.created_by_id,
         has_letter=document is not None,
         addressee_ids=frozenset(document.addressee_ids) if document is not None else frozenset(),
+        reminder_of=document.scanned_by_id
+        if document is not None and task.type == Task.Type.EXPIRY
+        else None,
     )
 
 

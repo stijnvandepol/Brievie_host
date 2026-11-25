@@ -141,3 +141,25 @@ def test_the_rule_has_no_database() -> None:
         )
     }
     assert not any(name.split(".")[0] in {"django", "apps"} for name in imported), imported
+
+
+def _reminder(*, uploaded_by: UUID, on_persons: frozenset[UUID] = frozenset()) -> TaskFacts:
+    return TaskFacts(
+        assigned_to_id=None,
+        created_by_id=None,
+        has_letter=True,
+        addressee_ids=on_persons,
+        reminder_of=uploaded_by,
+    )
+
+
+def test_a_reminder_of_a_document_without_a_person_is_its_uploaders() -> None:
+    """Security review of PR #54, point 7: the uploader reads such a document (also a
+    private one); its reminder is theirs, not only a sorter's."""
+    assert reason_for(_reminder(uploaded_by=ME), member()) == Reason.ADDRESSEE
+    assert reason_for(_reminder(uploaded_by=ME), member(sorts=True)) == Reason.ADDRESSEE
+    assert reason_for(_reminder(uploaded_by=SOMEONE), member(sorts=True)) == Reason.UNASSIGNED
+    assert reason_for(_reminder(uploaded_by=SOMEONE), member()) == Reason.OTHER
+    # On a person: that person's, as any task of the document.
+    on_piet = _reminder(uploaded_by=ME, on_persons=frozenset({PIET}))
+    assert reason_for(on_piet, member()) == Reason.OTHER

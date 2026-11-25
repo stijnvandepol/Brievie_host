@@ -701,6 +701,10 @@ msgid "Brief definitief verwijderd"
 msgstr "Letter deleted permanently"
 
 #: apps/audit/codes.py
+msgid "Bewaren tot gewijzigd"
+msgstr "Keep until changed"
+
+#: apps/audit/codes.py
 msgid "Gebruiker"
 msgstr "User"
 
@@ -728,7 +732,7 @@ msgstr "Label"
 msgid "Persoon"
 msgstr "Person"
 
-#: apps/audit/codes.py
+#: apps/audit/codes.py apps/documents/models.py
 msgid "Document"
 msgstr "Document"
 
@@ -1548,12 +1552,24 @@ msgid "Aantal pagina's: %(pages)d"
 msgstr "Number of pages: %(pages)d"
 
 #: apps/documents/export.py
+msgid "De map documents: elke brief en elk eigen document als PDF, per jaar."
+msgstr "The folder documents: every letter and every own document as a PDF, by year."
+
+#: apps/documents/export.py
 msgid "De map pagina's: elke brief heeft een eigen map met een foto per pagina."
 msgstr "The folder pages: each letter has its own folder with a photo per page."
 
 #: apps/documents/export.py
 msgid "brievie-export.json: de gegevens van elke brief, zoals afzender, samenvatting, labels, personen en taken."
 msgstr "brievie-export.json: the details of each letter, such as sender, summary, labels, persons and tasks."
+
+#: apps/documents/export.py
+msgid "Je opent brievie-export.json in een rekenblad (zoals Excel of LibreOffice) of geeft het aan een ander programma, samen met de PDF's."
+msgstr "Open brievie-export.json in a spreadsheet (such as Excel or LibreOffice) or give it to another program, together with the PDFs."
+
+#: apps/documents/export.py
+msgid "Dit is geen back-up: terugzetten doe je met de back-up van Brievie."
+msgstr "This is not a backup: to restore, use Brievie's backup."
 
 #: apps/documents/export.py
 msgid "Let op: in de tekst en de gegevens is het BSN weggehaald. Op de foto's van de pagina's is het BSN wel te lezen."
@@ -1563,9 +1579,13 @@ msgstr "Note: the BSN has been removed from the text and the details. On the pho
 msgid "Dit bestand is niet versleuteld zodra je het hebt gedownload. Bewaar het op een veilige plek en verwijder het als je het niet meer nodig hebt."
 msgstr "This file is not encrypted once you have downloaded it. Keep it in a safe place and delete it when you no longer need it."
 
-#: apps/documents/handle.py apps/documents/review.py apps/documents/services.py apps/documents/trash.py
+#: apps/documents/handle.py apps/documents/own.py apps/documents/review.py apps/documents/services.py apps/documents/trash.py
 msgid "We kunnen dit document niet vinden."
 msgstr "We can't find this document."
+
+#: apps/documents/handle.py
+msgid "Een eigen document handel je niet af. Vink de taak af in Mijn taken."
+msgstr "You do not handle an own document. Tick off the task in My tasks."
 
 #: apps/documents/handle.py
 msgid "Deze brief is nog niet nagekeken."
@@ -1617,12 +1637,33 @@ msgid "We kunnen deze export niet vinden."
 msgstr "We can't find this export."
 
 #: apps/documents/member_export.py
+msgid "Kies mijn archief of alles."
+msgstr "Choose my archive or everything."
+
+#: apps/documents/member_export.py
+msgid "Er wordt al een export van alles gemaakt. Probeer het later nog eens."
+msgstr "An export of everything is being made already. Try again later."
+
+#: apps/documents/member_export.py
+msgid "Deze export wordt groter dan deze server toestaat. Vraag de serverbeheerder."
+msgstr "This export would be larger than this server allows. Ask your server admin."
+
+#: apps/documents/member_export.py
 msgid "In deze werkruimte staat exporteren uit. Vraag de beheerder."
 msgstr "Exporting is switched off in this workspace. Ask the admin."
 
 #: apps/documents/member_export.py
+msgid "Alleen een beheerder kan alles exporteren."
+msgstr "Only an admin can export everything."
+
+#: apps/documents/member_export.py
 msgid "Je export wordt nog gemaakt. Probeer het zo nog eens."
 msgstr "Your export is still being made. Try again in a moment."
+
+#: apps/documents/member_export.py
+#, python-format
+msgid "Brievie: alles wat %(name)s mag lezen"
+msgstr "Brievie: everything %(name)s may read"
 
 #: apps/documents/member_export.py
 #, python-format
@@ -1636,6 +1677,10 @@ msgstr "A folder needs a name."
 #: apps/documents/models.py
 msgid "Een mapnaam mag geen / bevatten."
 msgstr "A folder name may not contain /."
+
+#: apps/documents/models.py
+msgid "Brief"
+msgstr "Letter"
 
 #: apps/documents/models.py
 msgid "Wordt verwerkt"
@@ -1726,6 +1771,26 @@ msgid "Overig"
 msgstr "Other"
 
 #: apps/documents/models.py
+msgid "Identiteitsbewijs"
+msgstr "ID document"
+
+#: apps/documents/models.py
+msgid "Diploma"
+msgstr "Diploma"
+
+#: apps/documents/models.py
+msgid "Garantiebewijs"
+msgstr "Warranty"
+
+#: apps/documents/models.py
+msgid "Belastingaangifte"
+msgstr "Tax return"
+
+#: apps/documents/models.py
+msgid "Medisch"
+msgstr "Medical"
+
+#: apps/documents/models.py
 msgid "Normaal"
 msgstr "Normal"
 
@@ -1763,9 +1828,84 @@ msgstr "We can't find this event."
 msgid "Deze wijziging kun je niet meer terugdraaien."
 msgstr "This change can no longer be undone."
 
+#: apps/documents/own.py
+msgid "Deze gegevens horen bij een eigen document, niet bij een brief."
+msgstr "These details belong to an own document, not to a letter."
+
+#: apps/documents/own.py
+msgid "Kies een brief of een eigen document."
+msgstr "Choose a letter or an own document."
+
+#: apps/documents/own.py
+msgid "Een document heeft een titel nodig."
+msgstr "A document needs a title."
+
+#: apps/documents/own.py
+msgid "Een titel is hoogstens 200 tekens lang."
+msgstr "A title is at most 200 characters long."
+
+#: apps/documents/own.py
+msgid "Kies een soort document uit de lijst."
+msgstr "Choose a type of document from the list."
+
+#: apps/documents/own.py
+msgid "Kies 7, 30, 60 of 90 dagen vooraf."
+msgstr "Choose 7, 30, 60 or 90 days ahead."
+
+#: apps/documents/own.py
+msgid "De datum van een document ligt tussen 1 januari 1900 en vandaag."
+msgstr "A document's date lies between January 1, 1900 and today."
+
+#: apps/documents/own.py
+msgid "Deze datum ligt te ver weg."
+msgstr "This date is too far away."
+
+#: apps/documents/own.py
+msgid "Bewaren tot ligt hoogstens 20 jaar vooruit."
+msgstr "Keep until lies at most 20 years ahead."
+
+#: apps/documents/own.py
+msgid "Geldig tot ligt na de datum van het document."
+msgstr "Valid until comes after the document's date."
+
+#: apps/documents/own.py
+msgid "Kies voor wie het document is uit de lijst van mensen."
+msgstr "Choose who the document belongs to from the list of people."
+
+#: apps/documents/own.py
+msgid "Kies de labels uit de lijst."
+msgstr "Choose the labels from the list."
+
+#: apps/documents/own.py apps/labels/services.py apps/people/services.py apps/tasks/assignment.py apps/tasks/services.py apps/workspaces/deps.py apps/workspaces/members.py apps/workspaces/visibility_settings.py
+msgid "Je mag dit niet doen in deze werkruimte."
+msgstr "You are not allowed to do this in this workspace."
+
+#: apps/documents/own.py
+msgid "Bij een brief kun je alleen Bewaren tot aanpassen."
+msgstr "For a letter you can only change Keep until."
+
+#: apps/documents/own.py
+msgid "Kies een nieuwe datum of haal de datum weg, niet allebei."
+msgstr "Choose a new date or remove the date, not both."
+
 #: apps/documents/reading.py
 msgid "Kies hoogstens 200 brieven."
 msgstr "Choose 200 letters at most."
+
+#: apps/documents/reminders.py
+#, python-format
+msgid "Geldig tot %(date)s: %(title)s"
+msgstr "Valid until %(date)s: %(title)s"
+
+#: apps/documents/retention.py
+#, python-format
+msgid "Bewaren tot %(date)s. Weet je het zeker?"
+msgstr "Keep until %(date)s. Are you sure?"
+
+#: apps/documents/retention.py
+#, python-format
+msgid "Dit document moet bewaard worden tot %(date)s. Een beheerder kan de datum weghalen om het nu te wissen."
+msgstr "This document must be kept until %(date)s. An admin can remove the date to delete it now."
 
 #: apps/documents/retention.py
 msgid "Deze brief moet nog bewaard worden. Je kunt hem nu niet wissen."
@@ -1811,7 +1951,7 @@ msgstr "This date needs the sentence from the document where it appears."
 msgid "Deze stand van de inbox kennen we niet."
 msgstr "We don't know this inbox state."
 
-#: apps/documents/search.py
+#: apps/documents/search.py apps/documents/services.py
 msgid "Deze soort brief kennen we niet."
 msgstr "We don't know this kind of letter."
 
@@ -1830,6 +1970,14 @@ msgstr "There is already a folder with this name in this place."
 #: apps/documents/services.py
 msgid "Deze status kennen we niet."
 msgstr "We do not know this status."
+
+#: apps/documents/services.py
+msgid "Kies brieven of documenten."
+msgstr "Choose letters or documents."
+
+#: apps/documents/services.py
+msgid "Dit jaar kennen we niet."
+msgstr "We do not know this year."
 
 #: apps/documents/services.py
 msgid "Deze brief staat in de prullenbak."
@@ -2206,10 +2354,6 @@ msgstr "There is already a label with this name."
 #: apps/labels/services.py
 msgid "Kies een afdeling."
 msgstr "Choose a department."
-
-#: apps/labels/services.py apps/people/services.py apps/tasks/assignment.py apps/tasks/services.py apps/workspaces/deps.py apps/workspaces/members.py apps/workspaces/visibility_settings.py
-msgid "Je mag dit niet doen in deze werkruimte."
-msgstr "You are not allowed to do this in this workspace."
 
 #: apps/labels/services.py
 msgid "Deze werkruimte heeft het grootste aantal labels. Verwijder er eerst een."
@@ -2728,6 +2872,10 @@ msgid "Aangifte"
 msgstr "File a return"
 
 #: apps/tasks/models.py
+msgid "Verloopt"
+msgstr "Expires"
+
+#: apps/tasks/models.py
 msgid "Staat in het document"
 msgstr "In the document"
 
@@ -2754,6 +2902,14 @@ msgstr "We can't find this task."
 #: apps/tasks/services.py
 msgid "De status moet open, done of all zijn."
 msgstr "The status must be open, done or all."
+
+#: apps/tasks/services.py
+msgid "Er staat al een nieuwere herinnering voor dit document open."
+msgstr "A newer reminder for this document is open already."
+
+#: apps/tasks/services.py
+msgid "Deze datum volgt Geldig tot van het document. Pas die daar aan."
+msgstr "This date follows the document's Valid until. Change it there."
 
 #: apps/tasks/services.py
 msgid "Die datum ligt voor de datum van de brief."

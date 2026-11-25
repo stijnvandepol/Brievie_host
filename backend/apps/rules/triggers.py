@@ -22,6 +22,9 @@ def on_confirmed(document: Document) -> None:
 
 
 def _run(document: Document, trigger: str) -> None:
+    # No rule runs on an own document (archive spec S 6.2): it gets no proposals or tasks.
+    if document.kind != Document.Kind.LETTER:
+        return
     specs = active_specs(document.workspace_id)
     if not specs:
         return

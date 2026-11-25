@@ -31,7 +31,7 @@ describe("post on a phone", () => {
   it("shows a card per letter instead of the table", async () => {
     phoneScreen();
     server.use(
-      http.get(`*${API}/workspaces/${workspace.id}/documents`, () =>
+      http.post(`*${API}/workspaces/${workspace.id}/documents/archive`, () =>
         HttpResponse.json([
           { ...documentSummary, status: "needs_review", addressee_ids: [papa.id] },
         ]),
@@ -39,7 +39,7 @@ describe("post on a phone", () => {
       ...loggedInHandlers(),
       ...documentHandlers(),
     );
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
 
     const link = await screen.findByRole("link", { name: "Belastingdienst" });
     expect(link).toHaveAttribute("href", expect.stringContaining("/post/"));
@@ -54,13 +54,13 @@ describe("post on a phone", () => {
 describe("status in Alle post", () => {
   it("says Naam kiezen for a read letter without a name, as Inbox does", async () => {
     server.use(
-      http.get(`*${API}/workspaces/${workspace.id}/documents`, () =>
+      http.post(`*${API}/workspaces/${workspace.id}/documents/archive`, () =>
         HttpResponse.json([{ ...documentSummary, status: "done", inbox_state: "unassigned" }]),
       ),
       ...loggedInHandlers(),
       ...documentHandlers(),
     );
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     const row = (await screen.findByRole("link", { name: "Belastingdienst" })).closest("tr");
     expect(within(row as HTMLElement).getByText("Naam kiezen")).toBeInTheDocument();
     expect(within(row as HTMLElement).queryByText("Klaar")).not.toBeInTheDocument();
@@ -68,7 +68,7 @@ describe("status in Alle post", () => {
 
   it("says Klaar only when nothing waits", async () => {
     server.use(
-      http.get(`*${API}/workspaces/${workspace.id}/documents`, () =>
+      http.post(`*${API}/workspaces/${workspace.id}/documents/archive`, () =>
         HttpResponse.json([
           { ...documentSummary, status: "done", inbox_state: "", addressee_ids: [papa.id] },
         ]),
@@ -76,7 +76,7 @@ describe("status in Alle post", () => {
       ...loggedInHandlers(),
       ...documentHandlers(),
     );
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     const row = (await screen.findByRole("link", { name: "Belastingdienst" })).closest("tr");
     expect(within(row as HTMLElement).getByText("Klaar")).toBeInTheDocument();
   });

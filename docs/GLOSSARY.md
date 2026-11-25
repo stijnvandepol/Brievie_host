@@ -45,7 +45,15 @@ the translation. Add a line before introducing a new domain term.
 | label | label |
 | geschiedenis | history (`DocumentEvent`) |
 | Inbox (pagina: post die op jou wacht; route `inbox`; heette eerder "Te doen") | inbox |
-| Alle post (pagina: alle brieven; route `post`) | documents list |
+| Archief (pagina: elke gecontroleerde brief en elk eigen document; route `archief`, `post` stuurt door) | archive (`listDocuments` `archived=true`) |
+| Alle post (oude naam van Archief) | documents list |
+| soort (brief of eigen document) | kind (`letter`, `document`) |
+| eigen document | own document (`kind = document`) |
+| titel | title |
+| geldig tot | expires_on |
+| herinner me … vooraf | remind_days |
+| bewaren tot | retain_until |
+| verloopt (taak bij geldig tot) | expiry (task type) |
 | Controleren (wat een brief in de Inbox nodig heeft) | `inbox_state` `review` (status `needs_review` or `failed`) |
 | Naam kiezen (wat een brief in de Inbox nodig heeft) | `inbox_state` `unassigned` |
 | Bezig… (brief wordt nog gelezen, niets te doen) | `inbox_state` `new` (status `processing`) |
@@ -155,7 +163,24 @@ the request that creates the workspace and keep that name.
 |---|---|---|
 | post (alle brieven samen) | mail | "All mail", "Search your mail". Never "post", except the name "Mijn post": "My post" (decision B1, 21-11-2026; it pairs with "My tasks"). |
 | brief | letter | One item. "Letter date" for dagtekening. |
-| Alle post | All mail | |
+| Archief | Archive | Menu, page. Replaces "Alle post" / "All mail" as the list of everything reviewed. |
+| Alle post (oude naam van Archief) | All mail (old name of Archive) | Removed one release after the archive ships. |
+| Eigen document / document (soort) | Own document / document (kind) | A letter stays "brief" / "letter". Never "stuk". |
+| Soort (brief of document) | Kind (letter or document) | The filter name "Soort"; not "Type". |
+| Type: Identiteitsbewijs, Diploma, Garantiebewijs, Belastingaangifte, Medisch | ID document, Diploma, Warranty, Tax return, Medical | The five types of own documents. |
+| Document toevoegen | Add a document | |
+| Dit document bewaren / Bewaren | Keep this document / Keep | |
+| Titel | Title | |
+| Datum / Datum brief | Date / Letter date | `letter_date`: "Datum" for a document. |
+| Van wie | Belongs to | The person or department of an own document. |
+| Geldig tot | Valid until | `expires_on`. |
+| Herinner me … vooraf | Remind me … ahead | 7, 30, 60 or 90 days. |
+| Bewaren tot | Keep until | `retain_until`. "Bewaren tot 1 jan 2031. Weet je het zeker?": "Keep until Jan 1, 2031. Are you sure?" |
+| Alleen voor deze persoon | Only for this person | |
+| Loopt af / Verlopen | Expiring / Expired | |
+| Verloopt (taak) | Expires | The task an end date becomes. |
+| Alles exporteren / Mijn archief exporteren | Export everything / Export my archive | Admin / member. |
+| De tekst is niet gelezen | The text could not be read | |
 | Inbox | Inbox | The list of letters that wait for you; it was called "Te doen" / "To do" before. |
 | Controleren / Te controleren | Check / To check | "Check it yourself" for Zelf controleren. |
 | Naam kiezen | Choose a name | |

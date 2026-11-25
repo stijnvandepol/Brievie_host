@@ -56,6 +56,15 @@ export type DocumentFilters = {
   letter_status?: string;
   /** Only the letters with the marker "Te laat". */
   overdue?: boolean;
+  /** Archief: only reviewed documents, of both kinds. */
+  archived?: boolean;
+  /** "letter" or "document". */
+  kind?: string;
+  document_type?: string;
+  /** The document's own date's year, else its upload's. */
+  year?: number;
+  /** Own documents ending within 90 days, or ended ("Loopt af"). */
+  expiring?: boolean;
 };
 
 export const documentsQuery = (
@@ -84,6 +93,11 @@ export const documentsQuery = (
             unread_only: filters.unread_only || undefined,
             letter_status: filters.letter_status || undefined,
             overdue: filters.overdue || undefined,
+            archived: filters.archived || undefined,
+            kind: filters.kind || undefined,
+            document_type: filters.document_type || undefined,
+            year: filters.year || undefined,
+            expiring: filters.expiring || undefined,
           },
         },
       });
@@ -293,6 +307,65 @@ export const letterStatusCountsQuery = (workspaceId: string, personId?: string) 
             query: { person_id: personId || undefined },
           },
         },
+      );
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
+export type ArchiveFilters = {
+  kind?: string;
+  document_type?: string;
+  year?: number;
+  /** Exactly this sender, a value of the archive's facets: only ever in a POST body. */
+  sender?: string;
+  person_id?: string;
+  label_id?: string;
+  letter_status?: string;
+  overdue?: boolean;
+  automatic?: boolean;
+  expiring?: boolean;
+};
+
+/**
+ * Archief's list, as a POST (security review of PR #54, point 1): a sender's name never
+ * goes into a URL. The filters live in memory (this cache), never in the address bar.
+ */
+export const archiveQuery = (workspaceId: string, filters: ArchiveFilters = {}) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "documents", "archive", filters],
+    queryFn: async () => {
+      const { data, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/documents/archive",
+        {
+          params: { path: { workspace_id: workspaceId } },
+          body: {
+            kind: filters.kind ?? "",
+            document_type: filters.document_type ?? "",
+            year: filters.year ?? 0,
+            sender: filters.sender ?? "",
+            person_id: filters.person_id || null,
+            label_id: filters.label_id || null,
+            letter_status: filters.letter_status ?? "",
+            overdue: filters.overdue ?? false,
+            automatic: filters.automatic ?? false,
+            expiring: filters.expiring ?? false,
+          },
+        },
+      );
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+  });
+
+/** What the archive's filters can choose, with counts over what the caller may read. */
+export const archiveFacetsQuery = (workspaceId: string) =>
+  queryOptions({
+    queryKey: ["workspaces", workspaceId, "documents", "archive-facets"],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/documents/archive-facets",
+        { params: { path: { workspace_id: workspaceId } } },
       );
       if (error !== undefined || !data) throw new ApiFailure(error);
       return data;
@@ -516,6 +589,10 @@ export type DocumentSearch = {
   inbox_state?: string;
   date_from?: string;
   date_to?: string;
+  /** Archief: "letter" or "document"; the year; reviewed documents only. */
+  kind?: string;
+  year?: number;
+  archived?: boolean;
   offset?: number;
 };
 
@@ -534,6 +611,9 @@ export async function searchDocuments(workspaceId: string, search: DocumentSearc
       person_id: search.person_id || null,
       date_from: search.date_from || null,
       date_to: search.date_to || null,
+      kind: search.kind ?? "",
+      year: search.year ?? 0,
+      archived: search.archived ?? false,
       offset: search.offset ?? 0,
       limit: SEARCH_PAGE_SIZE,
     },

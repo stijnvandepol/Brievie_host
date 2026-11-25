@@ -43,6 +43,7 @@ def test_export_holds_only_the_given_documents_pages_and_data(ws_a: Workspace) -
         [
             f"pagina's/{wanted.id}/1.jpg",
             f"pagina's/{wanted.id}/2.jpg",
+            export.pdf_name(wanted),
             "brievie-export.json",
             "LEESMIJ.txt",
         ]
@@ -83,7 +84,8 @@ def test_export_json_names_persons_labels_and_tasks(ws_a: Workspace) -> None:
     archive = read_zip(run_export(ws_a, [document.id]))
 
     data = export_json(archive)
-    assert data["version"] == 1
+    # Version 2 (the archive) keeps every key of version 1.
+    assert data["version"] == 2
     (entry,) = export_documents(archive)
     assert entry["id"] == str(document.id)
     assert entry["status"] == "done"
@@ -101,11 +103,13 @@ def test_export_json_names_persons_labels_and_tasks(ws_a: Workspace) -> None:
             "description": "Betaal de aanslag",
             "deadline": timezone.now().date().isoformat(),
             "status": "open",
+            # Version 2: when it was ticked off (empty while open).
+            "completed_at": "",
         }
     ]
     assert entry["pages"] == [f"pagina's/{document.id}/1.jpg"]
-    # The text of the letter itself is not part of the data file.
-    assert "ocr_text" not in entry
+    # Since version 2 the (BSN-masked) text is in it, as the archive's export promises.
+    assert entry["ocr_text"] == document.ocr_text
 
 
 def test_readme_says_what_is_in_it(ws_a: Workspace) -> None:
@@ -168,7 +172,8 @@ def test_write_export_opens_a_short_context_per_document(
 
     # One transaction per document, and none open while a page file is read.
     assert len(commits) == 3
-    assert open_during_page_reads == [False] * 6
+    # Every page twice (the picture, then the PDF): one at a time, never all at once.
+    assert open_during_page_reads == [False] * 12
     assert not connection.in_atomic_block
 
 

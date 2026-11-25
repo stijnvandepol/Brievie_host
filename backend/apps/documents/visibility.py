@@ -563,6 +563,24 @@ def _private_skipped(
             )
 
 
+def own_person_ids(workspace_id: UUID, user_id: UUID) -> set[UUID]:
+    """The persons that are `user_id`'s own account in the workspace. As the system."""
+    with system_actor():
+        return set(
+            Person.objects.filter(
+                workspace_id=workspace_id, kind=Person.Kind.PERSON, user_id=user_id
+            ).values_list("id", flat=True)
+        )
+
+
+def belongs_to(document: Document, user_id: UUID) -> bool:
+    """Whether the letter is on one of `user_id`'s own persons (an addressee). As the
+    system."""
+    own = own_person_ids(document.workspace_id, user_id)
+    with system_actor():
+        return document.addressee_links.filter(person_id__in=own).exists()
+
+
 def can_make_public(document: Document, user_id: UUID) -> bool:
     """A reader through an addressee or department row may; when the letter has no such
     rows at all (no addressee with an account), any reader may. As the system."""

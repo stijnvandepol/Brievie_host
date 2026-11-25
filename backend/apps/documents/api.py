@@ -13,12 +13,25 @@ from apps.audit.services import actor_from_request
 from apps.common.errors import ApiError
 from apps.common.schemas import AUTH_ERRORS, BODY_ERRORS, SESSION_WRITE_ERRORS, ErrorOut
 from apps.common.throttling import CallerThrottle
-from apps.documents import handle, intake, member_export, reading, review, search, services, trash
+from apps.documents import (
+    handle,
+    intake,
+    member_export,
+    own,
+    reading,
+    review,
+    search,
+    services,
+    trash,
+)
 from apps.documents.models import DocumentEvent, Folder, MemberExport
 from apps.documents.schemas import (
     AddresseesIn,
+    ArchiveFacetsOut,
+    ArchiveListIn,
     ConfirmIn,
     DocumentAccessOut,
+    DocumentDetailsIn,
     DocumentEventOut,
     DocumentOut,
     DocumentSearchIn,
@@ -29,6 +42,7 @@ from apps.documents.schemas import (
     DocumentVisibilityOut,
     EmptyTrashIn,
     EmptyTrashOut,
+    FacetOut,
     FolderIn,
     FolderOut,
     HandleDocumentIn,
@@ -96,7 +110,12 @@ def create_folder(request: HttpRequest, workspace_id: UUID, payload: FolderIn) -
         "in page order. Repeating an upload with the same `client_id` and pages answers "
         "200 with the existing document. 429 `too_many_uploads` with Retry-After when the "
         "member or the workspace uploaded too much in a short time (by default 60 per "
-        "member per 10 minutes, 600 per workspace per hour)."
+        "member per 10 minutes, 600 per workspace per hour). With `kind` `document` in the "
+        "metadata it is an own document for the archive: `title` and `document_type` (an own "
+        "document's type) are required, `person_ids` and `label_ids` organise it at once, "
+        "`private` makes it private with the uploader as a reader; it skips the Inbox, gets "
+        "no tasks and ends `done` after processing. A letter with any of these fields is 422 "
+        "`validation_error`; a read-only member gets 403."
     ),
 )
 def create_document(
@@ -120,6 +139,7 @@ def create_document(
         user=user,
         metadata=parsed,
         pages=[file.read() for file in page],
+        actor=actor_from_request(request),
     )
     return Status(201 if created else 200, services.document_out(document))
 
@@ -138,7 +158,13 @@ def create_document(
         "departments; empty for a member without a person. `unread_only=true` keeps the "
         "letters the caller has not read (`unread`). `letter_status` (`new`, `open`, `waiting` or "
         "`handled`; 422 for another) and `overdue=true` keep the letters in that status, "
-        'with the marker "Te laat"; `new` here is the letter not checked yet, not `unread`.'
+        'with the marker "Te laat"; `new` here is the letter not checked yet, not `unread`. '
+        "Archief (archive spec S 5): `archived=true` keeps the reviewed documents (`done`) of "
+        "both kinds; `kind` (`letter` or `document`), `document_type`, `year` (the document's "
+        "own date, else its upload's) and `expiring=true` (own documents ending within 90 "
+        "days or already ended) narrow it. A sender is never a query parameter (it would "
+        "land in a URL): `listArchive` takes it in its body. 422 `validation_error` for an "
+        "unknown kind, type or year."
     ),
 )
 def list_documents(
@@ -153,6 +179,11 @@ def list_documents(
     unread_only: bool = False,
     letter_status: str = "",
     overdue: bool = False,
+    kind: str = "",
+    document_type: str = "",
+    year: int = 0,
+    archived: bool = False,
+    expiring: bool = False,
 ) -> list[DocumentSummaryOut]:
     membership = workspace_member(request, workspace_id)
     documents = services.list_documents(
@@ -166,8 +197,72 @@ def list_documents(
         unread_only=unread_only,
         letter_status=letter_status,
         overdue=overdue,
+        archive=services.ArchiveFilters(
+            kind=kind,
+            document_type=document_type,
+            year=year,
+            archived=archived,
+            expiring=expiring,
+        ),
     )
     return services.document_summaries_out(membership, documents)
+
+
+@router.post(
+    "/workspaces/{workspace_id}/documents/archive",
+    response={200: list[DocumentSummaryOut], 404: ErrorOut, **SESSION_WRITE_ERRORS, **BODY_ERRORS},
+    operation_id="listArchive",
+    description=(
+        "Archief: the newest 200 reviewed documents (`done`) of both kinds the caller sees, "
+        "filtered by the body: as `listDocuments` with `archived=true`, plus `sender` "
+        "(exactly, a value of `getArchiveFacets`). A POST so a sender's name is never in a "
+        "URL, a log line or the browser's history. Reads only; 422 `validation_error` for "
+        "an unknown kind, type, year or status."
+    ),
+)
+def list_archive(
+    request: HttpRequest, workspace_id: UUID, payload: ArchiveListIn
+) -> list[DocumentSummaryOut]:
+    membership = workspace_member(request, workspace_id)
+    documents = services.list_documents(
+        membership,
+        person_id=payload.person_id,
+        label_id=payload.label_id,
+        automatic=payload.automatic,
+        letter_status=payload.letter_status,
+        overdue=payload.overdue,
+        archive=services.ArchiveFilters(
+            kind=payload.kind,
+            document_type=payload.document_type,
+            year=payload.year,
+            sender=payload.sender,
+            archived=True,
+            expiring=payload.expiring,
+        ),
+    )
+    return services.document_summaries_out(membership, documents)
+
+
+@router.get(
+    "/workspaces/{workspace_id}/documents/archive-facets",
+    response={200: ArchiveFacetsOut, 404: ErrorOut, **AUTH_ERRORS},
+    operation_id="getArchiveFacets",
+    description=(
+        "The choices of Archief's filters with their counts, over the reviewed documents "
+        "(`done`) the caller sees: `kinds`, `types`, `years` (newest first) and the 50 most "
+        "frequent `senders`. Nothing the caller may not read is counted. Any role, session "
+        "or device."
+    ),
+)
+def get_archive_facets(request: HttpRequest, workspace_id: UUID) -> ArchiveFacetsOut:
+    membership = workspace_member(request, workspace_id)
+    facets = services.list_archive_facets(membership)
+    return ArchiveFacetsOut(
+        kinds=[FacetOut(value=f.value, count=f.count) for f in facets.kinds],
+        types=[FacetOut(value=f.value, count=f.count) for f in facets.types],
+        years=[FacetOut(value=f.value, count=f.count) for f in facets.years],
+        senders=[FacetOut(value=f.value, count=f.count) for f in facets.senders],
+    )
 
 
 @router.get(
@@ -233,7 +328,9 @@ def mark_documents_read(
         "`next_offset` is null on the last page (offset at most 1000). Each hit has a "
         "fragment (`snippet`) with the matched words marked. The term is never logged. "
         "422 `validation_error` for a term over 200 characters, an unknown `inbox_state` "
-        "or `document_type`, or `date_from` after `date_to`; 429 after 30 searches a minute."
+        "or `document_type`, or `date_from` after `date_to`; 429 after 30 searches a minute. "
+        "Archief: `kind`, `year` and `archived` narrow as in `listDocuments`; an own "
+        "document is found by its title too."
     ),
 )
 def search_documents(
@@ -250,6 +347,9 @@ def search_documents(
             inbox_state=payload.inbox_state,
             date_from=payload.date_from,
             date_to=payload.date_to,
+            kind=payload.kind,
+            year=payload.year,
+            archived=payload.archived,
         ),
         limit=payload.limit,
         offset=payload.offset,
@@ -489,6 +589,44 @@ def handle_document(
     return services.document_out_for(document)
 
 
+@router.patch(
+    "/workspaces/{workspace_id}/documents/{document_id}/details",
+    response={
+        200: DocumentOut,
+        404: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
+    operation_id="updateDocumentDetails",
+    description=(
+        "Change an own document's title, type, date (`document_date`), end date "
+        "(`expires_on`, cleared with `clear_expires_on`) with its reminder lead "
+        '(`remind_days`: 7, 30, 60 or 90; 0 leaves it) and "Bewaren tot" (`retain_until`, '
+        "cleared with `clear_retain_until`); a letter takes only `retain_until`. Only what is "
+        "sent changes; an empty text or a missing date leaves the field. Members (a read-only "
+        "member gets 403; emergency access is read-only: 403 `emergency_read_only`). 404 "
+        "`document_not_found` for a document the caller does not see or that is in the trash; "
+        "422 `validation_error` for a type of the other kind, a field a letter has not, or a "
+        "date out of range. One history line per changed field (`details_changed`, "
+        "`retention_changed`)."
+    ),
+)
+def update_document_details(
+    request: HttpRequest, workspace_id: UUID, document_id: UUID, payload: DocumentDetailsIn
+) -> DocumentOut:
+    # Any role: the service reads it under the lock, and a read-only member may only take
+    # "Bewaren tot" away from a document that is theirs (security review of PR #54, point 3).
+    membership = workspace_member(request, workspace_id)
+    document = own.update_details(
+        membership=membership,
+        user=current_user(request),
+        actor=actor_from_request(request),
+        document_id=document_id,
+        data=payload,
+    )
+    return services.document_out_for(document)
+
+
 @router.put(
     "/workspaces/{workspace_id}/documents/{document_id}/addressees",
     response={
@@ -708,7 +846,9 @@ def undo_document_event(
         " from every list, count, search and task list, and can be put back with"
         " `restoreDocument` until `purge_after` (30 days); then it is purged for good."
         " Trashing a letter in the trash again answers the same. 404 `document_not_found`"
-        " for a letter the caller does not see. Written to the log (`document_trashed`)."
+        " for a letter the caller does not see. Written to the log (`document_trashed`). A"
+        ' document with a "Bewaren tot" today or later is moved too, with `warning` (ask'
+        " first, from `retain_until`); it cannot be purged before that day."
     ),
 )
 def trash_document(
@@ -721,7 +861,7 @@ def trash_document(
         actor=actor_from_request(request),
         document_id=document_id,
     )
-    return trash.trashed_out(document)
+    return trash.trashed_out(document).model_copy(update={"warning": trash.trash_warning(document)})
 
 
 @router.post(
@@ -758,7 +898,7 @@ def restore_document(request: HttpRequest, workspace_id: UUID, document_id: UUID
 def list_trash(request: HttpRequest, workspace_id: UUID) -> TrashListOut:
     membership = workspace_member(request, workspace_id)
     return TrashListOut(
-        items=[trash.trashed_out(document) for document in trash.list_trash(membership)],
+        items=trash.list_trash_out(membership),
         retention_days=trash.TRASH_RETENTION.days,
         total=trash.count_trash(membership),
     )
@@ -774,14 +914,15 @@ def list_trash(request: HttpRequest, workspace_id: UUID) -> TrashListOut:
     + " Purge every letter in the caller's trash for good (role admin), up to `up_to`: the"
     " newest `trashed_at` the caller showed (all when absent). Letters the caller does not"
     " see stay. Answers how many letters are now being purged; a job removes them. Written"
-    " to the log, one `document_purged` row per letter.",
+    ' to the log, one `document_purged` row per letter. A letter with a "Bewaren tot" today'
+    " or later stays in the trash; `retained` counts them.",
 )
 def empty_trash(request: HttpRequest, workspace_id: UUID, payload: EmptyTrashIn) -> EmptyTrashOut:
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
-    count = trash.empty_trash(
+    emptied = trash.empty_trash(
         membership=membership, actor=actor_from_request(request), up_to=payload.up_to
     )
-    return EmptyTrashOut(document_count=count)
+    return EmptyTrashOut(document_count=emptied.marked, retained=emptied.retained)
 
 
 @router.delete(
@@ -794,7 +935,8 @@ def empty_trash(request: HttpRequest, workspace_id: UUID, payload: EmptyTrashIn)
     " caller's trash: a live letter, one whose purge started, or one the caller does not"
     " see answers 404 `document_not_found`. From this answer on it cannot be restored; a"
     " job removes its scanned pages and its rows. A back-up made earlier still holds it."
-    " Written to the log (`document_purged`).",
+    ' Written to the log (`document_purged`). 409 `document_retained` while its "Bewaren'
+    ' tot" is today or later (remove the date first).',
 )
 def purge_document(request: HttpRequest, workspace_id: UUID, document_id: UUID) -> Status[None]:
     membership = workspace_member(request, workspace_id, min_role=Membership.Role.ADMIN)
@@ -816,6 +958,8 @@ def _my_export_out(membership: Membership, export: MemberExport | None) -> MyExp
         expires_at=export.expires_at,
         document_count=export.document_count,
         size=export.size,
+        scope=export.scope,
+        failure_code=export.failure_code,
     )
 
 
@@ -825,6 +969,7 @@ def _my_export_out(membership: Membership, export: MemberExport | None) -> MyExp
         202: MyExportOut,
         404: ErrorOut,
         409: ErrorOut,
+        422: ErrorOut,
         429: ErrorOut,
         **SESSION_WRITE_ERRORS,
     },
@@ -837,12 +982,18 @@ def _my_export_out(membership: Membership, export: MemberExport | None) -> MyExp
     " can be downloaded for 24 hours, by the member who asked for it only. A newer request"
     " replaces an older export. 403 `export_not_allowed` when an admin switched exports off"
     " in this workspace, 409 `export_running` while the last one is being built, 429 after"
-    " five requests in an hour. Written to the log (`export_created`).",
+    " five requests in an hour. Written to the log (`export_created`). Version 2 holds a PDF"
+    " per document next to the page images, own documents, the masked text and the history."
+    ' `scope=all` ("Alles exporteren", admins only: 403 `not_admin` otherwise) exports every'
+    " document the admin may read, whatever `allow_member_export` says; private letters the"
+    " admin may not read are not in it. One export per member, whatever its scope.",
 )
-def create_my_export(request: HttpRequest, workspace_id: UUID) -> Status[MyExportOut]:
+def create_my_export(
+    request: HttpRequest, workspace_id: UUID, scope: str = "mine"
+) -> Status[MyExportOut]:
     membership = workspace_member(request, workspace_id)
     export = member_export.create_my_export(
-        membership=membership, actor=actor_from_request(request)
+        membership=membership, actor=actor_from_request(request), scope=scope
     )
     return Status(202, _my_export_out(membership, export))
 

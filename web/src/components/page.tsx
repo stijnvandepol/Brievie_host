@@ -176,7 +176,7 @@ export function PageHeader({
 
 type BreadcrumbTarget =
   | "/w/$workspaceId/inbox"
-  | "/w/$workspaceId/post"
+  | "/w/$workspaceId/archief"
   | "/w/$workspaceId/automatisering"
   | "/w/$workspaceId/mensen"
   | "/w/$workspaceId/instellingen";
@@ -201,7 +201,7 @@ function NavItem({
     | "/w/$workspaceId/mijn-post"
     | "/w/$workspaceId/taken"
     | "/w/$workspaceId/inbox"
-    | "/w/$workspaceId/post"
+    | "/w/$workspaceId/archief"
     | "/w/$workspaceId/prullenbak"
     | "/w/$workspaceId/mensen"
     | "/w/$workspaceId/afdelingen"
@@ -257,7 +257,7 @@ function inboxLabel(waiting: number, lingering: number): string | undefined {
 
 /**
  * The menu of one workspace in the owner's order (spec S 4.1): Inbox, Mijn post, Mijn
- * taken, Alle post, Labels, Mensen, Afdelingen or Groepen (when on), Automatisering (not
+ * taken, Archief (was Alle post), Labels, Mensen, Afdelingen or Groepen (when on), Automatisering (not
  * for viewers), Prullenbak; Instellingen at the bottom, for everyone. One call gives the
  * numbers; a number shows only above zero, its words are in the link's name.
  */
@@ -308,7 +308,7 @@ function WorkspaceNav({ workspace }: { workspace: NavWorkspace }) {
         count={mine}
         warn={late > 0}
       />
-      <NavItem to="/w/$workspaceId/post" params={params} icon="layers" label={t`Alle post`} />
+      <NavItem to="/w/$workspaceId/archief" params={params} icon="layers" label={t`Archief`} />
       <NavItem to="/w/$workspaceId/labels" params={params} icon="tag" label={t`Labels`} />
       <NavItem to="/w/$workspaceId/mensen" params={params} icon="people" label={t`Mensen`} />
       {sight?.departments_enabled ? (

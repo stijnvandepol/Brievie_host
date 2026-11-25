@@ -347,6 +347,107 @@
         "title": "AiSupplierOut",
         "type": "object"
       },
+      "ArchiveFacetsOut": {
+        "description": "The choices of the archive's filters (`getArchiveFacets`), counted over the reviewed\ndocuments the caller sees: kinds (`letter`, `document`), types, years (the document's\nown date, else its upload's; newest first) and the 50 most frequent senders. A value\nwith no document is left out.",
+        "properties": {
+          "kinds": {
+            "items": {
+              "$ref": "#/components/schemas/FacetOut"
+            },
+            "title": "Kinds",
+            "type": "array"
+          },
+          "senders": {
+            "items": {
+              "$ref": "#/components/schemas/FacetOut"
+            },
+            "title": "Senders",
+            "type": "array"
+          },
+          "types": {
+            "items": {
+              "$ref": "#/components/schemas/FacetOut"
+            },
+            "title": "Types",
+            "type": "array"
+          },
+          "years": {
+            "items": {
+              "$ref": "#/components/schemas/FacetOut"
+            },
+            "title": "Years",
+            "type": "array"
+          }
+        },
+        "title": "ArchiveFacetsOut",
+        "type": "object"
+      },
+      "ArchiveListIn": {
+        "description": "`listArchive`: the archive's filters, every one optional; together they all apply. In\na body, so a sender's name is never in a URL (security review of PR #54, point 1).",
+        "properties": {
+          "automatic": {
+            "default": false,
+            "title": "Automatic",
+            "type": "boolean"
+          },
+          "document_type": {
+            "default": "",
+            "title": "Document Type",
+            "type": "string"
+          },
+          "expiring": {
+            "default": false,
+            "title": "Expiring",
+            "type": "boolean"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "label_id": {
+            "format": "uuid",
+            "title": "Label Id",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "letter_status": {
+            "default": "",
+            "title": "Letter Status",
+            "type": "string"
+          },
+          "overdue": {
+            "default": false,
+            "title": "Overdue",
+            "type": "boolean"
+          },
+          "person_id": {
+            "format": "uuid",
+            "title": "Person Id",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sender": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Sender",
+            "type": "string"
+          },
+          "year": {
+            "default": 0,
+            "maximum": 2200,
+            "minimum": 0,
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "title": "ArchiveListIn",
+        "type": "object"
+      },
       "AssignIn": {
         "properties": {
           "user_id": {
@@ -803,6 +904,63 @@
         "title": "DocumentAccessOut",
         "type": "object"
       },
+      "DocumentDetailsIn": {
+        "description": "`updateDocumentDetails` (archive spec S 10): only what is sent changes. An empty\ntext, a missing date, `remind_days` 0 and the false flags mean \"unchanged\"; a date is\ncleared with its `clear_` flag. An own document takes every field; a letter only\n`retain_until` and `clear_retain_until`.",
+        "properties": {
+          "clear_expires_on": {
+            "default": false,
+            "title": "Clear Expires On",
+            "type": "boolean"
+          },
+          "clear_retain_until": {
+            "default": false,
+            "title": "Clear Retain Until",
+            "type": "boolean"
+          },
+          "document_date": {
+            "format": "date",
+            "title": "Document Date",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "document_type": {
+            "default": "",
+            "title": "Document Type",
+            "type": "string"
+          },
+          "expires_on": {
+            "format": "date",
+            "title": "Expires On",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "remind_days": {
+            "default": 0,
+            "title": "Remind Days",
+            "type": "integer"
+          },
+          "retain_until": {
+            "format": "date",
+            "title": "Retain Until",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "default": "",
+            "maxLength": 400,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "title": "DocumentDetailsIn",
+        "type": "object"
+      },
       "DocumentEventOut": {
         "properties": {
           "actor_id": {
@@ -955,6 +1113,14 @@
             "title": "Document Type",
             "type": "string"
           },
+          "expires_on": {
+            "format": "date",
+            "title": "Expires On",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "failure_code": {
             "title": "Failure Code",
             "type": "string"
@@ -967,6 +1133,11 @@
           "inbox_state": {
             "default": "",
             "title": "Inbox State",
+            "type": "string"
+          },
+          "kind": {
+            "default": "letter",
+            "title": "Kind",
             "type": "string"
           },
           "label_ids": {
@@ -1060,6 +1231,27 @@
             "title": "Reader Names",
             "type": "array"
           },
+          "remind_days": {
+            "default": 30,
+            "title": "Remind Days",
+            "type": "integer"
+          },
+          "reminder_task_id": {
+            "format": "uuid",
+            "title": "Reminder Task Id",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "retain_until": {
+            "format": "date",
+            "title": "Retain Until",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "sender": {
             "title": "Sender",
             "type": "string"
@@ -1097,6 +1289,11 @@
             },
             "title": "Tasks",
             "type": "array"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
           },
           "unread": {
             "default": false,
@@ -1189,6 +1386,14 @@
             "title": "Document Type",
             "type": "string"
           },
+          "expires_on": {
+            "format": "date",
+            "title": "Expires On",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -1197,6 +1402,11 @@
           "inbox_state": {
             "default": "",
             "title": "Inbox State",
+            "type": "string"
+          },
+          "kind": {
+            "default": "letter",
+            "title": "Kind",
             "type": "string"
           },
           "label_ids": {
@@ -1269,6 +1479,27 @@
             "title": "Reader Names",
             "type": "array"
           },
+          "remind_days": {
+            "default": 30,
+            "title": "Remind Days",
+            "type": "integer"
+          },
+          "reminder_task_id": {
+            "format": "uuid",
+            "title": "Reminder Task Id",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "retain_until": {
+            "format": "date",
+            "title": "Retain Until",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "sender": {
             "title": "Sender",
             "type": "string"
@@ -1282,6 +1513,11 @@
           },
           "status": {
             "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
             "type": "string"
           },
           "unread": {
@@ -1319,6 +1555,11 @@
       "DocumentSearchIn": {
         "description": "A search in the letters of the workspace. POST, so the term is never in a URL.",
         "properties": {
+          "archived": {
+            "default": false,
+            "title": "Archived",
+            "type": "boolean"
+          },
           "date_from": {
             "format": "date",
             "title": "Date From",
@@ -1343,6 +1584,11 @@
           "inbox_state": {
             "default": "",
             "title": "Inbox State",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
             "type": "string"
           },
           "label_id": {
@@ -1379,6 +1625,13 @@
             "maxLength": 200,
             "title": "Q",
             "type": "string"
+          },
+          "year": {
+            "default": 0,
+            "maximum": 2200,
+            "minimum": 0,
+            "title": "Year",
+            "type": "integer"
           }
         },
         "required": [
@@ -1473,6 +1726,14 @@
             "title": "Document Type",
             "type": "string"
           },
+          "expires_on": {
+            "format": "date",
+            "title": "Expires On",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -1481,6 +1742,11 @@
           "inbox_state": {
             "default": "",
             "title": "Inbox State",
+            "type": "string"
+          },
+          "kind": {
+            "default": "letter",
+            "title": "Kind",
             "type": "string"
           },
           "label_ids": {
@@ -1553,12 +1819,38 @@
             "title": "Reader Names",
             "type": "array"
           },
+          "remind_days": {
+            "default": 30,
+            "title": "Remind Days",
+            "type": "integer"
+          },
+          "reminder_task_id": {
+            "format": "uuid",
+            "title": "Reminder Task Id",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "retain_until": {
+            "format": "date",
+            "title": "Retain Until",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "sender": {
             "title": "Sender",
             "type": "string"
           },
           "status": {
             "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
             "type": "string"
           },
           "unread": {
@@ -1860,6 +2152,11 @@
           "document_count": {
             "title": "Document Count",
             "type": "integer"
+          },
+          "retained": {
+            "default": 0,
+            "title": "Retained",
+            "type": "integer"
           }
         },
         "required": [
@@ -1960,6 +2257,25 @@
           "docs_url"
         ],
         "title": "ExternalAccessOut",
+        "type": "object"
+      },
+      "FacetOut": {
+        "description": "One value a filter can choose and how many reviewed documents the caller sees with\nit.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "count"
+        ],
+        "title": "FacetOut",
         "type": "object"
       },
       "FolderIn": {
@@ -2493,6 +2809,14 @@
             "title": "Document Type",
             "type": "string"
           },
+          "expires_on": {
+            "format": "date",
+            "title": "Expires On",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -2501,6 +2825,11 @@
           "inbox_state": {
             "default": "",
             "title": "Inbox State",
+            "type": "string"
+          },
+          "kind": {
+            "default": "letter",
+            "title": "Kind",
             "type": "string"
           },
           "label_ids": {
@@ -2573,12 +2902,38 @@
             "title": "Reader Names",
             "type": "array"
           },
+          "remind_days": {
+            "default": 30,
+            "title": "Remind Days",
+            "type": "integer"
+          },
+          "reminder_task_id": {
+            "format": "uuid",
+            "title": "Reminder Task Id",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "retain_until": {
+            "format": "date",
+            "title": "Retain Until",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "sender": {
             "title": "Sender",
             "type": "string"
           },
           "status": {
             "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
             "type": "string"
           },
           "unread": {
@@ -2901,6 +3256,11 @@
               "null"
             ]
           },
+          "failure_code": {
+            "default": "",
+            "title": "Failure Code",
+            "type": "string"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -2908,6 +3268,11 @@
               "string",
               "null"
             ]
+          },
+          "scope": {
+            "default": "mine",
+            "title": "Scope",
+            "type": "string"
           },
           "size": {
             "default": 0,
@@ -5072,6 +5437,11 @@
             "title": "Auto Rule Label Ids",
             "type": "array"
           },
+          "can_clear_retention": {
+            "default": false,
+            "title": "Can Clear Retention",
+            "type": "boolean"
+          },
           "client_id": {
             "format": "uuid",
             "title": "Client Id",
@@ -5091,6 +5461,14 @@
             "title": "Document Type",
             "type": "string"
           },
+          "expires_on": {
+            "format": "date",
+            "title": "Expires On",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -5099,6 +5477,11 @@
           "inbox_state": {
             "default": "",
             "title": "Inbox State",
+            "type": "string"
+          },
+          "kind": {
+            "default": "letter",
+            "title": "Kind",
             "type": "string"
           },
           "label_ids": {
@@ -5176,12 +5559,38 @@
             "title": "Reader Names",
             "type": "array"
           },
+          "remind_days": {
+            "default": 30,
+            "title": "Remind Days",
+            "type": "integer"
+          },
+          "reminder_task_id": {
+            "format": "uuid",
+            "title": "Reminder Task Id",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "retain_until": {
+            "format": "date",
+            "title": "Retain Until",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "sender": {
             "title": "Sender",
             "type": "string"
           },
           "status": {
             "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
             "type": "string"
           },
           "trashed_at": {
@@ -5211,6 +5620,11 @@
               "string",
               "null"
             ]
+          },
+          "warning": {
+            "default": "",
+            "title": "Warning",
+            "type": "string"
           }
         },
         "required": [
@@ -5254,12 +5668,88 @@
             "title": "Client Id",
             "type": "string"
           },
+          "document_date": {
+            "default": null,
+            "format": "date",
+            "title": "Document Date",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "document_type": {
+            "default": "",
+            "title": "Document Type",
+            "type": "string"
+          },
+          "expires_on": {
+            "default": null,
+            "format": "date",
+            "title": "Expires On",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "default": "letter",
+            "title": "Kind",
+            "type": "string"
+          },
+          "label_ids": {
+            "default": [],
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 30,
+            "title": "Label Ids",
+            "type": "array"
+          },
           "pages": {
             "items": {
               "$ref": "#/components/schemas/PageMetaIn"
             },
             "title": "Pages",
             "type": "array"
+          },
+          "person_ids": {
+            "default": [],
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Person Ids",
+            "type": "array"
+          },
+          "private": {
+            "default": null,
+            "title": "Private",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "remind_days": {
+            "default": 30,
+            "title": "Remind Days",
+            "type": "integer"
+          },
+          "retain_until": {
+            "default": null,
+            "format": "date",
+            "title": "Retain Until",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "default": "",
+            "maxLength": 400,
+            "title": "Title",
+            "type": "string"
           }
         },
         "required": [
@@ -9994,7 +10484,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/documents": {
       "get": {
-        "description": "The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`). `addressed_to_me=true` keeps \"Mijn post\": the letters on the caller's own persons (their own and those they manage), with `include_departments=true` also on their departments; empty for a member without a person. `unread_only=true` keeps the letters the caller has not read (`unread`). `letter_status` (`new`, `open`, `waiting` or `handled`; 422 for another) and `overdue=true` keep the letters in that status, with the marker \"Te laat\"; `new` here is the letter not checked yet, not `unread`.",
+        "description": "The newest 200 documents. `inbox_state` (`new`, `review` or `unassigned`), `person_id`, `label_id` and `automatic` narrow the list; together they all apply. `automatic=true` keeps the documents the AI confirmed itself or put a label or addressee on (see `confirmed_by_ai`, `auto_label_ids`, `auto_addressee_ids`). `addressed_to_me=true` keeps \"Mijn post\": the letters on the caller's own persons (their own and those they manage), with `include_departments=true` also on their departments; empty for a member without a person. `unread_only=true` keeps the letters the caller has not read (`unread`). `letter_status` (`new`, `open`, `waiting` or `handled`; 422 for another) and `overdue=true` keep the letters in that status, with the marker \"Te laat\"; `new` here is the letter not checked yet, not `unread`. Archief (archive spec S 5): `archived=true` keeps the reviewed documents (`done`) of both kinds; `kind` (`letter` or `document`), `document_type`, `year` (the document's own date, else its upload's) and `expiring=true` (own documents ending within 90 days or already ended) narrow it. A sender is never a query parameter (it would land in a URL): `listArchive` takes it in its body. 422 `validation_error` for an unknown kind, type or year.",
         "operationId": "listDocuments",
         "parameters": [
           {
@@ -10102,6 +10592,56 @@
               "title": "Overdue",
               "type": "boolean"
             }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "document_type",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Document Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "archived",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Archived",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expiring",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Expiring",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -10164,7 +10704,7 @@
         ]
       },
       "post": {
-        "description": "Upload a scanned document as multipart/form-data: `metadata` is a JSON string (schema `UploadMetadataIn`), followed by one `page` file (image/jpeg) per page in page order. Repeating an upload with the same `client_id` and pages answers 200 with the existing document. 429 `too_many_uploads` with Retry-After when the member or the workspace uploaded too much in a short time (by default 60 per member per 10 minutes, 600 per workspace per hour).",
+        "description": "Upload a scanned document as multipart/form-data: `metadata` is a JSON string (schema `UploadMetadataIn`), followed by one `page` file (image/jpeg) per page in page order. Repeating an upload with the same `client_id` and pages answers 200 with the existing document. 429 `too_many_uploads` with Retry-After when the member or the workspace uploaded too much in a short time (by default 60 per member per 10 minutes, 600 per workspace per hour). With `kind` `document` in the metadata it is an own document for the archive: `title` and `document_type` (an own document's type) are required, `person_ids` and `label_ids` organise it at once, `private` makes it private with the uploader as a reader; it skips the Inbox, gets no tasks and ends `done` after processing. A letter with any of these fields is 422 `validation_error`; a read-only member gets 403.",
         "operationId": "createDocument",
         "parameters": [
           {
@@ -10343,6 +10883,194 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/documents/archive": {
+      "post": {
+        "description": "Archief: the newest 200 reviewed documents (`done`) of both kinds the caller sees, filtered by the body: as `listDocuments` with `archived=true`, plus `sender` (exactly, a value of `getArchiveFacets`). A POST so a sender's name is never in a URL, a log line or the browser's history. Reads only; 422 `validation_error` for an unknown kind, type, year or status.",
+        "operationId": "listArchive",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveListIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentSummaryOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "List Archive",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/archive-facets": {
+      "get": {
+        "description": "The choices of Archief's filters with their counts, over the reviewed documents (`done`) the caller sees: `kinds`, `types`, `years` (newest first) and the 50 most frequent `senders`. Nothing the caller may not read is counted. Any role, session or device.",
+        "operationId": "getArchiveFacets",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchiveFacetsOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Get Archive Facets",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/documents/read": {
       "post": {
         "description": "\"Alles gelezen\": mark the given letters read for the caller (at most 200; 422 `validation_error` for more). Ids the caller does not see are skipped without a word. `marked`: how many were newly marked. The caller's own state only: nobody else sees it; no history line, no log.",
@@ -10467,7 +11195,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/documents/search": {
       "post": {
-        "description": "Search the letters of the workspace by their text, sender, summary, label names and person names; every word must match, as a word beginning (Dutch stems too). Best first, then newest. The filters narrow the search; together they all apply. When nothing matches exactly, letters with similar words are answered with `fuzzy=true`. A BSN in `q` is removed before searching (`bsn_removed`). `next_offset` is null on the last page (offset at most 1000). Each hit has a fragment (`snippet`) with the matched words marked. The term is never logged. 422 `validation_error` for a term over 200 characters, an unknown `inbox_state` or `document_type`, or `date_from` after `date_to`; 429 after 30 searches a minute.",
+        "description": "Search the letters of the workspace by their text, sender, summary, label names and person names; every word must match, as a word beginning (Dutch stems too). Best first, then newest. The filters narrow the search; together they all apply. When nothing matches exactly, letters with similar words are answered with `fuzzy=true`. A BSN in `q` is removed before searching (`bsn_removed`). `next_offset` is null on the last page (offset at most 1000). Each hit has a fragment (`snippet`) with the matched words marked. The term is never logged. 422 `validation_error` for a term over 200 characters, an unknown `inbox_state` or `document_type`, or `date_from` after `date_to`; 429 after 30 searches a minute. Archief: `kind`, `year` and `archived` narrow as in `listDocuments`; an own document is found by its title too.",
         "operationId": "searchDocuments",
         "parameters": [
           {
@@ -11093,6 +11821,138 @@
           }
         ],
         "summary": "Confirm Document",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/details": {
+      "patch": {
+        "description": "Change an own document's title, type, date (`document_date`), end date (`expires_on`, cleared with `clear_expires_on`) with its reminder lead (`remind_days`: 7, 30, 60 or 90; 0 leaves it) and \"Bewaren tot\" (`retain_until`, cleared with `clear_retain_until`); a letter takes only `retain_until`. Only what is sent changes; an empty text or a missing date leaves the field. Members (a read-only member gets 403; emergency access is read-only: 403 `emergency_read_only`). 404 `document_not_found` for a document the caller does not see or that is in the trash; 422 `validation_error` for a type of the other kind, a field a letter has not, or a date out of range. One history line per changed field (`details_changed`, `retention_changed`).",
+        "operationId": "updateDocumentDetails",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentDetailsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "security": [
+          {
+            "DeviceTokenAuth": []
+          },
+          {
+            "SessionAuth": []
+          }
+        ],
+        "summary": "Update Document Details",
         "tags": [
           "documents"
         ]
@@ -12482,7 +13342,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}/trash": {
       "post": {
-        "description": "Move the letter to the trash (role member or admin; a viewer gets 403). It is gone from every list, count, search and task list, and can be put back with `restoreDocument` until `purge_after` (30 days); then it is purged for good. Trashing a letter in the trash again answers the same. 404 `document_not_found` for a letter the caller does not see. Written to the log (`document_trashed`).",
+        "description": "Move the letter to the trash (role member or admin; a viewer gets 403). It is gone from every list, count, search and task list, and can be put back with `restoreDocument` until `purge_after` (30 days); then it is purged for good. Trashing a letter in the trash again answers the same. 404 `document_not_found` for a letter the caller does not see. Written to the log (`document_trashed`). A document with a \"Bewaren tot\" today or later is moved too, with `warning` (ask first, from `retain_until`); it cannot be purged before that day.",
         "operationId": "trashDocument",
         "parameters": [
           {
@@ -15062,7 +15922,7 @@
         ]
       },
       "post": {
-        "description": "Web session only: a bearer token answers 401 not_authenticated. Any member asks for an export of their own post: the letters on their name, as a ZIP of the page images and their data. A job builds it; poll `getMyExport`. The file can be downloaded for 24 hours, by the member who asked for it only. A newer request replaces an older export. 403 `export_not_allowed` when an admin switched exports off in this workspace, 409 `export_running` while the last one is being built, 429 after five requests in an hour. Written to the log (`export_created`).",
+        "description": "Web session only: a bearer token answers 401 not_authenticated. Any member asks for an export of their own post: the letters on their name, as a ZIP of the page images and their data. A job builds it; poll `getMyExport`. The file can be downloaded for 24 hours, by the member who asked for it only. A newer request replaces an older export. 403 `export_not_allowed` when an admin switched exports off in this workspace, 409 `export_running` while the last one is being built, 429 after five requests in an hour. Written to the log (`export_created`). Version 2 holds a PDF per document next to the page images, own documents, the masked text and the history. `scope=all` (\"Alles exporteren\", admins only: 403 `not_admin` otherwise) exports every document the admin may read, whatever `allow_member_export` says; private letters the admin may not read are not in it. One export per member, whatever its scope.",
         "operationId": "createMyExport",
         "parameters": [
           {
@@ -15072,6 +15932,16 @@
             "schema": {
               "format": "uuid",
               "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": "mine",
+              "title": "Scope",
               "type": "string"
             }
           }
@@ -15126,6 +15996,16 @@
               }
             },
             "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
           },
           "429": {
             "content": {
@@ -18294,6 +19174,16 @@
             },
             "description": "Not Found"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "413": {
             "content": {
               "application/json": {
@@ -18405,6 +19295,16 @@
               }
             },
             "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
           }
         },
         "security": [
@@ -18769,7 +19669,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/trash/empty": {
       "post": {
-        "description": "Web session only: a bearer token answers 401 not_authenticated. Purge every letter in the caller's trash for good (role admin), up to `up_to`: the newest `trashed_at` the caller showed (all when absent). Letters the caller does not see stay. Answers how many letters are now being purged; a job removes them. Written to the log, one `document_purged` row per letter.",
+        "description": "Web session only: a bearer token answers 401 not_authenticated. Purge every letter in the caller's trash for good (role admin), up to `up_to`: the newest `trashed_at` the caller showed (all when absent). Letters the caller does not see stay. Answers how many letters are now being purged; a job removes them. Written to the log, one `document_purged` row per letter. A letter with a \"Bewaren tot\" today or later stays in the trash; `retained` counts them.",
         "operationId": "emptyTrash",
         "parameters": [
           {
@@ -18888,7 +19788,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/trash/{document_id}": {
       "delete": {
-        "description": "Web session only: a bearer token answers 401 not_authenticated. Purge a letter from the trash now, for good (role admin). Only a letter in the caller's trash: a live letter, one whose purge started, or one the caller does not see answers 404 `document_not_found`. From this answer on it cannot be restored; a job removes its scanned pages and its rows. A back-up made earlier still holds it. Written to the log (`document_purged`).",
+        "description": "Web session only: a bearer token answers 401 not_authenticated. Purge a letter from the trash now, for good (role admin). Only a letter in the caller's trash: a live letter, one whose purge started, or one the caller does not see answers 404 `document_not_found`. From this answer on it cannot be restored; a job removes its scanned pages and its rows. A back-up made earlier still holds it. Written to the log (`document_purged`). 409 `document_retained` while its \"Bewaren tot\" is today or later (remove the date first).",
         "operationId": "purgeDocument",
         "parameters": [
           {

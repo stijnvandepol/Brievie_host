@@ -228,9 +228,9 @@ function PeoplePage() {
         <OpenInvitations workspaceId={workspace.id} showRole={showRole} onRenewed={setRenewed} />
       ) : null}
       <section className="panel panel-pad" aria-labelledby="my-export">
-        <h2 id="my-export">{t`Mijn post`}</h2>
-        <p className="muted">{t`Maak een ZIP-bestand met jouw post. Het staat 24 uur klaar om te downloaden.`}</p>
-        <ExportPanel workspaceId={workspace.id} isAdmin={isAdmin} />
+        <h2 id="my-export">{t`Exporteren`}</h2>
+        <p className="muted">{t`Maak een ZIP-bestand met een PDF per brief of document en de gegevens erbij, om te bewaren of naar een ander programma te brengen. Het staat 24 uur klaar om te downloaden.`}</p>
+        <ExportPanel workspaceId={workspace.id} isAdmin={isAdmin} offerAll={isAdmin} />
       </section>
       <PersonDialog
         workspaceId={workspace.id}

@@ -36,6 +36,25 @@ class UploadMetadataIn(InputSchema):
     # Chosen by the client; repeating an upload with the same id is safe.
     client_id: UUID
     pages: list[PageMetaIn]
+    # Archive (spec S 6.2), all optional: an older app sends none and makes a letter.
+    # `document` is an own document: it skips the Inbox and gets no tasks; then `title` and
+    # `document_type` (one of the own documents' types) are required.
+    kind: str = "letter"
+    title: str = Field(default="", max_length=400)
+    document_type: str = ""
+    # The document's own date ("Datum"); stored as its `letter_date`.
+    document_date: date | None = None
+    person_ids: list[UUID] = Field(default=[], max_length=10)
+    label_ids: list[UUID] = Field(default=[], max_length=30)
+    # "Geldig tot" and how many days ahead its reminder starts (7, 30, 60 or 90).
+    expires_on: date | None = None
+    remind_days: int = 30
+    # "Bewaren tot": no permanent delete before this day.
+    retain_until: date | None = None
+    # "Alleen voor deze persoon": make it private at once (only narrows). Absent: on for an
+    # identity document, medical, a payslip and a tax return (Besluit B3), off otherwise; an
+    # explicit false is honoured.
+    private: bool | None = None
 
 
 class DocumentSummaryOut(Schema):
@@ -91,6 +110,18 @@ class DocumentSummaryOut(Schema):
     open_task_count: int = 0
     # When `letter_status` is "waiting": the day the first waiting task is due back.
     waiting_until: date | None = None
+    # Archive (spec S 10): "letter" (post) or "document" (an own document; it has a
+    # `title`, no letter status and is never in the Inbox). A missing value means letter.
+    kind: str = "letter"
+    # An own document's name, shown where a letter shows its sender.
+    title: str = ""
+    # "Geldig tot" of an own document, and how many days ahead its reminder starts.
+    expires_on: date | None = None
+    remind_days: int = 30
+    # "Bewaren tot": a permanent delete is refused before this day (either kind).
+    retain_until: date | None = None
+    # The open reminder task of `expires_on`, when there is one.
+    reminder_task_id: UUID | None = None
 
 
 class TrashedDocumentOut(DocumentSummaryOut):
@@ -102,6 +133,13 @@ class TrashedDocumentOut(DocumentSummaryOut):
     trashed_by_name: str = ""
     # `trashed_at` plus the retention (30 days); purged within the hour after.
     purge_after: datetime
+    # `trashDocument` only: the sentence the move came with ("Bewaren tot ... Weet je het
+    # zeker?") when the document is retained; the clients ask it before (from
+    # `retain_until`). Empty otherwise.
+    warning: str = ""
+    # Whether the caller may take "Bewaren tot" away here (`updateDocumentDetails` with only
+    # `clear_retain_until`): an admin, and the person the document belongs to.
+    can_clear_retention: bool = False
 
 
 class TrashListOut(Schema):
@@ -126,6 +164,8 @@ class EmptyTrashIn(InputSchema):
 class EmptyTrashOut(Schema):
     # How many letters are now being purged.
     document_count: int
+    # How many stayed in the trash because of their "Bewaren tot".
+    retained: int = 0
 
 
 class PageOut(Schema):
@@ -262,6 +302,24 @@ class ConfirmIn(InputSchema):
     visibility: str = ""
 
 
+class DocumentDetailsIn(InputSchema):
+    """`updateDocumentDetails` (archive spec S 10): only what is sent changes. An empty
+    text, a missing date, `remind_days` 0 and the false flags mean "unchanged"; a date is
+    cleared with its `clear_` flag. An own document takes every field; a letter only
+    `retain_until` and `clear_retain_until`."""
+
+    title: str = Field(default="", max_length=400)
+    document_type: str = ""
+    # The document's own date ("Datum"), stored as `letter_date`.
+    document_date: date | None = None
+    expires_on: date | None = None
+    clear_expires_on: bool = False
+    # 7, 30, 60 or 90; 0 leaves it.
+    remind_days: int = 0
+    retain_until: date | None = None
+    clear_retain_until: bool = False
+
+
 class AddresseesIn(InputSchema):
     # The document's addressees become exactly these persons.
     person_ids: list[UUID] = Field(max_length=10)
@@ -334,6 +392,43 @@ class LetterStatusCountsOut(Schema):
     waiting: int = 0
     handled: int = 0
     overdue: int = 0
+
+
+class ArchiveListIn(InputSchema):
+    """`listArchive`: the archive's filters, every one optional; together they all apply. In
+    a body, so a sender's name is never in a URL (security review of PR #54, point 1)."""
+
+    kind: str = ""
+    document_type: str = ""
+    year: int = Field(default=0, ge=0, le=2200)
+    # Exactly this sender, a value of `getArchiveFacets`.
+    sender: str = Field(default="", max_length=200)
+    person_id: UUID | None = None
+    label_id: UUID | None = None
+    letter_status: str = ""
+    overdue: bool = False
+    automatic: bool = False
+    expiring: bool = False
+
+
+class FacetOut(Schema):
+    """One value a filter can choose and how many reviewed documents the caller sees with
+    it."""
+
+    value: str
+    count: int
+
+
+class ArchiveFacetsOut(Schema):
+    """The choices of the archive's filters (`getArchiveFacets`), counted over the reviewed
+    documents the caller sees: kinds (`letter`, `document`), types, years (the document's
+    own date, else its upload's; newest first) and the 50 most frequent senders. A value
+    with no document is left out."""
+
+    kinds: list[FacetOut] = Field(default_factory=list)
+    types: list[FacetOut] = Field(default_factory=list)
+    years: list[FacetOut] = Field(default_factory=list)
+    senders: list[FacetOut] = Field(default_factory=list)
 
 
 class InboxCountsOut(Schema):
@@ -462,6 +557,11 @@ class MyExportOut(Schema):
     document_count: int = 0
     # Bytes of the sealed file.
     size: int = 0
+    # `mine` (the member's own post) or `all` (an admin's "Alles exporteren").
+    scope: str = "mine"
+    # Why a `failed` export failed, when known: `too_large` (over the server's limit) or
+    # `not_enough_space` (the disk has no room); empty otherwise.
+    failure_code: str = ""
 
 
 class DocumentSearchIn(InputSchema):
@@ -478,6 +578,12 @@ class DocumentSearchIn(InputSchema):
     # On the letter date; a letter without one falls under its upload date.
     date_from: date | None = None
     date_to: date | None = None
+    # Archive (spec S 5): "letter" or "document"; empty for both.
+    kind: str = ""
+    # The document's own date's year, else its upload's; 0 for all.
+    year: int = Field(default=0, ge=0, le=2200)
+    # Reviewed documents only (the archive).
+    archived: bool = False
     limit: int = Field(default=30, ge=1, le=100)
     offset: int = Field(default=0, ge=0, le=1000)
 

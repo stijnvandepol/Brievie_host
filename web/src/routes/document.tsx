@@ -17,8 +17,10 @@ import type { components } from "../api/schema";
 import { refreshAfterTrash, trashDocument } from "../api/trash";
 import { ConfirmAction, ConfirmDialog } from "../components/confirm-dialog";
 import { DocumentAccess } from "../components/document-access";
+import { DocumentDetails, isRetained } from "../components/document-details-form";
 import { DocumentHistory } from "../components/document-history";
 import {
+  ArchiveBadges,
   AutomaticBadge,
   formatLetterDate,
   RowStatus,
@@ -92,7 +94,56 @@ function Proposals({ proposals }: { proposals: Proposal[] }) {
   );
 }
 
+/** An own document whose text was not read (archive spec S 6.2 point 5): it is in the
+ * archive anyway; an editor may have it read again. */
+function FailedTextNotice({
+  workspaceId,
+  document,
+  canEdit,
+}: {
+  workspaceId: string;
+  document: Document;
+  canEdit: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const retry = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/documents/{document_id}/retry",
+        { params: { path: { workspace_id: workspaceId, document_id: document.id } } },
+      );
+      if (error !== undefined || !data) throw new ApiFailure(error);
+      return data;
+    },
+    onSuccess: (answer) => {
+      queryClient.setQueryData(["workspaces", workspaceId, "documents", document.id], answer);
+    },
+  });
+  return (
+    <>
+      <MessageBar intent="warning">
+        {t`De tekst is niet gelezen. Het document staat wel in het archief.`}{" "}
+        {canEdit ? (
+          <Button
+            className="button-text"
+            isDisabled={retry.isPending}
+            onPress={() => retry.mutate()}
+          >
+            {t`Opnieuw proberen`}
+          </Button>
+        ) : null}
+      </MessageBar>
+      <ErrorAlert error={retry.error} />
+    </>
+  );
+}
+
 function StatusNotice({ document }: { document: Document }) {
+  if (document.kind === "document") {
+    return document.status === "processing" ? (
+      <MessageBar intent="info">{t`Dit document wordt nog gelezen.`}</MessageBar>
+    ) : null;
+  }
   if (document.status === "processing") {
     return <MessageBar intent="info">{t`Deze brief wordt nog gelezen.`}</MessageBar>;
   }
@@ -137,7 +188,7 @@ function useReopen(workspaceId: string, documentId: string) {
 }
 
 /**
- * Moves the letter to the trash, then goes to "Alle post" with the undo bar. The letter's own
+ * Moves the letter to the trash, then goes to "Archief" with the undo bar. The letter's own
  * cache entry goes: it answers `document_in_trash` from now on.
  */
 function useTrash(workspaceId: string, documentId: string) {
@@ -147,7 +198,7 @@ function useTrash(workspaceId: string, documentId: string) {
     mutationFn: () => trashDocument(workspaceId, documentId),
     onSuccess: async () => {
       showUndo(workspaceId, documentId);
-      await navigate({ to: "/w/$workspaceId/post", params: { workspaceId } });
+      await navigate({ to: "/w/$workspaceId/archief", params: { workspaceId } });
       queryClient.removeQueries({ queryKey: ["workspaces", workspaceId, "documents", documentId] });
       await refreshAfterTrash(queryClient, workspaceId);
     },
@@ -229,6 +280,8 @@ function DocumentView({
   const sender = document.sender || t`Onbekende afzender`;
   const pages = Array.from({ length: document.page_count }, (_, index) => index + 1);
   const reviewing = document.status === "needs_review" || document.status === "failed";
+  const own = document.kind === "document";
+  const retained = isRetained(document.retain_until);
   return (
     <div className="document">
       <div className="document-pages">
@@ -244,36 +297,50 @@ function DocumentView({
       </div>
       <div className="document-side">
         <StatusNotice document={document} />
+        {own && document.status === "done" && document.failure_code ? (
+          <FailedTextNotice workspaceId={workspaceId} document={document} canEdit={canEdit} />
+        ) : null}
         <PrivateLock
           visibility={document.visibility}
           readerNames={document.reader_names}
           variant="page"
         />
         <section className="panel" aria-label={t`Gegevens`}>
+          {own ? (
+            <DocumentDetails workspaceId={workspaceId} document={document} canEdit={canEdit} />
+          ) : null}
           <dl className="detail-list">
-            <div>
-              <dt>{t`Afzender`}</dt>
-              <dd>{sender}</dd>
-            </div>
-            <div>
-              <dt>{t`Soort`}</dt>
-              <dd>{typeLabel(document.document_type)}</dd>
-            </div>
-            <div>
-              <dt>{t`Datum brief`}</dt>
-              <dd>{document.letter_date ? formatLetterDate(document.letter_date) : ""}</dd>
-            </div>
+            {own ? null : (
+              <>
+                <div>
+                  <dt>{t`Afzender`}</dt>
+                  <dd>{sender}</dd>
+                </div>
+                <div>
+                  <dt>{t`Soort`}</dt>
+                  <dd>{typeLabel(document.document_type)}</dd>
+                </div>
+                <div>
+                  <dt>{t`Datum brief`}</dt>
+                  <dd>{document.letter_date ? formatLetterDate(document.letter_date) : ""}</dd>
+                </div>
+              </>
+            )}
             <div>
               <dt>{t`Status`}</dt>
               <dd>
                 <span className="cell-badges">
-                  <RowStatus document={document} departments={departmentsOn} letterStatus="all" />
+                  {own ? (
+                    <ArchiveBadges document={document} />
+                  ) : (
+                    <RowStatus document={document} departments={departmentsOn} letterStatus="all" />
+                  )}
                   <AutomaticBadge document={document} />
                 </span>
               </dd>
             </div>
             <div>
-              <dt>{t`Op naam van`}</dt>
+              <dt>{own ? t`Van wie` : t`Op naam van`}</dt>
               <dd>
                 <PersonPicker
                   persons={persons.data ?? []}
@@ -367,12 +434,25 @@ function DocumentView({
               <ConfirmAction
                 label={t`Verwijderen`}
                 icon="delete"
-                title={t`Brief verwijderen?`}
+                title={
+                  retained && document.retain_until
+                    ? t`Bewaren tot ${formatLetterDate(document.retain_until)}. Weet je het zeker?`
+                    : own
+                      ? t`Document verwijderen?`
+                      : t`Brief verwijderen?`
+                }
                 confirmLabel={t`Naar de prullenbak`}
                 tone="primary"
                 onConfirm={() => trash.mutateAsync()}
               >
-                <p>{t`De brief gaat naar de prullenbak. Daar blijft hij 30 dagen. Zo lang kun je hem terugzetten. Daarna wordt hij voorgoed gewist.`}</p>
+                {retained ? (
+                  <p>{t`Je kunt het naar de prullenbak verplaatsen. Voorgoed wissen kan pas als de datum voorbij is of iemand de datum weghaalt.`}</p>
+                ) : null}
+                <p>
+                  {own
+                    ? t`Het document gaat naar de prullenbak. Daar blijft het 30 dagen. Zo lang kun je het terugzetten. Daarna wordt het voorgoed gewist.`
+                    : t`De brief gaat naar de prullenbak. Daar blijft hij 30 dagen. Zo lang kun je hem terugzetten. Daarna wordt hij voorgoed gewist.`}
+                </p>
               </ConfirmAction>
             </div>
           ) : null}
@@ -385,6 +465,11 @@ function DocumentView({
           canEdit={canEdit}
         />
         <NewPersonList workspaceId={workspaceId} document={document} canEdit={canEdit} />
+        {own ? null : (
+          <section className="panel" aria-label={t`Bewaren`}>
+            <DocumentDetails workspaceId={workspaceId} document={document} canEdit={canEdit} />
+          </section>
+        )}
         {document.summary ? (
           <section className="panel" aria-labelledby="summary-heading">
             <div className="panel-head">
@@ -436,7 +521,7 @@ function DocumentView({
         <DocumentAccess workspaceId={workspaceId} documentId={document.id} />
         <DocumentHistory workspaceId={workspaceId} documentId={document.id} canEdit={canEdit} />
         <details className="panel letter-text">
-          <summary>{t`Tekst van de brief`}</summary>
+          <summary>{own ? t`Tekst van het document` : t`Tekst van de brief`}</summary>
           {document.pages.map((page) => (
             <p key={page.index} className="letter-page">
               {page.ocr_text}
@@ -483,7 +568,11 @@ function DocumentPage() {
   const { documentId } = documentRoute.useParams();
   const { data, error, isPending } = useQuery(documentQuery(workspace.id, documentId));
   const unknown = t`Onbekende afzender`;
-  const title = data ? data.sender || unknown : t`Brief`;
+  const title = data
+    ? data.kind === "document"
+      ? data.title || t`Document zonder titel`
+      : data.sender || unknown
+    : t`Brief`;
   usePageTitle(title);
   const reading = useReadMark(workspace.id, data);
 
@@ -493,12 +582,12 @@ function DocumentPage() {
       <PageHeader
         title={title}
         breadcrumb={{
-          to: "/w/$workspaceId/post",
+          to: "/w/$workspaceId/archief",
           params: { workspaceId: workspace.id },
-          label: t`Alle post`,
+          label: t`Archief`,
         }}
         commands={
-          data ? (
+          data && data.kind !== "document" ? (
             <Button
               className="button secondary"
               isDisabled={reading.isPending}

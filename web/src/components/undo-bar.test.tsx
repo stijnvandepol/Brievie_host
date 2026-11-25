@@ -16,7 +16,7 @@ import {
 } from "../test-utils";
 import { showUndo } from "../undo-trash";
 
-const post = `/w/${workspace.id}/post`;
+const post = `/w/${workspace.id}/archief`;
 
 describe("undo bar", () => {
   it("has no timer and closes on Sluiten", async () => {
@@ -58,7 +58,7 @@ describe("undo bar", () => {
     const bar = await screen.findByRole("status");
     await user.click(within(bar).getByRole("button", { name: "Ongedaan maken" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Deze brief bestaat niet (meer).");
-    expect(screen.getByRole("heading", { level: 1, name: "Alle post" })).toBeVisible();
+    expect(screen.getByRole("heading", { level: 1, name: "Archief" })).toBeVisible();
   });
 
   it("does not follow into another workspace", async () => {
@@ -66,12 +66,20 @@ describe("undo bar", () => {
       twoWorkspaces(),
       ...loggedInHandlers(),
       ...documentHandlers(),
-      http.get(`*${API}/workspaces/${secondWorkspace.id}/documents`, () => HttpResponse.json([])),
+      http.post(`*${API}/workspaces/${secondWorkspace.id}/documents/archive`, () =>
+        HttpResponse.json([]),
+      ),
       http.get(`*${API}/workspaces/${secondWorkspace.id}/inbox/counts`, () =>
         HttpResponse.json({ new: 0, review: 0, unassigned: 0 }),
       ),
       http.get(`*${API}/workspaces/${secondWorkspace.id}/persons`, () => HttpResponse.json([])),
       http.get(`*${API}/workspaces/${secondWorkspace.id}/labels`, () => HttpResponse.json([])),
+      http.get(`*${API}/workspaces/${secondWorkspace.id}/documents/archive-facets`, () =>
+        HttpResponse.json({ kinds: [], types: [], years: [], senders: [] }),
+      ),
+      http.get(`*${API}/workspaces/${secondWorkspace.id}/documents/status-counts`, () =>
+        HttpResponse.json({ new: 0, open: 0, waiting: 0, handled: 0, overdue: 0 }),
+      ),
       http.get(`*${API}/workspaces/${secondWorkspace.id}/ai`, () =>
         HttpResponse.json({ mode: "off" }),
       ),
@@ -80,9 +88,12 @@ describe("undo bar", () => {
     const { router } = renderApp(post);
     await screen.findByRole("status");
     await act(() =>
-      router.navigate({ to: "/w/$workspaceId/post", params: { workspaceId: secondWorkspace.id } }),
+      router.navigate({
+        to: "/w/$workspaceId/archief",
+        params: { workspaceId: secondWorkspace.id },
+      }),
     );
-    await screen.findByText("Er is nog geen post.");
+    await screen.findByText("Nog niets in je archief.");
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 });

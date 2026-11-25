@@ -17,6 +17,7 @@ thing export code ever deletes is such a file:
 
 import os
 import re
+import shutil
 import stat
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -143,6 +144,16 @@ def open_export_for_write(path: Path) -> BinaryIO:
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
     descriptor = os.open(path, flags, _OWNER_ONLY_FILE)
     return os.fdopen(descriptor, "wb")
+
+
+def free_bytes() -> int:
+    """Free bytes on the disk of the export directory (of the storage root while the
+    directory does not exist yet). Looks only; makes and removes nothing."""
+    target = judge_export_root(export_root())
+    # The nearest directory that exists (a fresh install has no export directory yet).
+    while not target.exists() and target.parent != target:
+        target = target.parent
+    return shutil.disk_usage(target).free
 
 
 def open_export_for_read(path: Path) -> BinaryIO:

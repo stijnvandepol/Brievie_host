@@ -29,6 +29,7 @@ from django.contrib.postgres.search import (
 )
 from django.db import connection, models, transaction
 from django.db.models.functions import Cast, Coalesce, Greatest, Left, Replace, TruncDate
+from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from apps.common.errors import ApiError
@@ -40,8 +41,11 @@ from apps.documents.services import (
     HEADLINE_PROPOSALS,
     INBOX_STATES,
     SUGGESTIONS,
+    ArchiveFilters,
     _in_state,
+    archive_q,
     document_summary_out,
+    validate_archive,
 )
 from apps.labels.models import Label
 from apps.people.models import Person
@@ -91,6 +95,10 @@ class SearchFilters:
     inbox_state: str = ""
     date_from: date | None = None
     date_to: date | None = None
+    # The archive's filters (`services.archive_q`): kind, year, reviewed only.
+    kind: str = ""
+    year: int = 0
+    archived: bool = False
 
 
 @dataclass(frozen=True)
@@ -205,6 +213,11 @@ def _validate(filters: SearchFilters) -> None:
         raise ApiError(422, "validation_error", _("Deze soort brief kennen we niet."))
     if filters.date_from and filters.date_to and filters.date_from > filters.date_to:
         raise ApiError(422, "validation_error", _("De begindatum moet vóór de einddatum liggen."))
+    validate_archive(_archive(filters))
+
+
+def _archive(filters: SearchFilters) -> ArchiveFilters:
+    return ArchiveFilters(kind=filters.kind, year=filters.year, archived=filters.archived)
 
 
 def _filtered(membership: Membership, filters: SearchFilters) -> "models.QuerySet[Document]":
@@ -218,6 +231,8 @@ def _filtered(membership: Membership, filters: SearchFilters) -> "models.QuerySe
     )
     if filters.document_type:
         documents = documents.filter(document_type=filters.document_type)
+    if filters.kind or filters.year or filters.archived:
+        documents = documents.filter(archive_q(_archive(filters), timezone.localdate()))
     if filters.inbox_state:
         documents = documents.filter(_in_state(filters.inbox_state))
     if filters.label_id is not None:

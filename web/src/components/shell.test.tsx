@@ -106,7 +106,7 @@ describe("the menu in the owner's order", () => {
     first: Parameters<typeof server.use> = [],
   ) {
     server.use(...first, asRole(role, kind), ...loggedInHandlers(), ...documentHandlers());
-    renderApp(`/w/${workspace.id}/post`);
+    renderApp(`/w/${workspace.id}/archief`);
     const nav = await screen.findByRole("navigation", { name: "Hoofdmenu" });
     await within(nav).findByRole("link", { name: "Instellingen" });
     return nav;
@@ -117,7 +117,7 @@ describe("the menu in the owner's order", () => {
       "Inbox",
       "Mijn post",
       "Mijn taken",
-      "Alle post",
+      "Archief",
       "Labels",
       "Mensen",
       "Automatisering",

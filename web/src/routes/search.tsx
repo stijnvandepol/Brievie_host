@@ -318,8 +318,8 @@ function SearchPage() {
               <li>{t`Probeer een andere spelling of het begin van het woord.`}</li>
             </ul>
             <p>
-              <Link to="/w/$workspaceId/post" params={{ workspaceId: workspace.id }}>
-                {t`Bekijk alle post`}
+              <Link to="/w/$workspaceId/archief" params={{ workspaceId: workspace.id }}>
+                {t`Bekijk het archief`}
               </Link>
             </p>
             {filtered ? (

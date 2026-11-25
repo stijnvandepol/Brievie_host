@@ -1,10 +1,11 @@
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from typing import TYPE_CHECKING
 from uuid import UUID
 
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, models, transaction
+from django.db import IntegrityError, connection, models, transaction
+from django.db.models.functions import Coalesce, ExtractYear
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from psycopg import errors as pg_errors
@@ -24,6 +25,7 @@ from apps.documents import (
 )
 from apps.documents.intake import page_aad
 from apps.documents.models import (
+    LETTERS_ONLY,
     LIVE,
     Document,
     DocumentAddressee,
@@ -112,7 +114,10 @@ _REVIEW_STATUSES = (Document.Status.NEEDS_REVIEW, Document.Status.FAILED)
 
 
 def inbox_state(document: Document) -> str:
-    """Where the document stands in the inbox; derived, not stored (design 11)."""
+    """Where the document stands in the inbox; derived, not stored (design 11). An own
+    document is never in the Inbox (archive spec S 8): always sorted."""
+    if document.kind == Document.Kind.DOCUMENT:
+        return InboxState.SORTED
     if document.status == Document.Status.PROCESSING:
         return InboxState.NEW
     if document.status in _REVIEW_STATUSES:
@@ -230,13 +235,14 @@ def _is_automatic() -> models.Q:
 
 
 def _in_state(state: str) -> models.Q:
+    """Letters only: an own document is never in the Inbox (archive spec S 8)."""
     if state == InboxState.NEW:
-        return models.Q(status=Document.Status.PROCESSING)
+        return LETTERS_ONLY & models.Q(status=Document.Status.PROCESSING)
     if state == InboxState.REVIEW:
-        return models.Q(status__in=_REVIEW_STATUSES)
+        return LETTERS_ONLY & models.Q(status__in=_REVIEW_STATUSES)
     # `addressee_ids` mirrors the links (one writer, checked nightly); this form uses the
-    # partial index `documents_document_unassigned`.
-    return models.Q(status=Document.Status.DONE, addressee_ids=[])
+    # partial index `documents_document_unassigned` (its condition names `kind` too).
+    return LETTERS_ONLY & models.Q(status=Document.Status.DONE, addressee_ids=[])
 
 
 LETTER_STATUSES = tuple(str(each) for each in LetterStatus)
@@ -250,13 +256,14 @@ _NOT_REVIEWED = (
 def letter_status_q(status: str, today: date) -> models.Q:
     """The letters in a status today (spec S 4.2), from the three cached task facts and the
     review; the partial index `documents_document_open_tasks` serves open, waiting and
-    late. 422 for a status that does not exist."""
+    late. 422 for a status that does not exist. Letters only: an own document has no
+    status (archive spec AR7)."""
     done = Document.Status.DONE
     if status == LetterStatus.NEW:
-        return models.Q(status__in=_NOT_REVIEWED)
+        return LETTERS_ONLY & models.Q(status__in=_NOT_REVIEWED)
     if status == LetterStatus.HANDLED:
-        return models.Q(status=done, task_open_count=0)
-    active = models.Q(status=done, task_open_count__gt=0)
+        return LETTERS_ONLY & models.Q(status=done, task_open_count=0)
+    active = LETTERS_ONLY & models.Q(status=done, task_open_count__gt=0)
     if status == LetterStatus.WAITING:
         return active & models.Q(task_wait_until__gt=today)
     if status == LetterStatus.OPEN:
@@ -267,8 +274,9 @@ def letter_status_q(status: str, today: date) -> models.Q:
 
 
 def overdue_q(today: date) -> models.Q:
-    """The marker "Te laat": reviewed, and an open task is active with a deadline behind."""
-    return models.Q(
+    """The marker "Te laat": a reviewed letter, and an open task is active with a deadline
+    behind. Never an own document (its reminder is late in "Mijn taken" only)."""
+    return LETTERS_ONLY & models.Q(
         status=Document.Status.DONE, task_open_count__gt=0, task_overdue_from__lte=today
     )
 
@@ -316,14 +324,15 @@ def my_post_filter(membership: Membership, *, include_departments: bool = False)
     """ "Mijn post" (navigation spec B2): letters on the member's own persons (their own and
     those they manage), with `include_departments` also on their departments ("Ook mijn
     afdeling"). Matches nothing for a member without any. The GIN index on
-    `addressee_ids`; only ever applied on top of `visible_documents`."""
+    `addressee_ids`; only ever applied on top of `visible_documents`. Letters only: Mijn
+    post is the personal Inbox of post; an own document is in Archief (spec S 8)."""
     facts = member_facts(membership)
     ids = set(facts.person_ids)
     if include_departments:
         ids |= facts.department_ids
     if not ids:
         return models.Q(pk__in=[])
-    return models.Q(addressee_ids__overlap=sorted(ids))
+    return LETTERS_ONLY & models.Q(addressee_ids__overlap=sorted(ids))
 
 
 def list_documents(
@@ -338,17 +347,21 @@ def list_documents(
     unread_only: bool = False,
     letter_status: str = "",
     overdue: bool = False,
+    archive: "ArchiveFilters | None" = None,
 ) -> list[Document]:
     """The newest documents the member sees (at most 200; paging comes later), filtered.
 
     `automatic` keeps the documents the autopilot confirmed or organised;
     `addressed_to_me` the member's own post ("Mijn post", with `include_departments` also
     their departments'); `unread_only` the letters they have not read (navigation S 5);
-    `letter_status` (`new`, `open`, `waiting`, `handled`) and `overdue` the letter status.
+    `letter_status` (`new`, `open`, `waiting`, `handled`) and `overdue` the letter status;
+    `archive` the archive's filters (`archive_q`). Every filter narrows.
     """
     if inbox_state and inbox_state not in INBOX_STATES:
         raise ApiError(422, "validation_error", _("Deze stand van de inbox kennen we niet."))
     documents = visibility.visible_documents(membership)
+    if archive is not None:
+        documents = documents.filter(archive_q(archive, _today()))
     if letter_status or overdue:
         today = _today()
         if letter_status:
@@ -374,6 +387,129 @@ def list_documents(
         documents.prefetch_related(
             "addressee_links", "label_links", SUGGESTIONS, HEADLINE_PROPOSALS
         ).order_by("-created_at", "-id")[:200]
+    )
+
+
+@dataclass(frozen=True)
+class ArchiveFilters:
+    """The filters of "Archief" (archive spec S 5); each empty value filters nothing."""
+
+    # `letter` or `document`.
+    kind: str = ""
+    document_type: str = ""
+    # The document's own date's year, else its upload's.
+    year: int = 0
+    # Exactly this sender (chosen from the facets, never typed into a URL).
+    sender: str = ""
+    # Reviewed only (`status = done`): the archive.
+    archived: bool = False
+    # Own documents whose end date is within `EXPIRING_DAYS` or past ("Loopt af").
+    expiring: bool = False
+
+
+# "Loopt af": an end date within 90 days, or past.
+EXPIRING_DAYS = 90
+YEAR_FROM = 1900
+YEAR_TO = 2200
+
+
+def validate_archive(filters: ArchiveFilters) -> None:
+    """422 for a kind, type or year that does not exist."""
+    if filters.kind and filters.kind not in Document.Kind.values:
+        raise ApiError(422, "validation_error", _("Kies brieven of documenten."))
+    if filters.document_type and filters.document_type not in Document.Type.values:
+        raise ApiError(422, "validation_error", _("Deze soort brief kennen we niet."))
+    if filters.year and not YEAR_FROM <= filters.year <= YEAR_TO:
+        raise ApiError(422, "validation_error", _("Dit jaar kennen we niet."))
+
+
+def archive_q(filters: ArchiveFilters, today: date) -> models.Q:
+    """The archive's filters as one condition, only ever applied on top of
+    `visible_documents`: it narrows, it never widens. 422 for an unknown kind, type or
+    year (`validate_archive`)."""
+    validate_archive(filters)
+    condition = models.Q()
+    if filters.archived:
+        condition &= models.Q(status=Document.Status.DONE)
+    if filters.kind:
+        condition &= models.Q(kind=filters.kind)
+    if filters.document_type:
+        condition &= models.Q(document_type=filters.document_type)
+    if filters.sender:
+        condition &= models.Q(sender=filters.sender)
+    if filters.year:
+        start, end = date(filters.year, 1, 1), date(filters.year + 1, 1, 1)
+        condition &= models.Q(letter_date__gte=start, letter_date__lt=end) | models.Q(
+            letter_date__isnull=True, created_at__date__gte=start, created_at__date__lt=end
+        )
+    if filters.expiring:
+        condition &= models.Q(
+            kind=Document.Kind.DOCUMENT,
+            expires_on__lte=today + timedelta(days=EXPIRING_DAYS),
+        )
+    return condition
+
+
+@dataclass(frozen=True)
+class Facet:
+    value: str
+    count: int
+
+
+@dataclass(frozen=True)
+class ArchiveFacets:
+    kinds: list[Facet]
+    types: list[Facet]
+    years: list[Facet]
+    senders: list[Facet]
+
+
+# The senders facet names the most frequent; the rest are found through search.
+SENDERS_MAX = 50
+
+
+# One pass over the archive (measured, plan Task 12): the four groupings of the rows the
+# member sees, computed by PostgreSQL from one scan. GROUPING() says which set a row is of
+# (bit 3: kind, 2: type, 1: year, 0: sender; a set's own column is the one not rolled up).
+_FACETS_HEAD = (
+    "SELECT GROUPING(kind, document_type, year, sender), kind, document_type, year, sender,"
+    " count(*) FROM ("
+)
+_FACETS_TAIL = ") AS archive GROUP BY GROUPING SETS ((kind), (document_type), (year), (sender))"
+_SETS = {0b0111: "kind", 0b1011: "type", 0b1101: "year", 0b1110: "sender"}
+
+
+def list_archive_facets(membership: Membership) -> ArchiveFacets:
+    """What the archive's filters can choose, counted over the reviewed documents the
+    member sees (`visible_documents`, `status = done`): kinds, types, years and the 50 most
+    frequent senders, in one scan of those rows (grouping sets over the seam's own query,
+    run as the member under the policies). A value nobody sees is never counted; a zero
+    count is left out."""
+    archived = (
+        visibility.visible_documents(membership)
+        .filter(status=Document.Status.DONE)
+        .annotate(year=Coalesce(ExtractYear("letter_date"), ExtractYear("created_at")))
+        .values("kind", "document_type", "year", "sender")
+    )
+    inner, params = archived.query.sql_with_params()
+    found: dict[str, list[Facet]] = {"kind": [], "type": [], "year": [], "sender": []}
+    with connection.cursor() as cursor:
+        # The inner query is the ORM's own, with its parameters bound separately.
+        cursor.execute(_FACETS_HEAD + inner + _FACETS_TAIL, params)
+        for grouping, kind, document_type, year, sender, count in cursor.fetchall():
+            name = _SETS.get(int(grouping))
+            value = {"kind": kind, "type": document_type, "year": year, "sender": sender}.get(
+                name or ""
+            )
+            if name is None or value is None or value == "" or not count:
+                continue
+            found[name].append(Facet(str(value), int(count)))
+    by_count = lambda facet: (-facet.count, facet.value)  # noqa: E731
+    return ArchiveFacets(
+        kinds=[f for kind in Document.Kind.values for f in found["kind"] if f.value == kind],
+        types=sorted(found["type"], key=by_count),
+        years=sorted(found["year"], key=lambda facet: -int(facet.value)),
+        senders=sorted(found["sender"], key=by_count)[:SENDERS_MAX],
     )
 
 
@@ -526,10 +662,29 @@ def document_summary_out(
     open_duplicate_count: int = 0,
     reader_names: list[str] | None = None,
     unread: bool = False,
+    reminder_task_id: UUID | None = None,
 ) -> DocumentSummaryOut:
     """A row of a document list."""
     return _summary_out(
-        document, _open_suggestions(document), open_duplicate_count, reader_names or [], unread
+        document,
+        _open_suggestions(document),
+        open_duplicate_count,
+        reader_names or [],
+        unread,
+        reminder_task_id,
+    )
+
+
+def reminder_task_ids(documents: list[Document]) -> dict[UUID, UUID]:
+    """The open end-date reminder of each own document among `documents` (already read
+    through the seam), in one query; the task policy follows the document's."""
+    own = [d.id for d in documents if d.kind == Document.Kind.DOCUMENT]
+    if not own:
+        return {}
+    return dict(
+        Task.objects.filter(
+            document_id__in=own, type=Task.Type.EXPIRY, status=Task.Status.OPEN
+        ).values_list("document_id", "id")
     )
 
 
@@ -541,12 +696,14 @@ def document_summaries_out(
     counts = duplicates.pair_counts(membership, [d.id for d in documents])
     names = visibility.reader_names(documents)
     unread = reading.unread_ids(membership, documents)
+    reminders = reminder_task_ids(documents)
     return [
         document_summary_out(
             d,
             open_duplicate_count=counts.get(d.id, 0),
             reader_names=names.get(d.id, []),
             unread=d.id in unread,
+            reminder_task_id=reminders.get(d.id),
         )
         for d in documents
     ]
@@ -564,11 +721,14 @@ def _summary_out(
     open_duplicate_count: int = 0,
     reader_names: list[str] | None = None,
     unread: bool = False,
+    reminder_task_id: UUID | None = None,
 ) -> DocumentSummaryOut:
     proposed = _headline_proposals(document)
     status, late = status_of(
         document.status == Document.Status.DONE, letter_sync.stored_facts(document), _today()
     )
+    # An own document has no letter status, also with an open reminder (archive AR7).
+    is_letter = document.kind == Document.Kind.LETTER
     return DocumentSummaryOut(
         id=document.id,
         client_id=document.client_id,
@@ -597,10 +757,18 @@ def _summary_out(
         visibility=document.visibility,
         reader_names=reader_names or [],
         unread=unread,
-        letter_status=str(status),
-        overdue=late,
-        open_task_count=document.task_open_count,
-        waiting_until=document.task_wait_until if status == LetterStatus.WAITING else None,
+        letter_status=str(status) if is_letter else "",
+        overdue=late and is_letter,
+        open_task_count=document.task_open_count if is_letter else 0,
+        waiting_until=document.task_wait_until
+        if is_letter and status == LetterStatus.WAITING
+        else None,
+        kind=document.kind,
+        title=document.title,
+        expires_on=document.expires_on,
+        remind_days=document.remind_days,
+        retain_until=document.retain_until,
+        reminder_task_id=reminder_task_id,
     )
 
 
@@ -650,9 +818,19 @@ def document_out(document: Document, *, open_duplicate_count: int = 0) -> Docume
     flags = flags_for_actor(document.workspace_id, tasks)
     today = _today()
     own = snooze.snoozed_until(tasks, actor, today) if isinstance(actor, UUID) else {}
+    reminder = next(
+        (
+            t.id
+            for t in tasks
+            if t.type == Task.Type.EXPIRY
+            and t.status == Task.Status.OPEN
+            and document.kind == Document.Kind.DOCUMENT
+        ),
+        None,
+    )
     return DocumentOut(
         **_summary_out(
-            document, open_suggestions, open_duplicate_count, names, unread
+            document, open_suggestions, open_duplicate_count, names, unread, reminder
         ).model_dump(),
         shared_user_ids=visibility.shared_user_ids(document),
         new_person_suggestions=[
@@ -741,7 +919,8 @@ def read_page(*, membership: Membership, document_id: UUID, index: int) -> tuple
 
 
 def retry_processing(*, workspace: Workspace, document_id: UUID) -> Document:
-    """Queue a failed document for processing again."""
+    """Queue a failed document for processing again: a letter in `failed`, or an own
+    document that ended `done` with a `failure_code` (archive spec S 6.2 point 5)."""
     with transaction.atomic():
         _lock_own_membership(workspace)
         document = (
@@ -753,7 +932,12 @@ def retry_processing(*, workspace: Workspace, document_id: UUID) -> Document:
             raise ApiError(404, "document_not_found", _("We kunnen dit document niet vinden."))
         # Never sent to the AI again by someone with emergency access only.
         visibility.require_editable(document)
-        if document.status != Document.Status.FAILED:
+        own_failed = (
+            document.kind == Document.Kind.DOCUMENT
+            and document.status == Document.Status.DONE
+            and document.failure_code != ""
+        )
+        if document.status != Document.Status.FAILED and not own_failed:
             raise ApiError(
                 409,
                 "document_not_failed",

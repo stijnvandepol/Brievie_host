@@ -12,17 +12,28 @@ import { Loading } from "./ui";
 const dateTime = dateFormat({ dateStyle: "medium", timeStyle: "short" });
 
 /**
- * "Mijn post exporteren": make a ZIP of one's own post, wait while it is built, then
- * download it (it stays 24 hours). Hidden behind a sentence when the workspace does not
- * allow it. The download is a plain link: the browser sends the session cookie.
+ * "Mijn archief exporteren": make a ZIP of one's own post and documents (a PDF each and the
+ * data), wait while it is built, then download it (it stays 24 hours). Hidden behind a
+ * sentence when the workspace does not allow it. With `offerAll` an admin also gets "Alles
+ * exporteren": everything they may read, whatever that switch says (archive spec S 9,
+ * AR13). One export at a time per member. The download is a plain link: the browser sends
+ * the session cookie.
  */
-export function ExportPanel({ workspaceId, isAdmin }: { workspaceId: string; isAdmin: boolean }) {
+export function ExportPanel({
+  workspaceId,
+  isAdmin,
+  offerAll = false,
+}: {
+  workspaceId: string;
+  isAdmin: boolean;
+  offerAll?: boolean;
+}) {
   const queryClient = useQueryClient();
   const state = useQuery(myExportQuery(workspaceId));
   const start = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (scope: "mine" | "all") => {
       const { data, error } = await api.POST("/api/v1/workspaces/{workspace_id}/my-export", {
-        params: { path: { workspace_id: workspaceId } },
+        params: { path: { workspace_id: workspaceId }, query: { scope } },
       });
       if (error !== undefined || !data) throw new ApiFailure(error);
       return data;
@@ -34,21 +45,29 @@ export function ExportPanel({ workspaceId, isAdmin }: { workspaceId: string; isA
   if (state.error) return <ErrorAlert error={state.error} />;
   const current = state.data;
   if (!current) return null;
-  if (!current.allowed) {
+  const all = offerAll && isAdmin;
+  const offAdmin = (
+    <p className="muted">
+      {t`Exporteren staat uit voor de leden van deze werkruimte.`}{" "}
+      <Link to="/w/$workspaceId/instellingen" params={{ workspaceId }}>
+        {t`Zet het aan bij Instellingen.`}
+      </Link>
+    </p>
+  );
+  if (!current.allowed && !all) {
     return isAdmin ? (
-      <p className="muted">
-        {t`Exporteren staat uit voor deze werkruimte.`}{" "}
-        <Link to="/w/$workspaceId/instellingen" params={{ workspaceId }}>
-          {t`Zet het aan bij Instellingen.`}
-        </Link>
-      </p>
+      offAdmin
     ) : (
       <p className="muted">
         {t`Exporteren staat uit voor deze werkruimte. Vraag een beheerder om dit aan te zetten.`}
       </p>
     );
   }
-  const letters = plural(current.document_count ?? 0, { one: "# brief", other: "# brieven" });
+  const letters = plural(current.document_count ?? 0, {
+    one: "# document",
+    other: "# documenten",
+  });
+  const everything = current.scope === "all";
   return (
     <div className="export-panel">
       {current.status === "pending" ? (
@@ -60,24 +79,51 @@ export function ExportPanel({ workspaceId, isAdmin }: { workspaceId: string; isA
       {current.status === "ready" && current.expires_at ? (
         <a className="button" href={`/api/v1/workspaces/${workspaceId}/my-export/file`}>
           <Icon name="arrowDown" />
-          {t`Download (${letters}, geldig tot ${dateTime.format(new Date(current.expires_at))})`}
+          {everything
+            ? t`Download alles (${letters}, geldig tot ${dateTime.format(new Date(current.expires_at))})`
+            : t`Download (${letters}, geldig tot ${dateTime.format(new Date(current.expires_at))})`}
         </a>
       ) : null}
       {current.status === "failed" ? (
-        <p>{t`De export is niet gelukt. Probeer het opnieuw.`}</p>
+        <p>
+          {current.failure_code === "too_large"
+            ? t`De export werd groter dan deze server toestaat. Vraag de serverbeheerder.`
+            : current.failure_code === "not_enough_space"
+              ? t`Er was niet genoeg ruimte op de server voor deze export. Vraag de serverbeheerder.`
+              : t`De export is niet gelukt. Probeer het opnieuw.`}
+        </p>
       ) : null}
       <ErrorAlert error={start.error} />
       {current.status === "pending" ? null : (
-        <div>
-          <Button
-            className="button secondary"
-            isPending={start.isPending}
-            onPress={() => start.mutate()}
-          >
-            {current.status === "ready" ? t`Opnieuw exporteren` : t`Mijn post exporteren`}
-          </Button>
+        <div className="panel-actions">
+          {current.allowed ? (
+            <Button
+              className="button secondary"
+              isPending={start.isPending && start.variables === "mine"}
+              isDisabled={start.isPending}
+              onPress={() => start.mutate("mine")}
+            >
+              {t`Mijn archief exporteren`}
+            </Button>
+          ) : null}
+          {all ? (
+            <Button
+              className="button secondary"
+              isPending={start.isPending && start.variables === "all"}
+              isDisabled={start.isPending}
+              onPress={() => start.mutate("all")}
+            >
+              {t`Alles exporteren`}
+            </Button>
+          ) : null}
         </div>
       )}
+      {all ? (
+        <p className="muted small">
+          {t`Alles exporteren: alles wat jij mag lezen. Privébrieven die jij niet mag lezen, zitten er niet in. Het is geen back-up.`}
+        </p>
+      ) : null}
+      {all && !current.allowed ? offAdmin : null}
     </div>
   );
 }

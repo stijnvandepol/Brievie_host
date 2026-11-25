@@ -134,7 +134,7 @@ def complete_task(request: HttpRequest, workspace_id: UUID, task_id: UUID) -> Ta
 
 @router.post(
     f"{_TASK}/reopen",
-    response={200: TaskItemOut, 404: ErrorOut, **SESSION_WRITE_ERRORS},
+    response={200: TaskItemOut, 404: ErrorOut, 409: ErrorOut, **SESSION_WRITE_ERRORS},
     operation_id="reopenTask",
     description="Idempotent. Writes a `task_reopened` event on the task's document.",
 )
@@ -251,7 +251,13 @@ def list_task_assignees(
 
 @router.post(
     f"{_TASK}/deadline",
-    response={200: TaskItemOut, 404: ErrorOut, **SESSION_WRITE_ERRORS, **BODY_ERRORS},
+    response={
+        200: TaskItemOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        **SESSION_WRITE_ERRORS,
+        **BODY_ERRORS,
+    },
     operation_id="setTaskDeadline",
     description=(
         '"Datum invullen": the date the letter names, filled in by hand (`deadline`; null '

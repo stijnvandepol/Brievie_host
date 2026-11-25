@@ -5,13 +5,15 @@ from uuid import UUID
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from apps.accounts.models import User
+from apps.audit.services import AuditActor
 from apps.common import crypto
 from apps.common.errors import ApiError
 from apps.common.privacy import mask_bsns
-from apps.documents import reading, visibility
+from apps.documents import own, reading, visibility
 from apps.documents.jpeg import jpeg_size
 from apps.documents.models import Document, DocumentPage
 from apps.documents.schemas import UploadMetadataIn
@@ -34,15 +36,24 @@ def page_aad(workspace_id: UUID, document_id: UUID, index: int) -> bytes:
 
 
 def create_document_from_upload(
-    *, workspace: Workspace, user: User, metadata: UploadMetadataIn, pages: list[bytes]
+    *,
+    workspace: Workspace,
+    user: User,
+    metadata: UploadMetadataIn,
+    pages: list[bytes],
+    actor: AuditActor | None = None,
 ) -> tuple[Document, bool]:
     """Store an uploaded document; `True` when it is new.
 
     Repeating an upload (same `client_id`, same pages) returns the existing
     document, so a client may retry after a lost answer. Needs the workspace's RLS
-    context (see workspaces.deps).
+    context (see workspaces.deps). With `kind = document` it is an own document
+    (`apps.documents.own`): checked before anything is stored, organised in the same
+    transaction. `actor` is who the audit log names for a private flip (the uploader's
+    browser or device; the uploader when absent).
     """
     _validate(metadata, pages)
+    own_data = own.validate_fields(metadata, today=timezone.localdate())
     hashes = [page.sha256 for page in metadata.pages]
 
     existing = _find_existing(workspace, metadata.client_id)
@@ -53,6 +64,10 @@ def create_document_from_upload(
     written: list[str] = []
     try:
         with transaction.atomic():
+            if own_data is not None:
+                # The membership first (the one lock order), then the names are looked up.
+                own.lock_creator(workspace, user)
+                own.check_names(workspace, own_data)
             try:
                 with transaction.atomic():
                     document = Document.objects.create(
@@ -63,6 +78,7 @@ def create_document_from_upload(
                         ocr_text=PAGE_SEPARATOR.join(
                             mask_bsns(page.text) for page in metadata.pages
                         ),
+                        **(own.document_fields(own_data) if own_data is not None else {}),
                     )
             except IntegrityError:
                 # Another request with this client_id got in first; nothing is written yet.
@@ -74,6 +90,13 @@ def create_document_from_upload(
                     raise
                 return _same_upload(winner, hashes), False
             _store_pages(document, metadata, pages, storage, written)
+            if own_data is not None:
+                own.create_document(
+                    document,
+                    own_data,
+                    user=user,
+                    actor=actor if actor is not None else AuditActor.for_user(user),
+                )
             # The uploader made it: not unread for them (navigation spec S 5.3).
             reading.mark_scanned(document, user)
             defer_processing(workspace_id=workspace.id, document_id=document.id)

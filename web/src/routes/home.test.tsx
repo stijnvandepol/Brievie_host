@@ -59,8 +59,8 @@ describe("start", () => {
 
   it("remembers the workspace opened last", async () => {
     server.use(twoWorkspaces(), ...loggedInHandlers(), ...workspaceHandlers(secondWorkspace.id));
-    renderApp(`/w/${secondWorkspace.id}/post`);
-    await screen.findByRole("heading", { level: 1, name: "Alle post" });
+    renderApp(`/w/${secondWorkspace.id}/archief`);
+    await screen.findByRole("heading", { level: 1, name: "Archief" });
     expect(window.localStorage.getItem("brievie.last-workspace")).toBe(secondWorkspace.id);
   });
 });

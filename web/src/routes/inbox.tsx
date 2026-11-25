@@ -327,8 +327,8 @@ function TodoList({
             hint={
               <>
                 {t`Scan een nieuwe brief met de Brievie-app. Eerdere brieven vind je bij`}{" "}
-                <Link to="/w/$workspaceId/post" params={{ workspaceId }}>
-                  {t`Alle post`}
+                <Link to="/w/$workspaceId/archief" params={{ workspaceId }}>
+                  {t`Archief`}
                 </Link>
                 .
               </>

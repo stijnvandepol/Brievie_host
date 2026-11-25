@@ -172,9 +172,9 @@ describe("inbox", () => {
     renderApp(path);
     expect(await screen.findByText("Je bent klaar. Er is niets te doen.")).toBeInTheDocument();
     const inPanel = screen
-      .getAllByRole("link", { name: "Alle post" })
+      .getAllByRole("link", { name: "Archief" })
       .find((link) => link.closest(".empty-state"));
-    expect(inPanel).toHaveAttribute("href", `/w/${workspace.id}/post`);
+    expect(inPanel).toHaveAttribute("href", `/w/${workspace.id}/archief`);
   });
 
   it("ignores the tab of an old bookmark", async () => {
