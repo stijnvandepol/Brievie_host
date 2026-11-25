@@ -217,10 +217,10 @@ def external_access_status(
     # Without Caddy no request counts as public (apps.access.route), so the second step is
     # not asked outside either: say so rather than claim it always is (security review of
     # PR #56, point 6).
-    second_factor = second_factor and bool(settings.BRIEVIE_BEHIND_CADDY)
-    if public_way and public_web and not second_factor:
+    second_step_outside = second_factor and bool(settings.BRIEVIE_BEHIND_CADDY)
+    if public_way and public_web and not second_step_outside:
         codes.append("public_web_without_second_factor")
-    if public_way and public_web and second_factor:
+    if public_way and public_web and second_step_outside:
         # A password sign-in on the public route needs the second step (apps.accounts.signin).
         codes.append("public_web_second_factor_required")
         if admin_without_factor():
