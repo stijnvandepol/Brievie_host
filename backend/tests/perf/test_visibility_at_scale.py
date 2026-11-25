@@ -238,7 +238,7 @@ def _list(name: str, workspace: Workspace, world: PerfWorld, actor: UUID) -> Cal
         "archive_facets": lambda: json.dumps(
             asdict(documents.list_archive_facets(member)), sort_keys=True
         ),
-        "search_with_title": lambda: ids(found("loonstrook wasmachine 4243")),
+        "search_with_title": lambda: ids(found("loonstrook wasmachine")),
         "list_archive_expiring": lambda: ids(
             documents.list_documents(
                 member, archive=documents.ArchiveFilters(archived=True, expiring=True)

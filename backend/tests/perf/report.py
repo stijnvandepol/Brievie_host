@@ -58,7 +58,11 @@ LISTS: Final = (
 )
 # Measured and shown, not part of P1's verdict (search is not a list of S 4.9.5); their
 # results must still match without the member filter.
-NOT_GATED: Final = frozenset({"search_sender", "search_common_word"})
+# Search by an own document's title is that same search (archive plan Task 12): the
+# planner reads the workspace through the policies instead of the GIN index for every
+# search term alike (search_sender 393-473 ms on the same runs, also on main). Measured and
+# shown on the same terms; DECISIONS "Archive" has the numbers.
+NOT_GATED: Final = frozenset({"search_sender", "search_common_word", "search_with_title"})
 
 
 @dataclass
