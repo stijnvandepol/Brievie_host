@@ -265,7 +265,8 @@ def test_a_trashed_letter_keeps_its_original_until_the_purge(ws_a: Workspace) ->
     assert post_json(client, f"{path}/trash").status_code == 200
     assert _original_file(ws_a, created["id"]).is_file()
     hidden = client.get(f"{url}/original")
-    assert (hidden.status_code, hidden.json()["code"]) == (404, "document_not_found")
+    # The trash's own answer for who put it there; the file is still on disk.
+    assert (hidden.status_code, hidden.json()["code"]) == (404, "document_in_trash")
 
     assert post_json(client, f"{path}/restore").status_code == 200
     restored = client.get(f"{url}/original")
