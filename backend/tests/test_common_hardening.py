@@ -57,6 +57,8 @@ def test_another_process_of_the_user_cannot_read_its_environment() -> None:
     finally:
         child.kill()
         child.wait()
+        if child.stdout is not None:
+            child.stdout.close()
 
 
 @linux_only
